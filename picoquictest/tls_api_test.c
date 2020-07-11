@@ -7903,7 +7903,7 @@ int null_sni_test()
  * Test whether server redirection is applied properly
  */
 
-int preferred_address_test()
+int preferred_address_test_one(int migration_disabled)
 {
     int ret;
     uint64_t simulated_time = 0;
@@ -7928,6 +7928,7 @@ int preferred_address_test()
     server_parameters.prefered_address.is_defined = 1;
     memcpy(server_parameters.prefered_address.ipv4Address, &server_preferred.sin_addr, 4);
     server_parameters.prefered_address.ipv4Port = ntohs(server_preferred.sin_port);
+    server_parameters.migration_disabled = migration_disabled;
 
     ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1,
         NULL, &server_parameters);
@@ -7954,6 +7955,32 @@ int preferred_address_test()
         ret = -1;
     }
 
+    /* verify that both have migrated to a new CID */
+    if (ret == 0 && 
+        (test_ctx->cnx_client->path[0]->p_local_cnxid == NULL || 
+            test_ctx->cnx_client->path[0]->p_local_cnxid->sequence == 0)){
+        DBG_PRINTF("%s", "Client CID not updated\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && test_ctx->cnx_server != NULL &&
+        (test_ctx->cnx_server->path[0]->p_local_cnxid == NULL ||
+            test_ctx->cnx_server->path[0]->p_local_cnxid->sequence == 0)) {
+        DBG_PRINTF("%s", "Server CID not updated\n");
+        ret = -1;
+    }
+
+    /* verify that migrations are now authorized */
+    if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_client->remote_parameters.migration_disabled) {
+        DBG_PRINTF("%s", "Migration blocked on client\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->local_parameters.migration_disabled) {
+        DBG_PRINTF("%s", "Migration blocked on server\n");
+        ret = -1;
+    }
+
     /* And then free the resource
      */
 
@@ -7965,6 +7992,15 @@ int preferred_address_test()
     return ret;
 }
 
+int preferred_address_test()
+{
+    return preferred_address_test_one(0);
+}
+
+int preferred_address_dis_mig_test()
+{
+    return preferred_address_test_one(1);
+}
 
 /* Test that the random public generation behaves in expected ways */
 int random_public_tester_test()

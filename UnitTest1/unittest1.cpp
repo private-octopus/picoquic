@@ -904,6 +904,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(preferred_address_dis_mig)
+        {
+            int ret = preferred_address_dis_mig_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         
         TEST_METHOD(test_cnxid_renewal)
         {

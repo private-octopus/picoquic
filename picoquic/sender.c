@@ -1894,8 +1894,8 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
                     local_addr = (struct sockaddr*) & cnx->path[0]->local_addr;
                 }
 
-                ret = picoquic_probe_new_path(cnx, (struct sockaddr *)&dest_addr, local_addr,
-                    picoquic_get_quic_time(cnx->quic));
+                ret = picoquic_probe_new_path_ex(cnx, (struct sockaddr *)&dest_addr, local_addr,
+                    picoquic_get_quic_time(cnx->quic), 1);
             }
         }
     }
@@ -2639,7 +2639,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 /* Create required ID, register, and format the corresponding connection ID frame */
 uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t * bytes_max, int * more_data, int * is_pure_ack)
 {
-    while (cnx->remote_parameters.migration_disabled == 0 &&
+    while ((cnx->remote_parameters.migration_disabled == 0 || cnx->remote_parameters.prefered_address.is_defined) &&
         cnx->local_parameters.migration_disabled == 0 &&
         cnx->nb_local_cnxid < (int)(cnx->remote_parameters.active_connection_id_limit) &&
         cnx->nb_local_cnxid <= PICOQUIC_NB_PATH_TARGET) {

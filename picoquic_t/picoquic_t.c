@@ -166,6 +166,7 @@ static const picoquic_test_def_t test_table[] = {
     { "migration_with_loss", migration_test_loss },
     { "migration_fail", migration_fail_test },
     { "preferred_address", preferred_address_test},
+    { "preferred_address_dis_mig", preferred_address_dis_mig_test },
     { "cnxid_renewal",  cnxid_renewal_test },
     { "retire_cnxid", retire_cnxid_test },
     { "not_before_cnxid", not_before_cnxid_test },

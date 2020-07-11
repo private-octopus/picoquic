@@ -1276,6 +1276,16 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
     if (path_index > 0 && path_index < cnx->nb_paths) {
         picoquic_path_t * path_x = cnx->path[path_index];
 
+        if (cnx->path[path_index]->path_is_preferred_path) {
+            /* this is a migration to the preferred path requested by the server */
+            if (cnx->client_mode) {
+                cnx->remote_parameters.migration_disabled = 0;
+            }
+            else {
+                cnx->local_parameters.migration_disabled = 0;
+            }
+        }
+
         if (cnx->quic->F_log != 0) {
             picoquic_log_path_promotion(cnx->quic->F_log, cnx, path_index, current_time);
         }
@@ -1378,15 +1388,15 @@ int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id)
 }
 
 /* Create a new path in order to trigger a migration */
-int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, uint64_t current_time)
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
+    const struct sockaddr* addr_to, uint64_t current_time, int to_preferred_address)
 {
     int ret = 0;
     int partial_match_path = -1;
     int path_id = -1;
 
-    if (cnx->remote_parameters.migration_disabled != 0 ||
-        cnx->local_parameters.migration_disabled != 0) {
+    if ((cnx->remote_parameters.migration_disabled && !to_preferred_address ) ||
+        cnx->local_parameters.migration_disabled) {
         /* Do not create new paths if migration is disabled */
         ret = PICOQUIC_ERROR_MIGRATION_DISABLED;
         DBG_PRINTF("Tried to create probe with migration disabled = %d", cnx->remote_parameters.migration_disabled);
@@ -1419,10 +1429,17 @@ int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_fro
             cnx->path[path_id]->path_is_published = 1;
             picoquic_register_path(cnx, cnx->path[path_id]);
             picoquic_set_path_challenge(cnx, path_id, current_time);
+            cnx->path[path_id]->path_is_preferred_path = to_preferred_address;
         }
     }
 
     return ret;
+}
+
+int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
+    const struct sockaddr* addr_to, uint64_t current_time)
+{
+    return picoquic_probe_new_path_ex(cnx, addr_from, addr_to, current_time, 0);
 }
 
 /* Reset the path MTU, for example if too many packet losses are detected */

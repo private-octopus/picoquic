@@ -723,6 +723,7 @@ typedef struct st_picoquic_path_t {
     unsigned int path_is_registered : 1;
     unsigned int last_bw_estimate_path_limited : 1;
     unsigned int path_cid_rotated : 1;
+    unsigned int path_is_preferred_path : 1;
 
     /* number of retransmissions observed on path */
     uint64_t retrans_count;
@@ -1097,6 +1098,8 @@ void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t curr
 int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from, int* partial_match);
 int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
+    const struct sockaddr* addr_to, uint64_t current_time, int to_preferred_address);
 
 /* Management of the CNX-ID stash */
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
