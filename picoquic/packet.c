@@ -1583,6 +1583,30 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             /* The peer is probing for a new path, or there was a path rebinding */
             path_id = cnx->nb_paths - 1;
 
+            if (!cnx->client_mode && cnx->local_parameters.prefered_address.is_defined) {
+                struct sockaddr_storage dest_addr;
+
+                memset(&dest_addr, 0, sizeof(struct sockaddr_storage));
+
+                /* program a migration. */
+                if (addr_to->sa_family== AF_INET) {
+                    /* configure an IPv4 sockaddr */
+                    struct sockaddr_in* d4 = (struct sockaddr_in*) & dest_addr;
+                    d4->sin_family = AF_INET;
+                    d4->sin_port = htons(cnx->local_parameters.prefered_address.ipv4Port);
+                    memcpy(&d4->sin_addr, cnx->local_parameters.prefered_address.ipv4Address, 4);
+                } else if (addr_to->sa_family == AF_INET6){
+                    /* configure an IPv6 sockaddr */
+                    struct sockaddr_in6* d6 = (struct sockaddr_in6*) & dest_addr;
+                    d6->sin6_family = AF_INET6;
+                    d6->sin6_port = htons(cnx->local_parameters.prefered_address.ipv6Port);
+                    memcpy(&d6->sin6_addr, cnx->local_parameters.prefered_address.ipv6Address, 16);
+                }
+                if (picoquic_compare_addr(addr_to, (struct sockaddr*) & dest_addr) == 0) {
+                    cnx->path[path_id]->path_is_preferred_path = 1;
+                }
+            }
+
             if (picoquic_assign_peer_cnxid_to_path(cnx, path_id) != 0){
                 /* Copy the destination ID from an existing path */
                 int alt_path = (nat_rebinding_path >= 0) ? nat_rebinding_path : 0;
