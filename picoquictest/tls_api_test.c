@@ -6835,7 +6835,7 @@ int bad_cnxid_test()
 #define PACKET_TRACE_TEST_REF "picoquictest/packet_trace_ref.txt"
 #endif
 #define PACKET_TRACE_CSV "packet_trace.csv"
-#define PACKET_TRACE_BIN "ace1020304050607.log"
+#define PACKET_TRACE_BIN "ace1020304050607.server.log"
 
 int packet_trace_test()
 {
@@ -6898,7 +6898,7 @@ int packet_trace_test()
 #else
 #define QLOG_TRACE_TEST_REF "picoquictest/qlog_trace_ref.txt"
 #endif
-#define QLOG_TRACE_BIN "0102030405060708.log"
+#define QLOG_TRACE_BIN "0102030405060708.server.log"
 #define QLOG_TRACE_QLOG "qlog_trace.qlog"
 
 #ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
@@ -8761,7 +8761,7 @@ int direct_receive_test()
 * We verify that in these scenario the CWIN does not grow too much above the flow control window.
 */
 #define APP_LIMIT_TRACE_CSV "app_limit_trace.csv"
-#define APP_LIMIT_TRACE_BIN "acc1020304050607.log"
+#define APP_LIMIT_TRACE_BIN "acc1020304050607.server.log"
 
 int app_limit_cc_test_one(
     picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time)

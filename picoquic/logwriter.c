@@ -761,8 +761,9 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
 
     char log_filename[512];
     if (ret == 0) {
-        if (picoquic_sprintf(log_filename, sizeof(log_filename), NULL, "%s%s%s.log",
-            cnx->quic->binlog_dir, PICOQUIC_FILE_SEPARATOR, cid_name) != 0) {
+        if (picoquic_sprintf(log_filename, sizeof(log_filename), NULL, "%s%s%s.%s.log",
+            cnx->quic->binlog_dir, PICOQUIC_FILE_SEPARATOR, cid_name,
+            (cnx->client_mode)?"client":"server") != 0) {
             ret = -1;
         }
     }
