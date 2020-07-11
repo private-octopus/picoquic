@@ -436,8 +436,8 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
         }
     }
 
-    if (quic->f_binlog != NULL && quic->cnx_in_progress != NULL) {
-        binlog_transport_extension(quic->f_binlog, quic->cnx_in_progress, 
+    if (quic->cnx_in_progress != NULL && quic->cnx_in_progress->f_binlog != NULL) {
+        binlog_transport_extension(quic->cnx_in_progress, 
             0, params->server_name.base, params->server_name.len, alpn_found, alpn_found_length, 
             params->negotiated_protocols.list, params->negotiated_protocols.count,
             0, NULL);
@@ -516,13 +516,13 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
                 /* decryption error */
                 ret = -1;
                 if (quic->F_log != NULL) {
-                    picoquic_log_app_message(quic, &quic->cnx_in_progress->initial_cnxid, "%s",
+                    picoquic_log_app_message(quic->cnx_in_progress, "%s",
                         "Session ticket could not be decrypted");
                 }
             } else {
                 dst->off += decrypted;
                 if (quic->F_log != NULL) {
-                    picoquic_log_app_message(quic, &quic->cnx_in_progress->initial_cnxid, "%s",
+                    picoquic_log_app_message(quic->cnx_in_progress, "%s",
                         "Session ticket properly decrypted");
                 }
             }
@@ -1702,11 +1702,11 @@ void picoquic_log_openssl_errors(picoquic_cnx_t* cnx, int ret)
     int err_line = 0;
 
     while ((openssl_err = ERR_get_error_line(&err_file, &err_line)) != 0) {
-        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "OpenSSL error: %lu, file %s, line %d", openssl_err,
+        picoquic_log_app_message(cnx, "OpenSSL error: %lu, file %s, line %d", openssl_err,
             (err_file == NULL) ? "?" : err_file, err_line);
     }
     
-    picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Picotls returns error: %d (0x%x)", ret, ret);
+    picoquic_log_app_message(cnx, "Picotls returns error: %d (0x%x)", ret, ret);
 }
 
 /* Prepare the initial message when starting a connection.
@@ -1750,8 +1750,8 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
     if (cnx->quic->F_log != NULL) {
         picoquic_log_negotiated_alpn(cnx->quic->F_log, cnx, 0, 1, ctx->handshake_properties.client.negotiated_protocols.list, ctx->handshake_properties.client.negotiated_protocols.count);
     }
-    if (cnx->quic->f_binlog != NULL) {
-        binlog_transport_extension(cnx->quic->f_binlog, cnx,
+    if (cnx->f_binlog != NULL) {
+        binlog_transport_extension(cnx,
             1, (const uint8_t *)cnx->sni, (cnx->sni == NULL)?0:strlen(cnx->sni), NULL, 0,
             ctx->handshake_properties.client.negotiated_protocols.list, 
             ctx->handshake_properties.client.negotiated_protocols.count,
@@ -2068,8 +2068,8 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                         if (alpn != NULL){
                             cnx->alpn = picoquic_string_duplicate(alpn);
 
-                            if (cnx->quic->f_binlog != NULL) {
-                                binlog_transport_extension(cnx->quic->f_binlog, cnx, 0, NULL, 0, 
+                            if (cnx->f_binlog != NULL) {
+                                binlog_transport_extension(cnx, 0, NULL, 0, 
                                     (const uint8_t *)alpn, strlen(alpn), NULL, 0, 0, NULL);
                             }
 
@@ -2469,7 +2469,7 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
                 /* Remove old tickets before testing this one. */
                 picoquic_registered_token_clear(quic, current_time);
                 if (new_context_created && (ret = picoquic_registered_token_check_reuse(quic, token, token_size, token_time)) != 0) {
-                    picoquic_log_app_message(quic, rcid, "Duplicate token test resturns %d", ret);
+                    picoquic_log_context_free_app_message(quic, rcid, "Duplicate token test returns %d", ret);
                 }
                 else if (odcid->id_len > 0 &&
                     picoquic_compare_connection_id(rcid, &cid) != 0) {

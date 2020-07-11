@@ -453,7 +453,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
                     if (sock_ret <= 0) {
-                        picoquic_log_app_message(quic, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
+                        picoquic_log_context_free_app_message(quic, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
                             peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
                     }
                 }

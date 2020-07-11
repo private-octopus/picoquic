@@ -660,8 +660,8 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
             bytes, sequence_number, length,
             send_buffer, send_length, pn_length);
     }
-    if (cnx->quic->f_binlog != NULL && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log)) {
-        binlog_outgoing_packet(cnx->quic->f_binlog, cnx,
+    if (cnx->f_binlog != NULL && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log)) {
+        binlog_outgoing_packet(cnx,
             bytes, sequence_number, pn_length, length,
             send_buffer, send_length, current_time);
     }
@@ -1404,8 +1404,8 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 /* If not pure ack, the packet will be placed in the "retransmitted" queue,
                  * in order to enable detection of spurious restransmissions */
 
-                if (cnx->quic->f_binlog != NULL) {
-                    binlog_packet_lost(cnx->quic->f_binlog, cnx, old_p->ptype, old_p->sequence_number,
+                if (cnx->f_binlog != NULL) {
+                    binlog_packet_lost(cnx, old_p->ptype, old_p->sequence_number,
                         (timer_based_retransmit == 0) ? "repeat" : "timer",
                         (old_p->send_path == NULL) ? NULL : &old_p->send_path->remote_cnxid,
                         old_p->length, current_time);
@@ -1421,7 +1421,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                         old_p->send_path->nb_mtu_losses++;
                         if (old_p->send_path->nb_mtu_losses > PICOQUIC_MTU_LOSS_THRESHOLD) {
                             picoquic_reset_path_mtu(old_p->send_path);
-                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                            picoquic_log_app_message(cnx,
                                 "Reset path MTU after %d retransmissions, %d MTU losses",
                                 cnx->pkt_ctx[pc].nb_retransmit,
                                 old_p->send_path->nb_mtu_losses);
@@ -2146,7 +2146,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                                     /* Signal the application */
                                     if (cnx->callback_fn != NULL) {
                                         if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
-                                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                                            picoquic_log_app_message(cnx, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                                             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                                         }
                                     }
@@ -2354,7 +2354,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
                     if (cnx->callback_fn != NULL) {
                         if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
-                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                            picoquic_log_app_message(cnx, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                         }
                     }
@@ -2693,7 +2693,7 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     /* Notify the application */
     if (cnx->callback_fn != NULL) {
         if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_ready, cnx->callback_ctx, NULL) != 0) {
-            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Callback ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+            picoquic_log_app_message(cnx, "Callback ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
     }
@@ -2844,7 +2844,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         if (path_x == cnx->path[0]) {
                             /* TODO: consider alt address. Also, consider other available path. */
                             DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
-                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "%s", "Too many challenge retransmits, disconnect");
+                            picoquic_log_app_message(cnx, "%s", "Too many challenge retransmits, disconnect");
                             cnx->cnx_state = picoquic_state_disconnected;
                             if (cnx->callback_fn) {
                                 (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
@@ -2852,7 +2852,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         }
                         else {
                             DBG_PRINTF("%s\n", "Too many challenge retransmits, abandon path");
-                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "%s", "Too many challenge retransmits, abandon path");
+                            picoquic_log_app_message(cnx, "%s", "Too many challenge retransmits, abandon path");
                             path_x->challenge_failed = 1;
                             cnx->path_demotion_needed = 1;
                         }
@@ -3092,7 +3092,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         cnx->crypto_epoch_sequence <
         cnx->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range) {
         if (picoquic_start_key_rotation(cnx) != 0) {
-            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Cannot start key rotation after %"PRIu64" packets",
+            picoquic_log_app_message(cnx, "Cannot start key rotation after %"PRIu64" packets",
                 cnx->pkt_ctx[picoquic_packet_context_application].send_sequence);
         }
     }
@@ -3165,7 +3165,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
                     if (path_x == cnx->path[0]) {
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
-                        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "%s", "Too many challenge retransmits, disconnect");
+                        picoquic_log_app_message(cnx, "%s", "Too many challenge retransmits, disconnect");
                         cnx->cnx_state = picoquic_state_disconnected;
                         if (cnx->callback_fn) {
                             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
@@ -3173,7 +3173,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     }
                     else {
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, abandon path");
-                        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "%s", "Too many challenge retransmits, abandon path");
+                        picoquic_log_app_message(cnx, "%s", "Too many challenge retransmits, abandon path");
                         path_x->challenge_failed = 1;
                     }
                 }
@@ -3691,8 +3691,8 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
             picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
             cnx, (struct sockaddr *)&addr_to_log, 0, *send_length, current_time);
     }
-    if (*send_length > 0 && cnx->quic->f_binlog != NULL && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log)) {
-        binlog_pdu(cnx->quic->f_binlog, &cnx->initial_cnxid, 0, current_time,
+    if (*send_length > 0 && cnx->f_binlog != NULL && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log)) {
+        binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, 0, current_time,
             (struct sockaddr *)&addr_to_log, (struct sockaddr*)& addr_from_log, *send_length);
     }
 
@@ -3772,7 +3772,7 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
             if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                 ret = 0;
 
-                picoquic_log_app_message(quic, &cnx->initial_cnxid, "Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d",
+                picoquic_log_app_message(cnx, "Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d",
                     (int)cnx->nb_retransmission_total, (int)cnx->nb_spurious,
                     (int)cnx->path[0]->max_reorder_gap, (int)cnx->path[0]->max_spurious_rtt);
 
@@ -3780,8 +3780,8 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
                     fflush(quic->F_log);
                 }
 
-                if (quic->f_binlog != NULL) {
-                    fflush(quic->f_binlog);
+                if (cnx->f_binlog != NULL) {
+                    fflush(cnx->f_binlog);
                 }
 
                 picoquic_delete_cnx(cnx);

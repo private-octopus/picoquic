@@ -565,8 +565,6 @@ void picoquic_free(picoquic_quic_t* quic)
             quic->tls_master_ctx = NULL;
         }
 
-        binlog_close(quic);
-
         free(quic);
     }
 }
@@ -627,10 +625,6 @@ picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* 
         if (quic->F_log != NULL) {
             picoquic_log_packet_address(quic->F_log, sp->cnxid_log64,
                 NULL, (struct sockaddr*)&sp->addr_to, 0, sp->length, picoquic_get_quic_time(quic));
-        }
-        if (quic->f_binlog != NULL) {
-            binlog_pdu(quic->f_binlog, &sp->initial_cid, 0, picoquic_get_quic_time(quic),
-                (struct sockaddr*)&sp->addr_to, (struct sockaddr*) & sp->addr_local, sp->length);
         }
     }
 
@@ -2722,9 +2716,11 @@ void picoquic_set_fuzz(picoquic_quic_t * quic, picoquic_fuzz_fn fuzz_fn, void * 
     quic->fuzz_ctx = fuzz_ctx;
 }
 
-int picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file)
+int picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_dir)
 {
-    return binlog_open(quic, binlog_file);
+    quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
+    quic->binlog_dir = picoquic_string_duplicate(binlog_dir);
+    return 0;
 }
 
 int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
@@ -3004,7 +3000,7 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
         }
         cnx->cnx_state = picoquic_state_disconnecting;
 
-        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Protocol error 0x%x", local_error);
+        picoquic_log_app_message(cnx, "Protocol error 0x%x", local_error);
         DBG_PRINTF("Protocol error (%x)", local_error);
     } else if (cnx->cnx_state < picoquic_state_server_false_start) {
         if (cnx->cnx_state != picoquic_state_handshake_failure &&

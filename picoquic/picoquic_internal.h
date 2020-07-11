@@ -463,7 +463,7 @@ typedef enum {
  */
 typedef struct st_picoquic_quic_t {
     void * F_log;
-    FILE * f_binlog;
+    char* binlog_dir;
     void* tls_master_ctx;
     struct st_ptls_key_exchange_context_t * esni_key_exchange[16];
     picoquic_stream_data_cb_fn default_callback_fn;
@@ -1061,6 +1061,9 @@ typedef struct st_picoquic_cnx_t {
     /* Copies of packets received too soon */
     picoquic_stateless_packet_t* first_sooner;
     picoquic_stateless_packet_t* last_sooner;
+
+    FILE* f_binlog;
+
 } picoquic_cnx_t;
 
 typedef struct st_picoquic_packet_data_t {

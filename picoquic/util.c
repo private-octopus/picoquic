@@ -82,6 +82,15 @@ char* picoquic_string_duplicate(const char* original)
     return str;
 }
 
+char* picoquic_string_free(char* str)
+{
+    if (str != NULL) {
+        free(str);
+    }
+
+    return NULL;
+}
+
 char* picoquic_strip_endofline(char* buf, size_t bufmax, char const* line)
 {
     for (size_t i = 0; i < bufmax; i++) {

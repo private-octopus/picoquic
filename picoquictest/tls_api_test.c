@@ -6832,7 +6832,7 @@ int packet_trace_test()
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, PACKET_TRACE_BIN);
+        picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 20000, 1000000);
@@ -6879,7 +6879,7 @@ int packet_trace_test()
 #else
 #define QLOG_TRACE_TEST_REF "picoquictest/qlog_trace_ref.txt"
 #endif
-#define QLOG_TRACE_BIN "qlog_trace.bin"
+#define QLOG_TRACE_BIN "0102030405060708.log"
 #define QLOG_TRACE_QLOG "qlog_trace.qlog"
 
 #ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
@@ -6924,7 +6924,7 @@ int qlog_trace_test()
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, QLOG_TRACE_BIN);
+        picoquic_set_binlog(test_ctx->qserver, ".");
         picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_null);
         picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_null);
         test_ctx->qserver->cnx_id_callback_ctx = (void*)&cnxfn_data_server;

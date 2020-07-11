@@ -50,7 +50,7 @@ picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uin
         while (stream_id >= cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
             stream = picoquic_create_stream(cnx, cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]);
             if (stream == NULL) {
-                picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Create stream %" PRIu64 " returns error 0x%x",
+                picoquic_log_app_message(cnx, "Create stream %" PRIu64 " returns error 0x%x",
                     stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                 break;
@@ -591,7 +591,7 @@ uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 
         if (cnx->callback_fn != NULL && !stream->stop_sending_signalled) {
             if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stop_sending, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
-                picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Stop sending callback on stream %" PRIu64 " returns error 0x%x",
+                picoquic_log_app_message(cnx, "Stop sending callback on stream %" PRIu64 " returns error 0x%x",
                     stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
                     picoquic_frame_type_stop_sending);
@@ -697,7 +697,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 
         if (cnx->callback_fn(cnx, stream->stream_id, data->bytes + start, data_length, fin_now,
             cnx->callback_ctx, stream->app_stream_ctx) != 0) {
-            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Data callback on stream %" PRIu64 " returns error 0x%x",
+            picoquic_log_app_message(cnx, "Data callback on stream %" PRIu64 " returns error 0x%x",
                 stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
@@ -711,7 +711,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
         stream->fin_signalled = 1;
         if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_fin,
             cnx->callback_ctx, stream->app_stream_ctx) != 0) {
-            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "FIN callback on stream %" PRIu64 " returns error 0x%x", 
+            picoquic_log_app_message(cnx, "FIN callback on stream %" PRIu64 " returns error 0x%x", 
                 stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
@@ -1254,7 +1254,7 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
 
                 if ((cnx->callback_fn)(cnx, stream->stream_id, (uint8_t*)&stream_data_context, allowed_space, picoquic_callback_prepare_to_send, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
                     /* something went wrong */
-                    picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Prepare to send returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                    picoquic_log_app_message(cnx, "Prepare to send returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                     *ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                     bytes = bytes0; /* CHECK: SHOULD THIS BE NULL ? */
                 }
@@ -1415,7 +1415,7 @@ uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx,
 
     if (picoquic_parse_stream_header(frame, misc->length, &stream_id, &offset, &data_length, &fin, &consumed) != 0) {
         /* Malformed stream frame. Log an error, and ignore. */
-        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Malformed copied stream frame, type %d, length %zu",
+        picoquic_log_app_message(cnx, "Malformed copied stream frame, type %d, length %zu",
             frame[0], misc->length);
         all_sent = 1;
     }
@@ -1913,7 +1913,7 @@ void picoquic_update_1wd(picoquic_cnx_t * cnx, picoquic_path_t * old_path,
 
         if (one_way_delay < 0) {
             int64_t correct_1wd = old_path->rtt_sample / 2;
-            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+            picoquic_log_app_message(cnx,
                 "BAD 1WD! RTS=%" PRIu64 ", AD=%"PRIu64 ", Start=%" PRIu64 ", Phi=%"PRIi64 ", Send=%" PRIu64 ", OWD=%"PRIu64 "\n",
                 remote_time_stamp, ack_delay, cnx->start_time, old_path->phase_delay, send_time, one_way_delay);
             old_path->phase_delay += correct_1wd - one_way_delay;
@@ -3579,7 +3579,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, uint64_t current_time, pic
 
         if (packet_data->acked_path->rtt_sample == 0) {
             uint64_t cnx_time = current_time - cnx->start_time;
-            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "RTT Sample = 0 after %" PRIu64 "us.", cnx_time);
+            picoquic_log_app_message(cnx, "RTT Sample = 0 after %" PRIu64 "us.", cnx_time);
         }
 
         if (cnx->congestion_alg != NULL && cnx->is_time_stamp_enabled && packet_data->acked_path->rtt_sample > 0) {

@@ -772,7 +772,7 @@ static char const* log_test_file = "log_test.txt";
 static char const* log_error_test_file = "log_error_test.txt";
 static char const* log_fuzz_test_file = "log_fuzz_test.txt";
 static char const* log_packet_test_file = "log_fuzz_test.txt";
-static char const* binlog_test_file = "binlog_test.log";
+static char const* binlog_test_file = "01020304.log";
 static char const* binlog_error_test_file = "binlog_error_test.txt";
 static char const* binlog_fuzz_test_file = "binlog_fuzz_test.log";
 static char const* qlog_test_file = "01020304.qlog";
@@ -928,7 +928,6 @@ int logger_test()
     picoquic_cnx_t cnx;
     picoquic_quic_t quic;
     memset(&cnx, 0, sizeof(cnx));
-    quic.f_binlog = NULL;
 
     if ((F = picoquic_file_open(log_test_file, "w")) == NULL) {
         DBG_PRINTF("failed to open file:%s\n", log_test_file);
@@ -945,8 +944,8 @@ int logger_test()
         cnx.quic = &quic;
         quic.F_log = F;
 
-        picoquic_log_app_message(&quic, &cnx.initial_cnxid, "%s.", "This is an app message test");
-        picoquic_log_app_message(&quic, &cnx.initial_cnxid, "This is app message test #%d, severity %d.", 1, 2);
+        picoquic_log_app_message(&cnx, "%s.", "This is an app message test");
+        picoquic_log_app_message(&cnx, "This is app message test #%d, severity %d.", 1, 2);
 
         (void)picoquic_file_close(F);
     }
@@ -1104,7 +1103,7 @@ int binlog_test()
         ret = -1;
     }
     else {
-        picoquic_set_binlog(quic, binlog_test_file);        
+        picoquic_set_binlog(quic, ".");        
         picoquic_set_default_spinbit_policy(quic, picoquic_spinbit_null);
 
         struct sockaddr_in saddr;
@@ -1129,7 +1128,7 @@ int binlog_test()
                 ph.offset = 0;
                 ph.payload_length = test_skip_list[i].len;
 
-                binlog_packet(quic->f_binlog, &initial_cid, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len);
+                binlog_packet(cnx->f_binlog, &initial_cid, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len);
             }
 
             picoquic_delete_cnx(cnx);

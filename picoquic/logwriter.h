@@ -62,18 +62,18 @@ void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, int receiving,
     const picoquic_packet_header * ph, const uint8_t* bytes, size_t bytes_max);
 
 /* binary alternative to picoquic_log_outgoing_segment() */
-void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
+void binlog_outgoing_packet(picoquic_cnx_t* cnx,
     uint8_t * bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time);
 
 /* Logging packet lost events */
-void binlog_packet_lost(FILE* f, picoquic_cnx_t* cnx,
+void binlog_packet_lost(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time);
 
 /* binary alternative to picoquic_log_transport_extension() */
-void binlog_transport_extension(FILE * f, picoquic_cnx_t * cnx, int is_local,
+void binlog_transport_extension(picoquic_cnx_t * cnx, int is_local,
     uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
     const ptls_iovec_t* alpn_list, size_t alpn_count,
     size_t param_length, uint8_t* params);
@@ -84,8 +84,5 @@ void binlog_picotls_ticket(FILE* f, picoquic_connection_id_t cnx_id,
 
 void binlog_new_connection(picoquic_cnx_t * cnx);
 void binlog_close_connection(picoquic_cnx_t * cnx);
-
-int binlog_open(picoquic_quic_t * quic, char const * binlog_file);
-void binlog_close(picoquic_quic_t * quic);
 
 void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time);
