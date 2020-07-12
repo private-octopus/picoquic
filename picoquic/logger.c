@@ -1963,30 +1963,45 @@ void picoquic_log_path_promotion(FILE* F, picoquic_cnx_t* cnx, int path_index, u
 
 /* Adding here a declaration of binlog message defined in logwriter.c,
  * so the call the log_app_message writes on both log file and binlog */
-void picoquic_binlog_message_v(picoquic_quic_t* quic, const picoquic_connection_id_t* icid, const char* fmt, va_list vargs);
+void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list vargs);
 
-void picoquic_log_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t * icid,  const char* fmt, ...)
+void picoquic_txtlog_message_v(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs)
 {
     FILE* F = quic->F_log;
+    picoquic_log_prefix_initial_cid64(F, picoquic_val64_connection_id(*cid));
 
-    if (F != NULL) {
-        picoquic_log_prefix_initial_cid64(F, picoquic_val64_connection_id(*icid));
+#ifdef _WINDOWS
+    (void)vfprintf_s(F, fmt, vargs);
+#else
+    (void)vfprintf(F, fmt, vargs);
+#endif
 
+    fputc('\n', F);
+}
+
+void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t * cid, const char* fmt, ...)
+{
+    if (quic->F_log != NULL) {
         va_list args;
         va_start(args, fmt);
-#ifdef _WINDOWS
-        (void)vfprintf_s(F, fmt, args);
-#else
-        (void)vfprintf(F, fmt, args);
-#endif
+        picoquic_txtlog_message_v(quic, cid, fmt, args);
         va_end(args);
-        fputc('\n', F);
+    }
+}
+
+void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
+{
+    if (cnx->quic->F_log != NULL) {
+        va_list args;
+        va_start(args, fmt);
+        picoquic_txtlog_message_v(cnx->quic, &cnx->initial_cnxid, fmt, args);
+        va_end(args);
     }
 
-    if (quic->f_binlog != NULL) {
+    if (cnx->f_binlog != NULL) {
         va_list args;
         va_start(args, fmt);
-        picoquic_binlog_message_v(quic, icid, fmt, args);
+        picoquic_binlog_message_v(cnx, fmt, args);
         va_end(args);
     }
 }

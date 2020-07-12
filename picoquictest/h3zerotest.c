@@ -1192,6 +1192,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     char test_server_esni_key_file[512];
     char test_server_esni_rr_file[512];
     picoquic_tp_t client_parameters;
+    picoquic_connection_id_t initial_cid = { {0xde, 0xc1, 3, 4, 5, 6, 7, 8}, 8 };
 
     if (do_esni) {
         ret = picoquic_get_input_path(test_server_esni_key_file, sizeof(test_server_esni_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_ESNI_KEY);
@@ -1209,17 +1210,17 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     callback_ctx.out_dir = out_dir;
 
     if (ret == 0) {
-        ret = tls_api_init_ctx(&test_ctx,
+        ret = tls_api_init_ctx_ex(&test_ctx,
             PICOQUIC_INTERNAL_TEST_VERSION_1,
-            PICOQUIC_TEST_SNI, alpn, &simulated_time, NULL, NULL, 0, 1, 0);
+            PICOQUIC_TEST_SNI, alpn, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
 
         if (ret == 0 && server_bin != NULL) {
-            picoquic_set_binlog(test_ctx->qserver, server_bin);
+            picoquic_set_binlog(test_ctx->qserver, ".");
             test_ctx->qserver->use_long_log = 1;
         }
 
         if (ret == 0 && client_bin != NULL) {
-            picoquic_set_binlog(test_ctx->qclient, client_bin);
+            picoquic_set_binlog(test_ctx->qclient, ".");
         }
 
         if (ret == 0 && do_sat) {

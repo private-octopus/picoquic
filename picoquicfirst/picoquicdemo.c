@@ -132,7 +132,7 @@ int quic_server(const char* server_name, int server_port,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     int dest_if, int mtu_max, uint32_t proposed_version, 
     const char * esni_key_file_name, const char * esni_rr_file_name,
-    char const * log_file, char const* bin_file, int use_long_log, 
+    char const * log_file, char const* bin_dir, int use_long_log, 
     picoquic_congestion_algorithm_t const * cc_algorithm, char const * web_folder)
 {
     /* Start: start the QUIC process with cert and key files */
@@ -190,7 +190,7 @@ int quic_server(const char* server_name, int server_port,
             }
             picoquic_set_default_congestion_algorithm(qserver, cc_algorithm);
 
-            picoquic_set_binlog(qserver, bin_file);
+            picoquic_set_binlog(qserver, bin_dir);
             
             picoquic_set_textlog(qserver, log_file);
 
@@ -227,7 +227,7 @@ int quic_server(const char* server_name, int server_port,
 
             DBG_PRINTF("Looped %d times in %llu microsec, file: %d, line: %d\n",
                 nb_loops, (unsigned long long) loop_delta, qserver->wake_file, qserver->wake_line);
-            picoquic_log_app_message(qserver, &log_cid, "Looped %d times in %llu microsec, file: %d, line: %d",
+            picoquic_log_context_free_app_message(qserver, &log_cid, "Looped %d times in %llu microsec, file: %d, line: %d",
                 nb_loops, (unsigned long long) loop_delta, qserver->wake_file, qserver->wake_line);
             
             nb_loops = 0;
@@ -270,7 +270,7 @@ int quic_server(const char* server_name, int server_port,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
                     if (sock_ret <= 0) {
-                        picoquic_log_app_message(qserver, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
+                        picoquic_log_context_free_app_message(qserver, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
                             peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
                     }
                 }
@@ -404,7 +404,7 @@ int quic_client(const char* ip_address_text, int server_port,
     const char * sni, const char * esni_rr_file,
     const char * alpn, const char * root_crt,
     uint32_t proposed_version, int force_zero_share, int force_migration,
-    int nb_packets_before_key_update, int mtu_max, char const * log_file, char const* bin_file,
+    int nb_packets_before_key_update, int mtu_max, char const * log_file, char const* bin_dir,
     int client_cnx_id_length, char const * client_scenario_text, 
     int no_disk, int use_long_log, picoquic_congestion_algorithm_t const* cc_algorithm,
     int large_client_hello, char const * out_dir, int cipher_suite_id)
@@ -524,7 +524,7 @@ int quic_client(const char* ip_address_text, int server_port,
             (void)picoquic_set_default_connection_id_length(qclient, (uint8_t)client_cnx_id_length);
 
             picoquic_set_key_log_file_from_env(qclient);
-            picoquic_set_binlog(qclient, bin_file);
+            picoquic_set_binlog(qclient, bin_dir);
             picoquic_set_textlog(qclient, log_file);
             picoquic_set_log_level(qclient, use_long_log);
 
@@ -558,7 +558,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     picoquic_demo_client_set_alpn_from_tickets(cnx_client, &callback_ctx, current_time);
                     if (cnx_client->alpn != NULL) {
                         fprintf(stdout, "Set ALPN to %s based on stored ticket\n", cnx_client->alpn);
-                        picoquic_log_app_message(qclient, &cnx_client->initial_cnxid,
+                        picoquic_log_app_message(cnx_client,
                             "Set ALPN to %s based on stored ticket", cnx_client->alpn);
                     }
                 }
@@ -692,19 +692,19 @@ int quic_client(const char* ip_address_text, int server_port,
                 if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready && notified_ready == 0) {
                     if (picoquic_tls_is_psk_handshake(cnx_client)) {
                         fprintf(stdout, "The session was properly resumed!");
-                        picoquic_log_app_message(qclient, &cnx_client->initial_cnxid,
+                        picoquic_log_app_message(cnx_client,
                             "%s", "The session was properly resumed!");
                     }
 
                     if (cnx_client->zero_rtt_data_accepted) {
                         fprintf(stdout, "Zero RTT data is accepted!\n");
-                        picoquic_log_app_message(qclient, &cnx_client->initial_cnxid,
+                        picoquic_log_app_message(cnx_client,
                             "%s", "Zero RTT data is accepted!");
                     }
 
                     if (cnx_client->alpn != NULL) {
                         fprintf(stdout, "Negotiated ALPN: %s\n", cnx_client->alpn);
-                        picoquic_log_app_message(qclient, &cnx_client->initial_cnxid,
+                        picoquic_log_app_message(cnx_client,
                             "Negotiated ALPN: %s", cnx_client->alpn);
                         saved_alpn = picoquic_string_duplicate(cnx_client->alpn);
                     }
@@ -735,7 +735,7 @@ int quic_client(const char* ip_address_text, int server_port,
                             (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
                             cnx_client->is_hcid_verified);
 
-                        picoquic_log_app_message(qclient, &cnx_client->initial_cnxid,
+                        picoquic_log_app_message(cnx_client,
                             "Connection established. Version = %x, I-CID: %llx, verified: %d",
                             picoquic_supported_versions[cnx_client->version_index].version,
                             (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
@@ -755,18 +755,18 @@ int quic_client(const char* ip_address_text, int server_port,
                         if (picoquic_compare_addr(
                             (struct sockaddr*) & server_address, (struct sockaddr*) & cnx_client->path[0]->peer_addr) != 0) {
                             fprintf(stdout, "Migrated to server preferred address!\n");
-                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Migrated to server preferred address!");
+                            picoquic_log_app_message(cnx_client, "%s", "Migrated to server preferred address!");
                             migration_to_preferred_finished = 1;
                         }
                         else if (cnx_client->nb_paths > 1 && !migration_to_preferred_started) {
                             migration_to_preferred_started = 1;
                             fprintf(stdout, "Attempting migration to server preferred address.\n");
-                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Attempting migration to server preferred address.");
+                            picoquic_log_app_message(cnx_client, "%s", "Attempting migration to server preferred address.");
 
                         }
                         else if (cnx_client->nb_paths == 1 && migration_to_preferred_started) {
                             fprintf(stdout, "Could not migrate to server preferred address!\n");
-                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Could not migrate to server preferred address!");
+                            picoquic_log_app_message(cnx_client, "%s", "Could not migrate to server preferred address!");
                             migration_to_preferred_finished = 1;
                         }
                     }
@@ -783,7 +783,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
                         if (mig_ret != 0) {
                             fprintf(stdout, "Will not test migration.\n");
-                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Will not test migration.");
+                            picoquic_log_app_message(cnx_client, "%s", "Will not test migration.");
                             migration_started = -1;
                         }
                     }
@@ -794,12 +794,12 @@ int quic_client(const char* ip_address_text, int server_port,
                         int key_rot_ret = picoquic_start_key_rotation(cnx_client);
                         if (key_rot_ret != 0) {
                             fprintf(stdout, "Will not test key rotation.\n");
-                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Will not test key rotation.");
+                            picoquic_log_app_message(cnx_client, "%s", "Will not test key rotation.");
                             key_update_done = (uint64_t)-1;
                         }
                         else {
                             fprintf(stdout, "Key rotation started.\n");
-                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Key rotation started.");
+                            picoquic_log_app_message(cnx_client, "%s", "Key rotation started.");
                             key_update_done = 1;
                         }
                     }
@@ -809,17 +809,17 @@ int quic_client(const char* ip_address_text, int server_port,
                             if (cnx_client->nb_zero_rtt_sent != 0) {
                                 fprintf(stdout, "Out of %d zero RTT packets, %d were acked by the server.\n",
                                     cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
-                                picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "Out of %d zero RTT packets, %d were acked by the server.",
+                                picoquic_log_app_message(cnx_client, "Out of %d zero RTT packets, %d were acked by the server.",
                                     cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
                             }
                             if (force_migration && !migration_started) {
                                 fprintf(stdout, "Could not start testing migration.\n");
-                                picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Could not start testing migration.");
+                                picoquic_log_app_message(cnx_client, "%s", "Could not start testing migration.");
                                 migration_started = -1;
                             }
 
                             fprintf(stdout, "All done, Closing the connection.\n");
-                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "All done, Closing the connection.");
+                            picoquic_log_app_message(cnx_client, "%s", "All done, Closing the connection.");
                             if (picoquic_get_data_received(cnx_client) > 0) {
                                 double duration_usec = (double)(current_time - picoquic_get_cnx_start_time(cnx_client));
 
@@ -828,7 +828,7 @@ int quic_client(const char* ip_address_text, int server_port,
                                     fprintf(stdout, "Received %llu bytes in %f seconds, %f Mbps.\n",
                                         (unsigned long long)picoquic_get_data_received(cnx_client),
                                         duration_usec/1000000.0, receive_rate_mbps);
-                                    picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "Received %llu bytes in %f seconds, %f Mbps.",
+                                    picoquic_log_app_message(cnx_client, "Received %llu bytes in %f seconds, %f Mbps.",
                                         (unsigned long long)picoquic_get_data_received(cnx_client),
                                         duration_usec / 1000000.0, receive_rate_mbps);
                                 }
@@ -840,7 +840,7 @@ int quic_client(const char* ip_address_text, int server_port,
                             current_time > callback_ctx.last_interaction_time && current_time - callback_ctx.last_interaction_time > 10000000ull
                             && picoquic_is_cnx_backlog_empty(cnx_client)) {
                             fprintf(stdout, "No progress for 10 seconds. Closing. \n");
-                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "No progress for 10 seconds. Closing.");
+                            picoquic_log_app_message(cnx_client, "%s", "No progress for 10 seconds. Closing.");
                             ret = picoquic_close(cnx_client, 0);
                         }
                     }
@@ -863,7 +863,7 @@ int quic_client(const char* ip_address_text, int server_port,
                                 (client_address.ss_family == AF_INET) ?
                                 ((struct sockaddr_in*) & x_from)->sin_port :
                                 ((struct sockaddr_in6*) & x_from)->sin6_port);
-                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "Dropping packet sent from wrong address, port: %d",
+                            picoquic_log_app_message(cnx_client, "Dropping packet sent from wrong address, port: %d",
                                 (client_address.ss_family == AF_INET) ?
                                 ((struct sockaddr_in*) & x_from)->sin_port :
                                 ((struct sockaddr_in6*) & x_from)->sin6_port);
@@ -878,7 +878,7 @@ int quic_client(const char* ip_address_text, int server_port,
                         if (bytes_sent <= 0)
                         {
                             fprintf(stdout, "Cannot send packet to server, returns %d", bytes_sent);
-                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "Cannot send packet to server, returns %d", bytes_sent);
+                            picoquic_log_app_message(cnx_client, "Cannot send packet to server, returns %d", bytes_sent);
                         }
                     }
                 }
@@ -999,6 +999,7 @@ void usage()
     fprintf(stderr, "                        defaults to current directory.\n");
     fprintf(stderr, "  -w folder             Folder containing web pages served by server\n");
     fprintf(stderr, "  -l file               Log file, Log to stdout if file = \"n\". No logging if absent.\n");
+    fprintf(stderr, "  -b bin_dir            Binary logging to this directory. No binary logging if absent.\n");
     fprintf(stderr, "  -L                    Log all packets. If absent, log stops after 100 packets.\n");
     fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
     fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
@@ -1045,7 +1046,7 @@ int main(int argc, char** argv)
     const char * esni_key_file = NULL;
     const char * esni_rr_file = NULL;
     const char * log_file = NULL;
-    const char * bin_file = NULL;
+    const char * bin_dir = NULL;
     const char * sni = NULL;
     const char * alpn = NULL;
     const char* www_dir = NULL;
@@ -1167,7 +1168,7 @@ int main(int argc, char** argv)
             log_file = optarg;
             break;
         case 'b':
-            bin_file = optarg;
+            bin_dir = optarg;
             break;
         case 'L':
             use_long_log = 1;
@@ -1262,13 +1263,13 @@ int main(int argc, char** argv)
             (cnx_id_cbdata == NULL) ? NULL : (void*)cnx_id_cbdata,
             (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version,
             esni_key_file, esni_rr_file,
-            log_file, bin_file, use_long_log, cc_algorithm, www_dir);
+            log_file, bin_dir, use_long_log, cc_algorithm, www_dir);
         printf("Server exit with code = %d\n", ret);
     } else {
         /* Run as client */
         printf("Starting Picoquic (v%s) connection to server = %s, port = %d\n", PICOQUIC_VERSION, server_name, server_port);
         ret = quic_client(server_name, server_port, sni, esni_rr_file, alpn, root_trust_file, proposed_version, force_zero_share, 
-            force_migration, nb_packets_before_update, mtu_max, log_file, bin_file, client_cnx_id_length, client_scenario,
+            force_migration, nb_packets_before_update, mtu_max, log_file, bin_dir, client_cnx_id_length, client_scenario,
             no_disk, use_long_log, cc_algorithm, large_client_hello, out_dir, cipher_suite_id);
 
         printf("Client exit with code = %d\n", ret);

@@ -842,7 +842,7 @@ void picoquic_bbr_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t*
 #define picoquic_bbr_ID "bbr" /* BBR */
 
 picoquic_congestion_algorithm_t picoquic_bbr_algorithm_struct = {
-    picoquic_bbr_ID,
+    picoquic_bbr_ID, 5,
     picoquic_bbr_init,
     picoquic_bbr_notify,
     picoquic_bbr_delete,

@@ -288,7 +288,7 @@ void picoquic_newreno_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint6
 #define PICOQUIC_NEWRENO_ID "newreno" /* NR88 */
 
 picoquic_congestion_algorithm_t picoquic_newreno_algorithm_struct = {
-    PICOQUIC_NEWRENO_ID,
+    PICOQUIC_NEWRENO_ID, 1,
     picoquic_newreno_init,
     picoquic_newreno_notify,
     picoquic_newreno_delete,

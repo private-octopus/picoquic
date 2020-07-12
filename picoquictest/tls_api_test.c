@@ -958,10 +958,10 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
     free(test_ctx);
 }
 
-int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
+int tls_api_init_ctx_ex(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time, 
     char const* ticket_file_name, char const* token_file_name,
-    int force_zero_share, int delayed_init, int use_bad_crypt)
+    int force_zero_share, int delayed_init, int use_bad_crypt, picoquic_connection_id_t * icid)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -1050,7 +1050,8 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
 
                 /* Create a client connection */
                 test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-                    picoquic_null_connection_id, picoquic_null_connection_id,
+                    (icid == NULL)? picoquic_null_connection_id: *icid,
+                    picoquic_null_connection_id,
                     (struct sockaddr*)&test_ctx->server_addr, *p_simulated_time,
                     proposed_version, sni, alpn, 1);
 
@@ -1072,6 +1073,14 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
     *pctx = test_ctx;
 
     return ret;
+}
+
+int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
+    char const* sni, char const* alpn, uint64_t* p_simulated_time,
+    char const* ticket_file_name, char const* token_file_name,
+    int force_zero_share, int delayed_init, int use_bad_crypt)
+{
+    return tls_api_init_ctx_ex(pctx, proposed_version, sni, alpn, p_simulated_time, ticket_file_name, token_file_name, force_zero_share, delayed_init, use_bad_crypt, NULL);
 }
 
 static int tls_api_one_sim_link_arrival(picoquictest_sim_link_t* sim_link, struct sockaddr* target_addr, 
@@ -1972,14 +1981,15 @@ int tls_api_wrong_alpn_test()
  * Scenario based transmission tests.
  */
 
-int tls_api_one_scenario_init(
+int tls_api_one_scenario_init_ex(
     picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t * simulated_time,
     uint32_t proposed_version,
-    picoquic_tp_t * client_params, picoquic_tp_t * server_params)
+    picoquic_tp_t * client_params, picoquic_tp_t * server_params,
+    picoquic_connection_id_t * icid)
 {
-    int ret = tls_api_init_ctx(p_test_ctx,
+    int ret = tls_api_init_ctx_ex(p_test_ctx,
         (proposed_version == 0) ? PICOQUIC_INTERNAL_TEST_VERSION_1 : proposed_version,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, simulated_time, NULL, NULL, 0, 1, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, simulated_time, NULL, NULL, 0, 1, 0, icid);
 
     if (ret != 0) {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
@@ -2003,6 +2013,14 @@ int tls_api_one_scenario_init(
     }
 
     return ret;
+}
+
+int tls_api_one_scenario_init(
+    picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t* simulated_time,
+    uint32_t proposed_version,
+    picoquic_tp_t* client_params, picoquic_tp_t* server_params)
+{
+    return tls_api_one_scenario_init_ex(p_test_ctx, simulated_time, proposed_version, client_params, server_params, NULL);
 }
 
 int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx) {
@@ -3296,12 +3314,15 @@ static int mtu_drop_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64
     const uint64_t mtu_drop_latency = 100000;
     const uint64_t picosec_1mbps = 8000000;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    picoquic_connection_id_t initial_cid = { {0xa1, 0x10, 0xcc, 0xa1, 0x90, 6, 7, 8}, 8 };
+    int ret;
+
+    initial_cid.id[4] = cc_algo->congestion_algorithm_number;
+    
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
 
     if (ret == 0) {
-        char binlog_file_name[512];
-
         /* Set long delays, 1 Mbps each way */
         test_ctx->c_to_s_link->microsec_latency = mtu_drop_latency;
         test_ctx->c_to_s_link->picosec_per_byte = picosec_1mbps;
@@ -3309,10 +3330,7 @@ static int mtu_drop_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64
         test_ctx->s_to_c_link->picosec_per_byte = picosec_1mbps;
         /* Set the CC algorithm to selected value */
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
-        /* Set the bin log, so we can debug based on traces */
-        (void)picoquic_sprintf(binlog_file_name, sizeof(binlog_file_name), NULL,
-            "mtu_drop_%s_trace.bin", cc_algo->congestion_algorithm_id);
-        picoquic_set_binlog(test_ctx->qserver, binlog_file_name);
+        picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
     }
 
@@ -6817,13 +6835,14 @@ int bad_cnxid_test()
 #define PACKET_TRACE_TEST_REF "picoquictest/packet_trace_ref.txt"
 #endif
 #define PACKET_TRACE_CSV "packet_trace.csv"
-#define PACKET_TRACE_BIN "packet_trace.bin"
+#define PACKET_TRACE_BIN "ace1020304050607.server.log"
 
 int packet_trace_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    picoquic_connection_id_t initial_cid = { {0xac, 0xe1, 2, 3, 4, 5, 6, 7}, 8 };
+    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -6832,7 +6851,7 @@ int packet_trace_test()
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, PACKET_TRACE_BIN);
+        picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 20000, 1000000);
@@ -6879,7 +6898,7 @@ int packet_trace_test()
 #else
 #define QLOG_TRACE_TEST_REF "picoquictest/qlog_trace_ref.txt"
 #endif
-#define QLOG_TRACE_BIN "qlog_trace.bin"
+#define QLOG_TRACE_BIN "0102030405060708.server.log"
 #define QLOG_TRACE_QLOG "qlog_trace.qlog"
 
 #ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
@@ -6924,7 +6943,7 @@ int qlog_trace_test()
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, QLOG_TRACE_BIN);
+        picoquic_set_binlog(test_ctx->qserver, ".");
         picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_null);
         picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_null);
         test_ctx->qserver->cnx_id_callback_ctx = (void*)&cnxfn_data_server;
@@ -7028,11 +7047,17 @@ int ready_to_send_test()
 }
 
 
-static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uint64_t max_completion_time, uint64_t jitter)
+static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uint64_t max_completion_time, uint64_t jitter, uint8_t jitter_id)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    picoquic_connection_id_t initial_cid = { {0xcc, 0xcc, 0, 0, 0, 0, 0, 0}, 8 };
+    int ret;
+
+    initial_cid.id[2] = ccalgo->congestion_algorithm_number;
+    initial_cid.id[3] = jitter_id;
+    
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -7040,8 +7065,6 @@ static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uin
 
     /* Set the congestion algorithm to specified value. Also, request a packet trace */
     if (ret == 0) {
-        char bin_log_name[256];
-        size_t bin_log_name_len = 0;
 
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
@@ -7049,9 +7072,7 @@ static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uin
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->s_to_c_link->jitter = jitter;
 
-        (void)picoquic_sprintf(bin_log_name, sizeof(bin_log_name), &bin_log_name_len, "congestion_%s_j%" PRIu64 ".bin", ccalgo->congestion_algorithm_id, jitter);
-
-        picoquic_set_binlog(test_ctx->qserver, bin_log_name);
+        picoquic_set_binlog(test_ctx->qserver, ".");
 
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_sustained, sizeof(test_scenario_sustained), 0, 0, 0, 20000 + 2*jitter, max_completion_time);
@@ -7070,32 +7091,32 @@ static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uin
 
 int cubic_test() 
 {
-    return congestion_control_test(picoquic_cubic_algorithm, 3600000, 0);
+    return congestion_control_test(picoquic_cubic_algorithm, 3600000, 0, 0);
 }
 
 int cubic_jitter_test()
 {
-    return congestion_control_test(picoquic_cubic_algorithm, 3600000, 5000);
+    return congestion_control_test(picoquic_cubic_algorithm, 3600000, 5000, 5);
 }
 
 int fastcc_test()
 {
-    return congestion_control_test(picoquic_fastcc_algorithm, 3600000, 0);
+    return congestion_control_test(picoquic_fastcc_algorithm, 3600000, 0, 0);
 }
 
 int fastcc_jitter_test()
 {
-    return congestion_control_test(picoquic_fastcc_algorithm, 3650000, 5000);
+    return congestion_control_test(picoquic_fastcc_algorithm, 3650000, 5000, 5);
 }
 
 int bbr_test()
 {
-    return congestion_control_test(picoquic_bbr_algorithm, 3600000, 0);
+    return congestion_control_test(picoquic_bbr_algorithm, 3600000, 0, 0);
 }
 
 int bbr_jitter_test()
 {
-    return congestion_control_test(picoquic_bbr_algorithm, 3650000, 5000);
+    return congestion_control_test(picoquic_bbr_algorithm, 3650000, 5000, 5);
 }
 
 int bbr_long_test()
@@ -7103,7 +7124,11 @@ int bbr_long_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    picoquic_connection_id_t initial_cid = { {0xbb, 0xcc, 0x10, 0, 0, 0, 0, 0}, 8 };
+    int ret;
+
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -7119,7 +7144,7 @@ int bbr_long_test()
         test_ctx->s_to_c_link->jitter = 0;
         test_ctx->c_to_s_link->picosec_per_byte = 8000000; /* Simulate 1 Mbps */
 
-        picoquic_set_binlog(test_ctx->qserver, "bbr_long.bin");
+        picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
 
         ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
@@ -7188,30 +7213,29 @@ int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t laten
 {
     uint64_t simulated_time = 0x0005a138fbde8743; /* Init to non zero time to test handling of time in cc algorithm */
     uint64_t picoseq_per_byte_100 = (1000000ull * 8) / mbps;
-
+    picoquic_connection_id_t initial_cid = { {0xbb, 0xcc, 0, 0, 0, 0, 0, 0}, 8 };
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
+    uint64_t buffer_id = (buffer_size*16) / (latency + jitter);
     int ret = 0;
 
-    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+    initial_cid.id[4] = (mbps > 0xff) ? 0xff : (uint8_t)mbps;
+    initial_cid.id[5] = (latency > 2550000) ? 0xff : (uint8_t)(latency / 10000);
+    initial_cid.id[6] = (jitter >255000) ? 0xff : (uint8_t)(jitter / 1000);
+    initial_cid.id[7] = (buffer_id > 255) ? 0xff : (uint8_t)buffer_id;
+
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
 
     if (ret == 0) {
-        char binlog_file_name[256];
-        size_t binlog_file_name_len = 0;
-
-        (void)picoquic_sprintf(binlog_file_name, sizeof(binlog_file_name), &binlog_file_name_len,
-            "perf_%" PRIu64"mbps_l%"PRIu64"us_j%"PRIu64"us_b%"PRIu64"us.bin",
-            mbps, latency, jitter, buffer_size);
-
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
         test_ctx->qserver->use_long_log = 1;
 
-        picoquic_set_binlog(test_ctx->qserver, binlog_file_name);
+        picoquic_set_binlog(test_ctx->qserver, ".");
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
@@ -7323,14 +7347,22 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     uint64_t picoseq_per_byte_250 = (1000000ull * 8) / mbps_up;
     uint64_t picoseq_per_byte_3 = (1000000ull * 8) / mbps_down;
     picoquic_tp_t client_parameters;
+    picoquic_connection_id_t initial_cid = { {0x5a, 0x4e, 0, 0, 0, 0, 0, 0}, 8 };
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = 0;
+
+    initial_cid.id[2] = ccalgo->congestion_algorithm_number;
+    initial_cid.id[3] = (mbps_up > 0xff) ? 0xff : (uint8_t)mbps_up;
+    initial_cid.id[4] = (mbps_down > 0xff) ? 0xff : (uint8_t)mbps_down;
+    initial_cid.id[5] = (latency > 2550000) ? 0xff : (uint8_t)(latency / 10000);
+    initial_cid.id[6] = (jitter > 255000) ? 0xff : (uint8_t)(jitter / 1000);
+    initial_cid.id[7] = 0x20;
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
     client_parameters.enable_time_stamp = 1;
 
-    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -7339,12 +7371,6 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     /* Simulate satellite links: 250 mbps, 300ms delay in each direction */
     /* Set the congestion algorithm to specified value. Also, request a packet trace */
     if (ret == 0) {
-        char binlog_file_name[256];
-        size_t binlog_file_name_len = 0;
-        (void)picoquic_sprintf(binlog_file_name, sizeof(binlog_file_name), &binlog_file_name_len,
-            "satellite_%s_u%" PRIu64 "_d%" PRIu64 "_j%" PRIu64 "%s.bin", ccalgo->congestion_algorithm_id, 
-            mbps_up, mbps_down, jitter, (has_loss) ? "_loss" : "");
-
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
 
@@ -7359,7 +7385,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
 
         /* set the binary log on the client side */
-        picoquic_set_binlog(test_ctx->qclient, binlog_file_name);
+        picoquic_set_binlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
         /* Since the client connection was created before the binlog was set, force log of connection header */
         binlog_new_connection(test_ctx->cnx_client);
@@ -7492,16 +7518,17 @@ int long_rtt_test()
     uint64_t simulated_time = 0;
     uint64_t latency = 300000ull; /* assume that each direction is 300 ms, e.g. satellite link */
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x10, 0x10, 30, 0, 0, 0, 0, 0}, 8 };
 
-    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
-        0, NULL, NULL);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time,
+        0, NULL, NULL, &initial_cid);
 
     if (ret == 0) {
         /* set the delay estimate, then launch the test */
         test_ctx->c_to_s_link->microsec_latency = latency;
         test_ctx->s_to_c_link->microsec_latency = latency;
 
-        picoquic_set_binlog(test_ctx->qserver, "long_rtt_test.bin");
+        picoquic_set_binlog(test_ctx->qserver, ".");
 
         /* The transmission delay cannot be less than 2.6 sec:
          * 3 handshakes at 1 RTT each = 1.8 sec, plus
@@ -7536,20 +7563,20 @@ int optimistic_ack_test_one(int shall_spoof_ack)
     uint64_t simulated_time = 0;
     int nb_holes = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x0a, 0x0a, 0x0a, 0x0a, 0, 0, 0, 0}, 8 };
 
-    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
-        0, NULL, NULL);
+    if (shall_spoof_ack) {
+        initial_cid.id[7] = 0xff;
+    }
+
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time,
+        0, NULL, NULL, &initial_cid);
 
     if (ret == 0) {
-        char binlog_file_name[256];
-        size_t binlog_file_name_len;
-
         /* set the optimistic ack policy*/
         picoquic_set_optimistic_ack_policy(test_ctx->qserver, 29);
         /* add a log request for debugging */
-        (void)picoquic_sprintf(binlog_file_name, sizeof(binlog_file_name), &binlog_file_name_len,
-            "optimistic_ack%s.bin", (shall_spoof_ack) ? "_spoof" : "");
-        picoquic_set_binlog(test_ctx->qserver, binlog_file_name);
+        picoquic_set_binlog(test_ctx->qserver, ".");
 
         /* Reset the uniform random test */
         picoquic_public_random_seed_64(RANDOM_PUBLIC_TEST_SEED, 1);
@@ -8742,7 +8769,7 @@ int direct_receive_test()
 * We verify that in these scenario the CWIN does not grow too much above the flow control window.
 */
 #define APP_LIMIT_TRACE_CSV "app_limit_trace.csv"
-#define APP_LIMIT_TRACE_BIN "app_limit_trace.bin"
+#define APP_LIMIT_TRACE_BIN "acc1020304050607.server.log"
 
 int app_limit_cc_test_one(
     picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time)
@@ -8753,13 +8780,14 @@ int app_limit_cc_test_one(
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_tp_t client_parameters;
     uint64_t cwin_limit = 100000;
+    picoquic_connection_id_t initial_cid = { {0xac, 0xc1, 2, 3, 4, 5, 6, 7}, 8 };
     int ret = 0;
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
     client_parameters.initial_max_data = 40000;
 
-    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -8769,7 +8797,7 @@ int app_limit_cc_test_one(
 
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
-        picoquic_set_binlog(test_ctx->qserver, APP_LIMIT_TRACE_BIN);
+        picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         test_ctx->cnx_client->is_flow_control_limited = 1;
 

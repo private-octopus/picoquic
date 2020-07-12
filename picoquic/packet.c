@@ -1875,8 +1875,8 @@ int picoquic_incoming_segment(
                     picoquic_val64_connection_id((cnx == NULL) ? ph.dest_cnx_id : picoquic_get_logging_cnxid(cnx)),
                     cnx, addr_from, 1, packet_length, current_time);
             }
-            if (quic->f_binlog != NULL && (cnx == NULL || cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || quic->use_long_log)) {
-                binlog_pdu(quic->f_binlog, log_cnxid, 1, current_time, addr_from, addr_to, packet_length);
+            if (cnx != NULL && cnx->f_binlog != NULL && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || quic->use_long_log)) {
+                binlog_pdu(cnx->f_binlog, log_cnxid, 1, current_time, addr_from, addr_to, packet_length);
             }
         }
         else if (picoquic_compare_connection_id(previous_dest_id, &ph.dest_cnx_id) != 0) {
@@ -1903,9 +1903,9 @@ int picoquic_incoming_segment(
     if (quic->F_log != NULL && (cnx == NULL || cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || quic->use_long_log)) {
         picoquic_log_decrypted_segment(quic->F_log, 1, cnx, 1, &ph, bytes, *consumed, ret);
     }
-    if (ret == 0 && quic->f_binlog != NULL && (quic->use_long_log || cnx == NULL ||
+    if (ret == 0 && cnx != NULL && cnx->f_binlog != NULL && (quic->use_long_log ||
          cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE)) {
-        binlog_packet(quic->f_binlog, log_cnxid, 1, current_time, &ph, bytes, *consumed);
+        binlog_packet(cnx->f_binlog, log_cnxid, 1, current_time, &ph, bytes, *consumed);
     }
 
     if (ret == 0) {

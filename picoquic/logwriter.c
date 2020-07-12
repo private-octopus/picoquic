@@ -596,10 +596,12 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, 
     (void)fseek(f, 0, SEEK_END);
 }
 
-void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
+void binlog_outgoing_packet(picoquic_cnx_t* cnx,
     uint8_t * bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time)
 {
+    FILE* f = cnx->f_binlog;
+
     picoquic_cnx_t* pcnx = cnx;
     picoquic_packet_header ph;
     size_t checksum_length = 16;
@@ -643,11 +645,13 @@ void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
     binlog_packet(f, cnxid, 0, current_time, &ph, bytes, length);
 }
 
-void binlog_packet_lost(FILE* f, picoquic_cnx_t* cnx,
+void binlog_packet_lost(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype,  uint64_t sequence_number, char const * trigger,
     picoquic_connection_id_t * dcid, size_t packet_size,
     uint64_t current_time)
 {
+    FILE* f = cnx->f_binlog;
+
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
 
@@ -673,11 +677,13 @@ void binlog_packet_lost(FILE* f, picoquic_cnx_t* cnx,
 }
 
 
-void binlog_transport_extension(FILE * f, picoquic_cnx_t* cnx, int is_local,
+void binlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
     uint8_t const * sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
     const ptls_iovec_t* alpn_list, size_t alpn_count,
     size_t param_length, uint8_t * params)
 {
+    FILE* f = cnx->f_binlog;
+
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     bytewrite_cid(msg, &cnx->initial_cnxid);
@@ -736,38 +742,66 @@ void binlog_picotls_ticket(FILE* f, picoquic_connection_id_t cnx_id,
     (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
 }
 
+FILE* create_binlog(char const* binlog_file, uint64_t creation_time);
+
 void binlog_new_connection(picoquic_cnx_t * cnx)
 {
-    FILE * f = cnx->quic->f_binlog;
-    if (f == NULL) {
+    if (cnx == NULL || cnx->quic->binlog_dir == NULL) {
         return;
     }
 
-    bytestream_buf stream_msg;
-    bytestream * msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
-    bytewrite_cid(msg, &cnx->initial_cnxid);
-    bytewrite_vint(msg, cnx->start_time);
-    bytewrite_vint(msg, picoquic_log_event_new_connection);
+    int ret = 0;
 
-    bytewrite_int8(msg, cnx->client_mode != 0);
-    bytewrite_int32(msg, cnx->proposed_version);
-    bytewrite_cid(msg, &cnx->path[0]->remote_cnxid);
+    cnx->f_binlog = picoquic_file_close(cnx->f_binlog);
+    
+    char cid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
+    if (picoquic_print_connection_id_hexa(cid_name, sizeof(cid_name), &cnx->initial_cnxid) != 0) {
+        ret = -1;
+    }
 
-    /* Algorithms used */
-    bytewrite_cstr(msg, cnx->congestion_alg->congestion_algorithm_id);
-    bytewrite_vint(msg, cnx->spin_policy);
+    char log_filename[512];
+    if (ret == 0) {
+        if (picoquic_sprintf(log_filename, sizeof(log_filename), NULL, "%s%s%s.%s.log",
+            cnx->quic->binlog_dir, PICOQUIC_FILE_SEPARATOR, cid_name,
+            (cnx->client_mode)?"client":"server") != 0) {
+            ret = -1;
+        }
+    }
 
-    bytestream_buf stream_head;
-    bytestream * head = bytestream_buf_init(&stream_head, 8);
-    bytewrite_int32(head, (uint32_t)bytestream_length(msg));
+    if (ret == 0) {
+        cnx->f_binlog = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic));
+        if (cnx->f_binlog == NULL) {
+            ret = -1;
+        }
+    }
 
-    (void)fwrite(bytestream_data(head), bytestream_length(head), 1, f);
-    (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
+    if (ret == 0) {
+        bytestream_buf stream_msg;
+        bytestream * msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
+        bytewrite_cid(msg, &cnx->initial_cnxid);
+        bytewrite_vint(msg, cnx->start_time);
+        bytewrite_vint(msg, picoquic_log_event_new_connection);
+
+        bytewrite_int8(msg, cnx->client_mode != 0);
+        bytewrite_int32(msg, cnx->proposed_version);
+        bytewrite_cid(msg, &cnx->path[0]->remote_cnxid);
+
+        /* Algorithms used */
+        bytewrite_cstr(msg, cnx->congestion_alg->congestion_algorithm_id);
+        bytewrite_vint(msg, cnx->spin_policy);
+
+        bytestream_buf stream_head;
+        bytestream * head = bytestream_buf_init(&stream_head, 8);
+        bytewrite_int32(head, (uint32_t)bytestream_length(msg));
+
+        (void)fwrite(bytestream_data(head), bytestream_length(head), 1, cnx->f_binlog);
+        (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, cnx->f_binlog);
+    }
 }
 
 void binlog_close_connection(picoquic_cnx_t * cnx)
 {
-    FILE * f = cnx->quic->f_binlog;
+    FILE * f = cnx->f_binlog;
     if (f == NULL) {
         return;
     }
@@ -786,6 +820,8 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
     (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
 
     fflush(f);
+
+    cnx->f_binlog = picoquic_file_close(cnx->f_binlog);
 }
 
 FILE* create_binlog(char const* binlog_file, uint64_t creation_time)
@@ -811,25 +847,6 @@ FILE* create_binlog(char const* binlog_file, uint64_t creation_time)
     return f_binlog;
 }
 
-int binlog_open(picoquic_quic_t* quic, char const* binlog_file)
-{
-    int ret = 0;
-
-    binlog_close(quic);
-    if (binlog_file != NULL) {
-        quic->f_binlog = create_binlog(binlog_file, picoquic_get_quic_time(quic));
-        if (quic->f_binlog == NULL) {
-            ret = -1;
-        }
-    }
-    return ret;
-}
-
-void binlog_close(picoquic_quic_t * quic)
-{
-    quic->f_binlog = picoquic_file_close(quic->f_binlog);
-}
-
 /*
  * Log the state of the congestion management, retransmission, etc.
  * Call either just after processing a received packet, or just after
@@ -838,7 +855,7 @@ void binlog_close(picoquic_quic_t * quic)
 
 void picoquic_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 {
-    if (cnx->quic->f_binlog == NULL) {
+    if (cnx->f_binlog == NULL) {
         return;
     }
 
@@ -899,8 +916,8 @@ void picoquic_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 
     bytewrite_int32(ps_head, (uint32_t)bytestream_length(ps_msg));
 
-    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->quic->f_binlog);
-    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->quic->f_binlog);
+    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->f_binlog);
+    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->f_binlog);
 
     cnx->cwin_blocked = 0;
     cnx->flow_blocked = 0;
@@ -911,9 +928,9 @@ void picoquic_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
  * Write an information message frame, for free form debugging.
  */
 
-void picoquic_binlog_message_v(picoquic_quic_t* quic, picoquic_connection_id_t* icid, const char* fmt, va_list vargs)
+void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
 {
-    if (quic->f_binlog == NULL) {
+    if (cnx->f_binlog == NULL) {
         return;
     }
     bytestream_buf stream_msg;
@@ -921,8 +938,8 @@ void picoquic_binlog_message_v(picoquic_quic_t* quic, picoquic_connection_id_t* 
     size_t message_len;
     char* message_text;
 
-    bytewrite_cid(ps_msg, icid);
-    bytewrite_vint(ps_msg, picoquic_get_quic_time(quic));
+    bytewrite_cid(ps_msg, &cnx->initial_cnxid);
+    bytewrite_vint(ps_msg, picoquic_get_quic_time(cnx->quic));
     bytewrite_vint(ps_msg, picoquic_log_event_info_message);
 #ifdef _WINDOWS
     (void)vsprintf_s((char *)(ps_msg->data + ps_msg->ptr), ps_msg->size - ps_msg->ptr, fmt, vargs);
@@ -944,6 +961,6 @@ void picoquic_binlog_message_v(picoquic_quic_t* quic, picoquic_connection_id_t* 
 
     bytewrite_int32(ps_head, (uint32_t)bytestream_length(ps_msg));
 
-    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, quic->f_binlog);
-    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, quic->f_binlog);
+    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->f_binlog);
+    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->f_binlog);
 }
