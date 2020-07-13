@@ -132,7 +132,7 @@ int quic_server(const char* server_name, int server_port,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     int dest_if, int mtu_max, uint32_t proposed_version, 
     const char * esni_key_file_name, const char * esni_rr_file_name,
-    char const * log_file, char const* bin_dir, int use_long_log, 
+    char const * log_file, char const* bin_dir, char const* qlog_dir, int use_long_log,
     picoquic_congestion_algorithm_t const * cc_algorithm, char const * web_folder)
 {
     /* Start: start the QUIC process with cert and key files */
@@ -191,6 +191,8 @@ int quic_server(const char* server_name, int server_port,
             picoquic_set_default_congestion_algorithm(qserver, cc_algorithm);
 
             picoquic_set_binlog(qserver, bin_dir);
+
+            picoquic_set_qlog(qserver, qlog_dir);
             
             picoquic_set_textlog(qserver, log_file);
 
@@ -404,7 +406,8 @@ int quic_client(const char* ip_address_text, int server_port,
     const char * sni, const char * esni_rr_file,
     const char * alpn, const char * root_crt,
     uint32_t proposed_version, int force_zero_share, int force_migration,
-    int nb_packets_before_key_update, int mtu_max, char const * log_file, char const* bin_dir,
+    int nb_packets_before_key_update, int mtu_max, char const * log_file, 
+    char const* bin_dir, char const* qlog_dir,
     int client_cnx_id_length, char const * client_scenario_text, 
     int no_disk, int use_long_log, picoquic_congestion_algorithm_t const* cc_algorithm,
     int large_client_hello, char const * out_dir, int cipher_suite_id)
@@ -525,6 +528,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
             picoquic_set_key_log_file_from_env(qclient);
             picoquic_set_binlog(qclient, bin_dir);
+            picoquic_set_qlog(qclient, qlog_dir);
             picoquic_set_textlog(qclient, log_file);
             picoquic_set_log_level(qclient, use_long_log);
 
@@ -1000,6 +1004,10 @@ void usage()
     fprintf(stderr, "  -w folder             Folder containing web pages served by server\n");
     fprintf(stderr, "  -l file               Log file, Log to stdout if file = \"n\". No logging if absent.\n");
     fprintf(stderr, "  -b bin_dir            Binary logging to this directory. No binary logging if absent.\n");
+    fprintf(stderr, "  -q qlog_dir           Qlog logging to this directory. No qlog logging if absent,\n");
+    fprintf(stderr, "                        but qlogs could be extracted from binary logs using picolog\n");
+    fprintf(stderr, "                        if binary logs are available.\n");
+    fprintf(stderr, "                        Production of qlogs on servers affects performance.\n");
     fprintf(stderr, "  -L                    Log all packets. If absent, log stops after 100 packets.\n");
     fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
     fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
@@ -1047,6 +1055,7 @@ int main(int argc, char** argv)
     const char * esni_rr_file = NULL;
     const char * log_file = NULL;
     const char * bin_dir = NULL;
+    const char * qlog_dir = NULL;
     const char * sni = NULL;
     const char * alpn = NULL;
     const char* www_dir = NULL;
@@ -1083,7 +1092,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:o:w:f:i:s:e:E:C:l:b:m:n:a:t:S:I:G:1rhzDLQ")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:o:w:f:i:s:e:E:C:l:b:q:m:n:a:t:S:I:G:1rhzDLQ")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1167,11 +1176,14 @@ int main(int argc, char** argv)
         case 'l':
             log_file = optarg;
             break;
+        case 'L':
+            use_long_log = 1;
+            break;
         case 'b':
             bin_dir = optarg;
             break;
-        case 'L':
-            use_long_log = 1;
+        case 'q':
+            qlog_dir = optarg;
             break;
         case 'm':
             mtu_max = atoi(optarg);
@@ -1263,13 +1275,14 @@ int main(int argc, char** argv)
             (cnx_id_cbdata == NULL) ? NULL : (void*)cnx_id_cbdata,
             (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version,
             esni_key_file, esni_rr_file,
-            log_file, bin_dir, use_long_log, cc_algorithm, www_dir);
+            log_file, bin_dir, qlog_dir, use_long_log, cc_algorithm, www_dir);
         printf("Server exit with code = %d\n", ret);
     } else {
         /* Run as client */
         printf("Starting Picoquic (v%s) connection to server = %s, port = %d\n", PICOQUIC_VERSION, server_name, server_port);
         ret = quic_client(server_name, server_port, sni, esni_rr_file, alpn, root_trust_file, proposed_version, force_zero_share, 
-            force_migration, nb_packets_before_update, mtu_max, log_file, bin_dir, client_cnx_id_length, client_scenario,
+            force_migration, nb_packets_before_update, mtu_max, log_file, 
+            bin_dir, qlog_dir, client_cnx_id_length, client_scenario,
             no_disk, use_long_log, cc_algorithm, large_client_hello, out_dir, cipher_suite_id);
 
         printf("Client exit with code = %d\n", ret);
