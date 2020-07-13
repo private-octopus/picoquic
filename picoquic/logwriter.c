@@ -747,7 +747,7 @@ FILE* create_binlog(char const* binlog_file, uint64_t creation_time);
 void binlog_new_connection(picoquic_cnx_t * cnx)
 {
     char const* bin_dir = (cnx->quic->binlog_dir == NULL) ? cnx->quic->qlog_dir : cnx->quic->binlog_dir;
-    if (cnx == NULL || bin_dir == NULL) {
+    if (bin_dir == NULL) {
         return;
     }
 
