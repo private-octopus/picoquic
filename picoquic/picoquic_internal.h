@@ -458,6 +458,12 @@ typedef enum {
     picoquic_tp_grease_quic_bit = 0x2ab2
 } picoquic_tp_enum;
 
+/* Callback for converting binary log to quic log at the end of a connection. 
+ * This is kept private for now, and will only be set through the "set quic log"
+ * API.
+ */
+typedef int (*picoquic_autoqlog_fn)(picoquic_cnx_t * cnx);
+
 /* QUIC context, defining the tables of connections,
  * open sockets, etc.
  */
@@ -465,6 +471,7 @@ typedef struct st_picoquic_quic_t {
     void * F_log;
     char* binlog_dir;
     char* qlog_dir;
+    picoquic_autoqlog_fn autoqlog_fn;
     void* tls_master_ctx;
     struct st_ptls_key_exchange_context_t * esni_key_exchange[16];
     picoquic_stream_data_cb_fn default_callback_fn;

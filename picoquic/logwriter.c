@@ -25,10 +25,8 @@
 
 #include <stdarg.h>
 #include "logwriter.h"
-#include "logreader.h"
 #include "bytestream.h"
 #include "tls_api.h"
-#include "qlog.h"
 #include "picotls.h"
 
 #define VARINT_LEN(bytes) ((size_t)1 << (((bytes)[0] & 0xC0) >> 6))
@@ -830,39 +828,8 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
 
     cnx->f_binlog = picoquic_file_close(cnx->f_binlog);
 
-    if (cnx->quic->qlog_dir != NULL) {
-        uint64_t log_time = cnx->start_time;
-        FILE* f_binlog = picoquic_open_cc_log_file_for_read(cnx->binlog_file_name, &log_time);
-        if (f_binlog == NULL) {
-            DBG_PRINTF("Cannot open file %s for write.\n", cnx->binlog_file_name);
-        }
-        else {
-            char filename[512];
-            char cid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
-
-            if (picoquic_print_connection_id_hexa(cid_name, sizeof(cid_name), &cnx->initial_cnxid) != 0) {
-                DBG_PRINTF("Cannot convert connection id for %s", cnx->binlog_file_name);
-            } else if (picoquic_sprintf(filename, sizeof(filename), NULL, "%s%s%s.%s.%s",
-                cnx->quic->qlog_dir, PICOQUIC_FILE_SEPARATOR, cid_name,
-                (cnx->client_mode)?"client":"server", "qlog") != 0){ 
-                DBG_PRINTF("Cannot format file name for connection %s in file %s", cid_name, cnx->binlog_file_name);
-            }
-            else {
-                int convert_ret = qlog_convert(&cnx->initial_cnxid, f_binlog, cnx->binlog_file_name, filename, cnx->quic->qlog_dir);
-                picoquic_file_close(f_binlog);
-                if (convert_ret != 0) {
-                    DBG_PRINTF("Cannot convert file %s to qlog, err = %d.\n", cnx->binlog_file_name, convert_ret);
-                }
-                else {
-                    if (cnx->quic->binlog_dir == NULL) {
-                        int last_err = 0;
-                        if (picoquic_file_delete(cnx->binlog_file_name, &last_err) != 0) {
-                            DBG_PRINTF("Cannot delete file %s to qlog, err = %d.\n", cnx->binlog_file_name, last_err);
-                        }
-                    }
-                }
-            }
-        }
+    if (cnx->quic->qlog_dir != NULL && cnx->quic->autoqlog_fn != NULL) {
+        (void)cnx->quic->autoqlog_fn(cnx);
     }
     cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
 }

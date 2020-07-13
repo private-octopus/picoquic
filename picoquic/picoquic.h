@@ -347,19 +347,7 @@ void picoquic_set_fuzz(picoquic_quic_t* quic, picoquic_fuzz_fn fuzz_fn, void * f
  */
 int picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_dir);
 
-/* Set the qlog log folder and start generating per connection qlog traces into it. 
- * Set to NULL value to stop binary tracing.
- * If the binary folder is not set, binary traces will be generated temporarily in 
- * the qlog folder during the connection, and then deleted after the connection
- * is closed and the binary trace has been converted to qlog.
- * This conversion from binary to qlog consumes resource and can affect performance.
- * Applications that are concerned about the performance issues should not use this
- * option, and should instead use binary logs, from which qlogs can be extracted
- * using the picolog_t app.
- */
-int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir);
-
-/* Set the binary log file and start tracing into it.
+/* Set the text log file and start tracing into it.
  * Set to NULL value to stop text log.
  */
 int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);

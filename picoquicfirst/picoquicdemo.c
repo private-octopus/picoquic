@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ws2tcpip.h>
+#include "autoqlog.h"
 
 #ifndef SOCKET_TYPE
 #define SOCKET_TYPE SOCKET
@@ -84,6 +85,7 @@
 
 #define SERVER_CERT_FILE "certs/cert.pem"
 #define SERVER_KEY_FILE "certs/key.pem"
+#include "autoqlog.h"
 
 #endif
 
@@ -96,6 +98,7 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "picoquic_internal.h"
 #include "picosocks.h"
 #include "picoquic_utils.h"
+#include "autoqlog.h"
 #include "h3zero.c"
 #include "democlient.h"
 #include "demoserver.h"

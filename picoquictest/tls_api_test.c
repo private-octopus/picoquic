@@ -35,6 +35,7 @@
 #include "logwriter.h"
 #include "csv.h"
 #include "qlog.h"
+#include "autoqlog.h"
 #include "picoquictest.h"
 
 #define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull

@@ -146,12 +146,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="autoqlog.c" />
+    <ClCompile Include="cidset.c" />
     <ClCompile Include="csv.c" />
+    <ClCompile Include="logconvert.c" />
+    <ClCompile Include="logreader.c" />
+    <ClCompile Include="qlog.c" />
     <ClCompile Include="svg.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="csv.h" />
-    <ClInclude Include="svg.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

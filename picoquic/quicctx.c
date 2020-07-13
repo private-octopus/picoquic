@@ -2726,13 +2726,6 @@ int picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_dir)
     return 0;
 }
 
-int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
-{
-    quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
-    quic->qlog_dir = picoquic_string_duplicate(qlog_dir);
-    return 0;
-}
-
 int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
 {
     int ret = 0;
