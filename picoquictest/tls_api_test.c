@@ -35,6 +35,7 @@
 #include "logwriter.h"
 #include "csv.h"
 #include "qlog.h"
+#include "autoqlog.h"
 #include "picoquictest.h"
 
 #define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
@@ -6900,6 +6901,7 @@ int packet_trace_test()
 #endif
 #define QLOG_TRACE_BIN "0102030405060708.server.log"
 #define QLOG_TRACE_QLOG "qlog_trace.qlog"
+#define QLOG_TRACE_AUTO_QLOG "0102030405060708.server.qlog"
 
 #ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
 const int has_chacha_poly = 1;
@@ -6925,7 +6927,7 @@ void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_lo
     }
 }
 
-int qlog_trace_test()
+int qlog_trace_test_one(int auto_qlog, int keep_binlog)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -6940,10 +6942,22 @@ int qlog_trace_test()
         ret = -1;
     }
 
+    if (!auto_qlog && !keep_binlog) {
+        ret = -1;
+    }
+
+    (void)picoquic_file_delete(QLOG_TRACE_BIN, NULL);
+    (void)picoquic_file_delete((auto_qlog)? QLOG_TRACE_AUTO_QLOG:QLOG_TRACE_QLOG, NULL);
+
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        if (auto_qlog) {
+            picoquic_set_qlog(test_ctx->qserver, ".");
+        }
+        if (keep_binlog) {
+            picoquic_set_binlog(test_ctx->qserver, ".");
+        }
         picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_null);
         picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_null);
         test_ctx->qserver->cnx_id_callback_ctx = (void*)&cnxfn_data_server;
@@ -6981,7 +6995,7 @@ int qlog_trace_test()
     }
 
     /* Create a QLOG file from the .bin log file */
-    if (ret == 0) {
+    if (ret == 0 && !auto_qlog) {
         uint64_t log_time = 0;
         FILE* f_binlog = picoquic_open_cc_log_file_for_read(QLOG_TRACE_BIN, &log_time);
         if (f_binlog == NULL) {
@@ -7004,11 +7018,27 @@ int qlog_trace_test()
             DBG_PRINTF("%s", "Cannot set the qlog trace test ref file name.\n");
         }
         else {
-            ret = picoquic_test_compare_text_files(QLOG_TRACE_QLOG, qlog_trace_test_ref);
+            ret = picoquic_test_compare_text_files((auto_qlog) ? QLOG_TRACE_AUTO_QLOG : QLOG_TRACE_QLOG,
+                qlog_trace_test_ref);
         }
     }
 
     return ret;
+}
+
+int qlog_trace_test()
+{
+    return qlog_trace_test_one(0, 1);
+}
+
+int qlog_trace_only_test()
+{
+    return qlog_trace_test_one(1, 0);
+}
+
+int qlog_trace_auto_test()
+{
+    return qlog_trace_test_one(1, 1);
 }
 
 /*

@@ -746,7 +746,8 @@ FILE* create_binlog(char const* binlog_file, uint64_t creation_time);
 
 void binlog_new_connection(picoquic_cnx_t * cnx)
 {
-    if (cnx == NULL || cnx->quic->binlog_dir == NULL) {
+    char const* bin_dir = (cnx->quic->binlog_dir == NULL) ? cnx->quic->qlog_dir : cnx->quic->binlog_dir;
+    if (bin_dir == NULL) {
         return;
     }
 
@@ -762,9 +763,13 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
     char log_filename[512];
     if (ret == 0) {
         if (picoquic_sprintf(log_filename, sizeof(log_filename), NULL, "%s%s%s.%s.log",
-            cnx->quic->binlog_dir, PICOQUIC_FILE_SEPARATOR, cid_name,
+            bin_dir, PICOQUIC_FILE_SEPARATOR, cid_name,
             (cnx->client_mode)?"client":"server") != 0) {
             ret = -1;
+        }
+        else {
+            picoquic_string_free(cnx->binlog_file_name);
+            cnx->binlog_file_name = picoquic_string_duplicate(log_filename);
         }
     }
 
@@ -822,6 +827,11 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
     fflush(f);
 
     cnx->f_binlog = picoquic_file_close(cnx->f_binlog);
+
+    if (cnx->quic->qlog_dir != NULL && cnx->quic->autoqlog_fn != NULL) {
+        (void)cnx->quic->autoqlog_fn(cnx);
+    }
+    cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
 }
 
 FILE* create_binlog(char const* binlog_file, uint64_t creation_time)

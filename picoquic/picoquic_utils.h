@@ -144,6 +144,8 @@ FILE * picoquic_file_open_ex(char const * file_name, char const * flags, int * l
 FILE * picoquic_file_open(char const * file_name, char const * flags);
 FILE * picoquic_file_close(FILE * F);
 
+int picoquic_file_delete(char const* file_name, int* last_err);
+
 /* Skip and decoding functions */
 uint8_t* picoquic_frames_fixed_skip(uint8_t * bytes, const uint8_t * bytes_max, size_t size);
 uint8_t* picoquic_frames_varint_skip(uint8_t * bytes, const uint8_t * bytes_max);

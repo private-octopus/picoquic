@@ -186,6 +186,8 @@ static const picoquic_test_def_t test_table[] = {
     { "padding_test", padding_test },
     { "packet_trace", packet_trace_test },
     { "qlog_trace", qlog_trace_test },
+    { "qlog_trace_auto", qlog_trace_auto_test },
+    { "qlog_trace_only", qlog_trace_only_test },
     { "rebiding_stress", rebinding_stress_test },
     { "ready_to_send", ready_to_send_test },
     { "cubic", cubic_test },

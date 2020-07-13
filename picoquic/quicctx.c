@@ -565,6 +565,9 @@ void picoquic_free(picoquic_quic_t* quic)
             quic->tls_master_ctx = NULL;
         }
 
+        quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
+        quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
+
         free(quic);
     }
 }

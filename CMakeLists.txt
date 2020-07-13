@@ -39,6 +39,7 @@ set(PICOQUIC_LIBRARY_FILES
 )
 
 set(LOGLIB_LIBRARY_FILES
+    loglib/autoqlog.c
     loglib/cidset.c
     loglib/csv.c
     loglib/logconvert.c

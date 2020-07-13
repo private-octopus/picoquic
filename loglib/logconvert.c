@@ -26,7 +26,7 @@ const char * ptype2str(picoquic_packet_type_enum ptype)
     case picoquic_packet_error:
         return "error";
     case picoquic_packet_version_negotiation:
-        return "version";
+        return "version_negotiation";
     case picoquic_packet_initial:
         return "initial";
     case picoquic_packet_retry:
