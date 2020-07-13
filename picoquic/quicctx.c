@@ -565,6 +565,9 @@ void picoquic_free(picoquic_quic_t* quic)
             quic->tls_master_ctx = NULL;
         }
 
+        quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
+        quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
+
         free(quic);
     }
 }
@@ -2720,6 +2723,13 @@ int picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_dir)
 {
     quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
     quic->binlog_dir = picoquic_string_duplicate(binlog_dir);
+    return 0;
+}
+
+int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
+{
+    quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
+    quic->qlog_dir = picoquic_string_duplicate(qlog_dir);
     return 0;
 }
 

@@ -32,6 +32,7 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <pthread.h>
+#include <unistd.h>
 #endif
 #include "picoquic_internal.h"
 #include <stdarg.h>
@@ -549,6 +550,25 @@ FILE * picoquic_file_close(FILE * F)
         (void)fclose(F);
     }
     return NULL;
+}
+
+/* Safely delete file in a portable way */
+int picoquic_file_delete(char const * file_name, int * last_err)
+{
+    int ret;
+
+#ifdef _WINDOWS
+    ret = _unlink(file_name);
+    if (last_err != NULL && ret != 0) {
+        *last_err = errno;
+    }
+#else
+    ret = unlink(file_name);
+    if (last_err != NULL && ret != 0) {
+        *last_err = errno;
+    }
+#endif
+    return ret;
 }
 
  /* Skip and decode function.

@@ -15,11 +15,14 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/bbr.c
     picoquic/bytestream.c
 	picoquic/cc_common.c
+    picoquic/cidset.c
     picoquic/cubic.c
     picoquic/fastcc.c
     picoquic/frames.c
     picoquic/intformat.c
+    picoquic/logconvert.c
     picoquic/logger.c
+    picoquic/logreader.c
     picoquic/logwriter.c
     picoquic/newreno.c
     picoquic/packet.c
@@ -27,6 +30,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/picosocks.c
     picoquic/picosplay.c
     picoquic/quicctx.c
+    picoquic/qlog.c
     picoquic/sacks.c
     picoquic/sender.c
     picoquic/sim_link.c
@@ -39,11 +43,7 @@ set(PICOQUIC_LIBRARY_FILES
 )
 
 set(LOGLIB_LIBRARY_FILES
-    loglib/cidset.c
     loglib/csv.c
-    loglib/logconvert.c
-    loglib/logreader.c
-    loglib/qlog.c
     loglib/svg.c
 )
 
