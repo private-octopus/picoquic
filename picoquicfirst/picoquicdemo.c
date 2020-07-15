@@ -698,7 +698,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
                 if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready && notified_ready == 0) {
                     if (picoquic_tls_is_psk_handshake(cnx_client)) {
-                        fprintf(stdout, "The session was properly resumed!");
+                        fprintf(stdout, "The session was properly resumed!\n");
                         picoquic_log_app_message(cnx_client,
                             "%s", "The session was properly resumed!");
                     }
@@ -819,6 +819,10 @@ int quic_client(const char* ip_address_text, int server_port,
                                 picoquic_log_app_message(cnx_client, "Out of %d zero RTT packets, %d were acked by the server.",
                                     cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
                             }
+
+                            fprintf(stdout, "Quic Bit was %sgreased by the client.\n", (cnx_client->quic_bit_greased)?"":"NOT ");
+                            fprintf(stdout, "Quic Bit was %sgreased by the server.\n", (cnx_client->quic_bit_received_0) ? "" : "NOT ");
+
                             if (force_migration && !migration_started) {
                                 fprintf(stdout, "Could not start testing migration.\n");
                                 picoquic_log_app_message(cnx_client, "%s", "Could not start testing migration.");
@@ -884,7 +888,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
                         if (bytes_sent <= 0)
                         {
-                            fprintf(stdout, "Cannot send packet to server, returns %d", bytes_sent);
+                            fprintf(stdout, "Cannot send packet to server, returns %d\n", bytes_sent);
                             picoquic_log_app_message(cnx_client, "Cannot send packet to server, returns %d", bytes_sent);
                         }
                     }

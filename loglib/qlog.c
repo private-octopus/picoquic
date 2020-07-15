@@ -57,6 +57,8 @@ typedef struct qlog_context_st {
     unsigned int key_phase_received : 1;
     unsigned int spin_bit_sent_last : 1;
     unsigned int spin_bit_sent : 1;
+    unsigned int spin_bit_received_last : 1;
+    unsigned int spin_bit_received : 1;
 
 
     int state;
@@ -302,7 +304,9 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_enable_time_stamp:
                     qlog_boolean_transport_extension(f, "enable_time_stamp", s, extension_length);
                     break;
-                 
+                case picoquic_tp_grease_quic_bit:
+                    qlog_boolean_transport_extension(f, "grease_quic_bit", s, extension_length);
+                    break;
                 default:
                     /* dump unknown extensions */
                     fprintf(f, "\"%" PRIx64 "\": ", extension_type);
@@ -542,6 +546,9 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
             need_key_phase = !ctx->key_phase_received || (ctx->key_phase_received_last != ph->key_phase);
             ctx->key_phase_received_last = ph->key_phase;
             ctx->key_phase_received = 1;
+            need_spin = !ctx->spin_bit_received || (ctx->spin_bit_received_last != ph->spin);
+            ctx->spin_bit_received = 1;
+            ctx->spin_bit_received_last = ph->spin;
         }
         if (need_key_phase) {
             fprintf(f, ", \"key_phase\": %d", ph->key_phase);
@@ -1172,6 +1179,8 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
     ctx->key_phase_received = 0;
     ctx->spin_bit_sent_last = 0;
     ctx->spin_bit_sent = 0;
+    ctx->spin_bit_received_last = 0;
+    ctx->spin_bit_received = 0;
 
     fprintf(f, "{ \"qlog_version\": \"draft-00\", \"title\": \"picoquic\", \"traces\": [\n");
     fprintf(f, "{ \"vantage_point\": { \"name\": \"backend-67\", \"type\": \"%s\" },\n",

@@ -80,7 +80,7 @@
 [21652, "TRANSPORT", "PACKET_RECEIVED", { "packet_type": "handshake", "header": { "packet_size": 89, "packet_number": 1, "payload_length": 44, "scid": "0203040506070809", "dcid": "030405060708090a" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[0, 1]]}, { 
     "frame_type": "crypto", "offset": 0, "length": 36}]}],
-[21652, "TRANSPORT", "PACKET_RECEIVED", { "packet_type": "1rtt", "header": { "packet_size": 222, "packet_number": 0, "dcid": "030405060708090a", "key_phase": 0 }, "frames": [{ 
+[21652, "TRANSPORT", "PACKET_RECEIVED", { "packet_type": "1rtt", "header": { "packet_size": 222, "packet_number": 0, "dcid": "030405060708090a", "key_phase": 0, "spin": 0 }, "frames": [{ 
     "frame_type": "new_connection_id", "sequence_number": 1, "retire_before": 0, "connection_id": "0303040506070809", "reset_token": "053eb6a0de938613052030c0fbf65e05"}, { 
     "frame_type": "new_connection_id", "sequence_number": 2, "retire_before": 0, "connection_id": "0403040506070809", "reset_token": "f6a690832b3e443e1cabc8ffcbf5b11a"}, { 
     "frame_type": "new_connection_id", "sequence_number": 3, "retire_before": 0, "connection_id": "0503040506070809", "reset_token": "f4522daa3e83e5786ac2679fd899e971"}, { 
