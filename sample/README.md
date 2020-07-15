@@ -65,3 +65,32 @@ from the binary log file, use the program `picolog_t`:
 ```
 picolog_t -f qlog -o "." 012345678abcdef.client.log
 ```
+
+Building the sample
+-------------------
+The sample is built when building `picoquic` using `cmake` and `make`, but you
+may want to build it separately from `picoquic`. For that, you will need
+to compile the sample components: `sample.c`, `sample_client.c` and
+`sample_server.c`. This requires accessing `sample.h`, and adding an include
+search path to `picoquic\lib` in order to find the include files:
+
+* Picoquic API: `picoquic.h`
+* Picoquic portable socket API: `picosocks.h`
+* Picoquic utilities: `picoquic_utils.h`
+
+You will then need to link the objects with the following dependencies:
+
+* Picoquic core library: `libpicoquic-core.a`
+* Picoquic logging library: `libpicoquic-log.a`
+* Picotls core library: `libpicotls-core.a` 
+* Picotls fusion library: `libpicotls-fusion.a`
+* Picotls minicrypto library: `libpicotls-minicrypto.a`
+* Picotls openssl mapping library: `libpicotls-openssl.a`
+* OpenSSL library: `libssl.so`
+* OpenSSL crypto library: `libcrypto.so`
+
+On Windows, these dependencies have different names, as seen in the project
+`sample.vcxproj`
+
+Suggestions for a better experience and contributions such as CMake of make
+files would be most welcome!
