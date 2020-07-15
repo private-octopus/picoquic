@@ -888,7 +888,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
                         if (bytes_sent <= 0)
                         {
-                            fprintf(stdout, "Cannot send packet to server, returns %d", bytes_sent);
+                            fprintf(stdout, "Cannot send packet to server, returns %d\n", bytes_sent);
                             picoquic_log_app_message(cnx_client, "Cannot send packet to server, returns %d", bytes_sent);
                         }
                     }
