@@ -1179,6 +1179,8 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
     ctx->key_phase_received = 0;
     ctx->spin_bit_sent_last = 0;
     ctx->spin_bit_sent = 0;
+    ctx->spin_bit_received_last = 0;
+    ctx->spin_bit_received = 0;
 
     fprintf(f, "{ \"qlog_version\": \"draft-00\", \"title\": \"picoquic\", \"traces\": [\n");
     fprintf(f, "{ \"vantage_point\": { \"name\": \"backend-67\", \"type\": \"%s\" },\n",
