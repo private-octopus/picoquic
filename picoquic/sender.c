@@ -1474,9 +1474,11 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     }
                     
                     if (length <= packet->offset) {
-                        /* Pace down the next retransmission so as to not pile up error upon error */
                         length = 0;
-                        path_x->pacing_bucket_nanosec -= path_x->pacing_packet_time_nanosec;
+                        if (!packet_is_pure_ack) {
+                            /* Pace down the next retransmission so as to not pile up error upon error */
+                            path_x->pacing_bucket_nanosec -= path_x->pacing_packet_time_nanosec;
+                        }
                     }
                     else {
                         break;
@@ -3343,20 +3345,25 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     }
 
     if (cnx->cnx_state != picoquic_state_disconnected) {
-        if (is_pure_ack && ack_sent && length > 0) {
-            /* If we have sent many ACKs, add a PING to get an ack of ack */
-            bytes_next = bytes + length;
-            if (!cnx->pkt_ctx[pc].ack_of_ack_requested &&
-                bytes_next < bytes_max &&
-                cnx->pkt_ctx[pc].highest_acknowledged + 64 < cnx->pkt_ctx[pc].send_sequence &&
-                path_x == cnx->path[0] &&
-                cnx->pkt_ctx[pc].highest_acknowledged_time + 2 * cnx->path[0]->smoothed_rtt < current_time) {
-                /* Bundle a Ping with ACK, so as to get trigger an Acknowledgement */
-                *bytes_next++ = picoquic_frame_type_ping;
-                cnx->pkt_ctx[pc].ack_of_ack_requested = 1;
-                is_pure_ack = 0;
+        if (length > 0){
+            cnx->pkt_ctx[pc].ack_of_ack_requested |= !is_pure_ack;
+            if (!cnx->pkt_ctx[pc].ack_of_ack_requested && ack_sent) {
+                /* If we have sent many ACKs, add a PING to get an ack of ack */
+                /* The number 24 is chosen to not break any of the unit tests. If the number is
+                 * too small, the PING mechanism can cause delayed end of the connection, or 
+                 * early breakage */
+                bytes_next = bytes + length;
+                if (bytes_next < bytes_max &&
+                    cnx->pkt_ctx[pc].highest_acknowledged + 24 < cnx->pkt_ctx[pc].send_sequence &&
+                    path_x == cnx->path[0] &&
+                    cnx->pkt_ctx[pc].highest_acknowledged_time + cnx->path[0]->smoothed_rtt < current_time) {
+                    /* Bundle a Ping with ACK, so as to get trigger an Acknowledgement */
+                    *bytes_next++ = picoquic_frame_type_ping;
+                    cnx->pkt_ctx[pc].ack_of_ack_requested = 1;
+                    is_pure_ack = 0;
+                    length = bytes_next - bytes;
+                }
             }
-            length = bytes_next - bytes;
         }
 
         if (is_pure_ack == 0)
