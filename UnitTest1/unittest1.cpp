@@ -660,6 +660,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(red_cc)
+        {
+            int ret = red_cc_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_spurious_retransmit)
         {
             int ret = spurious_retransmit_test();

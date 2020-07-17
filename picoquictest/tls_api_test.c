@@ -3395,7 +3395,7 @@ int mtu_drop_test()
         10000000,
         10000000,
         10000000,
-        10000000
+        11000000
     };
     int ret = 0;
 
@@ -7374,8 +7374,8 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 {
     uint64_t simulated_time = 0;
     uint64_t latency = 300000;
-    uint64_t picoseq_per_byte_250 = (1000000ull * 8) / mbps_up;
-    uint64_t picoseq_per_byte_3 = (1000000ull * 8) / mbps_down;
+    uint64_t picoseq_per_byte_up = (1000000ull * 8) / mbps_up;
+    uint64_t picoseq_per_byte_down = (1000000ull * 8) / mbps_down;
     picoquic_tp_t client_parameters;
     picoquic_connection_id_t initial_cid = { {0x5a, 0x4e, 0, 0, 0, 0, 0, 0}, 8 };
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -7386,7 +7386,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     initial_cid.id[4] = (mbps_down > 0xff) ? 0xff : (uint8_t)mbps_down;
     initial_cid.id[5] = (latency > 2550000) ? 0xff : (uint8_t)(latency / 10000);
     initial_cid.id[6] = (jitter > 255000) ? 0xff : (uint8_t)(jitter / 1000);
-    initial_cid.id[7] = 0x20;
+    initial_cid.id[7] = (has_loss)?0xff:0x00;
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
@@ -7406,9 +7406,9 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
-        test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_250;
+        test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_up;
         test_ctx->s_to_c_link->microsec_latency = latency;
-        test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_3; 
+        test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_down;
         test_ctx->s_to_c_link->jitter = jitter;
         test_ctx->stream0_flow_release = 1;
 
@@ -7446,7 +7446,7 @@ int satellite_basic_test()
 int satellite_loss_test()
 {
     /* Should be less than 10 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8300000, 250, 3, 0, 1);
 }
 
 int satellite_jitter_test()
@@ -9291,4 +9291,124 @@ int grease_quic_bit_test()
 int grease_quic_bit_one_way_test()
 {
     return  grease_quic_bit_test_one(1);
+}
+
+/* Test effects of random early drop congestion control
+ */
+ /*
+ * MTU discovery test. Perform a long duration transmission.
+ * Verify that MTU was properly set to expected value, then
+ * simulate a routing event that causes the MTU to drop.
+ * Check that the MTU gets reduced, and the transmission
+ * completes.
+ */
+
+static int red_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t target_time, uint64_t loss_target)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    const uint64_t latency_target = 7500;
+    const uint64_t red_drop_mask = 0x5555555555555555ull;
+    const uint64_t queue_max_red = 40000;
+    const uint64_t picosec_per_byte = (1000000ull * 8) /100;
+    uint64_t observed_loss = 0;
+
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x8e, 0xd0, 0xcc, 0xa1, 0x90, 6, 7, 8}, 8 };
+    int ret;
+
+    initial_cid.id[4] = cc_algo->congestion_algorithm_number;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0) {
+        /* Set long delays, 1 Mbps each way */
+        test_ctx->c_to_s_link->microsec_latency = latency_target;
+        test_ctx->c_to_s_link->red_drop_mask = red_drop_mask;
+        test_ctx->c_to_s_link->red_queue_max = queue_max_red;
+        test_ctx->c_to_s_link->picosec_per_byte = picosec_per_byte;
+        test_ctx->s_to_c_link->microsec_latency = latency_target;
+        test_ctx->s_to_c_link->red_drop_mask = red_drop_mask;
+        test_ctx->s_to_c_link->red_queue_max = queue_max_red;
+        test_ctx->s_to_c_link->picosec_per_byte = picosec_per_byte;
+        /* Set the CC algorithm to selected value */
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, latency_target, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_sustained, sizeof(test_scenario_sustained));
+    }
+
+    /* Try to complete the data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    if (ret == 0) {
+        observed_loss = (test_ctx->cnx_server == NULL) ? UINT64_MAX : test_ctx->cnx_server->nb_retransmission_total;
+    }
+
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, target_time);
+    }
+
+
+
+    if (ret == 0 && observed_loss > loss_target) {
+        DBG_PRINTF("RED, for cc=%s, expected %" PRIu64 " losses, got %" PRIu64 "\n",
+            cc_algo->congestion_algorithm_id, loss_target, observed_loss);
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int red_cc_test()
+{
+    picoquic_congestion_algorithm_t* algo_list[5] = {
+        picoquic_newreno_algorithm,
+        picoquic_cubic_algorithm,
+        picoquic_dcubic_algorithm,
+        picoquic_fastcc_algorithm,
+        picoquic_bbr_algorithm
+    };
+    uint64_t algo_time[5] = {
+        600000,
+        500000,
+        500000,
+        500000,
+        500000
+    };
+    uint64_t algo_loss[5] = {
+        150,
+        300,
+        300,
+        180,
+        150
+    };
+
+    int ret = 0;
+
+    for (int i = 0; i < 5 && ret == 0; i++) {
+        ret = red_cc_algotest(algo_list[i], algo_time[i], algo_loss[i]);
+        if (ret != 0) {
+            DBG_PRINTF("RED cc test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
+        }
+    }
+
+    return ret;
 }
