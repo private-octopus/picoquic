@@ -54,6 +54,8 @@ picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
         link->jitter_seed = 0xDEADBEEFBABAC001ull;
         link->jitter = 0;
         link->path_mtu = PICOQUIC_MAX_PACKET_SIZE;
+        link->red_drop_mask = 0;
+        link->red_queue_max = 0;
     }
 
     return link;
@@ -145,10 +147,23 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
 {
     uint64_t queue_delay = (current_time > link->queue_time) ? 0 : link->queue_time - current_time;
     uint64_t transmit_time = ((link->picosec_per_byte * ((uint64_t)packet->length)) >> 20);
+    uint64_t should_drop = 0;
+
     if (transmit_time <= 0)
         transmit_time = 1;
 
-    if (link->queue_delay_max == 0 || queue_delay < link->queue_delay_max) {
+    if (link->queue_delay_max > 0 && queue_delay >= link->queue_delay_max) {
+        if (link->red_drop_mask == 0 || queue_delay >= link->red_queue_max) {
+            should_drop = 1;
+        }
+        else {
+            should_drop = link->red_drop_mask & 1;
+            link->red_drop_mask >>= 1;
+            link->red_drop_mask |= (should_drop << 63);
+        }
+    }
+
+    if (!should_drop) {
 
         link->queue_time = current_time + queue_delay + transmit_time;
 
@@ -170,7 +185,7 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
             }
         }
     } else {
-        /* simulate congestion loss on queue full */
+        /* simulate congestion loss or random drop on queue full */
         link->packets_dropped++;
         free(packet);
     }

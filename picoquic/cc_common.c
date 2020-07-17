@@ -63,23 +63,33 @@ void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t * rtt_track, uint64_t rt
     }
 }
 
-int picoquic_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event)
+int picoquic_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event, uint64_t lost_packet_number)
 {
     int ret = 0;
+    uint64_t next_number = rtt_track->last_lost_packet_number;
 
-    switch (event) {
-    case picoquic_congestion_notification_acknowledgement:
-        rtt_track->smoothed_drop_rate *= (1.0 - PICOQUIC_SMOOTHED_LOSS_FACTOR);
-        break;
-    case picoquic_congestion_notification_repeat:
+    if (lost_packet_number > next_number) {
+        if (next_number + PICOQUIC_SMOOTHED_LOSS_SCOPE < lost_packet_number) {
+            next_number = lost_packet_number - PICOQUIC_SMOOTHED_LOSS_SCOPE;
+        }
+
+        while (next_number < lost_packet_number) {
+            rtt_track->smoothed_drop_rate *= (1.0 - PICOQUIC_SMOOTHED_LOSS_FACTOR);
+            next_number++;
+        }
+
         rtt_track->smoothed_drop_rate += (1.0 - rtt_track->smoothed_drop_rate) * PICOQUIC_SMOOTHED_LOSS_FACTOR;
-        ret = rtt_track->smoothed_drop_rate > PICOQUIC_SMOOTHED_LOSS_THRESHOLD;
-        break;
-    case picoquic_congestion_notification_timeout:
-        rtt_track->smoothed_drop_rate += (1.0 - rtt_track->smoothed_drop_rate) * PICOQUIC_SMOOTHED_LOSS_FACTOR;
-        ret = 1;
-    default:
-        break;
+        rtt_track->last_lost_packet_number = lost_packet_number;
+
+        switch (event) {
+        case picoquic_congestion_notification_repeat:
+            ret = rtt_track->smoothed_drop_rate > PICOQUIC_SMOOTHED_LOSS_THRESHOLD;
+            break;
+        case picoquic_congestion_notification_timeout:
+            ret = 1;
+        default:
+            break;
+        }
     }
 
     return ret;

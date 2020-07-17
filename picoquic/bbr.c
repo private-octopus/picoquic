@@ -748,10 +748,6 @@ static void picoquic_bbr_notify(
     if (bbr_state != NULL) {
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement:
-            /* Update the packet loss rate */
-            if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
-                (void)picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification);
-            }
             /* sum the amount of data acked per packet */
             bbr_state->bytes_delivered += nb_bytes_acknowledged;
             break;
@@ -760,10 +756,15 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
-            /* enter recovery */
+            /* Update and check the packet loss rate */
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt &&
-                picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification)) {
+                picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification, lost_packet_number)) {
                 BBRExitStartupLongRtt(bbr_state, path_x, current_time);
+            }
+            else if (bbr_state->state == picoquic_bbr_alg_startup &&
+                picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification, lost_packet_number)) {
+                bbr_state->filled_pipe = 1;
+                BBREnterDrain(bbr_state);
             }
             break;
         case picoquic_congestion_notification_spurious_repeat:
