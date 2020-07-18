@@ -29,6 +29,7 @@
 #define FASTCC_BANDWIDTH_FRACTION 0.5
 #define FASTCC_REPEAT_THRESHOLD 4
 #define FASTCC_BETA 0.125
+#define FASTCC_BETA_HEAVY_LOSS 0.5
 #define FASTCC_EVAL_ALPHA 0.25
 #define FASTCC_DELAY_THRESHOLD_MAX 25000
 #define FASTCC_NB_PERIOD 6
@@ -101,22 +102,34 @@ void picoquic_fastcc_init(picoquic_path_t* path_x, uint64_t current_time)
     path_x->congestion_alg_state = (void*)fastcc_state;
 }
 
-void fastcc_process_cc_event(picoquic_cnx_t * cnx, 
+static void fastcc_shrink_on_event(picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x, picoquic_fastcc_state_t* fastcc_state, 
+    int is_heavy_loss, uint64_t current_time)
+{
+    if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
+        fastcc_state->alg_state = picoquic_fastcc_freeze;
+        fastcc_state->end_of_freeze = current_time + fastcc_state->rtt_min;
+        fastcc_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx);
+        if (is_heavy_loss) {
+            path_x->cwin -= (uint64_t)(FASTCC_BETA_HEAVY_LOSS * (double)path_x->cwin);
+        }
+        else {
+            path_x->cwin -= (uint64_t)(FASTCC_BETA * (double)path_x->cwin);
+        }
+        if (path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
+            path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+        }
+        picoquic_update_pacing_data(cnx, path_x, 0);
+    }
+}
+
+static void fastcc_process_cc_event(picoquic_cnx_t * cnx, 
     picoquic_path_t* path_x, picoquic_fastcc_state_t* fastcc_state, uint64_t current_time)
 {
     fastcc_state->nb_cc_events++;
     if (fastcc_state->nb_cc_events >= FASTCC_REPEAT_THRESHOLD) {
         /* Too many events, reduce the window */
-        if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
-            fastcc_state->alg_state = picoquic_fastcc_freeze;
-            fastcc_state->end_of_freeze = current_time + fastcc_state->rtt_min;
-            fastcc_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx);
-            path_x->cwin -= (uint64_t)(FASTCC_BETA * (double)path_x->cwin);
-            if (path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
-                path_x->cwin = PICOQUIC_CWIN_MINIMUM;
-            }
-            picoquic_update_pacing_data(cnx, path_x, 0);
-        }
+        fastcc_shrink_on_event(cnx, path_x, fastcc_state, 0, current_time);
     }
 }
 
@@ -160,11 +173,23 @@ void picoquic_fastcc_notify(
             }
             break;  
         case picoquic_congestion_notification_ecn_ec:
+            if (fastcc_state->alg_state != picoquic_fastcc_freeze &&
+                cnx->cnx_state >= picoquic_state_ready) {
+                /* Count ECN as maybe cc events */
+                fastcc_process_cc_event(cnx, path_x, fastcc_state, current_time);
+            }
+            break;
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
             if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
-                /* Count packet losses as maybe cc events */
-                fastcc_process_cc_event(cnx, path_x, fastcc_state, current_time);
+                if (cnx->cnx_state >= picoquic_state_ready &&
+                    picoquic_hystart_loss_test(&fastcc_state->rtt_filter, notification, lost_packet_number)) {
+                    fastcc_shrink_on_event(cnx, path_x, fastcc_state, 1, current_time);
+                }
+                else {
+                    /* Count packet losses as maybe cc events */
+                    fastcc_process_cc_event(cnx, path_x, fastcc_state, current_time);
+                }
             }
             break;
         case picoquic_congestion_notification_spurious_repeat:

@@ -3394,7 +3394,7 @@ int mtu_drop_test()
         13000000,
         10000000,
         12700000,
-        10000000,
+        14000000,
         11000000
     };
     int ret = 0;
@@ -8813,6 +8813,8 @@ int app_limit_cc_test_one(
     picoquic_connection_id_t initial_cid = { {0xac, 0xc1, 2, 3, 4, 5, 6, 7}, 8 };
     int ret = 0;
 
+    initial_cid.id[3] = ccalgo->congestion_algorithm_number;
+
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
     client_parameters.initial_max_data = 40000;
@@ -9383,14 +9385,14 @@ int red_cc_test()
         600000,
         500000,
         500000,
-        500000,
+        550000,
         500000
     };
     uint64_t algo_loss[5] = {
         150,
         300,
         300,
-        180,
+        170,
         150
     };
 
@@ -9472,8 +9474,6 @@ static int pacing_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, target_time);
     }
 
-
-
     if (ret == 0 && observed_loss > loss_target) {
         DBG_PRINTF("Pacing, for cc=%s, expected %" PRIu64 " losses, got %" PRIu64 "\n",
             cc_algo->congestion_algorithm_id, loss_target, observed_loss);
@@ -9508,7 +9508,7 @@ int pacing_cc_test()
         70,
         110,
         230,
-        1301,
+        200,
         275
     };
 
