@@ -8813,7 +8813,7 @@ int app_limit_cc_test_one(
     picoquic_connection_id_t initial_cid = { {0xac, 0xc1, 2, 3, 4, 5, 6, 7}, 8 };
     int ret = 0;
 
-    initial_cid.id[3] = ccalgo->congestion_algorithm_number;
+    (void)picoquic_file_delete(APP_LIMIT_TRACE_BIN, NULL);
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
