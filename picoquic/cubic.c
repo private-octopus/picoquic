@@ -429,17 +429,6 @@ static void dcubic_exit_slow_start(
     }
 }
 
-static void dcubic_exit_avoidance(
-    picoquic_cnx_t* cnx, picoquic_path_t* path_x,
-    picoquic_congestion_notification_t notification,
-    picoquic_cubic_state_t* cubic_state,
-    uint64_t current_time)
-{
-
-}
-
-
-
 /*
  * Define delay-based Cubic, dcubic, and alternative congestion control protocol similar to Cubic but 
  * using delay measurements instead of reacting to packet losses. This is a quic hack, intended for
@@ -612,7 +601,8 @@ static void picoquic_dcubic_notify(
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
                 /* In contrast to Cubic, only exit on high losses */
-                if (picoquic_hystart_loss_test(&cubic_state->rtt_filter, notification, lost_packet_number)) {
+                if (picoquic_hystart_loss_test(&cubic_state->rtt_filter, notification, lost_packet_number) &&
+                    lost_packet_number > cubic_state->recovery_sequence) {
                     /* re-enter recovery */
                     picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
