@@ -252,11 +252,17 @@ typedef struct st_picoquictest_sim_link_t {
     uint64_t packets_sent;
     uint64_t jitter;
     uint64_t jitter_seed;
-    uint64_t red_drop_mask;
-    uint64_t red_queue_max;
     size_t path_mtu;
     picoquictest_sim_packet_t* first_packet;
     picoquictest_sim_packet_t* last_packet;
+    /* Variables for random early drop simulation */
+    uint64_t red_drop_mask;
+    uint64_t red_queue_max;
+    /* Variables for rate limiter simulation */
+    double bucket_increase_per_microsec;
+    uint64_t bucket_max;
+    double bucket_current;
+    uint64_t bucket_arrival_last;
 } picoquictest_sim_link_t;
 
 picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
