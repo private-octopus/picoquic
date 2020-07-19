@@ -1720,13 +1720,20 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                     picoquic_update_path_rtt(cnx, old_path, p->send_time, current_time, 0);
                 }
 
+                if (old_path->nb_losses_found > 0) {
+                    old_path->nb_losses_found--;
+                }
+
+                if (old_path->total_bytes_lost > p->length) {
+                    old_path->total_bytes_lost -= p->length;
+                }
+                else {
+                    old_path->total_bytes_lost = 0;
+                }
+
                 if (cnx->congestion_alg != NULL) {
                     cnx->congestion_alg->alg_notify(cnx, old_path, picoquic_congestion_notification_spurious_repeat,
                         0, 0, 0, p->sequence_number, current_time);
-                }
-
-                if (old_path->nb_losses_found > 0) {
-                    old_path->nb_losses_found--;
                 }
             }
 

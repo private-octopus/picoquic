@@ -132,6 +132,7 @@ static const picoquic_test_def_t test_table[] = {
     { "mtu_discovery", mtu_discovery_test },
     { "mtu_drop", mtu_drop_test },
     { "red_cc", red_cc_test },
+    { "pacing_cc", pacing_cc_test },
     { "spurious_retransmit", spurious_retransmit_test },
     { "tls_zero_share", tls_zero_share_test },
     { "transport_param_log", transport_param_log_test },

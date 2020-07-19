@@ -396,7 +396,38 @@ static void picoquic_cubic_notify(
             cubic_state->ssthresh == UINT64_MAX);
     }
 }
-
+/* Exit slow start on either long delay of high loss
+ */
+static void dcubic_exit_slow_start(
+    picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    picoquic_congestion_notification_t notification,
+    picoquic_cubic_state_t* cubic_state,
+    uint64_t current_time)
+{
+    if (cubic_state->ssthresh == UINT64_MAX) {
+        cubic_state->ssthresh = path_x->cwin;
+        cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
+        cubic_state->W_last_max = cubic_state->W_max;
+        cubic_state->W_reno = ((double)path_x->cwin);
+        picoquic_cubic_enter_avoidance(cubic_state, current_time);
+        /* apply a correction to enter the test phase immediately */
+        uint64_t K_micro = (uint64_t)(cubic_state->K * 1000000.0);
+        if (K_micro > current_time) {
+            cubic_state->K = ((double)current_time) / 1000000.0;
+            cubic_state->start_of_epoch = 0;
+        }
+        else {
+            cubic_state->start_of_epoch = current_time - K_micro;
+        }
+    }
+    else {
+        if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+            cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+            /* re-enter recovery if this is a new event */
+            picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
+        }
+    }
+}
 
 /*
  * Define delay-based Cubic, dcubic, and alternative congestion control protocol similar to Cubic but 
@@ -434,9 +465,14 @@ static void picoquic_dcubic_notify(
                 }
                 break;
             case picoquic_congestion_notification_ecn_ec:
+                /* In contrast to Cubic, do nothing here */
+                break;
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
-                /* In contrast to Cubic, do nothing here */
+                /* In contrast to Cubic, only exit on high losses */
+                if (picoquic_hystart_loss_test(&cubic_state->rtt_filter, notification, lost_packet_number)) {
+                    dcubic_exit_slow_start(cnx, path_x, notification, cubic_state, current_time);
+                }
                 break;
             case picoquic_congestion_notification_spurious_repeat:
                 /* Unlike Cubic, losses have no effect so do nothing here */
@@ -463,29 +499,7 @@ static void picoquic_dcubic_notify(
                  * during congestion avoidance */
                 if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
                     cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
-                    if (cubic_state->ssthresh == UINT64_MAX) {
-                        cubic_state->ssthresh = path_x->cwin;
-                        cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
-                        cubic_state->W_last_max = cubic_state->W_max;
-                        cubic_state->W_reno = ((double)path_x->cwin);
-                        picoquic_cubic_enter_avoidance(cubic_state, current_time);
-                        /* apply a correction to enter the test phase immediately */
-                        uint64_t K_micro = (uint64_t)(cubic_state->K * 1000000.0);
-                        if (K_micro > current_time) {
-                            cubic_state->K = ((double)current_time) / 1000000.0;
-                            cubic_state->start_of_epoch = 0;
-                        }
-                        else {
-                            cubic_state->start_of_epoch = current_time - K_micro;
-                        }
-                    } else {
-                        if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
-                            cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
-                            /* re-enter recovery if this is a new event */
-                            picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
-                        }
-                        break;
-                    }
+                    dcubic_exit_slow_start(cnx, path_x, notification, cubic_state, current_time);
                 }
                 break;
             case picoquic_congestion_notification_cwin_blocked:
@@ -582,9 +596,16 @@ static void picoquic_dcubic_notify(
                 }
                 break;
             case picoquic_congestion_notification_ecn_ec:
+                /* Do nothing */
+                break;
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
-                /* Do nothing */
+                /* In contrast to Cubic, only exit on high losses */
+                if (picoquic_hystart_loss_test(&cubic_state->rtt_filter, notification, lost_packet_number) &&
+                    lost_packet_number > cubic_state->recovery_sequence) {
+                    /* re-enter recovery */
+                    picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
+                }
                 break;
             case picoquic_congestion_notification_spurious_repeat:
                 /* Do nothing */

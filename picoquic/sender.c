@@ -1465,6 +1465,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
                     if (old_path != NULL) {
                         old_path->nb_losses_found++;
+                        old_path->total_bytes_lost += old_p->length;
 
                         if (cnx->congestion_alg != NULL && cnx->cnx_state >= picoquic_state_ready) {
                             cnx->congestion_alg->alg_notify(cnx, old_path,
