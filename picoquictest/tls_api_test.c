@@ -9509,7 +9509,7 @@ int pacing_cc_test()
         110,
         230,
         200,
-        275
+        200
     };
 
     int ret = 0;
@@ -9517,7 +9517,7 @@ int pacing_cc_test()
     for (int i = 0; i < 5 && ret == 0; i++) {
         ret = pacing_cc_algotest(algo_list[i], algo_time[i], algo_loss[i]);
         if (ret != 0) {
-            DBG_PRINTF("RED cc test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
+            DBG_PRINTF("Pacing cc test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
         }
     }
 

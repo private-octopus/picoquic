@@ -117,6 +117,34 @@ Hystart instead of startup if the RTT is above the Reno target of
 
 */
 
+/* Detection of leaky-bucket pacers.
+ * This is based on code added to BBR after the IETF draft was published.
+ * The code detect whether the connection is being "policed" by a leaky-bucket based
+ * parser, and introduces state variables:
+ * - lt_use_bw, boolean: check whether the connection is currently constrained
+ *   to use a limited bandwidth.
+ * - lt_rtt_cnt: number of RTT during which the bandwidth has been limited. Exit the
+ *   limited bandwidth state when this reaches the maximum value.
+ * - lt_is_sampling: whether the connection is sampling the number of loss
+ *   intervals. This starts when the first losses are noticed. It is reset if
+ *   the bandwidth is app limited.
+ * Sampling lasts for a number of rounds, as counted by the round_start
+ * variable. No action taken except updating counters in that state.
+ * Sampling can only ends on an interval when losses are detected, to avoid
+ * undercounting. If no loss, sampling continues after the min required
+ * interval. If no losses for too long, sampling state is reset.
+ * At the end of the sampling interval compute the ratio of packets lost
+ * to packet delivered. If it is below threshold, continue sampling, i.e.,
+ * extend the interval.
+ * If loss rate exceed the threshold, compute the duration of the interval.
+ * If it is too short, extend. If is is too long, reset the sampling.
+ * Else, compute the delivery rate for the interval. Check whether this
+ * is the first detection, in which case do nothing but remember the estimated
+ * rate in "lt_bw". Else, check whether the new rate is "close enough" to
+ * the previous rate, which indicates active policing. If that is true,
+ * activate policing to the average rate between current and previous sample.
+ */
+
 typedef enum {
     picoquic_bbr_alg_startup = 0,
     picoquic_bbr_alg_drain,
@@ -136,6 +164,15 @@ typedef enum {
 #define BBR_PACING_RATE_MEDIUM 3000000.0 /* 3000000 B/s = 24 Mbps */
 #define BBR_GAIN_CYCLE_LEN 8
 #define BBR_GAIN_CYCLE_MAX_START 5
+#define BBR_LT_BW_INTERVAL_MIN_RTT 4
+#define BBR_LT_BW_RATIO_SCALE 1024
+#define BBR_LT_BW_RATIO_SCALED_TARGET 205 /* 205/1024 is very close 20% */
+
+#define BBR_LT_BW_INTERVAL_MAX_RTT (4*BBR_LT_BW_INTERVAL_MIN_RTT)
+#define BBR_LT_BW_RATIO_INVERSE 8
+#define BBR_LT_BW_BYTES_PER_SEC_DIFF 4000
+#define BBR_LT_BW_MAX_RTTS 48
+
 
 static const double bbr_pacing_gain_cycle[BBR_GAIN_CYCLE_LEN] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.25, 0.75};
 
@@ -152,7 +189,7 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t probe_rtt_done_stamp;
     uint64_t prior_cwnd;
     uint64_t prior_in_flight;
-    uint64_t bytes_delivered;
+    uint64_t bytes_delivered; /* Number of bytes signalled in ACK notify, but not processed yet */
     uint64_t send_quantum;
     picoquic_min_max_rtt_t rtt_filter;
     uint64_t target_cwnd;
@@ -163,6 +200,13 @@ typedef struct st_picoquic_bbr_state_t {
     unsigned int cycle_start;
     int round_count;
     int full_bw_count;
+    int lt_rtt_cnt;
+    uint64_t lt_bw;
+    uint64_t lt_last_stamp; /* Time in microsec at start of interval */
+    uint64_t previous_round_lost;
+    uint64_t previous_sampling_delivered;
+    uint64_t previous_sampling_lost;
+
     unsigned int filled_pipe : 1;
     unsigned int round_start : 1;
     unsigned int rt_prop_expired : 1;
@@ -170,7 +214,18 @@ typedef struct st_picoquic_bbr_state_t {
     unsigned int idle_restart : 1;
     unsigned int packet_conservation : 1;
     unsigned int btl_bw_increased : 1;
+    unsigned int lt_use_bw : 1;
+    unsigned int lt_is_sampling : 1;
+
 } picoquic_bbr_state_t;
+
+void BBRltbwSampling(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
+static void BBRResetProbeBwMode(picoquic_bbr_state_t* bbr_state, uint64_t current_time);
+
+static uint64_t BBRGetBtlBW(picoquic_bbr_state_t* bbr_state)
+{
+    return (bbr_state->lt_use_bw) ? bbr_state->lt_bw : bbr_state->btl_bw;
+}
 
 void BBREnterStartupLongRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
@@ -218,7 +273,7 @@ uint64_t BBRInflight(picoquic_bbr_state_t* bbr_state, double gain)
     uint64_t cwnd = PICOQUIC_CWIN_INITIAL;
     if (bbr_state->rt_prop != UINT64_MAX){
         /* Bandwidth is estimated in bytes per second, rtt in microseconds*/
-        double estimated_bdp = (((double)bbr_state->btl_bw * (double)bbr_state->rt_prop) / 1000000.0);
+        double estimated_bdp = (((double)BBRGetBtlBW(bbr_state) * (double)bbr_state->rt_prop) / 1000000.0);
         uint64_t quanta = 3 * bbr_state->send_quantum;       
         cwnd = (uint64_t)(gain * estimated_bdp) + quanta;
     }
@@ -266,13 +321,133 @@ static void picoquic_bbr_delete(picoquic_path_t* path_x)
     }
 }
 
+
+/* Implementation of leaky-bucket pacer detection
+ */
+
+void BBRltbwResetInterval(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+{
+    bbr_state->lt_last_stamp = current_time;
+    bbr_state->previous_sampling_delivered = path_x->delivered;
+    bbr_state->previous_sampling_lost = path_x->total_bytes_lost;
+    bbr_state->previous_round_lost = path_x->total_bytes_lost;
+    bbr_state->lt_rtt_cnt = 0;
+}
+
+void BBRltbwResetSampling(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+{
+    bbr_state->lt_bw = 0;
+    bbr_state->lt_use_bw = 0;
+    bbr_state->lt_is_sampling = 0;
+    BBRltbwResetInterval(bbr_state, path_x, current_time);
+}
+
+void BBRltbwIntervalDone(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t bw, uint64_t current_time)
+{
+    if (bbr_state->lt_bw) {
+        /* This is not the first limited interval. Look whether it is close enough */
+        uint64_t diff = (bw > bbr_state->lt_bw) ? bw - bbr_state->lt_bw : bbr_state->lt_bw - bw;
+        if (diff * BBR_LT_BW_RATIO_INVERSE < bbr_state->lt_bw ||
+            diff < BBR_LT_BW_BYTES_PER_SEC_DIFF) {
+            bbr_state->lt_bw = (bbr_state->lt_bw + bw) / 2;
+            bbr_state->lt_use_bw = 1;
+            bbr_state->pacing_gain = 1.0;
+            bbr_state->lt_rtt_cnt = 0;
+            return;
+        }
+    }
+    /* If first interval or non-matching rate, just remember */
+    bbr_state->lt_bw = bw;
+    BBRltbwResetInterval(bbr_state, path_x, current_time);
+}
+
+void BBRltbwSampling(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+{
+    uint64_t losses = (path_x->total_bytes_lost > bbr_state->previous_round_lost) ?
+        path_x->total_bytes_lost - bbr_state->previous_round_lost : 0;
+    uint64_t delivered;
+    uint64_t interval_microsec;
+    uint64_t bw;
+
+    if (bbr_state->lt_use_bw) {
+        if (bbr_state->state == picoquic_bbr_alg_probe_bw && bbr_state->round_start) {
+            bbr_state->lt_rtt_cnt++;
+            if (bbr_state->lt_rtt_cnt > BBR_LT_BW_MAX_RTTS) {
+                BBRltbwResetSampling(bbr_state, path_x, current_time);
+                BBRResetProbeBwMode(bbr_state, current_time);
+                return;
+            }
+        }
+    }
+    
+    if (!bbr_state->lt_is_sampling) {
+            /* Return if no loss; */
+            if (losses == 0) {
+                return;
+            }
+            /* Reset sampling otherwise. */
+            BBRltbwResetSampling(bbr_state, path_x, current_time);
+            bbr_state->lt_is_sampling = 1;
+    }
+
+    /* Reset sampling if app is limited */
+    if (path_x->last_bw_estimate_path_limited) {
+        BBRltbwResetSampling(bbr_state, path_x, current_time);
+        return;
+    }
+    /* Check whether we are reaching the end of the interval */
+    if (!bbr_state->round_start) {
+        return;
+    } else {
+        bbr_state->lt_rtt_cnt++;	/* count round trips in this interval */
+        bbr_state->previous_round_lost = path_x->total_bytes_lost;
+
+        if (bbr_state->lt_rtt_cnt < BBR_LT_BW_INTERVAL_MIN_RTT) {
+            return;		/* sampling interval needs to be longer */
+        }
+        if (bbr_state->lt_rtt_cnt > BBR_LT_BW_INTERVAL_MAX_RTT) {
+            BBRltbwResetSampling(bbr_state, path_x, current_time);  /* interval is too long */
+            return;
+        }
+    }
+    /* Continue sampling if no losses on this round */
+    if (losses == 0) {
+        return;
+    }
+    /* Calculate bytes lost and delivered in sampling interval.
+     * Notice that the previous values of losses and delivered were for the round, not the interval.
+     */
+    if (path_x->delivered <= bbr_state->previous_sampling_delivered) {
+        /* No delivery at all, cannot calculate any ratio, wait some more. */
+        return;
+    } 
+    losses = (path_x->total_bytes_lost > bbr_state->previous_sampling_lost) ?
+        path_x->total_bytes_lost - bbr_state->previous_sampling_lost : 0;
+    delivered = path_x->delivered - bbr_state->previous_sampling_delivered;
+    /* Check the loss ratio */
+    if (losses * BBR_LT_BW_RATIO_SCALE < BBR_LT_BW_RATIO_SCALED_TARGET * delivered) {
+        /* Not enough losses, continue sampling */
+        return;
+    }
+    /* Find average delivery rate in this sampling interval. */
+    interval_microsec = current_time - bbr_state->lt_last_stamp;
+    if (interval_microsec < 1000) {
+        /* Interval too small for significant measurements, wait a bit */
+        return;
+    }
+    /* Compute  bw in bytes per second */
+    bw = (delivered * 1000000) / interval_microsec; 
+    /* Apply the changes */
+    BBRltbwIntervalDone(bbr_state, path_x, bw, current_time);
+}
+
 /* Track the round count using the "delivered" counter. The value carried per
  * packet is the delivered count when this packet was sent. If it is greater
  * than next_round_delivered, it means that the packet was sent at or after
  * the beginning of the round, and thus that at least one RTT has elapsed
  * for this round. */
 
-void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
+void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
 {
     uint64_t bandwidth_estimate = path_x->bandwidth_estimate;
 
@@ -298,6 +473,8 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
     else {
         bbr_state->round_start = 0;
     }
+
+    BBRltbwSampling(bbr_state, path_x, current_time);
 
     if (bbr_state->round_start) {
         /* Forget the oldest BW round, shift by 1, compute the max BTL_BW for
@@ -408,6 +585,13 @@ void BBRCheckCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t packets_lost, 
     }
 }
 
+static void BBRResetProbeBwMode(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
+{
+    bbr_state->state = picoquic_bbr_alg_probe_bw;
+    bbr_state->cycle_index = 2;
+    BBRAdvanceCyclePhase(bbr_state, current_time);
+}
+
 void BBRCheckFullPipe(picoquic_bbr_state_t* bbr_state, int rs_is_app_limited)
 {
     if (!bbr_state->filled_pipe && bbr_state->round_start && !rs_is_app_limited) {
@@ -424,7 +608,7 @@ void BBRCheckFullPipe(picoquic_bbr_state_t* bbr_state, int rs_is_app_limited)
     }
 }
 
-void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
+void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
 {
     unsigned int start = 0;
     bbr_state->state = picoquic_bbr_alg_probe_bw;
@@ -447,23 +631,27 @@ void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
     bbr_state->btl_bw_increased = 1;
 
     BBRAdvanceCyclePhase(bbr_state, current_time);
+    /* Start sampling */
+    BBRltbwSampling(bbr_state, path_x, current_time);
 }
 
-void BBREnterDrain(picoquic_bbr_state_t* bbr_state)
+void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
 {
     bbr_state->state = picoquic_bbr_alg_drain;
     bbr_state->pacing_gain = 1.0 / BBR_HIGH_GAIN;  /* pace slowly */
     bbr_state->cwnd_gain = BBR_HIGH_GAIN;   /* maintain cwnd */
+    /* Start sampling */
+    BBRltbwSampling(bbr_state, path_x, current_time);
 }
 
-void BBRCheckDrain(picoquic_bbr_state_t* bbr_state, uint64_t bytes_in_transit, uint64_t current_time)
+void BBRCheckDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t bytes_in_transit, uint64_t current_time)
 {
     if (bbr_state->state == picoquic_bbr_alg_startup && bbr_state->filled_pipe) {
-        BBREnterDrain(bbr_state);
+        BBREnterDrain(bbr_state, path_x, current_time);
     }
 
     if (bbr_state->state == picoquic_bbr_alg_drain && bytes_in_transit <= BBRInflight(bbr_state, 1.0)) {
-        BBREnterProbeBW(bbr_state, current_time);  /* we estimate queue is drained */
+        BBREnterProbeBW(bbr_state, path_x, current_time);  /* we estimate queue is drained */
     }
 }
 
@@ -485,10 +673,10 @@ void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pat
         bbr_state->rt_prop_stamp = current_time;
     }
     /* Enter drain */
-    BBREnterDrain(bbr_state);
+    BBREnterDrain(bbr_state, path_x, current_time);
     /* If there were just few bytes in transit, enter probe */
     if (path_x->bytes_in_transit <= BBRInflight(bbr_state, 1.0)) {
-        BBREnterProbeBW(bbr_state, current_time);
+        BBREnterProbeBW(bbr_state, path_x, current_time);
     }
 }
 
@@ -499,10 +687,10 @@ void BBREnterProbeRTT(picoquic_bbr_state_t* bbr_state)
     bbr_state->cwnd_gain = 1.0;
 }
 
-void BBRExitProbeRTT(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
+void BBRExitProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
 {
     if (bbr_state->filled_pipe) {
-        BBREnterProbeBW(bbr_state, current_time);
+        BBREnterProbeBW(bbr_state, path_x, current_time);
     }
     else {
         BBREnterStartup(bbr_state);
@@ -557,7 +745,7 @@ void BBRHandleProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x
             current_time > bbr_state->probe_rtt_done_stamp) {
             bbr_state->rt_prop_stamp = current_time;
             BBRRestoreCwnd(bbr_state, path_x);
-            BBRExitProbeRTT(bbr_state, current_time);
+            BBRExitProbeRTT(bbr_state, path_x, current_time);
         }
     }
 }
@@ -581,17 +769,17 @@ void BBRCheckProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
 void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x,
     uint64_t rtt_sample, uint64_t bytes_in_transit, uint64_t packets_lost, uint64_t current_time)
 {
-    BBRUpdateBtlBw(bbr_state, path_x);
+    BBRUpdateBtlBw(bbr_state, path_x, current_time);
     BBRCheckCyclePhase(bbr_state, packets_lost, current_time);
     BBRCheckFullPipe(bbr_state, path_x->last_bw_estimate_path_limited);
-    BBRCheckDrain(bbr_state, bytes_in_transit, current_time);
+    BBRCheckDrain(bbr_state, path_x, bytes_in_transit, current_time);
     BBRUpdateRTprop(bbr_state, rtt_sample, current_time);
     BBRCheckProbeRTT(bbr_state, path_x, bytes_in_transit, current_time);
 }
 
 void BBRSetPacingRateWithGain(picoquic_bbr_state_t* bbr_state, double pacing_gain)
 {
-    double rate = pacing_gain * (double)bbr_state->btl_bw;
+    double rate = pacing_gain * (double)BBRGetBtlBW(bbr_state);
 
     if (bbr_state->filled_pipe || rate > bbr_state->pacing_rate){
         bbr_state->pacing_rate = rate;
@@ -674,7 +862,6 @@ void BBRHandleRestartFromIdle(picoquic_bbr_state_t* bbr_state, uint64_t bytes_in
         }
     }
 }
-
 
 /* This is the per ACK processing, activated upon receiving an ACK.
  * At that point, we expect the following:
@@ -764,7 +951,7 @@ static void picoquic_bbr_notify(
             else if (bbr_state->state == picoquic_bbr_alg_startup &&
                 picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification, lost_packet_number)) {
                 bbr_state->filled_pipe = 1;
-                BBREnterDrain(bbr_state);
+                BBREnterDrain(bbr_state, path_x, current_time);
             }
             break;
         case picoquic_congestion_notification_spurious_repeat:
@@ -786,7 +973,7 @@ static void picoquic_bbr_notify(
                 uint64_t max_win;
                 uint64_t min_win;
 
-                BBRUpdateBtlBw(bbr_state, path_x);
+                BBRUpdateBtlBw(bbr_state, path_x, current_time);
                 if (rtt_measurement <= bbr_state->rt_prop) {
                     bbr_state->rt_prop = rtt_measurement;
                     bbr_state->rt_prop_stamp = current_time;
