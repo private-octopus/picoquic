@@ -416,7 +416,7 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
         }
         else {
             if (picoquic_load_retry_tokens(quic, token_store_filename) != 0) {
-                fprintf(stderr, "Could not load tokens from <%s>.\n", token_store_filename);
+                fprintf(stderr, "No token file present. Will create one as <%s>.\n", token_store_filename);
             }
 
             picoquic_set_default_congestion_algorithm(quic, picoquic_bbr_algorithm);
