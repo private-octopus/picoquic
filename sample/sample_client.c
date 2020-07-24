@@ -461,12 +461,21 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
             ret = -1;
         }
         else {
+
             /* Set the client callback context */
             picoquic_set_callback(cnx, sample_client_callback, &client_ctx);
             /* Client connection parameters could be set here, before starting the connection. */
             ret = picoquic_start_client_cnx(cnx);
             if (ret < 0) {
                 fprintf(stderr, "Could not activate connection\n");
+            } else {
+                /* Printing out the initial CID, which is used to identify log files */
+                picoquic_connection_id_t icid = picoquic_get_initial_cnxid(cnx);
+                printf("Initial connection ID: ");
+                for (uint8_t i = 0; i < icid.id_len; i++) {
+                    printf("%02x", icid.id[i]);
+                }
+                printf("\n");
             }
         }
 
