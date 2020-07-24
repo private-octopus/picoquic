@@ -36,8 +36,8 @@
 
 #define PICOQUIC_SAMPLE_CLIENT_TICKET_STORE "sample_ticket_store.bin";
 #define PICOQUIC_SAMPLE_CLIENT_TOKEN_STORE "sample_token_store.bin";
-#define PICOQUIC_SAMPLE_CLIENT_BINLOG_DIR "sample_client_log";
-#define PICOQUIC_SAMPLE_SERVER_BINLOG_DIR "sample_server_log";
+#define PICOQUIC_SAMPLE_CLIENT_QLOG_DIR ".";
+#define PICOQUIC_SAMPLE_SERVER_QLOG_DIR ".";
 
 int picoquic_sample_client(char const* server_name, int server_port, char const* default_dir,
     int nb_files, char const** file_names);

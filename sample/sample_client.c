@@ -30,6 +30,13 @@
  *  - the client loop, that reads messages on the socket, submits them
  *    to the Quic context, let the client prepare messages, and send
  *    them on the appropriate socket.
+ *
+ * The Sample Client uses the "qlog" option to produce Quic Logs as defined
+ * in https://datatracker.ietf.org/doc/draft-marx-qlog-event-definitions-quic-h3/.
+ * This is an optional feature, which requires linking with the "loglib" library,
+ * and using the picoquic_set_qlog() API defined in "autoqlog.h". When a connection
+ * completes, the code saves the log as a file named after the Initial Connection
+ * ID (in hexa), with the suffix ".client.qlog".
  */
 
 #include <stdint.h>
@@ -37,6 +44,7 @@
 #include <picoquic.h>
 #include <picoquic_utils.h>
 #include <picosocks.h>
+#include <autoqlog.h>
 #include "picoquic_sample.h"
 
  /* Client context and callback management:
@@ -265,6 +273,7 @@ int sample_client_callback(picoquic_cnx_t* cnx,
 
                 if ((client_ctx->nb_files_received + client_ctx->nb_files_failed) >= client_ctx->nb_files) {
                     /* everything is done, close the connection */
+                    fprintf(stdout, "All done, closing the connection.\n");
                     ret = picoquic_close(cnx, 0);
                 }
             }
@@ -272,6 +281,7 @@ int sample_client_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stateless_reset:
         case picoquic_callback_close: /* Received connection close */
         case picoquic_callback_application_close: /* Received application close */
+            fprintf(stdout, "Connection closed.\n");
             /* Mark the connection as completed */
             client_ctx->is_disconnected = 1;
             /* Remove the application callback */
@@ -329,8 +339,11 @@ int sample_client_callback(picoquic_cnx_t* cnx,
             }
             break;
         case picoquic_callback_almost_ready:
+            fprintf(stdout, "Connection to the server completed, almost ready.\n");
+            break;
         case picoquic_callback_ready:
             /* TODO: Check that the transport parameters are what the sample expects */
+            fprintf(stdout, "Connection to the server confirmed.\n");
             break;
         default:
             /* unexpected -- just ignore. */
@@ -365,7 +378,7 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
     picoquic_quic_t* quic = NULL;
     char const* ticket_store_filename = PICOQUIC_SAMPLE_CLIENT_TICKET_STORE;
     char const* token_store_filename = PICOQUIC_SAMPLE_CLIENT_TOKEN_STORE;
-    char const* bin_dir = PICOQUIC_SAMPLE_CLIENT_BINLOG_DIR;
+    char const* qlog_dir = PICOQUIC_SAMPLE_CLIENT_QLOG_DIR;
     sample_client_ctx_t client_ctx = { 0 };
     picoquic_cnx_t* cnx = NULL;
     uint8_t recv_buffer[1536];
@@ -422,7 +435,7 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
             picoquic_set_default_congestion_algorithm(quic, picoquic_bbr_algorithm);
 
             picoquic_set_key_log_file_from_env(quic);
-            picoquic_set_binlog(quic, bin_dir);
+            picoquic_set_qlog(quic, qlog_dir);
             picoquic_set_log_level(quic, 1);
         }
     }
