@@ -30,6 +30,13 @@
  *  - the client loop, that reads messages on the socket, submits them
  *    to the Quic context, let the client prepare messages, and send
  *    them on the appropriate socket.
+ *
+ * The Sample Client uses the "qlog" option to produce Quic Logs as defined
+ * in https://datatracker.ietf.org/doc/draft-marx-qlog-event-definitions-quic-h3/.
+ * This is an optional feature, which requires linking with the "loglib" library,
+ * and using the picoquic_set_qlog() API defined in "autoqlog.h". When a connection
+ * completes, the code saves the log as a file named after the Initial Connection
+ * ID (in hexa), with the suffix ".client.qlog".
  */
 
 #include <stdint.h>
@@ -37,6 +44,7 @@
 #include <picoquic.h>
 #include <picoquic_utils.h>
 #include <picosocks.h>
+#include <autoqlog.h>
 #include "picoquic_sample.h"
 
  /* Client context and callback management:
@@ -71,6 +79,7 @@ typedef struct st_sample_client_stream_ctx_t {
     size_t name_sent_length;
     FILE* F;
     size_t bytes_received;
+    uint64_t remote_error;
     unsigned int is_name_sent : 1;
     unsigned int is_file_open : 1;
     unsigned int is_stream_reset : 1;
@@ -142,7 +151,31 @@ static void sample_client_report(sample_client_ctx_t* client_ctx)
         else {
             status = "unknown status";
         }
-        printf("%s: %s, received %zu bytes\n", client_ctx->file_names[stream_ctx->file_rank], status, stream_ctx->bytes_received);
+        printf("%s: %s, received %zu bytes", client_ctx->file_names[stream_ctx->file_rank], status, stream_ctx->bytes_received);
+        if (stream_ctx->is_stream_reset && stream_ctx->remote_error != PICOQUIC_SAMPLE_NO_ERROR){
+            char const* error_text = "unknown error";
+            switch (stream_ctx->remote_error) {
+            case PICOQUIC_SAMPLE_INTERNAL_ERROR:
+                error_text = "internal error";
+                break;
+            case PICOQUIC_SAMPLE_NAME_TOO_LONG_ERROR:
+                error_text = "internal error";
+                break;
+            case PICOQUIC_SAMPLE_NO_SUCH_FILE_ERROR:
+                error_text = "no such file";
+                break;
+            case PICOQUIC_SAMPLE_FILE_READ_ERROR:
+                error_text = "file read error";
+                break;
+            case PICOQUIC_SAMPLE_FILE_CANCEL_ERROR:
+                error_text = "cancelled";
+                break;
+            default:
+                break;
+            }
+            printf(", error 0x%" PRIx64 " -- %s", stream_ctx->remote_error, error_text);
+        }
+        printf("\n");
         stream_ctx = stream_ctx->next_stream;
     }
 }
@@ -260,11 +293,13 @@ int sample_client_callback(picoquic_cnx_t* cnx,
                 return -1;
             }
             else {
+                stream_ctx->remote_error = picoquic_get_remote_stream_error(cnx, stream_id);
                 stream_ctx->is_stream_reset = 1;
                 client_ctx->nb_files_failed++;
 
                 if ((client_ctx->nb_files_received + client_ctx->nb_files_failed) >= client_ctx->nb_files) {
                     /* everything is done, close the connection */
+                    fprintf(stdout, "All done, closing the connection.\n");
                     ret = picoquic_close(cnx, 0);
                 }
             }
@@ -272,6 +307,7 @@ int sample_client_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stateless_reset:
         case picoquic_callback_close: /* Received connection close */
         case picoquic_callback_application_close: /* Received application close */
+            fprintf(stdout, "Connection closed.\n");
             /* Mark the connection as completed */
             client_ctx->is_disconnected = 1;
             /* Remove the application callback */
@@ -329,8 +365,11 @@ int sample_client_callback(picoquic_cnx_t* cnx,
             }
             break;
         case picoquic_callback_almost_ready:
+            fprintf(stdout, "Connection to the server completed, almost ready.\n");
+            break;
         case picoquic_callback_ready:
             /* TODO: Check that the transport parameters are what the sample expects */
+            fprintf(stdout, "Connection to the server confirmed.\n");
             break;
         default:
             /* unexpected -- just ignore. */
@@ -365,7 +404,7 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
     picoquic_quic_t* quic = NULL;
     char const* ticket_store_filename = PICOQUIC_SAMPLE_CLIENT_TICKET_STORE;
     char const* token_store_filename = PICOQUIC_SAMPLE_CLIENT_TOKEN_STORE;
-    char const* bin_dir = PICOQUIC_SAMPLE_CLIENT_BINLOG_DIR;
+    char const* qlog_dir = PICOQUIC_SAMPLE_CLIENT_QLOG_DIR;
     sample_client_ctx_t client_ctx = { 0 };
     picoquic_cnx_t* cnx = NULL;
     uint8_t recv_buffer[1536];
@@ -416,13 +455,13 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
         }
         else {
             if (picoquic_load_retry_tokens(quic, token_store_filename) != 0) {
-                fprintf(stderr, "Could not load tokens from <%s>.\n", token_store_filename);
+                fprintf(stderr, "No token file present. Will create one as <%s>.\n", token_store_filename);
             }
 
             picoquic_set_default_congestion_algorithm(quic, picoquic_bbr_algorithm);
 
             picoquic_set_key_log_file_from_env(quic);
-            picoquic_set_binlog(quic, bin_dir);
+            picoquic_set_qlog(quic, qlog_dir);
             picoquic_set_log_level(quic, 1);
         }
     }
@@ -448,12 +487,21 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
             ret = -1;
         }
         else {
+
             /* Set the client callback context */
             picoquic_set_callback(cnx, sample_client_callback, &client_ctx);
             /* Client connection parameters could be set here, before starting the connection. */
             ret = picoquic_start_client_cnx(cnx);
             if (ret < 0) {
                 fprintf(stderr, "Could not activate connection\n");
+            } else {
+                /* Printing out the initial CID, which is used to identify log files */
+                picoquic_connection_id_t icid = picoquic_get_initial_cnxid(cnx);
+                printf("Initial connection ID: ");
+                for (uint8_t i = 0; i < icid.id_len; i++) {
+                    printf("%02x", icid.id[i]);
+                }
+                printf("\n");
             }
         }
 
@@ -520,8 +568,14 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
     /* Done. At this stage, we could print out statistics, etc. */
     sample_client_report(&client_ctx);
 
-    /* Free the QUIC context */
+    /* Save tickets and tokens, and free the QUIC context */
     if (quic != NULL) {
+        if (picoquic_save_session_tickets(quic, ticket_store_filename) != 0) {
+            fprintf(stderr, "Could not store the saved session tickets.\n");
+        }
+        if (picoquic_save_retry_tokens(quic, token_store_filename) != 0) {
+            fprintf(stderr, "Could not save tokens to <%s>.\n", token_store_filename);
+        }
         picoquic_free(quic);
     }
 

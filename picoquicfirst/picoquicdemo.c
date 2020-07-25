@@ -519,7 +519,7 @@ int quic_client(const char* ip_address_text, int server_port,
             picoquic_set_default_congestion_algorithm(qclient, cc_algorithm);
 
             if (picoquic_load_retry_tokens(qclient, token_store_filename) != 0) {
-                fprintf(stderr, "Could not load tokens from <%s>.\n", token_store_filename);
+                fprintf(stderr, "No token file present. Will create one as <%s>.\n", token_store_filename);
             }
 
             if (force_zero_share) {

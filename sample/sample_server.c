@@ -30,14 +30,21 @@
  *  - the server loop, that reads messages on the socket, submits them
  *    to the Quic context, let the server prepare messages, and send
  *    them on the appropriate socket.
+ *
+ * The Sample Server uses the "qlog" option to produce Quic Logs as defined
+ * in https://datatracker.ietf.org/doc/draft-marx-qlog-event-definitions-quic-h3/.
+ * This is an optional feature, which requires linking with the "loglib" library,
+ * and using the picoquic_set_qlog() API defined in "autoqlog.h". . When a connection
+ * completes, the code saves the log as a file named after the Initial Connection
+ * ID (in hexa), with the suffix ".server.qlog".
  */
-
 
 #include <stdint.h>
 #include <stdio.h>
 #include <picoquic.h>
 #include <picosocks.h>
 #include <picoquic_utils.h>
+#include <autoqlog.h>
 #include "picoquic_sample.h"
 
 /* Server context and callback management:
@@ -362,7 +369,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     int ret = 0;
     picoquic_quic_t* quic = NULL;
     picoquic_server_sockets_t server_sockets;
-    char const* binlog_dir = PICOQUIC_SAMPLE_SERVER_BINLOG_DIR;
+    char const* qlog_dir = PICOQUIC_SAMPLE_SERVER_QLOG_DIR;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
     int if_index_to;
@@ -400,7 +407,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
 
             picoquic_set_default_congestion_algorithm(quic, picoquic_bbr_algorithm);
 
-            picoquic_set_binlog(quic, binlog_dir);
+            picoquic_set_qlog(quic, qlog_dir);
 
             picoquic_set_log_level(quic, 1);
 

@@ -242,14 +242,12 @@ uint8_t * picoquic_format_stream_reset_frame(picoquic_cnx_t* cnx, picoquic_strea
 uint8_t* picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint64_t stream_id = 0;
-    uint16_t error_code = 0;
+    uint64_t error_code_64 = 0;
     uint64_t final_offset = 0;
     picoquic_stream_head_t* stream;
 
     if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &stream_id)) != NULL) {
-        uint64_t error_code_64 = 0;
         bytes = picoquic_frames_varint_decode(bytes, bytes_max, &error_code_64);
-        error_code = (uint16_t)error_code;
         if (bytes != NULL) {
             bytes = picoquic_frames_varint_decode(bytes, bytes_max, &final_offset);
         }
@@ -270,7 +268,7 @@ uint8_t* picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 
     } else if (!stream->reset_received) {
         stream->reset_received = 1;
-        stream->remote_error  = error_code;
+        stream->remote_error  = error_code_64;
 
         picoquic_update_max_stream_ID_local(cnx, stream);
 

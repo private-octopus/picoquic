@@ -46,25 +46,17 @@ Both server and clients will create logs of the connections if they can write fi
 in the expected folders. If you want logs, you will need to create these
 folders before launching the server or the client.
 
-For the client, create a folder with the name `sample_client_log`:
+The log files are in the [qlog format](https://datatracker.ietf.org/doc/draft-marx-qlog-event-definitions-quic-h3/).
+They will be added to the working directory of client or server. The name of the log files are derived from
+the initial connection identifier used for the connection, which is represented
+as a string of hexadecimal digits. For example, if the Initial CID is
+`012345678abcdef`, the logs created by client and server will be:
 ```
-mkdir sample_client_log
+012345678abcdef.client.qlog
+012345678abcdef.server.qlog
 ```
-For the server, create a folder with the name `sample_server_log`:
-```
-mkdir sample_server_log
-```
-Client and server log files are binary files, with names derived from
-the identifiers of the connections. They will have names like
-`012345678abcdef.client.log` or `012345678abcdef.server.log`. 
-They can be used to generate files in `qlog` format, which are
-text files encoding the connection events according to the JSON
-syntax. These files can be explored with a variety of tools,
-such as [qvis](https://qvis.edm.uhasselt.be/). To obtain the `qlog`
-from the binary log file, use the program `picolog_t`:
-```
-picolog_t -f qlog -o "." 012345678abcdef.client.log
-```
+The qlog syntax is defined using JSON. The logs can be read using a text editor,
+or with specialized tools like [QVIS](https://qvis.edm.uhasselt.be/)
 
 Building the sample
 -------------------
