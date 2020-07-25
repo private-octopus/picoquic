@@ -568,8 +568,14 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
     /* Done. At this stage, we could print out statistics, etc. */
     sample_client_report(&client_ctx);
 
-    /* Free the QUIC context */
+    /* Save tickets and tokens, and free the QUIC context */
     if (quic != NULL) {
+        if (picoquic_save_session_tickets(quic, ticket_store_filename) != 0) {
+            fprintf(stderr, "Could not store the saved session tickets.\n");
+        }
+        if (picoquic_save_retry_tokens(quic, token_store_filename) != 0) {
+            fprintf(stderr, "Could not save tokens to <%s>.\n", token_store_filename);
+        }
         picoquic_free(quic);
     }
 
