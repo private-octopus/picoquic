@@ -3374,6 +3374,16 @@ int picoquic_get_remote_error(picoquic_cnx_t* cnx)
     return cnx->remote_error;
 }
 
+uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_id)
+{
+    uint64_t remote_error = 0;
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+    if (stream != NULL) {
+        remote_error = stream->remote_error;
+    }
+    return remote_error;
+}
+
 uint64_t picoquic_get_data_sent(picoquic_cnx_t* cnx)
 {
     return cnx->data_sent;
