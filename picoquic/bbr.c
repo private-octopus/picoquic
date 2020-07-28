@@ -507,7 +507,8 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, ui
 void BBRUpdateRTprop(picoquic_bbr_state_t* bbr_state, uint64_t rtt_sample, uint64_t current_time)
 {
     bbr_state->rt_prop_expired =
-        current_time > bbr_state->rt_prop_stamp + BBR_PROBE_RTT_INTERVAL;
+        current_time > bbr_state->rt_prop_stamp + BBR_PROBE_RTT_INTERVAL &&
+        current_time > bbr_state->rt_prop_stamp + 20 * bbr_state->rt_prop;
     if (rtt_sample <= bbr_state->rt_prop || bbr_state->rt_prop_expired) {
         bbr_state->rt_prop = rtt_sample;
         bbr_state->rt_prop_stamp = current_time;
