@@ -7330,7 +7330,7 @@ int bbr_slow_long_test()
 
 int bbr_one_second_test()
 {
-    uint64_t max_completion_time = 120000000;
+    uint64_t max_completion_time = 130000000;
     uint64_t latency = 1000000;
     uint64_t jitter = 3000;
     uint64_t buffer = 2 * (latency + jitter);
@@ -7446,7 +7446,7 @@ int satellite_basic_test()
 int satellite_loss_test()
 {
     /* Should be less than 10 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8300000, 250, 3, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8600000, 250, 3, 0, 1);
 }
 
 int satellite_jitter_test()
@@ -8922,10 +8922,10 @@ int app_limit_cc_test()
         picoquic_fastcc_algorithm };
     uint64_t max_completion_times[] = {
         21000000,
-        23000000,
+        23500000,
         21000000,
         21000000,
-        27000000 };
+        28000000 };
     int ret = 0;
 
     for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
