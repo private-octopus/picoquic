@@ -2725,7 +2725,6 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     int ret = 0;
     picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected;
     picoquic_packet_context_enum pc = picoquic_packet_context_application;
-    picoquic_epoch_enum epoch = picoquic_epoch_1rtt;
     int tls_ready = 0;
     int is_pure_ack = 1;
     size_t header_length = 0;
@@ -2759,13 +2758,11 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
         length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
             path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
         if (length > 0) {
-            epoch = picoquic_epoch_handshake;
             checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
             bytes_max = bytes + send_buffer_min_max - checksum_overhead;
         }
     }
     else {
-        epoch = picoquic_epoch_initial;
         checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_initial);
         bytes_max = bytes + send_buffer_min_max - checksum_overhead;
 
