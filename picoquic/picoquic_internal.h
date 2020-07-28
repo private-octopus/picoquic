@@ -78,7 +78,7 @@ extern "C" {
 #define PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX 1000000ull /* one second */
 
 #define PICOQUIC_MICROSEC_SILENCE_MAX 120000000ull /* 120 seconds for now */
-#define PICOQUIC_MICROSEC_HANDSHAKE_MAX 15000000ull /* 15 seconds for now */
+#define PICOQUIC_MICROSEC_HANDSHAKE_MAX 30000000ull /* 30 seconds for now */
 #define PICOQUIC_MICROSEC_WAIT_MAX 10000000ull /* 10 seconds for now */
 
 #define PICOQUIC_CWIN_INITIAL (10 * PICOQUIC_MAX_PACKET_SIZE)
