@@ -18,6 +18,8 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+#ifndef PICOQUIC_LOG_WRITER_H
+#define PICOQUIC_LOG_WRITER_H
 
 /*
 * Packet logging.
@@ -38,6 +40,7 @@ typedef enum {
     picoquic_log_event_connection_close = 0x0011,
     picoquic_log_event_connection_id_update = 0x0012,
     picoquic_log_event_packet_lost = 0x0013,
+    picoquic_log_event_packet_dropped = 0x0014,
 
     picoquic_log_event_tls_key_update = 0x0020,
     picoquic_log_event_tls_key_retired = 0x0021,
@@ -60,6 +63,9 @@ void binlog_pdu(FILE * f, const picoquic_connection_id_t* cid, int receiving, ui
 /* binary alternative to picoquic_log_decrypted_segment() */
 void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
     const picoquic_packet_header * ph, const uint8_t* bytes, size_t bytes_max);
+
+/* Report that a packet was dropped due to some error */
+void binlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, size_t packet_size, int err, uint8_t* raw_data, uint64_t current_time);
 
 /* binary alternative to picoquic_log_outgoing_segment() */
 void binlog_outgoing_packet(picoquic_cnx_t* cnx,
@@ -86,3 +92,5 @@ void binlog_new_connection(picoquic_cnx_t * cnx);
 void binlog_close_connection(picoquic_cnx_t * cnx);
 
 void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time);
+
+#endif /* PICOQUIC_LOG_WRITER_H */

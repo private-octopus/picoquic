@@ -65,6 +65,14 @@ int svg_packet_lost(uint64_t time, bytestream* s, void* ptr)
     return 0;
 }
 
+int svg_packet_dropped(uint64_t time, bytestream* s, void* ptr)
+{
+    (void)time;
+    (void)s;
+    (void)ptr;
+    return 0;
+}
+
 int svg_connection_start(uint64_t time, const picoquic_connection_id_t * cid, int client_mode,
     uint32_t proposed_version, const picoquic_connection_id_t * remote_cnxid, void * ptr)
 {
@@ -193,6 +201,7 @@ int svg_convert(const picoquic_connection_id_t * cid, FILE * f_binlog, FILE * f_
     ctx.packet_frame = svg_packet_frame;
     ctx.packet_end = svg_packet_end;
     ctx.packet_lost = svg_packet_lost;
+    ctx.packet_dropped = svg_packet_dropped;
     ctx.cc_update = svg_cc_update;
     ctx.info_message = svg_info_message;
     ctx.ptr = &svg;

@@ -6986,6 +6986,17 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog)
             test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0x00004281, 0, 20000, 2000000);
     }
 
+    /* Add a gratuitous bad packet to test "packet dropped" log */
+    if (ret == 0 && test_ctx->cnx_server != NULL) {
+        uint8_t p[256];
+
+        memset(p, 0, sizeof(p));
+        memcpy(p + 1, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id_len);
+        p[0] |= 64;
+        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr,
+            (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr, 0, 0, simulated_time);
+    }
+
     /* Free the resource, which will close the log file.
      */
 

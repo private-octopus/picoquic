@@ -241,4 +241,9 @@
 [170799, "recovery", "metrics_updated", {"bytes_in_flight": 0,"smoothed_rtt": 21089,"min_rtt": 20070,"latest_rtt": 20070}],
 [170799, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_size": 15, "packet_number": 19, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "connection_close", "error_space": "transport", "error_code": 0}]}],
-[170799, "TRANSPORT", "DATAGRAM_SENT", { "byte_length": 31}]]}]}
+[170799, "TRANSPORT", "DATAGRAM_SENT", { "byte_length": 31}],
+[324270, "TRANSPORT", "DATAGRAM_RECEIVED", { "byte_length": 256}],
+[324270, "TRANSPORT", "PACKET_DROPPED", {
+    "packet_type" : "1rtt",
+    "packet_size" : 256,
+    "trigger": "payload_decrypt_error"}]]}]}
