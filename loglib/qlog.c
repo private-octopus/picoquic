@@ -433,6 +433,72 @@ int qlog_packet_lost(uint64_t time, bytestream* s, void* ptr)
     return 0;
 }
 
+int qlog_packet_dropped(uint64_t time, bytestream* s, void* ptr)
+{
+    qlog_context_t* ctx = (qlog_context_t*)ptr;
+    int64_t delta_time = time - ctx->start_time;
+    FILE* f = ctx->f_txtlog;
+    uint64_t packet_type = 0;
+    uint64_t err_code;
+    uint64_t packet_size = 0;
+    uint64_t raw_len = 0;
+    char const* str;
+    int ret = 0;
+
+    ret |= byteread_vint(s, &packet_type);
+    ret |= byteread_vint(s, &packet_size);
+    ret |= byteread_vint(s, &err_code);
+    ret |= byteread_vint(s, &raw_len);
+
+    if (ctx->event_count != 0) {
+        fprintf(f, ",\n");
+    }
+    else {
+        fprintf(f, "\n");
+    }
+
+    fprintf(f, "[%"PRId64", \"TRANSPORT\", \"PACKET_DROPPED\", {\n", delta_time);
+    fprintf(f, "    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
+    fprintf(f, ",\n    \"packet_size\" : %" PRIu64, packet_size);
+    switch (err_code) {
+    case PICOQUIC_ERROR_DUPLICATE:
+        str = "dos_prevention";
+        break;
+    case PICOQUIC_ERROR_AEAD_CHECK:
+        str = "payload_decrypt_error";
+        break;
+    case PICOQUIC_ERROR_CNXID_CHECK:
+        str = "unknown_connection_id";
+        break;
+    case PICOQUIC_ERROR_INITIAL_TOO_SHORT:
+        str = "dos_prevention";
+        break;
+    case PICOQUIC_ERROR_CNXID_NOT_AVAILABLE:	
+        str = "unknown_connection_id";
+        break;
+    case PICOQUIC_ERROR_KEY_ROTATION_NOT_READY:
+        str = "key_unavailable";
+        break;
+    case PICOQUIC_ERROR_AEAD_NOT_READY:
+        str = "key_unavailable";
+        break;
+    default:
+        str = "protocol_violation";
+        break;
+    }
+    fprintf(f, ",\n    \"trigger\": \"%s\"", str);
+
+    if (ret == 0 && raw_len > 0) {
+        fprintf(f, ",\n    \"raw\": ");
+        qlog_string(f, s, raw_len);
+    }
+    fprintf(f, "}]");
+
+    ctx->event_count++;
+
+    return 0;
+}
+
 int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
 {
     qlog_context_t* ctx = (qlog_context_t*)ptr;
@@ -1243,6 +1309,7 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char
         ctx.packet_frame = qlog_packet_frame;
         ctx.packet_end = qlog_packet_end;
         ctx.packet_lost = qlog_packet_lost;
+        ctx.packet_dropped = qlog_packet_dropped;
         ctx.cc_update = qlog_cc_update;
         ctx.info_message = qlog_info_message;
         ctx.ptr = &qlog;

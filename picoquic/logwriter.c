@@ -596,6 +596,37 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, 
     (void)fseek(f, 0, SEEK_END);
 }
 
+void binlog_dropped_packet(picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum ptype,  size_t packet_size, int err,
+    uint8_t * raw_data, uint64_t current_time)
+{
+    FILE* f = cnx->f_binlog;
+    size_t raw_size = packet_size;
+    bytestream_buf stream_msg;
+    bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
+
+    if (err == PICOQUIC_ERROR_AEAD_CHECK) {
+        /* Do not log on decryption error, because the buffer was randomized by decryption */
+        raw_size = 0;
+    } else if (raw_size > 32) {
+        raw_size = 32;
+    }
+
+    bytewrite_int32(msg, 0);
+    bytewrite_cid(msg, &cnx->initial_cnxid);
+    bytewrite_vint(msg, current_time);
+    bytewrite_vint(msg, picoquic_log_event_packet_dropped);
+    bytewrite_vint(msg, ptype);
+    bytewrite_vint(msg, packet_size);
+    bytewrite_vint(msg, err);
+    bytewrite_vint(msg, raw_size);
+    (void)bytewrite_buffer(msg, raw_data, raw_size);
+
+    /* write the frame length at the reserved spot, and save to log file*/
+    picoformat_32(msg->data, (uint32_t)(msg->ptr - 4));
+    (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
+}
+
 void binlog_outgoing_packet(picoquic_cnx_t* cnx,
     uint8_t * bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time)
