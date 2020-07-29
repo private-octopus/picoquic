@@ -550,7 +550,7 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
             /* No incoming packet, so check whether there is something to send */
             ret = picoquic_prepare_next_packet(quic, picoquic_current_time(),
                 send_buffer, sizeof(send_buffer), &send_length,
-                &peer_addr, &local_addr, &if_index, &log_cid);
+                &peer_addr, &local_addr, &if_index, &log_cid, NULL);
 
             if (ret == 0 && send_length > 0) {
                 /* Send the packet that was just prepared */

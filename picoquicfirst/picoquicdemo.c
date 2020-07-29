@@ -259,6 +259,7 @@ int quic_server(const char* server_name, int server_port,
             do {
                 struct sockaddr_storage peer_addr;
                 struct sockaddr_storage local_addr;
+                picoquic_cnx_t* last_cnx;
                 int if_index = dest_if;
                 int sock_ret = 0;
                 int sock_err = 0;
@@ -266,7 +267,7 @@ int quic_server(const char* server_name, int server_port,
 
                 ret = picoquic_prepare_next_packet(qserver, loop_time,
                     send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &local_addr, &if_index, &log_cid);
+                    &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx);
 
                 if (ret == 0 && send_length > 0) {
                     loop_count_time = current_time;
@@ -275,8 +276,14 @@ int quic_server(const char* server_name, int server_port,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
                     if (sock_ret <= 0) {
-                        picoquic_log_context_free_app_message(qserver, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
-                            peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
+                        if (last_cnx == NULL) {
+                            picoquic_log_context_free_app_message(qserver, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
+                                peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
+                        }
+                        else {
+                            picoquic_log_app_message(last_cnx, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
+                                peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
+                        }
                     }
                 }
 
