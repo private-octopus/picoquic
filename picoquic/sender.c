@@ -1090,7 +1090,7 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
     uint64_t rto = cnx->path[0]->retransmit_timer;
 
     rto <<= cnx->pkt_ctx[pc].nb_retransmit;
-    if (cnx->cnx_state < picoquic_state_client_ready_start) {
+    if (cnx->cnx_state < picoquic_state_ready) {
         if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
             rto = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
         }
