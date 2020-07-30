@@ -428,7 +428,6 @@ int picoquic_addr_length(const struct sockaddr* addr)
     }
     return len;
 }
-
 /* Copy a sockaddr to a storage value, and return the copied address length */
 void picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr)
 {
@@ -486,6 +485,35 @@ int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* i
     return ret;
 }
 
+/* Get text string for address and port */
+char const* picoquic_addr_text(struct sockaddr* addr, char* text, size_t text_size)
+{
+    char addr_buffer[128];
+    char const* addr_text;
+    char const* ret_text = "?:?";
+
+    switch (addr->sa_family) {
+    case AF_INET:
+        addr_text = inet_ntop(AF_INET,
+            (const void*)(&((struct sockaddr_in*)addr)->sin_addr),
+            addr_buffer, sizeof(addr_buffer));
+        if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ((struct sockaddr_in*) addr)->sin_port) == 0) {
+            ret_text = text;
+        }
+        break;
+    case AF_INET6:
+        addr_text = inet_ntop(AF_INET6,
+            (const void*)(&((struct sockaddr_in6*)addr)->sin6_addr),
+            addr_buffer, sizeof(addr_buffer));
+        if (picoquic_sprintf(text, text_size, NULL, "[%s]:%d", addr_text, ((struct sockaddr_in6*) addr)->sin6_port) == 0) {
+            ret_text = text;
+        }
+    default:
+        break;
+    }
+
+    return ret_text;
+}
 
 /* Return a directory path based on solution dir and file name */
 char const* picoquic_solution_dir = NULL;

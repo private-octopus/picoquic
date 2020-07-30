@@ -3721,10 +3721,14 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
 int picoquic_prepare_next_packet(picoquic_quic_t* quic,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int * if_index,
-    picoquic_connection_id_t * log_cid)
+    picoquic_connection_id_t * log_cid, picoquic_cnx_t** p_last_cnx)
 {
     int ret = 0;
     picoquic_stateless_packet_t* sp = picoquic_dequeue_stateless_packet(quic);
+
+    if (p_last_cnx) {
+        *p_last_cnx = NULL;
+    }
 
     if (sp != NULL) {
         if (sp->length > send_buffer_max) {
@@ -3774,6 +3778,9 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
             else {
                 if (*if_index == -1) {
                     *if_index = picoquic_get_local_if_index(cnx);
+                }
+                if (p_last_cnx) {
+                    *p_last_cnx = cnx;
                 }
             }
         }

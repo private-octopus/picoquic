@@ -614,7 +614,7 @@ int picoquic_incoming_packet(
 int picoquic_prepare_next_packet(picoquic_quic_t* quic,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index,
-    picoquic_connection_id_t* p_logcid);
+    picoquic_connection_id_t* p_logcid, picoquic_cnx_t** p_last_cnx);
 
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,

@@ -453,7 +453,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
 
                 ret = picoquic_prepare_next_packet(quic, current_time,
                     send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &local_addr, &if_index, &log_cid);
+                    &peer_addr, &local_addr, &if_index, &log_cid, NULL);
 
                 if (ret == 0 && send_length > 0) {
                     sock_ret = picoquic_send_through_server_sockets(&server_sockets,

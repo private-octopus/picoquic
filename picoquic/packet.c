@@ -355,8 +355,7 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
 
 void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx)
 {
-    if (cnx->quic->F_log != NULL)
-    {
+    if (cnx->quic->log_pn_dec && (cnx->quic->F_log != NULL || cnx->f_binlog != NULL)){
         void* pn_dec = cnx->crypto_context[picoquic_epoch_1rtt].pn_dec;
         void* pn_enc = cnx->crypto_context[picoquic_epoch_1rtt].pn_enc;
         uint8_t test_iv[32] = {
@@ -376,8 +375,7 @@ void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx)
             picoquic_pn_encrypt(pn_dec, test_iv, demask_bytes, demask_bytes, mask_length);
         }
 
-        fprintf(cnx->quic->F_log, "%016llx: 1RTT PN ENC/DEC, Phi: %d, signature = %02x%02x%02x%02x%02x, %02x%02x%02x%02x%02x\n",
-            (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
+        picoquic_log_app_message(cnx, "1RTT PN ENC/DEC, Phi: %d, signature = %02x%02x%02x%02x%02x, %02x%02x%02x%02x%02x",
             cnx->key_phase_enc,
             mask_bytes[0], mask_bytes[1], mask_bytes[2], mask_bytes[3], mask_bytes[4],
             demask_bytes[0], demask_bytes[1], demask_bytes[2], demask_bytes[3], demask_bytes[4]);
@@ -963,6 +961,11 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
                 bytes, 0, sp->length,
                 bytes, sp->length, pn_length);
         }
+        if (cnx->f_binlog != NULL) {
+            binlog_outgoing_packet(cnx,
+                bytes, 0, pn_length, sp->length,
+                bytes, sp->length, picoquic_get_quic_time(cnx->quic));
+        }
 
         picoquic_queue_stateless_packet(cnx->quic, sp);
     }
@@ -1194,9 +1197,7 @@ int picoquic_incoming_retry(
                 memcmp(cnx->initial_cnxid.id, &bytes[byte_index], odcil) != 0) {
                 /* malformed ODCIL, or does not match initial cid; ignore */
                 ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
-                if (ret != 0 && cnx->quic->F_log != NULL) {
-                    picoquic_log_retry_packet_error(cnx->quic->F_log, cnx, "odcid check failed");
-                }
+                picoquic_log_app_message(cnx, "Retry packet rejected: odcid check failed");
             }
             else {
                 byte_index += odcil;
@@ -1205,9 +1206,7 @@ int picoquic_incoming_retry(
         else {
             ret = picoquic_verify_retry_protection(integrity_aead, bytes, &data_length, byte_index, &cnx->initial_cnxid);
 
-            if (ret != 0 && cnx->quic->F_log != NULL) {
-                picoquic_log_retry_packet_error(cnx->quic->F_log, cnx, "integrity check failed");
-            }
+            picoquic_log_app_message(cnx, "Retry packet rejected: integrity check failed");
         }
 
         if (ret == 0) {
