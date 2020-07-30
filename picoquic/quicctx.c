@@ -1283,8 +1283,14 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
             }
         }
 
-        if (cnx->quic->F_log != 0) {
-            picoquic_log_path_promotion(cnx->quic->F_log, cnx, path_index, current_time);
+        if (cnx->quic->F_log != NULL || cnx->f_binlog != NULL) {
+            char src_ip[128];
+            char dst_ip[128];
+
+            picoquic_log_app_message(cnx, "Path %d promoted to default at T=%fs, Local: %s, Remote: %s",
+                path_index, (double)(current_time - cnx->start_time) / 1000000.0,
+                picoquic_addr_text((struct sockaddr*) & cnx->path[path_index]->local_addr, src_ip, sizeof(src_ip)),
+                picoquic_addr_text((struct sockaddr*) & cnx->path[path_index]->peer_addr, dst_ip, sizeof(dst_ip)));
         }
 
         /* Set the congestion algorithm for the new path */

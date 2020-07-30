@@ -503,6 +503,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int should_close_log : 1;
     unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
     unsigned int one_way_grease_quic_bit : 1; /* Grease of QUIC bit, but do not announce support */
+    unsigned int log_pn_dec : 1; /* Log key hashes on key changes to debug crypto */
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 

@@ -1020,11 +1020,8 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
             stream_ctx->frame[stream_ctx->ps.hq.command_length] = 0;
             stream_ctx->ps.hq.status = picohttp_server_stream_status_finished;
 
-            if (cnx->quic->F_log != NULL) {
-                fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-                fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
-                    stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
-            }
+            picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
+                stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
 
             if (stream_ctx->method == 0) {
                 if (demo_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, &stream_ctx->echo_length,
@@ -1068,11 +1065,8 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                     picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t*)buf, header_length, 0, (void*)stream_ctx);
                 }
 
-                if (cnx->quic->F_log != NULL) {
-                    fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-                    fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Reply with bad request message after command: %s\n",
-                        stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
-                }
+                picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", Reply with bad request message after command: %s\n",
+                    stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
 
                 stream_ctx->response_length = strlen(bad_request_message);
                 (void)picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, (const uint8_t*)bad_request_message,
@@ -1111,12 +1105,8 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
             if (stream_ctx->ps.hq.command_length < sizeof(stream_ctx->frame)){
                 stream_ctx->frame[stream_ctx->ps.hq.command_length] = 0;
 
-                if (cnx->quic->F_log != NULL) {
-                    fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-                    fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
-                        stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
-                    fflush(cnx->quic->F_log);
-                }
+                picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
+                    stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
             }
             else {
 
@@ -1134,10 +1124,8 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     picoquic_h09_server_callback_ctx_t* ctx = NULL;
     picohttp_server_stream_ctx_t* stream_ctx = (picohttp_server_stream_ctx_t*)v_stream_ctx;
 
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-        picoquic_log_time(cnx->quic->F_log, cnx, picoquic_current_time(), "", " : ");
-        fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d (%s)\n",
+    if (picoquic_cnx_is_still_logging(cnx)) {
+        picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d (%s)\n",
             stream_id, length, fin_or_event, picoquic_log_fin_or_event_name(fin_or_event));
     }
 
@@ -1146,11 +1134,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
         picoquic_h09_server_callback_ctx_t* new_ctx = first_server_callback_create_context((picohttp_server_parameters_t*)callback_ctx);
         if (new_ctx == NULL) {
             /* cannot handle the connection */
-            if (cnx->quic->F_log != NULL) {
-                fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-                fprintf(cnx->quic->F_log, "Memory error, cannot allocate application context\n");
-            }
-
+            picoquic_log_app_message(cnx, "Memory error, cannot allocate application context\n");
             picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
             return 0;
         }
@@ -1191,11 +1175,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
         /* TODO-POST: notify callback. */
         stream_ctx->ps.hq.status = picohttp_server_stream_status_finished;
         picoquic_reset_stream(cnx, stream_id, 0);
-        if (cnx->quic->F_log != NULL) {
-            printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-            printf("Server CB, Stop Sending Stream: %" PRIu64 ", resetting the local stream.\n",
-                stream_id);
-        }
+        picoquic_log_app_message(cnx, "Server CB, Stop Sending Stream: %" PRIu64 ", resetting the local stream.\n", stream_id);
         if (stream_ctx != NULL && stream_ctx->F != NULL) {
             stream_ctx->F = picoquic_file_close(stream_ctx->F);
         }
@@ -1204,11 +1184,8 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
         /* TODO-POST: notify callback. */
         stream_ctx->ps.hq.status = picohttp_server_stream_status_finished;
         picoquic_reset_stream(cnx, stream_id, 0);
-        if (cnx->quic->F_log != NULL) {
-            fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-            fprintf(cnx->quic->F_log, "Server CB, Reset Stream: %" PRIu64 ", resetting the local stream.\n",
-                stream_id);
-        }
+        picoquic_log_app_message(cnx, "Server CB, Reset Stream: %" PRIu64 ", resetting the local stream.\n", stream_id);
+
         if (stream_ctx != NULL && stream_ctx->F != NULL) {
             stream_ctx->F = picoquic_file_close(stream_ctx->F);
         }
@@ -1242,10 +1219,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
         /* We do not support this, yet */
         stream_ctx->ps.hq.status = picohttp_server_stream_status_finished;
         picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
-        if (cnx->quic->F_log != NULL) {
-            fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-            fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", RESET, stream gaps not supported\n", stream_id);
-        }
+        picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", RESET, stream gaps not supported\n", stream_id);
         return 0;
     }
     else if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin) {
@@ -1258,10 +1232,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
         /* TODO-POST: notify callback. */
         stream_ctx->ps.hq.status = picohttp_server_stream_status_finished;
         picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
-        if (cnx->quic->F_log != NULL) {
-            fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-            fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", unexpected event\n", stream_id);
-        }
+        picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", unexpected event\n", stream_id);
     }
 
     /* that's it */
