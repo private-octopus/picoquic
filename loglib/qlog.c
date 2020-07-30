@@ -407,7 +407,7 @@ int qlog_packet_lost(uint64_t time, bytestream* s, void* ptr)
         fprintf(f, "\n");
     }
 
-    fprintf(f, "[%"PRId64", \"RECOVERY\", \"PACKET_LOST\", {\n", delta_time);
+    fprintf(f, "[%"PRId64", \"recovery\", \"packet_lost\", {\n", delta_time);
     fprintf(f, "    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
     fprintf(f, ",\n    \"packet_number\" : %" PRIu64, sequence);
     if (trigger_length > 0) {
@@ -551,7 +551,7 @@ int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
     }
 
     fprintf(f, "[%"PRId64", \"transport\", \"%s\", { \"byte_length\": %" PRIu64,
-        delta_time, (rxtx == 0) ? "DATAGRAM_SENT" : "DATAGRAM_RECEIVED", byte_length);
+        delta_time, (rxtx == 0) ? "datagram_sent" : "datagram_received", byte_length);
 
     if (addr_peer.ss_family != 0 &&
         picoquic_compare_addr((struct sockaddr*)&addr_peer, (struct sockaddr*) & ctx->addr_peer) != 0) {
@@ -588,7 +588,7 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
     }
 
     fprintf(f, "[%"PRId64", \"transport\", \"%s\", { \"packet_type\": \"%s\", \"header\": { \"packet_size\": %"PRIu64 ,
-        delta_time, (rxtx == 0)?"PACKET_SENT":"PACKET_RECEIVED", ptype2str(ph->ptype), size);
+        delta_time, (rxtx == 0)?"packet_sent":"packet_received", ptype2str(ph->ptype), size);
 
     if (ph->ptype != picoquic_packet_version_negotiation &&
         ph->ptype != picoquic_packet_retry) {
