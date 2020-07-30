@@ -1790,7 +1790,7 @@ int picoquic_incoming_encrypted(
 
 /* Processing of packets received before they could be fully decrypted
  */
-void picoquic_incoming_not_decrypted(
+int  picoquic_incoming_not_decrypted(
     picoquic_cnx_t* cnx,
     picoquic_packet_header* ph,
     uint64_t current_time,
@@ -1800,6 +1800,8 @@ void picoquic_incoming_not_decrypted(
     struct sockaddr* addr_to,
     int if_index_to)
 {
+    int buffered = 0;
+
     if (cnx->cnx_state < picoquic_state_ready) {
         if (cnx->path[0]->p_local_cnxid->cnx_id.id_len > 0 &&
             picoquic_compare_connection_id(&cnx->path[0]->p_local_cnxid->cnx_id, &ph->dest_cnx_id) == 0)
@@ -1826,10 +1828,13 @@ void picoquic_incoming_not_decrypted(
                     picoquic_store_addr(&packet->addr_local, addr_to);
                     picoquic_store_addr(&packet->addr_to, addr_from);
                     packet->if_index_local = if_index_to;
+                    buffered = 1;
                 }
             }
         }
     }
+
+    return buffered;
 }
 
 /*
@@ -1854,6 +1859,7 @@ int picoquic_incoming_segment(
     picoquic_packet_header ph;
     int new_context_created = 0;
     int is_first_segment = 0;
+    int is_buffered = 0;
 
     /* Parse the header and decrypt the segment */
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,
@@ -1885,7 +1891,7 @@ int picoquic_incoming_segment(
     /* Store packet if received in advance of encryption keys */
     if (ret == PICOQUIC_ERROR_AEAD_NOT_READY &&
         cnx != NULL) {
-        picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length, addr_from, addr_to, if_index_to);
+        is_buffered = picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length, addr_from, addr_to, if_index_to);
     }
 
     /* Log the incoming packet */
@@ -1897,7 +1903,9 @@ int picoquic_incoming_segment(
         if (ret == 0) {
             binlog_packet(cnx->f_binlog, log_cnxid, 1, current_time, &ph, bytes, *consumed);
         }
-        else {
+        else if (is_buffered) {
+            binlog_buffered_packet(cnx, ph.ptype, current_time);
+        } else {
             binlog_dropped_packet(cnx, ph.ptype, length, ret, bytes, current_time);
         }
     }
