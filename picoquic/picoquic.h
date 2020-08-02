@@ -157,7 +157,8 @@ typedef enum {
 typedef enum {
     picoquic_spinbit_basic = 0, /* default spin bit behavior, as specified in spin bit draft */
     picoquic_spinbit_random = 1, /* alternative spin bit behavior, randomized for each packet */
-    picoquic_spinbit_null = 2 /* null behavior, randomized per path */
+    picoquic_spinbit_null = 2, /* null behavior, randomized per path */
+    picoquic_spinbit_on = 3 /* Option used in test to avoid randomizing spin bit on/off */
 } picoquic_spinbit_version_enum;
 
 /*

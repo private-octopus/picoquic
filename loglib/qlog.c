@@ -523,7 +523,7 @@ int qlog_packet_buffered(uint64_t time, bytestream* s, void* ptr)
 
     ctx->event_count++;
 
-    return 0;
+    return ret;
 }
 
 int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
