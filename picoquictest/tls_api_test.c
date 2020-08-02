@@ -6958,8 +6958,8 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog)
         if (keep_binlog) {
             picoquic_set_binlog(test_ctx->qserver, ".");
         }
-        picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_null);
-        picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_null);
+        picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_basic);
+        picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_basic);
         test_ctx->qserver->cnx_id_callback_ctx = (void*)&cnxfn_data_server;
         test_ctx->qserver->cnx_id_callback_fn = qlog_trace_cid_fn;
         test_ctx->qclient->cnx_id_callback_ctx = (void*)&cnxfn_data_client;
