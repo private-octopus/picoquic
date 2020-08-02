@@ -225,9 +225,9 @@ static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
     /* packet information */
     uint8_t header_flags = 0;
     byteread_int8(s, &header_flags);
-    ph->quic_bit_is_zero = (header_flags & 64) != 0;
-    ph->spin = (header_flags & 2) != 0;
-    ph->key_phase = (header_flags & 1) != 0;
+    ph->quic_bit_is_zero = ((header_flags & 64) != 0);
+    ph->spin = ((header_flags & 2) != 0);
+    ph->key_phase = ((header_flags & 1) != 0);
 
     size_t payload_length = 0;
     byteread_vlen(s, &payload_length);

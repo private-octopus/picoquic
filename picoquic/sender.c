@@ -2145,13 +2145,13 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                                 cnx->tls_stream[1].send_queue == NULL &&
                                 cnx->tls_stream[2].send_queue == NULL) {
                                 cnx->cnx_state = picoquic_state_client_ready_start;
-                                if (ret == 0) {
-                                    /* Signal the application */
-                                    if (cnx->callback_fn != NULL) {
-                                        if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
-                                            picoquic_log_app_message(cnx, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
-                                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
-                                        }
+                                /* Reset the HS retransmission count, since end of flight counts as acknowledgement */
+                                cnx->pkt_ctx[picoquic_packet_context_handshake].nb_retransmit = 0;
+                                /* Signal the application, because data can now be sent. */
+                                if (cnx->callback_fn != NULL) {
+                                    if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
+                                        picoquic_log_app_message(cnx, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                                        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                                     }
                                 }
                             }

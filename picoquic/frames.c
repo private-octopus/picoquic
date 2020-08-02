@@ -1953,7 +1953,8 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
             }
 
             old_path->rtt_min = rtt_estimate;
-            old_path->retransmit_timer = 3 * rtt_estimate + old_path->max_ack_delay;
+            old_path->retransmit_timer = 3 * rtt_estimate +
+                cnx->remote_parameters.max_ack_delay;
             if (old_path == cnx->path[0]) {
                 /* Only update the ack delay upon measuring the default path */
                 cnx->is_ack_frequency_updated = cnx->is_ack_frequency_negotiated;

@@ -2287,6 +2287,10 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                 cnx->spin_policy = picoquic_spinbit_null;
             }
         }
+        else if (cnx->spin_policy == picoquic_spinbit_on) {
+            /* Option used in test to avoid randomizing spin bit on/off */
+            cnx->spin_policy = picoquic_spinbit_basic;
+        }
 
         if (sni != NULL) {
             cnx->sni = picoquic_string_duplicate(sni);

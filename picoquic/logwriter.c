@@ -680,7 +680,7 @@ void binlog_outgoing_packet(picoquic_cnx_t* cnx,
     ph.pn = (uint32_t)ph.pn64;
     if (ph.ptype != picoquic_packet_retry) {
         if (ph.pn_offset != 0) {
-            ph.offset = ph.pn_offset + pn_length; /* todo: should provide the actual length */
+            ph.offset = ph.pn_offset + pn_length;
             ph.payload_length -= pn_length;
         }
     }
