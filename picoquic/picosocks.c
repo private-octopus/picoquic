@@ -182,8 +182,8 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     else {
 #if defined(IP_TOS)
         {
-            unsigned int ecn = 2;
-            /* Request setting ECN_1 in outgoing packets */
+            unsigned int ecn = 1;
+            /* Request setting ECN_0 in outgoing packets */
             if (setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPv4 IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
@@ -680,7 +680,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                     }
                 }
 #endif
-                else if (cmsg->cmsg_type == IP_TOS && cmsg->cmsg_len > 0) {
+                else if ((cmsg->cmsg_type == IP_TOS || cmsg->cmsg_type == IP_RECVTOS) && cmsg->cmsg_len > 0) {
                     if (received_ecn != NULL) {
                         *received_ecn = *((unsigned char *)CMSG_DATA(cmsg));
                     }
