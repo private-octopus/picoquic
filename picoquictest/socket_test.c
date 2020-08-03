@@ -85,10 +85,11 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
 
     /* perform select at client */
     if (ret == 0) {
+        unsigned char received_ecn;
         memset(buffer, 0, sizeof(buffer));
 
         bytes_recv = picoquic_select(&fd, 1,
-            &addr_back, NULL, NULL, NULL,
+            &addr_back, NULL, NULL, &received_ecn,
             buffer, sizeof(buffer), 1000000, &current_time);
 
         if (bytes_recv != bytes_sent) {
@@ -103,6 +104,8 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
                     ret = -1;
                 }
             }
+
+            DBG_PRINTF("Received ecn: %x\n", received_ecn);
         }
     }
 
