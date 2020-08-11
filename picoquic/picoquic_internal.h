@@ -454,7 +454,7 @@ typedef enum {
     picoquic_tp_enable_loss_bit_old = 0x1055,
     picoquic_tp_enable_loss_bit = 0x1057,
     picoquic_tp_min_ack_delay = 0xDE1A,
-    picoquic_tp_enable_time_stamp = 0x7157,
+    picoquic_tp_enable_time_stamp = 0x7158, /* x&1 = */
     picoquic_tp_grease_quic_bit = 0x2ab2
 } picoquic_tp_enum;
 
@@ -911,7 +911,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_ack_frequency_negotiated : 1; /* Ack Frequency extension negotiated */
     unsigned int is_ack_frequency_updated : 1; /* Should send an ack frequency frame asap. */
     unsigned int recycle_sooner_needed : 1; /* There may be a need to recycle "sooner" packets */
-    unsigned int is_time_stamp_enabled : 1; /* Add time stamp before acks, read on incoming */
+    unsigned int is_time_stamp_enabled : 1; /* Read time stamp on on incoming */
+    unsigned int is_time_stamp_sent : 1; /* Send time stamp with ACKS */
     unsigned int is_pacing_update_requested : 1; /* Whether the application subscribed to pacing updates */
     unsigned int is_flow_control_limited : 1; /* Flow control window limited to initial value, mostly for tests */
     unsigned int is_hcid_verified : 1; /* Whether the HCID was received from the peer */

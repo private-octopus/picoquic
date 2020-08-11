@@ -2252,7 +2252,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
         {
             /* Requires TP grease, for interop tests */
             ctx->cnx_client->grease_transport_parameters = 1;
-            ctx->cnx_client->local_parameters.enable_time_stamp = 1;
+            ctx->cnx_client->local_parameters.enable_time_stamp = 3;
             ctx->client_time = *simulated_time;
 
             if (ret == 0) {

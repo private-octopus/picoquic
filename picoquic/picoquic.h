@@ -230,7 +230,7 @@ typedef struct st_picoquic_tp_t {
     picoquic_tp_prefered_address_t prefered_address;
     uint32_t max_datagram_frame_size;
     int enable_loss_bit;
-    int enable_time_stamp;
+    int enable_time_stamp; /* (x&1) want, (x&2) can */
     uint64_t min_ack_delay;
     int do_grease_quic_bit;
 } picoquic_tp_t;
