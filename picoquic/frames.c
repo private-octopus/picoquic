@@ -2660,7 +2660,7 @@ uint8_t * picoquic_format_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t
     uint64_t lowest_acknowledged = 0;
     int is_ecn = cnx->sending_ecn_ack;
     uint8_t* after_stamp = bytes;
-    int has_time_stamp = (pc == picoquic_packet_context_application && cnx->is_time_stamp_enabled);
+    int has_time_stamp = (pc == picoquic_packet_context_application && cnx->is_time_stamp_sent);
     uint8_t ack_type_byte = ((is_ecn) ? picoquic_frame_type_ack_ecn : picoquic_frame_type_ack);
 
     /* Check that there something to acknowledge */

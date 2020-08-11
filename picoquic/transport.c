@@ -391,7 +391,8 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     }
 
     if (cnx->local_parameters.enable_time_stamp > 0 && bytes != NULL) {
-        bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_enable_time_stamp);
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_time_stamp,
+            cnx->local_parameters.enable_time_stamp);
     }
 
     if (cnx->local_parameters.do_grease_quic_bit > 0 && bytes != NULL) {
@@ -664,14 +665,20 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         }
                     }
                     break;
-                case picoquic_tp_enable_time_stamp:
-                    if (extension_length != 0) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
-                    }
-                    else {
-                        cnx->remote_parameters.enable_time_stamp = 1;
+                case picoquic_tp_enable_time_stamp: {
+                    uint64_t tp_time_stamp =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+
+                    if (ret == 0) {
+                        if (tp_time_stamp < 1 || tp_time_stamp > 3) {
+                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        }
+                        else {
+                            cnx->remote_parameters.enable_time_stamp = (int)tp_time_stamp;
+                        }
                     }
                     break;
+                }
                 case picoquic_tp_grease_quic_bit:
                     if (extension_length != 0) {
                         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
@@ -784,14 +791,27 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
     /* One way delay and Quic_bit_grease only enabled if asked by client and accepted by server */
     if (cnx->client_mode) {
-        cnx->is_time_stamp_enabled = cnx->local_parameters.enable_time_stamp && cnx->remote_parameters.enable_time_stamp;
+        cnx->is_time_stamp_enabled = 
+            (cnx->local_parameters.enable_time_stamp&1) && (cnx->remote_parameters.enable_time_stamp&2);
+        cnx->is_time_stamp_sent =
+            (cnx->local_parameters.enable_time_stamp & 2) && (cnx->remote_parameters.enable_time_stamp & 2);
         cnx->do_grease_quic_bit = cnx->local_parameters.do_grease_quic_bit && cnx->remote_parameters.do_grease_quic_bit;
     }
     else
     {
         if (cnx->remote_parameters.enable_time_stamp) {
-            cnx->local_parameters.enable_time_stamp = 1;
-            cnx->is_time_stamp_enabled = 1;
+            int v_local = 0;
+            if (cnx->remote_parameters.enable_time_stamp & 1) {
+                /* Peer wants TS. Say that we can send. */
+                v_local |= 2;
+                cnx->is_time_stamp_sent = 1;
+            }
+            if (cnx->remote_parameters.enable_time_stamp & 2) {
+                /* Peer can do TS. Say that we want to receive. */
+                v_local |= 1;
+                cnx->is_time_stamp_enabled = 1;
+            }
+            cnx->local_parameters.enable_time_stamp = v_local;
         }
         /* When the one way option is set, the server will grease the quic bit if the client supports that,
          * but will not announce support of the grease quic bit, thus asking the client to not set it */
