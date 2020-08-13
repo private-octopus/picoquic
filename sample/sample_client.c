@@ -231,20 +231,30 @@ int sample_client_callback(picoquic_cnx_t* cnx,
             {
                 if (stream_ctx->F == NULL) {
                     /* Open the file to receive the data. This is done at the last possible moment,
-                     * to minimize the number of files open simultaneously */
+                     * to minimize the number of files open simultaneously.
+                     * When formatting the file_path, verify that the directory name is zero-length,
+                     * or terminated by a proper file separator.
+                     */
                     char file_path[1024];
-#ifdef _WINDOWS
-                    char* sep = "\\";
-#else
-                    char* sep = "/";
-#endif
-                    if (picoquic_sprintf(file_path, sizeof(file_path), NULL, "%s%s%s",
-                        client_ctx->default_dir, sep, client_ctx->file_names[stream_ctx->file_rank]) != 0) {
-                        /* Unexpected: could not format the file name */
-                        fprintf(stderr, "Could not format the file name.\n");
-                        ret = -1;
+                    size_t dir_len = strlen(client_ctx->default_dir);
+                    size_t file_name_len = strlen(client_ctx->file_names[stream_ctx->file_rank]);
+
+                    if (dir_len > 0 && dir_len < sizeof(file_path)) {
+                        memcpy(file_path, client_ctx->default_dir, dir_len);
+                        if (file_path[dir_len - 1] != PICOQUIC_FILE_SEPARATOR[0]) {
+                            file_path[dir_len] = PICOQUIC_FILE_SEPARATOR[0];
+                            dir_len++;
+                        }
                     }
-                    else {
+
+                    if (dir_len + file_name_len + 1 >= sizeof(file_path)) {
+                        /* Unexpected: could not format the file name */
+                        fprintf(stderr, "Could not format the file path.\n");
+                        ret = -1;
+                    } else {
+                        memcpy(file_path + dir_len, client_ctx->file_names[stream_ctx->file_rank],
+                            file_name_len);
+                        file_path[dir_len + file_name_len] = 0;
                         stream_ctx->F = picoquic_file_open(file_path, "wb");
 
                         if (stream_ctx->F == NULL) {
@@ -256,6 +266,7 @@ int sample_client_callback(picoquic_cnx_t* cnx,
                 }
 
                 if (ret == 0 && length > 0) {
+                    /* write the received bytes to the file */
                     if (fwrite(bytes, length, 1, stream_ctx->F) != 1) {
                         /* Could not write file to disk */
                         fprintf(stderr, "Could not write data to disk.\n");

@@ -113,23 +113,31 @@ sample_server_stream_ctx_t * sample_server_create_stream_context(sample_server_c
 int sample_server_open_stream(sample_server_ctx_t* server_ctx, sample_server_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
-    char file_name[1024];
+    char file_path[1024];
 
     /* Keep track that the full file name was acquired. */
     stream_ctx->is_name_read = 1;
 
     /* Verify the name, then try to open the file */
-    if (server_ctx->default_dir_len + stream_ctx->name_length + 1 > sizeof(file_name)) {
+    if (server_ctx->default_dir_len + stream_ctx->name_length + 1 > sizeof(file_path)) {
         ret = PICOQUIC_SAMPLE_NAME_TOO_LONG_ERROR;
     }
     else {
-        /* Assume that the default path is empty of terminates with "/" or "\" depending on OS  */
-        memcpy(file_name, server_ctx->default_dir, server_ctx->default_dir_len);
-        memcpy(file_name + server_ctx->default_dir_len, stream_ctx->file_name, stream_ctx->name_length);
-        file_name[server_ctx->default_dir_len + stream_ctx->name_length] = 0;
+        /* Verify that the default path is empty of terminates with "/" or "\" depending on OS,
+         * and format the file path */
+        size_t dir_len = server_ctx->default_dir_len;
+        if (dir_len > 0) {
+            memcpy(file_path, server_ctx->default_dir, dir_len);
+            if (file_path[dir_len - 1] != PICOQUIC_FILE_SEPARATOR[0]) {
+                file_path[dir_len] = PICOQUIC_FILE_SEPARATOR[0];
+                dir_len++;
+            }
+        }
+        memcpy(file_path + dir_len, stream_ctx->file_name, stream_ctx->name_length);
+        file_path[dir_len + stream_ctx->name_length] = 0;
 
-        /* Using the picoquic_file_open API for portability to WIndows and Linux */
-        stream_ctx->F = picoquic_file_open(file_name, "rb");
+        /* Use the picoquic_file_open API for portability to Windows and Linux */
+        stream_ctx->F = picoquic_file_open(file_path, "rb");
 
         if (stream_ctx->F == NULL) {
             ret = PICOQUIC_SAMPLE_NO_SUCH_FILE_ERROR;
