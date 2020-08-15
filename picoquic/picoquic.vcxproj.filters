@@ -90,6 +90,9 @@
     <ClCompile Include="sim_link.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="sockloop.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
@@ -126,6 +129,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picoquic_utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picoquic_packet_loop.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

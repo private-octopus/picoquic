@@ -30,7 +30,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ws2tcpip.h>
-#include "autoqlog.h"
 
 #ifndef SOCKET_TYPE
 #define SOCKET_TYPE SOCKET
@@ -85,7 +84,6 @@
 
 #define SERVER_CERT_FILE "certs/cert.pem"
 #define SERVER_KEY_FILE "certs/key.pem"
-#include "autoqlog.h"
 
 #endif
 
@@ -94,7 +92,9 @@ static const char* default_server_name = "::";
 static const char* ticket_store_filename = "demo_ticket_store.bin";
 static const char* token_store_filename = "demo_token_store.bin";
 
+
 #include "picoquic.h"
+#include "picoquic_packet_loop.h"
 #include "picoquic_internal.h"
 #include "picosocks.h"
 #include "picoquic_utils.h"
@@ -103,7 +103,7 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "democlient.h"
 #include "demoserver.h"
 #include "siduck.h"
-
+#include "autoqlog.h"
 /*
  * SIDUCK datagram demo call back.
  */
@@ -129,47 +129,72 @@ void print_address(FILE* F_log, struct sockaddr* address, char* label, picoquic_
     }
 }
 
+/* server loop call back management */
+typedef struct st_server_loop_cb_t {
+    int just_once;
+    int first_connection_seen;
+    int connection_done;
+} server_loop_cb_t;
+
+int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, void* callback_ctx)
+{
+    int ret = 0;
+    server_loop_cb_t* cb_ctx = (server_loop_cb_t*)callback_ctx;
+
+    if (cb_ctx == NULL) {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    else {
+        switch (cb_mode) {
+        case picoquic_packet_loop_after_receive:
+            if (cb_ctx->just_once && !cb_ctx->first_connection_seen && picoquic_get_first_cnx(quic) != NULL) {
+                cb_ctx->first_connection_seen = 1;
+                fprintf(stdout, "First connection noticed.\n");
+            }
+            break;
+        case picoquic_packet_loop_after_send:
+            if (cb_ctx->just_once && cb_ctx->first_connection_seen && picoquic_get_first_cnx(quic) == NULL) {
+                fprintf(stdout, "No more active connections.\n");
+                cb_ctx->connection_done = 1;
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+            }
+            break;
+        default:
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            break;
+        }
+    }
+    return ret;
+}
+
 int quic_server(const char* server_name, int server_port,
     const char* pem_cert, const char* pem_key,
     int just_once, int do_retry, picoquic_connection_id_cb_fn cnx_id_callback,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
-    int dest_if, int mtu_max, uint32_t proposed_version, 
-    const char * esni_key_file_name, const char * esni_rr_file_name,
-    char const * log_file, char const* bin_dir, char const* qlog_dir, int use_long_log,
-    picoquic_congestion_algorithm_t const * cc_algorithm, char const * web_folder)
+    int dest_if, int mtu_max, uint32_t proposed_version,
+    const char* esni_key_file_name, const char* esni_rr_file_name,
+    char const* log_file, char const* bin_dir, char const* qlog_dir, int use_long_log,
+    picoquic_congestion_algorithm_t const* cc_algorithm, char const* web_folder)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
     picoquic_quic_t* qserver = NULL;
     picoquic_server_sockets_t server_sockets;
-    struct sockaddr_storage addr_from;
-    struct sockaddr_storage addr_to;
-    int if_index_to;
-    uint8_t buffer[1536];
-    uint8_t send_buffer[1536];
-    size_t send_length = 0;
-    int bytes_recv;
     uint64_t current_time = 0;
-    int64_t delay_max = 10000000;
-    int connection_done = 0;
     picohttp_server_parameters_t picoquic_file_param;
-    uint64_t loop_count_time = 0;
-    int nb_loops = 0;
-    picoquic_connection_id_t log_cid;
-    int first_connection_seen = 0;
+    server_loop_cb_t loop_cb_ctx;
 
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
     picoquic_file_param.web_folder = web_folder;
-
-    // picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, server_param);
+    memset(&loop_cb_ctx, 0, sizeof(server_loop_cb_t));
+    loop_cb_ctx.just_once = just_once;
 
     /* Open a UDP socket */
     ret = picoquic_open_server_sockets(&server_sockets, server_port);
 
-    /* Wait for packets and process them */
+    /* Setup the server context */
     if (ret == 0) {
         current_time = picoquic_current_time();
-        loop_count_time = current_time;
         /* Create QUIC context */
         qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL,
             picoquic_demo_server_callback, &picoquic_file_param,
@@ -178,7 +203,8 @@ int quic_server(const char* server_name, int server_port,
         if (qserver == NULL) {
             printf("Could not create server context\n");
             ret = -1;
-        } else {
+        }
+        else {
             picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
             if (do_retry != 0) {
                 picoquic_set_cookie_mode(qserver, 1);
@@ -196,7 +222,7 @@ int quic_server(const char* server_name, int server_port,
             picoquic_set_binlog(qserver, bin_dir);
 
             picoquic_set_qlog(qserver, qlog_dir);
-            
+
             picoquic_set_textlog(qserver, log_file);
 
             picoquic_set_log_level(qserver, use_long_log);
@@ -213,90 +239,13 @@ int quic_server(const char* server_name, int server_port,
     }
 
     /* Wait for packets */
-    while (ret == 0 && (!just_once || !connection_done)) {
-        int64_t delta_t = picoquic_get_next_wake_delay(qserver, current_time, delay_max);
-        unsigned char received_ecn;
+    ret = picoquic_packet_loop(qserver, &server_sockets, dest_if, server_loop_cb, &loop_cb_ctx);
 
-        if_index_to = 0;
-
-        bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
-            &addr_from, 
-            &addr_to, &if_index_to, &received_ecn,
-            buffer, sizeof(buffer),
-            delta_t, &current_time);
-
-        nb_loops++;
-        if (nb_loops >= 100) {
-            uint64_t loop_delta = current_time - loop_count_time;
-            loop_count_time = current_time;
-
-            DBG_PRINTF("Looped %d times in %llu microsec, file: %d, line: %d\n",
-                nb_loops, (unsigned long long) loop_delta, qserver->wake_file, qserver->wake_line);
-            picoquic_log_context_free_app_message(qserver, &log_cid, "Looped %d times in %llu microsec, file: %d, line: %d",
-                nb_loops, (unsigned long long) loop_delta, qserver->wake_file, qserver->wake_line);
-            
-            nb_loops = 0;
-        }
-
-        if (bytes_recv < 0) {
-            ret = -1;
-        } else {
-            uint64_t loop_time = current_time;
-
-            if (bytes_recv > 0) {
-                /* Submit the packet to the server */
-                (void)picoquic_incoming_packet(qserver, buffer,
-                    (size_t)bytes_recv, (struct sockaddr*)&addr_from,
-                    (struct sockaddr*)&addr_to, if_index_to, received_ecn,
-                    current_time);
-
-                if (just_once && !first_connection_seen && picoquic_get_first_cnx(qserver) != NULL) {
-                    first_connection_seen = 1;
-                    fprintf(stdout, "First connection noticed.\n");
-                }
-            }
-
-            do {
-                struct sockaddr_storage peer_addr;
-                struct sockaddr_storage local_addr;
-                picoquic_cnx_t* last_cnx;
-                int if_index = dest_if;
-                int sock_ret = 0;
-                int sock_err = 0;
-
-
-                ret = picoquic_prepare_next_packet(qserver, loop_time,
-                    send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx);
-
-                if (ret == 0 && send_length > 0) {
-                    loop_count_time = current_time;
-                    nb_loops = 0;
-                    sock_ret = picoquic_send_through_server_sockets(&server_sockets,
-                        (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                        (const char*)send_buffer, (int)send_length, &sock_err);
-                    if (sock_ret <= 0) {
-                        if (last_cnx == NULL) {
-                            picoquic_log_context_free_app_message(qserver, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
-                                peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
-                        }
-                        else {
-                            picoquic_log_app_message(last_cnx, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
-                                peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
-                        }
-                    }
-                }
-
-            } while (ret == 0 && send_length > 0);
-
-            if (just_once && first_connection_seen && picoquic_get_first_cnx(qserver) == NULL) {
-                fprintf(stdout, "No more active connections.\n");
-                connection_done = 1;
-            }
-        }
+    /* And exit */
+    printf("Server exit, ret = 0x%x\n", ret);
+    if (ret == PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP) {
+        ret = 0;
     }
-
-    printf("Server exit, ret = %d\n", ret);
 
     /* Clean up */
     if (qserver != NULL) {

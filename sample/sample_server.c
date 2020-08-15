@@ -46,6 +46,7 @@
 #include <picoquic_utils.h>
 #include <autoqlog.h>
 #include "picoquic_sample.h"
+#include "picoquic_packet_loop.h"
 
 /* Server context and callback management:
  *
@@ -378,6 +379,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     picoquic_quic_t* quic = NULL;
     picoquic_server_sockets_t server_sockets;
     char const* qlog_dir = PICOQUIC_SAMPLE_SERVER_QLOG_DIR;
+#if 0
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
     int if_index_to;
@@ -385,9 +387,12 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     uint8_t send_buffer[1536];
     size_t send_length = 0;
     int bytes_recv;
+#endif
     uint64_t current_time = 0;
+#if 0
     int64_t delay_max = 10000000;
     picoquic_connection_id_t log_cid;
+#endif
     sample_server_ctx_t default_context = { 0 };
 
     default_context.default_dir = default_dir;
@@ -426,6 +431,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     }
 
     /* Wait for packets */
+#if 0
     while (ret == 0) {
         int loop_count = 0;
         unsigned char received_ecn;
@@ -475,7 +481,9 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
             } while (ret == 0 && send_length > 0 && loop_count < 10);
         }
     }
-
+#else
+    ret = picoquic_packet_loop(quic, &server_sockets, 0, NULL, NULL);
+#endif
     printf("Server exit, ret = %d\n", ret);
 
     /* Clean up */
