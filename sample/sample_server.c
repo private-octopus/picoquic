@@ -379,20 +379,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     picoquic_quic_t* quic = NULL;
     picoquic_server_sockets_t server_sockets;
     char const* qlog_dir = PICOQUIC_SAMPLE_SERVER_QLOG_DIR;
-#if 0
-    struct sockaddr_storage addr_from;
-    struct sockaddr_storage addr_to;
-    int if_index_to;
-    uint8_t recv_buffer[1536];
-    uint8_t send_buffer[1536];
-    size_t send_length = 0;
-    int bytes_recv;
-#endif
     uint64_t current_time = 0;
-#if 0
-    int64_t delay_max = 10000000;
-    picoquic_connection_id_t log_cid;
-#endif
     sample_server_ctx_t default_context = { 0 };
 
     default_context.default_dir = default_dir;
@@ -431,59 +418,9 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     }
 
     /* Wait for packets */
-#if 0
-    while (ret == 0) {
-        int loop_count = 0;
-        unsigned char received_ecn;
-        int64_t delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
-
-        if_index_to = 0;
-
-        bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
-            &addr_from, &addr_to, &if_index_to, &received_ecn,
-            recv_buffer, sizeof(recv_buffer),
-            delta_t, &current_time);
-
-        if (bytes_recv < 0) {
-            ret = -1;
-        }
-        else {
-            if (bytes_recv > 0) {
-                /* Submit the packet to the server */
-                (void)picoquic_incoming_packet(quic, recv_buffer,
-                    (size_t)bytes_recv, (struct sockaddr*) & addr_from,
-                    (struct sockaddr*) & addr_to, if_index_to, received_ecn,
-                    current_time);
-            }
-
-            do {
-                struct sockaddr_storage peer_addr;
-                struct sockaddr_storage local_addr;
-                int if_index = 0;
-                int sock_ret = 0;
-                int sock_err = 0;
-
-                loop_count++;
-
-                ret = picoquic_prepare_next_packet(quic, current_time,
-                    send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &local_addr, &if_index, &log_cid, NULL);
-
-                if (ret == 0 && send_length > 0) {
-                    sock_ret = picoquic_send_through_server_sockets(&server_sockets,
-                        (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                        (const char*)send_buffer, (int)send_length, &sock_err);
-                    if (sock_ret <= 0) {
-                        picoquic_log_context_free_app_message(quic, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
-                            peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
-                    }
-                }
-            } while (ret == 0 && send_length > 0 && loop_count < 10);
-        }
-    }
-#else
     ret = picoquic_packet_loop(quic, &server_sockets, 0, NULL, NULL);
-#endif
+
+    /* And finish. */
     printf("Server exit, ret = %d\n", ret);
 
     /* Clean up */
