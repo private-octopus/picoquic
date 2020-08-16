@@ -30,14 +30,15 @@ extern "C" {
 #endif
 
 typedef enum {
-    picoquic_packet_loop_after_receive = 0,
-    picoquic_packet_loop_after_send = 1
+    picoquic_packet_loop_ready = 0,
+    picoquic_packet_loop_after_receive,
+    picoquic_packet_loop_after_send
 } picoquic_packet_loop_cb_enum;
 
 typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packet_loop_cb_enum cb_mode, void * callback_ctx);
 
 int picoquic_packet_loop(picoquic_quic_t* quic,
-    picoquic_server_sockets_t* server_sockets,
+    int server_port,
     int dest_if,
     picoquic_packet_loop_cb_fn loop_callback,
     void * loop_callback_ctx);

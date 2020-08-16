@@ -372,12 +372,11 @@ int sample_server_callback(picoquic_cnx_t* cnx,
  * - The loop breaks if the socket return an error. 
  */
 
-int picoquic_sample_server(int server_port, const char* server_cert, const char* server_key, const char * default_dir)
+int picoquic_sample_server(int server_port, const char* server_cert, const char* server_key, const char* default_dir)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
     picoquic_quic_t* quic = NULL;
-    picoquic_server_sockets_t server_sockets;
     char const* qlog_dir = PICOQUIC_SAMPLE_SERVER_QLOG_DIR;
     uint64_t current_time = 0;
     sample_server_ctx_t default_context = { 0 };
@@ -385,40 +384,34 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     default_context.default_dir = default_dir;
     default_context.default_dir_len = strlen(default_dir);
 
-    /* Open a UDP socket */
-    ret = picoquic_open_server_sockets(&server_sockets, server_port);
-    if (ret != 0) {
-        fprintf(stderr, "Could not open sockets on port %d\n", server_port);
+    printf("Starting Picoquic Sample server on port %d\n", server_port);
+
+    /* Create the QUIC context for the server */
+    current_time = picoquic_current_time();
+    /* Create QUIC context */
+    quic = picoquic_create(8, server_cert, server_key, NULL, PICOQUIC_SAMPLE_ALPN,
+        sample_server_callback, &default_context, NULL, NULL, NULL, current_time, NULL, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        fprintf(stderr, "Could not create server context\n");
+        ret = -1;
     }
     else {
+        picoquic_set_cookie_mode(quic, 2);
 
-        /* Create the QUIC context for the server */
-        current_time = picoquic_current_time();
-        /* Create QUIC context */
-        quic = picoquic_create(8, server_cert, server_key, NULL, PICOQUIC_SAMPLE_ALPN,
-            sample_server_callback, &default_context, NULL, NULL, NULL, current_time, NULL, NULL, NULL, 0);
+        picoquic_set_default_congestion_algorithm(quic, picoquic_bbr_algorithm);
 
-        if (quic == NULL) {
-            fprintf(stderr, "Could not create server context\n");
-            ret = -1;
-        }
-        else {
-            picoquic_set_cookie_mode(quic, 2);
+        picoquic_set_qlog(quic, qlog_dir);
 
-            picoquic_set_default_congestion_algorithm(quic, picoquic_bbr_algorithm);
+        picoquic_set_log_level(quic, 1);
 
-            picoquic_set_qlog(quic, qlog_dir);
-
-            picoquic_set_log_level(quic, 1);
-
-            picoquic_set_key_log_file_from_env(quic);
-
-            printf("Server ready on port %d\n", server_port);
-        }
+        picoquic_set_key_log_file_from_env(quic);
     }
 
     /* Wait for packets */
-    ret = picoquic_packet_loop(quic, &server_sockets, 0, NULL, NULL);
+    if (ret == 0) {
+        ret = picoquic_packet_loop(quic, server_port, 0, NULL, NULL);
+    }
 
     /* And finish. */
     printf("Server exit, ret = %d\n", ret);
@@ -427,8 +420,6 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     if (quic != NULL) {
         picoquic_free(quic);
     }
-
-    picoquic_close_server_sockets(&server_sockets);
 
     return ret;
 }

@@ -24,12 +24,14 @@
  *
  * First step: do this as a straight copy of the code in picoquic demo.
  *
- * The "call loop back" function is called at two places: after receiving, and after sending. The
+ * The "call loop back" function is called: when readdy, after receiving, and after sending. The
  * loop will terminate if the callback return code is not zero.
  *
+ * TODO: get a client socket option.
  * TODO: in Windows, use WSA asynchronous calls instead of sendmsg, allowing for multiple parallel sends.
  * TODO: in Linux, use multiple send per call API
  * TDOO: trim the #define list.
+ * TODO: support the QuicDoq scenario, manage extra socket.
  */
 
 #ifdef _WINDOWS
@@ -97,9 +99,8 @@
 #include "picoquic_internal.h"
 #include "picoquic_packet_loop.h"
 
-
 int picoquic_packet_loop(picoquic_quic_t * quic,
-    picoquic_server_sockets_t * server_sockets,
+    int server_port,
     int dest_if,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx)
@@ -117,6 +118,13 @@ int picoquic_packet_loop(picoquic_quic_t * quic,
     uint64_t loop_count_time = current_time;
     int nb_loops = 0;
     picoquic_connection_id_t log_cid;
+    picoquic_server_sockets_t server_sockets;
+
+    /* Open the sockets */
+    ret = picoquic_open_server_sockets(&server_sockets, server_port);
+    if (ret == 0) {
+        printf("Server ready on port %d\n", server_port);
+    }
 
     /* Wait for packets */
     /* TODO: add stopping condition, was && (!just_once || !connection_done) */
@@ -126,7 +134,7 @@ int picoquic_packet_loop(picoquic_quic_t * quic,
 
         if_index_to = 0;
 
-        bytes_recv = picoquic_select(server_sockets->s_socket, PICOQUIC_NB_SERVER_SOCKETS,
+        bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
             &addr_from,
             &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
@@ -179,7 +187,7 @@ int picoquic_packet_loop(picoquic_quic_t * quic,
                 if (ret == 0 && send_length > 0) {
                     loop_count_time = current_time;
                     nb_loops = 0;
-                    sock_ret = picoquic_send_through_server_sockets(server_sockets,
+                    sock_ret = picoquic_send_through_server_sockets(&server_sockets,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
                     if (sock_ret <= 0) {
@@ -203,6 +211,9 @@ int picoquic_packet_loop(picoquic_quic_t * quic,
             }
         }
     }
+
+    /* Close the sockets */
+    picoquic_close_server_sockets(&server_sockets);
 
     return ret;
 }

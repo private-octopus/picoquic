@@ -146,6 +146,9 @@ int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
     }
     else {
         switch (cb_mode) {
+        case picoquic_packet_loop_ready:
+            fprintf(stdout, "Waiting for packets.\n");
+            break;
         case picoquic_packet_loop_after_receive:
             if (cb_ctx->just_once && !cb_ctx->first_connection_seen && picoquic_get_first_cnx(quic) != NULL) {
                 cb_ctx->first_connection_seen = 1;
@@ -179,7 +182,6 @@ int quic_server(const char* server_name, int server_port,
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
     picoquic_quic_t* qserver = NULL;
-    picoquic_server_sockets_t server_sockets;
     uint64_t current_time = 0;
     picohttp_server_parameters_t picoquic_file_param;
     server_loop_cb_t loop_cb_ctx;
@@ -188,9 +190,6 @@ int quic_server(const char* server_name, int server_port,
     picoquic_file_param.web_folder = web_folder;
     memset(&loop_cb_ctx, 0, sizeof(server_loop_cb_t));
     loop_cb_ctx.just_once = just_once;
-
-    /* Open a UDP socket */
-    ret = picoquic_open_server_sockets(&server_sockets, server_port);
 
     /* Setup the server context */
     if (ret == 0) {
@@ -239,7 +238,7 @@ int quic_server(const char* server_name, int server_port,
     }
 
     /* Wait for packets */
-    ret = picoquic_packet_loop(qserver, &server_sockets, dest_if, server_loop_cb, &loop_cb_ctx);
+    ret = picoquic_packet_loop(qserver, server_port, dest_if, server_loop_cb, &loop_cb_ctx);
 
     /* And exit */
     printf("Server exit, ret = 0x%x\n", ret);
@@ -251,8 +250,6 @@ int quic_server(const char* server_name, int server_port,
     if (qserver != NULL) {
         picoquic_free(qserver);
     }
-
-    picoquic_close_server_sockets(&server_sockets);
 
     return ret;
 }
