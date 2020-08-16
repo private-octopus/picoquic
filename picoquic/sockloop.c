@@ -27,7 +27,8 @@
  * The "call loop back" function is called: when readdy, after receiving, and after sending. The
  * loop will terminate if the callback return code is not zero.
  *
- * TODO: get a client socket option.
+ * TODO: get a client socket option (sample client)
+ * TODO: rewrite the demo client???
  * TODO: in Windows, use WSA asynchronous calls instead of sendmsg, allowing for multiple parallel sends.
  * TODO: in Linux, use multiple send per call API
  * TDOO: trim the #define list.
