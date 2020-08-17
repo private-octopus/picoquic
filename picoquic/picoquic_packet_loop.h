@@ -29,6 +29,8 @@
 extern "C" {
 #endif
 
+#define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 2
+
 typedef enum {
     picoquic_packet_loop_ready = 0,
     picoquic_packet_loop_after_receive,
@@ -38,7 +40,8 @@ typedef enum {
 typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packet_loop_cb_enum cb_mode, void * callback_ctx);
 
 int picoquic_packet_loop(picoquic_quic_t* quic,
-    int server_port,
+    int local_port,
+    int local_af,
     int dest_if,
     picoquic_packet_loop_cb_fn loop_callback,
     void * loop_callback_ctx);

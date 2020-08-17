@@ -45,6 +45,7 @@
 #include <picoquic_utils.h>
 #include <picosocks.h>
 #include <autoqlog.h>
+#include <picoquic_packet_loop.h>
 #include "picoquic_sample.h"
 
  /* Client context and callback management:
@@ -391,6 +392,41 @@ int sample_client_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
+/* Sample client,  loop call back management.
+ * The function "picoquic_packet_loop" will call back the application when it is ready to
+ * receive or send packets, after receiving a packet, and after sending a packet.
+ * We implement here a minimal callback that instruct  "picoquic_packet_loop" to exit
+ * when the connection is complete.
+ */
+
+static int sample_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, void* callback_ctx)
+{
+    int ret = 0;
+    sample_client_ctx_t* cb_ctx = (sample_client_ctx_t*)callback_ctx;
+
+    if (cb_ctx == NULL) {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    else {
+        switch (cb_mode) {
+        case picoquic_packet_loop_ready:
+            fprintf(stdout, "Waiting for packets.\n");
+            break;
+        case picoquic_packet_loop_after_receive:
+            break;
+        case picoquic_packet_loop_after_send:
+            if (cb_ctx->is_disconnected) {
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+            }
+            break;
+        default:
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            break;
+        }
+    }
+    return ret;
+}
+
 /* Client:
  * - Create the QUIC context.
  * - Open the sockets
@@ -411,19 +447,13 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
     int ret = 0;
     struct sockaddr_storage server_address;
     char const* sni = PICOQUIC_SAMPLE_SNI;
-    SOCKET_TYPE fd = INVALID_SOCKET;
     picoquic_quic_t* quic = NULL;
     char const* ticket_store_filename = PICOQUIC_SAMPLE_CLIENT_TICKET_STORE;
     char const* token_store_filename = PICOQUIC_SAMPLE_CLIENT_TOKEN_STORE;
     char const* qlog_dir = PICOQUIC_SAMPLE_CLIENT_QLOG_DIR;
     sample_client_ctx_t client_ctx = { 0 };
     picoquic_cnx_t* cnx = NULL;
-    uint8_t recv_buffer[1536];
-    int recv_length = 0;
-    uint8_t send_buffer[1536];
-    size_t send_length = 0;
     uint64_t current_time = picoquic_current_time();
-    int64_t delay_max = 10000000;
 
     /* Get the server's address */
     if (ret == 0) {
@@ -435,15 +465,6 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
         }
         else if (is_name) {
             sni = server_name;
-        }
-    }
-
-    /* Open a UDP socket */
-    if (ret == 0) {
-        fd = picoquic_open_client_socket(server_address.ss_family);
-        if (fd == INVALID_SOCKET) {
-            fprintf(stderr, "Cannot open a client socket");
-            ret = -1;
         }
     }
 
@@ -525,56 +546,8 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
         }
     }
 
-    /* Run a loop until the client connection finishes, either because it broke or
-     * because all the files are downloaded */
-    while (ret == 0 && !client_ctx.is_disconnected) {
-        int64_t delta_t;
-        struct sockaddr_storage peer_addr;
-        struct sockaddr_storage local_addr;
-        int if_index = 0;
-        unsigned char received_ecn;
-        picoquic_connection_id_t log_cid;
-        int sock_ret = 0;
-        int sock_err = 0;
-
-        /* Compute how long to wait until the next packet can be sent. */
-        delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
-
-        /* Check whether packets arrive before delta_t */
-        recv_length = picoquic_select(&fd, 1,
-            &peer_addr, &local_addr, &if_index, &received_ecn,
-            recv_buffer, sizeof(recv_buffer),
-            delta_t, &current_time);
-
-        if (recv_length < 0) {
-            fprintf(stderr, "Could not receive packets on socket");
-            ret = -1;
-        }
-        else if (recv_length > 0) {
-                /* Submit the packet to the server */
-                (void)picoquic_incoming_packet(quic, recv_buffer,
-                    (size_t)recv_length, (struct sockaddr*) & peer_addr,
-                    (struct sockaddr*) & local_addr, if_index, received_ecn,
-                    current_time);
-            }
-        else {
-            /* No incoming packet, so check whether there is something to send */
-            ret = picoquic_prepare_next_packet(quic, picoquic_current_time(),
-                send_buffer, sizeof(send_buffer), &send_length,
-                &peer_addr, &local_addr, &if_index, &log_cid, NULL);
-
-            if (ret == 0 && send_length > 0) {
-                /* Send the packet that was just prepared */
-                sock_ret = picoquic_send_through_socket(fd,
-                    (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                    (const char*)send_buffer, (int)send_length, &sock_err);
-                if (sock_ret <= 0) {
-                    picoquic_log_context_free_app_message(quic, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
-                        peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
-                }
-            }
-        }
-    }
+    /* Wait for packets */
+    ret = picoquic_packet_loop(quic, 0, server_address.ss_family, 0, sample_client_loop_cb, &client_ctx);
 
     /* Done. At this stage, we could print out statistics, etc. */
     sample_client_report(&client_ctx);

@@ -136,7 +136,7 @@ typedef struct st_server_loop_cb_t {
     int connection_done;
 } server_loop_cb_t;
 
-int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, void* callback_ctx)
+static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, void* callback_ctx)
 {
     int ret = 0;
     server_loop_cb_t* cb_ctx = (server_loop_cb_t*)callback_ctx;
@@ -238,13 +238,10 @@ int quic_server(const char* server_name, int server_port,
     }
 
     /* Wait for packets */
-    ret = picoquic_packet_loop(qserver, server_port, dest_if, server_loop_cb, &loop_cb_ctx);
+    ret = picoquic_packet_loop(qserver, server_port, 0, dest_if, server_loop_cb, &loop_cb_ctx);
 
     /* And exit */
     printf("Server exit, ret = 0x%x\n", ret);
-    if (ret == PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP) {
-        ret = 0;
-    }
 
     /* Clean up */
     if (qserver != NULL) {
@@ -357,6 +354,265 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
     return ret;
 }
 
+#if 0
+/* Client loop call back management.
+ * This is pretty complex, because the demo client is used to test a variety of interop
+ * scenarios, for example:
+ *
+ * Variants of migration:
+ * - Basic NAT traversal (1)
+ * - Simple CID swap (2)
+ * - Organized migration (3)
+ * Encryption key rotation, after some number of packets have been sent.
+ *
+ * The client loop terminates when the client connection is closed.
+ */
+
+typedef struct st_client_loop_cb_t {
+    picoquic_cnx_t* cnx_client;
+    int notified_ready;
+    int established;
+    int migration_to_preferred_started;
+    int migration_to_preferred_finished;
+    int migration_started;
+    int address_updated;
+    int force_migration;
+    int nb_packets_before_key_update;
+    int key_update_done;
+    char const* saved_alpn;
+    struct sockaddr_storage server_address;
+    struct sockaddr_storage client_address;
+} server_loop_cb_t;
+
+int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, void* callback_ctx)
+{
+    int ret = 0;
+    server_loop_cb_t* cb_ctx = (server_loop_cb_t*)callback_ctx;
+
+    if (cb_ctx == NULL) {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    else {
+        switch (cb_mode) {
+        case picoquic_packet_loop_ready:
+            fprintf(stdout, "Waiting for packets.\n");
+            break;
+        case picoquic_packet_loop_after_receive:
+            /* Post receive callback */
+
+            /* Keeping track of the addresses and ports, as we
+             * need them to verify the migration behavior.
+             * TODO: can this be done by tracking the value of the local address in path[0]? */
+            if (!cb_ctx->address_updated) {
+                /* TODO: This is a call to the local socket context. Replace or enable?*/
+                struct sockaddr_storage local_address;
+                if (picoquic_get_local_address(fd, &local_address) != 0) {
+                    memset(&local_address, 0, sizeof(struct sockaddr_storage));
+                    fprintf(stderr, "Could not read local address.\n");
+                }
+
+                address_updated = 1;
+                picoquic_store_addr(&cb_ctx->client_address, (struct sockaddr*) & packet_to);
+                if (client_address.ss_family == AF_INET) {
+                    ((struct sockaddr_in*) & client_address)->sin_port =
+                        ((struct sockaddr_in*) & local_address)->sin_port;
+                    fprintf(stdout, "IPv4 port: %d.\n", ((struct sockaddr_in*) & client_address)->sin_port);
+                }
+                else {
+                    ((struct sockaddr_in6*) & client_address)->sin6_port =
+                        ((struct sockaddr_in6*) & local_address)->sin6_port;
+                    fprintf(stdout, "IPv6 port: %d.\n", ((struct sockaddr_in6*) & client_address)->sin6_port);
+                }
+
+                fprintf(stdout, "Client port (AF=%d): %d.\n",
+                    client_address.ss_family,
+                    (client_address.ss_family == AF_INET) ?
+                    ((struct sockaddr_in*) & client_address)->sin_port :
+                    ((struct sockaddr_in6*) & client_address)->sin6_port
+                );
+            }
+            /* TODO: this is a peculiarity of the client, not getting the receive address from the stack. Unify? */
+            if (client_address.ss_family == AF_INET) {
+                ((struct sockaddr_in*) & packet_to)->sin_port =
+                    ((struct sockaddr_in*) & client_address)->sin_port;
+            }
+            else {
+                ((struct sockaddr_in6*) & packet_to)->sin6_port =
+                    ((struct sockaddr_in6*) & client_address)->sin6_port;
+            }
+
+            /* if almost ready, display results of negotiation */
+            if (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_almost_ready && cb_ctx->notified_ready == 0) {
+                if (picoquic_tls_is_psk_handshake(cb_ctx->cnx_client)) {
+                    fprintf(stdout, "The session was properly resumed!\n");
+                    picoquic_log_app_message(cb_ctx->cnx_client,
+                        "%s", "The session was properly resumed!");
+                }
+
+                if (cb_ctx->cnx_client->zero_rtt_data_accepted) {
+                    fprintf(stdout, "Zero RTT data is accepted!\n");
+                    picoquic_log_app_message(cb_ctx->cnx_client,
+                        "%s", "Zero RTT data is accepted!");
+                }
+
+                if (cb_ctx->cnx_client->alpn != NULL) {
+                    fprintf(stdout, "Negotiated ALPN: %s\n", cb_ctx->cnx_client->alpn);
+                    picoquic_log_app_message(cb_ctx->cnx_client,
+                        "Negotiated ALPN: %s", cb_ctx->cnx_client->alpn);
+                    cb_ctx->saved_alpn = picoquic_string_duplicate(cb_ctx->cnx_client->alpn);
+                }
+                fprintf(stdout, "Almost ready!\n\n");
+                cb_ctx->notified_ready = 1;
+            }
+            else  if (ret == 0 && (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready ||
+                picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
+
+                client_ready_loop++;
+
+                /* Track the migration to server preferred address */
+                if (cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined && !cb_ctx->migration_to_preferred_finished) {
+                    if (picoquic_compare_addr(
+                        (struct sockaddr*) & cb_ctx->server_address, (struct sockaddr*) & cb_ctx->cnx_client->path[0]->peer_addr) != 0) {
+                        fprintf(stdout, "Migrated to server preferred address!\n");
+                        picoquic_log_app_message(cb_ctx->cnx_client, "%s", "Migrated to server preferred address!");
+                        cb_ctx->migration_to_preferred_finished = 1;
+                    }
+                    else if (cb_ctx->cnx_client->nb_paths > 1 && !cb_ctx->migration_to_preferred_started) {
+                        cb_ctx->migration_to_preferred_started = 1;
+                        fprintf(stdout, "Attempting migration to server preferred address.\n");
+                        picoquic_log_app_message(cb_ctx->cnx_client, "%s", "Attempting migration to server preferred address.");
+
+                    }
+                    else if (cb_ctx->cnx_client->nb_paths == 1 && cb_ctx->migration_to_preferred_started) {
+                        fprintf(stdout, "Could not migrate to server preferred address!\n");
+                        picoquic_log_app_message(cb_ctx->cnx_client, "%s", "Could not migrate to server preferred address!");
+                        cb_ctx->migration_to_preferred_finished = 1;
+                    }
+                }
+
+                if (cb_ctx->force_migration && cb_ctx->migration_started == 0 && cb_ctx->address_updated &&
+                    picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready &&
+                    (cb_ctx->cnx_client->cnxid_stash_first != NULL || cb_ctx->force_migration == 1) &&
+                    picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready &&
+                    (cb_ctx->force_migration != 3 || !cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined ||
+                        cb_ctx->migration_to_preferred_finished)) {
+
+                    /* TODO: verify that socket management works after migration */
+                    int mig_ret = quic_client_migrate(cb_ctx->cnx_client, &fd, NULL, (struct sockaddr*) & cb_ctx->client_address,
+                        &cb_ctx->address_updated, cb_ctx->force_migration, current_time);
+
+                    cb_ctx->migration_started = 1;
+
+                    if (mig_ret != 0) {
+                        fprintf(stdout, "Will not test migration.\n");
+                        picoquic_log_app_message(cb_ctx->cnx_client, "%s", "Will not test migration.");
+                        cb_ctx->migration_started = -1;
+                    }
+                }
+
+                /* Track key update */
+                if (cb_ctx->nb_packets_before_key_update > 0 &&
+                    !cb_ctx->key_update_done &&
+                    cb_ctx->cnx_client->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range > 
+                    (uint64_t)cb_ctx->nb_packets_before_key_update) {
+                    int key_rot_ret = picoquic_start_key_rotation(cb_ctx->cnx_client);
+                    if (key_rot_ret != 0) {
+                        fprintf(stdout, "Will not test key rotation.\n");
+                        picoquic_log_app_message(cnx_client, "%s", "Will not test key rotation.");
+                        cb_ctx->key_update_done = (uint64_t)-1;
+                    }
+                    else {
+                        fprintf(stdout, "Key rotation started.\n");
+                        picoquic_log_app_message(cb_ctx->cnx_client, "%s", "Key rotation started.");
+                        cb_ctx->key_update_done = 1;
+                    }
+                }
+
+                /* TODO: understand where to insert a timeout condition, when no data was received.
+                 * TODO: move tracking of activity to the send loop call back, from the data receive callback.
+                 */
+
+                if (bytes_recv == 0 || client_ready_loop > 4) {
+                    if (!is_siduck && callback_ctx.nb_open_streams == 0) {
+                        if (cnx_client->nb_zero_rtt_sent != 0) {
+                            fprintf(stdout, "Out of %d zero RTT packets, %d were acked by the server.\n",
+                                cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
+                            picoquic_log_app_message(cnx_client, "Out of %d zero RTT packets, %d were acked by the server.",
+                                cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
+                        }
+
+                        fprintf(stdout, "Quic Bit was %sgreased by the client.\n", (cnx_client->quic_bit_greased) ? "" : "NOT ");
+                        fprintf(stdout, "Quic Bit was %sgreased by the server.\n", (cnx_client->quic_bit_received_0) ? "" : "NOT ");
+                        fprintf(stdout, "ECN was %sreceived (0x%x)\n", (got_ecn == 0) ? "NOT " : "", got_ecn);
+
+                        if (force_migration && !migration_started) {
+                            fprintf(stdout, "Could not start testing migration.\n");
+                            picoquic_log_app_message(cnx_client, "%s", "Could not start testing migration.");
+                            migration_started = -1;
+                        }
+
+                        fprintf(stdout, "All done, Closing the connection.\n");
+                        picoquic_log_app_message(cnx_client, "%s", "All done, Closing the connection.");
+                        if (picoquic_get_data_received(cnx_client) > 0) {
+                            double duration_usec = (double)(current_time - picoquic_get_cnx_start_time(cnx_client));
+
+                            if (duration_usec > 0) {
+                                double receive_rate_mbps = 8.0 * ((double)picoquic_get_data_received(cnx_client)) / duration_usec;
+                                fprintf(stdout, "Received %llu bytes in %f seconds, %f Mbps.\n",
+                                    (unsigned long long)picoquic_get_data_received(cnx_client),
+                                    duration_usec / 1000000.0, receive_rate_mbps);
+                                picoquic_log_app_message(cnx_client, "Received %llu bytes in %f seconds, %f Mbps.",
+                                    (unsigned long long)picoquic_get_data_received(cnx_client),
+                                    duration_usec / 1000000.0, receive_rate_mbps);
+                            }
+                        }
+
+                        ret = picoquic_close(cnx_client, 0);
+                    }
+                    else if (
+                        current_time > callback_ctx.last_interaction_time&& current_time - callback_ctx.last_interaction_time > 10000000ull
+                        && picoquic_is_cnx_backlog_empty(cnx_client)) {
+                        fprintf(stdout, "No progress for 10 seconds. Closing. \n");
+                        picoquic_log_app_message(cnx_client, "%s", "No progress for 10 seconds. Closing.");
+                        ret = picoquic_close(cnx_client, 0);
+                    }
+                }
+            }
+            break;
+        case picoquic_packet_loop_after_send:
+            if (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_disconnected) {
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+            }
+            else if (ret == 0 && cb_ctx->established == 0 && (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready ||
+                picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
+                printf("Connection established. Version = %x, I-CID: %llx, verified: %d\n",
+                    picoquic_supported_versions[cb_ctx->cnx_client->version_index].version,
+                    (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cb_ctx->cnx_client)),
+                    cb_ctx->cnx_client->is_hcid_verified);
+
+                picoquic_log_app_message(cnx_client,
+                    "Connection established. Version = %x, I-CID: %llx, verified: %d",
+                    picoquic_supported_versions[cb_ctx->cnx_client->version_index].version,
+                    (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cb_ctx->cnx_client)),
+                    cnx_client->is_hcid_verified);
+                cb_ctx->established = 1;
+
+                if (zero_rtt_available == 0 && !is_siduck) {
+                    /* Start the download scenario */
+
+                    picoquic_demo_client_start_streams(cnx_client, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+                }
+            }
+            break;
+        default:
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            break;
+        }
+    }
+    return ret;
+}
+#endif
+
 /* Quic Client */
 int quic_client(const char* ip_address_text, int server_port, 
     const char * sni, const char * esni_rr_file,
@@ -418,7 +674,6 @@ int quic_client(const char* ip_address_text, int server_port,
         fprintf(stdout, "Getting ready to quack\n");
     }
     else {
-
         if (no_disk) {
             fprintf(stdout, "Files not saved to disk (-D, no_disk)\n");
         }
@@ -602,8 +857,10 @@ int quic_client(const char* ip_address_text, int server_port,
             delta_t,
             &current_time);
 
+        /* Check whether ECN was received */
         got_ecn |= received_ecn;
 
+        /* Check whether the client address was updated */
         if (bytes_recv != 0 && packet_to.ss_family != 0) {
             /* Keeping track of the addresses and ports, as we 
              * need them to verify the migration behavior */
@@ -656,6 +913,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     current_time);
                 client_receive_loop++;
 
+                /* Post receive callback: if almost ready, display results of negotiation */
                 if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready && notified_ready == 0) {
                     if (picoquic_tls_is_psk_handshake(cnx_client)) {
                         fprintf(stdout, "The session was properly resumed!\n");
@@ -829,6 +1087,8 @@ int quic_client(const char* ip_address_text, int server_port,
                     ret = picoquic_prepare_packet(cnx_client, current_time,
                         send_buffer, sizeof(send_buffer), &send_length, &x_to, &x_from);
 
+                    /* Send verify callback: notice if packet sent from wrong address, avoid send error
+                     * that would cause early termination of connection */
                     if (migration_started && force_migration == 3 && send_length > 0 && address_updated) {
                         if (picoquic_compare_addr((struct sockaddr*) & x_from, (struct sockaddr*) & client_address) != 0) {
                             fprintf(stderr, "Dropping packet sent from wrong address, port: %d\n",

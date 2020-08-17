@@ -22,12 +22,10 @@
 /* Socket loop implements the "wait for messages" loop common to most servers
  * and many clients.
  *
- * First step: do this as a straight copy of the code in picoquic demo.
+ * Second step: support simple servers and simple client.
  *
  * The "call loop back" function is called: when readdy, after receiving, and after sending. The
  * loop will terminate if the callback return code is not zero.
- *
- * TODO: get a client socket option (sample client)
  * TODO: rewrite the demo client???
  * TODO: in Windows, use WSA asynchronous calls instead of sendmsg, allowing for multiple parallel sends.
  * TODO: in Linux, use multiple send per call API
@@ -100,8 +98,52 @@
 #include "picoquic_internal.h"
 #include "picoquic_packet_loop.h"
 
-int picoquic_packet_loop(picoquic_quic_t * quic,
-    int server_port,
+int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af, int nb_sockets_max)
+{
+    int nb_sockets = (local_af == AF_UNSPEC) ? 2 : 1;
+
+    /* Compute how many sockets are necessary */
+    if (nb_sockets > nb_sockets_max) {
+        DBG_PRINTF("Cannot open %d sockets, max set to %d\n", nb_sockets, nb_sockets_max);
+        nb_sockets = 0;
+    } else if (local_af == AF_UNSPEC) {
+        sock_af[0] = AF_INET;
+        sock_af[1] = AF_INET6;
+    }
+    else if (local_af == AF_INET || local_af == AF_INET6) {
+        sock_af[0] = local_af;
+    }
+    else {
+        DBG_PRINTF("Cannot open socket(AF=%d), unsupported AF\n", local_af);
+        nb_sockets = 0;
+    }
+
+    for (int i = 0; i < nb_sockets; i++) {
+        int recv_set = 0;
+        int send_set = 0;
+        
+        if ((s_socket[i] = socket(sock_af[i], SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET ||
+            picoquic_socket_set_ecn_options(s_socket[i], sock_af[i], &recv_set, &send_set) != 0 ||
+            picoquic_socket_set_pkt_info(s_socket[i], sock_af[i]) != 0 ||
+            (local_port != 0 && picoquic_bind_to_port(s_socket[i], sock_af[i], local_port) != 0)) {
+            DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", sock_af[i], local_port);
+            for (int j = 0; j < i; j++) {
+                if (s_socket[i] != INVALID_SOCKET) {
+                    SOCKET_CLOSE(s_socket[i]);
+                    s_socket[i] = INVALID_SOCKET;
+                }
+            }
+            nb_sockets = 0;
+            break;
+        }
+    }
+
+    return nb_sockets;
+}
+
+int picoquic_packet_loop(picoquic_quic_t* quic,
+    int local_port,
+    int local_af,
     int dest_if,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx)
@@ -119,28 +161,33 @@ int picoquic_packet_loop(picoquic_quic_t * quic,
     uint64_t loop_count_time = current_time;
     int nb_loops = 0;
     picoquic_connection_id_t log_cid;
-    picoquic_server_sockets_t server_sockets;
-
-    /* Open the sockets */
-    ret = picoquic_open_server_sockets(&server_sockets, server_port);
-    if (ret == 0) {
-        printf("Server ready on port %d\n", server_port);
+    SOCKET_TYPE s_socket[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
+    int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
+    int nb_sockets = 0;
+#ifdef _WINDOWS
+    WSADATA wsaData = { 0 };
+    (void)WSA_START(MAKEWORD(2, 2), &wsaData);
+#endif
+    if ((nb_sockets = picoquic_packet_loop_open_sockets(local_port, local_af, s_socket, sock_af, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    else if (loop_callback != NULL) {
+        ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx);
     }
 
     /* Wait for packets */
     /* TODO: add stopping condition, was && (!just_once || !connection_done) */
     while (ret == 0) {
         int64_t delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
-        unsigned char received_ecn;
+            unsigned char received_ecn;
 
         if_index_to = 0;
 
-        bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
+        bytes_recv = picoquic_select(s_socket, nb_sockets,
             &addr_from,
             &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
             delta_t, &current_time);
-
 
         nb_loops++;
         if (nb_loops >= 100) {
@@ -186,11 +233,18 @@ int picoquic_packet_loop(picoquic_quic_t * quic,
                     &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx);
 
                 if (ret == 0 && send_length > 0) {
+                    SOCKET_TYPE send_socket = INVALID_SOCKET;
                     loop_count_time = current_time;
                     nb_loops = 0;
-                    sock_ret = picoquic_send_through_server_sockets(&server_sockets,
+                    for (int i = 0; i < nb_sockets; i++) {
+                        if (sock_af[i] == peer_addr.ss_family) {
+                            send_socket = s_socket[i];
+                        }
+                    }
+                    sock_ret = picoquic_send_through_socket(send_socket,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
+
                     if (sock_ret <= 0) {
                         if (last_cnx == NULL) {
                             picoquic_log_context_free_app_message(quic, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
@@ -213,8 +267,18 @@ int picoquic_packet_loop(picoquic_quic_t * quic,
         }
     }
 
+    if (ret == PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP) {
+        /* Normal termination requested by the application, returns no error */
+        ret = 0;
+    }
+
     /* Close the sockets */
-    picoquic_close_server_sockets(&server_sockets);
+    for (int i = 0; i < nb_sockets; i++) {
+        if (s_socket[i] != INVALID_SOCKET) {
+            SOCKET_CLOSE(s_socket[i]);
+            s_socket[i] = INVALID_SOCKET;
+        }
+    }
 
     return ret;
 }
