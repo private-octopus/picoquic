@@ -401,36 +401,18 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
             /* Post receive callback */
 
             /* Keeping track of the addresses and ports, as we
-             * need them to verify the migration behavior.
-             * TODO: can this be done by tracking the value of the local address in path[0]? */
-            if (!cb_ctx->address_updated) {
-                /* TODO: This is a call to the local socket context. Replace or enable?*/
-                struct sockaddr_storage local_address;
-                if (picoquic_get_local_address(fd, &local_address) != 0) {
-                    memset(&local_address, 0, sizeof(struct sockaddr_storage));
-                    fprintf(stderr, "Could not read local address.\n");
+             * need them to verify the migration behavior */
+            if (!address_updated && cnx_client->path[0]->local_addr.ss_family != 0) {
+                uint16_t updated_port = (cnx_client->path[0]->local_addr.ss_family == AF_INET) ?
+                    ((struct sockaddr_in*) & cnx_client->path[0]->local_addr)->sin_port :
+                    ((struct sockaddr_in6*) & cnx_client->path[0]->local_addr)->sin6_port;
+                if (updated_port != 0) {
+                    address_updated = 1;
+                    picoquic_store_addr(&client_address, (struct sockaddr*) & cnx_client->path[0]->local_addr);
+                    fprintf(stdout, "Client port (AF=%d): %d.\n", client_address.ss_family, socket_port);
                 }
-
-                address_updated = 1;
-                picoquic_store_addr(&cb_ctx->client_address, (struct sockaddr*) & packet_to);
-                if (client_address.ss_family == AF_INET) {
-                    ((struct sockaddr_in*) & client_address)->sin_port =
-                        ((struct sockaddr_in*) & local_address)->sin_port;
-                    fprintf(stdout, "IPv4 port: %d.\n", ((struct sockaddr_in*) & client_address)->sin_port);
-                }
-                else {
-                    ((struct sockaddr_in6*) & client_address)->sin6_port =
-                        ((struct sockaddr_in6*) & local_address)->sin6_port;
-                    fprintf(stdout, "IPv6 port: %d.\n", ((struct sockaddr_in6*) & client_address)->sin6_port);
-                }
-
-                fprintf(stdout, "Client port (AF=%d): %d.\n",
-                    client_address.ss_family,
-                    (client_address.ss_family == AF_INET) ?
-                    ((struct sockaddr_in*) & client_address)->sin_port :
-                    ((struct sockaddr_in6*) & client_address)->sin6_port
-                );
             }
+
             /* TODO: this is a peculiarity of the client, not getting the receive address from the stack. Unify? */
             if (client_address.ss_family == AF_INET) {
                 ((struct sockaddr_in*) & packet_to)->sin_port =
@@ -490,23 +472,45 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
                     }
                 }
 
+                /* Execute the migration trials
+                 * The actual change of sockets is delegated to the packet loop function,
+                 * so it can be integrated with other aspects of socket management.
+                 * If a new socket is needed, two special error codes will be used.
+                 */
                 if (cb_ctx->force_migration && cb_ctx->migration_started == 0 && cb_ctx->address_updated &&
                     picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready &&
                     (cb_ctx->cnx_client->cnxid_stash_first != NULL || cb_ctx->force_migration == 1) &&
-                    picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready &&
                     (cb_ctx->force_migration != 3 || !cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined ||
                         cb_ctx->migration_to_preferred_finished)) {
-
-                    /* TODO: verify that socket management works after migration */
-                    int mig_ret = quic_client_migrate(cb_ctx->cnx_client, &fd, NULL, (struct sockaddr*) & cb_ctx->client_address,
-                        &cb_ctx->address_updated, cb_ctx->force_migration, current_time);
-
+                    int mig_ret = 0;
                     cb_ctx->migration_started = 1;
-
-                    if (mig_ret != 0) {
-                        fprintf(stdout, "Will not test migration.\n");
-                        picoquic_log_app_message(cb_ctx->cnx_client, "%s", "Will not test migration.");
+                    switch (cb_ctx->force_migration) {
+                    case 1:
+                        fprintf(stdout, "Switch to new port. Will test NAT rebinding support.\n");
+                        ret = PICOQUIC_NO_ERROR_SIMULATE_NAT;
+                        break;
+                    case 2:
+                        mig_ret = picoquic_renew_connection_id(cb_ctx->cnx_client, 0);
+                        if (mig_ret != 0) {
+                            if (mig_ret == PICOQUIC_ERROR_MIGRATION_DISABLED) {
+                                fprintf(stdout, "Migration disabled, cannot test CNXID renewal.\n");
+                            }
+                            else {
+                                fprintf(stdout, "Renew CNXID failed, error: %x.\n", mig_ret);
+                            }
+                            cb_ctx->migration_started = -1;
+                        }
+                        else {
+                            fprintf(stdout, "Switching to new CNXID.\n");
+                        }
+                        break;
+                    case 3:
+                        ret = PICOQUIC_NO_ERROR_SIMULATE_MIGRATION;
+                        break;
+                    default:
                         cb_ctx->migration_started = -1;
+                        fprintf(stdout, "Invalid migration code: %d!\n", cb_ctx->force_migration);
+                        break;
                     }
                 }
 
@@ -632,6 +636,7 @@ int quic_client(const char* ip_address_text, int server_port,
     SOCKET_TYPE fd = INVALID_SOCKET;
     struct sockaddr_storage server_address;
     int server_addr_length = 0;
+    uint16_t socket_port = 0;
     struct sockaddr_storage client_address;
     struct sockaddr_storage packet_from;
     struct sockaddr_storage packet_to;
@@ -862,43 +867,26 @@ int quic_client(const char* ip_address_text, int server_port,
 
         /* Check whether the client address was updated */
         if (bytes_recv != 0 && packet_to.ss_family != 0) {
-            /* Keeping track of the addresses and ports, as we 
-             * need them to verify the migration behavior */
-            if (!address_updated) {
+            /* track the local port value if not known yet */
+            if (socket_port == 0 ) {
                 struct sockaddr_storage local_address;
                 if (picoquic_get_local_address(fd, &local_address) != 0) {
                     memset(&local_address, 0, sizeof(struct sockaddr_storage));
                     fprintf(stderr, "Could not read local address.\n");
                 }
-
-                address_updated = 1;
-                picoquic_store_addr(&client_address, (struct sockaddr *)&packet_to);
-                if (client_address.ss_family == AF_INET) {
-                    ((struct sockaddr_in *)&client_address)->sin_port =
-                        ((struct sockaddr_in *)&local_address)->sin_port;
-                    fprintf(stdout, "IPv4 port: %d.\n", ((struct sockaddr_in*)& client_address)->sin_port);
+                else if (local_address.ss_family == AF_INET6) {
+                    socket_port = ntohs(((struct sockaddr_in6*) & local_address)->sin6_port);
                 }
-                else {
-                    ((struct sockaddr_in6 *)&client_address)->sin6_port =
-                        ((struct sockaddr_in6 *)&local_address)->sin6_port;
-                    fprintf(stdout, "IPv6 port: %d.\n", ((struct sockaddr_in6*)& client_address)->sin6_port);
+                else if (local_address.ss_family == AF_INET) {
+                    socket_port = ntohs(((struct sockaddr_in*) & local_address)->sin_port);
                 }
-                
-                fprintf(stdout, "Client port (AF=%d): %d.\n",
-                    client_address.ss_family,
-                    (client_address.ss_family == AF_INET) ?
-                    ((struct sockaddr_in*) & client_address)->sin_port :
-                    ((struct sockaddr_in6*) & client_address)->sin6_port
-                );
             }
-
-            if (client_address.ss_family == AF_INET) {
-                ((struct sockaddr_in *)&packet_to)->sin_port =
-                    ((struct sockaddr_in *)&client_address)->sin_port;
+            /* Document incoming port */
+            if (packet_to.ss_family == AF_INET6) {
+                ((struct sockaddr_in6*) & packet_to)->sin6_port = socket_port;
             }
-            else {
-                ((struct sockaddr_in6 *)&packet_to)->sin6_port =
-                    ((struct sockaddr_in6 *)&client_address)->sin6_port;
+            else if (packet_to.ss_family == AF_INET) {
+                ((struct sockaddr_in*) & packet_to)->sin_port = socket_port;
             }
         }
 
@@ -912,6 +900,21 @@ int quic_client(const char* ip_address_text, int server_port,
                     (struct sockaddr*)&packet_to, if_index_to, received_ecn,
                     current_time);
                 client_receive_loop++;
+#if 1
+                /* Post receive callback: check whether the address was updated */
+                /* Keeping track of the addresses and ports, as we 
+                 * need them to verify the migration behavior */
+                if (!address_updated && cnx_client->path[0]->local_addr.ss_family != 0) {
+                    uint16_t updated_port = (cnx_client->path[0]->local_addr.ss_family == AF_INET) ?
+                        ((struct sockaddr_in*) & cnx_client->path[0]->local_addr)->sin_port :
+                        ((struct sockaddr_in6*) & cnx_client->path[0]->local_addr)->sin6_port;
+                    if (updated_port != 0) {
+                        address_updated = 1;
+                        picoquic_store_addr(&client_address, (struct sockaddr*) & cnx_client->path[0]->local_addr);
+                        fprintf(stdout, "Client port (AF=%d): %d.\n", client_address.ss_family, socket_port);
+                    }
+                }
+#endif
 
                 /* Post receive callback: if almost ready, display results of negotiation */
                 if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready && notified_ready == 0) {
@@ -1003,6 +1006,9 @@ int quic_client(const char* ip_address_text, int server_port,
                         (force_migration != 3 || !cnx_client->remote_parameters.prefered_address.is_defined || migration_to_preferred_finished)) {
                         int mig_ret = quic_client_migrate(cnx_client, &fd, NULL, (struct sockaddr*) & client_address,
                             &address_updated, force_migration, current_time);
+                        if (!address_updated) {
+                            socket_port = 0;
+                        }
 
                         migration_started = 1;
 

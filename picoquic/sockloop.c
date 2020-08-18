@@ -164,6 +164,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     SOCKET_TYPE s_socket[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int nb_sockets = 0;
+    uint16_t socket_port = (uint16_t)local_port;
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
@@ -209,6 +210,27 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
             uint64_t loop_time = current_time;
 
             if (bytes_recv > 0) {
+                /* track the local port value if not known yet */
+                if (socket_port == 0 && nb_sockets == 1) {
+                    struct sockaddr_storage local_address;
+                    if (picoquic_get_local_address(s_socket[0], &local_address) != 0) {
+                        memset(&local_address, 0, sizeof(struct sockaddr_storage));
+                        fprintf(stderr, "Could not read local address.\n");
+                    }
+                    else if (addr_to.ss_family == AF_INET6) {
+                        socket_port = ntohs(((struct sockaddr_in6*) & local_address)->sin6_port);
+                    }
+                    else if (addr_to.ss_family == AF_INET) {
+                        socket_port = ntohs(((struct sockaddr_in*) & local_address)->sin_port);
+                    }
+                }
+                /* Document incoming port */
+                if (addr_to.ss_family == AF_INET6) {
+                    ((struct sockaddr_in6*) & addr_to)->sin6_port = socket_port;
+                }
+                else if (addr_to.ss_family == AF_INET) {
+                    ((struct sockaddr_in*) & addr_to)->sin_port = socket_port;
+                }
                 /* Submit the packet to the server */
                 (void)picoquic_incoming_packet(quic, buffer,
                     (size_t)bytes_recv, (struct sockaddr*) & addr_from,
