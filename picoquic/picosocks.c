@@ -144,8 +144,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     if (af == AF_INET6) {
 #if defined(IPV6_TCLASS)
         {
-            unsigned int ecn = 2; /* ECN_ECT_0 */
-            /* Request setting ECN_1 in outgoing packets */
+            unsigned int ecn = 1; /* Setting ECN_ECT_0 in outgoing packets */
             if (setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPV6_TCLASS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
