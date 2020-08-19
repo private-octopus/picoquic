@@ -1798,7 +1798,8 @@ int  picoquic_incoming_not_decrypted(
     size_t length,
     struct sockaddr * addr_from,
     struct sockaddr* addr_to,
-    int if_index_to)
+    int if_index_to,
+    unsigned char received_ecn)
 {
     int buffered = 0;
 
@@ -1828,6 +1829,7 @@ int  picoquic_incoming_not_decrypted(
                     picoquic_store_addr(&packet->addr_local, addr_to);
                     picoquic_store_addr(&packet->addr_to, addr_from);
                     packet->if_index_local = if_index_to;
+                    packet->received_ecn = received_ecn;
                     buffered = 1;
                 }
             }
@@ -1891,7 +1893,7 @@ int picoquic_incoming_segment(
     /* Store packet if received in advance of encryption keys */
     if (ret == PICOQUIC_ERROR_AEAD_NOT_READY &&
         cnx != NULL) {
-        is_buffered = picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length, addr_from, addr_to, if_index_to);
+        is_buffered = picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length, addr_from, addr_to, if_index_to, received_ecn);
     }
 
     /* Log the incoming packet */
@@ -2140,7 +2142,7 @@ void picoquic_process_sooner_packets(picoquic_cnx_t* cnx, uint64_t current_time)
 
             DBG_PRINTF("De-stashing packet type %d, %d bytes", (int)packet->ptype, (int)packet->length);
             ret = picoquic_incoming_packet(cnx->quic, packet->bytes, packet->length,
-                (struct sockaddr*) & packet->addr_to, (struct sockaddr*) & packet->addr_local, packet->if_index_local, 0, current_time);
+                (struct sockaddr*) & packet->addr_to, (struct sockaddr*) & packet->addr_local, packet->if_index_local, packet->received_ecn, current_time);
 
             if (ret != 0) {
                 DBG_PRINTF("Processing sooner packet type %d returns %d (0x%d)", (int)packet->ptype, ret, ret);
