@@ -907,7 +907,7 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
     }
     fprintf(f, "]");
     if (ftype == picoquic_frame_type_ack_ecn) {
-        char const* ecn_name[3] = { "ect_0", "ect_1", "ce" };
+        char const* ecn_name[3] = { "ect0", "ect1", "ce" };
         for (int ecnx = 0; ecnx < 3; ecnx++) {
             uint64_t ecn_v = 0;
             byteread_vint(s, &ecn_v);
