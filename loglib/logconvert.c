@@ -34,9 +34,9 @@ const char * ptype2str(picoquic_packet_type_enum ptype)
     case picoquic_packet_handshake:
         return "handshake";
     case picoquic_packet_0rtt_protected:
-        return "0rtt";
+        return "0RTT";
     case picoquic_packet_1rtt_protected:
-        return "1rtt";
+        return "1RTT";
     case picoquic_packet_type_max:
     default:
         return "unknown";
