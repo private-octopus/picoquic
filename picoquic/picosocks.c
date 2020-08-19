@@ -99,11 +99,11 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
         *send_set = 0;
 #ifdef IPV6_ECN
         {
-            DWORD set = 1;
-            /* Request receiving TOS reports in recvmsg */
-            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_ECN, (char *)&set, sizeof(set));
+            DWORD recvEcn = 1;
+            /* Request receiving ECN reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_ECN, (char *)&recvEcn, sizeof(recvEcn));
             if (ret < 0) {
-                DBG_PRINTF("setsockopt IPV6_ECN (0x%x) fails, errno: %d\n", set, GetLastError());
+                DBG_PRINTF("setsockopt IPV6_ECN (0x%x) fails, errno: %d\n", recvEcn, GetLastError());
                 ret = -1;
                 *recv_set = 0;
             }
@@ -120,10 +120,9 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
         /* Using IPv4 options. */
 #if defined(IP_ECN)
         {
-            INT recvEcn;
+            INT recvEcn =1;
 
-            /* Request setting ECN_1 in outgoing packets */
-            recvEcn = 1;
+            /* Request receiving ECN reports in recvmsg */
             ret = setsockopt(sd, IPPROTO_IP, IP_ECN, (CHAR*)&recvEcn, sizeof(recvEcn));
             if (ret < 0) {
                 DBG_PRINTF("setsockopt IP_ECN (0x%x) fails, errno: %d\n", recvEcn, GetLastError());
@@ -144,7 +143,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     if (af == AF_INET6) {
 #if defined(IPV6_TCLASS)
         {
-            unsigned int ecn = 1; /* Setting ECN_ECT_0 in outgoing packets */
+            unsigned int ecn = PICOQUIC_ECN_ECT_0; /* Setting ECN_ECT_0 in outgoing packets */
             if (setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPV6_TCLASS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
@@ -181,8 +180,8 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     else {
 #if defined(IP_TOS)
         {
-            unsigned int ecn = 1;
-            /* Request setting ECN_0 in outgoing packets */
+            unsigned int ecn = PICOQUIC_ECN_ECT_0;
+            /* Request setting ECN_ECT_0 in outgoing packets */
             if (setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPv4 IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
@@ -802,7 +801,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
                         DBG_PRINTF("Cannot obtain third CMSG (control_length: %d)\n", control_length);
                     }
                     else {
-                        INT ecn_val = 1;
+                        INT ecn_val = PICOQUIC_ECN_ECT_0;
                         cmsg_3->cmsg_level = IPPROTO_IPV6;
                         cmsg_3->cmsg_type = IPV6_ECN;
                         cmsg_3->cmsg_len = WSA_CMSG_LEN(sizeof(INT));
@@ -835,7 +834,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
                     DBG_PRINTF("Cannot obtain third CMSG (control_length: %d)\n", control_length);
                 }
                 else {
-                    INT ecn_val = 1;
+                    INT ecn_val = PICOQUIC_ECN_ECT_0;
                     cmsg_3->cmsg_level = IPPROTO_IP;
                     cmsg_3->cmsg_type = IP_ECN;
                     cmsg_3->cmsg_len = WSA_CMSG_LEN(sizeof(INT));
