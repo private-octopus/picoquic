@@ -469,6 +469,7 @@ void picoquic_log_packet_header(FILE* F, uint64_t log_cnxid64, picoquic_packet_h
         ph->ptype, picoquic_log_ptype_name(ph->ptype));
 
     fprintf(F, "S%d,", ph->spin);
+    fprintf(F, " Q%d,", !ph->quic_bit_is_zero);
 
     switch (ph->ptype) {
     case picoquic_packet_1rtt_protected:
