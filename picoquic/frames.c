@@ -2630,14 +2630,14 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     }
 
     if (bytes != 0 && is_ecn) {
-        if (ecnx3[0] > cnx->ecn_ect0_total_remote) {
-            cnx->ecn_ect0_total_remote = ecnx3[0];
+        if (ecnx3[0] > cnx->pkt_ctx[pc].ecn_ect0_total_remote) {
+            cnx->pkt_ctx[pc].ecn_ect0_total_remote = ecnx3[0];
         }
-        if (ecnx3[1] > cnx->ecn_ect1_total_remote) {
-            cnx->ecn_ect1_total_remote = ecnx3[1];
+        if (ecnx3[1] > cnx->pkt_ctx[pc].ecn_ect1_total_remote) {
+            cnx->pkt_ctx[pc].ecn_ect1_total_remote = ecnx3[1];
         }
-        if (ecnx3[2] > cnx->ecn_ce_total_remote) {
-            cnx->ecn_ce_total_remote = ecnx3[2];
+        if (ecnx3[2] > cnx->pkt_ctx[pc].ecn_ce_total_remote) {
+            cnx->pkt_ctx[pc].ecn_ce_total_remote = ecnx3[2];
 
             cnx->congestion_alg->alg_notify(cnx, cnx->path[0],
                 picoquic_congestion_notification_ecn_ec,
@@ -2658,7 +2658,7 @@ uint8_t * picoquic_format_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t
     uint64_t ack_range = 0;
     uint64_t ack_gap = 0;
     uint64_t lowest_acknowledged = 0;
-    int is_ecn = cnx->sending_ecn_ack;
+    int is_ecn = cnx->pkt_ctx[pc].sending_ecn_ack;
     uint8_t* after_stamp = bytes;
     int has_time_stamp = (pc == picoquic_packet_context_application && cnx->is_time_stamp_sent);
     uint8_t ack_type_byte = ((is_ecn) ? picoquic_frame_type_ack_ecn : picoquic_frame_type_ack);
@@ -2724,9 +2724,9 @@ uint8_t * picoquic_format_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t
         if (bytes > after_stamp && is_ecn) {
             /* Try to encode the ECN bytes */
             uint8_t* bytes_ecn = bytes;
-            if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->ecn_ect0_total_local)) == NULL ||
-                (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->ecn_ect1_total_local)) == NULL ||
-                (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->ecn_ce_total_local)) == NULL)
+            if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->pkt_ctx[pc].ecn_ect0_total_local)) == NULL ||
+                (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->pkt_ctx[pc].ecn_ect1_total_local)) == NULL ||
+                (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->pkt_ctx[pc].ecn_ce_total_local)) == NULL)
             {
                 bytes = bytes_ecn;
                 *more_data = 1;

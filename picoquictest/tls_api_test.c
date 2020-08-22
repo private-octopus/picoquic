@@ -1085,7 +1085,7 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
 }
 
 static int tls_api_one_sim_link_arrival(picoquictest_sim_link_t* sim_link, struct sockaddr* target_addr, 
-    int multiple_address, picoquic_quic_t * quic, uint64_t simulated_time, int * was_active)
+    int multiple_address, picoquic_quic_t * quic, uint64_t simulated_time, int * was_active, uint8_t recv_ecn)
 {
     int ret = 0;
 
@@ -1098,7 +1098,7 @@ static int tls_api_one_sim_link_arrival(picoquictest_sim_link_t* sim_link, struc
             (packet->addr_to.ss_family == target_addr->sa_family  && multiple_address)) {
             ret = picoquic_incoming_packet(quic, packet->bytes, (uint32_t)packet->length,
                 (struct sockaddr*) & packet->addr_from,
-                (struct sockaddr*) & packet->addr_to, 0, 0, simulated_time);
+                (struct sockaddr*) & packet->addr_to, 0, recv_ecn, simulated_time);
             *was_active |= 1;
         }
 
@@ -1322,19 +1322,19 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
     }
     else if (next_action == 4) {
         ret = tls_api_one_sim_link_arrival(test_ctx->s_to_c_link, (struct sockaddr*) & test_ctx->client_addr,
-            test_ctx->client_use_multiple_addresses, test_ctx->qclient, *simulated_time, was_active);
+            test_ctx->client_use_multiple_addresses, test_ctx->qclient, *simulated_time, was_active, test_ctx->recv_ecn_client);
     }
     else if (next_action == 5) {
         ret = tls_api_one_sim_link_arrival(test_ctx->c_to_s_link, (struct sockaddr*) & test_ctx->server_addr,
-            test_ctx->server_use_multiple_addresses, test_ctx->qserver, *simulated_time, was_active);
+            test_ctx->server_use_multiple_addresses, test_ctx->qserver, *simulated_time, was_active, test_ctx->recv_ecn_server);
     }
     else if (next_action == 6) {
         ret = tls_api_one_sim_link_arrival(test_ctx->s_to_c_link_2, (struct sockaddr*) & test_ctx->client_addr_2,
-            0, test_ctx->qclient, *simulated_time, was_active);
+            0, test_ctx->qclient, *simulated_time, was_active, test_ctx->recv_ecn_client);
     }
     else if (next_action == 7) {
         ret = tls_api_one_sim_link_arrival(test_ctx->c_to_s_link_2, (struct sockaddr*) & test_ctx->server_addr,
-            test_ctx->server_use_multiple_addresses, test_ctx->qserver, *simulated_time, was_active);
+            test_ctx->server_use_multiple_addresses, test_ctx->qserver, *simulated_time, was_active, test_ctx->recv_ecn_server);
     }
 
     if (test_ctx->cnx_server == NULL && ret == 0 && *was_active) {
@@ -2328,7 +2328,7 @@ int tls_api_bad_server_reset_test()
         /* Submit bogus request to client */
         ret = picoquic_incoming_packet(test_ctx->qclient, buffer, sizeof(buffer),
             (struct sockaddr*)(&test_ctx->server_addr),
-            (struct sockaddr*)(&test_ctx->client_addr), 0, 0,
+            (struct sockaddr*)(&test_ctx->client_addr), 0, test_ctx->recv_ecn_client,
             simulated_time);
     }
 
@@ -5135,7 +5135,7 @@ int rebinding_stress_test()
                         test_ctx->c_to_s_link->last_packet->bytes,
                         (uint32_t)test_ctx->c_to_s_link->last_packet->length,
                         bad_address,
-                        (struct sockaddr*)&test_ctx->c_to_s_link->last_packet->addr_to, 0, 0,
+                        (struct sockaddr*)&test_ctx->c_to_s_link->last_packet->addr_to, 0, test_ctx->recv_ecn_server,
                         simulated_time);
                 }
             }
@@ -6896,11 +6896,14 @@ int packet_trace_test()
  */
 #ifdef _WINDOWS
 #define QLOG_TRACE_TEST_REF "picoquictest\\qlog_trace_ref.txt"
+#define QLOG_TRACE_ECN_TEST_REF "picoquictest\\qlog_trace_ecn_ref.txt"
 #else
 #define QLOG_TRACE_TEST_REF "picoquictest/qlog_trace_ref.txt"
+#define QLOG_TRACE_ECN_TEST_REF "picoquictest/qlog_trace_ecn_ref.txt"
 #endif
 #define QLOG_TRACE_BIN "0102030405060708.server.log"
 #define QLOG_TRACE_QLOG "qlog_trace.qlog"
+#define QLOG_TRACE_ECN_QLOG "qlog_trace_ecn.qlog"
 #define QLOG_TRACE_AUTO_QLOG "0102030405060708.server.qlog"
 
 #ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
@@ -6927,7 +6930,7 @@ void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_lo
     }
 }
 
-int qlog_trace_test_one(int auto_qlog, int keep_binlog)
+int qlog_trace_test_one(int auto_qlog, int keep_binlog, uint8_t recv_ecn)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -6937,6 +6940,7 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog)
     picoquic_connection_id_t cnxfn_data_server = { {2, 2, 2, 2, 2, 2, 2, 2}, 8 };
     uint8_t reset_seed_client[PICOQUIC_RESET_SECRET_SIZE] = { 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 };
     uint8_t reset_seed_server[PICOQUIC_RESET_SECRET_SIZE] = { 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35 };
+    char const* qlog_target = (auto_qlog) ? QLOG_TRACE_AUTO_QLOG : ((recv_ecn != 0) ? QLOG_TRACE_ECN_QLOG : QLOG_TRACE_QLOG);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -6947,11 +6951,13 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog)
     }
 
     (void)picoquic_file_delete(QLOG_TRACE_BIN, NULL);
-    (void)picoquic_file_delete((auto_qlog)? QLOG_TRACE_AUTO_QLOG:QLOG_TRACE_QLOG, NULL);
+    (void)picoquic_file_delete(qlog_target, NULL);
 
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
+        test_ctx->recv_ecn_client = recv_ecn;
+        test_ctx->recv_ecn_server = recv_ecn;
         if (auto_qlog) {
             picoquic_set_qlog(test_ctx->qserver, ".");
         }
@@ -6994,7 +7000,7 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog)
         memcpy(p + 1, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id_len);
         p[0] |= 64;
         (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr,
-            (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr, 0, 0, simulated_time);
+            (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
     }
 
     /* Free the resource, which will close the log file.
@@ -7013,7 +7019,7 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog)
             ret = -1;
         }
         else {
-            ret = qlog_convert(&initial_cid, f_binlog, QLOG_TRACE_BIN, QLOG_TRACE_QLOG, NULL);
+            ret = qlog_convert(&initial_cid, f_binlog, QLOG_TRACE_BIN, qlog_target, NULL);
             picoquic_file_close(f_binlog);
         }
     }
@@ -7023,14 +7029,14 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog)
     {
         char qlog_trace_test_ref[512];
 
-        ret = picoquic_get_input_path(qlog_trace_test_ref, sizeof(qlog_trace_test_ref), picoquic_solution_dir, QLOG_TRACE_TEST_REF);
+        ret = picoquic_get_input_path(qlog_trace_test_ref, sizeof(qlog_trace_test_ref), picoquic_solution_dir,
+            (recv_ecn== 0)?QLOG_TRACE_TEST_REF: QLOG_TRACE_ECN_TEST_REF);
 
         if (ret != 0) {
             DBG_PRINTF("%s", "Cannot set the qlog trace test ref file name.\n");
         }
         else {
-            ret = picoquic_test_compare_text_files((auto_qlog) ? QLOG_TRACE_AUTO_QLOG : QLOG_TRACE_QLOG,
-                qlog_trace_test_ref);
+            ret = picoquic_test_compare_text_files(qlog_target, qlog_trace_test_ref);
         }
     }
 
@@ -7039,17 +7045,22 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog)
 
 int qlog_trace_test()
 {
-    return qlog_trace_test_one(0, 1);
+    return qlog_trace_test_one(0, 1, 0);
 }
 
 int qlog_trace_only_test()
 {
-    return qlog_trace_test_one(1, 0);
+    return qlog_trace_test_one(1, 0, 0);
 }
 
 int qlog_trace_auto_test()
 {
-    return qlog_trace_test_one(1, 1);
+    return qlog_trace_test_one(1, 1, 0);
+}
+
+int qlog_trace_ecn_test()
+{
+    return qlog_trace_test_one(0, 1, 0x02);
 }
 
 /*
@@ -8257,7 +8268,7 @@ int ddos_amplification_test_one(int use_0rtt)
 
             ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
                 (struct sockaddr*) & packet->addr_from,
-                (struct sockaddr*) & packet->addr_to, 0, 0,
+                (struct sockaddr*) & packet->addr_to, 0, test_ctx->recv_ecn_server,
                 simulated_time);
 
             if (ret == 0) {

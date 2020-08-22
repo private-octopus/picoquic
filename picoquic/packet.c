@@ -1646,25 +1646,23 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
  * ECN Accounting. This is only called if the packet was processed successfully.
  */
 void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
-    unsigned char received_ecn, int path_id)
+    unsigned char received_ecn, picoquic_packet_context_enum pc)
 {
-    if (path_id == 0) {
-        switch (received_ecn & 0x03) {
-        case 0x00:
-            break;
-        case 0x01: /* ECN_ECT_1 */
-            cnx->ecn_ect1_total_local++;
-            cnx->sending_ecn_ack |= 1;
-            break;
-        case 0x02: /* ECN_ECT_0 */
-            cnx->ecn_ect0_total_local++;
-            cnx->sending_ecn_ack |= 1;
-            break;
-        case 0x03: /* ECN_CE */
-            cnx->ecn_ce_total_local++;
-            cnx->sending_ecn_ack |= 1;
-            break;
-        }
+    switch (received_ecn & 0x03) {
+    case 0x00:
+        break;
+    case 0x01: /* ECN_ECT_1 */
+        cnx->pkt_ctx[pc].ecn_ect1_total_local++;
+        cnx->pkt_ctx[pc].sending_ecn_ack |= 1;
+        break;
+    case 0x02: /* ECN_ECT_0 */
+        cnx->pkt_ctx[pc].ecn_ect0_total_local++;
+        cnx->pkt_ctx[pc].sending_ecn_ack |= 1;
+        break;
+    case 0x03: /* ECN_CE */
+        cnx->pkt_ctx[pc].ecn_ce_total_local++;
+        cnx->pkt_ctx[pc].sending_ecn_ack |= 1;
+        break;
     }
 }
 
@@ -1772,8 +1770,6 @@ int picoquic_incoming_encrypted(
                     }
                 }
 
-                /* Perform ECN accounting */
-                picoquic_ecn_accounting(cnx, received_ecn, path_id);
                 /* Processing of TLS messages  */
                 ret = picoquic_tls_stream_process(cnx);
             }
@@ -2019,11 +2015,13 @@ int picoquic_incoming_segment(
         }
     }
 
-    if (ret == 0 || ret == PICOQUIC_ERROR_SPURIOUS_REPEAT) {
+    if (ret == 0) {
         if (cnx != NULL && cnx->cnx_state != picoquic_state_disconnected &&
             ph.ptype != picoquic_packet_version_negotiation) {
             /* Mark the sequence number as received */
             ret = picoquic_record_pn_received(cnx, ph.pc, ph.pn64, current_time);
+            /* Perform ECN accounting */
+            picoquic_ecn_accounting(cnx, received_ecn, ph.pc);
         }
         if (cnx != NULL) {
             picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
@@ -2093,8 +2091,6 @@ int picoquic_incoming_packet(
         ret = picoquic_incoming_segment(quic, bytes + consumed_index, 
             packet_length - consumed_index, packet_length,
             &consumed, addr_from, addr_to, if_index_to, received_ecn, current_time, &previous_destid);
-
-        received_ecn = 0; /* Avoid doublecounting ECN bits in coalesced packets */
 
         if (ret == 0) {
             consumed_index += consumed;

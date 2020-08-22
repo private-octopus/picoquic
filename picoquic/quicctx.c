@@ -2926,6 +2926,13 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
 
     pkt_ctx->first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
     pkt_ctx->first_sack_item.end_of_sack_range = 0;
+    /* Reset the ECN data */
+    pkt_ctx->ecn_ect0_total_local = 0;
+    pkt_ctx->ecn_ect1_total_local = 0;
+    pkt_ctx->ecn_ce_total_local = 0;
+    pkt_ctx->ecn_ect0_total_remote = 0;
+    pkt_ctx->ecn_ect1_total_remote = 0;
+    pkt_ctx->ecn_ce_total_remote = 0;
 }
 
 /*
@@ -2966,14 +2973,6 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
         cnx->tls_stream[epoch].sent_offset = 0;
         /* No need to reset the state flags, are they are not used for the crypto stream */
     }
-
-    /* Reset the ECN data */
-    cnx->ecn_ect0_total_local = 0;
-    cnx->ecn_ect1_total_local = 0;
-    cnx->ecn_ce_total_local = 0;
-    cnx->ecn_ect0_total_remote = 0;
-    cnx->ecn_ect1_total_remote = 0;
-    cnx->ecn_ce_total_remote = 0;
 
     for (int k = 0; k < 4; k++) {
         picoquic_crypto_context_free(&cnx->crypto_context[k]);
