@@ -34,9 +34,9 @@ const char * ptype2str(picoquic_packet_type_enum ptype)
     case picoquic_packet_handshake:
         return "handshake";
     case picoquic_packet_0rtt_protected:
-        return "0rtt";
+        return "0RTT";
     case picoquic_packet_1rtt_protected:
-        return "1rtt";
+        return "1RTT";
     case picoquic_packet_type_max:
     default:
         return "unknown";
@@ -89,7 +89,7 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
     case picoquic_frame_type_new_token:
         return "new_token";
     case picoquic_frame_type_ack_ecn:
-        return "ack_ecn";
+        return "ack";
     case picoquic_frame_type_retire_connection_id:
         return "retire_connection_id";
     case picoquic_frame_type_handshake_done:

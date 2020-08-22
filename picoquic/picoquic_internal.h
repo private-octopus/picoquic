@@ -293,6 +293,7 @@ typedef struct st_picoquic_stateless_packet_t {
     struct sockaddr_storage addr_to;
     struct sockaddr_storage addr_local;
     int if_index_local;
+    unsigned char received_ecn;
     size_t length;
 
     uint64_t cnxid_log64;
@@ -851,10 +852,18 @@ typedef struct st_picoquic_packet_context_t {
     picoquic_packet_t* retransmit_oldest;
     picoquic_packet_t* retransmitted_newest;
     picoquic_packet_t* retransmitted_oldest;
+    /* ECN Counters */
+    uint64_t ecn_ect0_total_local;
+    uint64_t ecn_ect1_total_local;
+    uint64_t ecn_ce_total_local;
+    uint64_t ecn_ect0_total_remote;
+    uint64_t ecn_ect1_total_remote;
+    uint64_t ecn_ce_total_remote;
     /* Flags */
     unsigned int ack_needed : 1;
     unsigned int ack_of_ack_requested : 1;
     unsigned int ack_after_fin : 1;
+    unsigned int sending_ecn_ack : 1;
 } picoquic_packet_context_t;
 
 /*
@@ -991,7 +1000,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int cwin_blocked : 1;
     unsigned int flow_blocked : 1;
     unsigned int stream_blocked : 1;
-
+#if 0
     /* ECN Counters */
     uint64_t ecn_ect0_total_local;
     uint64_t ecn_ect1_total_local;
@@ -999,7 +1008,7 @@ typedef struct st_picoquic_cnx_t {
     uint64_t ecn_ect0_total_remote;
     uint64_t ecn_ect1_total_remote;
     uint64_t ecn_ce_total_remote;
-
+#endif
     /* Congestion algorithm */
     picoquic_congestion_algorithm_t const* congestion_alg;
     uint64_t pacing_rate_signalled;

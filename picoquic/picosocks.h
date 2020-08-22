@@ -104,6 +104,10 @@
 #endif
 #endif
 
+#define PICOQUIC_ECN_ECT_0 0x02
+#define PICOQUIC_ECN_ECT_1 0x01
+#define PICOQUIC_ECN_CE 0x03
+
 #include "picoquic.h"
 
 #ifdef __cplusplus

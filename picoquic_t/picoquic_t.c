@@ -190,6 +190,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qlog_trace", qlog_trace_test },
     { "qlog_trace_auto", qlog_trace_auto_test },
     { "qlog_trace_only", qlog_trace_only_test },
+    { "qlog_trace_ecn", qlog_trace_ecn_test },
     { "rebiding_stress", rebinding_stress_test },
     { "ready_to_send", ready_to_send_test },
     { "cubic", cubic_test },

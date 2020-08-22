@@ -131,6 +131,10 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     uint64_t blackhole_start;
     uint64_t blackhole_end;
 
+    /* ECN simulation */
+    uint8_t recv_ecn_client;
+    uint8_t recv_ecn_server;
+
     /* File used to test bandwidth notification */
     FILE* bw_update;
 } picoquic_test_tls_api_ctx_t;

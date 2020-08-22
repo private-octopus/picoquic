@@ -442,6 +442,9 @@ char const* picoquic_log_tp_name(uint64_t tp_number)
     case picoquic_tp_enable_time_stamp:
         tp_name = "enable_time_stamp";
         break;
+    case picoquic_tp_grease_quic_bit:
+        tp_name = "grease_quic_bit";
+        break;
     default:
         break;
     }
@@ -466,6 +469,7 @@ void picoquic_log_packet_header(FILE* F, uint64_t log_cnxid64, picoquic_packet_h
         ph->ptype, picoquic_log_ptype_name(ph->ptype));
 
     fprintf(F, "S%d,", ph->spin);
+    fprintf(F, " Q%d,", !ph->quic_bit_is_zero);
 
     switch (ph->ptype) {
     case picoquic_packet_1rtt_protected:
