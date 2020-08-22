@@ -1065,6 +1065,14 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(qlog_trace_ecn)
+        {
+            int ret = qlog_trace_ecn_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(rebinding_stress)
         {
             int ret = rebinding_stress_test();
