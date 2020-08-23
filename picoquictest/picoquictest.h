@@ -189,6 +189,7 @@ int h09_server_test();
 int generic_server_test();
 int esni_test();
 int tls_retry_token_test();
+int tls_retry_token_valid_test();
 int optimistic_ack_test();
 int optimistic_hole_test();
 int document_addresses_test();
