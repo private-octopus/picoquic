@@ -19,39 +19,21 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 #ifdef _WINDOWS
 #define WIN32_LEAN_AND_MEAN
 #include "getopt.h"
 #include <WinSock2.h>
 #include <Windows.h>
-#include <assert.h>
-#include <iphlpapi.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <ws2tcpip.h>
-
-#ifndef SOCKET_TYPE
-#define SOCKET_TYPE SOCKET
-#endif
-#ifndef SOCKET_CLOSE
-#define SOCKET_CLOSE(x) closesocket(x)
-#endif
-#ifndef WSA_LAST_ERROR
-#define WSA_LAST_ERROR(x) WSAGetLastError()
-#endif
-#ifndef socklen_t
-#define socklen_t int
-#endif
 
 #define SERVER_CERT_FILE "certs\\cert.pem"
 #define SERVER_KEY_FILE  "certs\\key.pem"
 
 #else /* Linux */
 
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -69,19 +51,6 @@
 #include <netinet/in.h>
 #include <sys/select.h>
 
-#ifndef SOCKET_TYPE
-#define SOCKET_TYPE int
-#endif
-#ifndef INVALID_SOCKET
-#define INVALID_SOCKET -1
-#endif
-#ifndef SOCKET_CLOSE
-#define SOCKET_CLOSE(x) close(x)
-#endif
-#ifndef WSA_LAST_ERROR
-#define WSA_LAST_ERROR(x) ((long)(x))
-#endif
-
 #define SERVER_CERT_FILE "certs/cert.pem"
 #define SERVER_KEY_FILE "certs/key.pem"
 
@@ -96,7 +65,6 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "picoquic.h"
 #include "picoquic_packet_loop.h"
 #include "picoquic_internal.h"
-#include "picosocks.h"
 #include "picoquic_utils.h"
 #include "autoqlog.h"
 #include "h3zero.c"
@@ -268,6 +236,7 @@ static const char * test_scenario_default = "0:index.html;4:test.html;8:/1234567
 typedef struct st_client_loop_cb_t {
     picoquic_cnx_t* cnx_client;
     picoquic_demo_callback_ctx_t* demo_callback_ctx;
+    siduck_ctx_t* siduck_ctx;
     int notified_ready;
     int established;
     int migration_to_preferred_started;
@@ -302,7 +271,8 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
             break;
         case picoquic_packet_loop_after_receive:
             /* Post receive callback */
-            if (cb_ctx->demo_callback_ctx->connection_closed) {
+            if ((!cb_ctx->is_siduck && cb_ctx->demo_callback_ctx->connection_closed) ||
+                cb_ctx->cnx_client->cnx_state == picoquic_state_disconnected) {
                 fprintf(stdout, "The connection is closed!\n");
                 ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
                 break;
@@ -319,9 +289,8 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
                     fprintf(stdout, "Client port (AF=%d): %d.\n", cb_ctx->client_address.ss_family, updated_port);
                 }
             }
-
-            /* if almost ready, display results of negotiation */
             if (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_almost_ready && cb_ctx->notified_ready == 0) {
+                /* if almost ready, display results of negotiation */
                 if (picoquic_tls_is_psk_handshake(cb_ctx->cnx_client)) {
                     fprintf(stdout, "The session was properly resumed!\n");
                     picoquic_log_app_message(cb_ctx->cnx_client,
@@ -431,14 +400,12 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
 
                 cb_ctx->client_ready_loop++;
 
-                if (cb_ctx->client_ready_loop > 4 && !cb_ctx->is_siduck && cb_ctx->demo_callback_ctx->nb_open_streams == 0) {
+                if (!cb_ctx->is_siduck && cb_ctx->client_ready_loop > 4 && cb_ctx->demo_callback_ctx->nb_open_streams == 0) {
                     fprintf(stdout, "All done, Closing the connection.\n");
                     picoquic_log_app_message(cb_ctx->cnx_client, "%s", "All done, Closing the connection.");
 
                     ret = picoquic_close(cb_ctx->cnx_client, 0);
                 }
-
-                /* TODO: understand where to insert a timeout condition, when no data was received.*/
             }
             break;
         case picoquic_packet_loop_after_send:
@@ -659,10 +626,16 @@ int quic_client(const char* ip_address_text, int server_port,
     /* Wait for packets */
     if (ret == 0) {
         loop_cb.cnx_client = cnx_client;
-        loop_cb.demo_callback_ctx = &callback_ctx;
         loop_cb.force_migration = force_migration;
         loop_cb.nb_packets_before_key_update = nb_packets_before_key_update;
         loop_cb.is_siduck = is_siduck;
+        if (is_siduck) {
+            loop_cb.siduck_ctx = siduck_ctx;
+        }
+        else {
+            loop_cb.demo_callback_ctx = &callback_ctx;
+        }
+
 
         ret = picoquic_packet_loop(qclient, 0, loop_cb.server_address.ss_family, 0, client_loop_cb, &loop_cb);
     }
@@ -760,13 +733,6 @@ int quic_client(const char* ip_address_text, int server_port,
         }
     }
 
-    /* Clean up */
-    if (is_siduck) {
-        free(siduck_ctx);
-    } else {
-        picoquic_demo_client_delete_context(&callback_ctx);
-    }
-
     if (qclient != NULL) {
         uint8_t* ticket;
         uint16_t ticket_length;
@@ -786,6 +752,16 @@ int quic_client(const char* ip_address_text, int server_port,
         }
 
         picoquic_free(qclient);
+    }
+
+    /* Clean up */
+    if (is_siduck) {
+        if (siduck_ctx != NULL) {
+            free(siduck_ctx);
+        }
+    }
+    else {
+        picoquic_demo_client_delete_context(&callback_ctx);
     }
 
     if (loop_cb.saved_alpn != NULL) {
