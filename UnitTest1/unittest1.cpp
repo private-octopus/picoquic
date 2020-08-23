@@ -540,6 +540,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(retry_token_valid)
+        {
+            int ret = tls_retry_token_valid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         
         TEST_METHOD(test_two_connections)
         {

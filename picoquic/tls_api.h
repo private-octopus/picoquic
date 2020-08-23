@@ -136,10 +136,12 @@ int picoquic_server_decrypt_retry_token(picoquic_quic_t* quic, const struct sock
 
 int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
     uint64_t current_time, const picoquic_connection_id_t * odcid, const picoquic_connection_id_t* rcid,
+    uint32_t initial_pn,
     uint8_t * token, size_t token_max, size_t * token_size);
 
 int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
     uint64_t current_time, picoquic_connection_id_t * odcid, const picoquic_connection_id_t* rcid,
+    uint32_t initial_pn,
     const uint8_t * token, size_t token_size, int new_context_created);
 
 void picoquic_cid_free_under_mask_ctx(void * v_pn_enc);

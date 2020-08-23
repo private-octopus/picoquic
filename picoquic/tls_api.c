@@ -2150,7 +2150,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                             picoquic_connection_id_t n_cid = picoquic_null_connection_id;
 
                             if (picoquic_prepare_retry_token(cnx->quic, (struct sockaddr *)&cnx->path[0]->peer_addr,
-                                picoquic_get_quic_time(cnx->quic) + PICOQUIC_TOKEN_DELAY_LONG, &n_cid, &n_cid,
+                                picoquic_get_quic_time(cnx->quic) + PICOQUIC_TOKEN_DELAY_LONG, &n_cid, &n_cid, 0,
                                 token_buffer, sizeof(token_buffer), &token_size) == 0) {
                                 if (picoquic_queue_new_token_frame(cnx, token_buffer, token_size) != 0) {
                                     picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_new_token);
@@ -2404,6 +2404,7 @@ int picoquic_server_decrypt_retry_token(picoquic_quic_t* quic, const struct sock
 
 int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr* addr_peer,
     uint64_t current_time, const picoquic_connection_id_t* odcid, const picoquic_connection_id_t* rcid,
+    uint32_t initial_pn,
     uint8_t* token, size_t token_max, size_t* token_size)
 {
     int ret = 0;
@@ -2422,7 +2423,8 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr* a
     /* serialize the token components */
     if ((bytes = picoquic_frames_uint64_encode(bytes, bytes_max, token_time)) != NULL &&
         (bytes = picoquic_frames_cid_encode(bytes, bytes_max, odcid)) != NULL &&
-        (bytes = picoquic_frames_cid_encode(bytes, bytes_max, rcid)) != NULL) {
+        (bytes = picoquic_frames_cid_encode(bytes, bytes_max, rcid)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, initial_pn)) != NULL) {
         /* Pad to min token size */
         while (bytes < text + PICOQUIC_RETRY_TOKEN_PAD_SIZE) {
             *bytes++ = 0;
@@ -2439,12 +2441,14 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr* a
 
 int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
     uint64_t current_time, picoquic_connection_id_t * odcid, const picoquic_connection_id_t* rcid,
+    uint32_t initial_pn,
     const uint8_t * token, size_t token_size, int new_context_created)
 {
     int ret = 0;
     uint8_t text[128];
     size_t text_len = 0;
     picoquic_connection_id_t cid;
+    uint64_t token_pn;
 
     odcid->id_len = 0;
 
@@ -2460,9 +2464,14 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
 
         if ((bytes = picoquic_frames_uint64_decode(bytes, bytes_max, &token_time)) != NULL &&
             (bytes = picoquic_frames_cid_decode(bytes, bytes_max, odcid)) != NULL &&
-            (bytes = picoquic_frames_cid_decode(bytes, bytes_max, &cid)) != NULL) {
+            (bytes = picoquic_frames_cid_decode(bytes, bytes_max, &cid)) != NULL &&
+            (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &token_pn)) != NULL) {
             if (token_time < current_time) {
                 /* Invalid token, too old */
+                ret = -1;
+            }
+            else if (odcid->id_len > 0 && token_pn >= initial_pn) {
+                /* Invalid PN number */
                 ret = -1;
             }
             else {

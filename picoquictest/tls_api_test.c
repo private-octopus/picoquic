@@ -2500,6 +2500,128 @@ int tls_retry_token_test()
     return ret;
 }
 
+/* Unit test of token validation */
+int tls_retry_token_valid_test()
+{
+    int ret = 0;
+    struct sockaddr_in addr1, addr2, addr3;
+    struct sockaddr* addr[3];
+    picoquic_connection_id_t n_cid = picoquic_null_connection_id;
+    picoquic_connection_id_t cid1 = { { 1,1,1,1,1,1,1,1}, 8 };
+    picoquic_connection_id_t cid2 = { { 2,2,2,2,2,2,2,2,2}, 9 };
+    picoquic_connection_id_t* cid[3];
+    picoquic_connection_id_t cid_o = { { 3,3,3,3,3,3,3,3}, 8 };
+    picoquic_connection_id_t* odcid[2];
+    picoquic_connection_id_t odcid_found;
+    uint64_t time_base = 10000;
+    uint64_t time_delta[4] = { 0, PICOQUIC_TOKEN_DELAY_SHORT, PICOQUIC_TOKEN_DELAY_SHORT + 4000001,
+     24ull * 3600ull * 1000000ull + PICOQUIC_TOKEN_DELAY_SHORT + 1000000 };
+    uint32_t pn[3] = { 0, 1, 2 };
+    uint8_t token_buffer[128];
+    size_t token_size;
+    int verified;
+    picoquic_quic_t * quic = picoquic_create(8, NULL, NULL, NULL, PICOQUIC_TEST_ALPN, NULL, NULL, NULL, NULL, NULL,
+        time_base*1000000, NULL, NULL, test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
+
+    if (quic == NULL) {
+        return -1;
+    }
+
+    picoquic_set_test_address(&addr1, 0x01010101, 1234);
+    picoquic_set_test_address(&addr2, 0x01010101, 3456);
+    picoquic_set_test_address(&addr3, 0x03030303, 1234);
+    addr[0] = (struct sockaddr*) & addr1;
+    addr[1] = (struct sockaddr*) & addr2;
+    addr[2] = (struct sockaddr*) & addr3;
+    cid[0] = &cid1;
+    cid[1] = &n_cid;
+    cid[2] = &cid2;
+    odcid[0] = &cid_o;
+    odcid[1] = &n_cid;
+
+    /* Test of a connection token
+     * - Create a token with test address, time1, cid1, pn1.
+     * - Check with time-0 (valid), time1(valid), time2(invalid)
+     * - Check with addr1,port1 (valid), addr1,port2 (valid), addr2,port1(invalid)
+     * - Check with pn2 (valid), pn1(invalid)
+     * - check with cid1 (valid), cid2(invalid)
+     */
+
+     /* Test of a new token
+      * - Create a token with test address, time1, n_cid, pn1.
+      * - Check with time-0 (valid), time1(valid), time2(invalid)
+      * - Check with addr1,port1 (valid), addr1,port2 (valid), addr2,port1(invalid)
+      * - Check with pn2 (valid), pn1(valid)
+      * - check with cid1 (valid), cid2(valid)
+      */
+
+    /* Test of an invalid token: valid token with changed bytes */
+
+    for (int token_mode = 0; ret == 0 && token_mode < 2; token_mode++) {
+        if (picoquic_prepare_retry_token(quic, addr[0], time_base * 1000000 + time_delta[1], odcid[token_mode],
+            cid[token_mode], pn[1],
+            token_buffer, sizeof(token_buffer), &token_size) != 0) {
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+
+        if (ret == 0) {
+            verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
+                &odcid_found, cid[0], pn[2],
+                token_buffer, token_size, 0);
+            if (verified != 0) {
+                DBG_PRINTF("%s", "Token validation fails for normal parameters\n");
+                ret = -1;
+            }
+            else if (token_mode == 0 && picoquic_compare_connection_id(odcid[0], &odcid_found) != 0) {
+                DBG_PRINTF("%s", "ODCID validation fails\n");
+                ret = -1;
+            }
+            else if (token_mode == 1 && odcid_found.id_len > 0) {
+                DBG_PRINTF("%s", "Spurious ODCID\n");
+                ret = -1;
+            }
+        }
+
+        if (ret == 0 && picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[2 + token_mode],
+            &odcid_found, cid[0], pn[2],
+            token_buffer, token_size, 0) == 0) {
+            DBG_PRINTF("%s", "Token validation fdoes not detect elapsed time.\n");
+            ret = -1;
+        }
+
+        if (ret == 0) {
+            verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
+                &odcid_found, cid[2], pn[2],
+                token_buffer, token_size, 0);
+            if (token_mode == 0 && verified == 0) {
+                DBG_PRINTF("%s", "RCID invalidation fails\n");
+                ret = -1;
+            }
+            else if (token_mode == 1 && verified != 0) {
+                DBG_PRINTF("%s", "Spurious RCID invalidation\n");
+                ret = -1;
+            }
+        }
+
+        for (int pn_id = 0; ret == 0 && pn_id < 2; pn_id++) {
+            verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
+                &odcid_found, cid[0], pn[pn_id],
+                token_buffer, token_size, 0);
+            if (token_mode == 0 && verified == 0) {
+                DBG_PRINTF("%s", "PN invalidation fails\n");
+                ret = -1;
+            }
+            else if (token_mode == 1 && verified != 0) {
+                DBG_PRINTF("%s", "Spurious PN invalidation\n");
+                ret = -1;
+            }
+        }
+    }
+
+    picoquic_free(quic);
+    return ret;
+}
+
 int tls_api_retry_test_one(int large_client_hello)
 {
     uint64_t simulated_time = 0;
