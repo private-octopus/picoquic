@@ -116,6 +116,7 @@ static const picoquic_test_def_t test_table[] = {
     { "retry", tls_api_retry_test },
     { "retry_large", tls_api_retry_large_test},
     { "retry_token", tls_retry_token_test },
+    { "retry_token_valid", tls_retry_token_valid_test },
     { "two_connections", tls_api_two_connections_test },
     { "multiple_versions", tls_api_multiple_versions_test },
     { "keep_alive", keep_alive_test },
