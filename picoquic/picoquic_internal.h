@@ -1000,15 +1000,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int cwin_blocked : 1;
     unsigned int flow_blocked : 1;
     unsigned int stream_blocked : 1;
-#if 0
-    /* ECN Counters */
-    uint64_t ecn_ect0_total_local;
-    uint64_t ecn_ect1_total_local;
-    uint64_t ecn_ce_total_local;
-    uint64_t ecn_ect0_total_remote;
-    uint64_t ecn_ect1_total_remote;
-    uint64_t ecn_ce_total_remote;
-#endif
     /* Congestion algorithm */
     picoquic_congestion_algorithm_t const* congestion_alg;
     uint64_t pacing_rate_signalled;

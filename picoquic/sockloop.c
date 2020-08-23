@@ -24,9 +24,9 @@
  *
  * Second step: support simple servers and simple client.
  *
- * The "call loop back" function is called: when readdy, after receiving, and after sending. The
- * loop will terminate if the callback return code is not zero.
- * TODO: rewrite the demo client???
+ * The "call loop back" function is called: when ready, after receiving, and after sending. The
+ * loop will terminate if the callback return code is not zero -- except for special processing
+ * of the migration testing code.
  * TODO: in Windows, use WSA asynchronous calls instead of sendmsg, allowing for multiple parallel sends.
  * TODO: in Linux, use multiple send per call API
  * TDOO: trim the #define list.
@@ -165,6 +165,9 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int nb_sockets = 0;
     uint16_t socket_port = (uint16_t)local_port;
+    int testing_migration = 0; /* Hook for the migration test */
+    uint16_t next_port = 0; /* Data for the migration test */
+    picoquic_cnx_t* last_cnx = NULL;
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
@@ -245,7 +248,6 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
             while (ret == 0 ) {
                 struct sockaddr_storage peer_addr;
                 struct sockaddr_storage local_addr;
-                picoquic_cnx_t* last_cnx;
                 int if_index = dest_if;
                 int sock_ret = 0;
                 int sock_err = 0;
@@ -261,8 +263,20 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                     for (int i = 0; i < nb_sockets; i++) {
                         if (sock_af[i] == peer_addr.ss_family) {
                             send_socket = s_socket[i];
+                            break;
                         }
                     }
+
+                    if (testing_migration) {
+                        /* This code path is only used in the migration tests */
+                        uint16_t send_port = (local_addr.ss_family == AF_INET) ?
+                            ntohs(((struct sockaddr_in*) & local_addr)->sin_port) :
+                            ntohs(((struct sockaddr_in6*) & local_addr)->sin6_port);
+                        if (send_port == next_port) {
+                            send_socket = nb_sockets - 1;
+                        }
+                    }
+
                     sock_ret = picoquic_send_through_socket(send_socket,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
@@ -285,6 +299,53 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
 
             if (ret == 0 && loop_callback != NULL) {
                 ret = loop_callback(quic, picoquic_packet_loop_after_send, loop_callback_ctx);
+            }
+        }
+
+        if (ret == PICOQUIC_NO_ERROR_SIMULATE_NAT || ret == PICOQUIC_NO_ERROR_SIMULATE_MIGRATION) {
+            /* Two pseudo error codes used for testing migration!
+             * What follows is really test code, which we write here because it has to handle
+             * the sockets, which interferes a lot with the handling of the packet loop.
+             */
+            SOCKET_TYPE s_mig = INVALID_SOCKET;
+            int s_mig_af;
+            int sock_ret;
+            int testing_nat = (ret == PICOQUIC_NO_ERROR_SIMULATE_NAT);
+            
+            next_port = (testing_nat) ? 0 : socket_port + 1;
+            sock_ret = picoquic_packet_loop_open_sockets(next_port, sock_af[0], &s_mig, &s_mig_af, 1);
+            if (sock_ret != 1 || s_mig == INVALID_SOCKET) {
+                if (last_cnx != NULL) {
+                    picoquic_log_app_message(last_cnx, "Could not create socket for migration test, port=%d, af=%d, err=%d",
+                        next_port, sock_af[0], sock_ret);
+                }
+            }
+            else if (testing_nat) {
+                if (s_socket[0] != INVALID_SOCKET) {
+                    SOCKET_CLOSE(s_socket[0]);
+                }
+                s_socket[0] = s_mig;
+                ret = 0;
+            } else {
+                /* Testing organized migration */
+                if (nb_sockets < PICOQUIC_PACKET_LOOP_SOCKETS_MAX && last_cnx != NULL) {
+                    struct sockaddr_storage local_address;
+                    picoquic_store_addr(&local_address, (struct sockaddr*)& last_cnx->path[0]->local_addr);
+                    if (local_address.ss_family == AF_INET6) {
+                        ((struct sockaddr_in6*) & local_address)->sin6_port = next_port;
+                    }
+                    else if (local_address.ss_family == AF_INET) {
+                        ((struct sockaddr_in*) & local_address)->sin_port = next_port;
+                    }
+                    s_socket[nb_sockets] = s_mig;
+                    nb_sockets++;
+                    testing_migration = 1;
+                    ret = picoquic_probe_new_path(last_cnx, (struct sockaddr*)&last_cnx->path[0]->peer_addr,
+                        (struct sockaddr*) &local_address, current_time);
+                }
+                else {
+                    SOCKET_CLOSE(s_mig);
+                }
             }
         }
     }
