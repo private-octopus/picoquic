@@ -420,7 +420,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
                     if (key_rot_ret != 0) {
                         fprintf(stdout, "Will not test key rotation.\n");
                         picoquic_log_app_message(cb_ctx->cnx_client, "%s", "Will not test key rotation.");
-                        cb_ctx->key_update_done = (uint64_t)-1;
+                        cb_ctx->key_update_done = -1;
                     }
                     else {
                         fprintf(stdout, "Key rotation started.\n");
@@ -735,7 +735,7 @@ int quic_client(const char* ip_address_text, int server_port,
             if (loop_cb.key_update_done == 0) {
                 fprintf(stdout, "Did not start key rotation.\n");
             }
-            else if (loop_cb.key_update_done == UINT64_MAX) {
+            else if (loop_cb.key_update_done == -1) {
                 fprintf(stdout, "Error when starting key rotation.\n");
             }
             else {
