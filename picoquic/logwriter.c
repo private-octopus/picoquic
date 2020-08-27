@@ -979,10 +979,6 @@ void picoquic_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 
     (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->f_binlog);
     (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->f_binlog);
-
-    cnx->cwin_blocked = 0;
-    cnx->flow_blocked = 0;
-    cnx->stream_blocked = 0;
 }
 
 /*

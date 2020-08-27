@@ -142,6 +142,7 @@ static h3zero_server_callback_ctx_t* h3zero_server_callback_create_context(picoh
         picosplay_init_tree(&ctx->h3_stream_tree, picohttp_stream_node_compare, picohttp_stream_node_create, picohttp_stream_node_delete, picohttp_stream_node_value);
 
         ctx->first_stream = NULL;
+#if 0
         ctx->buffer = (uint8_t*)malloc(PICOHTTP_RESPONSE_MAX);
         if (ctx->buffer == NULL) {
             free(ctx);
@@ -155,6 +156,13 @@ static h3zero_server_callback_ctx_t* h3zero_server_callback_create_context(picoh
                 ctx->web_folder = param->web_folder;
             }
         }
+#else
+        if (param != NULL) {
+            ctx->path_table = param->path_table;
+            ctx->path_table_nb = param->path_table_nb;
+            ctx->web_folder = param->web_folder;
+        }
+#endif
     }
 
     return ctx;
@@ -163,11 +171,12 @@ static h3zero_server_callback_ctx_t* h3zero_server_callback_create_context(picoh
 static void h3zero_server_callback_delete_context(h3zero_server_callback_ctx_t* ctx)
 {
     picosplay_empty_tree(&ctx->h3_stream_tree);
-
+#if 0
     if (ctx->buffer != NULL) {
         free(ctx->buffer);
         ctx->buffer = NULL;
     }
+#endif
 
     free(ctx);
 }
