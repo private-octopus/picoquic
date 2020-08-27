@@ -3290,6 +3290,16 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         if (stream_tried_and_failed && datagram_tried_and_failed) {
                             path_x->last_sender_limited_time = current_time;
                         }
+                        else if (length <= header_length && stream_tried_and_failed && !cnx->stream_blocked && !cnx->flow_blocked) {
+                            /* Consider redundant retransmission:
+                             * if the redundant retransmission index is null:
+                             * - if the packet loss rate is large enough compared to BDP, set index to last sent packet.
+                             * - if not, do not perform redundant retransmission.
+                             * if the packet contains a stream frame, if that stream is finished, and if the
+                             * data range has not been acked, and it fits: copy it to the data. Move the index to the previous packet.
+                             */
+                            /* TODO: write that code! */
+                        }
                     } /* end of PMTU not required */
 
                     if (ret == 0 && length <= header_length && send_buffer_max > path_x->send_mtu
@@ -3440,6 +3450,11 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
     uint64_t* next_wake_time, int* is_initial_sent)
 {
     int ret = 0;
+
+    /* Reset the blocked indicators */
+    cnx->cwin_blocked = 0;
+    cnx->flow_blocked = 0;
+    cnx->stream_blocked = 0;
 
     /* Prepare header -- depend on connection state */
     /* TODO: 0-RTT work. */
