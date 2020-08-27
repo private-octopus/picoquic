@@ -30,6 +30,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sacks.c
     picoquic/sender.c
     picoquic/sim_link.c
+    picoquic/sockloop.c
     picoquic/spinbit.c
     picoquic/ticket_store.c
     picoquic/token_store.c

@@ -55,7 +55,7 @@ int picoquic_get_local_address(SOCKET_TYPE sd, struct sockaddr_storage * addr)
     return getsockname(sd, (struct sockaddr *)addr, &name_len);
 }
 
-static int picoquic_socket_set_pkt_info(SOCKET_TYPE sd, int af)
+int picoquic_socket_set_pkt_info(SOCKET_TYPE sd, int af)
 {
     int ret;
 #ifdef _WINDOWS
