@@ -929,10 +929,11 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
                 struct sockaddr_storage peer_addr;
                 int local_addr_len = 0;
                 struct sockaddr_storage local_addr;
+                int if_index = -1;
 
                 ret = picoquic_prepare_packet(cnx_next, current_time,
                     send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &local_addr);
+                    &peer_addr, &local_addr, &if_index);
 
                 if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                     ret = 0;
@@ -951,7 +952,7 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
 
                         (void)picoquic_send_through_socket(s,
                             (struct sockaddr *)&peer_addr, (struct sockaddr *)&local_addr, 
-                            picoquic_get_local_if_index(cnx_next),
+                            if_index,
                             (const char*)send_buffer, (int)send_length, NULL);
 
                         AppendText(_T("Packet sent\r\n"));

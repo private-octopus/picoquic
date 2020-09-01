@@ -1236,7 +1236,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 }
                 ret = picoquic_prepare_packet(test_ctx->cnx_client, *simulated_time,
                     packet->bytes + coalesced_length, PICOQUIC_MAX_PACKET_SIZE - coalesced_length, &packet->length,
-                    &packet->addr_to, &packet->addr_from);
+                    &packet->addr_to, &packet->addr_from, NULL);
                 if (ret != 0)
                 {
                     /* useless test, but makes it easier to add a breakpoint under debugger */
@@ -1262,7 +1262,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
             else if (next_action == 3) {
                 ret = picoquic_prepare_packet(test_ctx->cnx_server, *simulated_time,
                     packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-                    &packet->addr_to, &packet->addr_from);
+                    &packet->addr_to, &packet->addr_from, NULL);
                 if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                     ret = 0;
                 } else if (ret != 0)
@@ -8376,7 +8376,7 @@ int ddos_amplification_test_one(int use_0rtt)
         /* Prepare a first packet from the client to the server */
         ret = picoquic_prepare_packet(test_ctx->cnx_client, simulated_time,
             packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-            &packet->addr_to, &packet->addr_from);
+            &packet->addr_to, &packet->addr_from, NULL);
 
         if (packet->length == 0) {
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
@@ -8418,7 +8418,7 @@ int ddos_amplification_test_one(int use_0rtt)
 
         ret = picoquic_prepare_packet(test_ctx->cnx_server, simulated_time,
             packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-            &packet->addr_to, &packet->addr_from);
+            &packet->addr_to, &packet->addr_from, NULL);
 
         if (ret == PICOQUIC_ERROR_DISCONNECTED) {
             ret = 0;
@@ -8756,7 +8756,7 @@ static int connection_drop_test_one(picoquic_state_enum target_client_state, pic
             }
 
             ret = picoquic_prepare_packet(target_cnx, simulated_time, packet, PICOQUIC_MAX_PACKET_SIZE,
-                &length, &a_to, &a_from);
+                &length, &a_to, &a_from, NULL);
 
             if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                 ret = 0;

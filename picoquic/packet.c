@@ -1104,6 +1104,7 @@ int picoquic_incoming_client_initial(
             if ((*pcnx)->path[0]->peer_addr.ss_family == 0 && addr_from != NULL) {
                 picoquic_store_addr(&(*pcnx)->path[0]->peer_addr, addr_from);
             }
+            (*pcnx)->path[0]->if_index_dest = if_index_to;
 
             /* decode the incoming frames */
             if (ret == 0) {
@@ -1263,9 +1264,6 @@ int picoquic_incoming_server_initial(
     uint64_t current_time)
 {
     int ret = 0;
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(if_index_to);
-#endif
 
     if (cnx->cnx_state == picoquic_state_client_init_sent || cnx->cnx_state == picoquic_state_client_init_resent) {
         cnx->cnx_state = picoquic_state_client_handshake_start;
@@ -1279,6 +1277,11 @@ int picoquic_incoming_server_initial(
 
     if (ret == 0) {
         if (cnx->cnx_state <= picoquic_state_client_handshake_start) {
+            /* Document local address if not present */
+            if (cnx->path[0]->local_addr.ss_family == 0 && addr_to != NULL) {
+                picoquic_store_addr(&cnx->path[0]->local_addr, addr_to);
+            }
+            cnx->path[0]->if_index_dest = if_index_to;
             /* Accept the incoming frames */
             if (ph->payload_length == 0) {
                 /* empty payload! */
@@ -1675,6 +1678,7 @@ int picoquic_incoming_encrypted(
     picoquic_packet_header* ph,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
+    int if_index_to,
     unsigned char received_ecn,
     uint64_t current_time)
 {
@@ -1740,6 +1744,7 @@ int picoquic_incoming_encrypted(
             if (ret == 0) {
                 picoquic_path_t * path_x = cnx->path[path_id];
 
+                path_x->if_index_dest = if_index_to;
                 cnx->is_1rtt_received = 1;
                 picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
                 /* Accept the incoming frames */
@@ -1988,7 +1993,7 @@ int picoquic_incoming_segment(
                 ret = picoquic_incoming_0rtt(cnx, bytes, &ph, current_time);
                 break;
             case picoquic_packet_1rtt_protected:
-                ret = picoquic_incoming_encrypted(cnx, bytes, &ph, addr_from, addr_to, received_ecn, current_time);
+                ret = picoquic_incoming_encrypted(cnx, bytes, &ph, addr_from, addr_to, if_index_to, received_ecn, current_time);
                 break;
             default:
                 /* Packet type error. Log and ignore */

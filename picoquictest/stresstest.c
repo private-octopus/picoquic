@@ -600,7 +600,7 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
             || simulate_disconnect == 0) { 
             ret = picoquic_prepare_packet(cnx, ctx->simulated_time,
                 packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-                &packet->addr_to, &packet->addr_from);
+                &packet->addr_to, &packet->addr_from, NULL);
         }
 
         if (ret == 0 && packet->length > 0) {
