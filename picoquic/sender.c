@@ -3570,7 +3570,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
 /* Prepare next packet to send, or nothing.. */
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr_storage * p_addr_to, struct sockaddr_storage * p_addr_from)
+    struct sockaddr_storage * p_addr_to, struct sockaddr_storage * p_addr_from, int* if_index)
 {
 
     int ret;
@@ -3620,6 +3620,10 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
         if (p_addr_from != NULL) {
             picoquic_store_addr(p_addr_from, (struct sockaddr *)&cnx->path[path_id]->local_addr);
+        }
+
+        if (if_index != NULL) {
+            *if_index = cnx->path[path_id]->if_index_dest;
         }
        
         /* Send the available segments */
@@ -3768,7 +3772,7 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
             *send_length = 0;
         }
         else {
-            ret = picoquic_prepare_packet(cnx, current_time, send_buffer, send_buffer_max, send_length, p_addr_to, p_addr_from);
+            ret = picoquic_prepare_packet(cnx, current_time, send_buffer, send_buffer_max, send_length, p_addr_to, p_addr_from, if_index);
             if (log_cid != NULL) {
                 *log_cid = cnx->initial_cnxid;
             }

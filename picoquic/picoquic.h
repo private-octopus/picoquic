@@ -624,7 +624,7 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
 
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from);
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index);
 
 /* Handling of out of sequence stream data delivery.
  *
