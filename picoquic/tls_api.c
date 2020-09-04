@@ -649,11 +649,10 @@ void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic, int cus
         return;
     }
 
-    if (custom == 1) {
-        free(ctx->verify_certificate);
-    } else {
+    if (custom == 0) {
         ptls_openssl_dispose_verify_certificate((ptls_openssl_verify_certificate_t*)ctx->verify_certificate);
     }
+    free(ctx->verify_certificate);
 
     ctx->verify_certificate = NULL;
 }

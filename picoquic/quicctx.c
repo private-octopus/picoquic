@@ -573,7 +573,7 @@ void picoquic_free(picoquic_quic_t* quic)
 }
 
 void picoquic_set_null_verifier(picoquic_quic_t* quic) {
-    picoquic_dispose_verify_certificate_callback(quic, 1);
+    picoquic_dispose_verify_certificate_callback(quic, quic->verify_certificate_callback_fn != NULL);
 }
 
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
