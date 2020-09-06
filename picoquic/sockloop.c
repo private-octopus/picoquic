@@ -273,7 +273,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                             ntohs(((struct sockaddr_in*) & local_addr)->sin_port) :
                             ntohs(((struct sockaddr_in6*) & local_addr)->sin6_port);
                         if (send_port == next_port) {
-                            send_socket = nb_sockets - 1;
+                            send_socket = s_socket[nb_sockets - 1];
                         }
                     }
 

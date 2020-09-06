@@ -234,7 +234,8 @@ static const picoquic_test_def_t test_table[] = {
     { "cplusplus", cplusplustest },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
-    { "fuzz_initial", fuzz_initial_test}
+    { "fuzz_initial", fuzz_initial_test},
+    { "cnx_stress", cnx_stress_unit_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

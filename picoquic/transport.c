@@ -699,18 +699,24 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
-    /* Compute the negotiated version of the time out
+    /* Compute the negotiated version of the time out.
+     * The parameter values are expressed in milliseconds,
+     * but the connection context variable is in microseconds.
+     * If the keep alive interval was set to a too short value,
+     * reset it.
      */
-    cnx->idle_timeout = cnx->local_parameters.idle_timeout;
-    if (cnx->idle_timeout == 0 ||
-        (cnx->remote_parameters.idle_timeout > 0 && cnx->remote_parameters.idle_timeout < cnx->idle_timeout)) {
-        cnx->idle_timeout = cnx->remote_parameters.idle_timeout;
+    cnx->idle_timeout = cnx->local_parameters.idle_timeout*1000;
+    if (cnx->local_parameters.idle_timeout == 0 ||
+        (cnx->remote_parameters.idle_timeout > 0 && cnx->remote_parameters.idle_timeout < 
+            cnx->local_parameters.idle_timeout)) {
+        cnx->idle_timeout = cnx->remote_parameters.idle_timeout*1000;
     }
     if (cnx->idle_timeout == 0) {
         cnx->idle_timeout = UINT64_MAX;
     }
-    else {
-        cnx->idle_timeout *= 1000;
+    else if (cnx->keep_alive_interval != 0 &&
+        cnx->keep_alive_interval > cnx->idle_timeout / 2) {
+        cnx->keep_alive_interval = cnx->idle_timeout / 2;
     }
 
     if (ret == 0 && (present_flag & (1ull << picoquic_tp_max_ack_delay)) == 0) {

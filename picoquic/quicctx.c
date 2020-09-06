@@ -1204,7 +1204,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
             (cnx->path[path_index_current]->path_is_demoted &&
                 current_time >= cnx->path[path_index_current]->demotion_time) ||
             (path_index_current > 0 && cnx->path[path_index_current]->challenge_verified &&
-                cnx->path[path_index_current]->latest_sent_time + cnx->idle_timeout < current_time)) {
+                current_time - cnx->path[path_index_current]->latest_sent_time >= cnx->idle_timeout)) {
             /* Demote any failed path */
             if (!cnx->path[path_index_current]->path_is_demoted) {
                 picoquic_demote_path(cnx, path_index_current, current_time);
@@ -3341,6 +3341,10 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
     if (interval == 0) {
         /* Use the negotiated value */
         uint64_t idle_timeout = cnx->idle_timeout;
+        if (idle_timeout == 0) {
+            /* Idle timeout is only initialized after parameters are negotiated  */
+            idle_timeout = cnx->local_parameters.idle_timeout * 1000;
+        }
         /* Ensure at least 3 PTO*/
         if (idle_timeout < 3 * cnx->path[0]->retransmit_timer) {
             idle_timeout = 3 * cnx->path[0]->retransmit_timer;
@@ -3463,7 +3467,7 @@ static void picoquic_lb_compat_cid_one_pass_stream(void * enc_ctx, uint8_t * non
 static void picoquic_lb_compat_cid_generate_stream_cipher(picoquic_quic_t* quic,
     picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t* cnx_id_returned)
 {
-    size_t id_offset = 1 + lb_ctx->nonce_length;
+    size_t id_offset = ((size_t)1) + lb_ctx->nonce_length;
     /* Prepare a clear text server ID */
     cnx_id_returned->id[0] = lb_ctx->first_byte;
     memcpy(cnx_id_returned->id + id_offset, lb_ctx->server_id, lb_ctx->server_id_length);
@@ -3549,7 +3553,7 @@ static uint64_t picoquic_lb_compat_cid_verify_obfuscated(picoquic_quic_t* quic,
 static uint64_t picoquic_lb_compat_cid_verify_stream_cipher(picoquic_quic_t* quic,
     picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t const* cnx_id)
 {
-    size_t id_offset = 1 + lb_ctx->nonce_length;
+    size_t id_offset = ((size_t)1) + lb_ctx->nonce_length;
     uint64_t s_id64 = 0;
     picoquic_connection_id_t target = *cnx_id;
     /* First pass -- obtain intermediate server ID */

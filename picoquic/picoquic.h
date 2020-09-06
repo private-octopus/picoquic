@@ -755,6 +755,7 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
 void picoquic_set_optimistic_ack_policy(picoquic_quic_t* quic, uint32_t sequence_hole_pseudo_period);
 
 /* Enables keep alive for a connection.
+ * Keep alive interval is expressed in microseconds.
  * If `interval` is `0`, it is set to `idle_timeout / 2`.
  */
 void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval);

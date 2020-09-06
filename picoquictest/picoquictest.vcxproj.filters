@@ -81,6 +81,9 @@
     <ClCompile Include="cplusplus.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="cnxstress.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">
