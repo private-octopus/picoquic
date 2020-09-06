@@ -444,6 +444,8 @@ int main(int argc, char** argv)
                                 test_status[i] = test_failed;
                                 nb_test_failed++;
                                 ret = -1;
+                            } else {
+                                test_status[i] = test_success;
                             }
                         } else if (do_one_test(i, stdout) != 0) {
                             test_status[i] = test_failed;
@@ -454,7 +456,7 @@ int main(int argc, char** argv)
                             test_status[i] = test_success;
                         }
                     }
-                    else if (stress_minutes == 0) {
+                    else if (!(do_cnx_stress || do_fuzz || do_stress)) {
                         fprintf(stdout, "Test number %d (%s) is bypassed.\n", (int)i, test_table[i].test_name);
                     }
                 }
