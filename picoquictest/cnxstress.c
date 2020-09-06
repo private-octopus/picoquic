@@ -252,7 +252,7 @@ int cnx_stress_callback_data(cnx_stress_callback_ctx_t* cnx_ctx,
             stream_ctx->nb_bytes_received++;
         }
         if (length > 0) {
-            stream_ctx->nb_bytes_received += 8;
+            stream_ctx->nb_bytes_received += length;
         }
         /* On FIN or RESET, terminate the stream */
         if (fin_or_event == picoquic_callback_stream_fin) {
@@ -306,13 +306,13 @@ int cnx_stress_callback_prepare_to_send(cnx_stress_callback_ctx_t* cnx_ctx,
     if (buffer != NULL) {
         /* If the first 16 bytes have not been sent yet, send the header */
         while (data_length > 0 && stream_ctx->nb_bytes_sent < 8) {
-            *buffer = (uint8_t)((stream_ctx->send_time >> (4 * (7 - stream_ctx->nb_bytes_sent))) & 0xff);
+            *buffer = (uint8_t)((stream_ctx->send_time >> (8 * (7 - stream_ctx->nb_bytes_sent))) & 0xff);
             buffer++; 
             stream_ctx->nb_bytes_sent++;
             data_length--;
         }
         while (data_length > 0 && stream_ctx->nb_bytes_sent < 16) {
-            *buffer = (uint8_t)((stream_ctx->nb_bytes_expected >> (4 * (15 - stream_ctx->nb_bytes_sent))) & 0xff);
+            *buffer = (uint8_t)((stream_ctx->nb_bytes_expected >> (8 * (15 - stream_ctx->nb_bytes_sent))) & 0xff);
             buffer++;
             stream_ctx->nb_bytes_sent++;
             data_length--;
@@ -814,6 +814,7 @@ cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients)
             stress_ctx->next_client_deletion_time = duration -
                 stress_ctx->client_deletion_interval * nb_clients;
             stress_ctx->nb_messages_target = nb_clients;
+            stress_ctx->message_size = 1024;
             stress_ctx->message_creation_interval = stress_ctx->next_client_deletion_time /
                 (3 * stress_ctx->nb_messages_target);
             stress_ctx->next_message_creation_time = stress_ctx->next_client_deletion_time / 3;
@@ -884,7 +885,6 @@ int cnx_stress_do_test(uint64_t duration, int nb_clients)
     cnx_stress_ctx_t* stress_ctx = cnx_stress_create_ctx(duration, nb_clients);
 
     if (stress_ctx != NULL) {
-        int ret = 0;
         uint64_t wall_time_start = picoquic_current_time();
 
         /* loop until time exhausted */

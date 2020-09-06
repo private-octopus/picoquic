@@ -284,6 +284,7 @@ int usage(char const * argv0)
     fprintf(stderr, "  -x test           Do not run the specified test.\n");
     fprintf(stderr, "  -s nnn            Run stress for nnn minutes.\n");
     fprintf(stderr, "  -f nnn            Run fuzz for nnn minutes.\n");
+    fprintf(stderr, "  -c nnn ccc        Run fuzz for nnn minutes, ccc connections.\n");
     fprintf(stderr, "  -n                Disable debug prints.\n");
     fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
@@ -316,8 +317,11 @@ int main(int argc, char** argv)
     int opt;
     int do_fuzz = 0;
     int do_stress = 0;
+    int do_cnx_stress = 0;
     int disable_debug = 0;
     int retry_failed_test = 0;
+    int cnx_stress_minutes = 0;
+    int cnx_stress_nb_cnx = 0;
 
     if (test_status == NULL)
     {
@@ -326,7 +330,7 @@ int main(int argc, char** argv)
     }
     else
     {
-        while (ret == 0 && (opt = getopt(argc, argv, "f:s:S:x:nrh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "f:s:c:S:x:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 int test_number = get_test_number(optarg);
@@ -357,6 +361,23 @@ int main(int argc, char** argv)
                     ret = usage(argv[0]);
                 }
                 break;
+            case 'c':
+                if (optind + 1 > argc) {
+                    fprintf(stderr, "option requires more arguments -- c\n");
+                    ret = usage(argv[0]);
+                }
+                do_cnx_stress = 1;
+                cnx_stress_minutes = atoi(optarg);
+                cnx_stress_nb_cnx = atoi(argv[optind++]);
+                if (cnx_stress_minutes <= 0) {
+                    fprintf(stderr, "Incorrect cnx stress minutes: %s\n", optarg);
+                    ret = usage(argv[0]);
+                }
+                else if (cnx_stress_nb_cnx < 0) {
+                    fprintf(stderr, "Incorrect cnx stress number of connections: %s\n", argv[optind - 1]);
+                    ret = usage(argv[0]);
+                }
+                break;
             case 'S':
                 picoquic_set_solution_dir(optarg);
                 break;
@@ -383,7 +404,7 @@ int main(int argc, char** argv)
             debug_printf_push_stream(stderr);
         }
 
-        if (ret == 0 && stress_minutes > 0) {
+        if (ret == 0 && (do_stress || do_fuzz || do_cnx_stress)) {
             if (optind >= argc && found_exclusion == 0) {
                 for (size_t i = 0; i < nb_tests; i++) {
                     if (strcmp(test_table[i].test_name, "stress") == 0)
@@ -394,6 +415,11 @@ int main(int argc, char** argv)
                     }
                     else if (strcmp(test_table[i].test_name, "fuzz") == 0) {
                         if (do_fuzz == 0) {
+                            test_status[i] = test_excluded;
+                        }
+                    }
+                    else if (strcmp(test_table[i].test_name, "cnx_stress") == 0) {
+                        if (do_cnx_stress == 0) {
                             test_status[i] = test_excluded;
                         }
                     }
@@ -412,7 +438,14 @@ int main(int argc, char** argv)
                 for (size_t i = 0; i < nb_tests; i++) {
                     if (test_status[i] == test_not_run) {
                         nb_test_tried++;
-                        if (do_one_test(i, stdout) != 0) {
+                        if (do_cnx_stress && strcmp(test_table[i].test_name, "cnx_stress") == 0) {
+                            uint64_t duration = ((uint64_t)cnx_stress_minutes) * 60000000ull;
+                            if (cnx_stress_do_test(duration, cnx_stress_nb_cnx) != 0) {
+                                test_status[i] = test_failed;
+                                nb_test_failed++;
+                                ret = -1;
+                            }
+                        } else if (do_one_test(i, stdout) != 0) {
                             test_status[i] = test_failed;
                             nb_test_failed++;
                             ret = -1;

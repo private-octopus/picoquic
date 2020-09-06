@@ -697,10 +697,6 @@ static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t
     if ((ret = ptls_hkdf_expand_label(cipher->hash, pnekey, 
         cipher->aead->ctr_cipher->key_size, ptls_iovec_init(secret, cipher->hash->digest_size), 
         PICOQUIC_LABEL_HP, ptls_iovec_init(NULL, 0), PICOQUIC_LABEL_QUIC_KEY_BASE)) == 0) {
-#ifdef _DEBUG
-        DBG_PRINTF("PN Encryption key (%d):\n", (int)cipher->aead->ctr_cipher->key_size);
-        debug_dump(pnekey, (int)cipher->aead->ctr_cipher->key_size);
-#endif
         if ((*v_pn_enc = ptls_cipher_new(cipher->aead->ctr_cipher, is_enc, pnekey)) == NULL) {
             ret = PTLS_ERROR_NO_MEMORY;
         }
@@ -779,10 +775,6 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
     ptls_context_t* ctx = (ptls_context_t*)cnx->quic->tls_master_ctx;
     ptls_cipher_suite_t * cipher = ptls_get_cipher(tls);
     UNREFERENCED_PARAMETER(self);
-#ifdef _DEBUG
-    DBG_PRINTF("Update traffic key epoch:%d, enc:%d\n", (int)epoch, is_enc);
-    debug_dump(secret, (int)cipher->hash->digest_size);
-#endif
 
     int ret = picoquic_set_key_from_secret(cipher, is_enc, 0, &cnx->crypto_context[epoch], secret);
     if (cnx->cnx_state < picoquic_state_ready) {
@@ -2046,12 +2038,6 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
             ret = ptls_handle_message(ctx->tls, &sendbuf, send_offset, epoch,
                 data->bytes + start, epoch_data, &ctx->handshake_properties);
 
-#ifdef _DEBUG
-            if (cnx->cnx_state < picoquic_state_ready) {
-                DBG_PRINTF("State: %d, tls input: %d, ret 0x%x\n",
-                    cnx->cnx_state, epoch_data, ret);
-            }
-#endif
             if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS ||
                 ret == PTLS_ERROR_STATELESS_RETRY)) {
                 for (int i = 0; i < PICOQUIC_NUMBER_OF_EPOCHS; i++) {
