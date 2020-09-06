@@ -298,7 +298,7 @@ int cnx_stress_callback_prepare_to_send(cnx_stress_callback_ctx_t* cnx_ctx,
 #endif
     /* Compute the number of bytes that can be sent */
     if (stream_ctx->nb_bytes_sent + data_length >= stream_ctx->nb_bytes_expected) {
-        data_length = stream_ctx->nb_bytes_expected - stream_ctx->nb_bytes_sent;
+        data_length = (size_t)(stream_ctx->nb_bytes_expected - stream_ctx->nb_bytes_sent);
         is_fin = 1;
     }
     buffer = picoquic_provide_stream_data_buffer(context, data_length, is_fin, !is_fin);
@@ -706,11 +706,6 @@ int cnx_stress_loop_step(cnx_stress_ctx_t * stress_ctx)
  *   The "real time" required to run the test for the simulated time
  *
  */
-
-static const uint8_t cnx_stress_ticket_encrypt_key[32] = {
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-};
 
 /* Set transport parameters to adequate value for cnx stress */
 int cnx_stress_set_default_tp(picoquic_quic_t* quic)
