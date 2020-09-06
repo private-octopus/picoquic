@@ -2048,13 +2048,9 @@ int picoquic_incoming_segment(
         /* Bad packets are dropped silently */
 
         if (cnx == NULL) {
-            DBG_PRINTF("Packet (%d) dropped, t: %d, e: %d, pc: %d, pn: %d, l: %zu, ret : 0x%x\n",
-                (cnx == NULL) ? -1 : cnx->client_mode, ph.ptype, ph.epoch, ph.pc, (int)ph.pn,
+            DBG_PRINTF("Packet (%d) dropped, t: %d, e: %d, pc: %d, l: %zu, ret : 0x%x\n",
+                (cnx == NULL) ? -1 : cnx->client_mode, ph.ptype, ph.epoch, ph.pc,
                 length, ret);
-        }
-        else {
-            picoquic_log_app_message(cnx, "Packet (%d) dropped, t: %d, e: %d, pc: %d, pn: %d, l: %zu, ret : 0x%x\n",
-                cnx->client_mode, ph.ptype, ph.epoch, ph.pc, (int)ph.pn, length, ret);
         }
 
         if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_AEAD_NOT_READY) {
