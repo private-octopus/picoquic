@@ -274,6 +274,9 @@ int cnx_stress_callback_data(cnx_stress_callback_ctx_t* cnx_ctx,
                     stress_ctx->message_delay_max = delta_t;
                 }
                 if (delta_t < stress_ctx->message_delay_min) {
+                    if (delta_t < 10000) {
+                        DBG_PRINTF("Unexpected message delay; %d", (int)delta_t);
+                    }
                     stress_ctx->message_delay_min = delta_t;
                 }
             }
@@ -815,6 +818,7 @@ cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients)
                 stress_ctx->client_deletion_interval * nb_clients;
             stress_ctx->nb_messages_target = nb_clients;
             stress_ctx->message_size = 1024;
+            stress_ctx->message_delay_min = INT64_MAX;
             stress_ctx->message_creation_interval = stress_ctx->next_client_deletion_time /
                 (3 * stress_ctx->nb_messages_target);
             stress_ctx->next_message_creation_time = stress_ctx->next_client_deletion_time / 3;
@@ -879,7 +883,7 @@ cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients)
     return stress_ctx;
 }
 
-int cnx_stress_do_test(uint64_t duration, int nb_clients)
+int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report)
 {
     int ret = 0;
     cnx_stress_ctx_t* stress_ctx = cnx_stress_create_ctx(duration, nb_clients);
@@ -913,6 +917,19 @@ int cnx_stress_do_test(uint64_t duration, int nb_clients)
                     stress_ctx->nb_messages_sent, stress_ctx->nb_messages_received);
                 ret = -1;
             }
+            else if (do_report) {
+                double msg_avg_delay = (stress_ctx->nb_messages_target > 0) ?
+                    (double)stress_ctx->sum_message_delays / (double)stress_ctx->nb_messages_target : 0;
+                msg_avg_delay /= 1000000.0;
+                fprintf(stdout, "Many connection stress (cnx_stress) succeeds:\n");
+                fprintf(stdout, "Processed %d connections for %fs (simulated) in %fs (wall time).\n",
+                    stress_ctx->nb_client_target, 
+                    ((double)stress_ctx->simulated_time)/1000000.0, 
+                    ((double)wall_time_elapsed)/1000000.0);
+                fprintf(stdout, "Processed %d messages, delays min/avg/max= %fs, %fs, %fs.\n",
+                    stress_ctx->nb_messages_target, ((double)stress_ctx->message_delay_min)/ 1000000.0,
+                    msg_avg_delay, ((double)stress_ctx->message_delay_max)/ 1000000.0);
+            }
         }
 
         cnx_stress_delete_ctx(stress_ctx);
@@ -925,5 +942,5 @@ int cnx_stress_do_test(uint64_t duration, int nb_clients)
  * the cnx stress code actually works. */
 int cnx_stress_unit_test()
 {
-    return cnx_stress_do_test(120000000, 100);
+    return cnx_stress_do_test(120000000, 100, 0);
 }

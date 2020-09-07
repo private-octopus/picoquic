@@ -440,7 +440,7 @@ int main(int argc, char** argv)
                         nb_test_tried++;
                         if (do_cnx_stress && strcmp(test_table[i].test_name, "cnx_stress") == 0) {
                             uint64_t duration = ((uint64_t)cnx_stress_minutes) * 60000000ull;
-                            if (cnx_stress_do_test(duration, cnx_stress_nb_cnx) != 0) {
+                            if (cnx_stress_do_test(duration, cnx_stress_nb_cnx,1) != 0) {
                                 test_status[i] = test_failed;
                                 nb_test_failed++;
                                 ret = -1;

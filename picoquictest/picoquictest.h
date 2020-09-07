@@ -126,7 +126,7 @@ int zero_rtt_delay_test();
 int parse_frame_test();
 int stress_test();
 int cnx_stress_unit_test();
-int cnx_stress_do_test(uint64_t duration, int nb_clients);
+int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report);
 int splay_test();
 int TlsStreamFrameTest();
 int draft17_vector_test();
