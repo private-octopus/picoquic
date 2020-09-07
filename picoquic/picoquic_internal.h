@@ -512,9 +512,7 @@ typedef struct st_picoquic_quic_t {
 
     struct st_picoquic_cnx_t* cnx_list;
     struct st_picoquic_cnx_t* cnx_last;
-
-    struct st_picoquic_cnx_t* cnx_wake_first;
-    struct st_picoquic_cnx_t* cnx_wake_last;
+    picosplay_tree_t cnx_wake_tree;
 
     struct st_picoquic_cnx_t* cnx_in_progress;
 
@@ -966,8 +964,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Next time sending data is expected */
     uint64_t next_wake_time;
-    struct st_picoquic_cnx_t* next_by_wake_time;
-    struct st_picoquic_cnx_t* previous_by_wake_time;
+    picosplay_node_t cnx_wake_node;
 
     /* TLS context, TLS Send Buffer, streams, epochs */
     void* tls_ctx;

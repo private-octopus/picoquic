@@ -294,10 +294,6 @@ int picoquic_tls_collect_extensions_cb(ptls_t* tls, struct st_ptls_handshake_pro
     UNREFERENCED_PARAMETER(tls);
     UNREFERENCED_PARAMETER(properties);
 #endif
-#ifdef _DEBUG
-    DBG_PRINTF("Collect extension callback, ext: %x, ret=%d\n",
-        type, type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION);
-#endif
     return type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION;
 }
 
@@ -306,10 +302,6 @@ void picoquic_tls_set_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ct
     size_t consumed;
     int ret = picoquic_prepare_transport_extensions(cnx, (tls_ctx->client_mode) ? 0 : 1,
         tls_ctx->ext_data, sizeof(tls_ctx->ext_data), &consumed);
-#ifdef _DEBUG
-    DBG_PRINTF("Prepare extension, ext: %x, ret=%d\n",
-        PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION, ret);
-#endif
 
     if (ret == 0) {
         tls_ctx->ext[0].type = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION;
@@ -344,10 +336,6 @@ int picoquic_tls_collected_extensions_cb(ptls_t* tls, ptls_handshake_properties_
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)((char*)properties - offsetof(struct st_picoquic_tls_ctx_t, handshake_properties));
 
     for (int i_slot = 0; slots[i_slot].type != 0xFFFF; i_slot++) {
-#ifdef _DEBUG
-        DBG_PRINTF("Receive extension, slot[%d]: %x\n",
-            i_slot, slots[i_slot].type);
-#endif
         if (slots[i_slot].type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION) {
             size_t copied_length = sizeof(ctx->ext_received);
 
@@ -416,7 +404,9 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
 
         for (size_t i = 0; i < params->negotiated_protocols.count; i++) {
             if (params->negotiated_protocols.list[i].len == len && memcmp(params->negotiated_protocols.list[i].base, quic->default_alpn, len) == 0) {
-                DBG_PRINTF("ALPN[%d] matches default alpn (%s)", (int)i, quic->default_alpn);
+                if (quic->cnx_in_progress != NULL) {
+                    picoquic_log_app_message(quic->cnx_in_progress, "ALPN[%d] matches default alpn (%s)", (int)i, quic->default_alpn);
+                }
                 alpn_found = (const uint8_t *)quic->default_alpn;
                 alpn_found_length = len;
                 ptls_set_negotiated_protocol(tls, quic->default_alpn, len);
@@ -426,9 +416,9 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
     }
     else if (quic->alpn_select_fn != NULL) {
         size_t selected = quic->alpn_select_fn(quic, params->negotiated_protocols.list, params->negotiated_protocols.count);
-
-        DBG_PRINTF("ALPN Selection call back selects %d (out of %d)", (int)selected, (int)params->negotiated_protocols.count);
-
+        if (quic->cnx_in_progress != NULL) {
+            picoquic_log_app_message(quic->cnx_in_progress, "ALPN Selection call back selects %d (out of %d)", (int)selected, (int)params->negotiated_protocols.count);
+        }
         if (selected < params->negotiated_protocols.count) {
             alpn_found = params->negotiated_protocols.list[selected].base;
             alpn_found_length = params->negotiated_protocols.list[selected].len;
@@ -448,9 +438,9 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
         ret = PTLS_ALERT_NO_APPLICATION_PROTOCOL;
     }
 
-
-
-    DBG_PRINTF("Client Hello call back returns %d (0x%x)", ret, ret);
+    if (ret != 0 && quic->cnx_in_progress != NULL) {
+        picoquic_log_app_message(quic->cnx_in_progress, "Client Hello call back returns %d (0x%x)", ret, ret);
+    }
 
     return ret;
 }
@@ -672,13 +662,6 @@ static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * ci
     if ((*v_aead = ptls_aead_new(cipher->aead, cipher->hash, is_enc, secret, PICOQUIC_LABEL_QUIC_KEY_BASE)) == NULL) {
         ret = PTLS_ERROR_NO_MEMORY;
     }
-#ifdef _DEBUG
-    else {
-        DBG_PRINTF("AEAD %s IV (%d):\n", 
-            (is_enc)?"Encryption":"Decryption",
-            (int)cipher->aead->iv_size);
-    }
-#endif
 
     return ret;
 }
@@ -696,10 +679,6 @@ static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t
     if ((ret = ptls_hkdf_expand_label(cipher->hash, pnekey, 
         cipher->aead->ctr_cipher->key_size, ptls_iovec_init(secret, cipher->hash->digest_size), 
         PICOQUIC_LABEL_HP, ptls_iovec_init(NULL, 0), PICOQUIC_LABEL_QUIC_KEY_BASE)) == 0) {
-#ifdef _DEBUG
-        DBG_PRINTF("PN Encryption key (%d):\n", (int)cipher->aead->ctr_cipher->key_size);
-        debug_dump(pnekey, (int)cipher->aead->ctr_cipher->key_size);
-#endif
         if ((*v_pn_enc = ptls_cipher_new(cipher->aead->ctr_cipher, is_enc, pnekey)) == NULL) {
             ret = PTLS_ERROR_NO_MEMORY;
         }
@@ -778,10 +757,6 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
     ptls_context_t* ctx = (ptls_context_t*)cnx->quic->tls_master_ctx;
     ptls_cipher_suite_t * cipher = ptls_get_cipher(tls);
     UNREFERENCED_PARAMETER(self);
-#ifdef _DEBUG
-    DBG_PRINTF("Update traffic key epoch:%d, enc:%d\n", (int)epoch, is_enc);
-    debug_dump(secret, (int)cipher->hash->digest_size);
-#endif
 
     int ret = picoquic_set_key_from_secret(cipher, is_enc, 0, &cnx->crypto_context[epoch], secret);
     if (cnx->cnx_state < picoquic_state_ready) {
@@ -2045,12 +2020,6 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
             ret = ptls_handle_message(ctx->tls, &sendbuf, send_offset, epoch,
                 data->bytes + start, epoch_data, &ctx->handshake_properties);
 
-#ifdef _DEBUG
-            if (cnx->cnx_state < picoquic_state_ready) {
-                DBG_PRINTF("State: %d, tls input: %d, ret 0x%x\n",
-                    cnx->cnx_state, epoch_data, ret);
-            }
-#endif
             if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS ||
                 ret == PTLS_ERROR_STATELESS_RETRY)) {
                 for (int i = 0; i < PICOQUIC_NUMBER_OF_EPOCHS; i++) {

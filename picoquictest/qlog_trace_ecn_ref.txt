@@ -8,6 +8,7 @@
 [0, "transport", "packet_received", { "packet_type": "initial", "header": { "packet_size": 1252, "packet_number": 0, "version": "50435130", "payload_length": 1206, "scid": "0203040506070809", "dcid": "0102030405060708" }, "frames": [{ 
     "frame_type": "crypto", "offset": 0, "length": 275}, { 
     "frame_type": "padding"}]}],
+[0, "info", "message", { "message": "ALPN[0] matches default alpn (picoquic-test)"}],
 [0, "transport", "parameters_set", {
     "owner": "remote",
     "sni": "test.example.com",

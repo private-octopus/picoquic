@@ -19,6 +19,12 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+#include <openssl/pem.h>
+#include <picotls.h>
+#include "picoquic_utils.h"
 #include "picoquic_internal.h"
 #include "tls_api.h"
 #include "picoquictest_internal.h"
@@ -27,24 +33,16 @@
 #else
 #include <signal.h>
 #endif
-#include <picotls.h>
-#include <stddef.h>
-#include <stdlib.h>
-#include <string.h>
-#include <openssl/pem.h>
 
-/* TODO: do we really need global variables? */
-uint64_t cnx_stress_test_duration = 120000000; /* Default to 4 minutes */
-size_t cnx_stress_nb_clients = 1000; /* Default to 1000 clients */
-uint64_t stress_random_ctx = 0xBabaC001BaddBab1ull;
-uint32_t cnx_stress_max_message_before_drop = 25;
-uint32_t cnx_stress_max_message_before_migrate = 8;
+#define CNX_STRESS_ALPN "cnxstress"
 
 typedef struct st_cnx_stress_stream_ctx_t {
     /* For receive streams, just look at the first 16 bytes,
      * ignore the following until everything is received 
      * For send streams, send the first bytes, followed by
      * random or fixed data up to message size. */
+    struct st_cnx_stress_stream_ctx_t* previous_stream;
+    struct st_cnx_stress_stream_ctx_t* next_stream;
     uint64_t stream_id;
     uint64_t send_time;
     uint64_t nb_bytes_expected;
@@ -52,17 +50,21 @@ typedef struct st_cnx_stress_stream_ctx_t {
     size_t nb_bytes_sent;
 } cnx_stress_stream_ctx_t;
 
-typedef struct st_cnx_stress_cnx_callback_ctx_t {
+typedef struct st_cnx_stress_callback_ctx_t {
     struct st_cnx_stress_ctx_t* stress_ctx;
     picoquic_cnx_t* cnx;
-    uint64_t next_steam_send;
-    cnx_stress_stream_ctx_t* active_stream;
-} cnx_stress_cnx_callback_ctx_t;
+    uint64_t next_stream_send;
+    int mode;
+    int rank;
+    cnx_stress_stream_ctx_t* first_stream;
+    cnx_stress_stream_ctx_t* last_stream;
+} cnx_stress_callback_ctx_t;
 
 typedef enum {
-    cnx_stress_event_none(0),
+    cnx_stress_event_none = 0,
     cnx_stress_event_new_message,
     cnx_stress_event_client_creation,
+    cnx_stress_event_client_removal,
     cnx_stress_event_client_arrival,
     cnx_stress_event_client_prepare,
     cnx_stress_event_server_arrival,
@@ -71,26 +73,42 @@ typedef enum {
 
 typedef struct st_cnx_stress_ctx_t {
     uint64_t simulated_time;
+    uint64_t random_ctx;
     picoquic_quic_t* qserver;
     picoquic_quic_t* qclient;
     struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
+    picoquictest_sim_link_t* link_to_clients;
+    picoquictest_sim_link_t* link_to_server;
     int nb_clients;
     int nb_servers;
     int nb_client_target;
+    int nb_clients_deleted;
     uint64_t client_creation_interval;
     uint64_t next_client_creation_time;
     uint64_t client_deletion_interval;
     uint64_t next_client_deletion_time;
     uint64_t message_creation_interval;
-    uint64_t message_creation_interval;
+    uint64_t next_message_creation_time;
+    /* Statistics on message arrival delay */
+    int nb_messages_target;
+    size_t message_size;
+    int nb_messages_sent;
+    int nb_messages_errors;
+    int nb_messages_received;
+    int64_t sum_message_delays;
+    double sum_square_message_delays;
+    int64_t message_delay_min;
+    int64_t message_delay_max;
     /* The array of client and server contexts are created with size "nb_client target"
      * during the initialization of the test. The variables nb_clients and nb_servers
      * hold the number of clients and servers actually created. */
-    cnx_stress_client_t * c_ctx;
-    cnx_stress_server_t* c_ctx;
+    cnx_stress_callback_ctx_t** c_ctx;
+    cnx_stress_callback_ctx_t** s_ctx;
+    cnx_stress_callback_ctx_t* default_ctx;
 } cnx_stress_ctx_t;
 
+#if 0
 /*
  * Portable abort call, should work on Linux and Windows.
  * We deliberately do not call the ASSERT macros, becuse these
@@ -110,7 +128,7 @@ static int stress_debug_break(int break_if_fuzzing)
 
     return 0;
 }
-
+#endif
 
 /* Callback context and protocol handling.
  * Nothing really special here? For message sending, assume short messages,
@@ -120,44 +138,203 @@ static int stress_debug_break(int break_if_fuzzing)
  * Context accumulate the message ID from the first 8 bytes, then ignores the
  * rest of the data.
  */
-cnx_stress_cnx_ctx_t* cnx_stress_callback_create_context(cnx_stress_ctx_t stress_ctx,
-    picoquic_cnx_t* cnx) {
-    cnx_stress_cnx_ctx_t* cnx_ctx = (cnx_stress_cnx_ctx_t*)malloc(sizeof(cnx_stress_cnx_ctx_t));
+cnx_stress_stream_ctx_t* cnx_stress_create_stream_context(
+    cnx_stress_callback_ctx_t* cnx_ctx,
+    uint64_t stream_id) {
+    cnx_stress_stream_ctx_t* stream_ctx = (cnx_stress_stream_ctx_t*)malloc(sizeof(cnx_stress_stream_ctx_t));
+    if (stream_ctx != NULL) {
+        memset(stream_ctx, 0, sizeof(cnx_stress_stream_ctx_t));
+        if (cnx_ctx->last_stream == NULL) {
+            cnx_ctx->first_stream = stream_ctx;
+        }
+        else {
+            stream_ctx->previous_stream = cnx_ctx->last_stream;
+            cnx_ctx->last_stream->next_stream = stream_ctx;
+        }
+        cnx_ctx->last_stream = stream_ctx;
+        stream_ctx->stream_id = stream_id;
+    }
+    return stream_ctx;
+}
+
+void cnx_stress_delete_stream_context(
+    cnx_stress_callback_ctx_t* cnx_ctx, cnx_stress_stream_ctx_t* stream_ctx) {
+    if (stream_ctx != NULL) {
+        /* Unchain the stream context */
+        if (stream_ctx == cnx_ctx->first_stream) {
+            cnx_ctx->first_stream = stream_ctx->next_stream;
+        }
+        else {
+            stream_ctx->previous_stream->next_stream = stream_ctx->next_stream;
+        }
+        if (stream_ctx == cnx_ctx->last_stream) {
+            cnx_ctx->last_stream = stream_ctx->previous_stream;
+        }
+        else {
+            stream_ctx->next_stream->previous_stream = stream_ctx->previous_stream;
+        }
+        /* Remove from connection context */
+        (void)picoquic_set_app_stream_ctx(cnx_ctx->cnx, stream_ctx->stream_id, NULL);
+        /* Release the memory */
+        memset(stream_ctx, 0, sizeof(cnx_stress_stream_ctx_t));
+        free(stream_ctx);
+    }
+}
+
+cnx_stress_callback_ctx_t* cnx_stress_callback_create_context(cnx_stress_ctx_t * stress_ctx,
+    picoquic_cnx_t* cnx, int mode) {
+    cnx_stress_callback_ctx_t* cnx_ctx = (cnx_stress_callback_ctx_t*)malloc(sizeof(cnx_stress_callback_ctx_t));
     if (cnx_ctx != NULL) {
-        memset(cnx_ctx, 0, sizeof(cnx_stress_cnx_ctx_t));
+        memset(cnx_ctx, 0, sizeof(cnx_stress_callback_ctx_t));
         cnx_ctx->stress_ctx = stress_ctx;
         cnx_ctx->cnx = cnx;
+        cnx_ctx->mode = mode;
+        if (mode == 0) {
+            stress_ctx->c_ctx[stress_ctx->nb_clients] = cnx_ctx;
+            cnx_ctx->rank = stress_ctx->nb_clients;
+            stress_ctx->nb_clients += 1;
+        } else if (mode == 1) {
+            cnx_ctx->stress_ctx->s_ctx[cnx_ctx->stress_ctx->nb_servers] = cnx_ctx;
+            cnx_ctx->rank = cnx_ctx->stress_ctx->nb_servers;
+            cnx_ctx->stress_ctx->nb_servers += 1;
+        }
+        else {
+            /* Pseudo context, used for setting default context on server */
+        }
     }
     return cnx_ctx;
 }
 
-int cnx_stress_callback_data(cnx_stress_cnx_ctx_t* cnx_ctx,
+void cnx_stress_callback_delete_context(cnx_stress_callback_ctx_t* cnx_ctx) {
+    if (cnx_ctx->mode == 0) {
+        cnx_ctx->stress_ctx->c_ctx[cnx_ctx->rank] = NULL;
+    }
+    else if (cnx_ctx->mode == 1) {
+        cnx_ctx->stress_ctx->s_ctx[cnx_ctx->rank] = NULL;
+    }
+    while (cnx_ctx->first_stream != NULL) {
+        cnx_stress_delete_stream_context(cnx_ctx, cnx_ctx->last_stream);
+    }
+    memset(cnx_ctx, 0, sizeof(cnx_stress_callback_ctx_t));
+    free(cnx_ctx);
+}
+
+int cnx_stress_callback_data(cnx_stress_callback_ctx_t* cnx_ctx,
     cnx_stress_stream_ctx_t* stream_ctx, uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event)
 {
+    int ret = 0;
     /* If this is the first reference to the stream, create a context */
+    if (stream_ctx == NULL) {
+        stream_ctx = cnx_stress_create_stream_context(cnx_ctx, stream_id);
+        if (stream_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = picoquic_set_app_stream_ctx(cnx_ctx->cnx, stream_id, stream_ctx);
+        }
+    }
 
-    /* Handle arrival of data on the stream: decode stream header if not yet received. */
+    if (ret == 0) {
+        /* Handle arrival of data on the stream: decode stream header if not yet received. */
+        while (length > 0 && stream_ctx->nb_bytes_received < 8) {
+            stream_ctx->send_time <<= 8;
+            stream_ctx->send_time += *bytes;
+            bytes++;
+            length--;
+            stream_ctx->nb_bytes_received++;
+        }
+        while (length > 0 && stream_ctx->nb_bytes_received < 16) {
+            stream_ctx->nb_bytes_expected <<= 8;
+            stream_ctx->nb_bytes_expected += *bytes;
+            bytes++;
+            length--;
+            stream_ctx->nb_bytes_received++;
+        }
+        if (length > 0) {
+            stream_ctx->nb_bytes_received += length;
+        }
+        /* On FIN or RESET, terminate the stream */
+        if (fin_or_event == picoquic_callback_stream_fin) {
+            /* If FIN received: if not enough data, record an error. Else,
+             * accumulate the statistics. */
+            cnx_stress_ctx_t* stress_ctx = cnx_ctx->stress_ctx;
+            if (stream_ctx->nb_bytes_received < 16 ||
+                stream_ctx->nb_bytes_received < stream_ctx->nb_bytes_expected) {
+                /* Receive error */
+                stress_ctx->nb_messages_errors++;
+            }
+            else {
+                uint64_t time_now = picoquic_get_quic_time(cnx_ctx->cnx->quic);
+                int64_t delta_t = time_now - stream_ctx->send_time;
+                stress_ctx->nb_messages_received++;
+                stress_ctx->sum_message_delays += delta_t;
+                stress_ctx->sum_square_message_delays += ((double)delta_t) * ((double)delta_t);
+                if (delta_t > stress_ctx->message_delay_max) {
+                    stress_ctx->message_delay_max = delta_t;
+                }
+                if (delta_t < stress_ctx->message_delay_min) {
+                    if (delta_t < 10000) {
+                        DBG_PRINTF("Unexpected message delay; %d", (int)delta_t);
+                    }
+                    stress_ctx->message_delay_min = delta_t;
+                }
+            }
+            /* Delete the stream context */
+            cnx_stress_delete_stream_context(cnx_ctx, stream_ctx);
+        }
+    }
 
-    /* If FIN received: if not enough data, record an error. Else,
-     * accumulate the statistics. */
-
+    return ret;
 }
 
-int cnx_stress_callback_prepare_to_send(cnx_stress_cnx_ctx_t* cnx_ctx,
-    cnx_stress_stream_ctx_t* stream_ctx, uint64_t stream_id, stream_id,
-    uint8_t* bytes, size_t length)
+int cnx_stress_callback_prepare_to_send(cnx_stress_callback_ctx_t* cnx_ctx,
+    cnx_stress_stream_ctx_t* stream_ctx, uint64_t stream_id,
+    void* context, size_t length)
 {
-    /* If the first 16 bytes have not been sent yet, send them */
-    /* Fill the reminder with data */
-    /* Handle end of stream */
-}
+    int ret = 0;
+    size_t data_length = length;
+    uint8_t* buffer;
+    int is_fin = 0;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(stream_id);
+#endif
+    /* Compute the number of bytes that can be sent */
+    if (stream_ctx->nb_bytes_sent + data_length >= stream_ctx->nb_bytes_expected) {
+        data_length = (size_t)(stream_ctx->nb_bytes_expected - stream_ctx->nb_bytes_sent);
+        is_fin = 1;
+    }
+    buffer = picoquic_provide_stream_data_buffer(context, data_length, is_fin, !is_fin);
+    
+    if (buffer != NULL) {
+        /* If the first 16 bytes have not been sent yet, send the header */
+        while (data_length > 0 && stream_ctx->nb_bytes_sent < 8) {
+            *buffer = (uint8_t)((stream_ctx->send_time >> (8 * (7 - stream_ctx->nb_bytes_sent))) & 0xff);
+            buffer++; 
+            stream_ctx->nb_bytes_sent++;
+            data_length--;
+        }
+        while (data_length > 0 && stream_ctx->nb_bytes_sent < 16) {
+            *buffer = (uint8_t)((stream_ctx->nb_bytes_expected >> (8 * (15 - stream_ctx->nb_bytes_sent))) & 0xff);
+            buffer++;
+            stream_ctx->nb_bytes_sent++;
+            data_length--;
+        }
+        /* Fill the reminder with data */
+        if (data_length > 0) {
+            memset(buffer, 'z', data_length);
+        }
 
-int cnx_stress_initiate_message(cnx_stress_cnx_ctx_t* cnx_ctx,
-    uint64_t nb_bytes_expected)
-{
-    /* Create a stream context. */
-    /* Initialize an active stream. */
+        if (is_fin) {
+            /* delete the stream context */
+            cnx_stress_delete_stream_context(cnx_ctx, stream_ctx);
+        }
+    }
+    else {
+        ret = -1;
+    }
+
+    return ret;
 }
 
 int cnx_stress_callback(picoquic_cnx_t* cnx,
@@ -165,7 +342,7 @@ int cnx_stress_callback(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
-    cnx_stress_cnx_ctx_t* cnx_ctx = (cnx_stress_cnx_ctx_t*)callback_ctx;
+    cnx_stress_callback_ctx_t* cnx_ctx = (cnx_stress_callback_ctx_t*)callback_ctx;
     cnx_stress_stream_ctx_t* stream_ctx = (cnx_stress_stream_ctx_t*)v_stream_ctx;
 
     if (cnx_ctx == NULL) {
@@ -178,7 +355,7 @@ int cnx_stress_callback(picoquic_cnx_t* cnx,
     else if (cnx_ctx->cnx == NULL) {
         /* In the case of server connections, the connection is NULL for the
          * default context. It should be initialized with a proper context */
-        cnx_ctx = cnx_stress_callback_create_context(cnx_ctx->cnx_stress_ctx, cnx);
+        cnx_ctx = cnx_stress_callback_create_context(cnx_ctx->stress_ctx, cnx, 1);
         if (cnx_ctx == NULL) {
             /* cannot handle the connection */
             picoquic_close(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
@@ -188,14 +365,26 @@ int cnx_stress_callback(picoquic_cnx_t* cnx,
             picoquic_set_callback(cnx, cnx_stress_callback, cnx_ctx);
         }
     }
+    else if (cnx_ctx->cnx != cnx) {
+        DBG_PRINTF("%s", "Invalid connection context!");
+        ret = -1;
+    }
 
     switch (fin_or_event) {
     case picoquic_callback_stream_data:
     case picoquic_callback_stream_fin:
         /* Data arrival on stream #x, maybe with fin mark */
-        ret = cnx_stress_callback_data(cnx, stream_ctx, stream_id, bytes, length, fin_or_event, cnx_ctx);
+        ret = cnx_stress_callback_data(cnx_ctx, stream_ctx, stream_id, bytes, length, fin_or_event);
         break;
-    case picoquic_callback_stream_reset: /* Client reset stream #x */
+    case picoquic_callback_stream_reset: 
+        /* Sender reset stream, abandon transmission */
+        if (stream_ctx != NULL) {
+            /* Mark the stream as abandoned before full transmission */
+            cnx_ctx->stress_ctx->nb_messages_errors += 1;
+            /* delete the stream context */
+            cnx_stress_delete_stream_context(cnx_ctx, stream_ctx);
+        }
+        break;
     case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
         /* TODO: probably no need for this in the test application. */
         break;
@@ -210,16 +399,12 @@ int cnx_stress_callback(picoquic_cnx_t* cnx,
         /* Should trigger a failure */
         break;
     case picoquic_callback_prepare_to_send:
-        ret = cnx_stress_callback_prepare_to_send(cnx, stream_id, stream_ctx, (void*)bytes, length, cnx_ctx);
+        ret = cnx_stress_callback_prepare_to_send(cnx_ctx, stream_ctx, stream_id, (void*)bytes, length);
         break;
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:
-        /* Check that the transport parameters are what DoQ expects */
-        if (cnx_stress_check_tp(cnx_ctx, cnx) != 0) {
-            (void)picoquic_close(cnx, cnx_stress_ERROR_PROTOCOL);
-        }
         break;
-    case picoquic_callback_datagram:/* No datagram support in DoQ */
+    case picoquic_callback_datagram:/* No datagram support */
         break;
     case picoquic_callback_version_negotiation:
         break;
@@ -260,21 +445,247 @@ int cnx_stress_callback(picoquic_cnx_t* cnx,
  * fine grain statistics, is it enough to compute min, max, average and stdev?
  */
 
+cnx_stress_callback_ctx_t * cnx_stress_cnx_from_rank(
+    int msg_num, int nb_ctx, cnx_stress_callback_ctx_t** v_ctx)
+{
+    int nb_trials = 0;
+    int rank = msg_num % nb_ctx;
+    cnx_stress_callback_ctx_t* cnx_ctx = v_ctx[rank];
+    while (cnx_ctx == NULL && nb_trials < nb_ctx) {
+        rank = (rank + 1) % nb_ctx;
+        cnx_ctx = v_ctx[rank];
+    }
+    return cnx_ctx;
+}
+
+int cnx_stress_initiate_message(cnx_stress_ctx_t* stress_ctx)
+{
+    /* Client or server? */
+    int ret = 0;
+    cnx_stress_callback_ctx_t* cnx_ctx;
+
+    stress_ctx->nb_messages_sent += 1;
+    cnx_ctx = ((stress_ctx->nb_messages_sent & 1) != 0) ?
+        cnx_stress_cnx_from_rank(stress_ctx->nb_messages_sent,
+            stress_ctx->nb_clients, stress_ctx->c_ctx):
+        cnx_stress_cnx_from_rank(stress_ctx->nb_messages_sent,
+            stress_ctx->nb_servers, stress_ctx->s_ctx);
+    if (cnx_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        uint64_t stream_id = picoquic_get_next_local_stream_id(cnx_ctx->cnx, 1);
+        cnx_stress_stream_ctx_t* stream_ctx = cnx_stress_create_stream_context(cnx_ctx, stream_id);
+        if (stream_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            stream_ctx->send_time = stress_ctx->simulated_time;
+            stream_ctx->nb_bytes_expected = stress_ctx->message_size;
+
+            ret = picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
+        }
+    }
+    return ret;
+}
+
+int cnx_stress_create_client_cnx(cnx_stress_ctx_t* stress_ctx)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = picoquic_create_cnx(
+        stress_ctx->qclient, picoquic_null_connection_id, picoquic_null_connection_id,
+        (struct sockaddr*) & stress_ctx->server_addr, stress_ctx->simulated_time, 0,
+        PICOQUIC_TEST_SNI, CNX_STRESS_ALPN, 1);
+    if (cnx == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Create the context and register it in cnx  stress context */
+        cnx_stress_callback_ctx_t* cnx_ctx = cnx_stress_callback_create_context(
+            stress_ctx, cnx, 0);
+        if (cnx_ctx == NULL) {
+            picoquic_delete_cnx(cnx);
+            ret = -1;
+        }
+        else {
+            /* Set callback */
+            picoquic_set_callback(cnx, cnx_stress_callback, cnx_ctx);
+            /* Set keep alive to default value based on timeout. */
+            picoquic_enable_keep_alive(cnx, 0);
+            /* start the connection */
+            ret = picoquic_start_client_cnx(cnx);
+        }
+    }
+    return ret;
+}
+
+int cnx_stress_close_one_connection(cnx_stress_ctx_t* stress_ctx)
+{
+    /* TODO: consider closing the connections in a random order. */
+    int ret = 0;
+    int rank;
+
+    stress_ctx->nb_clients_deleted++;
+    rank = stress_ctx->nb_clients - stress_ctx->nb_clients_deleted;
+
+    if (stress_ctx->c_ctx[rank] != NULL) {
+        ret = picoquic_close(stress_ctx->c_ctx[rank]->cnx, 0);
+    }
+
+    return ret;
+}
+
+int cnx_stress_link_arrival(picoquic_quic_t * quic, picoquictest_sim_link_t * link, 
+    uint64_t current_time)
+{
+    int ret = 0;
+    picoquictest_sim_packet_t* packet =
+        picoquictest_sim_link_dequeue(link, current_time);
+
+    if (packet != NULL) {
+        ret = picoquic_incoming_packet(quic, packet->bytes,
+            (uint32_t)packet->length,
+            (struct sockaddr*) & packet->addr_from,
+            (struct sockaddr*) & packet->addr_to, 0, 0, current_time);
+        free(packet);
+    }
+    return ret;
+}
+
+int cnx_stress_prepare(picoquic_quic_t* quic, picoquictest_sim_link_t* link,
+    struct sockaddr * default_source, uint64_t current_time)
+{
+    int ret = 0;
+    picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+
+    if (packet == NULL) {
+        ret = -1;
+    } else {
+        picoquic_connection_id_t log_cid;
+        picoquic_cnx_t* last_cnx;
+        int if_index = 0;
+
+        ret = picoquic_prepare_next_packet(quic, current_time, packet->bytes, 
+            PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+            &packet->addr_to, &packet->addr_from, &if_index, &log_cid, &last_cnx);
+
+        if (ret == 0 && packet->length > 0) {
+            if (packet->addr_from.ss_family == AF_UNSPEC) {
+                picoquic_store_addr(&packet->addr_from, default_source);
+            }
+            picoquictest_sim_link_submit(link, packet, current_time);
+        }
+        else {
+            free(packet);
+        }
+    }
+    return ret;
+}
+
 /* Loop -- manage arrival of clients, traffic, messages, etc. */
 int cnx_stress_loop_step(cnx_stress_ctx_t * stress_ctx)
 {
+    int ret = 0;
     cnx_stress_event_enum next_event = cnx_stress_event_none;
     uint64_t next_time = UINT64_MAX;
 
-    /* Is it time to inject a new connection? */
-    /* Is it time to delete a connection? */
     /* Is it time to inject a message ? */
+    if (stress_ctx->next_message_creation_time < next_time) {
+        next_event = cnx_stress_event_new_message;
+        next_time = stress_ctx->next_message_creation_time;
+    }
+    /* Is it time to inject a new connection? */
+    if (stress_ctx->next_client_creation_time < next_time) {
+        next_event = cnx_stress_event_client_creation;
+        next_time = stress_ctx->next_client_creation_time;
+    }
+    /* Is it time to delete a connection? */
+    if (stress_ctx->next_client_deletion_time < next_time) {
+        next_event = cnx_stress_event_client_removal;
+        next_time = stress_ctx->next_client_deletion_time;
+    }
     /* Is it time for client message arrival? */
+    if (stress_ctx->link_to_clients->first_packet != NULL &&
+        stress_ctx->link_to_clients->first_packet->arrival_time < next_time) {
+        next_event = cnx_stress_event_client_arrival;
+        next_time = stress_ctx->link_to_clients->first_packet->arrival_time;
+    }
     /* Is it time for client message preparation? */
+    if (picoquic_get_next_wake_time(stress_ctx->qclient, stress_ctx->simulated_time) < next_time) {
+        next_event = cnx_stress_event_client_prepare;
+        next_time = picoquic_get_next_wake_time(stress_ctx->qclient, stress_ctx->simulated_time);
+    }
     /* Is it time for server message arrival? */
+    if (stress_ctx->link_to_server->first_packet != NULL && 
+        stress_ctx->link_to_server->first_packet->arrival_time < next_time) {
+        next_event = cnx_stress_event_server_arrival;
+        next_time = stress_ctx->link_to_server->first_packet->arrival_time;
+    }
     /* Is it time for server message preparation? */
+    if (picoquic_get_next_wake_time(stress_ctx->qserver, stress_ctx->simulated_time) < next_time) {
+        next_event = cnx_stress_event_server_prepare;
+        next_time = picoquic_get_next_wake_time(stress_ctx->qserver, stress_ctx->simulated_time);
+    }
     /* Update the simulation time based on next time */
-    /* Execute the selected action */
+    if (next_time > stress_ctx->simulated_time) {
+        stress_ctx->simulated_time = next_time;
+    }
+    /* TODO: Execute the selected action */
+    switch (next_event) {
+    case cnx_stress_event_new_message:
+        ret = cnx_stress_initiate_message(stress_ctx);
+        if (stress_ctx->nb_messages_sent >= stress_ctx->nb_messages_target) {
+            stress_ctx->next_message_creation_time = UINT64_MAX;
+        }
+        else {
+            stress_ctx->next_message_creation_time += stress_ctx->message_creation_interval;
+        }
+        break;
+    case cnx_stress_event_client_creation:
+        ret = cnx_stress_create_client_cnx(stress_ctx);
+        /* Prep the next connection time. */
+        if (stress_ctx->nb_clients >= stress_ctx->nb_client_target) {
+            stress_ctx->next_client_creation_time = UINT64_MAX;
+        }
+        else {
+            stress_ctx->next_client_creation_time += stress_ctx->client_creation_interval;
+        }
+        break;
+    case cnx_stress_event_client_removal:
+        ret = cnx_stress_close_one_connection(stress_ctx);
+        if (stress_ctx->nb_clients_deleted >= stress_ctx->nb_clients) {
+            stress_ctx->next_client_deletion_time = UINT64_MAX;
+        }
+        else {
+            stress_ctx->next_client_deletion_time += stress_ctx->client_deletion_interval;
+        }
+        break;
+    case cnx_stress_event_client_arrival:
+        /* If there is something to receive on the client , do it now */
+        ret = cnx_stress_link_arrival(stress_ctx->qclient,
+            stress_ctx->link_to_clients, stress_ctx->simulated_time);
+        break;
+    case cnx_stress_event_client_prepare:
+        /* If a client packet is ready to send, send it. */
+        ret = cnx_stress_prepare(stress_ctx->qclient, stress_ctx->link_to_server,
+            (struct sockaddr *)&stress_ctx->client_addr, stress_ctx->simulated_time);
+        break;
+    case cnx_stress_event_server_arrival:
+        /* If there is something to receive on the client , do it now */
+        ret = cnx_stress_link_arrival(stress_ctx->qserver,
+            stress_ctx->link_to_server, stress_ctx->simulated_time);
+        break;
+    case cnx_stress_event_server_prepare:
+        /* If a client packet is ready to send, send it. */
+        ret = cnx_stress_prepare(stress_ctx->qserver, stress_ctx->link_to_clients,
+            (struct sockaddr*) & stress_ctx->server_addr, stress_ctx->simulated_time);
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+
+    return ret;
 }
 
 /* Connection stress:
@@ -299,71 +710,237 @@ int cnx_stress_loop_step(cnx_stress_ctx_t * stress_ctx)
  *
  */
 
-static const uint8_t cnx_stress_ticket_encrypt_key[32] = {
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-};
-
-
-int cnx_stress_create_cnx()
-{
-
-}
-
-static void stress_delete_client_context(int client_index, cnx_stress_ctx_t * stress_ctx)
-{
-    cnx_stress_client_t * ctx = stress_ctx->c_ctx[client_index];
-    cnx_stress_cnx_callback_ctx_t* cb_ctx;
-
-    if (ctx != NULL) {
-        while (ctx->qclient->cnx_list != NULL) {
-            cb_ctx = (cnx_stress_cnx_callback_ctx_t*)
-                picoquic_get_callback_context(ctx->qclient->cnx_list);
-            free(cb_ctx);
-            picoquic_set_callback(ctx->qclient->cnx_list, NULL, NULL);
-            picoquic_delete_cnx(ctx->qclient->cnx_list);
-        }
-
-        if (ctx->qclient != NULL) {
-            picoquic_free(ctx->qclient);
-            ctx->qclient = NULL;
-        }
-
-        if (ctx->c_to_s_link != NULL) {
-            picoquictest_sim_link_delete(ctx->c_to_s_link);
-            ctx->c_to_s_link = NULL;
-        }
-
-        if (ctx->s_to_c_link != NULL) {
-            picoquictest_sim_link_delete(ctx->s_to_c_link);
-            ctx->s_to_c_link = NULL;
-        }
-        free(ctx);
-
-        stress_ctx->c_ctx[client_index] = NULL;
-    }
-}
-
-static int cnx_stress_test()
+/* Set transport parameters to adequate value for cnx stress */
+int cnx_stress_set_default_tp(picoquic_quic_t* quic)
 {
     int ret = 0;
-    cnx_stress_ctx_t stress_ctx;
-    double run_time_seconds = 0;
-    double target_seconds = 0;
-    double wall_time_seconds = 0;
-    uint64_t wall_time_start = picoquic_current_time();
-    uint64_t nb_connections = 0;
-    uint64_t sim_time_next_log = 1000000;
-    const int nb_clients = (const int)cnx_stress_nb_clients;
-
-    stress_random_ctx = 0xBabaC001BaddBab1ull;
-
-    picoquic_fuzz_in_progress = (fuzz_fn == NULL) ? 0 : 1;
-
-    /* Initialization */
-    memset(&stress_ctx, 0, sizeof(cnx_stress_ctx_t));
-    stress_ctx.nb_clients = nb_clients;
-
+    picoquic_tp_t tp;
+    memset(&tp, 0, sizeof(picoquic_tp_t));
+    /* This is a server context. The "remote" bidi streams are those
+        * initiated by the client, and should be authorized to send
+        * a 64K-1 packet */
+    tp.initial_max_stream_data_bidi_local = 0;
+    tp.initial_max_stream_data_bidi_remote = 0;
+    tp.initial_max_stream_id_bidir = 0;
+    tp.initial_max_stream_data_uni = 0x20000;
+    tp.initial_max_stream_id_unidir = 256;
+    tp.initial_max_data = 0x20000;
+    tp.idle_timeout = 60000;
+    tp.max_packet_size = PICOQUIC_MAX_PACKET_SIZE;
+    tp.max_ack_delay = 10000;
+    tp.active_connection_id_limit = 3;
+    tp.ack_delay_exponent = 3;
+    tp.migration_disabled = 0;
+    ret = picoquic_set_default_tp(quic, &tp);
     return ret;
 }
 
+void cnx_stress_delete_ctx(cnx_stress_ctx_t* stress_ctx)
+{
+    if (stress_ctx->link_to_clients != NULL) {
+        picoquictest_sim_link_delete(stress_ctx->link_to_clients);
+        stress_ctx->link_to_clients = NULL;
+    }
+
+    if (stress_ctx->link_to_server != NULL) {
+        picoquictest_sim_link_delete(stress_ctx->link_to_server);
+        stress_ctx->link_to_server = NULL;
+    }
+
+    if (stress_ctx->qserver != NULL) {
+        picoquic_free(stress_ctx->qserver);
+        stress_ctx->qserver = NULL;
+    }
+
+    if (stress_ctx->qclient != NULL) {
+        picoquic_free(stress_ctx->qclient);
+        stress_ctx->qclient = NULL;
+    }
+
+    if (stress_ctx->default_ctx != NULL) {
+        free(stress_ctx->default_ctx);
+        stress_ctx->default_ctx = NULL;
+    }
+
+    if (stress_ctx->c_ctx != NULL) {
+        for (int i = 0; i < stress_ctx->nb_clients; i++) {
+            if (stress_ctx->c_ctx[i] != NULL) {
+                cnx_stress_callback_delete_context(stress_ctx->c_ctx[i]);
+            }
+        }
+        free(stress_ctx->c_ctx);
+        stress_ctx->c_ctx = NULL;
+    }
+
+    if (stress_ctx->s_ctx != NULL) {
+        for (int i = 0; i < stress_ctx->nb_servers; i++) {
+            if (stress_ctx->s_ctx[i] != NULL) {
+                cnx_stress_callback_delete_context(stress_ctx->s_ctx[i]);
+            }
+        }
+        free(stress_ctx->s_ctx);
+        stress_ctx->s_ctx = NULL;
+    }
+
+    free(stress_ctx);
+}
+
+cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients) 
+{
+    cnx_stress_ctx_t* stress_ctx = (cnx_stress_ctx_t*)malloc(sizeof(cnx_stress_ctx_t));
+
+    if (stress_ctx != NULL) {
+        int ret = 0;
+
+        memset(stress_ctx, 0, sizeof(cnx_stress_ctx_t));
+        /* The random seed depends only on initialization parameters */
+        stress_ctx->random_ctx = 0xBabaC001BaddBab1ull;
+        stress_ctx->random_ctx ^= duration;
+        (void)picoquic_test_random(&stress_ctx->random_ctx);
+        stress_ctx->random_ctx ^= (uint64_t)nb_clients;
+        (void)picoquic_test_random(&stress_ctx->random_ctx);
+
+        /* Document addresses for the simulation */
+        picoquic_set_test_address(&stress_ctx->client_addr, 0x08080808, 12345);
+        picoquic_set_test_address(&stress_ctx->server_addr, 0x01010101, 4433);
+
+        /* Set and verify the simulation intervals */
+        stress_ctx->nb_client_target = nb_clients;
+        stress_ctx->client_creation_interval = 2000;
+        stress_ctx->next_client_creation_time = 0;
+        stress_ctx->client_deletion_interval = 100;
+        if ((stress_ctx->client_creation_interval + stress_ctx->client_deletion_interval) * nb_clients
+            > duration) {
+            ret = -1;
+        }
+        else {
+            stress_ctx->next_client_deletion_time = duration -
+                stress_ctx->client_deletion_interval * nb_clients;
+            stress_ctx->nb_messages_target = (nb_clients > 20000) ? 20000 : nb_clients;
+            stress_ctx->message_size = 1024;
+            stress_ctx->message_delay_min = INT64_MAX;
+            stress_ctx->message_creation_interval = stress_ctx->next_client_deletion_time /
+                (3 * stress_ctx->nb_messages_target);
+            stress_ctx->next_message_creation_time = stress_ctx->next_client_deletion_time / 3;
+            if (stress_ctx->message_creation_interval <= 0) {
+                ret = -1;
+            }
+            else {
+                stress_ctx->c_ctx = (cnx_stress_callback_ctx_t**)malloc(
+                    sizeof(cnx_stress_callback_ctx_t*) * nb_clients);
+                if (stress_ctx->c_ctx != NULL) {
+                    memset(stress_ctx->c_ctx, 0, sizeof(cnx_stress_callback_ctx_t*) * nb_clients);
+                }
+                stress_ctx->s_ctx = (cnx_stress_callback_ctx_t**)malloc(
+                    sizeof(cnx_stress_callback_ctx_t*) * nb_clients);
+                if (stress_ctx->s_ctx != NULL) {
+                    memset(stress_ctx->s_ctx, 0, sizeof(cnx_stress_callback_ctx_t*) * nb_clients);
+                }
+                stress_ctx->default_ctx = cnx_stress_callback_create_context(stress_ctx, NULL, 2);
+                if (stress_ctx->s_ctx == NULL || stress_ctx->s_ctx == NULL || stress_ctx->default_ctx == NULL) {
+                    ret = -1;
+                }
+                else {
+                    char test_server_cert_file[512];
+                    char test_server_key_file[512];
+
+                    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+
+                    if (ret == 0) {
+                        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+                    }
+                    if (ret == 0) {
+                        stress_ctx->qclient = picoquic_create(nb_clients, NULL, NULL,
+                            NULL, CNX_STRESS_ALPN, NULL, NULL, NULL, NULL,
+                            NULL, stress_ctx->simulated_time, &stress_ctx->simulated_time,
+                            NULL, NULL, 0);
+                        stress_ctx->qserver = picoquic_create(nb_clients, test_server_cert_file, test_server_key_file,
+                            NULL, CNX_STRESS_ALPN, cnx_stress_callback, stress_ctx->default_ctx, NULL, NULL,
+                            NULL, stress_ctx->simulated_time, &stress_ctx->simulated_time,
+                            NULL, NULL, 0);
+                        stress_ctx->link_to_clients = picoquictest_sim_link_create(1.0,
+                            10000, NULL, 20000, 0);
+                        stress_ctx->link_to_server = picoquictest_sim_link_create(1.0,
+                            10000, NULL, 20000, 0);
+                        if (stress_ctx->qclient == NULL || stress_ctx->qserver == NULL ||
+                            stress_ctx->link_to_clients == NULL || stress_ctx->link_to_server == NULL) {
+                            ret = -1;
+                        }
+                        else {
+                            ret = cnx_stress_set_default_tp(stress_ctx->qclient);
+                            ret = cnx_stress_set_default_tp(stress_ctx->qserver);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (ret != 0) {
+            cnx_stress_delete_ctx(stress_ctx);
+            stress_ctx = NULL;
+        }
+    }
+    return stress_ctx;
+}
+
+int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report)
+{
+    int ret = 0;
+    cnx_stress_ctx_t* stress_ctx = cnx_stress_create_ctx(duration, nb_clients);
+
+    if (stress_ctx != NULL) {
+        uint64_t wall_time_start = picoquic_current_time();
+
+        /* loop until time exhausted */
+        while (ret == 0 && stress_ctx->simulated_time < duration) {
+            ret = cnx_stress_loop_step(stress_ctx);
+        }
+
+        if (ret == 0) {
+            uint64_t wall_time_end = picoquic_current_time();
+            uint64_t wall_time_elapsed = wall_time_end - wall_time_start;
+
+            if (wall_time_elapsed > stress_ctx->simulated_time) {
+                DBG_PRINTF("Simulating %" PRIu64 " in %" PRIu64, 
+                    stress_ctx->simulated_time, wall_time_elapsed);
+                ret = -1;
+            }
+            else if (stress_ctx->nb_clients != stress_ctx->nb_client_target ||
+                stress_ctx->nb_servers != stress_ctx->nb_client_target) {
+                DBG_PRINTF("Expected %d connections, got %d (client) and %d (server)",
+                    stress_ctx->nb_client_target, stress_ctx->nb_clients, stress_ctx->nb_servers);
+                ret = -1;
+            }
+            else if (stress_ctx->nb_messages_received != stress_ctx->nb_messages_target) {
+                DBG_PRINTF("Expected %d messages, sent %d, received %d",
+                    stress_ctx->nb_messages_target, 
+                    stress_ctx->nb_messages_sent, stress_ctx->nb_messages_received);
+                ret = -1;
+            }
+            else if (do_report) {
+                double msg_avg_delay = (stress_ctx->nb_messages_target > 0) ?
+                    (double)stress_ctx->sum_message_delays / (double)stress_ctx->nb_messages_target : 0;
+                msg_avg_delay /= 1000000.0;
+                fprintf(stdout, "Many connection stress (cnx_stress) succeeds:\n");
+                fprintf(stdout, "Processed %d connections for %fs (simulated) in %fs (wall time).\n",
+                    stress_ctx->nb_client_target,
+                    ((double)stress_ctx->simulated_time)/1000000.0,
+                    ((double)wall_time_elapsed)/1000000.0);
+                fprintf(stdout, "Processed %d messages, delays min/avg/max= %fs, %fs, %fs.\n",
+                    stress_ctx->nb_messages_target, ((double)stress_ctx->message_delay_min)/ 1000000.0,
+                    msg_avg_delay, ((double)stress_ctx->message_delay_max)/ 1000000.0);
+            }
+        }
+
+        cnx_stress_delete_ctx(stress_ctx);
+    }
+    return ret;
+}
+
+/* The unit test entry point executes the cnx stress test with a 
+ * small duration and a small number of clients, the goal being to check that
+ * the cnx stress code actually works. */
+int cnx_stress_unit_test()
+{
+    return cnx_stress_do_test(120000000, 100, 0);
+}

@@ -150,6 +150,7 @@
     <ClCompile Include="ack_of_ack_test.c" />
     <ClCompile Include="bytestream_test.c" />
     <ClCompile Include="cleartext_aead_test.c" />
+    <ClCompile Include="cnxstress.c" />
     <ClCompile Include="cnx_creation_test.c" />
     <ClCompile Include="h3zerotest.c" />
     <ClCompile Include="hashtest.c" />

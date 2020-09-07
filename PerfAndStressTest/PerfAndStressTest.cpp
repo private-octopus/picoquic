@@ -95,16 +95,20 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(fuzz)
-        {
+        TEST_METHOD(fuzz) {
             int ret = fuzz_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(fuzz_initial)
-        {
+        TEST_METHOD(fuzz_initial) {
             int ret = fuzz_initial_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cnx_stress) {
+            int ret = cnx_stress_unit_test();
 
             Assert::AreEqual(ret, 0);
         }
