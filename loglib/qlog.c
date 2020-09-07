@@ -1226,6 +1226,8 @@ int qlog_info_message(uint64_t time, bytestream* s, void* ptr)
     qlog_context_t* ctx = (qlog_context_t*)ptr;
     FILE* f = ctx->f_txtlog;
     int64_t delta_time = time - ctx->start_time;
+    uint8_t message[BYTESTREAM_MAX_BUFFER_SIZE];
+    size_t message_length = 0;
 
     if (ctx->event_count != 0) {
         fprintf(f, ",\n");
@@ -1235,7 +1237,18 @@ int qlog_info_message(uint64_t time, bytestream* s, void* ptr)
     }
 
     fprintf(f, "[%"PRId64", \"info\", \"message\", { \"message\": \"", delta_time);
-    fwrite(bytestream_ptr(s), bytestream_remain(s), 1, f);
+    message_length = bytestream_remain(s);
+    if (message_length > sizeof(message)) {
+        message_length = sizeof(message);
+    }
+    memcpy(message, bytestream_ptr(s), message_length);
+    for (size_t i = 0; i < message_length; i++) {
+        int c = message[i];
+        if (c < 0x20 || c > 0x7e) {
+            message[i] = '?';
+        }
+    }
+    fwrite(message, message_length, 1, f);
     fprintf(f, "\"}]");
     ctx->event_count++;
 
