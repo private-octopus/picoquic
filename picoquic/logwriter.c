@@ -1007,6 +1007,9 @@ void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list var
 #else
     written = vsnprintf(message_text, ps_msg->size - ps_msg->ptr, fmt, vargs);
     message_len = (written < 0) ? strlen(message_text):written;
+    if (written <= 0) {
+        fprintf(stderr, "vsnprintf error, written: %d, message_len: %zu", written, message_len);
+    }
 #endif
     ps_msg->ptr += message_len;
 
