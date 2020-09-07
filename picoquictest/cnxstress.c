@@ -816,7 +816,7 @@ cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients)
         else {
             stress_ctx->next_client_deletion_time = duration -
                 stress_ctx->client_deletion_interval * nb_clients;
-            stress_ctx->nb_messages_target = nb_clients;
+            stress_ctx->nb_messages_target = (nb_clients > 20000) ? 20000 : nb_clients;
             stress_ctx->message_size = 1024;
             stress_ctx->message_delay_min = INT64_MAX;
             stress_ctx->message_creation_interval = stress_ctx->next_client_deletion_time /
@@ -923,8 +923,8 @@ int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report)
                 msg_avg_delay /= 1000000.0;
                 fprintf(stdout, "Many connection stress (cnx_stress) succeeds:\n");
                 fprintf(stdout, "Processed %d connections for %fs (simulated) in %fs (wall time).\n",
-                    stress_ctx->nb_client_target, 
-                    ((double)stress_ctx->simulated_time)/1000000.0, 
+                    stress_ctx->nb_client_target,
+                    ((double)stress_ctx->simulated_time)/1000000.0,
                     ((double)wall_time_elapsed)/1000000.0);
                 fprintf(stdout, "Processed %d messages, delays min/avg/max= %fs, %fs, %fs.\n",
                     stress_ctx->nb_messages_target, ((double)stress_ctx->message_delay_min)/ 1000000.0,
