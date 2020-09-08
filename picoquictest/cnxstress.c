@@ -868,7 +868,9 @@ cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients)
                         }
                         else {
                             ret = cnx_stress_set_default_tp(stress_ctx->qclient);
-                            ret = cnx_stress_set_default_tp(stress_ctx->qserver);
+                            if (ret == 0) {
+                                ret = cnx_stress_set_default_tp(stress_ctx->qserver);
+                            }
                         }
                     }
                 }

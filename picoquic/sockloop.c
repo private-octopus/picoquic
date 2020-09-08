@@ -172,6 +172,8 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
+    memset(sock_af, 0, sizeof(sock_af));
+
     if ((nb_sockets = picoquic_packet_loop_open_sockets(local_port, local_af, s_socket, sock_af, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }

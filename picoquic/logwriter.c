@@ -994,23 +994,24 @@ void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list var
     bytestream* ps_msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     size_t message_len;
     char* message_text;
+    int written = -1;
 
     bytewrite_cid(ps_msg, &cnx->initial_cnxid);
     bytewrite_vint(ps_msg, picoquic_get_quic_time(cnx->quic));
     bytewrite_vint(ps_msg, picoquic_log_event_info_message);
-#ifdef _WINDOWS
-    (void)vsprintf_s((char *)(ps_msg->data + ps_msg->ptr), ps_msg->size - ps_msg->ptr, fmt, vargs);
-#else
-    (void)vsprintf((char*)(ps_msg->data + ps_msg->ptr), fmt, vargs);
-#endif
     message_text = (char*)(ps_msg->data + ps_msg->ptr);
-    message_len = strlen(message_text);
-    for (size_t i = 0; i < message_len; i++) {
-        int c = message_text[i];
-        if (c < 0x20 || c > 0x7e) {
-            message_text[i] = '?';
-        }
+#ifdef _WINDOWS
+    written = vsnprintf_s(message_text,
+        ps_msg->size - ps_msg->ptr, _TRUNCATE, fmt, vargs);
+    message_len = (written < 0) ? ps_msg->size - ps_msg->ptr - 1 : written;
+#else
+    written = vsnprintf(message_text, ps_msg->size - ps_msg->ptr, fmt, vargs);
+    if (written < 0 || written >= ps_msg->size - ps_msg->ptr){
+        message_len = ps_msg->size - ps_msg->ptr - 1;
+    } else {
+        message_len = written;
     }
+#endif
     ps_msg->ptr += message_len;
 
     bytestream_buf stream_head;
