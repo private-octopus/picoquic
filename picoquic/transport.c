@@ -705,11 +705,11 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
      * If the keep alive interval was set to a too short value,
      * reset it.
      */
-    cnx->idle_timeout = cnx->local_parameters.idle_timeout*1000;
+    cnx->idle_timeout = cnx->local_parameters.idle_timeout*1000ull;
     if (cnx->local_parameters.idle_timeout == 0 ||
         (cnx->remote_parameters.idle_timeout > 0 && cnx->remote_parameters.idle_timeout < 
             cnx->local_parameters.idle_timeout)) {
-        cnx->idle_timeout = cnx->remote_parameters.idle_timeout*1000;
+        cnx->idle_timeout = cnx->remote_parameters.idle_timeout*1000ull;
     }
     if (cnx->idle_timeout == 0) {
         cnx->idle_timeout = UINT64_MAX;

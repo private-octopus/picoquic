@@ -3337,7 +3337,7 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
         uint64_t idle_timeout = cnx->idle_timeout;
         if (idle_timeout == 0) {
             /* Idle timeout is only initialized after parameters are negotiated  */
-            idle_timeout = cnx->local_parameters.idle_timeout * 1000;
+            idle_timeout = cnx->local_parameters.idle_timeout * 1000ull;
         }
         /* Ensure at least 3 PTO*/
         if (idle_timeout < 3 * cnx->path[0]->retransmit_timer) {
