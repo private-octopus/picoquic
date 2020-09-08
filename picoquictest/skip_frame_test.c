@@ -2403,3 +2403,79 @@ int queue_network_input_test()
 
     return ret;
 }
+
+#define QLOG_OVERFLOW_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "app_msg_overflow_ref.qlog"
+static char const* qlog_overflow_bin = "0809000102030405.client.log";
+static char const* qlog_overflow_file = "0809000102030405.qlog";
+
+int app_message_overflow_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_cnx_t* cnx = NULL;
+    struct sockaddr_storage addr;
+    const picoquic_connection_id_t initial_cid = { { 8, 9, 0, 1, 2, 3, 4, 5 }, 8 };
+    const picoquic_connection_id_t dest_cid = { { 16, 17, 18, 19, 20, 21, 22, 23 }, 8 };
+    char qlog_test_ref[512];
+    int ret_qlog = picoquic_get_input_path(qlog_test_ref, sizeof(qlog_test_ref),
+        picoquic_solution_dir, QLOG_OVERFLOW_REF);
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL || ret_qlog != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_set_binlog(quic, ".");
+        ret = picoquic_store_text_addr(&addr, "10.0.0.1", 1234);
+        if (ret == 0) {
+            cnx = picoquic_create_cnx(quic, initial_cid, dest_cid, (struct sockaddr*) & addr,
+                simulated_time, 0, "test-sni", "test-alpn", 1);
+            if (cnx == NULL) {
+                ret = -1;
+            }
+        }
+    }
+    if (ret == 0) {
+        char test[BYTESTREAM_MAX_BUFFER_SIZE];
+
+        memset(test, 'x', sizeof(test) - 2);
+        test[sizeof(test) - 2] = '!';
+        test[sizeof(test) - 1] = 0;
+
+        for (int i = 0; i < 16; i++) {
+            picoquic_log_app_message(cnx, "s:%s", &test[15 - i]);
+        }
+
+        picoquic_delete_cnx(cnx);
+    }
+
+    picoquic_free(quic);
+
+    if (ret == 0) {
+        /* Convert to QLOG and verify */
+        uint64_t log_time = 0;
+        FILE* f_binlog = picoquic_open_cc_log_file_for_read(qlog_overflow_bin, &log_time);
+
+        if (f_binlog == NULL) {
+            DBG_PRINTF("Cannot open binlog file: %s.", qlog_overflow_bin);
+            ret = -1;
+        }
+        else {
+            ret = qlog_convert(&initial_cid, f_binlog, qlog_overflow_file, NULL, ".");
+            if (ret != 0) {
+                DBG_PRINTF("%s", "Cannot convert the binary log into QLOG.\n");
+            }
+            else {
+                ret = picoquic_test_compare_text_files(qlog_overflow_file, qlog_test_ref);
+                if (ret != 0) {
+                    DBG_PRINTF("%s", "Unexpected content in QLOG log file.\n");
+                }
+            }
+            picoquic_file_close(f_binlog);
+        }
+    }
+
+    return ret;
+}

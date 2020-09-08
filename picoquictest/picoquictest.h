@@ -85,6 +85,7 @@ int skip_frame_test();
 int keep_alive_test();
 int logger_test();
 int binlog_test();
+int app_message_overflow_test();
 int socket_test();
 int ticket_store_test();
 int token_store_test();
