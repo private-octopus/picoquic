@@ -3794,7 +3794,7 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
 
                 if (cnx->client_mode) {
                     /* Do not unilaterally delete the connection context, as it was set by the application */
-                    picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time + PICOQUIC_MICROSEC_WAIT_MAX);
+                    picoquic_reinsert_by_wake_time(cnx->quic, cnx, UINT64_MAX);
                     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                 }
                 else {
