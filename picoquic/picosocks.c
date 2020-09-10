@@ -1033,7 +1033,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
 }
 #endif
 
-int picoquic_select(SOCKET_TYPE* sockets,
+int picoquic_select_ex(SOCKET_TYPE* sockets,
     int nb_sockets,
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
@@ -1041,6 +1041,7 @@ int picoquic_select(SOCKET_TYPE* sockets,
     unsigned char * received_ecn,
     uint8_t* buffer, int buffer_max,
     int64_t delta_t,
+    int * socket_rank,
     uint64_t* current_time)
 {
     fd_set readfds;
@@ -1083,6 +1084,7 @@ int picoquic_select(SOCKET_TYPE* sockets,
     } else if (ret_select > 0) {
         for (int i = 0; i < nb_sockets; i++) {
             if (FD_ISSET(sockets[i], &readfds)) {
+                *socket_rank = i;
                 bytes_recv = picoquic_recvmsg(sockets[i], addr_from,
                     addr_dest, dest_if, received_ecn,
                     buffer, buffer_max);
@@ -1110,6 +1112,20 @@ int picoquic_select(SOCKET_TYPE* sockets,
     *current_time = picoquic_current_time();
 
     return bytes_recv;
+}
+
+int picoquic_select(SOCKET_TYPE* sockets,
+    int nb_sockets,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max,
+    int64_t delta_t,
+    uint64_t* current_time) {
+    int socket_rank;
+    return picoquic_select_ex(sockets, nb_sockets, addr_from, addr_dest, dest_if,
+        received_ecn, buffer, buffer_max, delta_t, &socket_rank, current_time);
 }
 
 int picoquic_send_through_socket(
