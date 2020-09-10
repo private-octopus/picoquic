@@ -295,7 +295,7 @@ typedef struct st_picoquic_stateless_packet_t {
     int if_index_local;
     unsigned char received_ecn;
     size_t length;
-
+    uint64_t receive_time;
     uint64_t cnxid_log64;
     picoquic_connection_id_t initial_cid;
     picoquic_packet_type_enum ptype;
