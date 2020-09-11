@@ -30,6 +30,75 @@
 #include <sys/time.h>
 #endif
 
+
+/*
+ * Supported versions. Specific versions may mandate different processing of different
+ * formats.
+ * The first version in the list is the preferred version.
+ * The protection of clear text packets will be a function of the version negotiation.
+ */
+
+static uint8_t picoquic_cleartext_internal_test_1_salt[] = {
+    0x30, 0x67, 0x16, 0xd7, 0x63, 0x75, 0xd5, 0x55,
+    0x4b, 0x2f, 0x60, 0x5e, 0xef, 0x78, 0xd8, 0x33,
+    0x3d, 0xc1, 0xca, 0x36
+};
+
+static uint8_t picoquic_cleartext_draft_23_salt[] = {
+    0xc3, 0xee, 0xf7, 0x12, 0xc7, 0x2e, 0xbb, 0x5a,
+    0x11, 0xa7, 0xd2, 0x43, 0x2b, 0xb4, 0x63, 0x65,
+    0xbe, 0xf9, 0xf5, 0x02
+};
+
+uint8_t picoquic_retry_protection_key_25[32] = {
+    0x65, 0x6e, 0x61, 0xe3, 0x36, 0xae, 0x94, 0x17, 0xf7, 0xf0, 0xed, 0xd8, 0xd7, 0x8d, 0x46, 0x1e,
+    0x2a, 0xa7, 0x08, 0x4a, 0xba, 0x7a, 0x14, 0xc1, 0xe9, 0xf7, 0x26, 0xd5, 0x57, 0x09, 0x16, 0x9a };
+
+static uint8_t picoquic_cleartext_draft_29_salt[] = {
+    0xaf, 0xbf, 0xec, 0x28, 0x99, 0x93, 0xd2, 0x4c,
+    0x9e, 0x97, 0x86, 0xf1, 0x9c, 0x61, 0x11, 0xe0,
+    0x43, 0x90, 0xa8, 0x99
+};
+
+uint8_t picoquic_retry_protection_key_29[32] = {
+    0x8b, 0x0d, 0x37, 0xeb, 0x85, 0x35, 0x02, 0x2e, 0xbc, 0x8d, 0x76, 0xa2, 0x07, 0xd8, 0x0d, 0xf2,
+    0x26, 0x46, 0xec, 0x06, 0xdc, 0x80, 0x96, 0x42, 0xc3, 0x0a, 0x8b, 0xaa, 0x2b, 0xaa, 0xff, 0x4c };
+
+const picoquic_version_parameters_t picoquic_supported_versions[] = {
+    { PICOQUIC_NINETEENTH_INTEROP_VERSION,
+        sizeof(picoquic_cleartext_draft_29_salt),
+        picoquic_cleartext_draft_29_salt,
+        sizeof(picoquic_retry_protection_key_29),
+        picoquic_retry_protection_key_29 },
+    { PICOQUIC_NINETEENTH_BIS_INTEROP_VERSION,
+        sizeof(picoquic_cleartext_draft_29_salt),
+        picoquic_cleartext_draft_29_salt,
+        sizeof(picoquic_retry_protection_key_29),
+        picoquic_retry_protection_key_29 },
+    { PICOQUIC_EIGHTEENTH_INTEROP_VERSION,
+        sizeof(picoquic_cleartext_draft_23_salt),
+        picoquic_cleartext_draft_23_salt,
+        sizeof(picoquic_retry_protection_key_25),
+        picoquic_retry_protection_key_25 },
+    { PICOQUIC_SEVENTEENTH_INTEROP_VERSION,
+        sizeof(picoquic_cleartext_draft_23_salt),
+        picoquic_cleartext_draft_23_salt,
+        sizeof(picoquic_retry_protection_key_25),
+        picoquic_retry_protection_key_25 },
+    { PICOQUIC_INTERNAL_TEST_VERSION_2,
+        sizeof(picoquic_cleartext_internal_test_1_salt),
+        picoquic_cleartext_internal_test_1_salt,
+        sizeof(picoquic_retry_protection_key_25),
+        picoquic_retry_protection_key_25},
+    { PICOQUIC_INTERNAL_TEST_VERSION_1,
+        sizeof(picoquic_cleartext_internal_test_1_salt),
+        picoquic_cleartext_internal_test_1_salt,
+        sizeof(picoquic_retry_protection_key_25),
+        picoquic_retry_protection_key_25 }
+};
+
+const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);
+
 /*
 * Structures used in the hash table of connections
 */
@@ -222,69 +291,6 @@ void picoquic_registered_token_clear(picoquic_quic_t* quic, uint64_t expiry_time
         }
     } while (!end_reached);
 }
-
-/*
- * Supported versions. Specific versions may mandate different processing of different
- * formats.
- * The first version in the list is the preferred version.
- * The protection of clear text packets will be a function of the version negotiation.
- */
-
-static uint8_t picoquic_cleartext_internal_test_1_salt[] = {
-    0x30, 0x67, 0x16, 0xd7, 0x63, 0x75, 0xd5, 0x55,
-    0x4b, 0x2f, 0x60, 0x5e, 0xef, 0x78, 0xd8, 0x33,
-    0x3d, 0xc1, 0xca, 0x36
-};
-
-static uint8_t picoquic_cleartext_draft_23_salt[] = {
-    0xc3, 0xee, 0xf7, 0x12, 0xc7, 0x2e, 0xbb, 0x5a,
-    0x11, 0xa7, 0xd2, 0x43, 0x2b, 0xb4, 0x63, 0x65,
-    0xbe, 0xf9, 0xf5, 0x02
-};
-
-uint8_t picoquic_retry_protection_key_25[32] = {
-    0x65, 0x6e, 0x61, 0xe3, 0x36, 0xae, 0x94, 0x17, 0xf7, 0xf0, 0xed, 0xd8, 0xd7, 0x8d, 0x46, 0x1e,
-    0x2a, 0xa7, 0x08, 0x4a, 0xba, 0x7a, 0x14, 0xc1, 0xe9, 0xf7, 0x26, 0xd5, 0x57, 0x09, 0x16, 0x9a };
-
-static uint8_t picoquic_cleartext_draft_29_salt[] = {
-    0xaf, 0xbf, 0xec, 0x28, 0x99, 0x93, 0xd2, 0x4c,
-    0x9e, 0x97, 0x86, 0xf1, 0x9c, 0x61, 0x11, 0xe0,
-    0x43, 0x90, 0xa8, 0x99
-};
-
-uint8_t picoquic_retry_protection_key_29[32] = {
-    0x8b, 0x0d, 0x37, 0xeb, 0x85, 0x35, 0x02, 0x2e, 0xbc, 0x8d, 0x76, 0xa2, 0x07, 0xd8, 0x0d, 0xf2,
-    0x26, 0x46, 0xec, 0x06, 0xdc, 0x80, 0x96, 0x42, 0xc3, 0x0a, 0x8b, 0xaa, 0x2b, 0xaa, 0xff, 0x4c };
-
-const picoquic_version_parameters_t picoquic_supported_versions[] = {
-    { PICOQUIC_NINETEENTH_INTEROP_VERSION,
-        sizeof(picoquic_cleartext_draft_29_salt),
-        picoquic_cleartext_draft_29_salt,
-        sizeof(picoquic_retry_protection_key_29),
-        picoquic_retry_protection_key_29 },
-    { PICOQUIC_EIGHTEENTH_INTEROP_VERSION,
-        sizeof(picoquic_cleartext_draft_23_salt),
-        picoquic_cleartext_draft_23_salt,
-        sizeof(picoquic_retry_protection_key_25),
-        picoquic_retry_protection_key_25 },
-    { PICOQUIC_SEVENTEENTH_INTEROP_VERSION,
-        sizeof(picoquic_cleartext_draft_23_salt),
-        picoquic_cleartext_draft_23_salt,
-        sizeof(picoquic_retry_protection_key_25),
-        picoquic_retry_protection_key_25 },
-    { PICOQUIC_INTERNAL_TEST_VERSION_2,
-        sizeof(picoquic_cleartext_internal_test_1_salt),
-        picoquic_cleartext_internal_test_1_salt, 
-        sizeof(picoquic_retry_protection_key_25),
-        picoquic_retry_protection_key_25},
-    { PICOQUIC_INTERNAL_TEST_VERSION_1,
-        sizeof(picoquic_cleartext_internal_test_1_salt),
-        picoquic_cleartext_internal_test_1_salt,
-        sizeof(picoquic_retry_protection_key_25),
-        picoquic_retry_protection_key_25 }
-};
-
-const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);
 
 /* Forward reference */
 static void picoquic_wake_list_init(picoquic_quic_t* quic);
