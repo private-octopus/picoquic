@@ -250,7 +250,6 @@ typedef struct st_client_loop_cb_t {
     int key_update_done;
     int zero_rtt_available;
     int is_siduck;
-    int client_ready_loop;
     char const* saved_alpn;
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
@@ -400,9 +399,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
                     }
                 }
 
-                cb_ctx->client_ready_loop++;
-
-                if (!cb_ctx->is_siduck && cb_ctx->client_ready_loop > 4 && cb_ctx->demo_callback_ctx->nb_open_streams == 0) {
+                if (!cb_ctx->is_siduck && cb_ctx->demo_callback_ctx->nb_open_streams == 0) {
                     fprintf(stdout, "All done, Closing the connection.\n");
                     picoquic_log_app_message(cb_ctx->cnx_client, "%s", "All done, Closing the connection.");
 

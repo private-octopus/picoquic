@@ -171,6 +171,7 @@ typedef enum {
 #define PICOQUIC_SEVENTEENTH_INTEROP_VERSION 0xFF00001B
 #define PICOQUIC_EIGHTEENTH_INTEROP_VERSION 0xFF00001C
 #define PICOQUIC_NINETEENTH_INTEROP_VERSION 0xFF00001D
+#define PICOQUIC_NINETEENTH_BIS_INTEROP_VERSION 0xFF00001E
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 #define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
@@ -295,7 +296,7 @@ typedef struct st_picoquic_stateless_packet_t {
     int if_index_local;
     unsigned char received_ecn;
     size_t length;
-
+    uint64_t receive_time;
     uint64_t cnxid_log64;
     picoquic_connection_id_t initial_cid;
     picoquic_packet_type_enum ptype;

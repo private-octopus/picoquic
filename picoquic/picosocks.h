@@ -167,6 +167,17 @@ int picoquic_select(SOCKET_TYPE* sockets, int nb_sockets,
     int64_t delta_t,
     uint64_t* current_time);
 
+int picoquic_select_ex(SOCKET_TYPE* sockets,
+    int nb_sockets,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max,
+    int64_t delta_t,
+    int* socket_rank,
+    uint64_t* current_time);
+
 int picoquic_send_through_socket(
     SOCKET_TYPE fd,
     struct sockaddr* addr_dest,

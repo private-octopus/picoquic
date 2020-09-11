@@ -1831,6 +1831,7 @@ int  picoquic_incoming_not_decrypted(
                     picoquic_store_addr(&packet->addr_to, addr_from);
                     packet->if_index_local = if_index_to;
                     packet->received_ecn = received_ecn;
+                    packet->receive_time = current_time;
                     buffered = 1;
                 }
             }
@@ -1855,6 +1856,7 @@ int picoquic_incoming_segment(
     int if_index_to,
     unsigned char received_ecn,
     uint64_t current_time,
+    uint64_t receive_time,
     picoquic_connection_id_t* previous_dest_id)
 {
     int ret = 0;
@@ -2024,7 +2026,7 @@ int picoquic_incoming_segment(
         if (cnx != NULL && cnx->cnx_state != picoquic_state_disconnected &&
             ph.ptype != picoquic_packet_version_negotiation) {
             /* Mark the sequence number as received */
-            ret = picoquic_record_pn_received(cnx, ph.pc, ph.pn64, current_time);
+            ret = picoquic_record_pn_received(cnx, ph.pc, ph.pn64, receive_time);
             /* Perform ECN accounting */
             picoquic_ecn_accounting(cnx, received_ecn, ph.pc);
         }
@@ -2097,7 +2099,7 @@ int picoquic_incoming_packet(
 
         ret = picoquic_incoming_segment(quic, bytes + consumed_index, 
             packet_length - consumed_index, packet_length,
-            &consumed, addr_from, addr_to, if_index_to, received_ecn, current_time, &previous_destid);
+            &consumed, addr_from, addr_to, if_index_to, received_ecn, current_time, current_time, &previous_destid);
 
         if (ret == 0) {
             consumed_index += consumed;
@@ -2141,12 +2143,35 @@ void picoquic_process_sooner_packets(picoquic_cnx_t* cnx, uint64_t current_time)
         if (could_try_now &&
             (cnx->crypto_context[epoch].aead_decrypt != NULL || cnx->crypto_context[epoch].pn_dec != NULL))
         {
+#if 0
             int ret;
 
             DBG_PRINTF("De-stashing packet type %d, %d bytes", (int)packet->ptype, (int)packet->length);
             ret = picoquic_incoming_packet(cnx->quic, packet->bytes, packet->length,
                 (struct sockaddr*) & packet->addr_to, (struct sockaddr*) & packet->addr_local, packet->if_index_local, packet->received_ecn, current_time);
+#else
 
+            size_t consumed_index = 0;
+            int ret = 0;
+            picoquic_connection_id_t previous_destid = picoquic_null_connection_id;
+
+
+            while (consumed_index < packet->length) {
+                size_t consumed = 0;
+
+                ret = picoquic_incoming_segment(cnx->quic, packet->bytes + consumed_index,
+                    packet->length - consumed_index, packet->length,
+                    &consumed, (struct sockaddr*) & packet->addr_to, (struct sockaddr*) & packet->addr_local, packet->if_index_local,
+                    packet->received_ecn, current_time, packet->receive_time, &previous_destid);
+
+                if (ret == 0 && consumed > 0) {
+                    consumed_index += consumed;
+                }
+                else {
+                    break;
+                }
+            }
+#endif
             if (ret != 0) {
                 DBG_PRINTF("Processing sooner packet type %d returns %d (0x%d)", (int)packet->ptype, ret, ret);
             }

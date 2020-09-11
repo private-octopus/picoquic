@@ -184,16 +184,17 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     /* Wait for packets */
     /* TODO: add stopping condition, was && (!just_once || !connection_done) */
     while (ret == 0) {
+        int socket_rank = -1;
         int64_t delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
             unsigned char received_ecn;
 
         if_index_to = 0;
 
-        bytes_recv = picoquic_select(s_socket, nb_sockets,
+        bytes_recv = picoquic_select_ex(s_socket, nb_sockets,
             &addr_from,
             &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
-            delta_t, &current_time);
+            delta_t, &socket_rank, &current_time);
 
         nb_loops++;
         if (nb_loops >= 100) {
@@ -213,6 +214,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
         }
         else {
             uint64_t loop_time = current_time;
+            uint16_t current_recv_port = socket_port;
 
             if (bytes_recv > 0) {
                 /* track the local port value if not known yet */
@@ -223,18 +225,27 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                         fprintf(stderr, "Could not read local address.\n");
                     }
                     else if (addr_to.ss_family == AF_INET6) {
-                        socket_port = ntohs(((struct sockaddr_in6*) & local_address)->sin6_port);
+                        socket_port = ((struct sockaddr_in6*) & local_address)->sin6_port;
                     }
                     else if (addr_to.ss_family == AF_INET) {
-                        socket_port = ntohs(((struct sockaddr_in*) & local_address)->sin_port);
+                        socket_port = ((struct sockaddr_in*) & local_address)->sin_port;
+                    }
+                    current_recv_port = socket_port;
+                }
+                if (testing_migration) {
+                    if (socket_rank == 0) {
+                        current_recv_port = socket_port;
+                    }
+                    else {
+                        current_recv_port = next_port;
                     }
                 }
                 /* Document incoming port */
                 if (addr_to.ss_family == AF_INET6) {
-                    ((struct sockaddr_in6*) & addr_to)->sin6_port = socket_port;
+                    ((struct sockaddr_in6*) & addr_to)->sin6_port = current_recv_port;
                 }
                 else if (addr_to.ss_family == AF_INET) {
-                    ((struct sockaddr_in*) & addr_to)->sin_port = socket_port;
+                    ((struct sockaddr_in*) & addr_to)->sin_port = current_recv_port;
                 }
                 /* Submit the packet to the server */
                 (void)picoquic_incoming_packet(quic, buffer,
@@ -272,8 +283,9 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                     if (testing_migration) {
                         /* This code path is only used in the migration tests */
                         uint16_t send_port = (local_addr.ss_family == AF_INET) ?
-                            ntohs(((struct sockaddr_in*) & local_addr)->sin_port) :
-                            ntohs(((struct sockaddr_in6*) & local_addr)->sin6_port);
+                            ((struct sockaddr_in*)& local_addr)->sin_port:
+                            ((struct sockaddr_in6*)& local_addr)->sin6_port;
+
                         if (send_port == next_port) {
                             send_socket = s_socket[nb_sockets - 1];
                         }
