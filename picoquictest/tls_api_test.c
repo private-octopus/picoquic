@@ -9681,11 +9681,9 @@ int integrity_limit_test()
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
-    else {
-        picoquic_set_qlog(test_ctx->qserver, ".");
-    }
 
     if (ret == 0) {
+        picoquic_set_qlog(test_ctx->qserver, ".");
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
