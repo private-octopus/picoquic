@@ -75,6 +75,7 @@ size_t picoquic_aead_decrypt_generic(uint8_t* output, const uint8_t* input, size
     uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_ctx);
 
 uint64_t picoquic_aead_integrity_limit(void* aead_ctx);
+uint64_t picoquic_aead_confidentiality_limit(void* aead_ctx);
 
 void picoquic_aead_free(void* aead_context);
 

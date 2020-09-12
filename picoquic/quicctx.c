@@ -330,7 +330,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->local_cnxid_length = 8; /* TODO: should be lower on clients-only implementation */
         quic->padding_multiple_default = 0; /* TODO: consider default = 128 */
         quic->padding_minsize_default = PICOQUIC_RESET_PACKET_MIN_SIZE;
-        quic->crypto_epoch_length_max = PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH;
+        quic->crypto_epoch_length_max = 0;
         picoquic_wake_list_init(quic);
 
         if (cnx_id_callback != NULL) {

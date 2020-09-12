@@ -9703,6 +9703,23 @@ int integrity_limit_test()
 
         ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 16);
     }
+
+    /* Check the max length of an epoch is the expected value */
+    if (ret == 0) {
+        uint64_t limit = picoquic_aead_confidentiality_limit(test_ctx->cnx_server->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+
+        if (test_ctx->cnx_server->crypto_epoch_length_max != limit) {
+            DBG_PRINTF("Server confidentiality limit set to 0x%" PRIx64 ", insted of %" PRIx64,
+                test_ctx->cnx_server->crypto_epoch_length_max, limit);
+            ret = -1;
+        } else if (test_ctx->cnx_client->crypto_epoch_length_max != limit) {
+            DBG_PRINTF("Client confidentiality limit set to 0x%" PRIx64 ", insted of %" PRIx64,
+                test_ctx->cnx_client->crypto_epoch_length_max, limit);
+            ret = -1;
+        }
+    }
+
+
     /* Set the number of failed decryptions just below the limit and then send a bad packet  */
     if (ret == 0 && test_ctx->cnx_server != NULL) {
         uint8_t p[256];
