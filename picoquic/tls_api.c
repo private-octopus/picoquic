@@ -1884,6 +1884,18 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
     return ret;
 }
 
+/* Access integrity limit for AEAD */
+uint64_t picoquic_aead_integrity_limit(void* aead_ctx)
+{
+    return ((ptls_aead_context_t*)aead_ctx)->algo->integrity_limit;
+}
+
+/* Access confidentiality limit for AEAD */
+uint64_t picoquic_aead_confidentiality_limit(void* aead_ctx)
+{
+    return ((ptls_aead_context_t*)aead_ctx)->algo->confidentiality_limit;
+}
+
 /* AEAD encrypt/decrypt routines */
 size_t picoquic_aead_decrypt_generic(uint8_t* output, const uint8_t* input, size_t input_length,
     uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_ctx)

@@ -490,6 +490,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
     }
 
     if (ph->epoch == picoquic_epoch_1rtt) {
+        int need_integrity_check = 1;
         /* Manage key rotation */
         if (ph->key_phase == cnx->key_phase_dec) {
             /* AEAD Decrypt, in place */
@@ -501,6 +502,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             if (current_time > cnx->crypto_rotation_time_guard) {
                 /* Too late. Ignore the packet. Could be some kind of attack. */
                 decoded = ph->payload_length + 1;
+                need_integrity_check = 0;
             }
             else if (cnx->crypto_context_old.aead_decrypt != NULL) {
                 decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
@@ -509,6 +511,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             else {
                 /* old context is either not yet available, or already removed */
                 decoded = ph->payload_length + 1;
+                need_integrity_check = 0;
             }
         }
         else {
@@ -540,6 +543,15 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             else {
                 /* new context could not be computed  */
                 decoded = ph->payload_length + 1;
+                need_integrity_check = 0;
+            }
+        }
+
+        if (need_integrity_check && decoded > ph->payload_length) {
+            cnx->crypto_failure_count++;
+            if (cnx->crypto_failure_count > picoquic_aead_integrity_limit(cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt)) {
+                picoquic_log_app_message(cnx, "AEAD Integrity limit reached after 0x%" PRIx64 " failed decryptions.", cnx->crypto_failure_count);
+                (void)picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_AEAD_LIMIT_REACHED, 0);
             }
         }
     }

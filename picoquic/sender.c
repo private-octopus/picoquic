@@ -2688,6 +2688,12 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_0rtt]);
     picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_handshake]);
 
+    /* Set the confidentiality limit if not already set */
+    if (cnx->crypto_epoch_length_max == 0) {
+        cnx->crypto_epoch_length_max = 
+            picoquic_aead_confidentiality_limit(cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+    }
+
     /* Start migration to server preferred address if present */
     if (cnx->client_mode) {
         (void)picoquic_prepare_server_address_migration(cnx);
@@ -3056,8 +3062,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
     /* If the number of packets sent is larger that the max length of
      * a crypto epoch, prepare a key rotation */
-    if (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence >
-        cnx->crypto_epoch_sequence + cnx->crypto_epoch_length_max &&
+    if ((cnx->pkt_ctx[picoquic_packet_context_application].send_sequence - cnx->crypto_epoch_sequence >
+        cnx->crypto_epoch_length_max) &&
         cnx->crypto_epoch_sequence <
         cnx->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range) {
         if (picoquic_start_key_rotation(cnx) != 0) {
