@@ -9667,3 +9667,73 @@ int pacing_cc_test()
 
     return ret;
 }
+
+int integrity_limit_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    int nb_initial_loop = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x15, 0x4E, 0x98, 0x14, 0, 0, 0, 1}, 8 };
+    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_set_qlog(test_ctx->qserver, ".");
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+    }
+
+    /* Perform a data sending loop for a few rounds after the ready state */
+    while (ret == 0 && nb_initial_loop < 64) {
+        if (test_ctx->cnx_server != NULL && 
+            test_ctx->cnx_server->crypto_context[picoquic_epoch_1rtt].aead_decrypt != NULL) {
+            nb_initial_loop++;
+        }
+
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 16);
+    }
+    /* Set the number of failed decryptions just below the limit and then send a bad packet  */
+    if (ret == 0 && test_ctx->cnx_server != NULL) {
+        uint8_t p[256];
+
+        test_ctx->cnx_server->crypto_failure_count = picoquic_aead_integrity_limit(
+            test_ctx->cnx_server->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+
+        memset(p, 0, sizeof(p));
+        memcpy(p + 1, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id_len);
+        p[0] |= 64;
+        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr,
+            (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+
+        if (test_ctx->cnx_server->cnx_state != picoquic_state_disconnecting) {
+            DBG_PRINTF("Connection not disconnecting, limit 0x%" PRIx64 ", reached %" PRIx64,
+                test_ctx->cnx_server->crypto_context[picoquic_epoch_1rtt].aead_decrypt,
+                test_ctx->cnx_server->crypto_failure_count);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->local_error != PICOQUIC_TRANSPORT_AEAD_LIMIT_REACHED) {
+            DBG_PRINTF("Wrong error code, 0x%x instead of 0x%x",
+                test_ctx->cnx_server->local_error,
+                PICOQUIC_TRANSPORT_AEAD_LIMIT_REACHED);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

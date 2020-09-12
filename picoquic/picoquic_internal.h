@@ -980,7 +980,8 @@ typedef struct st_picoquic_cnx_t {
     picoquic_crypto_context_t crypto_context[PICOQUIC_NUMBER_OF_EPOCHS]; /* Encryption and decryption objects */
     picoquic_crypto_context_t crypto_context_old; /* Old encryption and decryption context after key rotation */
     picoquic_crypto_context_t crypto_context_new; /* New encryption and decryption context just before key rotation */
-
+    uint64_t crypto_failure_count;
+    uint64_t crypto_success_count;
     /* Liveness detection */
     uint64_t latest_progress_time; /* last local time at which the connection progressed */
 
