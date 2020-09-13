@@ -93,6 +93,9 @@
     <ClCompile Include="sockloop.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="winsockloop.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

@@ -117,21 +117,23 @@ static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb
             fprintf(stdout, "Waiting for packets.\n");
             break;
         case picoquic_packet_loop_after_receive:
-            if (cb_ctx->just_once && !cb_ctx->first_connection_seen && picoquic_get_first_cnx(quic) != NULL) {
-                cb_ctx->first_connection_seen = 1;
-                fprintf(stdout, "First connection noticed.\n");
-            }
             break;
         case picoquic_packet_loop_after_send:
-            if (cb_ctx->just_once && cb_ctx->first_connection_seen && picoquic_get_first_cnx(quic) == NULL) {
-                fprintf(stdout, "No more active connections.\n");
-                cb_ctx->connection_done = 1;
-                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
-            }
             break;
         default:
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
             break;
+        }
+
+        if (ret == 0 && cb_ctx->just_once){
+            if (!cb_ctx->first_connection_seen && picoquic_get_first_cnx(quic) != NULL) {
+                cb_ctx->first_connection_seen = 1;
+                fprintf(stdout, "First connection noticed.\n");
+            } else if (cb_ctx->first_connection_seen && picoquic_get_first_cnx(quic) == NULL) {
+                fprintf(stdout, "No more active connections.\n");
+                cb_ctx->connection_done = 1;
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+            }
         }
     }
     return ret;
@@ -206,7 +208,11 @@ int quic_server(const char* server_name, int server_port,
 
     if (ret == 0) {
         /* Wait for packets */
+#if _WINDOWS
+        ret = picoquic_packet_loop_win(qserver, server_port, 0, dest_if, server_loop_cb, &loop_cb_ctx);
+#else
         ret = picoquic_packet_loop(qserver, server_port, 0, dest_if, server_loop_cb, &loop_cb_ctx);
+#endif
     }
 
     /* And exit */
@@ -635,8 +641,11 @@ int quic_client(const char* ip_address_text, int server_port,
             loop_cb.demo_callback_ctx = &callback_ctx;
         }
 
-
+#ifdef _WINDOWS
+        ret = picoquic_packet_loop_win(qclient, 0, loop_cb.server_address.ss_family, 0, client_loop_cb, &loop_cb);
+#else
         ret = picoquic_packet_loop(qclient, 0, loop_cb.server_address.ss_family, 0, client_loop_cb, &loop_cb);
+#endif
     }
 
     if (ret == 0) {

@@ -122,7 +122,7 @@ typedef struct st_picoquic_recvmsg_async_ctx_t {
     char cmsg_buffer[1024];
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     struct sockaddr_storage addr_from;
-    struct sockaddr_storage* addr_dest;
+    struct sockaddr_storage addr_dest;
     socklen_t from_length;
     socklen_t dest_length;
     SOCKET_TYPE fd;
