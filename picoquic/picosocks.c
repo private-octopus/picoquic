@@ -497,8 +497,7 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t * ctx)
 
         if (ret != 0) {
             last_error = WSAGetLastError();
-            if (last_error == 997) {
-                /* This is an horrific hack, but it seems to actually work. */
+            if (last_error == WSA_IO_PENDING){
                 ret = 0;
             } else {
                 DBG_PRINTF("Could not start receive async (WSARecvMsg) on UDP socket %d = %d!\n",

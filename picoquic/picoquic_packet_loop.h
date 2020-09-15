@@ -30,6 +30,7 @@ extern "C" {
 #endif
 
 #define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 2
+#define PICOQUIC_PACKET_LOOP_SEND_MAX 10
 
 typedef enum {
     picoquic_packet_loop_ready = 0,

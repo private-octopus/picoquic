@@ -74,6 +74,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 #include "picoquic_internal.h"
 #include "picoquic_packet_loop.h"
 
+/* Open a set of sockets in asynch mode. */
 int picoquic_packet_loop_open_sockets_win(int local_port, int local_af, 
     picoquic_recvmsg_async_ctx_t** sock_ctx, int * sock_af, HANDLE * events,
     int nb_sockets_max)
@@ -136,6 +137,216 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
     return nb_sockets;
 }
 
+/* Async version of Sendto.
+ * The goal is to use WSASendMsg in asynchronous mode.
+ * Each send operation operates with a buffer of type picoquic_sendmsg_ctx_t,
+ * with the following steps:
+ * 1) A call to picoquic_prepare_next_packet fills data buffer, addresses, etc.
+ * 2) A call to picooquic_sendmsg_start formats the sendmsg parameters and
+ *    calls sendmsg in asynchronous mode.
+ * 3) When the send completes, the completion routine fills number of
+ *    bytes sent, error codes, etc.
+ * 4) The send loop verifies that the previous send is complete before
+ *    reusing the buffer
+ * The step (4) is the most tricky. We envisage that the application will
+ * manage several buffers so as to be able to send several packets in a
+ * batch. We can manage the list of buffer as a heap, with the first sent
+ * packet on top. If that packet is available (send complete or not yet sent)
+ * the loop picks it, use it, and chains it at the end of the list. If
+ * the list is long enough, there should never be a need to wait. When that
+ * happens, the application has to actively wait for the completion,
+ * maybe by running another "wait for receive or return immediately".
+ */
+
+typedef struct st_picoquic_sendmsg_ctx_t {
+    WSAOVERLAPPED overlap;
+    struct st_picoquic_sendmsg_ctx_t* next;
+    WSABUF dataBuf;
+    WSAMSG msg;
+    char cmsg_buffer[1024];
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    struct sockaddr_storage addr_from;
+    struct sockaddr_storage addr_dest;
+    socklen_t from_length;
+    socklen_t dest_length;
+    int dest_if;
+    SOCKET_TYPE fd;
+    size_t send_length;
+    int bytes_sent;
+    int ret;
+    int last_err;
+    int is_started;
+    int is_complete;
+} picoquic_sendmsg_ctx_t;
+
+void CALLBACK picoquic_sendmsg_complete_cb(
+    IN DWORD dwError,
+    IN DWORD cbTransferred,
+    IN LPWSAOVERLAPPED lpOverlapped,
+    IN DWORD dwFlags
+)
+{
+    picoquic_sendmsg_ctx_t* send_ctx = (picoquic_sendmsg_ctx_t*)
+        (((uint8_t*)lpOverlapped) - offsetof(struct st_picoquic_sendmsg_ctx_t, overlap));
+    send_ctx->bytes_sent = (int)cbTransferred;
+    send_ctx->ret = dwError;
+    send_ctx->last_err = (dwError == 0) ? 0 : GetLastError();
+    send_ctx->is_complete = 1;
+}
+
+int picoquic_sendmsg_start(picoquic_sendmsg_ctx_t* send_ctx)
+{
+    int ret = 0;
+    GUID WSASendMsg_GUID = WSAID_WSASENDMSG;
+    LPFN_WSASENDMSG WSASendMsg;
+    int control_length = 0;
+    DWORD NumberOfBytes;
+    WSACMSGHDR* cmsg;
+
+    ret = WSAIoctl(send_ctx->fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
+        &WSASendMsg_GUID, sizeof WSASendMsg_GUID,
+        &WSASendMsg, sizeof WSASendMsg,
+        &NumberOfBytes, NULL, NULL);
+
+    if (ret == SOCKET_ERROR) {
+        send_ctx->ret = ret;
+        send_ctx->last_err = WSAGetLastError();
+        DBG_PRINTF("Could not initialize WSASendMsg on UDP socket %d= %d!\n",
+            (int)send_ctx->fd, send_ctx->last_err);
+        ret = -1;
+    }
+    else {
+        /* Format the message header */
+        send_ctx->is_started = 1;
+        memset(&send_ctx->msg, 0, sizeof(send_ctx->msg));
+        send_ctx->msg.name = (struct sockaddr*)& send_ctx->addr_dest;
+        send_ctx->msg.namelen = picoquic_addr_length((struct sockaddr*)&send_ctx->addr_dest);
+        send_ctx->dataBuf.buf = (char*)send_ctx->buffer;
+        send_ctx->dataBuf.len = (ULONG)send_ctx->send_length;
+        send_ctx->msg.lpBuffers = &send_ctx->dataBuf;
+        send_ctx->msg.dwBufferCount = 1;
+        send_ctx->msg.Control.buf = (char*)send_ctx->cmsg_buffer;
+        send_ctx->msg.Control.len = sizeof(send_ctx->cmsg_buffer);
+
+        /* Format the control message */
+        cmsg = WSA_CMSG_FIRSTHDR(&send_ctx->msg);
+
+        if (send_ctx->addr_from.ss_family != 0) {
+            if (send_ctx->addr_from.ss_family == AF_INET) {
+                memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in_pktinfo)));
+                cmsg->cmsg_level = IPPROTO_IP;
+                cmsg->cmsg_type = IP_PKTINFO;
+                cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in_pktinfo));
+                struct in_pktinfo* pktinfo = (struct in_pktinfo*)WSA_CMSG_DATA(cmsg);
+                pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)&send_ctx->addr_from)->sin_addr.s_addr;
+                pktinfo->ipi_ifindex = (unsigned long)send_ctx->dest_if;
+
+                control_length += WSA_CMSG_SPACE(sizeof(struct in_pktinfo));
+            }
+            else {
+                memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in6_pktinfo)));
+                cmsg->cmsg_level = IPPROTO_IPV6;
+                cmsg->cmsg_type = IPV6_PKTINFO;
+                cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in6_pktinfo));
+                struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)WSA_CMSG_DATA(cmsg);
+                memcpy(&pktinfo6->ipi6_addr.u, &((struct sockaddr_in6*)&send_ctx->addr_from)->sin6_addr.u, sizeof(IN6_ADDR));
+                pktinfo6->ipi6_ifindex = (unsigned long)send_ctx->dest_if;
+
+                control_length += WSA_CMSG_SPACE(sizeof(struct in6_pktinfo));
+            }
+
+            if (send_ctx->addr_from.ss_family == AF_INET6) {
+                struct cmsghdr* cmsg_2 = WSA_CMSG_NXTHDR(&send_ctx->msg, cmsg);
+                if (cmsg_2 == NULL) {
+                    DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+                }
+                else {
+                    int val = 1;
+
+                    cmsg_2->cmsg_level = IPPROTO_IPV6;
+                    cmsg_2->cmsg_type = IPV6_DONTFRAG;
+                    cmsg_2->cmsg_len = WSA_CMSG_LEN(sizeof(int));
+                    *((int*)WSA_CMSG_DATA(cmsg_2)) = val;
+                    control_length += WSA_CMSG_SPACE(sizeof(int));
+#ifdef IPV6_ECN_NOT
+                    struct cmsghdr* cmsg_3 = WSA_CMSG_NXTHDR(&msg, cmsg_2);
+                    if (cmsg_3 == NULL) {
+                        DBG_PRINTF("Cannot obtain third CMSG (control_length: %d)\n", control_length);
+                    }
+                    else {
+                        INT ecn_val = PICOQUIC_ECN_ECT_0;
+                        cmsg_3->cmsg_level = IPPROTO_IPV6;
+                        cmsg_3->cmsg_type = IPV6_ECN;
+                        cmsg_3->cmsg_len = WSA_CMSG_LEN(sizeof(INT));
+                        *((INT*)WSA_CMSG_DATA(cmsg_3)) = ecn_val;
+                        control_length += WSA_CMSG_SPACE(sizeof(INT));
+                    }
+#endif
+                }
+            }
+            else {
+                struct cmsghdr* last_msg = cmsg;
+                if (send_ctx->send_length > PICOQUIC_INITIAL_MTU_IPV4) {
+                    struct cmsghdr* cmsg_2 = WSA_CMSG_NXTHDR(&send_ctx->msg, last_msg);
+                    if (cmsg_2 == NULL) {
+                        DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+                    }
+                    else {
+                        int val = 1;
+                        cmsg_2->cmsg_level = IPPROTO_IP;
+                        cmsg_2->cmsg_type = IP_DONTFRAGMENT;
+                        cmsg_2->cmsg_len = WSA_CMSG_LEN(sizeof(int));
+                        *((PINT)WSA_CMSG_DATA(cmsg_2)) = val;
+                        control_length += WSA_CMSG_SPACE(sizeof(int));
+                        last_msg = cmsg_2;
+                    }
+                }
+#ifdef IP_ECN_NOT
+                struct cmsghdr* cmsg_3 = WSA_CMSG_NXTHDR(&msg, last_msg);
+                if (cmsg_3 == NULL) {
+                    DBG_PRINTF("Cannot obtain third CMSG (control_length: %d)\n", control_length);
+                }
+                else {
+                    INT ecn_val = PICOQUIC_ECN_ECT_0;
+                    cmsg_3->cmsg_level = IPPROTO_IP;
+                    cmsg_3->cmsg_type = IP_ECN;
+                    cmsg_3->cmsg_len = WSA_CMSG_LEN(sizeof(INT));
+                    *((PINT)WSA_CMSG_DATA(cmsg_3)) = ecn_val;
+                    control_length += WSA_CMSG_SPACE(sizeof(INT));
+                }
+#endif
+            }
+        }
+
+        send_ctx->msg.Control.len = control_length;
+        if (control_length == 0) {
+            send_ctx->msg.Control.buf = NULL;
+        }
+
+        /* Send the message */
+        ret = WSASendMsg(send_ctx->fd, &send_ctx->msg, 0, NULL, &send_ctx->overlap, picoquic_sendmsg_complete_cb);
+        if (ret != 0) {
+            DWORD last_err = WSAGetLastError();
+            if (last_err == WSA_IO_PENDING) {
+                ret = 0;
+            }
+            else {
+                send_ctx->last_err = WSAGetLastError();
+                send_ctx->ret = ret;
+            }
+        }
+        else {
+            /* Unexpected -- should be WSA_IO_PENDING */
+            DBG_PRINTF("%s", "Send function is not pending!");
+        }
+    }
+
+    return ret;
+}
+
+/* Specialized packet loop using Windows sockets.
+ */
+
 int picoquic_packet_loop_win(picoquic_quic_t* quic,
     int local_port,
     int local_af,
@@ -146,10 +357,6 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(quic);
     int64_t delay_max = 10000000;
-    uint8_t send_buffer[1536];
-    size_t send_length = 0;
-    uint64_t loop_count_time = current_time;
-    int nb_loops = 0;
     picoquic_connection_id_t log_cid;
     picoquic_recvmsg_async_ctx_t* sock_ctx[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
@@ -159,12 +366,36 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     int testing_migration = 0; /* Hook for the migration test */
     uint16_t next_port = 0; /* Data for the migration test */
     picoquic_cnx_t* last_cnx = NULL;
-#ifdef _WINDOWS
+    picoquic_sendmsg_ctx_t* send_ctx_first = NULL;
+    picoquic_sendmsg_ctx_t* send_ctx_last = NULL;
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
-#endif
     memset(sock_af, 0, sizeof(sock_af));
 
+    /* Create a list of contexts for sending packets */
+    for (int i = 0; i < PICOQUIC_PACKET_LOOP_SEND_MAX; i++)
+    {
+        picoquic_sendmsg_ctx_t* send_ctx = (picoquic_sendmsg_ctx_t*)malloc(sizeof(picoquic_sendmsg_ctx_t));
+        if (send_ctx == NULL) {
+            DBG_PRINTF("Cannot allocate send ctx #%d", i + 1);
+            ret = -1;
+            break;
+        }
+        else {
+            if (send_ctx_last == NULL) {
+                send_ctx_last = send_ctx;
+            } 
+            send_ctx->next = send_ctx_first;
+            send_ctx_first = send_ctx;
+            send_ctx->is_complete = 0;
+            send_ctx->is_started = 0;
+            send_ctx->last_err = 0;
+            send_ctx->ret = 0;
+        }
+    }
+
+
+    /* Open the sockets */
     if ((nb_sockets = picoquic_packet_loop_open_sockets_win(
         local_port, local_af, sock_ctx, sock_af, events, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
@@ -175,6 +406,8 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 
     /* If the socket is not already bound, need to send a first packet to commit the port number */
     if (ret == 0 && local_port == 0) {
+        uint8_t send_buffer[1536];
+        size_t send_length = 0;
         struct sockaddr_storage peer_addr;
         struct sockaddr_storage local_addr;
         int if_index = dest_if;
@@ -227,7 +460,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     }
 
     /* If the socket is already bound, start asynch receive */
-    if (ret == 0 /* && local_port != 0 */) {
+    if (ret == 0) {
         for (int i = 0; i < nb_sockets; i++) {
             if (!sock_ctx[i]->is_started) {
                 sock_ctx[i]->is_started = 1;
@@ -241,13 +474,11 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 
     /* TODO: add stopping condition, was && (!just_once || !connection_done) */
     while (ret == 0) {
-        uint64_t loop_time;
         int socket_rank = -1;
         int64_t delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
         DWORD delta_t_ms = (delta_t < 0)?0:(DWORD)(delta_t / 1000);
-        DWORD ret_event = WSAWaitForMultipleEvents(nb_sockets, events, FALSE, delta_t_ms, 0);
+        DWORD ret_event = WSAWaitForMultipleEvents(nb_sockets, events, FALSE, delta_t_ms, TRUE);
         current_time = picoquic_get_quic_time(quic);
-        loop_time = current_time;
 
         if (ret_event == WSA_WAIT_FAILED) {
             DBG_PRINTF("WSAWaitForMultipleEvents fails, error 0x%x", WSAGetLastError());
@@ -311,57 +542,81 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 
             /* Send packets that are now ready */
             /* TODO: manage asynch send. */
-            while (ret == 0) {
-                struct sockaddr_storage peer_addr;
-                struct sockaddr_storage local_addr;
-                int if_index = dest_if;
-                int sock_ret = 0;
-                int sock_err = 0;
+            if (ret == 0 && (!send_ctx_first->is_started || send_ctx_first->is_complete)) {
+                do {
+                    picoquic_sendmsg_ctx_t* send_ctx = send_ctx_first;
 
-                ret = picoquic_prepare_next_packet(quic, loop_time,
-                    send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx);
-
-                if (ret == 0 && send_length > 0) {
-                    SOCKET_TYPE send_socket = INVALID_SOCKET;
-                    loop_count_time = current_time;
-                    nb_loops = 0;
-                    for (int i = 0; i < nb_sockets; i++) {
-                        if (sock_af[i] == peer_addr.ss_family) {
-                            send_socket = sock_ctx[i]->fd;
-                            break;
+                    if (send_ctx_first->is_started && send_ctx_first->is_complete) {
+                        if (send_ctx->ret != 0) {
+                            if (last_cnx == NULL) {
+                                picoquic_log_context_free_app_message(quic, &log_cid,
+                                    "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
+                                    send_ctx->addr_dest.ss_family, send_ctx->addr_from.ss_family, send_ctx->dest_if,
+                                    send_ctx->ret, send_ctx->last_err);
+                            }
+                            else {
+                                picoquic_log_app_message(last_cnx,
+                                    "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
+                                    send_ctx->addr_dest.ss_family, send_ctx->addr_from.ss_family, send_ctx->dest_if,
+                                    send_ctx->ret, send_ctx->last_err);
+                            }
                         }
                     }
+                    memset(&send_ctx->overlap, 0, sizeof(send_ctx->overlap));
+                    send_ctx->is_started = 0;
+                    send_ctx->is_complete = 0;
+                    send_ctx->last_err = 0;
+                    send_ctx->ret = 0;
 
-                    if (testing_migration) {
-                        /* This code path is only used in the migration tests */
-                        uint16_t send_port = (local_addr.ss_family == AF_INET) ?
-                            ((struct sockaddr_in*) & local_addr)->sin_port :
-                            ((struct sockaddr_in6*) & local_addr)->sin6_port;
+                    ret = picoquic_prepare_next_packet(quic, current_time,
+                        send_ctx->buffer, sizeof(send_ctx->buffer), &send_ctx->send_length,
+                        &send_ctx->addr_dest, &send_ctx->addr_from, &send_ctx->dest_if, &log_cid, &last_cnx);
 
-                        if (send_port == next_port) {
-                            send_socket = sock_ctx[nb_sockets - 1]->fd;
+                    if (ret == 0 && send_ctx->send_length > 0) {
+                        send_ctx->fd = INVALID_SOCKET;
+
+                        for (int i = 0; i < nb_sockets; i++) {
+                            if (sock_af[i] == send_ctx->addr_dest.ss_family) {
+                                send_ctx->fd = sock_ctx[i]->fd;
+                                break;
+                            }
                         }
-                    }
 
-                    sock_ret = picoquic_send_through_socket(send_socket,
-                        (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                        (const char*)send_buffer, (int)send_length, &sock_err);
+                        if (testing_migration) {
+                            /* This code path is only used in the migration tests */
+                            uint16_t send_port = (send_ctx->addr_dest.ss_family == AF_INET) ?
+                                ((struct sockaddr_in*) & send_ctx->addr_from)->sin_port :
+                                ((struct sockaddr_in6*) & send_ctx->addr_from)->sin6_port;
 
-                    if (sock_ret <= 0) {
-                        if (last_cnx == NULL) {
-                            picoquic_log_context_free_app_message(quic, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
-                                peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
+                            if (send_port == next_port) {
+                                send_ctx->fd = sock_ctx[nb_sockets - 1]->fd;
+                            }
+                        }
+                        ret = picoquic_sendmsg_start(send_ctx);
+
+                        if (ret == 0) {
+                            /* Queue the send context at the end of the buffer chain,
+                             * but only if there is more than 1 such context */
+                            send_ctx->is_started = 1;
+                            if (send_ctx != send_ctx_last) {
+                                send_ctx_last->next = send_ctx;
+                                send_ctx_first = send_ctx->next;
+                                send_ctx->next = NULL;
+                                send_ctx_last = send_ctx;
+                            }
                         }
                         else {
-                            picoquic_log_app_message(last_cnx, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
-                                peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
+                            DBG_PRINTF("Cannot start sendsmg, error: %d", send_ctx->last_err);
                         }
                     }
-                }
-                else {
-                    break;
-                }
+                    else {
+                        break;
+                    }
+                } while (ret == 0 && (!send_ctx_first->is_started || send_ctx_first->is_complete));
+            }
+            else {
+                DBG_PRINTF("%s", "No completion routine called on time!");
+                Sleep(1);
             }
 
             if (ret == 0 && loop_callback != NULL) {
@@ -456,6 +711,23 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
             sock_ctx[i] = NULL;
             events[i] = NULL;
         }
+    }
+
+    /* Free the list of contexts */
+    while (send_ctx_first != NULL)
+    {
+        picoquic_sendmsg_ctx_t* send_ctx = send_ctx_first;
+        send_ctx_first = send_ctx->next;
+        for (int i = 0; i < 5; i++) {
+            if (send_ctx->is_started && !send_ctx->is_complete) {
+                DBG_PRINTF("Socket %d, send ctx is still started", (int)send_ctx->fd);
+                Sleep(0);
+            }
+            else {
+                break;
+            }
+        }
+        free(send_ctx);
     }
 
     return ret;
