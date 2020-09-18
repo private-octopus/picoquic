@@ -321,6 +321,344 @@ void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets)
     }
 }
 
+void picoquic_socks_cmsg_parse(
+    void* vmsg,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn)
+{
+    /* Assume that msg has been filled by a call to recvmsg */
+#if _WINDOWS
+    struct cmsghdr* cmsg;
+    WSAMSG* msg = (WSAMSG*)vmsg;
+
+    /* Get the control information */
+    for (cmsg = WSA_CMSG_FIRSTHDR(msg); cmsg != NULL; cmsg = WSA_CMSG_NXTHDR(msg, cmsg)) {
+        if (cmsg->cmsg_level == IPPROTO_IP) {
+            if (cmsg->cmsg_type == IP_PKTINFO) {
+                if (addr_dest != NULL) {
+                    IN_PKTINFO* pPktInfo = (IN_PKTINFO*)WSA_CMSG_DATA(cmsg);
+                    ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
+                    ((struct sockaddr_in*)addr_dest)->sin_port = 0;
+                    ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
+
+                    if (dest_if != NULL) {
+                        *dest_if = (int)pPktInfo->ipi_ifindex;
+                    }
+                }
+            }
+            else if (cmsg->cmsg_type == IP_TOS
+#ifdef IP_ECN
+                || cmsg->cmsg_type == IP_ECN
+#endif
+                ) {
+                if (cmsg->cmsg_len > 0) {
+                    if (received_ecn != NULL) {
+                        *received_ecn = *((unsigned char*)WSA_CMSG_DATA(cmsg));
+                    }
+                }
+            }
+            else {
+                DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
+            }
+        }
+        else if (cmsg->cmsg_level == IPPROTO_IPV6) {
+            if (cmsg->cmsg_type == IPV6_PKTINFO) {
+                if (addr_dest != NULL) {
+                    IN6_PKTINFO* pPktInfo6 = (IN6_PKTINFO*)WSA_CMSG_DATA(cmsg);
+                    ((struct sockaddr_in6*)addr_dest)->sin6_family = AF_INET6;
+                    ((struct sockaddr_in6*)addr_dest)->sin6_port = 0;
+                    memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(IN6_ADDR));
+
+                    if (dest_if != NULL) {
+                        *dest_if = (int)pPktInfo6->ipi6_ifindex;
+                    }
+                }
+            }
+            else if (cmsg->cmsg_type == IPV6_TCLASS
+#ifdef IPV6_ECN
+                || cmsg->cmsg_type == IPV6_ECN
+#endif
+                ) {
+                if (cmsg->cmsg_len > 0 && received_ecn != NULL) {
+                    *received_ecn = *((unsigned char*)WSA_CMSG_DATA(cmsg));
+                }
+            }
+            else {
+                DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
+            }
+        }
+        else {
+            DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
+        }
+    }
+#else
+    /* Get the control information */
+    struct msghdr* msg = (struct msghdr*)vmsg;
+    struct cmsghdr* cmsg;
+
+    for (cmsg = CMSG_FIRSTHDR(msg); cmsg != NULL; cmsg = CMSG_NXTHDR(msg, cmsg)) {
+        if (cmsg->cmsg_level == IPPROTO_IP) {
+#ifdef IP_PKTINFO
+            if (cmsg->cmsg_type == IP_PKTINFO) {
+                if (addr_dest != NULL) {
+                    struct in_pktinfo* pPktInfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
+                    ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
+                    ((struct sockaddr_in*)addr_dest)->sin_port = 0;
+                    ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
+
+                    if (dest_if != NULL) {
+                        *dest_if = (int)pPktInfo->ipi_ifindex;
+                    }
+                }
+            }
+#else
+            /* The IP_PKTINFO structure is not defined on BSD */
+            if (cmsg->cmsg_type == IP_RECVDSTADDR) {
+                if (addr_dest != NULL) {
+                    struct in_addr* pPktInfo = (struct in_addr*)CMSG_DATA(cmsg);
+                    ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
+                    ((struct sockaddr_in*)addr_dest)->sin_port = 0;
+                    ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->s_addr;
+
+                    if (dest_if != NULL) {
+                        *dest_if = 0;
+                    }
+                }
+            }
+#endif
+            else if ((cmsg->cmsg_type == IP_TOS || cmsg->cmsg_type == IP_RECVTOS) && cmsg->cmsg_len > 0) {
+                if (received_ecn != NULL) {
+                    *received_ecn = *((unsigned char*)CMSG_DATA(cmsg));
+                }
+            }
+        }
+        else if (cmsg->cmsg_level == IPPROTO_IPV6) {
+            if (cmsg->cmsg_type == IPV6_PKTINFO) {
+                if (addr_dest != NULL) {
+                    struct in6_pktinfo* pPktInfo6 = (struct in6_pktinfo*)CMSG_DATA(cmsg);
+
+                    ((struct sockaddr_in6*)addr_dest)->sin6_family = AF_INET6;
+                    ((struct sockaddr_in6*)addr_dest)->sin6_port = 0;
+                    memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(struct in6_addr));
+
+                    if (dest_if != NULL) {
+                        *dest_if = (int)pPktInfo6->ipi6_ifindex;
+                    }
+                }
+            }
+            else if (cmsg->cmsg_type == IPV6_TCLASS) {
+                if (cmsg->cmsg_len > 0 && received_ecn != NULL) {
+                    *received_ecn = *((unsigned char*)CMSG_DATA(cmsg));
+                }
+            }
+        }
+    }
+#endif
+}
+
+void picoquic_socks_cmsg_format(
+    void* vmsg,
+    size_t message_length,
+    struct sockaddr* addr_from,
+    int dest_if)
+{
+#ifdef _WINDOWS
+    WSAMSG* msg = (WSAMSG*)vmsg;
+    WSACMSGHDR* cmsg;
+    int control_length = 0;
+
+    /* Format the control message */
+    cmsg = WSA_CMSG_FIRSTHDR(msg);
+
+    if (addr_from != NULL && addr_from->sa_family != 0) {
+        if (addr_from->sa_family == AF_INET) {
+            memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in_pktinfo)));
+            cmsg->cmsg_level = IPPROTO_IP;
+            cmsg->cmsg_type = IP_PKTINFO;
+            cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in_pktinfo));
+            struct in_pktinfo* pktinfo = (struct in_pktinfo*)WSA_CMSG_DATA(cmsg);
+            pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
+            pktinfo->ipi_ifindex = (unsigned long)dest_if;
+
+            control_length += WSA_CMSG_SPACE(sizeof(struct in_pktinfo));
+        }
+        else {
+            memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in6_pktinfo)));
+            cmsg->cmsg_level = IPPROTO_IPV6;
+            cmsg->cmsg_type = IPV6_PKTINFO;
+            cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in6_pktinfo));
+            struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)WSA_CMSG_DATA(cmsg);
+            memcpy(&pktinfo6->ipi6_addr.u, &((struct sockaddr_in6*)addr_from)->sin6_addr.u, sizeof(IN6_ADDR));
+            pktinfo6->ipi6_ifindex = (unsigned long)dest_if;
+
+            control_length += WSA_CMSG_SPACE(sizeof(struct in6_pktinfo));
+        }
+
+        if (addr_from->sa_family == AF_INET6) {
+            struct cmsghdr* cmsg_2 = WSA_CMSG_NXTHDR(msg, cmsg);
+            if (cmsg_2 == NULL) {
+                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+            }
+            else {
+                int val = 1;
+
+                cmsg_2->cmsg_level = IPPROTO_IPV6;
+                cmsg_2->cmsg_type = IPV6_DONTFRAG;
+                cmsg_2->cmsg_len = WSA_CMSG_LEN(sizeof(int));
+                *((int*)WSA_CMSG_DATA(cmsg_2)) = val;
+                control_length += WSA_CMSG_SPACE(sizeof(int));
+#ifdef IPV6_ECN_NOT
+                struct cmsghdr* cmsg_3 = WSA_CMSG_NXTHDR(&msg, cmsg_2);
+                if (cmsg_3 == NULL) {
+                    DBG_PRINTF("Cannot obtain third CMSG (control_length: %d)\n", control_length);
+                }
+                else {
+                    INT ecn_val = PICOQUIC_ECN_ECT_0;
+                    cmsg_3->cmsg_level = IPPROTO_IPV6;
+                    cmsg_3->cmsg_type = IPV6_ECN;
+                    cmsg_3->cmsg_len = WSA_CMSG_LEN(sizeof(INT));
+                    *((INT*)WSA_CMSG_DATA(cmsg_3)) = ecn_val;
+                    control_length += WSA_CMSG_SPACE(sizeof(INT));
+                }
+#endif
+            }
+        }
+        else {
+            struct cmsghdr* last_msg = cmsg;
+            if (message_length > PICOQUIC_INITIAL_MTU_IPV4) {
+                struct cmsghdr* cmsg_2 = WSA_CMSG_NXTHDR(msg, last_msg);
+                if (cmsg_2 == NULL) {
+                    DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+                }
+                else {
+                    int val = 1;
+                    cmsg_2->cmsg_level = IPPROTO_IP;
+                    cmsg_2->cmsg_type = IP_DONTFRAGMENT;
+                    cmsg_2->cmsg_len = WSA_CMSG_LEN(sizeof(int));
+                    *((PINT)WSA_CMSG_DATA(cmsg_2)) = val;
+                    control_length += WSA_CMSG_SPACE(sizeof(int));
+                    last_msg = cmsg_2;
+                }
+            }
+#ifdef IP_ECN_NOT
+            struct cmsghdr* cmsg_3 = WSA_CMSG_NXTHDR(&msg, last_msg);
+            if (cmsg_3 == NULL) {
+                DBG_PRINTF("Cannot obtain third CMSG (control_length: %d)\n", control_length);
+            }
+            else {
+                INT ecn_val = PICOQUIC_ECN_ECT_0;
+                cmsg_3->cmsg_level = IPPROTO_IP;
+                cmsg_3->cmsg_type = IP_ECN;
+                cmsg_3->cmsg_len = WSA_CMSG_LEN(sizeof(INT));
+                *((PINT)WSA_CMSG_DATA(cmsg_3)) = ecn_val;
+                control_length += WSA_CMSG_SPACE(sizeof(INT));
+            }
+#endif
+        }
+    }
+
+    msg->Control.len = control_length;
+    if (control_length == 0) {
+        msg->Control.buf = NULL;
+    }
+
+#else
+    struct msghdr* msg = (struct msghdr*)vmsg;
+    int control_length = 0;
+    struct cmsghdr* cmsg;
+    /* Format the control message */
+    cmsg = CMSG_FIRSTHDR(&msg);
+
+    if (addr_from != NULL && addr_from->sa_family != 0) {
+        if (addr_from->sa_family == AF_INET) {
+#ifdef IP_PKTINFO
+            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in_pktinfo)));
+            cmsg->cmsg_level = IPPROTO_IP;
+            cmsg->cmsg_type = IP_PKTINFO;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
+            struct in_pktinfo* pktinfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
+            pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
+            pktinfo->ipi_ifindex = (unsigned int)dest_if;
+            control_length += CMSG_SPACE(sizeof(struct in_pktinfo));
+#else
+            /* The IP_PKTINFO structure is not defined on BSD */
+            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in_addr)));
+            cmsg->cmsg_level = IPPROTO_IP;
+            cmsg->cmsg_type = IP_SENDSRCADDR;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_addr));
+            struct in_addr* pktinfo = (struct in_addr*)CMSG_DATA(cmsg);
+            pktinfo->s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
+            control_length += CMSG_SPACE(sizeof(struct in_addr));
+#endif
+        }
+        else if (addr_from->sa_family == AF_INET6) {
+            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in6_pktinfo)));
+            cmsg->cmsg_level = IPPROTO_IPV6;
+            cmsg->cmsg_type = IPV6_PKTINFO;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in6_pktinfo));
+            struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)CMSG_DATA(cmsg);
+            memcpy(&pktinfo6->ipi6_addr, &((struct sockaddr_in6*)addr_from)->sin6_addr, sizeof(struct in6_addr));
+            pktinfo6->ipi6_ifindex = dest_if;
+
+            control_length += CMSG_SPACE(sizeof(struct in6_pktinfo));
+        }
+        else {
+            DBG_PRINTF("Unexpected address family: %d\n", addr_from->sa_family);
+        }
+#ifdef IPV6_DONTFRAG
+        if (addr_from->sa_family == AF_INET6) {
+#ifdef CMSG_ALIGN
+            struct cmsghdr* cmsg_2 = (struct cmsghdr*)((unsigned char*)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
+            {
+#else
+            struct cmsghdr* cmsg_2 = CMSG_NXTHDR((&msg), cmsg);
+            if (cmsg_2 == NULL) {
+                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+            }
+            else {
+#endif
+                int val = 1;
+                cmsg_2->cmsg_level = IPPROTO_IPV6;
+                cmsg_2->cmsg_type = IPV6_DONTFRAG;
+                cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
+                memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
+                control_length += CMSG_SPACE(sizeof(int));
+            }
+        }
+#endif
+#if defined(IP_DONTFRAG)
+        if (addr_from->sa_family == AF_INET6 && length > PICOQUIC_INITIAL_MTU_IPV6) {
+#ifdef CMSG_ALIGN
+            struct cmsghdr* cmsg_2 = (struct cmsghdr*)((unsigned char*)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
+#else
+            struct cmsghdr* cmsg_2 = CMSG_NXTHDR((&msg), cmsg);
+            if (cmsg_2 == NULL) {
+                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+            }
+            else
+#endif
+            {
+                /* On BSD systems, just use IP_DONTFRAG */
+                int val = 1;
+                cmsg_2->cmsg_level = IPPROTO_IP;
+                cmsg_2->cmsg_type = IP_DONTFRAG;
+                cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
+                memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
+                control_length += CMSG_SPACE(sizeof(int));
+            }
+        }
+#endif
+    }
+
+    msg->msg_controllen = control_length;
+    if (control_length == 0) {
+        msg->msg_control = NULL;
+    }
+#endif
+}
+
+
 #ifdef _WINDOWS
 
 void picoquic_delete_async_socket(picoquic_recvmsg_async_ctx_t * ctx)
@@ -397,52 +735,10 @@ int picoquic_recvmsg_async_finish(
         ctx->bytes_recv = -1;
     } 
     else {
-        struct cmsghdr* cmsg;
-
         ctx->bytes_recv = cbTransferred;
         ctx->from_length = ctx->msg.namelen;
 
-        /* Get the control information */
-        for (cmsg = WSA_CMSG_FIRSTHDR(&ctx->msg); cmsg != NULL; cmsg = WSA_CMSG_NXTHDR(&ctx->msg, cmsg)) {
-            if (cmsg->cmsg_level == IPPROTO_IP) {
-                if (cmsg->cmsg_type == IP_PKTINFO) {
-                    IN_PKTINFO* pPktInfo = (IN_PKTINFO*)WSA_CMSG_DATA(cmsg);
-                    ((struct sockaddr_in*)&ctx->addr_dest)->sin_family = AF_INET;
-                    ((struct sockaddr_in*)&ctx->addr_dest)->sin_port = 0;
-                    ((struct sockaddr_in*)&ctx->addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
-                    ctx->dest_length = sizeof(struct sockaddr_in);
-                    ctx->dest_if = (int) pPktInfo->ipi_ifindex;
-                }
-                else if (cmsg->cmsg_type == IP_TOS
-#ifdef IP_ECN
-                    || cmsg->cmsg_type == IP_ECN
-#endif
-                    ) {
-                    if (cmsg->cmsg_len > 0) {
-                        ctx->received_ecn = *((unsigned char*)WSA_CMSG_DATA(cmsg));
-                    }
-                }
-            }
-            else if (cmsg->cmsg_level == IPPROTO_IPV6) {
-                if (cmsg->cmsg_type == IPV6_PKTINFO) {
-                    IN6_PKTINFO* pPktInfo6 = (IN6_PKTINFO*)WSA_CMSG_DATA(cmsg);
-                    ((struct sockaddr_in6*)&ctx->addr_dest)->sin6_family = AF_INET6;
-                    ((struct sockaddr_in6*)&ctx->addr_dest)->sin6_port = 0;
-                    memcpy(&((struct sockaddr_in6*)&ctx->addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(IN6_ADDR));
-                    ctx->dest_length = sizeof(struct sockaddr_in6);
-                    ctx->dest_if = (int) pPktInfo6->ipi6_ifindex;
-                }
-                else if (cmsg->cmsg_type == IPV6_TCLASS
-#ifdef IPV6_ECN
-                    || cmsg->cmsg_type == IPV6_ECN
-#endif
-                    ) {
-                    if (cmsg->cmsg_len > 0) {
-                        ctx->received_ecn = *((unsigned char *)WSA_CMSG_DATA(cmsg));
-                    }
-                }
-            }
-        }
+        picoquic_socks_cmsg_parse(&ctx->msg, &ctx->addr_dest, &ctx->dest_if, &ctx->received_ecn);
     }
 
     return ret;
@@ -569,69 +865,8 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                 (int)fd, last_error);
             bytes_recv = -1;
         } else {
-            struct cmsghdr* cmsg;
-
             bytes_recv = NumberOfBytes;
-
-            /* Get the control information */
-            for (cmsg = WSA_CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = WSA_CMSG_NXTHDR(&msg, cmsg)) {
-                if (cmsg->cmsg_level == IPPROTO_IP) {
-                    if (cmsg->cmsg_type == IP_PKTINFO) {
-                        if (addr_dest != NULL) {
-                            IN_PKTINFO* pPktInfo = (IN_PKTINFO*)WSA_CMSG_DATA(cmsg);
-                            ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
-                            ((struct sockaddr_in*)addr_dest)->sin_port = 0;
-                            ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
-
-                            if (dest_if != NULL) {
-                                *dest_if = (int)pPktInfo->ipi_ifindex;
-                            }
-                        }
-                    }
-                    else if (cmsg->cmsg_type == IP_TOS
-#ifdef IP_ECN
-                        || cmsg->cmsg_type == IP_ECN
-#endif
-                        ) {
-                        if (cmsg->cmsg_len > 0) {
-                            if (received_ecn != NULL) {
-                                *received_ecn = *((unsigned char*)WSA_CMSG_DATA(cmsg));
-                            }
-                        }
-                    }
-                    else {
-                        DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
-                    }
-                } else if (cmsg->cmsg_level == IPPROTO_IPV6) {
-                    if (cmsg->cmsg_type == IPV6_PKTINFO) {
-                        if (addr_dest != NULL) {
-                            IN6_PKTINFO* pPktInfo6 = (IN6_PKTINFO*)WSA_CMSG_DATA(cmsg);
-                                ((struct sockaddr_in6*)addr_dest)->sin6_family = AF_INET6;
-                                ((struct sockaddr_in6*)addr_dest)->sin6_port = 0;
-                                memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(IN6_ADDR));
-
-                                if (dest_if != NULL) {
-                                    *dest_if = (int) pPktInfo6->ipi6_ifindex;
-                                }
-                        }
-                    }
-                    else if (cmsg->cmsg_type == IPV6_TCLASS
-#ifdef IPV6_ECN
-                        || cmsg->cmsg_type == IPV6_ECN
-#endif
-                        ){
-                        if (cmsg->cmsg_len > 0 && received_ecn != NULL) {
-                            *received_ecn = *((unsigned char *)WSA_CMSG_DATA(cmsg));
-                        }
-                    }
-                    else {
-                        DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
-                    }
-                }
-                else {
-                    DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
-                }
-            }
+            picoquic_socks_cmsg_parse(&msg, addr_dest, dest_if, received_ecn);
         }
     }
 
@@ -664,66 +899,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     if (bytes_recv <= 0) {
         addr_from->ss_family = 0;
     } else {
-        /* Get the control information */
-        struct cmsghdr* cmsg;
-
-        for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-            if (cmsg->cmsg_level == IPPROTO_IP) {
-#ifdef IP_PKTINFO
-                if (cmsg->cmsg_type == IP_PKTINFO) {
-                    if (addr_dest != NULL) {
-                        struct in_pktinfo* pPktInfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
-                        ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
-                        ((struct sockaddr_in*)addr_dest)->sin_port = 0;
-                        ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
-
-                        if (dest_if != NULL) {
-                            *dest_if = (int) pPktInfo->ipi_ifindex;
-                        }
-                    }
-                }
-#else
-                /* The IP_PKTINFO structure is not defined on BSD */
-                if (cmsg->cmsg_type == IP_RECVDSTADDR) {
-                    if (addr_dest != NULL) {
-                        struct in_addr* pPktInfo = (struct in_addr*)CMSG_DATA(cmsg);
-                        ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
-                        ((struct sockaddr_in*)addr_dest)->sin_port = 0;
-                        ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->s_addr;
-
-                        if (dest_if != NULL) {
-                            *dest_if = 0;
-                        }
-                    }
-                }
-#endif
-                else if ((cmsg->cmsg_type == IP_TOS || cmsg->cmsg_type == IP_RECVTOS) && cmsg->cmsg_len > 0) {
-                    if (received_ecn != NULL) {
-                        *received_ecn = *((unsigned char *)CMSG_DATA(cmsg));
-                    }
-                }
-            }
-            else if (cmsg->cmsg_level == IPPROTO_IPV6) {
-                if (cmsg->cmsg_type == IPV6_PKTINFO) {
-                    if (addr_dest != NULL) {
-                        struct in6_pktinfo* pPktInfo6 = (struct in6_pktinfo*)CMSG_DATA(cmsg);
-
-                        ((struct sockaddr_in6*)addr_dest)->sin6_family = AF_INET6;
-                        ((struct sockaddr_in6*)addr_dest)->sin6_port = 0;
-                        memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(struct in6_addr));
-
-                        if (dest_if != NULL) {
-                            *dest_if = (int) pPktInfo6->ipi6_ifindex;
-                        }
-                    }
-                }
-                else if (cmsg->cmsg_type == IPV6_TCLASS) {
-                    if (cmsg->cmsg_len > 0 && received_ecn != NULL) {
-                        *received_ecn = *((unsigned char *)CMSG_DATA(cmsg));
-                    }
-                }
-            }
-        }
+        picoquic_socks_cmsg_parse(&msg, addr_dest, dest_if, received_ecn);
     }
 
     return bytes_recv;
@@ -740,7 +916,6 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
     GUID WSASendMsg_GUID = WSAID_WSASENDMSG;
     LPFN_WSASENDMSG WSASendMsg;
     char cmsg_buffer[1024];
-    int control_length = 0;
     DWORD NumberOfBytes;
     int ret = 0;
     DWORD dwBytesSent = 0;
@@ -748,7 +923,6 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
     WSABUF dataBuf;
     int bytes_sent;
     int last_error;
-    WSACMSGHDR* cmsg;
 
     ret = WSAIoctl(fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
         &WSASendMsg_GUID, sizeof WSASendMsg_GUID,
@@ -762,8 +936,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
         bytes_sent = -1;
     }
     else {
-        /* Format the message header */
-
+        /* Format the control message header */
         memset(&msg, 0, sizeof(msg));
         msg.name = addr_dest;
         msg.namelen = picoquic_addr_length(addr_dest);
@@ -775,102 +948,9 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
         msg.Control.len = sizeof(cmsg_buffer);
 
         /* Format the control message */
-        cmsg = WSA_CMSG_FIRSTHDR(&msg);
-
-        if (addr_from != NULL && addr_from->sa_family != 0) {
-            if (addr_from->sa_family == AF_INET) {
-                memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in_pktinfo)));
-                cmsg->cmsg_level = IPPROTO_IP;
-                cmsg->cmsg_type = IP_PKTINFO;
-                cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in_pktinfo));
-                struct in_pktinfo* pktinfo = (struct in_pktinfo*)WSA_CMSG_DATA(cmsg);
-                pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
-                pktinfo->ipi_ifindex = (unsigned long)dest_if;
-
-                control_length += WSA_CMSG_SPACE(sizeof(struct in_pktinfo));
-            }
-            else {
-                memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in6_pktinfo)));
-                cmsg->cmsg_level = IPPROTO_IPV6;
-                cmsg->cmsg_type = IPV6_PKTINFO;
-                cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in6_pktinfo));
-                struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)WSA_CMSG_DATA(cmsg);
-                memcpy(&pktinfo6->ipi6_addr.u, &((struct sockaddr_in6*)addr_from)->sin6_addr.u, sizeof(IN6_ADDR));
-                pktinfo6->ipi6_ifindex = (unsigned long)dest_if;
-
-                control_length += WSA_CMSG_SPACE(sizeof(struct in6_pktinfo));
-            }
-
-            if (addr_from->sa_family == AF_INET6) {
-                struct cmsghdr* cmsg_2 = WSA_CMSG_NXTHDR(&msg, cmsg);
-                if (cmsg_2 == NULL) {
-                    DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
-                }
-                else {
-                    int val = 1;
-
-                    cmsg_2->cmsg_level = IPPROTO_IPV6;
-                    cmsg_2->cmsg_type = IPV6_DONTFRAG;
-                    cmsg_2->cmsg_len = WSA_CMSG_LEN(sizeof(int));
-                    *((int*)WSA_CMSG_DATA(cmsg_2)) = val;
-                    control_length += WSA_CMSG_SPACE(sizeof(int));
-#ifdef IPV6_ECN_NOT
-                    struct cmsghdr* cmsg_3 = WSA_CMSG_NXTHDR(&msg, cmsg_2);
-                    if (cmsg_3 == NULL) {
-                        DBG_PRINTF("Cannot obtain third CMSG (control_length: %d)\n", control_length);
-                    }
-                    else {
-                        INT ecn_val = PICOQUIC_ECN_ECT_0;
-                        cmsg_3->cmsg_level = IPPROTO_IPV6;
-                        cmsg_3->cmsg_type = IPV6_ECN;
-                        cmsg_3->cmsg_len = WSA_CMSG_LEN(sizeof(INT));
-                        *((INT*)WSA_CMSG_DATA(cmsg_3)) = ecn_val;
-                        control_length += WSA_CMSG_SPACE(sizeof(INT));
-                    }
-#endif
-                }
-            }
-            else {
-                struct cmsghdr* last_msg = cmsg;
-                if (length > PICOQUIC_INITIAL_MTU_IPV4) {
-                    struct cmsghdr* cmsg_2 = WSA_CMSG_NXTHDR(&msg, last_msg);
-                    if (cmsg_2 == NULL) {
-                        DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
-                    }
-                    else {
-                        int val = 1;
-                        cmsg_2->cmsg_level = IPPROTO_IP;
-                        cmsg_2->cmsg_type = IP_DONTFRAGMENT;
-                        cmsg_2->cmsg_len = WSA_CMSG_LEN(sizeof(int));
-                        *((PINT)WSA_CMSG_DATA(cmsg_2)) = val;
-                        control_length += WSA_CMSG_SPACE(sizeof(int));
-                        last_msg = cmsg_2;
-                    }
-                }
-#ifdef IP_ECN_NOT
-                struct cmsghdr* cmsg_3 = WSA_CMSG_NXTHDR(&msg, last_msg);
-                if (cmsg_3 == NULL) {
-                    DBG_PRINTF("Cannot obtain third CMSG (control_length: %d)\n", control_length);
-                }
-                else {
-                    INT ecn_val = PICOQUIC_ECN_ECT_0;
-                    cmsg_3->cmsg_level = IPPROTO_IP;
-                    cmsg_3->cmsg_type = IP_ECN;
-                    cmsg_3->cmsg_len = WSA_CMSG_LEN(sizeof(INT));
-                    *((PINT)WSA_CMSG_DATA(cmsg_3)) = ecn_val;
-                    control_length += WSA_CMSG_SPACE(sizeof(INT));
-                }
-#endif
-            }
-        }
-
-        msg.Control.len = control_length;
-        if (control_length == 0) {
-            msg.Control.buf = NULL;
-        }
+        picoquic_socks_cmsg_format(&msg, length, addr_from, dest_if);
 
         /* Send the message */
-
         ret = WSASendMsg(fd, &msg, 0, &dwBytesSent, NULL, NULL);
 
         if (ret != 0) {
@@ -905,126 +985,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
     msg.msg_controllen = sizeof(cmsg_buffer);
 
     /* Format the control message */
-    cmsg = CMSG_FIRSTHDR(&msg);
-
-    if (addr_from != NULL && addr_from->sa_family != 0) {
-        if (addr_from->sa_family == AF_INET) {
-#ifdef IP_PKTINFO
-            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in_pktinfo)));
-            cmsg->cmsg_level = IPPROTO_IP;
-            cmsg->cmsg_type = IP_PKTINFO;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
-            struct in_pktinfo* pktinfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
-            pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
-            pktinfo->ipi_ifindex = (unsigned int) dest_if;
-            control_length += CMSG_SPACE(sizeof(struct in_pktinfo));
-#else
-            /* The IP_PKTINFO structure is not defined on BSD */
-            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in_addr)));
-            cmsg->cmsg_level = IPPROTO_IP;
-            cmsg->cmsg_type = IP_SENDSRCADDR;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_addr));
-            struct in_addr* pktinfo = (struct in_addr*)CMSG_DATA(cmsg);
-            pktinfo->s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
-            control_length += CMSG_SPACE(sizeof(struct in_addr));
-#endif
-        } else if (addr_from->sa_family == AF_INET6) {
-            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in6_pktinfo)));
-            cmsg->cmsg_level = IPPROTO_IPV6;
-            cmsg->cmsg_type = IPV6_PKTINFO;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in6_pktinfo));
-            struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)CMSG_DATA(cmsg);
-            memcpy(&pktinfo6->ipi6_addr, &((struct sockaddr_in6*)addr_from)->sin6_addr, sizeof(struct in6_addr));
-            pktinfo6->ipi6_ifindex = dest_if;
-
-            control_length += CMSG_SPACE(sizeof(struct in6_pktinfo));
-        } else {
-            DBG_PRINTF("Unexpected address family: %d\n", addr_from->sa_family);
-        }
-#ifdef IPV6_DONTFRAG
-        if (addr_from->sa_family == AF_INET6) {
-#ifdef CMSG_ALIGN
-            struct cmsghdr * cmsg_2 = (struct cmsghdr *)((unsigned char *)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
-            {
-#else
-            struct cmsghdr * cmsg_2 = CMSG_NXTHDR((&msg), cmsg);
-            if (cmsg_2 == NULL) {
-                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
-            } else {
-#endif
-                int val = 1;
-                cmsg_2->cmsg_level = IPPROTO_IPV6;
-                cmsg_2->cmsg_type = IPV6_DONTFRAG;
-                cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
-                memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
-                control_length += CMSG_SPACE(sizeof(int));
-            }
-        }
-#endif
-
-#if 0
-#if defined(IP_PMTUDISC_DO) || defined(IP_DONTFRAG)
-        if (addr_from->sa_family == AF_INET && length > PICOQUIC_INITIAL_MTU_IPV4) {
-#ifdef CMSG_ALIGN
-            struct cmsghdr * cmsg_2 = (struct cmsghdr *)((unsigned char *)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
-            {
-#else
-            struct cmsghdr * cmsg_2 = CMSG_NXTHDR((&msg), cmsg);
-            if (cmsg_2 == NULL) {
-                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
-            }
-            else {
-#endif
-#ifdef IP_PMTUDISC_DO
-                /* This sets the don't fragment bit on Linux */
-                int val = IP_PMTUDISC_DO;
-                cmsg_2->cmsg_level = IPPROTO_IP;
-                cmsg_2->cmsg_type = IP_MTU_DISCOVER;
-#else
-                /* On BSD systems, just use IP_DONTFRAG */
-                int val = 1;
-                cmsg_2->cmsg_level = IPPROTO_IP;
-                cmsg_2->cmsg_type = IP_DONTFRAG;
-#endif
-                cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
-                memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
-                control_length += CMSG_SPACE(sizeof(int));
-            }
-        }
-#endif
-#else
-#if defined(IP_DONTFRAG)
-        if (addr_from->sa_family == AF_INET6 && length > PICOQUIC_INITIAL_MTU_IPV6) {
-#ifdef CMSG_ALIGN
-            struct cmsghdr * cmsg_2 = (struct cmsghdr *)((unsigned char *)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
-            {
-#else
-            struct cmsghdr * cmsg_2 = CMSG_NXTHDR((&msg), cmsg);
-            if (cmsg_2 == NULL) {
-                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
-            }
-            else {
-#endif
-                /* On BSD systems, just use IP_DONTFRAG */
-                int val = 1;
-                cmsg_2->cmsg_level = IPPROTO_IP;
-                cmsg_2->cmsg_type = IP_DONTFRAG;
-                cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
-                memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
-                control_length += CMSG_SPACE(sizeof(int));
-            }
-        }
-#endif
-
-
-#endif
-
-    }
-
-    msg.msg_controllen = control_length;
-    if (control_length == 0) {
-        msg.msg_control = NULL;
-    }
+    picoquic_socks_cmsg_format(&msg, length, addr_from, dest_if);
 
     bytes_sent = sendmsg(fd, &msg, 0);
 

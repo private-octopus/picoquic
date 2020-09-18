@@ -202,6 +202,21 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
 
 void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic);
 
+/* Utility functions for implementing async sockets
+ */
+
+void picoquic_socks_cmsg_parse(
+    void* vmsg,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn);
+
+void picoquic_socks_cmsg_format(
+    void* vmsg,
+    size_t message_length,
+    struct sockaddr* addr_from,
+    int dest_if);
+
 #ifdef __cplusplus
 }
 #endif
