@@ -568,7 +568,7 @@ void picoquic_socks_cmsg_format(
     int control_length = 0;
     struct cmsghdr* cmsg;
     /* Format the control message */
-    cmsg = CMSG_FIRSTHDR(&msg);
+    cmsg = CMSG_FIRSTHDR(msg);
 
     if (addr_from != NULL && addr_from->sa_family != 0) {
         if (addr_from->sa_family == AF_INET) {
@@ -612,7 +612,7 @@ void picoquic_socks_cmsg_format(
             struct cmsghdr* cmsg_2 = (struct cmsghdr*)((unsigned char*)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
             {
 #else
-            struct cmsghdr* cmsg_2 = CMSG_NXTHDR((&msg), cmsg);
+            struct cmsghdr* cmsg_2 = CMSG_NXTHDR((msg), cmsg);
             if (cmsg_2 == NULL) {
                 DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
             }
@@ -632,12 +632,12 @@ void picoquic_socks_cmsg_format(
 #ifdef CMSG_ALIGN
             struct cmsghdr* cmsg_2 = (struct cmsghdr*)((unsigned char*)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
 #else
-            struct cmsghdr* cmsg_2 = CMSG_NXTHDR((&msg), cmsg);
+            struct cmsghdr* cmsg_2 = CMSG_NXTHDR((msg), cmsg);
+#endif
             if (cmsg_2 == NULL) {
                 DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
             }
             else
-#endif
             {
                 /* On BSD systems, just use IP_DONTFRAG */
                 int val = 1;
@@ -967,9 +967,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
     struct msghdr msg;
     struct iovec dataBuf;
     char cmsg_buffer[1024];
-    int control_length = 0;
     int bytes_sent;
-    struct cmsghdr* cmsg;
 
     /* Format the message header */
 
