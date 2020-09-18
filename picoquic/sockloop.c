@@ -186,7 +186,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     while (ret == 0) {
         int socket_rank = -1;
         int64_t delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
-            unsigned char received_ecn;
+        unsigned char received_ecn;
 
         if_index_to = 0;
 
@@ -258,7 +258,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                 }
             }
 
-            while (ret == 0 ) {
+            while (ret == 0) {
                 struct sockaddr_storage peer_addr;
                 struct sockaddr_storage local_addr;
                 int if_index = dest_if;
@@ -283,8 +283,8 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                     if (testing_migration) {
                         /* This code path is only used in the migration tests */
                         uint16_t send_port = (local_addr.ss_family == AF_INET) ?
-                            ((struct sockaddr_in*)& local_addr)->sin_port:
-                            ((struct sockaddr_in6*)& local_addr)->sin6_port;
+                            ((struct sockaddr_in*) & local_addr)->sin_port :
+                            ((struct sockaddr_in6*) & local_addr)->sin6_port;
 
                         if (send_port == next_port) {
                             send_socket = s_socket[nb_sockets - 1];

@@ -30,6 +30,7 @@ extern "C" {
 #endif
 
 #define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 2
+#define PICOQUIC_PACKET_LOOP_SEND_MAX 10
 
 typedef enum {
     picoquic_packet_loop_ready = 0,
@@ -45,6 +46,15 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     int dest_if,
     picoquic_packet_loop_cb_fn loop_callback,
     void * loop_callback_ctx);
+
+#ifdef _WINDOWS
+int picoquic_packet_loop_win(picoquic_quic_t* quic,
+    int local_port,
+    int local_af,
+    int dest_if,
+    picoquic_packet_loop_cb_fn loop_callback,
+    void* loop_callback_ctx);
+#endif
 
 #ifdef __cplusplus
 }

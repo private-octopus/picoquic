@@ -122,7 +122,7 @@ typedef struct st_picoquic_recvmsg_async_ctx_t {
     char cmsg_buffer[1024];
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     struct sockaddr_storage addr_from;
-    struct sockaddr_storage* addr_dest;
+    struct sockaddr_storage addr_dest;
     socklen_t from_length;
     socklen_t dest_length;
     SOCKET_TYPE fd;
@@ -201,6 +201,21 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
  */
 
 void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic);
+
+/* Utility functions for implementing async sockets
+ */
+
+void picoquic_socks_cmsg_parse(
+    void* vmsg,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn);
+
+void picoquic_socks_cmsg_format(
+    void* vmsg,
+    size_t message_length,
+    struct sockaddr* addr_from,
+    int dest_if);
 
 #ifdef __cplusplus
 }

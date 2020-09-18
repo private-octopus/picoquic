@@ -170,6 +170,7 @@
     <ClCompile Include="token_store.c" />
     <ClCompile Include="transport.c" />
     <ClCompile Include="util.c" />
+    <ClCompile Include="winsockloop.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bytestream.h" />
