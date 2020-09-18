@@ -7469,12 +7469,12 @@ int bbr_slow_long_test()
 }
 
 /* BBR Performance test on a pathological long link, with 2 seconds RTT
- * Verify that 10 MB can be downloaded in less than 120 seconds on a 1 mbps link.
+ * Verify that 10 MB can be downloaded in less than 128 seconds on a 1 mbps link.
  */
 
 int bbr_one_second_test()
 {
-    uint64_t max_completion_time = 118000000;
+    uint64_t max_completion_time = 128000000;
     uint64_t latency = 1000000;
     uint64_t jitter = 3000;
     uint64_t buffer = 2 * (latency + jitter);
