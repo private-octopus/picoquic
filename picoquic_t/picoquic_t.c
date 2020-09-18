@@ -122,6 +122,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multiple_versions", tls_api_multiple_versions_test },
     { "keep_alive", keep_alive_test },
     { "integrity_limit", integrity_limit_test },
+    { "excess_repeat", excess_repeat_test },
     { "sockets", socket_test },
     { "socket_ecn", socket_ecn_test },
     { "ticket_store", ticket_store_test },
