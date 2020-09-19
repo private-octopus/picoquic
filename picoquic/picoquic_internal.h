@@ -56,7 +56,7 @@ extern "C" {
 #define PICOQUIC_TARGET_SATELLITE_RTT 610000ull /* 610 ms, practical maximum for non-pathological RTT */
 #define PICOQUIC_INITIAL_RETRANSMIT_TIMER 250000ull /* 250 ms */
 #define PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER 1000000ull /* one second */
-#define PICOQUIC_LARGE_RETRANSMIT_TIMER 3000000ull /* two seconds */
+#define PICOQUIC_LARGE_RETRANSMIT_TIMER 2000000ull /* two seconds */
 #define PICOQUIC_MIN_RETRANSMIT_TIMER 50000ull /* 50 ms */
 #define PICOQUIC_ACK_DELAY_MAX 10000ull /* 10 ms */
 #define PICOQUIC_ACK_DELAY_MAX_DEFAULT 25000ull /* 25 ms, per protocol spec */

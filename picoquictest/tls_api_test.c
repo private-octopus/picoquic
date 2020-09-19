@@ -9811,6 +9811,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
         int if_index = 0;
         picoquic_connection_id_t log_cid;
         picoquic_cnx_t* last_cnx;
+        uint64_t max_disconnected_time = simulated_time + 20000000;
         int nb_repeated = 0;
         int nb_loops = 0;
 
@@ -9820,8 +9821,19 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
         else {
             while (ret == 0 && test_ctx->cnx_server != NULL &&
                 test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+                uint64_t old_time = simulated_time;
+                uint64_t delta_t;
                 simulated_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
-                if (simulated_time == UINT64_MAX) {
+                delta_t = simulated_time - old_time;
+                if (delta_t > 3000000) {
+                    DBG_PRINTF("Large delta t=%" PRIu64, delta_t);
+                    ret = -1;
+                    break;
+                }
+                if (simulated_time > max_disconnected_time) {
+                    DBG_PRINTF("Timeout too at t=%" PRIu64 ", Delta_t=%" PRIu64,
+                        simulated_time, delta_t);
+                    ret = -1;
                     break;
                 }
                 else {
