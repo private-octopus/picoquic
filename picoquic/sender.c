@@ -1095,9 +1095,11 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
             rto = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
         }
     }
-    else if (rto > PICOQUIC_LARGE_RETRANSMIT_TIMER &&
-        cnx->path[0]->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
-        uint64_t alt_rto = (cnx->path[0]->smoothed_rtt*3) >> 1;
+    else if (rto > PICOQUIC_LARGE_RETRANSMIT_TIMER){
+        uint64_t alt_rto = PICOQUIC_LARGE_RETRANSMIT_TIMER;
+        if (cnx->path[0]->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
+            alt_rto = (cnx->path[0]->smoothed_rtt * 3) >> 1;
+        }
         if (alt_rto < rto) {
             rto = alt_rto;
         }
