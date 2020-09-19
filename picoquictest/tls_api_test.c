@@ -9761,7 +9761,6 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
 {
     const uint64_t test_latency = 30000;
     const uint64_t picosec_100mbps = 80000;
-    const uint64_t delay_max = 10000000;
     const int nb_loops_max = 3000;
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
