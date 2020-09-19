@@ -590,6 +590,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(excess_repeat)
+        {
+            int ret = excess_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(test_sockets)
         {
             int ret = socket_test();

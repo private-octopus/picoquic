@@ -3516,7 +3516,7 @@ int mtu_drop_test()
         13000000,
         10000000,
         12700000,
-        14000000,
+        11000000,
         11000000
     };
     int ret = 0;
@@ -7469,12 +7469,12 @@ int bbr_slow_long_test()
 }
 
 /* BBR Performance test on a pathological long link, with 2 seconds RTT
- * Verify that 10 MB can be downloaded in less than 120 seconds on a 1 mbps link.
+ * Verify that 10 MB can be downloaded in less than 128 seconds on a 1 mbps link.
  */
 
 int bbr_one_second_test()
 {
-    uint64_t max_completion_time = 118000000;
+    uint64_t max_completion_time = 128000000;
     uint64_t latency = 1000000;
     uint64_t jitter = 3000;
     uint64_t buffer = 2 * (latency + jitter);
@@ -9057,7 +9057,6 @@ int app_limit_cc_test_one(
 
 int app_limit_cc_test()
 {
-
     picoquic_congestion_algorithm_t* ccalgos[] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,
@@ -9069,7 +9068,7 @@ int app_limit_cc_test()
         23500000,
         21000000,
         21000000,
-        28000000 };
+        22500000 };
     int ret = 0;
 
     for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
@@ -9748,6 +9747,138 @@ int integrity_limit_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Excess repeat test.
+ * start a big transfer, then kill the client. Check how many packets the server sends
+ * before giving up. Fail if too many.
+ * Repeat for all supported congestion control algorithms */
+
+int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_target)
+{
+    const uint64_t test_latency = 30000;
+    const uint64_t picosec_100mbps = 80000;
+    const int nb_loops_max = 3000;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    int nb_initial_loop = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0xe8, 0xce, 0x55, 0, 0, 0, 0, 0}, 8 };
+    int ret;
+    
+    initial_cid.id[7] = cc_algo->congestion_algorithm_number;
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        /* Set long delays, 1 Mbps each way */
+        test_ctx->c_to_s_link->microsec_latency = test_latency;
+        test_ctx->c_to_s_link->picosec_per_byte = picosec_100mbps;
+        test_ctx->s_to_c_link->microsec_latency = test_latency;
+        test_ctx->s_to_c_link->picosec_per_byte = picosec_100mbps;
+        /* Set the CC algorithm to selected value */
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
+        /* set qlog */
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        /* initial connection */
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+    }
+
+    /* Perform a data sending loop for a few rounds after the ready state */
+    while (ret == 0 && nb_initial_loop < 64) {
+        if (test_ctx->cnx_server != NULL && test_ctx->cnx_client->cnx_state >= picoquic_state_ready){
+            nb_initial_loop++;
+        }
+
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 16);
+    }
+
+    /* Now, simulate that the client has gone away, and count the packets */
+    if (ret == 0) {
+        picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+        int if_index = 0;
+        picoquic_connection_id_t log_cid;
+        picoquic_cnx_t* last_cnx;
+        int nb_repeated = 0;
+        int nb_loops = 0;
+
+        if (packet == NULL) {
+            ret = -1;
+        }
+        else {
+            while (ret == 0 && test_ctx->cnx_server != NULL &&
+                test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+                simulated_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
+                if (simulated_time == UINT64_MAX) {
+                    break;
+                }
+                else {
+                    ret = picoquic_prepare_next_packet(test_ctx->qserver, simulated_time,
+                        packet->bytes, sizeof(packet->bytes), &packet->length,
+                        &packet->addr_to, &packet->addr_from, &if_index, &log_cid, &last_cnx);
+                    if (ret == 0 && packet->length > 0) {
+                        nb_repeated++;
+                        if (nb_repeated > repeat_target) {
+                            DBG_PRINTF("Stop test for cc=%s stopped after %d repeats, t=%" PRIu64,
+                                cc_algo->congestion_algorithm_id, nb_repeated, simulated_time);
+                            ret = -1;
+                            break;
+                        }
+                    }
+                }
+                nb_loops += 1;
+                if (nb_loops > nb_loops_max) {
+                    DBG_PRINTF("Stop test for cc=%s stopped after %d loops, %d repeats, t=%" PRIu64,
+                        cc_algo->congestion_algorithm_id, nb_loops, nb_repeated, simulated_time);
+                    ret = -1;
+                    break;
+                }
+
+            }
+            if (ret == 0) {
+                DBG_PRINTF("Test for cc=%s passes after %d loops, %d repeats, t=%" PRIu64,
+                    cc_algo->congestion_algorithm_id, nb_loops, nb_repeated, simulated_time);
+            }
+        }
+    }
+
+    /* Delete the context */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+int excess_repeat_test()
+{
+    const int nb_repeat_max = 64;
+    picoquic_congestion_algorithm_t* algo_list[5] = {
+        picoquic_newreno_algorithm,
+        picoquic_cubic_algorithm,
+        picoquic_dcubic_algorithm,
+        picoquic_fastcc_algorithm,
+        picoquic_bbr_algorithm
+    };
+    int ret = 0;
+
+    for (int i = 0; i < 5 && ret == 0; i++) {
+        ret = excess_repeat_test_one(algo_list[i], nb_repeat_max);
+        if (ret != 0) {
+            DBG_PRINTF("Excess repeat test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
+        }
     }
 
     return ret;

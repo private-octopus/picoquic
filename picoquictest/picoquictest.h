@@ -243,6 +243,7 @@ int grease_quic_bit_one_way_test();
 int red_cc_test();
 int pacing_cc_test();
 int integrity_limit_test();
+int excess_repeat_test();
 
 int h3zero_post_test();
 int h09_post_test();

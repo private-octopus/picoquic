@@ -56,6 +56,9 @@ typedef struct st_picoquic_fastcc_state_t {
     uint64_t rolling_rtt_min; /* Min RTT measured for this epoch */
     uint64_t last_rtt_min[FASTCC_NB_PERIOD];
     int nb_cc_events;
+    unsigned int last_freeze_was_timeout : 1;
+    unsigned int last_freeze_was_not_delay : 1;
+    unsigned int rtt_min_is_trusted : 1;
     picoquic_min_max_rtt_t rtt_filter;
 } picoquic_fastcc_state_t;
 
@@ -90,7 +93,6 @@ void picoquic_fastcc_init(picoquic_path_t* path_x, uint64_t current_time)
     
     if (fastcc_state != NULL) {
         memset(fastcc_state, 0, sizeof(picoquic_fastcc_state_t));
-        memset(fastcc_state, 0, sizeof(picoquic_fastcc_state_t));
         fastcc_state->alg_state = picoquic_fastcc_initial;
         fastcc_state->rtt_min = path_x->smoothed_rtt;
         fastcc_state->rolling_rtt_min = fastcc_state->rtt_min;
@@ -102,37 +104,46 @@ void picoquic_fastcc_init(picoquic_path_t* path_x, uint64_t current_time)
     path_x->congestion_alg_state = (void*)fastcc_state;
 }
 
-static void fastcc_shrink_on_event(picoquic_cnx_t* cnx,
-    picoquic_path_t* path_x, picoquic_fastcc_state_t* fastcc_state, 
-    int is_heavy_loss, uint64_t current_time)
+/* Reaction to ECN/CE or sustained losses.
+ * This is more or less the same code as added to bbr.
+ *
+ * This code is called if an ECN/EC event is received, or a timeout
+ * event, or a lost event indicating a high loss rate
+ */
+static void fastcc_notify_congestion(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    picoquic_fastcc_state_t* fastcc_state,
+    uint64_t current_time,
+    int is_delay,
+    int is_timeout)
 {
-    if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
-        fastcc_state->alg_state = picoquic_fastcc_freeze;
-        fastcc_state->end_of_freeze = current_time + fastcc_state->rtt_min;
-        fastcc_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx);
-        if (is_heavy_loss) {
-            path_x->cwin -= (uint64_t)(FASTCC_BETA_HEAVY_LOSS * (double)path_x->cwin);
-        }
-        else {
-            path_x->cwin -= (uint64_t)(FASTCC_BETA * (double)path_x->cwin);
-        }
-        if (path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
-            path_x->cwin = PICOQUIC_CWIN_MINIMUM;
-        }
-        picoquic_update_pacing_data(cnx, path_x, 0);
+    if (fastcc_state->alg_state == picoquic_fastcc_freeze &&
+        (!is_timeout || !fastcc_state->last_freeze_was_timeout) &&
+        (!is_delay || !fastcc_state->last_freeze_was_not_delay)) {
+        /* Do not treat additional events during same freeze interval */
+        return;
     }
-}
+    fastcc_state->last_freeze_was_not_delay = !is_delay;
+    fastcc_state->last_freeze_was_timeout = is_timeout;
+    fastcc_state->alg_state = picoquic_fastcc_freeze;
+    fastcc_state->end_of_freeze = current_time + fastcc_state->rtt_min;
+    fastcc_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx);
+    fastcc_state->nb_cc_events = 0;
 
-static void fastcc_process_cc_event(picoquic_cnx_t * cnx, 
-    picoquic_path_t* path_x, picoquic_fastcc_state_t* fastcc_state, uint64_t current_time)
-{
-    fastcc_state->nb_cc_events++;
-    if (fastcc_state->nb_cc_events >= FASTCC_REPEAT_THRESHOLD) {
-        /* Too many events, reduce the window */
-        fastcc_shrink_on_event(cnx, path_x, fastcc_state, 0, current_time);
+    if (is_delay) {
+        path_x->cwin -= (uint64_t)(FASTCC_BETA * (double)path_x->cwin);
     }
-}
+    else {
+        path_x->cwin = path_x->cwin / 2;
+    }
 
+    if (is_timeout || path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
+        path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+    }
+
+    picoquic_update_pacing_data(cnx, path_x, 0);
+}
 
 /*
  * Properly implementing fastcc requires managing a number of
@@ -158,7 +169,15 @@ void picoquic_fastcc_notify(
         if (fastcc_state->alg_state == picoquic_fastcc_freeze && 
             (current_time > fastcc_state->end_of_freeze ||
                 fastcc_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx))) {
-            fastcc_state->alg_state = picoquic_fastcc_eval;
+            if (fastcc_state->last_freeze_was_timeout) {
+                fastcc_state->alg_state = picoquic_fastcc_initial;
+            }
+            else {
+                fastcc_state->alg_state = picoquic_fastcc_eval;
+            }
+            fastcc_state->last_freeze_was_not_delay = 0;
+            fastcc_state->last_freeze_was_timeout = 0;
+
             fastcc_state->nb_cc_events = 0;
             fastcc_state->nb_bytes_ack_since_rtt = 0;
         }
@@ -171,25 +190,16 @@ void picoquic_fastcc_notify(
                 /* Compute pacing data. */
                 picoquic_update_pacing_data(cnx, path_x, 0);
             }
-            break;  
+            break;
+
         case picoquic_congestion_notification_ecn_ec:
-            if (fastcc_state->alg_state != picoquic_fastcc_freeze &&
-                cnx->cnx_state >= picoquic_state_ready) {
-                /* Count ECN as maybe cc events */
-                fastcc_process_cc_event(cnx, path_x, fastcc_state, current_time);
-            }
+            fastcc_notify_congestion(cnx, path_x, fastcc_state, current_time, 0, 0);
             break;
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
-            if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
-                if (cnx->cnx_state >= picoquic_state_ready &&
-                    picoquic_hystart_loss_test(&fastcc_state->rtt_filter, notification, lost_packet_number)) {
-                    fastcc_shrink_on_event(cnx, path_x, fastcc_state, 1, current_time);
-                }
-                else {
-                    /* Count packet losses as maybe cc events */
-                    fastcc_process_cc_event(cnx, path_x, fastcc_state, current_time);
-                }
+            if (picoquic_hystart_loss_test(&fastcc_state->rtt_filter, notification, lost_packet_number)) {
+                fastcc_notify_congestion(cnx, path_x, fastcc_state, current_time, 0,
+                    (notification == picoquic_congestion_notification_timeout) ? 1 : 0);
             }
             break;
         case picoquic_congestion_notification_spurious_repeat:
@@ -209,7 +219,7 @@ void picoquic_fastcc_notify(
                 if (current_time > fastcc_state->end_of_epoch) {
                     /* If end of epoch, reset the min RTT to min of remembered periods,
                      * and roll the period. */
-                    fastcc_state->rtt_min = (uint64_t)((int64_t)-1);
+                    fastcc_state->rtt_min = UINT64_MAX;
                     for (int i = FASTCC_NB_PERIOD - 1; i > 0; i--) {
                         fastcc_state->last_rtt_min[i] = fastcc_state->last_rtt_min[i - 1];
                         if (fastcc_state->last_rtt_min[i] > 0 &&
@@ -235,8 +245,14 @@ void picoquic_fastcc_notify(
                 if (rtt_measurement < fastcc_state->rtt_min) {
                     fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
                 }
-                else {
+                else if (fastcc_state->rtt_min_is_trusted){
                     delta_rtt = rtt_measurement - fastcc_state->rtt_min;
+                }
+                else {
+                    fastcc_state->rtt_min = rtt_measurement; 
+                    fastcc_state->rolling_rtt_min = rtt_measurement;
+                    fastcc_state->rtt_min_is_trusted = 1;
+                    delta_rtt = 0;
                 }
 
                 if (delta_rtt < fastcc_state->delay_threshold) {
@@ -256,7 +272,11 @@ void picoquic_fastcc_notify(
                 }
                 else {
                     /* May well be congested */
-                    fastcc_process_cc_event(cnx, path_x, fastcc_state, current_time);
+                    fastcc_state->nb_cc_events++;
+                    if (fastcc_state->nb_cc_events >= FASTCC_REPEAT_THRESHOLD) {
+                        /* Too many events, reduce the window */
+                        fastcc_notify_congestion(cnx, path_x, fastcc_state, current_time, 1, 0);
+                    }
                 }
             }
         }

@@ -145,6 +145,46 @@ Hystart instead of startup if the RTT is above the Reno target of
  * activate policing to the average rate between current and previous sample.
  */
 
+/* Reaction to losses and ECN
+ * This code is an implementation of BBRv1, which pretty much ignores packet
+ * losses or ECN marks. Google has still developed BBRv2, which is generally
+ * considered much more robust. Once the BBRv2 specification is available,
+ * we should develop it. However, before BBRv2 is there, we need to fix the
+ * most egregious issues in BBR v1. For example, in a test, we show that if
+ * a receiver starts a high speed download and then disappears, the sender
+ * will only close the connection after repeating over 1000 packets,
+ * compared to only 32 with New Reno or Cubic. This is because BBR does
+ * not slow down or reduce the CWIN on loss indication, even when there
+ * are many loss indications. 
+ *
+ * We implement the following fixes:
+ *
+ * - On basic loss indication, run a filter to determine whether the loss
+ *   rate is getting too high. This will allow the code to continue
+ *   ignoring low loss rates, but somehow react to high loss rates.
+ *
+ * - If high loss rate is detected, halve the congestion window. Do
+ *   the same if an EC mark is received.
+ *
+ * - If a timeout loss is detected, reduce the window to the minimum
+ *   value.
+ *
+ * This needs to be coordinated with the BBR state machine. We implement
+ * it as such:
+ *
+ * - if the state is start-up or start-up-long-rtt, exit startup
+ *   and move to a drain state.
+ * - if the state is probe-bw, start the new period with a conservative
+ *   packet window (trigger by cycle_on_loss state variable)
+ * - if the state is probe-RTT, do nothing special...
+ *
+ * The packet losses and congestion signals should be used only once per
+ * RTT. We filter with a "loss period start time" value, and only
+ * take signals into account if they happen 1-RTT after the current
+ * loss start time. However, if the previous loss was not due to
+ * timeout, the timeout will still be handled.
+ */
+
 typedef enum {
     picoquic_bbr_alg_startup = 0,
     picoquic_bbr_alg_drain,
@@ -206,6 +246,7 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t previous_round_lost;
     uint64_t previous_sampling_delivered;
     uint64_t previous_sampling_lost;
+    uint64_t loss_interval_start; /* Time in microsec when last loss considered */
 
     unsigned int filled_pipe : 1;
     unsigned int round_start : 1;
@@ -216,6 +257,8 @@ typedef struct st_picoquic_bbr_state_t {
     unsigned int btl_bw_increased : 1;
     unsigned int lt_use_bw : 1;
     unsigned int lt_is_sampling : 1;
+    unsigned int last_loss_was_timeout : 1;
+    unsigned int cycle_on_loss : 1;
 
 } picoquic_bbr_state_t;
 
@@ -523,7 +566,7 @@ void BBRUpdateRTprop(picoquic_bbr_state_t* bbr_state, uint64_t rtt_sample, uint6
 
 int BBRIsNextCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t prior_in_flight, uint64_t packets_lost, uint64_t current_time)
 {
-    int is_full_length = (current_time - bbr_state->cycle_stamp) > bbr_state->rt_prop;
+    int is_full_length = bbr_state->cycle_on_loss || (current_time - bbr_state->cycle_stamp) > bbr_state->rt_prop;
     
     if (bbr_state->pacing_gain != 1.0) {
         if (bbr_state->pacing_gain > 1.0) {
@@ -556,6 +599,7 @@ void BBRSetMinimalGain(picoquic_bbr_state_t* bbr_state)
 
 void BBRAdvanceCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
 {
+    bbr_state->cycle_on_loss = 0;
     bbr_state->cycle_stamp = current_time;
     bbr_state->cycle_index++;
     if (bbr_state->cycle_index >= BBR_GAIN_CYCLE_LEN) {
@@ -914,6 +958,42 @@ void BBRExitFastRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_
     BBRRestoreCwnd(bbr_state, path_x);
 }
 
+/* Reaction to ECN or sustained losses
+ */
+void picoquic_bbr_notify_congestion(
+    picoquic_bbr_state_t* bbr_state,
+    picoquic_path_t* path_x,
+    uint64_t current_time,
+    int is_timeout)
+{
+    /* Apply filter of last loss */
+    if ((bbr_state->cycle_on_loss || current_time < bbr_state->loss_interval_start + path_x->smoothed_rtt) &&
+        (!is_timeout || bbr_state->last_loss_was_timeout)) {
+        /* filter repeated loss events */
+        return;
+    }
+    path_x->cwin = path_x->cwin / 2;
+    if (is_timeout || path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
+        path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+    }
+
+    bbr_state->loss_interval_start = current_time;
+    bbr_state->last_loss_was_timeout = is_timeout;
+
+    /* Update and check the packet loss rate */
+    if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
+        BBRExitStartupLongRtt(bbr_state, path_x, current_time);
+    }
+    else if (bbr_state->state == picoquic_bbr_alg_startup) {
+        bbr_state->filled_pipe = 1;
+        BBREnterDrain(bbr_state, path_x, current_time);
+    }
+    else {
+        bbr_state->cycle_on_loss = 1;
+    }
+}
+
+
 /*
  * In order to implement BBR, we map generic congestion notification
  * signals to the corresponding BBR actions.
@@ -940,19 +1020,15 @@ static void picoquic_bbr_notify(
             bbr_state->bytes_delivered += nb_bytes_acknowledged;
             break;
         case picoquic_congestion_notification_ecn_ec:
-            /* TODO: study ECN use in BBR */
+            /* Non standard code to react on ECN_EC */
+            picoquic_bbr_notify_congestion(bbr_state, path_x, current_time, 0);
             break;
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
-            /* Update and check the packet loss rate */
-            if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt &&
-                picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification, lost_packet_number)) {
-                BBRExitStartupLongRtt(bbr_state, path_x, current_time);
-            }
-            else if (bbr_state->state == picoquic_bbr_alg_startup &&
-                picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification, lost_packet_number)) {
-                bbr_state->filled_pipe = 1;
-                BBREnterDrain(bbr_state, path_x, current_time);
+            /* Non standard code to react to high rate of packet loss, or timeout loss */
+            if (picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification, lost_packet_number)) {
+                picoquic_bbr_notify_congestion(bbr_state, path_x, current_time,
+                    (notification == picoquic_congestion_notification_timeout) ? 1 : 0);
             }
             break;
         case picoquic_congestion_notification_spurious_repeat:
