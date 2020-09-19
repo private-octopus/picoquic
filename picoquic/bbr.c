@@ -967,14 +967,9 @@ void picoquic_bbr_notify_congestion(
     int is_timeout)
 {
     /* Apply filter of last loss */
-    if (current_time < bbr_state->loss_interval_start + path_x->smoothed_rtt &&
+    if ((bbr_state->cycle_on_loss || current_time < bbr_state->loss_interval_start + path_x->smoothed_rtt) &&
         (!is_timeout || bbr_state->last_loss_was_timeout)) {
         /* filter repeated loss events */
-        return;
-    }
-    if (bbr_state->cycle_on_loss &&
-        (!is_timeout || bbr_state->last_loss_was_timeout)) {
-        /* The previous cycle did not yet conclude, so avoid doing something drastic */
         return;
     }
     path_x->cwin = path_x->cwin / 2;

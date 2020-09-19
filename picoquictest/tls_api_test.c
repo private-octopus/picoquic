@@ -3516,7 +3516,7 @@ int mtu_drop_test()
         13000000,
         10000000,
         12700000,
-        14000000,
+        11000000,
         11000000
     };
     int ret = 0;
@@ -9057,7 +9057,6 @@ int app_limit_cc_test_one(
 
 int app_limit_cc_test()
 {
-
     picoquic_congestion_algorithm_t* ccalgos[] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,
@@ -9069,7 +9068,7 @@ int app_limit_cc_test()
         23500000,
         21000000,
         21000000,
-        28000000 };
+        22500000 };
     int ret = 0;
 
     for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
@@ -9866,7 +9865,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
 
 int excess_repeat_test()
 {
-    const int nb_repeat_max = 1024;
+    const int nb_repeat_max = 64;
     picoquic_congestion_algorithm_t* algo_list[5] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,
