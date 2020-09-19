@@ -9855,7 +9855,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
     }
 
     /* Delete the context */
-    if (test_ctx == NULL) {
+    if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
     }
 
