@@ -1083,7 +1083,7 @@ int tls_api_init_ctx_ex(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_ve
     int force_zero_share, int delayed_init, int use_bad_crypt, picoquic_connection_id_t* icid)
 {
     return tls_api_init_ctx_ex2(pctx, proposed_version, sni, alpn, p_simulated_time, ticket_file_name, token_file_name,
-        force_zero_share, delayed_init, use_bad_crypt, NULL, 8);
+        force_zero_share, delayed_init, use_bad_crypt, icid, 8);
 
 }
 
