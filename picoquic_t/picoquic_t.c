@@ -238,7 +238,8 @@ static const picoquic_test_def_t test_table[] = {
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test},
-    { "cnx_stress", cnx_stress_unit_test }
+    { "cnx_stress", cnx_stress_unit_test },
+    { "cnx_ddos", cnx_ddos_unit_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
@@ -287,7 +288,9 @@ int usage(char const * argv0)
     fprintf(stderr, "  -x test           Do not run the specified test.\n");
     fprintf(stderr, "  -s nnn            Run stress for nnn minutes.\n");
     fprintf(stderr, "  -f nnn            Run fuzz for nnn minutes.\n");
-    fprintf(stderr, "  -c nnn ccc        Run fuzz for nnn minutes, ccc connections.\n");
+    fprintf(stderr, "  -c nnn ccc        Run connection stress for nnn minutes, ccc connections.\n");
+    fprintf(stderr, "  -d ppp uuu dir    Run connection ddoss for ppp packets, uuu usec intervals,\n");
+    fprintf(stderr, "                    logs in dir. No logs if dir=\"-\"");
     fprintf(stderr, "  -n                Disable debug prints.\n");
     fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
@@ -321,10 +324,14 @@ int main(int argc, char** argv)
     int do_fuzz = 0;
     int do_stress = 0;
     int do_cnx_stress = 0;
+    int do_cnx_ddos = 0;
     int disable_debug = 0;
     int retry_failed_test = 0;
     int cnx_stress_minutes = 0;
     int cnx_stress_nb_cnx = 0;
+    int cnx_ddos_packets = 0;
+    int cnx_ddos_interval = 0;
+    char const* cnx_ddos_dir = NULL;
 
     if (test_status == NULL)
     {
@@ -333,7 +340,7 @@ int main(int argc, char** argv)
     }
     else
     {
-        while (ret == 0 && (opt = getopt(argc, argv, "f:s:c:S:x:nrh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "f:s:c:d:S:x:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 int test_number = get_test_number(optarg);
@@ -381,6 +388,24 @@ int main(int argc, char** argv)
                     ret = usage(argv[0]);
                 }
                 break;
+            case 'd':
+                if (optind + 2 > argc) {
+                    fprintf(stderr, "option requires more arguments -- c\n");
+                    ret = usage(argv[0]);
+                }
+                do_cnx_ddos = 1;
+                cnx_ddos_packets = atoi(optarg);
+                cnx_ddos_interval = atoi(argv[optind++]);
+                cnx_ddos_dir = argv[optind++];
+                if (cnx_ddos_packets <= 0) {
+                    fprintf(stderr, "Incorrect cnx ddos packets: %s\n", optarg);
+                    ret = usage(argv[0]);
+                }
+                else if (cnx_stress_nb_cnx < 0) {
+                    fprintf(stderr, "Incorrect cnx ddos interval: %s\n", argv[optind - 1]);
+                    ret = usage(argv[0]);
+                }
+                break;
             case 'S':
                 picoquic_set_solution_dir(optarg);
                 break;
@@ -407,7 +432,7 @@ int main(int argc, char** argv)
             debug_printf_push_stream(stderr);
         }
 
-        if (ret == 0 && (do_stress || do_fuzz || do_cnx_stress)) {
+        if (ret == 0 && (do_stress || do_fuzz || do_cnx_stress || do_cnx_ddos)) {
             if (optind >= argc && found_exclusion == 0) {
                 for (size_t i = 0; i < nb_tests; i++) {
                     if (strcmp(test_table[i].test_name, "stress") == 0)
@@ -423,6 +448,11 @@ int main(int argc, char** argv)
                     }
                     else if (strcmp(test_table[i].test_name, "cnx_stress") == 0) {
                         if (do_cnx_stress == 0) {
+                            test_status[i] = test_excluded;
+                        }
+                    }
+                    else if (strcmp(test_table[i].test_name, "cnx_ddos") == 0) {
+                        if (do_cnx_ddos == 0) {
                             test_status[i] = test_excluded;
                         }
                     }
@@ -450,7 +480,18 @@ int main(int argc, char** argv)
                             } else {
                                 test_status[i] = test_success;
                             }
-                        } else if (do_one_test(i, stdout) != 0) {
+                        }
+                        else if (do_cnx_ddos && strcmp(test_table[i].test_name, "cnx_ddos") == 0) {
+                            if (cnx_ddos_test_loop(cnx_ddos_packets, cnx_ddos_interval, cnx_ddos_dir) != 0) {
+                                test_status[i] = test_failed;
+                                nb_test_failed++;
+                                ret = -1;
+                            }
+                            else {
+                                test_status[i] = test_success;
+                            }
+                        }
+                        else if (do_one_test(i, stdout) != 0) {
                             test_status[i] = test_failed;
                             nb_test_failed++;
                             ret = -1;
@@ -459,7 +500,7 @@ int main(int argc, char** argv)
                             test_status[i] = test_success;
                         }
                     }
-                    else if (!(do_cnx_stress || do_fuzz || do_stress)) {
+                    else if (!(do_cnx_stress || do_fuzz || do_stress || do_cnx_ddos)) {
                         fprintf(stdout, "Test number %d (%s) is bypassed.\n", (int)i, test_table[i].test_name);
                     }
                 }
