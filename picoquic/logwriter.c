@@ -798,7 +798,12 @@ FILE* create_binlog(char const* binlog_file, uint64_t creation_time);
 void binlog_new_connection(picoquic_cnx_t * cnx)
 {
     char const* bin_dir = (cnx->quic->binlog_dir == NULL) ? cnx->quic->qlog_dir : cnx->quic->binlog_dir;
+
     if (bin_dir == NULL) {
+        return;
+    }
+
+    if (cnx->quic->current_number_of_open_logs >= cnx->quic->max_simultaneous_logs) {
         return;
     }
 
@@ -829,6 +834,9 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
         if (cnx->f_binlog == NULL) {
             cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
             ret = -1;
+        }
+        else {
+            cnx->quic->current_number_of_open_logs++;
         }
     }
 
@@ -884,6 +892,9 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
         (void)cnx->quic->autoqlog_fn(cnx);
     }
     cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
+    if (cnx->quic->current_number_of_open_logs > 0) {
+        cnx->quic->current_number_of_open_logs--;
+    }
 }
 
 FILE* create_binlog(char const* binlog_file, uint64_t creation_time)

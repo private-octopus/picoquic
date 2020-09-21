@@ -86,6 +86,8 @@ extern "C" {
 
 #define PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH (1<<22)
 
+#define PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS 32
+
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 3
@@ -494,6 +496,8 @@ typedef struct st_picoquic_quic_t {
     uint32_t sequence_hole_pseudo_period; /* Optimistic ack defense */
     picoquic_spinbit_version_enum default_spin_policy;
     uint64_t crypto_epoch_length_max; /* Default packet interval between key rotations */
+    uint32_t max_simultaneous_logs;
+    uint32_t current_number_of_open_logs;
     /* Flags */
     unsigned int check_token : 1;
     unsigned int provide_token : 1;

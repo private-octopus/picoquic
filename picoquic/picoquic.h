@@ -510,6 +510,13 @@ void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn 
 
 void picoquic_set_default_callback(picoquic_quic_t * quic, picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);
 
+/* Set and get the maximum number of simultaneously logged connections.
+* If that number is too high, the maximum number of open files will be hit 
+* at random places in the code. A small value means that some connections may
+* not be logged. Default is set to 32. */
+void picoquic_set_max_simultaneous_logs(picoquic_quic_t* quic, uint32_t max_simultaneous_logs);
+uint32_t picoquic_get_max_simultaneous_logs(picoquic_quic_t* quic);
+
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,

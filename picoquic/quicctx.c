@@ -331,6 +331,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->padding_multiple_default = 0; /* TODO: consider default = 128 */
         quic->padding_minsize_default = PICOQUIC_RESET_PACKET_MIN_SIZE;
         quic->crypto_epoch_length_max = 0;
+        quic->max_simultaneous_logs = PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS;
         picoquic_wake_list_init(quic);
 
         if (cnx_id_callback != NULL) {
@@ -482,6 +483,16 @@ int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid)
 {
     return (cid->id_len == quic->local_cnxid_length &&
         picoquic_cnx_by_id(quic, *cid) != NULL);
+}
+
+void picoquic_set_max_simultaneous_logs(picoquic_quic_t* quic, uint32_t max_simultaneous_logs)
+{
+    quic->max_simultaneous_logs = max_simultaneous_logs;
+}
+
+uint32_t picoquic_get_max_simultaneous_logs(picoquic_quic_t* quic)
+{
+    return quic->max_simultaneous_logs;
 }
 
 void picoquic_free(picoquic_quic_t* quic)
