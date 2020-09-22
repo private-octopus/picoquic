@@ -9935,10 +9935,8 @@ int excess_repeat_test()
 
 int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* qlogdir)
 {
-    const int nb_loops_max = 3000;
     uint64_t simulated_time = 0;
     uint64_t ddos_time = 0;
-    uint64_t loss_mask = 0;
     int nb_ddos_done = 0;
     int nb_sent = 0;
     int if_index = 0;
