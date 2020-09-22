@@ -2416,8 +2416,10 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
             else {
                 uint8_t text[256];
                 size_t text_len = 256;
+                int is_new_token = 0;
+
                 ret = picoquic_server_decrypt_retry_token(test_ctx->qserver, (struct sockaddr*) & test_ctx->client_addr,
-                    token, token_length, text, &text_len);
+                    &is_new_token, token, token_length, text, &text_len);
                 if (ret != 0) {
                     DBG_PRINTF("cannot decrypt the token, ret= %d\n", ret);
                 }
@@ -2456,10 +2458,16 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
         /* Try the new connection */
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
 
-        if (dup_token) {
+        if (dup_token ) {
             if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected){
-                ret = -1;
-                DBG_PRINTF("Connection succeeds despite duplicate token, ret= %d\n", ret);
+                if (test_ctx->cnx_client->original_cnxid.id_len > 0) {
+                    /* Correct behavior, required a new token */
+                    ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+                }
+                else {
+                    ret = -1;
+                    DBG_PRINTF("Connection succeeds despite duplicate token, ret= %d\n", ret);
+                }
             }
         }
         else {
@@ -2515,6 +2523,7 @@ int tls_retry_token_test()
 int tls_retry_token_valid_test()
 {
     int ret = 0;
+    int is_new_token = 0;
     struct sockaddr_in addr1, addr2, addr3;
     struct sockaddr* addr[3];
     picoquic_connection_id_t n_cid = picoquic_null_connection_id;
@@ -2577,7 +2586,7 @@ int tls_retry_token_valid_test()
 
         if (ret == 0) {
             verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
-                &odcid_found, cid[0], pn[2],
+                &is_new_token, &odcid_found, cid[0], pn[2],
                 token_buffer, token_size, 0);
             if (verified != 0) {
                 DBG_PRINTF("%s", "Token validation fails for normal parameters\n");
@@ -2591,18 +2600,26 @@ int tls_retry_token_valid_test()
                 DBG_PRINTF("%s", "Spurious ODCID\n");
                 ret = -1;
             }
+            else if (!is_new_token && odcid[token_mode]->id_len == 0) {
+                DBG_PRINTF("%s", "Wrongly recognized as new token\n");
+                ret = -1;
+            }
+            else if (is_new_token && odcid[token_mode]->id_len > 0) {
+                DBG_PRINTF("%s", "Wrongly recognized as retry token\n");
+                ret = -1;
+            }
         }
 
         if (ret == 0 && picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[2 + token_mode],
-            &odcid_found, cid[0], pn[2],
+            &is_new_token, &odcid_found, cid[0], pn[2],
             token_buffer, token_size, 0) == 0) {
-            DBG_PRINTF("%s", "Token validation fdoes not detect elapsed time.\n");
+            DBG_PRINTF("%s", "Token validation does not detect elapsed time.\n");
             ret = -1;
         }
 
         if (ret == 0) {
             verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
-                &odcid_found, cid[2], pn[2],
+                &is_new_token, &odcid_found, cid[2], pn[2],
                 token_buffer, token_size, 0);
             if (token_mode == 0 && verified == 0) {
                 DBG_PRINTF("%s", "RCID invalidation fails\n");
@@ -2616,7 +2633,7 @@ int tls_retry_token_valid_test()
 
         for (int pn_id = 0; ret == 0 && pn_id < 2; pn_id++) {
             verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
-                &odcid_found, cid[0], pn[pn_id],
+                &is_new_token, &odcid_found, cid[0], pn[pn_id],
                 token_buffer, token_size, 0);
             if (token_mode == 0 && verified == 0) {
                 DBG_PRINTF("%s", "PN invalidation fails\n");
