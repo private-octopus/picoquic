@@ -112,5 +112,11 @@ namespace PerfAndStressTest
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(cnx_ddos) {
+            int ret = cnx_ddos_unit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }

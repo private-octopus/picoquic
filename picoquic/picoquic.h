@@ -152,14 +152,8 @@ typedef enum {
 
 
 /*
-* Quic context flags
+* Quic spin bit variants
 */
-typedef enum {
-    picoquic_context_check_token = 1,
-    picoquic_context_unconditional_cnx_id = 2,
-    picoquic_context_client_zero_share = 4,
-    picoquic_context_server_busy = 8
-} picoquic_context_flags;
 
 typedef enum {
     picoquic_spinbit_basic = 0, /* default spin bit behavior, as specified in spin bit draft */
@@ -423,7 +417,16 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
 
 void picoquic_free(picoquic_quic_t* quic);
 
-/* Set cookie mode on QUIC context when under stress */
+/* management of retry policy.
+ * The cookie mode can be used to force the following behavior:
+ * - if cookie_mode&1, check the token and force a retry for each incoming connection.
+ * - if cookie&2, provide a token to the client after completing the handshake.
+ * When the "force retry" is not set, the code will count the number of "half-open" 
+ * connections. This can happen for example if the server is subject to a DDOS attack.
+ * If the threshold is exceeded, the code will request a token before accepting new
+ * connections, forcing DDOS attackers to reveal their IP address.
+ * By default, the threshold is set to 128 connections.
+ */
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
 
 /* Set cipher suite, for tests. 
@@ -509,6 +512,13 @@ void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max);
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn);
 
 void picoquic_set_default_callback(picoquic_quic_t * quic, picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);
+
+/* Set and get the maximum number of simultaneously logged connections.
+* If that number is too high, the maximum number of open files will be hit 
+* at random places in the code. A small value means that some connections may
+* not be logged. Default is set to 32. */
+void picoquic_set_max_simultaneous_logs(picoquic_quic_t* quic, uint32_t max_simultaneous_logs);
+uint32_t picoquic_get_max_simultaneous_logs(picoquic_quic_t* quic);
 
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,

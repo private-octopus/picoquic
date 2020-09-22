@@ -959,10 +959,11 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
     free(test_ctx);
 }
 
-int tls_api_init_ctx_ex(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
+int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time, 
     char const* ticket_file_name, char const* token_file_name,
-    int force_zero_share, int delayed_init, int use_bad_crypt, picoquic_connection_id_t * icid)
+    int force_zero_share, int delayed_init, int use_bad_crypt, 
+    picoquic_connection_id_t * icid, uint32_t nb_connections)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -1021,7 +1022,7 @@ int tls_api_init_ctx_ex(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_ve
                 (void)picoquic_load_token_file(test_ctx->qclient, token_file_name);
             }
 
-            test_ctx->qserver = picoquic_create(8,
+            test_ctx->qserver = picoquic_create(nb_connections,
                 test_server_cert_file, test_server_key_file, test_server_cert_store_file,
                 (alpn == NULL)?PICOQUIC_TEST_ALPN:alpn, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
                 *p_simulated_time, p_simulated_time, NULL,
@@ -1074,6 +1075,16 @@ int tls_api_init_ctx_ex(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_ve
     *pctx = test_ctx;
 
     return ret;
+}
+
+int tls_api_init_ctx_ex(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
+    char const* sni, char const* alpn, uint64_t* p_simulated_time,
+    char const* ticket_file_name, char const* token_file_name,
+    int force_zero_share, int delayed_init, int use_bad_crypt, picoquic_connection_id_t* icid)
+{
+    return tls_api_init_ctx_ex2(pctx, proposed_version, sni, alpn, p_simulated_time, ticket_file_name, token_file_name,
+        force_zero_share, delayed_init, use_bad_crypt, icid, 8);
+
 }
 
 int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
@@ -2405,8 +2416,10 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
             else {
                 uint8_t text[256];
                 size_t text_len = 256;
+                int is_new_token = 0;
+
                 ret = picoquic_server_decrypt_retry_token(test_ctx->qserver, (struct sockaddr*) & test_ctx->client_addr,
-                    token, token_length, text, &text_len);
+                    &is_new_token, token, token_length, text, &text_len);
                 if (ret != 0) {
                     DBG_PRINTF("cannot decrypt the token, ret= %d\n", ret);
                 }
@@ -2445,10 +2458,16 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
         /* Try the new connection */
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
 
-        if (dup_token) {
+        if (dup_token ) {
             if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected){
-                ret = -1;
-                DBG_PRINTF("Connection succeeds despite duplicate token, ret= %d\n", ret);
+                if (test_ctx->cnx_client->original_cnxid.id_len > 0) {
+                    /* Correct behavior, required a new token */
+                    ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+                }
+                else {
+                    ret = -1;
+                    DBG_PRINTF("Connection succeeds despite duplicate token, ret= %d\n", ret);
+                }
             }
         }
         else {
@@ -2504,6 +2523,7 @@ int tls_retry_token_test()
 int tls_retry_token_valid_test()
 {
     int ret = 0;
+    int is_new_token = 0;
     struct sockaddr_in addr1, addr2, addr3;
     struct sockaddr* addr[3];
     picoquic_connection_id_t n_cid = picoquic_null_connection_id;
@@ -2566,7 +2586,7 @@ int tls_retry_token_valid_test()
 
         if (ret == 0) {
             verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
-                &odcid_found, cid[0], pn[2],
+                &is_new_token, &odcid_found, cid[0], pn[2],
                 token_buffer, token_size, 0);
             if (verified != 0) {
                 DBG_PRINTF("%s", "Token validation fails for normal parameters\n");
@@ -2580,18 +2600,26 @@ int tls_retry_token_valid_test()
                 DBG_PRINTF("%s", "Spurious ODCID\n");
                 ret = -1;
             }
+            else if (!is_new_token && odcid[token_mode]->id_len == 0) {
+                DBG_PRINTF("%s", "Wrongly recognized as new token\n");
+                ret = -1;
+            }
+            else if (is_new_token && odcid[token_mode]->id_len > 0) {
+                DBG_PRINTF("%s", "Wrongly recognized as retry token\n");
+                ret = -1;
+            }
         }
 
         if (ret == 0 && picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[2 + token_mode],
-            &odcid_found, cid[0], pn[2],
+            &is_new_token, &odcid_found, cid[0], pn[2],
             token_buffer, token_size, 0) == 0) {
-            DBG_PRINTF("%s", "Token validation fdoes not detect elapsed time.\n");
+            DBG_PRINTF("%s", "Token validation does not detect elapsed time.\n");
             ret = -1;
         }
 
         if (ret == 0) {
             verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
-                &odcid_found, cid[2], pn[2],
+                &is_new_token, &odcid_found, cid[2], pn[2],
                 token_buffer, token_size, 0);
             if (token_mode == 0 && verified == 0) {
                 DBG_PRINTF("%s", "RCID invalidation fails\n");
@@ -2605,7 +2633,7 @@ int tls_retry_token_valid_test()
 
         for (int pn_id = 0; ret == 0 && pn_id < 2; pn_id++) {
             verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
-                &odcid_found, cid[0], pn[pn_id],
+                &is_new_token, &odcid_found, cid[0], pn[pn_id],
                 token_buffer, token_size, 0);
             if (token_mode == 0 && verified == 0) {
                 DBG_PRINTF("%s", "PN invalidation fails\n");
@@ -9863,6 +9891,8 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
                 DBG_PRINTF("Test for cc=%s passes after %d loops, %d repeats, t=%" PRIu64,
                     cc_algo->congestion_algorithm_id, nb_loops, nb_repeated, simulated_time);
             }
+
+            free(packet);
         }
     }
 
@@ -9894,4 +9924,189 @@ int excess_repeat_test()
     }
 
     return ret;
+}
+
+
+
+/* Connection DDOS
+* Simulate attack on server by sending tons of connection requests. See
+* what happens.
+*/
+
+int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* qlogdir)
+{
+    uint64_t simulated_time = 0;
+    uint64_t ddos_time = 0;
+    int nb_ddos_done = 0;
+    int nb_sent = 0;
+    int if_index = 0;
+    int still_sending = 0;
+    picoquic_connection_id_t log_cid;
+    picoquic_cnx_t* last_cnx;
+    picoquic_quic_t* qddos = picoquic_create(100, NULL, NULL, NULL, PICOQUIC_TEST_ALPN, NULL, NULL,
+        NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t start_wall_time;
+    uint64_t elapsed_wall_time;
+    picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+    picoquictest_sim_packet_t* ddos_packet_first = NULL;
+    int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 10000);
+
+    if (ret == 0 && (test_ctx == NULL || packet == NULL || qddos == NULL)) {
+        ret = -1;
+    }
+
+    if (ret == 0 && qlogdir != NULL && strcmp("-", qlogdir) != 0) {
+        picoquic_set_qlog(test_ctx->qserver, qlogdir);
+    }
+
+    /* Create a list of nb_connections initial packets. We do this before running the
+     * DDOS, so the time to create teh attack is not counted in the "wall time" of
+     * the server under attacks. */
+    for (int i = 0; ret == 0 && i < nb_connections; i++) {
+        picoquictest_sim_packet_t* ddos_packet = picoquictest_sim_link_create_packet();
+        if (ddos_packet == NULL) {
+            DBG_PRINTF("Could not create dos packet #%d", i + 1);
+            ret = -1;
+        }
+        else {
+            picoquic_cnx_t* ddos_cnx = NULL;
+
+            ddos_packet->next_packet = ddos_packet_first;
+            ddos_packet_first = ddos_packet;
+
+            ddos_cnx = picoquic_create_cnx(qddos, picoquic_null_connection_id, picoquic_null_connection_id,
+                (struct sockaddr*) & test_ctx->server_addr, simulated_time, 0, PICOQUIC_TEST_SNI,
+                PICOQUIC_TEST_ALPN, 1);
+            if (ddos_cnx == NULL) {
+                DBG_PRINTF("Cannot create ddos cnx #%d", nb_ddos_done);
+                ret = -1;
+            }
+            else if ((ret = picoquic_start_client_cnx(ddos_cnx)) != 0) {
+                DBG_PRINTF("Cannot create ddos cnx #%d", nb_ddos_done);
+                ret = -1;
+            }
+            else if ((ret = picoquic_prepare_next_packet(qddos, simulated_time,
+                ddos_packet->bytes, sizeof(ddos_packet->bytes), &ddos_packet->length,
+                &ddos_packet->addr_to, &ddos_packet->addr_from, &if_index, &log_cid, &last_cnx)) != 0 ||
+                ddos_packet->length == 0) {
+                DBG_PRINTF("Cannot create ddos initial #%d, ret = 0x%x", nb_ddos_done, ret);
+                ret = -1;
+            }
+            else {
+                picoquic_set_test_address((struct sockaddr_in*) & packet->addr_from,
+                    0x0a010000 + nb_ddos_done, 0x8421);
+            }
+
+            if (ddos_cnx != NULL) {
+                picoquic_delete_cnx(ddos_cnx);
+            }
+        }
+    }
+    if (ret == 0) {
+        DBG_PRINTF("Created %d ddos initial packets", nb_connections);
+    }
+
+    start_wall_time = picoquic_current_time();
+    while (ret == 0 && (ddos_packet_first != NULL || still_sending)) {
+        uint64_t next_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
+
+        still_sending = 0;
+
+        if (next_time < ddos_time) {
+            simulated_time = next_time;
+
+            ret = picoquic_prepare_next_packet(test_ctx->qserver, simulated_time,
+                packet->bytes, sizeof(packet->bytes), &packet->length,
+                &packet->addr_to, &packet->addr_from, &if_index, &log_cid, &last_cnx);
+            if (ret != 0) {
+                DBG_PRINTF("Server error after #%d ddos, ret = 0x%x", nb_ddos_done, ret);
+                ret = -1;
+            }
+            else if (packet->length > 0) {
+                nb_sent++;
+                still_sending = 1;
+            }
+        }
+        else if (ddos_packet_first != NULL) {
+            picoquictest_sim_packet_t* ddos_packet = ddos_packet_first;
+            ddos_packet_first = ddos_packet->next_packet;
+
+            simulated_time = ddos_time;
+            nb_ddos_done++;
+
+            if (nb_ddos_done >= nb_connections) {
+                ddos_time = UINT64_MAX;
+            }
+            else {
+                ddos_time += ddos_interval;
+            }
+
+            ret = picoquic_incoming_packet(test_ctx->qserver, ddos_packet->bytes, ddos_packet->length,
+                (struct sockaddr*) & ddos_packet->addr_from, (struct sockaddr*) & ddos_packet->addr_to,
+                if_index, 0, simulated_time);
+            still_sending = 1;
+            if (ret != 0) {
+                DBG_PRINTF("Server chokes on initial #%d, ret = 0x%x", nb_ddos_done, ret);
+            }
+
+            free(ddos_packet);
+        }
+    }
+
+    elapsed_wall_time = picoquic_current_time() - start_wall_time;
+
+    if (ret == 0) {
+        DBG_PRINTF("Simulation succeeds at t=%" PRIu64 ", spent: %" PRIu64 ", sent: %d",
+            simulated_time, elapsed_wall_time, nb_sent);
+    }
+
+    /* TODO: run a simulated connection to verify that the context is operational */
+    if (ret == 0) {
+        /* Get rid of the connection if one was created in the context */
+        if (test_ctx->cnx_client != NULL) {
+            (void)picoquic_delete_cnx(test_ctx->cnx_client);
+            test_ctx->cnx_client = NULL;
+        }
+        /* re-create a client connection, this time picking up the correct start time */
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*) & test_ctx->server_addr, simulated_time,
+            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0x00004281, 0, 20000, 2000000);
+
+        if (ret == 0) {
+            DBG_PRINTF("Post DDOS connection succeeds at t=%" PRIu64 ", spent: %" PRIu64 ", sent: %d",
+                simulated_time, elapsed_wall_time, nb_sent);
+        }
+    }
+
+    /* Delete the context and other fields. */
+    if (packet != NULL) {
+        free(packet);
+    }
+
+    if (qddos != NULL) {
+        picoquic_free(qddos);
+    }
+
+    while (ddos_packet_first != NULL) {
+        picoquictest_sim_packet_t* ddos_packet = ddos_packet_first;
+        ddos_packet_first = ddos_packet->next_packet;
+        free(ddos_packet);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+int cnx_ddos_unit_test()
+{
+    return cnx_ddos_test_loop(1000, 1000, NULL);
 }
