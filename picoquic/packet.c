@@ -2060,14 +2060,6 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_CNXID_SEGMENT ||
         ret == PICOQUIC_ERROR_AEAD_NOT_READY) {
         /* Bad packets are dropped silently */
-#if 0
-        if (cnx == NULL) {
-            DBG_PRINTF("Packet (%d) dropped, t: %d, e: %d, pc: %d, l: %zu, ret : 0x%x\n",
-                (cnx == NULL) ? -1 : cnx->client_mode, ph.ptype, ph.epoch, ph.pc,
-                length, ret);
-        }
-#endif
-
         if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_AEAD_NOT_READY) {
             ret = 0;
         }
