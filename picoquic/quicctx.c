@@ -332,6 +332,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->padding_minsize_default = PICOQUIC_RESET_PACKET_MIN_SIZE;
         quic->crypto_epoch_length_max = 0;
         quic->max_simultaneous_logs = PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS;
+        quic->max_half_open_before_retry = PICOQUIC_DEFAULT_HALF_OPEN_RETRY_THRESHOLD;
         picoquic_wake_list_init(quic);
 
         if (cnx_id_callback != NULL) {
@@ -597,9 +598,9 @@ void picoquic_set_null_verifier(picoquic_quic_t* quic) {
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
 {
     if (cookie_mode&1) {
-        quic->check_token = 1;
+        quic->force_check_token = 1;
     } else {
-        quic->check_token = 0;
+        quic->force_check_token = 0;
     }
 
     if (cookie_mode & 2) {
@@ -608,6 +609,18 @@ void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
     else {
         quic->provide_token = 0;
     }
+
+    quic->check_token = (quic->force_check_token || quic->max_half_open_before_retry <= quic->current_number_half_open);
+}
+
+void picoquic_set_max_half_open_retry_threshold(picoquic_quic_t* quic,  uint32_t max_half_open_before_retry)
+{
+    quic->max_half_open_before_retry = max_half_open_before_retry;
+}
+
+uint32_t picoquic_get_max_half_open_retry_threshold(picoquic_quic_t* quic)
+{
+    return quic->max_half_open_before_retry;
 }
 
 picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* quic)
@@ -2350,6 +2363,11 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                 picoquic_set_null_verifier(quic);
             }
         } else {
+            cnx->is_half_open = 1;
+            cnx->quic->current_number_half_open += 1;
+            if (cnx->quic->current_number_half_open > cnx->quic->max_half_open_before_retry) {
+                cnx->quic->check_token = 1;
+            }
             for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
                 cnx->tls_stream[epoch].send_queue = NULL;
             }
@@ -3081,6 +3099,11 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 
     if (cnx != NULL) {
         binlog_close_connection(cnx);
+
+        if (cnx->is_half_open && cnx->quic->current_number_half_open > 0) {
+            cnx->quic->current_number_half_open--;
+            cnx->is_half_open = 0;
+        }
 
         if (cnx->cnx_state < picoquic_state_disconnected) {
             /* Give the application a chance to clean up its state */

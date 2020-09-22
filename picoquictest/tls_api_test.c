@@ -10057,7 +10057,7 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
         /* re-create a client connection, this time picking up the correct start time */
         test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
             picoquic_null_connection_id, picoquic_null_connection_id,
-            (struct sockaddr*) & test_ctx->server_addr, 0,
+            (struct sockaddr*) & test_ctx->server_addr, simulated_time,
             PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
 
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,

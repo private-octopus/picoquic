@@ -152,14 +152,8 @@ typedef enum {
 
 
 /*
-* Quic context flags
+* Quic spin bit variants
 */
-typedef enum {
-    picoquic_context_check_token = 1,
-    picoquic_context_unconditional_cnx_id = 2,
-    picoquic_context_client_zero_share = 4,
-    picoquic_context_server_busy = 8
-} picoquic_context_flags;
 
 typedef enum {
     picoquic_spinbit_basic = 0, /* default spin bit behavior, as specified in spin bit draft */
@@ -423,7 +417,16 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
 
 void picoquic_free(picoquic_quic_t* quic);
 
-/* Set cookie mode on QUIC context when under stress */
+/* management of retry policy.
+ * The cookie mode can be used to force the following behavior:
+ * - if cookie_mode&1, check the token and force a retry for each incoming connection.
+ * - if cookie&2, provide a token to the client after completing the handshake.
+ * When the "force retry" is not set, the code will count the number of "half-open" 
+ * connections. This can happen for example if the server is subject to a DDOS attack.
+ * If the threshold is exceeded, the code will request a token before accepting new
+ * connections, forcing DDOS attackers to reveal their IP address.
+ * By default, the threshold is set to 128 connections.
+ */
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
 
 /* Set cipher suite, for tests. 

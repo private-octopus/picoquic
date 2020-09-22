@@ -2685,6 +2685,17 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
         (void)picoquic_queue_handshake_done_frame(cnx);
     }
 
+
+    if (cnx->is_half_open){
+        if (cnx->quic->current_number_half_open > 0) {
+            cnx->quic->current_number_half_open--;
+        }
+        cnx->is_half_open = 0;
+        if (cnx->quic->current_number_half_open < cnx->quic->max_half_open_before_retry) {
+            cnx->quic->check_token = cnx->quic->force_check_token;
+        }
+    }
+
     /* Remove handshake and initial keys if they are still around */
     picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
     picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_0rtt]);

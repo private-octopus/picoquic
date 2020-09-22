@@ -87,6 +87,7 @@ extern "C" {
 #define PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH (1<<22)
 
 #define PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS 32
+#define PICOQUIC_DEFAULT_HALF_OPEN_RETRY_THRESHOLD 64
 
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
@@ -498,8 +499,12 @@ typedef struct st_picoquic_quic_t {
     uint64_t crypto_epoch_length_max; /* Default packet interval between key rotations */
     uint32_t max_simultaneous_logs;
     uint32_t current_number_of_open_logs;
+    uint32_t max_half_open_before_retry;
+    uint32_t current_number_half_open;
+
     /* Flags */
     unsigned int check_token : 1;
+    unsigned int force_check_token : 1;
     unsigned int provide_token : 1;
     unsigned int unconditional_cnx_id : 1;
     unsigned int client_zero_share : 1;
@@ -931,6 +936,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int do_grease_quic_bit : 1; /* Negotiated grease of QUIC bit */
     unsigned int quic_bit_greased : 1; /* Indicate whether the quic bit was greased at least once */
     unsigned int quic_bit_received_0 : 1; /* Indicate whether the quic bit was received as zero at least once */
+    unsigned int is_half_open : 1; /* for server side connections, created but not yet complete */
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
     /* Idle timeout in microseconds */
