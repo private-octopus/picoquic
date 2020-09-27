@@ -3672,6 +3672,22 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
             bytes = NULL;
             break;
         }
+        else if (epoch == picoquic_epoch_0rtt && (first_byte == picoquic_frame_type_crypto_hs
+            || first_byte == picoquic_frame_type_handshake_done
+            || first_byte == picoquic_frame_type_new_token
+            || first_byte == picoquic_frame_type_path_response
+            || first_byte == picoquic_frame_type_retire_connection_id)) {
+            /* From draft-31:
+             * Note that it is not possible to send the following frames in 0-RTT
+             * packets for various reasons : ACK, CRYPTO, HANDSHAKE_DONE, NEW_TOKEN,
+             * PATH_RESPONSE, and RETIRE_CONNECTION_ID.A server MAY treat receipt
+             * of these frames in 0 - RTT packets as a connection error of type
+             * PROTOCOL_VIOLATION.
+             */
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+            bytes = NULL;
+            break;
+        }
         else {
             switch (first_byte) {
             case picoquic_frame_type_padding:
