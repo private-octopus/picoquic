@@ -1389,6 +1389,7 @@ int picoquic_incoming_client_handshake(
     int ret = 0;
 
     cnx->initial_validated = 1;
+    cnx->initial_repeat_needed = 0;
 
     if (cnx->cnx_state < picoquic_state_server_almost_ready) {
         if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
