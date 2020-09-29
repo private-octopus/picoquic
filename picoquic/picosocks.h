@@ -130,6 +130,7 @@ typedef struct st_picoquic_recvmsg_async_ctx_t {
     SOCKET_TYPE fd;
     int dest_if;
     unsigned char received_ecn;
+    int nb_immediate_receive;
     int bytes_recv;
     int is_started;
 } picoquic_recvmsg_async_ctx_t;

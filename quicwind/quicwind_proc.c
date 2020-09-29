@@ -17,6 +17,7 @@
 #include "h3zero.h"
 #include "democlient.h"
 #include "quicwind.h"
+#include "autoqlog.h"
 
 #ifndef SOCKET_TYPE
 #define SOCKET_TYPE SOCKET
@@ -280,6 +281,9 @@ picoquic_quic_t* quicwind_create_context(const char * alpn, int mtu_max, const c
         qclient = picoquic_create(8, NULL, NULL, root_crt, alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename, NULL, 0);
 
         picoquic_set_default_congestion_algorithm(qclient, picoquic_cubic_algorithm);
+
+        /* DEBUG code: capture a log */
+        picoquic_set_qlog(qclient, ".");
 
         if (picoquic_load_tokens(&qclient->p_first_token, current_time, token_store_filename) != 0) {
             AppendText(_T("Could not load tokens.\r\n"));
@@ -863,13 +867,15 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
                     AppendText(_T("Cannot finish async recv\r\n"));
                 }
                 else {
-                    AppendText(_T("Packet received\r\n"));
-                    /* Submit the packet to the client */
-                    ret = picoquic_incoming_packet(qclient, sock_ctx[i_sock]->buffer,
-                        (size_t)sock_ctx[i_sock]->bytes_recv, (struct sockaddr*)&sock_ctx[i_sock]->addr_from,
-                        (struct sockaddr*)&sock_ctx[i_sock]->addr_dest, sock_ctx[i_sock]->dest_if,
-                        sock_ctx[i_sock]->received_ecn, current_time);
-                    client_receive_loop++;
+                    if (sock_ctx[i_sock]->bytes_recv > 0) {
+                        AppendText(_T("Packet received\r\n"));
+                        /* Submit the packet to the client */
+                        ret = picoquic_incoming_packet(qclient, sock_ctx[i_sock]->buffer,
+                            (size_t)sock_ctx[i_sock]->bytes_recv, (struct sockaddr*) & sock_ctx[i_sock]->addr_from,
+                            (struct sockaddr*) & sock_ctx[i_sock]->addr_dest, sock_ctx[i_sock]->dest_if,
+                            sock_ctx[i_sock]->received_ecn, current_time);
+                        client_receive_loop++;
+                    }
                     delta_t = 0;
 
                     if (ret == 0) {

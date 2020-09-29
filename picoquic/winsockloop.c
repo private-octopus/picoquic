@@ -197,41 +197,53 @@ void CALLBACK picoquic_sendmsg_complete_cb(
 int picoquic_sendmsg_start(picoquic_recvmsg_async_ctx_t* sock_ctx, picoquic_sendmsg_ctx_t* send_ctx)
 {
     int ret = 0;
+    DWORD numberOfBytesSent = 0;
+    int should_retry;
 
-    /* Format the message header */
-    send_ctx->is_started = 1;
-    memset(&send_ctx->msg, 0, sizeof(send_ctx->msg));
-    send_ctx->msg.name = (struct sockaddr*) & send_ctx->addr_dest;
-    send_ctx->msg.namelen = picoquic_addr_length((struct sockaddr*) & send_ctx->addr_dest);
-    send_ctx->dataBuf.buf = (char*)send_ctx->buffer;
-    send_ctx->dataBuf.len = (ULONG)send_ctx->send_length;
-    send_ctx->msg.lpBuffers = &send_ctx->dataBuf;
-    send_ctx->msg.dwBufferCount = 1;
-    send_ctx->msg.Control.buf = (char*)send_ctx->cmsg_buffer;
-    send_ctx->msg.Control.len = sizeof(send_ctx->cmsg_buffer);
+    do {
+        should_retry = 0;
 
-    /* Format the control message */
-    picoquic_socks_cmsg_format(&send_ctx->msg, send_ctx->send_length,
-        (struct sockaddr*) & send_ctx->addr_from, send_ctx->dest_if);
+        /* Format the message header */
+        send_ctx->is_started = 1;
+        memset(&send_ctx->msg, 0, sizeof(send_ctx->msg));
+        send_ctx->msg.name = (struct sockaddr*) & send_ctx->addr_dest;
+        send_ctx->msg.namelen = picoquic_addr_length((struct sockaddr*) & send_ctx->addr_dest);
+        send_ctx->dataBuf.buf = (char*)send_ctx->buffer;
+        send_ctx->dataBuf.len = (ULONG)send_ctx->send_length;
+        send_ctx->msg.lpBuffers = &send_ctx->dataBuf;
+        send_ctx->msg.dwBufferCount = 1;
+        send_ctx->msg.Control.buf = (char*)send_ctx->cmsg_buffer;
+        send_ctx->msg.Control.len = sizeof(send_ctx->cmsg_buffer);
 
-    /* Send the message */
-    /* TODO: allo for immediate termination. */
-    ret = sock_ctx->WSASendMsg(sock_ctx->fd, &send_ctx->msg, 0, NULL, &send_ctx->overlap, picoquic_sendmsg_complete_cb);
-    if (ret != 0) {
-        DWORD last_err = WSAGetLastError();
-        if (last_err == WSA_IO_PENDING) {
-            ret = 0;
+        /* Format the control message */
+        picoquic_socks_cmsg_format(&send_ctx->msg, send_ctx->send_length,
+            (struct sockaddr*) & send_ctx->addr_from, send_ctx->dest_if);
+
+        /* Send the message */
+        /* TODO: allo for immediate termination. */
+        ret = sock_ctx->WSASendMsg(sock_ctx->fd, &send_ctx->msg, 0, &numberOfBytesSent, &send_ctx->overlap, picoquic_sendmsg_complete_cb);
+        if (ret != 0) {
+            DWORD last_err = WSAGetLastError();
+            if (last_err == WSA_IO_PENDING) {
+                ret = 0;
+            }
+            else if (last_err == WSAECONNRESET) {
+                should_retry = 1;
+                ret = 0;
+            }
+            else {
+                send_ctx->last_err = WSAGetLastError();
+                send_ctx->ret = ret;
+            }
         }
         else {
-            send_ctx->last_err = WSAGetLastError();
-            send_ctx->ret = ret;
+            /* Immediate completion */
+            send_ctx->bytes_sent = (int)numberOfBytesSent;
+            send_ctx->ret = 0;
+            send_ctx->last_err = 0;
+            send_ctx->is_complete = 1;
         }
-    }
-    else {
-        /* Unexpected -- should be WSA_IO_PENDING */
-        DBG_PRINTF("%s", "Send function is not pending!");
-    }
-
+    } while (should_retry);
 
     return ret;
 }
@@ -386,34 +398,37 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                 if (ret != 0) {
                     DBG_PRINTF("%s", "Cannot finish async recv");
                 }
-                else {
-                    /* Document incoming port. By default, there is just one port in use.
-                     * But we also have special code for supporting migration tests, which requires
-                     * a second socket with a different port number.
-                     */
-                    uint16_t current_recv_port = socket_port;
+                else
+                {
+                    if (sock_ctx[socket_rank]->bytes_recv > 0) {
+                        /* Document incoming port. By default, there is just one port in use.
+                         * But we also have special code for supporting migration tests, which requires
+                         * a second socket with a different port number.
+                         */
+                        uint16_t current_recv_port = socket_port;
 
-                    if (testing_migration) {
-                        if (socket_rank == 0) {
-                            current_recv_port = socket_port;
+                        if (testing_migration) {
+                            if (socket_rank == 0) {
+                                current_recv_port = socket_port;
+                            }
+                            else {
+                                current_recv_port = next_port;
+                            }
                         }
-                        else {
-                            current_recv_port = next_port;
+
+                        if (sock_ctx[socket_rank]->addr_dest.ss_family == AF_INET6) {
+                            ((struct sockaddr_in6*) & sock_ctx[socket_rank]->addr_dest)->sin6_port = current_recv_port;
                         }
-                    }
+                        else if (sock_ctx[socket_rank]->addr_dest.ss_family == AF_INET) {
+                            ((struct sockaddr_in*) & sock_ctx[socket_rank]->addr_dest)->sin_port = current_recv_port;
+                        }
 
-                    if (sock_ctx[socket_rank]->addr_dest.ss_family == AF_INET6) {
-                        ((struct sockaddr_in6*) & sock_ctx[socket_rank]->addr_dest)->sin6_port = current_recv_port;
+                        /* Submit the packet to the client */
+                        ret = picoquic_incoming_packet(quic, sock_ctx[socket_rank]->buffer,
+                            (size_t)sock_ctx[socket_rank]->bytes_recv, (struct sockaddr*) & sock_ctx[socket_rank]->addr_from,
+                            (struct sockaddr*) & sock_ctx[socket_rank]->addr_dest, sock_ctx[socket_rank]->dest_if,
+                            sock_ctx[socket_rank]->received_ecn, current_time);
                     }
-                    else if (sock_ctx[socket_rank]->addr_dest.ss_family == AF_INET) {
-                        ((struct sockaddr_in*) & sock_ctx[socket_rank]->addr_dest)->sin_port = current_recv_port;
-                    }
-
-                    /* Submit the packet to the client */
-                    ret = picoquic_incoming_packet(quic, sock_ctx[socket_rank]->buffer,
-                        (size_t)sock_ctx[socket_rank]->bytes_recv, (struct sockaddr*) & sock_ctx[socket_rank]->addr_from,
-                        (struct sockaddr*) & sock_ctx[socket_rank]->addr_dest, sock_ctx[socket_rank]->dest_if,
-                        sock_ctx[socket_rank]->received_ecn, current_time);
 
                     if (ret == 0) {
                         /* Restart waiting for packets on the socket */
