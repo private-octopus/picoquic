@@ -54,6 +54,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ws2def.h>
 #include <ws2tcpip.h>
 
 #ifndef SOCKET_TYPE
@@ -73,6 +74,60 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_packet_loop.h"
+
+#if 1
+/* Define here a set of UDP options that are defined in the newest 
+ * Windows Toolkits */
+#ifndef UDP_SEND_MSG_SIZE
+#define UDP_SEND_MSG_SIZE           2
+#endif
+#ifndef UDP_RECV_MAX_COALESCED_SIZE
+#define UDP_RECV_MAX_COALESCED_SIZE 3
+#endif
+#ifndef UDP_COALESCED_INFO
+#define UDP_COALESCED_INFO          3
+#endif
+#endif
+
+
+#if 1
+ /* Test support for UDP coalescing */
+void picoquic_socks_win_coalescing_test(picoquic_recvmsg_async_ctx_t* sock_ctx)
+{
+    int ret;
+    DWORD option_value;
+    int option_length;
+    int last_error;
+
+    SOCKET_TYPE fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    if (fd != INVALID_SOCKET) {
+#ifdef UDP_SEND_MSG_SIZE
+        option_length = (int)sizeof(option_value);
+
+        if ((ret = getsockopt(fd, IPPROTO_UDP, UDP_SEND_MSG_SIZE, (char *)&option_value, &option_length)) != 0) {
+            last_error = GetLastError();
+            DBG_PRINTF("UDP_SEND_MSG_SIZE not supported, returns %d (%d)", ret, last_error);
+        }
+        else {
+            sock_ctx->supports_udp_send_coalesced = 1;
+        }
+#endif
+#ifdef UDP_RECV_MAX_COALESCED_SIZE
+        option_value = 1;
+        option_length = (int)sizeof(option_value);
+        if ((ret = getsockopt(fd, IPPROTO_UDP, UDP_RECV_MAX_COALESCED_SIZE, (char*)&option_value, &option_length)) != 0) {
+            last_error = GetLastError();
+            DBG_PRINTF("UDP_RECV_MAX_COALESCED_SIZE not supported, returns %d (%d)", ret, last_error);
+        }
+        else {
+            sock_ctx->supports_udp_recv_coalesced = 1;
+        }
+#endif
+        closesocket(fd);
+    }
+}
+#endif
 
 /* Open a set of sockets in asynch mode. */
 int picoquic_packet_loop_open_sockets_win(int local_port, int local_af, 
@@ -130,6 +185,7 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
             }
             else {
                 events[i] = sock_ctx[i]->overlap.hEvent;
+                picoquic_socks_win_coalescing_test(sock_ctx[i]);
             }
         }
     }

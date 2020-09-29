@@ -132,7 +132,10 @@ typedef struct st_picoquic_recvmsg_async_ctx_t {
     unsigned char received_ecn;
     int nb_immediate_receive;
     int bytes_recv;
-    int is_started;
+    unsigned int is_started : 1;
+    unsigned int supports_udp_send_coalesced : 1;
+    unsigned int supports_udp_recv_coalesced : 1;
+
 } picoquic_recvmsg_async_ctx_t;
 
 picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af);
