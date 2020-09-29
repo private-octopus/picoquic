@@ -117,6 +117,8 @@ extern "C" {
 #ifdef _WINDOWS
 typedef struct st_picoquic_recvmsg_async_ctx_t {
     WSAOVERLAPPED overlap;
+    LPFN_WSARECVMSG WSARecvMsg;
+    LPFN_WSASENDMSG WSASendMsg;
     WSABUF dataBuf;
     WSAMSG msg;
     char cmsg_buffer[1024];

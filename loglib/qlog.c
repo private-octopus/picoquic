@@ -479,6 +479,9 @@ int qlog_packet_dropped(uint64_t time, bytestream* s, void* ptr)
     case PICOQUIC_ERROR_AEAD_NOT_READY:
         str = "key_unavailable";
         break;
+    case PICOQUIC_ERROR_STATELESS_RESET:
+        str = "stateless_reset";
+        break;
     default:
         str = "protocol_violation";
         break;
