@@ -2043,6 +2043,7 @@ int picoquic_incoming_segment(
     if (ret == 0) {
         if (cnx != NULL && cnx->cnx_state != picoquic_state_disconnected &&
             ph.ptype != picoquic_packet_version_negotiation) {
+            cnx->nb_packets_received++;
             /* Mark the sequence number as received */
             ret = picoquic_record_pn_received(cnx, ph.pc, ph.pn64, receive_time);
             /* Perform ECN accounting */
