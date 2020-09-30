@@ -369,6 +369,9 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...);
  * 0: only log the first 100 packets for each connection. */
 void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
 
+/* Require randomization of initial PN numbers */
+void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial);
+
 /* Require Picoquic to log the session keys in the specified files.
  * Instead of calling this API directly, consider calling the 
  * function picoquic_set_key_log_file_from_env() defined in 

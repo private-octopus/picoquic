@@ -1799,8 +1799,7 @@ int picoquic_incoming_encrypted(
                 ret = picoquic_tls_stream_process(cnx);
             }
 
-            if (ret == 0 && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE ||
-                cnx->quic->use_long_log)) {
+            if (ret == 0 && picoquic_cnx_is_still_logging(cnx)) {
                 picoquic_cc_dump(cnx, current_time);
             }
         }
@@ -1899,12 +1898,12 @@ int picoquic_incoming_segment(
         is_first_segment = 1;
 
         /* if needed, log that the packet is received */
-        if (quic->F_log != NULL && (cnx == NULL || cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || quic->use_long_log)) {
+        if (quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
             picoquic_log_packet_address(quic->F_log,
                 picoquic_val64_connection_id((cnx == NULL) ? ph.dest_cnx_id : picoquic_get_logging_cnxid(cnx)),
                 cnx, addr_from, 1, packet_length, current_time);
         }
-        if (cnx != NULL && cnx->f_binlog != NULL && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || quic->use_long_log)) {
+        if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
             binlog_pdu(cnx->f_binlog, log_cnxid, 1, current_time, addr_from, addr_to, packet_length);
         }
     }
@@ -1920,11 +1919,10 @@ int picoquic_incoming_segment(
     }
 
     /* Log the incoming packet */
-    if (quic->F_log != NULL && (cnx == NULL || cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || quic->use_long_log)) {
+    if (quic->F_log != NULL && (cnx == NULL || picoquic_cnx_is_still_logging(cnx))) {
         picoquic_log_decrypted_segment(quic->F_log, 1, cnx, 1, &ph, bytes, *consumed, ret);
     }
-    if (cnx != NULL && cnx->f_binlog != NULL && (quic->use_long_log ||
-         cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE)) {
+    if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
         if (ret == 0) {
             binlog_packet(cnx->f_binlog, log_cnxid, 1, current_time, &ph, bytes, *consumed);
         }
