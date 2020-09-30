@@ -195,6 +195,8 @@ int quic_server(const char* server_name, int server_port,
 
             picoquic_set_log_level(qserver, use_long_log);
 
+            picoquic_set_random_initial(qserver, 1);
+
             picoquic_set_key_log_file_from_env(qserver);
 
             if (esni_key_file_name != NULL && esni_rr_file_name != NULL) {
@@ -541,6 +543,7 @@ int quic_client(const char* ip_address_text, int server_port,
             picoquic_set_qlog(qclient, qlog_dir);
             picoquic_set_textlog(qclient, log_file);
             picoquic_set_log_level(qclient, use_long_log);
+            picoquic_set_random_initial(qclient, 1);
 
             if (cipher_suite_id != 0) {
                 if (picoquic_set_cipher_suite(qclient, cipher_suite_id) != 0) {
