@@ -800,7 +800,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         cnx->is_time_stamp_enabled = 
             (cnx->local_parameters.enable_time_stamp&1) && (cnx->remote_parameters.enable_time_stamp&2);
         cnx->is_time_stamp_sent =
-            (cnx->local_parameters.enable_time_stamp & 2) && (cnx->remote_parameters.enable_time_stamp & 2);
+            (cnx->local_parameters.enable_time_stamp & 2) && (cnx->remote_parameters.enable_time_stamp & 1);
         cnx->do_grease_quic_bit = cnx->local_parameters.do_grease_quic_bit && cnx->remote_parameters.do_grease_quic_bit;
     }
     else

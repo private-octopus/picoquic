@@ -68,6 +68,7 @@ static const picoquic_test_def_t test_table[] = {
     { "h3_multi_file", h3_multi_file_test },
     { "http_stress", http_stress_test },
     { "http_corrupt", http_corrupt_test},
+    { "http_corrupt_rdpn", http_corrupt_rdpn_test},
     { "http_drop", http_drop_test}
 };
 

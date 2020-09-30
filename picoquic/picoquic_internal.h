@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "0.30a"
+#define PICOQUIC_VERSION "0.31a"
 
 #ifndef PICOQUIC_MAX_PACKET_SIZE
 #define PICOQUIC_MAX_PACKET_SIZE 1536
@@ -1007,6 +1007,7 @@ typedef struct st_picoquic_cnx_t {
     uint32_t nb_zero_rtt_sent;
     uint32_t nb_zero_rtt_acked;
     uint32_t nb_zero_rtt_received;
+    uint64_t nb_packets_received;
     uint64_t nb_packets_logged;
     uint64_t nb_retransmission_total;
     uint64_t nb_spurious;
