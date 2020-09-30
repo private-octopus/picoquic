@@ -10057,56 +10057,147 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
 
     elapsed_wall_time = picoquic_current_time() - start_wall_time;
 
+if (ret == 0) {
+    DBG_PRINTF("Simulation succeeds at t=%" PRIu64 ", spent: %" PRIu64 ", sent: %d",
+        simulated_time, elapsed_wall_time, nb_sent);
+}
+
+/* TODO: run a simulated connection to verify that the context is operational */
+if (ret == 0) {
+    /* Get rid of the connection if one was created in the context */
+    if (test_ctx->cnx_client != NULL) {
+        (void)picoquic_delete_cnx(test_ctx->cnx_client);
+        test_ctx->cnx_client = NULL;
+    }
+    /* re-create a client connection, this time picking up the correct start time */
+    test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id,
+        (struct sockaddr*) & test_ctx->server_addr, simulated_time,
+        PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+    ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+        test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0x00004281, 0, 20000, 2000000);
+
     if (ret == 0) {
-        DBG_PRINTF("Simulation succeeds at t=%" PRIu64 ", spent: %" PRIu64 ", sent: %d",
+        DBG_PRINTF("Post DDOS connection succeeds at t=%" PRIu64 ", spent: %" PRIu64 ", sent: %d",
             simulated_time, elapsed_wall_time, nb_sent);
     }
+}
 
-    /* TODO: run a simulated connection to verify that the context is operational */
-    if (ret == 0) {
-        /* Get rid of the connection if one was created in the context */
-        if (test_ctx->cnx_client != NULL) {
-            (void)picoquic_delete_cnx(test_ctx->cnx_client);
-            test_ctx->cnx_client = NULL;
-        }
-        /* re-create a client connection, this time picking up the correct start time */
-        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-            picoquic_null_connection_id, picoquic_null_connection_id,
-            (struct sockaddr*) & test_ctx->server_addr, simulated_time,
-            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+/* Delete the context and other fields. */
+if (packet != NULL) {
+    free(packet);
+}
 
-        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0x00004281, 0, 20000, 2000000);
+if (qddos != NULL) {
+    picoquic_free(qddos);
+}
 
-        if (ret == 0) {
-            DBG_PRINTF("Post DDOS connection succeeds at t=%" PRIu64 ", spent: %" PRIu64 ", sent: %d",
-                simulated_time, elapsed_wall_time, nb_sent);
-        }
-    }
+while (ddos_packet_first != NULL) {
+    picoquictest_sim_packet_t* ddos_packet = ddos_packet_first;
+    ddos_packet_first = ddos_packet->next_packet;
+    free(ddos_packet);
+}
 
-    /* Delete the context and other fields. */
-    if (packet != NULL) {
-        free(packet);
-    }
+if (test_ctx != NULL) {
+    tls_api_delete_ctx(test_ctx);
+}
 
-    if (qddos != NULL) {
-        picoquic_free(qddos);
-    }
-
-    while (ddos_packet_first != NULL) {
-        picoquictest_sim_packet_t* ddos_packet = ddos_packet_first;
-        ddos_packet_first = ddos_packet->next_packet;
-        free(ddos_packet);
-    }
-
-    if (test_ctx != NULL) {
-        tls_api_delete_ctx(test_ctx);
-    }
-
-    return ret;
+return ret;
 }
 
 int cnx_ddos_unit_test()
 {
     return cnx_ddos_test_loop(1000, 1000, NULL);
+}
+
+
+/*
+ * Test randomization of initial packet number
+ */
+
+int pn_random_check_sequence(picoquic_cnx_t* cnx, char const* cnx_name)
+{
+    int ret = 0;
+    for (picoquic_packet_context_enum pc = picoquic_packet_context_application;
+        pc < picoquic_nb_packet_context; pc++) {
+        if (cnx->pkt_ctx[pc].send_sequence < PICOQUIC_PN_RANDOM_MIN) {
+            DBG_PRINTF("For connection %s, context number %d, sequencee number is only %" PRIu64,
+                cnx_name, (int)pc, cnx->pkt_ctx[pc].send_sequence);
+            ret = -1;
+            break;
+        }
+    }
+
+    return ret;
+}
+
+int pn_random_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+
+    picoquic_connection_id_t initial_cid = { {0xff, 0x12, 0x34, 0, 0, 0, 0, 0}, 8 };
+    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
+        &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the initial packet number randomization */
+    if (ret == 0) {
+        picoquic_set_random_initial(test_ctx->qclient, 1);
+        picoquic_set_random_initial(test_ctx->qserver, 1);
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        /* The client connection is already created, so we force randomization of sequence numbers here */
+        for (picoquic_packet_context_enum pc = picoquic_packet_context_application;
+            pc < picoquic_nb_packet_context; pc++) {
+            test_ctx->cnx_client->pkt_ctx[pc].send_sequence = PICOQUIC_PN_RANDOM_MIN + 17 + pc;
+        }
+        /* Now, start the client connection */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0){
+        ret = tls_api_connection_loop(test_ctx, 0, 0, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection loop returns error %d\n", ret);
+        }
+        else {
+            /* Check that the sequence numbers for all number spaces are larger than random minimum */
+            ret = pn_random_check_sequence(test_ctx->cnx_client, "client");
+            if (ret == 0) {
+                ret = pn_random_check_sequence(test_ctx->cnx_server, "server");
+            }
+        }
+    }
+    /* Complete the connection */
+    if (ret == 0) {
+        /* Prepare to send data */
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r, sizeof(test_scenario_q_and_r));
+
+        /* Try to complete the data sending loop */
+        if (ret == 0) {
+            ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+        }
+
+        /* verify that the transmission was complete */
+        if (ret == 0) {
+            ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 1000000);
+        }
+    }
+
+    /* And then free the resource
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }

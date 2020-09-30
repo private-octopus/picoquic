@@ -673,7 +673,7 @@ picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* 
 int picoquic_cnx_is_still_logging(picoquic_cnx_t* cnx)
 {
     int ret =
-        (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log);
+        (cnx->nb_packets_logged < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log);
 
     return ret;
 }
@@ -2398,7 +2398,13 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->pkt_ctx[pc].highest_ack_sent = 0;
             cnx->pkt_ctx[pc].highest_ack_sent_time = start_time;
             cnx->pkt_ctx[pc].time_stamp_largest_received = (uint64_t)((int64_t)-1);
-            cnx->pkt_ctx[pc].send_sequence = 0;
+            if (quic->random_initial) {
+                cnx->pkt_ctx[pc].send_sequence = picoquic_crypto_uniform_random(quic, PICOQUIC_PN_RANDOM_RANGE) +
+                    PICOQUIC_PN_RANDOM_MIN;
+            }
+            else {
+                cnx->pkt_ctx[pc].send_sequence = 0;
+            }
             cnx->pkt_ctx[pc].nb_retransmit = 0;
             cnx->pkt_ctx[pc].latest_retransmit_time = 0;
             cnx->pkt_ctx[pc].retransmit_newest = NULL;
@@ -2799,6 +2805,12 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level)
 {
     /* Only two level for now: log first 100 packets, or log everything. */
     quic->use_long_log = (log_level > 0) ? 1 : 0;
+}
+
+void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial)
+{
+    /* If set, triggers randomization of initial PN numbers. */
+    quic->random_initial = (random_initial > 0) ? 1 : 0;
 }
 
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length)

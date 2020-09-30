@@ -1460,6 +1460,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(pn_random) {
+            int ret = pn_random_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(cplusplus) {
             int ret = cplusplustest();
 

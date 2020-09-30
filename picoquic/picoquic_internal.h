@@ -89,6 +89,9 @@ extern "C" {
 #define PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS 32
 #define PICOQUIC_DEFAULT_HALF_OPEN_RETRY_THRESHOLD 64
 
+#define PICOQUIC_PN_RANDOM_MIN 0xffff
+#define PICOQUIC_PN_RANDOM_RANGE 0x10000
+
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 3
@@ -516,6 +519,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
     unsigned int one_way_grease_quic_bit : 1; /* Grease of QUIC bit, but do not announce support */
     unsigned int log_pn_dec : 1; /* Log key hashes on key changes to debug crypto */
+    unsigned int random_initial : 1; /* Randomize the initial PN number */
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 
@@ -1003,6 +1007,7 @@ typedef struct st_picoquic_cnx_t {
     uint32_t nb_zero_rtt_sent;
     uint32_t nb_zero_rtt_acked;
     uint32_t nb_zero_rtt_received;
+    uint64_t nb_packets_logged;
     uint64_t nb_retransmission_total;
     uint64_t nb_spurious;
     uint64_t nb_crypto_key_rotations;
