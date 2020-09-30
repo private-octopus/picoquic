@@ -213,7 +213,7 @@ int quic_server(const char* server_name, int server_port,
 
     if (ret == 0) {
         /* Wait for packets */
-#if _WINDOWS_ONLY
+#if _WINDOWS
         ret = picoquic_packet_loop_win(qserver, server_port, 0, dest_if, server_loop_cb, &loop_cb_ctx);
 #else
         ret = picoquic_packet_loop(qserver, server_port, 0, dest_if, server_loop_cb, &loop_cb_ctx);
@@ -650,7 +650,7 @@ int quic_client(const char* ip_address_text, int server_port,
             loop_cb.demo_callback_ctx = &callback_ctx;
         }
 
-#ifdef _WINDOWS_ONLY
+#ifdef _WINDOWS
         ret = picoquic_packet_loop_win(qclient, 0, loop_cb.server_address.ss_family, 0, client_loop_cb, &loop_cb);
 #else
         ret = picoquic_packet_loop(qclient, 0, loop_cb.server_address.ss_family, 0, client_loop_cb, &loop_cb);

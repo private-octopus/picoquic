@@ -23,7 +23,7 @@
     <ProjectGuid>{4898D6E0-6FC5-4375-99F5-4C69BB20CE94}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>picoquic_t</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
