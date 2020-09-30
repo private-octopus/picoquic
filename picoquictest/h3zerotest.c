@@ -38,6 +38,7 @@
 /* Include picotls.h in order to support tests of ESNI */
 #include "picotls.h"
 #include "tls_api.h"
+#include "autoqlog.h"
 
 /*
  * Test of the prefixed integer encoding
@@ -2178,7 +2179,8 @@ http_stress_client_context_t* http_stress_client_delete(http_stress_client_conte
     return(NULL);
 }
 
-http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64_t * simulated_time, struct sockaddr* server_address)
+http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64_t * simulated_time, 
+    struct sockaddr* server_address, int initial_random)
 {
     int ret = 0;
     http_stress_client_context_t* ctx = (http_stress_client_context_t*)malloc(sizeof(http_stress_client_context_t));
@@ -2212,6 +2214,9 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
 
             picoquic_set_default_congestion_algorithm(ctx->qclient, picoquic_bbr_algorithm);
             picoquic_set_null_verifier(ctx->qclient);
+            if (initial_random) {
+                picoquic_set_random_initial(ctx->qclient, 1);
+            }
 
             id64 ^= (uint64_t)client_id;
             for (int i = 0; i < 8; i++) {
@@ -2275,7 +2280,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
 
 size_t picohttp_nb_stress_clients = 128;
 
-int http_stress_test_one(int do_corrupt, int do_drop)
+int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
 {
     /* initialize the server, address 1::1 */
     /* Create QUIC context */
@@ -2316,6 +2321,9 @@ int http_stress_test_one(int do_corrupt, int do_drop)
         }
         else {
             picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
+            if (initial_random) {
+                picoquic_set_random_initial(qserver, 1);
+            }
         }
     }
 
@@ -2328,7 +2336,7 @@ int http_stress_test_one(int do_corrupt, int do_drop)
             /* initialize each client, address 2::nnnn */
             memset(ctx_client, 0, sizeof(http_stress_client_context_t*) * picohttp_nb_stress_clients);
             for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
-                ctx_client[i] = http_stress_client_create(i, &simulated_time, (struct sockaddr*) & server_address);
+                ctx_client[i] = http_stress_client_create(i, &simulated_time, (struct sockaddr*) & server_address, initial_random);
                 if (ctx_client[i] == NULL) {
                     ret = -1;
                 }
@@ -2521,15 +2529,20 @@ int http_stress_test_one(int do_corrupt, int do_drop)
 
 int http_stress_test()
 {
-    return http_stress_test_one(0, 0);
+    return http_stress_test_one(0, 0, 0);
 }
 
 int http_corrupt_test()
 {
-    return http_stress_test_one(1, 0);
+    return http_stress_test_one(1, 0, 0);
 }
 
 int http_drop_test()
 {
-    return http_stress_test_one(0, 1);
+    return http_stress_test_one(0, 1, 0);
+}
+
+int http_corrupt_rdpn_test()
+{
+    return http_stress_test_one(1, 0, 1);
 }

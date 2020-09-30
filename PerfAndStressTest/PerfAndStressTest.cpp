@@ -95,6 +95,12 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(http_corrupt_rdpn) {
+            int ret = http_corrupt_rdpn_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(fuzz) {
             int ret = fuzz_test();
 
