@@ -76,28 +76,16 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 #include "picoquic_packet_loop.h"
 
 #if 1
-/* Define here a set of UDP options that are defined in the newest 
- * Windows Toolkits */
-#ifndef UDP_SEND_MSG_SIZE
-#define UDP_SEND_MSG_SIZE           2
-#endif
-#ifndef UDP_RECV_MAX_COALESCED_SIZE
-#define UDP_RECV_MAX_COALESCED_SIZE 3
-#endif
-#ifndef UDP_COALESCED_INFO
-#define UDP_COALESCED_INFO          3
-#endif
-#endif
-
-
-#if 1
  /* Test support for UDP coalescing */
-void picoquic_socks_win_coalescing_test(picoquic_recvmsg_async_ctx_t* sock_ctx)
+void picoquic_socks_win_coalescing_test(int * recv_coalesced, int * send_coalesced)
 {
     int ret;
     DWORD option_value;
     int option_length;
     int last_error;
+
+    *recv_coalesced = 0;
+    *send_coalesced = 0;
 
     SOCKET_TYPE fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
@@ -110,7 +98,7 @@ void picoquic_socks_win_coalescing_test(picoquic_recvmsg_async_ctx_t* sock_ctx)
             DBG_PRINTF("UDP_SEND_MSG_SIZE not supported, returns %d (%d)", ret, last_error);
         }
         else {
-            sock_ctx->supports_udp_send_coalesced = 1;
+            *send_coalesced = 1;
         }
 #endif
 #ifdef UDP_RECV_MAX_COALESCED_SIZE
@@ -121,7 +109,7 @@ void picoquic_socks_win_coalescing_test(picoquic_recvmsg_async_ctx_t* sock_ctx)
             DBG_PRINTF("UDP_RECV_MAX_COALESCED_SIZE not supported, returns %d (%d)", ret, last_error);
         }
         else {
-            sock_ctx->supports_udp_recv_coalesced = 1;
+            *recv_coalesced = 1;
         }
 #endif
         closesocket(fd);
@@ -136,6 +124,11 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
 {
     int ret = 0;
     int nb_sockets = (local_af == AF_UNSPEC) ? 2 : 1;
+    int recv_coalesced;
+    int send_coalesced;
+
+    /* Assess whether coalescing is supported */
+    picoquic_socks_win_coalescing_test(&recv_coalesced, &send_coalesced);
 
     /* Compute how many sockets are necessary */
     if (nb_sockets > nb_sockets_max) {
@@ -157,7 +150,7 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
         int recv_set = 0;
         int send_set = 0;
 
-        sock_ctx[i] = picoquic_create_async_socket(sock_af[i]);
+        sock_ctx[i] = picoquic_create_async_socket(sock_af[i], recv_coalesced, send_coalesced);
         if (sock_ctx[i] == NULL) {
             ret = -1;
             events[i] = NULL;
@@ -165,13 +158,7 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
         else {
             if (picoquic_socket_set_ecn_options(sock_ctx[i]->fd, sock_af[i], &recv_set, &send_set) != 0 ||
                 picoquic_socket_set_pkt_info(sock_ctx[i]->fd, sock_af[i]) != 0 ||
-                (local_port != 0 && picoquic_bind_to_port(sock_ctx[i]->fd, sock_af[i], local_port) != 0)
-#if 0
-                ||
-                picoquic_recvmsg_async_start(sock_ctx[i]) != 0
-
-#endif
-                ){
+                (local_port != 0 && picoquic_bind_to_port(sock_ctx[i]->fd, sock_af[i], local_port) != 0)){
                 DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", sock_af[i], local_port);
                 for (int j = 0; j < i; j++) {
                     if (sock_ctx[i] != NULL) {
@@ -185,7 +172,6 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
             }
             else {
                 events[i] = sock_ctx[i]->overlap.hEvent;
-                picoquic_socks_win_coalescing_test(sock_ctx[i]);
             }
         }
     }
@@ -462,6 +448,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                          * a second socket with a different port number.
                          */
                         uint16_t current_recv_port = socket_port;
+                        int recv_bytes = 0;
 
                         if (testing_migration) {
                             if (socket_rank == 0) {
@@ -479,11 +466,21 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                             ((struct sockaddr_in*) & sock_ctx[socket_rank]->addr_dest)->sin_port = current_recv_port;
                         }
 
-                        /* Submit the packet to the client */
-                        ret = picoquic_incoming_packet(quic, sock_ctx[socket_rank]->buffer,
-                            (size_t)sock_ctx[socket_rank]->bytes_recv, (struct sockaddr*) & sock_ctx[socket_rank]->addr_from,
-                            (struct sockaddr*) & sock_ctx[socket_rank]->addr_dest, sock_ctx[socket_rank]->dest_if,
-                            sock_ctx[socket_rank]->received_ecn, current_time);
+                        while (recv_bytes < sock_ctx[socket_rank]->bytes_recv) {
+                            size_t recv_length = sock_ctx[socket_rank]->bytes_recv - recv_bytes;
+
+                            if (sock_ctx[socket_rank]->udp_coalesced_size > 0 &&
+                                recv_length > sock_ctx[socket_rank]->udp_coalesced_size){
+                                recv_length = sock_ctx[socket_rank]->udp_coalesced_size;
+                            }
+
+                            /* Submit the packet to the client */
+                            ret = picoquic_incoming_packet(quic, sock_ctx[socket_rank]->recv_buffer + recv_bytes,
+                                recv_length, (struct sockaddr*) & sock_ctx[socket_rank]->addr_from,
+                                (struct sockaddr*) & sock_ctx[socket_rank]->addr_dest, sock_ctx[socket_rank]->dest_if,
+                                sock_ctx[socket_rank]->received_ecn, current_time);
+                            recv_bytes += (int)recv_length;
+                        }
                     }
 
                     if (ret == 0) {

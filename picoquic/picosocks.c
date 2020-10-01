@@ -325,12 +325,15 @@ void picoquic_socks_cmsg_parse(
     void* vmsg,
     struct sockaddr_storage* addr_dest,
     int* dest_if,
-    unsigned char* received_ecn)
+    unsigned char* received_ecn,
+    size_t * udp_coalesced_size)
 {
     /* Assume that msg has been filled by a call to recvmsg */
 #if _WINDOWS
     struct cmsghdr* cmsg;
     WSAMSG* msg = (WSAMSG*)vmsg;
+
+    *udp_coalesced_size = 0;
 
     /* Get the control information */
     for (cmsg = WSA_CMSG_FIRSTHDR(msg); cmsg != NULL; cmsg = WSA_CMSG_NXTHDR(msg, cmsg)) {
@@ -388,6 +391,18 @@ void picoquic_socks_cmsg_parse(
                 DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
             }
         }
+#ifdef UDP_COALESCED_INFO
+        else if (cmsg->cmsg_level == UDP_COALESCED_INFO) {
+            if (cmsg->cmsg_len > 0) {
+                if (udp_coalesced_size != NULL) {
+                    *udp_coalesced_size = *((DWORD*)WSA_CMSG_DATA(cmsg));
+                }
+            }
+            else {
+                DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
+            }
+        }
+#endif
         else {
             DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
         }
@@ -678,7 +693,7 @@ void picoquic_delete_async_socket(picoquic_recvmsg_async_ctx_t * ctx)
     free(ctx);
 }
 
-picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af)
+picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af, int recv_coalesced, int send_coalesced)
 {
     int ret = 0;
     int last_error = 0;
@@ -688,7 +703,6 @@ picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af)
         DBG_PRINTF("Could not create async socket context, AF = %d!\n", af);
     }
     else {
-
         memset(ctx, 0, sizeof(picoquic_recvmsg_async_ctx_t));
         ctx->overlap.hEvent = WSA_INVALID_EVENT;
 
@@ -737,6 +751,28 @@ picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af)
                         ret = -1;
                     }
                 }
+#ifdef UDP_RECV_MAX_COALESCED_SIZE
+                if (ret == 0 && recv_coalesced) {
+                    int n_messages = (recv_coalesced) ? 1 : 10;
+                    DWORD coalesced_size = n_messages * PICOQUIC_MAX_PACKET_SIZE;
+                    ctx->recv_buffer_size = coalesced_size;
+                    ctx->recv_buffer = (uint8_t*)malloc(ctx->recv_buffer_size);
+                    ctx->supports_udp_recv_coalesced = recv_coalesced;
+                    ctx->supports_udp_send_coalesced = send_coalesced;
+                    if (ctx->recv_buffer == NULL) {
+                        DBG_PRINTF("Could allocate buffer size %zu for socket %d!\n",
+                            ctx->recv_buffer_size, (int)ctx->fd);
+                        ret = -1;
+                    }
+                    else if ((ret = setsockopt(ctx->fd, IPPROTO_UDP, UDP_RECV_MAX_COALESCED_SIZE, (char*)&coalesced_size,
+                        (int)sizeof(coalesced_size))) != 0) {
+                        last_error = GetLastError();
+                        DBG_PRINTF("Cannot set UDP_RECV_MAX_COALESCED_SIZE %d, returns %d (%d)",
+                            coalesced_size, ret, last_error);
+                        ret = -1;
+                    }
+                }
+#endif
             }
         }
 
@@ -776,7 +812,7 @@ int picoquic_recvmsg_async_finish(
         ctx->bytes_recv = cbTransferred;
         ctx->from_length = ctx->msg.namelen;
 
-        picoquic_socks_cmsg_parse(&ctx->msg, &ctx->addr_dest, &ctx->dest_if, &ctx->received_ecn);
+        picoquic_socks_cmsg_parse(&ctx->msg, &ctx->addr_dest, &ctx->dest_if, &ctx->received_ecn, &ctx->udp_coalesced_size);
     }
 
     return ret;
@@ -796,14 +832,15 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t* ctx)
         ctx->dest_if = 0;
         ctx->received_ecn = 0;
         ctx->bytes_recv = 0;
+        ctx->udp_coalesced_size = 0;
 
         ctx->overlap.Internal = 0;
         ctx->overlap.InternalHigh = 0;
         ctx->overlap.Offset = 0;
         ctx->overlap.OffsetHigh = 0;
 
-        ctx->dataBuf.buf = (char*)ctx->buffer;
-        ctx->dataBuf.len = sizeof(ctx->buffer);
+        ctx->dataBuf.buf = (char*)ctx->recv_buffer;
+        ctx->dataBuf.len = (ULONG)ctx->recv_buffer_size;
 
         ctx->msg.name = (struct sockaddr*) & ctx->addr_from;
         ctx->msg.namelen = sizeof(ctx->addr_from);
@@ -902,7 +939,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
             bytes_recv = -1;
         } else {
             bytes_recv = NumberOfBytes;
-            picoquic_socks_cmsg_parse(&msg, addr_dest, dest_if, received_ecn);
+            picoquic_socks_cmsg_parse(&msg, addr_dest, dest_if, received_ecn, NULL);
         }
     }
 
@@ -935,7 +972,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     if (bytes_recv <= 0) {
         addr_from->ss_family = 0;
     } else {
-        picoquic_socks_cmsg_parse(&msg, addr_dest, dest_if, received_ecn);
+        picoquic_socks_cmsg_parse(&msg, addr_dest, dest_if, received_ecn, NULL);
     }
 
     return bytes_recv;
