@@ -31,8 +31,8 @@ before_build:
   - ps: ci\build_picotls.ps1
 
 test_script:
- - ps: echo "Configuration: $Env:Configuration"
- - ps: echo "Platform: $Env:platform"
+ - ps: echo "$Env:Configuration"
+ - ps: echo "$Env:Platform"
  - ps: dir "$Env:OPENSSLDIR"
  - ps: dir "$Env:OPENSSL64DIR"
  - ps: if ($Env:Platform -eq "x64") { cd x64 }
