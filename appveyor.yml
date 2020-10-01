@@ -31,8 +31,13 @@ before_build:
   - ps: ci\build_picotls.ps1
 
 test_script:
+ - ps: echo "Configuration: $Env:Configuration"
+ - ps: echo "Platform: $Env:platform"
+ - ps: dir "$Env:OPENSSLDIR"
+ - ps: dir "$Env:OPENSSL64DIR"
  - ps: if ($Env:Platform -eq "x64") { cd x64 }
  - ps: cd "$Env:Configuration"
+ - ps: pwd
  - ps: vstest.console /logger:Appveyor UnitTest1.dll
  # Alternative to UnitTest1 (running the same tests):
  # - ps: .\picoquic_t -n -r -x fuzz_initial
