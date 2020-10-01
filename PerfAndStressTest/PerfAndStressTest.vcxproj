@@ -23,7 +23,7 @@
     <ProjectGuid>{436B580F-B0E8-4EB8-A987-08218D863316}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>PerfAndStressTest</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
     <ProjectSubType>NativeUnitTestProject</ProjectSubType>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
