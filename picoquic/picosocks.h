@@ -140,6 +140,19 @@ typedef struct st_picoquic_recvmsg_async_ctx_t {
 
 } picoquic_recvmsg_async_ctx_t;
 
+//
+// Not yet available in the SDK. When available this code can be removed.
+//
+#ifndef UDP_SEND_MSG_SIZE
+#define UDP_SEND_MSG_SIZE           2
+#endif
+#ifndef UDP_RECV_MAX_COALESCED_SIZE
+#define UDP_RECV_MAX_COALESCED_SIZE 3
+#endif
+#ifndef UDP_COALESCED_INFO
+#define UDP_COALESCED_INFO          3
+#endif
+
 picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af, int recv_coalesced, int send_coalesced);
 void picoquic_delete_async_socket(picoquic_recvmsg_async_ctx_t * ctx);
 int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t * ctx); 
