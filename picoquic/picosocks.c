@@ -688,6 +688,7 @@ picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af)
         DBG_PRINTF("Could not create async socket context, AF = %d!\n", af);
     }
     else {
+
         memset(ctx, 0, sizeof(picoquic_recvmsg_async_ctx_t));
         ctx->overlap.hEvent = WSA_INVALID_EVENT;
 
@@ -700,13 +701,42 @@ picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af)
             ret = -1;
         }
         else {
-            // ctx->overlap.hEvent = WSACreateEvent();
-            ctx->overlap.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-            if (ctx->overlap.hEvent == WSA_INVALID_EVENT) {
+            GUID WSARecvMsg_GUID = WSAID_WSARECVMSG;
+            DWORD NumberOfBytes;
+            int nResult = WSAIoctl(ctx->fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
+                &WSARecvMsg_GUID, sizeof(WSARecvMsg_GUID),
+                &ctx->WSARecvMsg, sizeof(ctx->WSARecvMsg),
+                &NumberOfBytes, NULL, NULL);
+
+            if (nResult == SOCKET_ERROR) {
                 last_error = WSAGetLastError();
-                DBG_PRINTF("Could not create WSA event for UDP socket %d= %d!\n",
+                DBG_PRINTF("Could not initialize WSARecvMsg on UDP socket %d= %d!\n",
                     (int)ctx->fd, last_error);
                 ret = -1;
+            }
+            else {
+                GUID WSASendMsg_GUID = WSAID_WSASENDMSG;
+                nResult = WSAIoctl(ctx->fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
+                    &WSASendMsg_GUID, sizeof(WSASendMsg_GUID),
+                    &ctx->WSASendMsg, sizeof(ctx->WSASendMsg),
+                    &NumberOfBytes, NULL, NULL);
+
+                if (nResult == SOCKET_ERROR) {
+                    last_error = WSAGetLastError();
+                    DBG_PRINTF("Could not initialize WSASendMsg on UDP socket %d= %d!\n",
+                        (int)ctx->fd, last_error);
+                    ret = -1;
+                }
+                else {
+                    // ctx->overlap.hEvent = WSACreateEvent();
+                    ctx->overlap.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+                    if (ctx->overlap.hEvent == WSA_INVALID_EVENT) {
+                        last_error = WSAGetLastError();
+                        DBG_PRINTF("Could not create WSA event for UDP socket %d= %d!\n",
+                            (int)ctx->fd, last_error);
+                        ret = -1;
+                    }
+                }
             }
         }
 
@@ -732,9 +762,15 @@ int picoquic_recvmsg_async_finish(
 
     if (!WSAGetOverlappedResult(ctx->fd, &ctx->overlap, &cbTransferred, FALSE, &flags)) {
         ret = WSAGetLastError();
-        DBG_PRINTF("Could not complete async call (WSARecvMsg) on UDP socket %d = %d!\n",
-            (int)ctx->fd, ret);
-        ctx->bytes_recv = -1;
+        if (ret == WSAECONNRESET) {
+            ctx->bytes_recv = 0;
+            ret = 0;
+        }
+        else {
+            DBG_PRINTF("Could not complete async call (WSARecvMsg) on UDP socket %d = %d!\n",
+                (int)ctx->fd, ret);
+            ctx->bytes_recv = -1;
+        }
     } 
     else {
         ctx->bytes_recv = cbTransferred;
@@ -746,28 +782,15 @@ int picoquic_recvmsg_async_finish(
     return ret;
 }
 
-int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t * ctx)
+int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t* ctx)
 {
     int last_error;
     int ret = 0;
-    GUID WSARecvMsg_GUID = WSAID_WSARECVMSG;
-    LPFN_WSARECVMSG WSARecvMsg;
-    DWORD NumberOfBytes;
-    int nResult;
+    DWORD numberOfBytesReceived = 0;
+    int should_retry;
 
-    nResult = WSAIoctl(ctx->fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
-        &WSARecvMsg_GUID, sizeof(WSARecvMsg_GUID),
-        &WSARecvMsg, sizeof(WSARecvMsg),
-        &NumberOfBytes, NULL, NULL);
-
-    if (nResult == SOCKET_ERROR) {
-        last_error = WSAGetLastError();
-        DBG_PRINTF("Could not initialize WSARecvMsg on UDP socket %d= %d!\n",
-            (int)ctx->fd, last_error);
-        ctx->bytes_recv = -1;
-    }
-    else {
-
+    do {
+        should_retry = 0;
         ctx->from_length = 0;
         ctx->dest_length = 0;
         ctx->dest_if = 0;
@@ -782,7 +805,7 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t * ctx)
         ctx->dataBuf.buf = (char*)ctx->buffer;
         ctx->dataBuf.len = sizeof(ctx->buffer);
 
-        ctx->msg.name = (struct sockaddr*)&ctx->addr_from;
+        ctx->msg.name = (struct sockaddr*) & ctx->addr_from;
         ctx->msg.namelen = sizeof(ctx->addr_from);
         ctx->msg.lpBuffers = &ctx->dataBuf;
         ctx->msg.dwBufferCount = 1;
@@ -791,19 +814,30 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t * ctx)
         ctx->msg.Control.len = sizeof(ctx->cmsg_buffer);
 
         /* Setting the &nbReceived parameter to NULL to force async behavior */
-        ret = WSARecvMsg(ctx->fd, &ctx->msg, NULL, &ctx->overlap, NULL);
+        ret = ctx->WSARecvMsg(ctx->fd, &ctx->msg, &numberOfBytesReceived, &ctx->overlap, NULL);
 
         if (ret != 0) {
             last_error = WSAGetLastError();
-            if (last_error == WSA_IO_PENDING){
+            if (last_error == WSA_IO_PENDING) {
                 ret = 0;
-            } else {
+            }
+            else if (last_error == WSAECONNRESET) {
+                /* Ignore the ICMP errors */
+                should_retry = 1;
+                ret = 0;
+            }
+            else {
                 DBG_PRINTF("Could not start receive async (WSARecvMsg) on UDP socket %d = %d!\n",
                     (int)ctx->fd, last_error);
                 ctx->bytes_recv = -1;
             }
         }
-    }
+        else {
+            DBG_PRINTF("Receive async immediate (WSARecvMsg) on UDP socket %d -- %d bytes !\n",
+                (int)ctx->fd, numberOfBytesReceived);
+            ctx->nb_immediate_receive++;
+        }
+    } while (should_retry);
 
     return ret;
 }

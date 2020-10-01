@@ -54,6 +54,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ws2def.h>
 #include <ws2tcpip.h>
 
 #ifndef SOCKET_TYPE
@@ -73,6 +74,60 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_packet_loop.h"
+
+#if 1
+/* Define here a set of UDP options that are defined in the newest 
+ * Windows Toolkits */
+#ifndef UDP_SEND_MSG_SIZE
+#define UDP_SEND_MSG_SIZE           2
+#endif
+#ifndef UDP_RECV_MAX_COALESCED_SIZE
+#define UDP_RECV_MAX_COALESCED_SIZE 3
+#endif
+#ifndef UDP_COALESCED_INFO
+#define UDP_COALESCED_INFO          3
+#endif
+#endif
+
+
+#if 1
+ /* Test support for UDP coalescing */
+void picoquic_socks_win_coalescing_test(picoquic_recvmsg_async_ctx_t* sock_ctx)
+{
+    int ret;
+    DWORD option_value;
+    int option_length;
+    int last_error;
+
+    SOCKET_TYPE fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    if (fd != INVALID_SOCKET) {
+#ifdef UDP_SEND_MSG_SIZE
+        option_length = (int)sizeof(option_value);
+
+        if ((ret = getsockopt(fd, IPPROTO_UDP, UDP_SEND_MSG_SIZE, (char *)&option_value, &option_length)) != 0) {
+            last_error = GetLastError();
+            DBG_PRINTF("UDP_SEND_MSG_SIZE not supported, returns %d (%d)", ret, last_error);
+        }
+        else {
+            sock_ctx->supports_udp_send_coalesced = 1;
+        }
+#endif
+#ifdef UDP_RECV_MAX_COALESCED_SIZE
+        option_value = 1;
+        option_length = (int)sizeof(option_value);
+        if ((ret = getsockopt(fd, IPPROTO_UDP, UDP_RECV_MAX_COALESCED_SIZE, (char*)&option_value, &option_length)) != 0) {
+            last_error = GetLastError();
+            DBG_PRINTF("UDP_RECV_MAX_COALESCED_SIZE not supported, returns %d (%d)", ret, last_error);
+        }
+        else {
+            sock_ctx->supports_udp_recv_coalesced = 1;
+        }
+#endif
+        closesocket(fd);
+    }
+}
+#endif
 
 /* Open a set of sockets in asynch mode. */
 int picoquic_packet_loop_open_sockets_win(int local_port, int local_af, 
@@ -130,6 +185,7 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
             }
             else {
                 events[i] = sock_ctx[i]->overlap.hEvent;
+                picoquic_socks_win_coalescing_test(sock_ctx[i]);
             }
         }
     }
@@ -170,13 +226,13 @@ typedef struct st_picoquic_sendmsg_ctx_t {
     socklen_t from_length;
     socklen_t dest_length;
     int dest_if;
-    SOCKET_TYPE fd;
     size_t send_length;
     int bytes_sent;
     int ret;
     int last_err;
-    int is_started;
-    int is_complete;
+    GUID WSASendMsg_GUID;
+    unsigned int is_started:1;
+    unsigned int is_complete:1;
 } picoquic_sendmsg_ctx_t;
 
 void CALLBACK picoquic_sendmsg_complete_cb(
@@ -194,31 +250,20 @@ void CALLBACK picoquic_sendmsg_complete_cb(
     send_ctx->is_complete = 1;
 }
 
-int picoquic_sendmsg_start(picoquic_sendmsg_ctx_t* send_ctx)
+int picoquic_sendmsg_start(picoquic_recvmsg_async_ctx_t* sock_ctx, picoquic_sendmsg_ctx_t* send_ctx)
 {
     int ret = 0;
-    GUID WSASendMsg_GUID = WSAID_WSASENDMSG;
-    LPFN_WSASENDMSG WSASendMsg;
-    DWORD NumberOfBytes;
+    DWORD numberOfBytesSent = 0;
+    int should_retry;
 
-    ret = WSAIoctl(send_ctx->fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
-        &WSASendMsg_GUID, sizeof WSASendMsg_GUID,
-        &WSASendMsg, sizeof WSASendMsg,
-        &NumberOfBytes, NULL, NULL);
+    do {
+        should_retry = 0;
 
-    if (ret == SOCKET_ERROR) {
-        send_ctx->ret = ret;
-        send_ctx->last_err = WSAGetLastError();
-        DBG_PRINTF("Could not initialize WSASendMsg on UDP socket %d= %d!\n",
-            (int)send_ctx->fd, send_ctx->last_err);
-        ret = -1;
-    }
-    else {
         /* Format the message header */
         send_ctx->is_started = 1;
         memset(&send_ctx->msg, 0, sizeof(send_ctx->msg));
-        send_ctx->msg.name = (struct sockaddr*)& send_ctx->addr_dest;
-        send_ctx->msg.namelen = picoquic_addr_length((struct sockaddr*)&send_ctx->addr_dest);
+        send_ctx->msg.name = (struct sockaddr*) & send_ctx->addr_dest;
+        send_ctx->msg.namelen = picoquic_addr_length((struct sockaddr*) & send_ctx->addr_dest);
         send_ctx->dataBuf.buf = (char*)send_ctx->buffer;
         send_ctx->dataBuf.len = (ULONG)send_ctx->send_length;
         send_ctx->msg.lpBuffers = &send_ctx->dataBuf;
@@ -227,14 +272,19 @@ int picoquic_sendmsg_start(picoquic_sendmsg_ctx_t* send_ctx)
         send_ctx->msg.Control.len = sizeof(send_ctx->cmsg_buffer);
 
         /* Format the control message */
-        picoquic_socks_cmsg_format(&send_ctx->msg, send_ctx->send_length, 
+        picoquic_socks_cmsg_format(&send_ctx->msg, send_ctx->send_length,
             (struct sockaddr*) & send_ctx->addr_from, send_ctx->dest_if);
 
         /* Send the message */
-        ret = WSASendMsg(send_ctx->fd, &send_ctx->msg, 0, NULL, &send_ctx->overlap, picoquic_sendmsg_complete_cb);
+        /* TODO: allo for immediate termination. */
+        ret = sock_ctx->WSASendMsg(sock_ctx->fd, &send_ctx->msg, 0, &numberOfBytesSent, &send_ctx->overlap, picoquic_sendmsg_complete_cb);
         if (ret != 0) {
             DWORD last_err = WSAGetLastError();
             if (last_err == WSA_IO_PENDING) {
+                ret = 0;
+            }
+            else if (last_err == WSAECONNRESET) {
+                should_retry = 1;
                 ret = 0;
             }
             else {
@@ -243,10 +293,13 @@ int picoquic_sendmsg_start(picoquic_sendmsg_ctx_t* send_ctx)
             }
         }
         else {
-            /* Unexpected -- should be WSA_IO_PENDING */
-            DBG_PRINTF("%s", "Send function is not pending!");
+            /* Immediate completion */
+            send_ctx->bytes_sent = (int)numberOfBytesSent;
+            send_ctx->ret = 0;
+            send_ctx->last_err = 0;
+            send_ctx->is_complete = 1;
         }
-    }
+    } while (should_retry);
 
     return ret;
 }
@@ -401,34 +454,37 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                 if (ret != 0) {
                     DBG_PRINTF("%s", "Cannot finish async recv");
                 }
-                else {
-                    /* Document incoming port. By default, there is just one port in use.
-                     * But we also have special code for supporting migration tests, which requires
-                     * a second socket with a different port number.
-                     */
-                    uint16_t current_recv_port = socket_port;
+                else
+                {
+                    if (sock_ctx[socket_rank]->bytes_recv > 0) {
+                        /* Document incoming port. By default, there is just one port in use.
+                         * But we also have special code for supporting migration tests, which requires
+                         * a second socket with a different port number.
+                         */
+                        uint16_t current_recv_port = socket_port;
 
-                    if (testing_migration) {
-                        if (socket_rank == 0) {
-                            current_recv_port = socket_port;
+                        if (testing_migration) {
+                            if (socket_rank == 0) {
+                                current_recv_port = socket_port;
+                            }
+                            else {
+                                current_recv_port = next_port;
+                            }
                         }
-                        else {
-                            current_recv_port = next_port;
+
+                        if (sock_ctx[socket_rank]->addr_dest.ss_family == AF_INET6) {
+                            ((struct sockaddr_in6*) & sock_ctx[socket_rank]->addr_dest)->sin6_port = current_recv_port;
                         }
-                    }
+                        else if (sock_ctx[socket_rank]->addr_dest.ss_family == AF_INET) {
+                            ((struct sockaddr_in*) & sock_ctx[socket_rank]->addr_dest)->sin_port = current_recv_port;
+                        }
 
-                    if (sock_ctx[socket_rank]->addr_dest.ss_family == AF_INET6) {
-                        ((struct sockaddr_in6*) & sock_ctx[socket_rank]->addr_dest)->sin6_port = current_recv_port;
+                        /* Submit the packet to the client */
+                        ret = picoquic_incoming_packet(quic, sock_ctx[socket_rank]->buffer,
+                            (size_t)sock_ctx[socket_rank]->bytes_recv, (struct sockaddr*) & sock_ctx[socket_rank]->addr_from,
+                            (struct sockaddr*) & sock_ctx[socket_rank]->addr_dest, sock_ctx[socket_rank]->dest_if,
+                            sock_ctx[socket_rank]->received_ecn, current_time);
                     }
-                    else if (sock_ctx[socket_rank]->addr_dest.ss_family == AF_INET) {
-                        ((struct sockaddr_in*) & sock_ctx[socket_rank]->addr_dest)->sin_port = current_recv_port;
-                    }
-
-                    /* Submit the packet to the client */
-                    ret = picoquic_incoming_packet(quic, sock_ctx[socket_rank]->buffer,
-                        (size_t)sock_ctx[socket_rank]->bytes_recv, (struct sockaddr*) & sock_ctx[socket_rank]->addr_from,
-                        (struct sockaddr*) & sock_ctx[socket_rank]->addr_dest, sock_ctx[socket_rank]->dest_if,
-                        sock_ctx[socket_rank]->received_ecn, current_time);
 
                     if (ret == 0) {
                         /* Restart waiting for packets on the socket */
@@ -446,11 +502,16 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                     }
                 }
             }
+            else {
+                /* Receive timer */
+                ret = 0;
+            }
 
             /* Send packets that are now ready */
             /* TODO: manage asynch send. */
             if (ret == 0 && (!send_ctx_first->is_started || send_ctx_first->is_complete)) {
                 do {
+                    picoquic_recvmsg_async_ctx_t* sock_ctx_send = NULL;
                     picoquic_sendmsg_ctx_t* send_ctx = send_ctx_first;
 
                     if (send_ctx_first->is_started && send_ctx_first->is_complete) {
@@ -480,11 +541,9 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                         &send_ctx->addr_dest, &send_ctx->addr_from, &send_ctx->dest_if, &log_cid, &last_cnx);
 
                     if (ret == 0 && send_ctx->send_length > 0) {
-                        send_ctx->fd = INVALID_SOCKET;
-
                         for (int i = 0; i < nb_sockets; i++) {
                             if (sock_af[i] == send_ctx->addr_dest.ss_family) {
-                                send_ctx->fd = sock_ctx[i]->fd;
+                                sock_ctx_send = sock_ctx[i];
                                 break;
                             }
                         }
@@ -496,10 +555,18 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                                 ((struct sockaddr_in6*) & send_ctx->addr_from)->sin6_port;
 
                             if (send_port == next_port) {
-                                send_ctx->fd = sock_ctx[nb_sockets - 1]->fd;
+                                sock_ctx_send = sock_ctx[nb_sockets - 1];
                             }
                         }
-                        ret = picoquic_sendmsg_start(send_ctx);
+                        if (sock_ctx_send == NULL) {
+                            picoquic_log_app_message(last_cnx,
+                                "Could not find socket for AF_to=%d, AF_from=%d",
+                                send_ctx->addr_dest.ss_family, send_ctx->addr_from.ss_family);
+                            ret = -1;
+                        }
+                        else {
+                            ret = picoquic_sendmsg_start(sock_ctx_send, send_ctx);
+                        }
 
                         if (ret == 0) {
                             /* Queue the send context at the end of the buffer chain,
@@ -627,7 +694,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
         send_ctx_first = send_ctx->next;
         for (int i = 0; i < 5; i++) {
             if (send_ctx->is_started && !send_ctx->is_complete) {
-                DBG_PRINTF("Socket %d, send ctx is still started", (int)send_ctx->fd);
+                DBG_PRINTF("%s", "Send ctx is still started");
                 Sleep(0);
             }
             else {

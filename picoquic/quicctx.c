@@ -1015,7 +1015,7 @@ int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
     uint64_t next_wake_time = picoquic_get_next_wake_time(quic, current_time);
     int64_t wake_delay = next_wake_time - current_time;
 
-    if (wake_delay > delay_max) {
+    if (wake_delay > delay_max || next_wake_time == UINT64_MAX) {
         wake_delay = delay_max;
     }
 
