@@ -22,7 +22,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <openssl/pem.h>
 #include <picotls.h>
 #include "picoquic_utils.h"
 #include "picoquic_internal.h"
