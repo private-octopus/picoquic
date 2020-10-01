@@ -333,8 +333,6 @@ void picoquic_socks_cmsg_parse(
     struct cmsghdr* cmsg;
     WSAMSG* msg = (WSAMSG*)vmsg;
 
-    *udp_coalesced_size = 0;
-
     /* Get the control information */
     for (cmsg = WSA_CMSG_FIRSTHDR(msg); cmsg != NULL; cmsg = WSA_CMSG_NXTHDR(msg, cmsg)) {
         if (cmsg->cmsg_level == IPPROTO_IP) {
