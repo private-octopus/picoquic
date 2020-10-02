@@ -632,10 +632,20 @@ int picoquic_incoming_packet(
  * connection at a time. 
  */
 
+int picoquic_prepare_next_packet_ex(picoquic_quic_t* quic, 
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, 
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index,
+    picoquic_connection_id_t* log_cid, picoquic_cnx_t** p_last_cnx, size_t* send_msg_size);
+
 int picoquic_prepare_next_packet(picoquic_quic_t* quic,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index,
     picoquic_connection_id_t* p_logcid, picoquic_cnx_t** p_last_cnx);
+
+int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index,
+    size_t* send_msg_size);
 
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,

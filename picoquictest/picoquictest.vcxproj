@@ -156,6 +156,7 @@
     <ClCompile Include="hashtest.c" />
     <ClCompile Include="intformattest.c" />
     <ClCompile Include="multipath_test.c" />
+    <ClCompile Include="netperf_test.c" />
     <ClCompile Include="parseheadertest.c" />
     <ClCompile Include="pn2pn64test.c" />
     <ClCompile Include="sacktest.c" />

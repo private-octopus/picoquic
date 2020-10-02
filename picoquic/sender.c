@@ -3585,9 +3585,9 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
 }
 
 /* Prepare next packet to send, or nothing.. */
-int picoquic_prepare_packet(picoquic_cnx_t* cnx,
+int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr_storage * p_addr_to, struct sockaddr_storage * p_addr_from, int* if_index)
+    struct sockaddr_storage * p_addr_to, struct sockaddr_storage * p_addr_from, int* if_index, size_t* send_msg_size)
 {
 
     int ret;
@@ -3596,6 +3596,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     struct sockaddr_storage addr_from_log;
     int is_initial_sent = 0;
     uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
+    uint64_t initial_next_time;
 
     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
@@ -3626,110 +3627,140 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         path_id = picoquic_select_next_path(cnx, current_time, &next_wake_time);
 
 
-        picoquic_store_addr(&addr_to_log, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
+        picoquic_store_addr(&addr_to_log, (struct sockaddr*) & cnx->path[path_id]->peer_addr);
         if (cnx->path[path_id]->local_addr.ss_family != 0) {
             picoquic_store_addr(&addr_from_log, (struct sockaddr*) & cnx->path[path_id]->local_addr);
         }
 
         if (p_addr_to != NULL) {
-            picoquic_store_addr(p_addr_to, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
+            picoquic_store_addr(p_addr_to, (struct sockaddr*) & cnx->path[path_id]->peer_addr);
         }
 
         if (p_addr_from != NULL) {
-            picoquic_store_addr(p_addr_from, (struct sockaddr *)&cnx->path[path_id]->local_addr);
+            picoquic_store_addr(p_addr_from, (struct sockaddr*) & cnx->path[path_id]->local_addr);
         }
 
         if (if_index != NULL) {
             *if_index = cnx->path[path_id]->if_index_dest;
         }
-       
-        /* Send the available segments */
+
+        /* Send the available packets */
+        if (send_msg_size != NULL) {
+            *send_msg_size = cnx->path[path_id]->send_mtu;
+        }
+        initial_next_time = next_wake_time;
+
         while (ret == 0)
         {
-            size_t available = send_buffer_max;
-            size_t segment_length = 0;
+            /* Create a new packet */
+            size_t packet_size = 0;
+            size_t packet_max = send_buffer_max - *send_length;
+            uint8_t* packet_buffer = send_buffer + *send_length;
+            /* Reset the wake time to the initial value after sending packets */
+            next_wake_time = initial_next_time;
+            /* Send the available segments in that packet. */
+            while (ret == 0)
+            {
+                size_t available = packet_max;
+                size_t segment_length = 0;
 
-            if (*send_length > 0) {
-                send_buffer_max = cnx->path[path_id]->send_mtu;
+                if (packet_size > 0) {
+                    packet_max = cnx->path[path_id]->send_mtu;
 
-                if (send_buffer_max < *send_length + PICOQUIC_MIN_SEGMENT_SIZE) {
+                    if (packet_max < packet_size + PICOQUIC_MIN_SEGMENT_SIZE) {
+                        break;
+                    }
+                    else {
+                        available = packet_max - packet_size;
+                    }
+                }
+
+                packet = picoquic_create_packet(cnx->quic);
+
+                if (packet == NULL) {
+                    ret = PICOQUIC_ERROR_MEMORY;
                     break;
                 }
                 else {
-                    available = send_buffer_max - *send_length;
-                }
-            }
+                    ret = picoquic_prepare_segment(cnx, cnx->path[path_id], packet, current_time,
+                        packet_buffer + packet_size, available, &segment_length, &next_wake_time, &is_initial_sent);
 
-            packet = picoquic_create_packet(cnx->quic);
+                    if (ret == 0) {
+                        packet_size += segment_length;
+                        if (packet->length == 0 ||
+                            packet->ptype == picoquic_packet_1rtt_protected) {
+                            if (packet->length == 0) {
+                                picoquic_recycle_packet(cnx->quic, packet);
+                                packet = NULL;
+                            }
+                            break;
+                        }
+                        else if (segment_length == 0) {
+                            DBG_PRINTF("Send bug: segment length = %zu, packet length = %zu\n", segment_length, packet->length);
+                            break;
+                        }
+                    }
+                    else {
+                        picoquic_recycle_packet(cnx->quic, packet);
+                        packet = NULL;
 
-            if (packet == NULL) {
-                ret = PICOQUIC_ERROR_MEMORY;
-                break;
-            }
-            else {
-                ret = picoquic_prepare_segment(cnx, cnx->path[path_id], packet, current_time,
-                    send_buffer + *send_length, available, &segment_length, &next_wake_time, &is_initial_sent);
-
-                if (ret == 0) {
-                    *send_length += segment_length;
-                    if (packet->length == 0 ||
-                        packet->ptype == picoquic_packet_1rtt_protected) {
-                        if (packet->length == 0) {
-                            picoquic_recycle_packet(cnx->quic, packet);
-                            packet = NULL;
+                        if (packet_size != 0) {
+                            ret = 0;
                         }
                         break;
                     }
-                    else if (segment_length == 0) {
-                        DBG_PRINTF("Send bug: segment length = %zu, packet length = %zu\n", segment_length, packet->length);
+
+                    if (cnx->quic->dont_coalesce_init) {
                         break;
                     }
                 }
-                else {
-                    picoquic_recycle_packet(cnx->quic, packet);
-                    packet = NULL;
+            }
 
-                    if (*send_length != 0) {
-                        ret = 0;
-                    }
-                    break;
-                }
-
-                if (cnx->quic->dont_coalesce_init) {
-                    break;
+            /* if needed, log that the packet is sent */
+            if (packet_size > 0 && cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+                picoquic_log_packet_address(cnx->quic->F_log,
+                    picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
+                    cnx, (struct sockaddr*) & addr_to_log, 0, packet_size, current_time);
+                if (cnx->f_binlog == NULL) {
+                    cnx->nb_packets_logged++;
                 }
             }
+            if (packet_size > 0 && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
+                cnx->nb_packets_logged++;
+                binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, 0, current_time,
+                    (struct sockaddr*) & addr_to_log, (struct sockaddr*) & addr_from_log, packet_size);
+            }
+
+            /* Update the wake up time for the connection */
+            if (packet_size > 0 || cnx->cnx_state == picoquic_state_disconnected) {
+                next_wake_time = current_time;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+            }
+
+            /* Account for the bytes in the packet. */
+            *send_length += packet_size;
+            /* Check whether to keep coalescing multiple packets in the send buffer */
+            if (send_msg_size == NULL) {
+                break;
+            }
+            else if (packet_size != *send_msg_size ||
+                *send_length + *send_msg_size > send_buffer_max) {
+                break;
+            }
         }
-    }
-
-    if (*send_length > 0 && is_initial_sent && *send_length < 1200 && cnx->client_mode) {
-        DBG_PRINTF("%s", "BUG");
-    }
-
-    /* if needed, log that the packet is sent */
-    if (*send_length > 0 && cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        picoquic_log_packet_address(cnx->quic->F_log,
-            picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
-            cnx, (struct sockaddr *)&addr_to_log, 0, *send_length, current_time);
-        if (cnx->f_binlog == NULL) {
-            cnx->nb_packets_logged++;
-        }
-    }
-    if (*send_length > 0 && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        cnx->nb_packets_logged++;
-        binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, 0, current_time,
-            (struct sockaddr *)&addr_to_log, (struct sockaddr*)& addr_from_log, *send_length);
-    }
-
-    /* Update the wake up time for the connection */
-    if (*send_length > 0 || cnx->cnx_state == picoquic_state_disconnected ) {
-        next_wake_time = current_time;
-        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
     }
     
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, next_wake_time);
 
     return ret;
+}
+
+int picoquic_prepare_packet(picoquic_cnx_t* cnx,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index)
+{
+    return picoquic_prepare_packet_ex(cnx, current_time, send_buffer, send_buffer_max, send_length,
+        p_addr_to, p_addr_from, if_index, NULL);
 }
 
 int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
@@ -3758,10 +3789,10 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
  * will send a stateless packet if one is queued, or ask the first connection in
  * the wake list to prepare a packet */
 
-int picoquic_prepare_next_packet(picoquic_quic_t* quic,
+int picoquic_prepare_next_packet_ex(picoquic_quic_t* quic,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int * if_index,
-    picoquic_connection_id_t * log_cid, picoquic_cnx_t** p_last_cnx)
+    picoquic_connection_id_t * log_cid, picoquic_cnx_t** p_last_cnx, size_t * send_msg_size)
 {
     int ret = 0;
     picoquic_stateless_packet_t* sp = picoquic_dequeue_stateless_packet(quic);
@@ -3793,7 +3824,8 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
             *send_length = 0;
         }
         else {
-            ret = picoquic_prepare_packet(cnx, current_time, send_buffer, send_buffer_max, send_length, p_addr_to, p_addr_from, if_index);
+            ret = picoquic_prepare_packet_ex(cnx, current_time, send_buffer, send_buffer_max, send_length, p_addr_to, p_addr_from, 
+                if_index, send_msg_size);
             if (log_cid != NULL) {
                 *log_cid = cnx->initial_cnxid;
             }
@@ -3834,4 +3866,13 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
     }
 
     return ret;
+}
+
+int picoquic_prepare_next_packet(picoquic_quic_t* quic,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index,
+    picoquic_connection_id_t* log_cid, picoquic_cnx_t** p_last_cnx)
+{
+    return picoquic_prepare_next_packet_ex(quic, current_time, send_buffer, send_buffer_max, send_length,
+        p_addr_to, p_addr_from, if_index, log_cid, p_last_cnx, NULL);
 }
