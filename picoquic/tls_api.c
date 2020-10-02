@@ -770,8 +770,8 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
     if (ctx->log_event != NULL) {
         char hexbuf[PTLS_MAX_DIGEST_SIZE * 2 + 1];
         static const char *log_labels[2][4] = {
-            {NULL, "QUIC_CLIENT_EARLY_TRAFFIC_SECRET", "QUIC_CLIENT_HANDSHAKE_TRAFFIC_SECRET", "QUIC_CLIENT_TRAFFIC_SECRET_0"},
-            {NULL, NULL, "QUIC_SERVER_HANDSHAKE_TRAFFIC_SECRET", "QUIC_SERVER_TRAFFIC_SECRET_0"}};
+            {NULL, "CLIENT_EARLY_TRAFFIC_SECRET", "CLIENT_HANDSHAKE_TRAFFIC_SECRET", "CLIENT_TRAFFIC_SECRET_0"},
+            {NULL, NULL, "SERVER_HANDSHAKE_TRAFFIC_SECRET", "SERVER_TRAFFIC_SECRET_0"}};
         const char *secret_label = log_labels[ptls_is_server(tls) == is_enc][epoch];
         ptls_hexdump(hexbuf, secret, cipher->hash->digest_size);
         ctx->log_event->cb(ctx->log_event, tls, secret_label, "%s", hexbuf);

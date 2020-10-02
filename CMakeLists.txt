@@ -102,12 +102,22 @@ add_library(picoquic-core
     ${PICOQUIC_LIBRARY_FILES}
 )
 
+target_link_libraries(picoquic-core
+    ${PTLS_LIBRARIES}
+    ${OPENSSL_LIBRARIES}
+)
+
 add_library(picoquic-log
     ${LOGLIB_LIBRARY_FILES}
 )
 
 add_library(picohttp-core
     ${PICOHTTP_LIBRARY_FILES}
+)
+
+target_link_libraries(picohttp-core
+    ${PTLS_LIBRARIES}
+    ${OPENSSL_LIBRARIES}
 )
 
 add_executable(picoquicdemo
