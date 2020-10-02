@@ -1898,7 +1898,7 @@ int picoquic_incoming_segment(
         is_first_segment = 1;
 
         /* if needed, log that the packet is received */
-        if (quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        if (quic->F_log != NULL && (cnx == NULL || picoquic_cnx_is_still_logging(cnx))) {
             picoquic_log_packet_address(quic->F_log,
                 picoquic_val64_connection_id((cnx == NULL) ? ph.dest_cnx_id : picoquic_get_logging_cnxid(cnx)),
                 cnx, addr_from, 1, packet_length, current_time);
