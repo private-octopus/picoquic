@@ -258,7 +258,7 @@ int picoquic_sendmsg_start(picoquic_recvmsg_async_ctx_t* sock_ctx, picoquic_send
         send_ctx->msg.Control.len = sizeof(send_ctx->cmsg_buffer);
 
         /* Format the control message */
-        picoquic_socks_cmsg_format(&send_ctx->msg, send_ctx->send_length,
+        picoquic_socks_cmsg_format(&send_ctx->msg, send_ctx->send_length, 0,
             (struct sockaddr*) & send_ctx->addr_from, send_ctx->dest_if);
 
         /* Send the message */
@@ -418,7 +418,6 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
         }
     }
 
-    /* TODO: add stopping condition, was && (!just_once || !connection_done) */
     while (ret == 0) {
         int socket_rank = -1;
         int64_t delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);

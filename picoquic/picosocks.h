@@ -236,6 +236,7 @@ void picoquic_socks_cmsg_parse(
 void picoquic_socks_cmsg_format(
     void* vmsg,
     size_t message_length,
+    size_t send_msg_size,
     struct sockaddr* addr_from,
     int dest_if);
 
