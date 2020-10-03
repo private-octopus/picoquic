@@ -206,13 +206,15 @@ typedef struct st_picoquic_sendmsg_ctx_t {
     WSABUF dataBuf;
     WSAMSG msg;
     char cmsg_buffer[1024];
-    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint8_t * send_buffer;
+    size_t send_buffer_size;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_dest;
     socklen_t from_length;
     socklen_t dest_length;
     int dest_if;
     size_t send_length;
+    size_t send_msg_size;
     int bytes_sent;
     int ret;
     int last_err;
@@ -250,7 +252,7 @@ int picoquic_sendmsg_start(picoquic_recvmsg_async_ctx_t* sock_ctx, picoquic_send
         memset(&send_ctx->msg, 0, sizeof(send_ctx->msg));
         send_ctx->msg.name = (struct sockaddr*) & send_ctx->addr_dest;
         send_ctx->msg.namelen = picoquic_addr_length((struct sockaddr*) & send_ctx->addr_dest);
-        send_ctx->dataBuf.buf = (char*)send_ctx->buffer;
+        send_ctx->dataBuf.buf = (char*)send_ctx->send_buffer;
         send_ctx->dataBuf.len = (ULONG)send_ctx->send_length;
         send_ctx->msg.lpBuffers = &send_ctx->dataBuf;
         send_ctx->msg.dwBufferCount = 1;
@@ -258,7 +260,7 @@ int picoquic_sendmsg_start(picoquic_recvmsg_async_ctx_t* sock_ctx, picoquic_send
         send_ctx->msg.Control.len = sizeof(send_ctx->cmsg_buffer);
 
         /* Format the control message */
-        picoquic_socks_cmsg_format(&send_ctx->msg, send_ctx->send_length, 0,
+        picoquic_socks_cmsg_format(&send_ctx->msg, send_ctx->send_length, send_ctx->send_msg_size,
             (struct sockaddr*) & send_ctx->addr_from, send_ctx->dest_if);
 
         /* Send the message */
@@ -290,6 +292,74 @@ int picoquic_sendmsg_start(picoquic_recvmsg_async_ctx_t* sock_ctx, picoquic_send
     return ret;
 }
 
+picoquic_sendmsg_ctx_t* picoquic_socks_create_send_ctx(size_t send_buffer_size)
+{
+    picoquic_sendmsg_ctx_t* send_ctx = (picoquic_sendmsg_ctx_t*)malloc(sizeof(picoquic_sendmsg_ctx_t));
+    if (send_ctx == NULL) {
+        DBG_PRINTF("Cannot allocate send ctx (%x)", send_ctx);
+    }
+    else {
+        uint8_t* send_buffer = (uint8_t*)malloc(send_buffer_size);
+        if (send_buffer == NULL) {
+            DBG_PRINTF("Cannot allocate send buffer (%x) size %zu",
+                send_buffer, send_buffer);
+            free(send_ctx);
+            send_ctx = NULL;
+        }
+        else {
+            memset(send_ctx, 0, sizeof(picoquic_sendmsg_ctx_t));
+            send_ctx->send_buffer = send_buffer;
+            send_ctx->send_buffer_size = send_buffer_size;
+        }
+    }
+
+    return send_ctx;
+}
+
+int picoquic_socks_create_send_ctx_list(int nb_ctx, size_t send_buffer_size,
+    picoquic_sendmsg_ctx_t** p_send_ctx_first, picoquic_sendmsg_ctx_t** p_send_ctx_last)
+{
+    int ret = 0;
+
+    for (int i = 0; i < nb_ctx; i++) {
+        picoquic_sendmsg_ctx_t* send_ctx = picoquic_socks_create_send_ctx(send_buffer_size);
+
+        if (send_ctx == NULL) {
+            ret = -1;
+            break;
+        }
+        else {
+            if (*p_send_ctx_last == NULL) {
+                *p_send_ctx_last = send_ctx;
+            }
+            send_ctx->next = *p_send_ctx_first;
+            *p_send_ctx_first = send_ctx;
+        }
+    }
+
+    return ret;
+}
+
+void  picoquic_socks_delete_send_ctx(picoquic_sendmsg_ctx_t* send_ctx)
+{
+    if (send_ctx != NULL) {
+        if (send_ctx->send_buffer != NULL) {
+            free(send_ctx->send_buffer);
+        }
+        free(send_ctx);
+    }
+}
+
+void picoquic_socks_delete_send_ctx_list(picoquic_sendmsg_ctx_t** p_send_ctx_first, picoquic_sendmsg_ctx_t** p_send_ctx_last)
+{
+    while (*p_send_ctx_first != NULL) {
+        picoquic_sendmsg_ctx_t* send_ctx = *p_send_ctx_first;
+        *p_send_ctx_first = send_ctx->next;
+        picoquic_socks_delete_send_ctx(send_ctx);
+    }
+    *p_send_ctx_last = NULL;
+}
+
 /* Specialized packet loop using Windows sockets.
  */
 
@@ -318,28 +388,6 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
     memset(sock_af, 0, sizeof(sock_af));
 
-    /* Create a list of contexts for sending packets */
-    for (int i = 0; i < PICOQUIC_PACKET_LOOP_SEND_MAX; i++)
-    {
-        picoquic_sendmsg_ctx_t* send_ctx = (picoquic_sendmsg_ctx_t*)malloc(sizeof(picoquic_sendmsg_ctx_t));
-        if (send_ctx == NULL) {
-            DBG_PRINTF("Cannot allocate send ctx #%d", i + 1);
-            ret = -1;
-            break;
-        }
-        else {
-            if (send_ctx_last == NULL) {
-                send_ctx_last = send_ctx;
-            } 
-            send_ctx->next = send_ctx_first;
-            send_ctx_first = send_ctx;
-            send_ctx->is_complete = 0;
-            send_ctx->is_started = 0;
-            send_ctx->last_err = 0;
-            send_ctx->ret = 0;
-        }
-    }
-
 
     /* Open the sockets */
     if ((nb_sockets = picoquic_packet_loop_open_sockets_win(
@@ -349,6 +397,18 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     else if (loop_callback != NULL) {
         ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx);
     }
+
+
+    /* Create a list of contexts for sending packets */
+    if (ret == 0) {
+        size_t send_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
+        if (sock_ctx[0]->supports_udp_send_coalesced) {
+            send_buffer_size *= 10;
+        }
+        ret = picoquic_socks_create_send_ctx_list(PICOQUIC_PACKET_LOOP_SEND_MAX, send_buffer_size,
+            &send_ctx_first, &send_ctx_last);
+    }
+
 
     /* If the socket is not already bound, need to send a first packet to commit the port number */
     if (ret == 0 && local_port == 0) {
@@ -531,10 +591,12 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                     send_ctx->is_complete = 0;
                     send_ctx->last_err = 0;
                     send_ctx->ret = 0;
+                    send_ctx->send_msg_size = 0;
 
-                    ret = picoquic_prepare_next_packet(quic, current_time,
-                        send_ctx->buffer, sizeof(send_ctx->buffer), &send_ctx->send_length,
-                        &send_ctx->addr_dest, &send_ctx->addr_from, &send_ctx->dest_if, &log_cid, &last_cnx);
+                    ret = picoquic_prepare_next_packet_ex(quic, current_time,
+                        send_ctx->send_buffer, send_ctx->send_buffer_size, &send_ctx->send_length,
+                        &send_ctx->addr_dest, &send_ctx->addr_from, &send_ctx->dest_if, &log_cid, &last_cnx,
+                        (sock_ctx[0]->supports_udp_send_coalesced) ? &send_ctx->send_msg_size : NULL);
 
                     if (ret == 0 && send_ctx->send_length > 0) {
                         for (int i = 0; i < nb_sockets; i++) {
@@ -684,21 +746,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     }
 
     /* Free the list of contexts */
-    while (send_ctx_first != NULL)
-    {
-        picoquic_sendmsg_ctx_t* send_ctx = send_ctx_first;
-        send_ctx_first = send_ctx->next;
-        for (int i = 0; i < 5; i++) {
-            if (send_ctx->is_started && !send_ctx->is_complete) {
-                DBG_PRINTF("%s", "Send ctx is still started");
-                Sleep(0);
-            }
-            else {
-                break;
-            }
-        }
-        free(send_ctx);
-    }
+    picoquic_socks_delete_send_ctx_list(&send_ctx_first, &send_ctx_last);
 
     return ret;
 }

@@ -3610,6 +3610,11 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
 
     ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
 
+    if (send_buffer_max < PICOQUIC_MAX_PACKET_SIZE) {
+        DBG_PRINTF("Invalid buffer size: %zu", send_buffer_max);
+        ret = -1;
+    }
+
     if (ret == 0) {
         int path_id;
 
