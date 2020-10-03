@@ -153,6 +153,9 @@ extern test_skip_frames_t test_skip_list[];
 extern size_t nb_test_skip_list;
 
 
+#define TEST_CLIENT_READY (test_ctx->cnx_client->cnx_state == picoquic_state_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start)
+#define TEST_SERVER_READY (test_ctx->cnx_server != NULL &&(test_ctx->cnx_server->cnx_state == picoquic_state_ready || test_ctx->cnx_server->cnx_state == picoquic_state_server_false_start))
+
 int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time,
     char const* ticket_file_name, char const* token_file_name, 
@@ -195,6 +198,8 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time,
     uint64_t max_completion_microsec);
+
+int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx);
 
 int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time);

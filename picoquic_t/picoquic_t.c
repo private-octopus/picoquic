@@ -123,6 +123,7 @@ static const picoquic_test_def_t test_table[] = {
     { "keep_alive", keep_alive_test },
     { "integrity_limit", integrity_limit_test },
     { "excess_repeat", excess_repeat_test },
+    { "netperf_basic", netperf_basic_test },
     { "sockets", socket_test },
     { "socket_ecn", socket_ecn_test },
     { "ticket_store", ticket_store_test },
