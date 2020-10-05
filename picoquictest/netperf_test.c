@@ -390,6 +390,8 @@ int netperf_one_scenario(test_api_stream_desc_t* scenario,
     }
 
     if (ret == 0 && cc_algo != NULL) {
+        test_ctx->qserver->padding_multiple_default = 128;
+        test_ctx->qclient->padding_multiple_default = 128;
         picoquic_set_packet_train_mode(test_ctx->qserver, 1);
         picoquic_set_packet_train_mode(test_ctx->qclient, 1);
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);

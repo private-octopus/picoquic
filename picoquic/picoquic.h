@@ -375,6 +375,22 @@ void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial);
 /* Set the "packet train" mode for pacing */
 void picoquic_set_packet_train_mode(picoquic_quic_t* quic, int train_mode);
 
+/* set the padding policy.
+ * The padding policy is parameterized by two variables:
+ * - packets shorter than padding_min_size will be padded to that size.
+ * - if packets are longer than the min_size, they will be padded to the min size plus
+ *   the nearest multiple of the "padding multiple", or to the path MTU.
+ *
+ * Padding is done before encryption, and before adding the AEAD checksum.
+ *
+ * The default value of the min size is set to 39 to enable the reset process.
+ * By default, the multiple is set to zero.
+ * 
+ * When using "packet trains", it is a good idea to also set the padding multiple, because that
+ * ensures that most packets will be padded to full path MTU length.
+ */
+void picoquic_set_padding_policy(picoquic_quic_t* quic, uint32_t padding_min_size, uint32_t padding_multiple);
+
 /* Require Picoquic to log the session keys in the specified files.
  * Instead of calling this API directly, consider calling the 
  * function picoquic_set_key_log_file_from_env() defined in 
