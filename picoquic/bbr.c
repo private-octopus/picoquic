@@ -305,8 +305,8 @@ void BBRSetSendQuantum(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
     }
     else {
         bbr_state->send_quantum = (uint64_t)(bbr_state->pacing_rate * 0.001);
-        if (bbr_state->send_quantum > 64000) {
-            bbr_state->send_quantum = 64000;
+        if (bbr_state->send_quantum > 0x10000) {
+            bbr_state->send_quantum = 0x10000;
         }
     }
 }

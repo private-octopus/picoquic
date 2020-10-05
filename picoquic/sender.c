@@ -710,8 +710,8 @@ static void picoquic_update_pacing_bucket(picoquic_path_t * path_x, uint64_t cur
  * Check pacing to see whether the next transmission is authorized.
  * If if is not, update the next wait time to reflect pacing.
  * 
- * In packet train mode, the wait will last until the bucket is completely full. This may be too cautious,
- * consider using a high water mark lower than the max bucket to account for wake up delays.
+ * In packet train mode, the wait will last until the bucket is completely full, or
+ * if at least N packets are received.
  */
 int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t * cnx, picoquic_path_t * path_x, uint64_t current_time, uint64_t * next_time)
 {
@@ -723,7 +723,13 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t * cnx, picoquic_path
         int64_t bucket_required;
         
         if (cnx->quic->packet_train_mode) {
-            bucket_required = path_x->pacing_bucket_max - path_x->pacing_bucket_nanosec;
+            bucket_required = path_x->pacing_bucket_max;
+
+            if (bucket_required > 10 * path_x->pacing_packet_time_nanosec) {
+                bucket_required = 10 * path_x->pacing_packet_time_nanosec;
+            }
+            
+            bucket_required -= path_x->pacing_bucket_nanosec;
         }
         else {
             bucket_required = path_x->pacing_packet_time_nanosec - path_x->pacing_bucket_nanosec;
@@ -760,7 +766,7 @@ void picoquic_update_pacing_rate(picoquic_cnx_t * cnx, picoquic_path_t* path_x, 
         if ((uint64_t)path_x->pacing_packet_time_nanosec > rtt_nanosec) {
             path_x->pacing_packet_time_nanosec = rtt_nanosec;
         }
-        path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 1023ull) / 1000;
+        path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 999ull) / 1000;
     }
 
     path_x->pacing_bucket_max = (uint64_t)(quantum_time * 1000000000.0);
@@ -3856,9 +3862,10 @@ int picoquic_prepare_next_packet_ex(picoquic_quic_t* quic,
             if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                 ret = 0;
 
-                picoquic_log_app_message(cnx, "Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d",
+                picoquic_log_app_message(cnx, "Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d, dg-coal: %f",
                     (int)cnx->nb_retransmission_total, (int)cnx->nb_spurious,
-                    (int)cnx->path[0]->max_reorder_gap, (int)cnx->path[0]->max_spurious_rtt);
+                    (int)cnx->path[0]->max_reorder_gap, (int)cnx->path[0]->max_spurious_rtt,
+                    (cnx->nb_trains_sent > 0) ? ((double)cnx->nb_packets_sent / (double)cnx->nb_trains_sent) : 0.0);
 
                 if (quic->F_log != NULL) {
                     fflush(quic->F_log);
