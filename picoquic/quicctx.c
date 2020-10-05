@@ -2813,6 +2813,19 @@ void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial)
     quic->random_initial = (random_initial > 0) ? 1 : 0;
 }
 
+void picoquic_set_packet_train_mode(picoquic_quic_t* quic, int train_mode)
+{
+    /* TODO: consider setting high water mark for pacing. */
+    /* If set, wait until pacing bucket is full enough to allow further transmissions. */
+    quic->packet_train_mode = (train_mode > 0) ? 1 : 0;
+}
+
+void picoquic_set_padding_policy(picoquic_quic_t* quic, uint32_t padding_min_size, uint32_t padding_multiple)
+{
+    quic->padding_minsize_default = padding_min_size;
+    quic->padding_multiple_default = padding_multiple;
+}
+
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length)
 {
     int ret = 0;

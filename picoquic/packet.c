@@ -1660,6 +1660,12 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
         }
     }
 
+#if 1
+    if (cnx->nb_paths > 2 && cnx->path[1] == cnx->path[2]) {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
+
     *p_path_id = path_id;
 
     return ret;

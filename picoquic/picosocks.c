@@ -325,7 +325,8 @@ void picoquic_socks_cmsg_parse(
     void* vmsg,
     struct sockaddr_storage* addr_dest,
     int* dest_if,
-    unsigned char* received_ecn)
+    unsigned char* received_ecn,
+    size_t * udp_coalesced_size)
 {
     /* Assume that msg has been filled by a call to recvmsg */
 #if _WINDOWS
@@ -388,6 +389,18 @@ void picoquic_socks_cmsg_parse(
                 DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
             }
         }
+#ifdef UDP_COALESCED_INFO
+        else if (cmsg->cmsg_level == UDP_COALESCED_INFO) {
+            if (cmsg->cmsg_len > 0) {
+                if (udp_coalesced_size != NULL) {
+                    *udp_coalesced_size = *((DWORD*)WSA_CMSG_DATA(cmsg));
+                }
+            }
+            else {
+                DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
+            }
+        }
+#endif
         else {
             DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
         }
@@ -457,106 +470,92 @@ void picoquic_socks_cmsg_parse(
 #endif
 }
 
+#ifdef _WINDOWS
+static void* cmsg_format_header_return_data_ptr(WSAMSG* msg, struct cmsghdr** last_cmsg, int * control_length,
+    INT cmsg_level, INT cmsg_type, size_t cmsg_data_len)
+{
+    void* cmsg_data_ptr = NULL;
+    WSACMSGHDR* cmsg = (*last_cmsg == NULL)? WSA_CMSG_FIRSTHDR(msg): WSA_CMSG_NXTHDR(msg, *last_cmsg);
+
+    if (cmsg != NULL) {
+        size_t cmsg_required_space = WSA_CMSG_SPACE(cmsg_data_len);
+        *control_length += (INT)cmsg_required_space;
+        memset(cmsg, 0, cmsg_required_space);
+        cmsg->cmsg_level = cmsg_level;
+        cmsg->cmsg_type = cmsg_type;
+        cmsg->cmsg_len = WSA_CMSG_LEN(cmsg_data_len);
+        cmsg_data_ptr = (void*)WSA_CMSG_DATA(cmsg);
+        *last_cmsg = cmsg;
+    }
+
+    return cmsg_data_ptr;
+}
+#endif
+
 void picoquic_socks_cmsg_format(
     void* vmsg,
     size_t message_length,
+    size_t send_msg_size,
     struct sockaddr* addr_from,
     int dest_if)
 {
 #ifdef _WINDOWS
     WSAMSG* msg = (WSAMSG*)vmsg;
-    WSACMSGHDR* cmsg;
     int control_length = 0;
+    struct cmsghdr* last_cmsg = NULL;
+    int is_null = 0;
 
     /* Format the control message */
-    cmsg = WSA_CMSG_FIRSTHDR(msg);
-
-    if (cmsg != NULL) {
-        if (addr_from != NULL && addr_from->sa_family != 0) {
-            if (addr_from->sa_family == AF_INET) {
-                memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in_pktinfo)));
-                cmsg->cmsg_level = IPPROTO_IP;
-                cmsg->cmsg_type = IP_PKTINFO;
-                cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in_pktinfo));
-                struct in_pktinfo* pktinfo = (struct in_pktinfo*)WSA_CMSG_DATA(cmsg);
+    if (addr_from != NULL && addr_from->sa_family != 0) {
+        if (addr_from->sa_family == AF_INET) {
+            struct in_pktinfo* pktinfo = (struct in_pktinfo*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+                &control_length, IPPROTO_IP, IP_PKTINFO, sizeof(struct in_pktinfo));
+            if (pktinfo != NULL) {
                 pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
                 pktinfo->ipi_ifindex = (unsigned long)dest_if;
-
-                control_length += WSA_CMSG_SPACE(sizeof(struct in_pktinfo));
             }
             else {
-                memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in6_pktinfo)));
-                cmsg->cmsg_level = IPPROTO_IPV6;
-                cmsg->cmsg_type = IPV6_PKTINFO;
-                cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in6_pktinfo));
-                struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)WSA_CMSG_DATA(cmsg);
+                is_null = 1;
+            }
+
+            if (!is_null && message_length > PICOQUIC_INITIAL_MTU_IPV4) {
+                int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+                    &control_length, IPPROTO_IP, IP_DONTFRAGMENT, sizeof(int));
+                if (pval != NULL) {
+                    *pval = 1;
+                }
+                else {
+                    is_null = 1;
+                }
+            }
+        }
+        else {
+            struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+                &control_length, IPPROTO_IPV6, IPV6_PKTINFO, sizeof(struct in6_pktinfo));
+            if (pktinfo6 != NULL) {
                 memcpy(&pktinfo6->ipi6_addr.u, &((struct sockaddr_in6*)addr_from)->sin6_addr.u, sizeof(IN6_ADDR));
                 pktinfo6->ipi6_ifindex = (unsigned long)dest_if;
-
-                control_length += WSA_CMSG_SPACE(sizeof(struct in6_pktinfo));
-            }
-
-            if (addr_from->sa_family == AF_INET6) {
-                struct cmsghdr* cmsg_2 = WSA_CMSG_NXTHDR(msg, cmsg);
-                if (cmsg_2 == NULL) {
-                    DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
-                }
-                else {
-                    int val = 1;
-
-                    cmsg_2->cmsg_level = IPPROTO_IPV6;
-                    cmsg_2->cmsg_type = IPV6_DONTFRAG;
-                    cmsg_2->cmsg_len = WSA_CMSG_LEN(sizeof(int));
-                    *((int*)WSA_CMSG_DATA(cmsg_2)) = val;
-                    control_length += WSA_CMSG_SPACE(sizeof(int));
-#ifdef IPV6_ECN_NOT
-                    struct cmsghdr* cmsg_3 = WSA_CMSG_NXTHDR(&msg, cmsg_2);
-                    if (cmsg_3 == NULL) {
-                        DBG_PRINTF("Cannot obtain third CMSG (control_length: %d)\n", control_length);
-                    }
-                    else {
-                        INT ecn_val = PICOQUIC_ECN_ECT_0;
-                        cmsg_3->cmsg_level = IPPROTO_IPV6;
-                        cmsg_3->cmsg_type = IPV6_ECN;
-                        cmsg_3->cmsg_len = WSA_CMSG_LEN(sizeof(INT));
-                        *((INT*)WSA_CMSG_DATA(cmsg_3)) = ecn_val;
-                        control_length += WSA_CMSG_SPACE(sizeof(INT));
-                    }
-#endif
-                }
             }
             else {
-                struct cmsghdr* last_msg = cmsg;
-                if (message_length > PICOQUIC_INITIAL_MTU_IPV4) {
-                    struct cmsghdr* cmsg_2 = WSA_CMSG_NXTHDR(msg, last_msg);
-                    if (cmsg_2 == NULL) {
-                        DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
-                    }
-                    else {
-                        int val = 1;
-                        cmsg_2->cmsg_level = IPPROTO_IP;
-                        cmsg_2->cmsg_type = IP_DONTFRAGMENT;
-                        cmsg_2->cmsg_len = WSA_CMSG_LEN(sizeof(int));
-                        *((PINT)WSA_CMSG_DATA(cmsg_2)) = val;
-                        control_length += WSA_CMSG_SPACE(sizeof(int));
-                        last_msg = cmsg_2;
-                    }
-                }
-#ifdef IP_ECN_NOT
-                struct cmsghdr* cmsg_3 = WSA_CMSG_NXTHDR(&msg, last_msg);
-                if (cmsg_3 == NULL) {
-                    DBG_PRINTF("Cannot obtain third CMSG (control_length: %d)\n", control_length);
+                is_null = 1;
+            }
+            if (!is_null) {
+                int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+                    &control_length, IPPROTO_IPV6, IPV6_DONTFRAG, sizeof(int));
+                if (pval != NULL) {
+                    *pval = 1;
                 }
                 else {
-                    INT ecn_val = PICOQUIC_ECN_ECT_0;
-                    cmsg_3->cmsg_level = IPPROTO_IP;
-                    cmsg_3->cmsg_type = IP_ECN;
-                    cmsg_3->cmsg_len = WSA_CMSG_LEN(sizeof(INT));
-                    *((PINT)WSA_CMSG_DATA(cmsg_3)) = ecn_val;
-                    control_length += WSA_CMSG_SPACE(sizeof(INT));
+                    is_null = 1;
                 }
-#endif
             }
+        }
+    }
+    if (!is_null && send_msg_size > 0) {
+        DWORD* pdw = (DWORD*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+            &control_length, IPPROTO_UDP, UDP_SEND_MSG_SIZE, sizeof(DWORD));
+        if (pdw != NULL) {
+            *pdw = (DWORD)send_msg_size;
         }
     }
 
@@ -678,7 +677,7 @@ void picoquic_delete_async_socket(picoquic_recvmsg_async_ctx_t * ctx)
     free(ctx);
 }
 
-picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af)
+picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af, int recv_coalesced, int send_coalesced)
 {
     int ret = 0;
     int last_error = 0;
@@ -688,7 +687,6 @@ picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af)
         DBG_PRINTF("Could not create async socket context, AF = %d!\n", af);
     }
     else {
-
         memset(ctx, 0, sizeof(picoquic_recvmsg_async_ctx_t));
         ctx->overlap.hEvent = WSA_INVALID_EVENT;
 
@@ -737,6 +735,28 @@ picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af)
                         ret = -1;
                     }
                 }
+#ifdef UDP_RECV_MAX_COALESCED_SIZE
+                if (ret == 0 && recv_coalesced) {
+                    int n_messages = (recv_coalesced) ? 1 : 10;
+                    DWORD coalesced_size = n_messages * PICOQUIC_MAX_PACKET_SIZE;
+                    ctx->recv_buffer_size = coalesced_size;
+                    ctx->recv_buffer = (uint8_t*)malloc(ctx->recv_buffer_size);
+                    ctx->supports_udp_recv_coalesced = recv_coalesced;
+                    ctx->supports_udp_send_coalesced = send_coalesced;
+                    if (ctx->recv_buffer == NULL) {
+                        DBG_PRINTF("Could allocate buffer size %zu for socket %d!\n",
+                            ctx->recv_buffer_size, (int)ctx->fd);
+                        ret = -1;
+                    }
+                    else if ((ret = setsockopt(ctx->fd, IPPROTO_UDP, UDP_RECV_MAX_COALESCED_SIZE, (char*)&coalesced_size,
+                        (int)sizeof(coalesced_size))) != 0) {
+                        last_error = GetLastError();
+                        DBG_PRINTF("Cannot set UDP_RECV_MAX_COALESCED_SIZE %d, returns %d (%d)",
+                            coalesced_size, ret, last_error);
+                        ret = -1;
+                    }
+                }
+#endif
             }
         }
 
@@ -776,7 +796,7 @@ int picoquic_recvmsg_async_finish(
         ctx->bytes_recv = cbTransferred;
         ctx->from_length = ctx->msg.namelen;
 
-        picoquic_socks_cmsg_parse(&ctx->msg, &ctx->addr_dest, &ctx->dest_if, &ctx->received_ecn);
+        picoquic_socks_cmsg_parse(&ctx->msg, &ctx->addr_dest, &ctx->dest_if, &ctx->received_ecn, &ctx->udp_coalesced_size);
     }
 
     return ret;
@@ -796,14 +816,15 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t* ctx)
         ctx->dest_if = 0;
         ctx->received_ecn = 0;
         ctx->bytes_recv = 0;
+        ctx->udp_coalesced_size = 0;
 
         ctx->overlap.Internal = 0;
         ctx->overlap.InternalHigh = 0;
         ctx->overlap.Offset = 0;
         ctx->overlap.OffsetHigh = 0;
 
-        ctx->dataBuf.buf = (char*)ctx->buffer;
-        ctx->dataBuf.len = sizeof(ctx->buffer);
+        ctx->dataBuf.buf = (char*)ctx->recv_buffer;
+        ctx->dataBuf.len = (ULONG)ctx->recv_buffer_size;
 
         ctx->msg.name = (struct sockaddr*) & ctx->addr_from;
         ctx->msg.namelen = sizeof(ctx->addr_from);
@@ -902,7 +923,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
             bytes_recv = -1;
         } else {
             bytes_recv = NumberOfBytes;
-            picoquic_socks_cmsg_parse(&msg, addr_dest, dest_if, received_ecn);
+            picoquic_socks_cmsg_parse(&msg, addr_dest, dest_if, received_ecn, NULL);
         }
     }
 
@@ -935,7 +956,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     if (bytes_recv <= 0) {
         addr_from->ss_family = 0;
     } else {
-        picoquic_socks_cmsg_parse(&msg, addr_dest, dest_if, received_ecn);
+        picoquic_socks_cmsg_parse(&msg, addr_dest, dest_if, received_ecn, NULL);
     }
 
     return bytes_recv;
@@ -984,7 +1005,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
         msg.Control.len = sizeof(cmsg_buffer);
 
         /* Format the control message */
-        picoquic_socks_cmsg_format(&msg, length, addr_from, dest_if);
+        picoquic_socks_cmsg_format(&msg, length, 0, addr_from, dest_if);
 
         /* Send the message */
         ret = WSASendMsg(fd, &msg, 0, &dwBytesSent, NULL, NULL);
@@ -1019,7 +1040,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
     msg.msg_controllen = sizeof(cmsg_buffer);
 
     /* Format the control message */
-    picoquic_socks_cmsg_format(&msg, length, addr_from, dest_if);
+    picoquic_socks_cmsg_format(&msg, length, 0, addr_from, dest_if);
 
     bytes_sent = sendmsg(fd, &msg, 0);
 

@@ -188,6 +188,8 @@ int quic_server(const char* server_name, int server_port,
             }
             picoquic_set_default_congestion_algorithm(qserver, cc_algorithm);
 
+            picoquic_set_padding_policy(qserver, 39, 128);
+
             picoquic_set_binlog(qserver, bin_dir);
 
             picoquic_set_qlog(qserver, qlog_dir);

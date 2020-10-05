@@ -122,7 +122,8 @@ typedef struct st_picoquic_recvmsg_async_ctx_t {
     WSABUF dataBuf;
     WSAMSG msg;
     char cmsg_buffer[1024];
-    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    size_t recv_buffer_size;
+    uint8_t* recv_buffer;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_dest;
     socklen_t from_length;
@@ -130,6 +131,7 @@ typedef struct st_picoquic_recvmsg_async_ctx_t {
     SOCKET_TYPE fd;
     int dest_if;
     unsigned char received_ecn;
+    size_t udp_coalesced_size;
     int nb_immediate_receive;
     int bytes_recv;
     unsigned int is_started : 1;
@@ -138,7 +140,20 @@ typedef struct st_picoquic_recvmsg_async_ctx_t {
 
 } picoquic_recvmsg_async_ctx_t;
 
-picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af);
+//
+// Not yet available in the SDK. When available this code can be removed.
+//
+#ifndef UDP_SEND_MSG_SIZE
+#define UDP_SEND_MSG_SIZE           2
+#endif
+#ifndef UDP_RECV_MAX_COALESCED_SIZE
+#define UDP_RECV_MAX_COALESCED_SIZE 3
+#endif
+#ifndef UDP_COALESCED_INFO
+#define UDP_COALESCED_INFO          3
+#endif
+
+picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af, int recv_coalesced, int send_coalesced);
 void picoquic_delete_async_socket(picoquic_recvmsg_async_ctx_t * ctx);
 int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t * ctx); 
 int picoquic_recvmsg_async_finish(picoquic_recvmsg_async_ctx_t * ctx);
@@ -215,11 +230,13 @@ void picoquic_socks_cmsg_parse(
     void* vmsg,
     struct sockaddr_storage* addr_dest,
     int* dest_if,
-    unsigned char* received_ecn);
+    unsigned char* received_ecn,
+    size_t* udp_coalesced_size);
 
 void picoquic_socks_cmsg_format(
     void* vmsg,
     size_t message_length,
+    size_t send_msg_size,
     struct sockaddr* addr_from,
     int dest_if);
 

@@ -75,7 +75,7 @@
 [21040, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 39, "packet_number": 2, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "ack_frequency", "sequence_number": 0, "packet_tolerance": 2, "max_ack_delay": 5260 }, { 
     "frame_type": "padding"}]}],
-[21040, "recovery", "metrics_updated", {"pacing_rate": 7294974,"bytes_in_flight": 2001,"smoothed_rtt": 21040,"min_rtt": 21040,"latest_rtt": 21040}],
+[21040, "recovery", "metrics_updated", {"pacing_rate": 7300291,"bytes_in_flight": 2001,"smoothed_rtt": 21040,"min_rtt": 21040,"latest_rtt": 21040}],
 [21040, "transport", "datagram_sent", { "byte_length": 55}],
 [21653, "transport", "datagram_received", { "byte_length": 311}],
 [21653, "transport", "packet_received", { "packet_type": "handshake", "header": { "packet_size": 89, "packet_number": 1, "payload_length": 44, "scid": "0203040506070809", "dcid": "030405060708090a" }, "frames": [{ 

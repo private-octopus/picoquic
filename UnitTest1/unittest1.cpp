@@ -596,6 +596,21 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(netperf_basic)
+        {
+            int ret = netperf_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(netperf_bbr)
+        {
+            int ret = netperf_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_sockets)
         {
             int ret = socket_test();

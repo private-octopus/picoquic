@@ -372,6 +372,25 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
 /* Require randomization of initial PN numbers */
 void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial);
 
+/* Set the "packet train" mode for pacing */
+void picoquic_set_packet_train_mode(picoquic_quic_t* quic, int train_mode);
+
+/* set the padding policy.
+ * The padding policy is parameterized by two variables:
+ * - packets shorter than padding_min_size will be padded to that size.
+ * - if packets are longer than the min_size, they will be padded to the min size plus
+ *   the nearest multiple of the "padding multiple", or to the path MTU.
+ *
+ * Padding is done before encryption, and before adding the AEAD checksum.
+ *
+ * The default value of the min size is set to 39 to enable the reset process.
+ * By default, the multiple is set to zero.
+ * 
+ * When using "packet trains", it is a good idea to also set the padding multiple, because that
+ * ensures that most packets will be padded to full path MTU length.
+ */
+void picoquic_set_padding_policy(picoquic_quic_t* quic, uint32_t padding_min_size, uint32_t padding_multiple);
+
 /* Require Picoquic to log the session keys in the specified files.
  * Instead of calling this API directly, consider calling the 
  * function picoquic_set_key_log_file_from_env() defined in 
@@ -632,10 +651,20 @@ int picoquic_incoming_packet(
  * connection at a time. 
  */
 
+int picoquic_prepare_next_packet_ex(picoquic_quic_t* quic, 
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, 
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index,
+    picoquic_connection_id_t* log_cid, picoquic_cnx_t** p_last_cnx, size_t* send_msg_size);
+
 int picoquic_prepare_next_packet(picoquic_quic_t* quic,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index,
     picoquic_connection_id_t* p_logcid, picoquic_cnx_t** p_last_cnx);
+
+int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index,
+    size_t* send_msg_size);
 
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,

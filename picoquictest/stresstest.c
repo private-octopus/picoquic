@@ -31,7 +31,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <openssl/pem.h>
 
 #define PICOQUIC_MAX_STRESS_CLIENTS 256
 #define PICOQUIC_STRESS_MAX_NUMBER_TRACKED_STREAMS 16

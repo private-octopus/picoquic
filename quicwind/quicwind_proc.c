@@ -822,7 +822,7 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
     work_item_mutex = CreateMutex(NULL, FALSE, NULL);
 
     for (int i = 0; i < 2; i++) {
-        sock_ctx[i] = picoquic_create_async_socket(socket_family[i]);
+        sock_ctx[i] = picoquic_create_async_socket(socket_family[i], 0, 0);
         if (sock_ctx[i] == NULL) {
             AppendText(_T("Cannot create socket\r\n"));
             ret = -1;
@@ -870,8 +870,8 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
                     if (sock_ctx[i_sock]->bytes_recv > 0) {
                         AppendText(_T("Packet received\r\n"));
                         /* Submit the packet to the client */
-                        ret = picoquic_incoming_packet(qclient, sock_ctx[i_sock]->buffer,
-                            (size_t)sock_ctx[i_sock]->bytes_recv, (struct sockaddr*) & sock_ctx[i_sock]->addr_from,
+                        ret = picoquic_incoming_packet(qclient, sock_ctx[i_sock]->recv_buffer,
+                            sock_ctx[i_sock]->recv_buffer_size , (struct sockaddr*) & sock_ctx[i_sock]->addr_from,
                             (struct sockaddr*) & sock_ctx[i_sock]->addr_dest, sock_ctx[i_sock]->dest_if,
                             sock_ctx[i_sock]->received_ecn, current_time);
                         client_receive_loop++;
