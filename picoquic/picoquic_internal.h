@@ -1011,6 +1011,10 @@ typedef struct st_picoquic_cnx_t {
     uint32_t nb_zero_rtt_received;
     uint64_t nb_packets_received;
     uint64_t nb_trains_sent;
+    uint64_t nb_trains_short;
+    uint64_t nb_trains_blocked_cwin;
+    uint64_t nb_trains_blocked_pacing;
+    uint64_t nb_trains_blocked_others;
     uint64_t nb_packets_sent;
     uint64_t nb_packets_logged;
     uint64_t nb_retransmission_total;

@@ -3769,8 +3769,26 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
             if (send_msg_size == NULL) {
                 break;
             }
-            else if (packet_size != *send_msg_size ||
-                *send_length + *send_msg_size > send_buffer_max) {
+            else if (packet_size != *send_msg_size) {
+                if (*send_length > 0) {
+                    if (packet_size == 0 && *send_length < 4*(*send_msg_size)) {
+                        if (cnx->path[0]->cwin <= cnx->path[0]->bytes_in_transit) {
+                            cnx->nb_trains_blocked_cwin++;
+                        }
+                        else if (cnx->path[0]->pacing_bucket_nanosec < cnx->path[0]->pacing_packet_time_nanosec){
+                            cnx->nb_trains_blocked_pacing++;
+                        }
+                        else {
+                            cnx->nb_trains_blocked_others++;
+                        }
+                    }
+                    else {
+                        cnx->nb_trains_short++;
+                    }
+                }
+                break;
+            }
+            else if (*send_length + *send_msg_size > send_buffer_max) {
                 break;
             }
         }
