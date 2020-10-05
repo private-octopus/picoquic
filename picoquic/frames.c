@@ -1378,7 +1378,7 @@ uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* b
         bytes_next = picoquic_format_stream_frame(cnx, stream, bytes_next, bytes_max, &more_stream_data, is_pure_ack, &is_still_active, ret);
 
         if (*ret == 0) {
-            if (bytes_next + 8 < bytes_max) {
+            if (bytes_next + 17 < bytes_max) {
                 stream = picoquic_find_ready_stream(cnx);
             }
             else {
