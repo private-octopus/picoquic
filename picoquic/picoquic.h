@@ -372,6 +372,9 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
 /* Require randomization of initial PN numbers */
 void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial);
 
+/* Set the "packet train" mode for pacing */
+void picoquic_set_packet_train_mode(picoquic_quic_t* quic, int train_mode);
+
 /* Require Picoquic to log the session keys in the specified files.
  * Instead of calling this API directly, consider calling the 
  * function picoquic_set_key_log_file_from_env() defined in 

@@ -709,7 +709,9 @@ static void picoquic_update_pacing_bucket(picoquic_path_t * path_x, uint64_t cur
 /*
  * Check pacing to see whether the next transmission is authorized.
  * If if is not, update the next wait time to reflect pacing.
- * -
+ * 
+ * In packet train mode, the wait will last until the bucket is completely full. This may be too cautious,
+ * consider using a high water mark lower than the max bucket to account for wake up delays.
  */
 int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t * cnx, picoquic_path_t * path_x, uint64_t current_time, uint64_t * next_time)
 {
@@ -717,8 +719,17 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t * cnx, picoquic_path
 
     picoquic_update_pacing_bucket(path_x, current_time);
     if (path_x->pacing_bucket_nanosec < path_x->pacing_packet_time_nanosec) {
-        int64_t bucket_required = path_x->pacing_packet_time_nanosec - path_x->pacing_bucket_nanosec;
-        uint64_t next_pacing_time = current_time + 1 + bucket_required / 1000;
+        uint64_t next_pacing_time;
+        int64_t bucket_required;
+        
+        if (cnx->quic->packet_train_mode) {
+            bucket_required = path_x->pacing_bucket_max - path_x->pacing_bucket_nanosec;
+        }
+        else {
+            bucket_required = path_x->pacing_packet_time_nanosec - path_x->pacing_bucket_nanosec;
+        }
+
+        next_pacing_time = current_time + 1 + bucket_required / 1000;
         if (next_pacing_time < *next_time) {
             *next_time = next_pacing_time;
             SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
@@ -3610,7 +3621,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
 
     ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
 
-    if (send_buffer_max < PICOQUIC_MAX_PACKET_SIZE) {
+    if (send_buffer_max < PICOQUIC_ENFORCED_INITIAL_MTU) {
         DBG_PRINTF("Invalid buffer size: %zu", send_buffer_max);
         ret = -1;
     }
@@ -3692,12 +3703,13 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
 
                     if (ret == 0) {
                         packet_size += segment_length;
-                        if (packet->length == 0 ||
-                            packet->ptype == picoquic_packet_1rtt_protected) {
-                            if (packet->length == 0) {
-                                picoquic_recycle_packet(cnx->quic, packet);
-                                packet = NULL;
-                            }
+                        if (packet->length == 0) {
+                            /* Nothing more to send */
+                            picoquic_recycle_packet(cnx->quic, packet);
+                            break;
+                        }
+                        else if (packet->ptype == picoquic_packet_1rtt_protected) {
+                            /* Cannot coalesce packets after 1 rtt packet */
                             break;
                         }
                         else if (segment_length == 0) {
@@ -3720,20 +3732,22 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                     }
                 }
             }
-
-            /* if needed, log that the packet is sent */
-            if (packet_size > 0 && cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-                picoquic_log_packet_address(cnx->quic->F_log,
-                    picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
-                    cnx, (struct sockaddr*) & addr_to_log, 0, packet_size, current_time);
-                if (cnx->f_binlog == NULL) {
-                    cnx->nb_packets_logged++;
+            if (packet_size > 0) {
+                cnx->nb_packets_sent++;
+                /* if needed, log that the packet is sent */
+                if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+                    picoquic_log_packet_address(cnx->quic->F_log,
+                        picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
+                        cnx, (struct sockaddr*) & addr_to_log, 0, packet_size, current_time);
+                    if (cnx->f_binlog == NULL) {
+                        cnx->nb_packets_logged++;
+                    }
                 }
-            }
-            if (packet_size > 0 && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
-                cnx->nb_packets_logged++;
-                binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, 0, current_time,
-                    (struct sockaddr*) & addr_to_log, (struct sockaddr*) & addr_from_log, packet_size);
+                if (cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
+                    cnx->nb_packets_logged++;
+                    binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, 0, current_time,
+                        (struct sockaddr*) & addr_to_log, (struct sockaddr*) & addr_from_log, packet_size);
+                }
             }
 
             /* Update the wake up time for the connection */
@@ -3744,6 +3758,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
 
             /* Account for the bytes in the packet. */
             *send_length += packet_size;
+
             /* Check whether to keep coalescing multiple packets in the send buffer */
             if (send_msg_size == NULL) {
                 break;
@@ -3752,6 +3767,9 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 *send_length + *send_msg_size > send_buffer_max) {
                 break;
             }
+        }
+        if (*send_length > 0) {
+            cnx->nb_trains_sent++;
         }
     }
     

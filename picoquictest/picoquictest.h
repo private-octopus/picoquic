@@ -248,6 +248,7 @@ int pacing_cc_test();
 int integrity_limit_test();
 int excess_repeat_test();
 int netperf_basic_test();
+int netperf_bbr_test();
 
 int h3zero_post_test();
 int h09_post_test();

@@ -368,7 +368,7 @@ static int netperf_attempt_to_close(
 
 /* Test a connection scenario, using large send buffers */
 int netperf_one_scenario(test_api_stream_desc_t* scenario,
-    size_t sizeof_scenario, size_t stream0_target,
+    size_t sizeof_scenario, picoquic_congestion_algorithm_t * cc_algo, size_t stream0_target,
     uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
     uint32_t proposed_version, uint64_t max_completion_microsec,
     picoquic_tp_t* client_params, picoquic_tp_t* server_params,
@@ -389,8 +389,15 @@ int netperf_one_scenario(test_api_stream_desc_t* scenario,
         }
     }
 
+    if (ret == 0 && cc_algo != NULL) {
+        picoquic_set_packet_train_mode(test_ctx->qserver, 1);
+        picoquic_set_packet_train_mode(test_ctx->qclient, 1);
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, cc_algo);
+    }
+
     if (ret == 0) {
-        int ret = netperf_scenario_body_connect(test_ctx, &simulated_time, stream0_target,
+        ret = netperf_scenario_body_connect(test_ctx, &simulated_time, stream0_target,
             max_data, queue_delay_max, send_buffer, send_buffer_size);
 
         /* Prepare to send data */
@@ -417,7 +424,25 @@ int netperf_one_scenario(test_api_stream_desc_t* scenario,
 
         if (ret == 0) {
             uint64_t close_time = 0;
-            int ret = tls_api_one_scenario_verify(test_ctx);
+            ret = tls_api_one_scenario_verify(test_ctx);
+
+            if (ret == 0) {
+                if (test_ctx->cnx_server == NULL) {
+                    DBG_PRINTF("%s", "Cannot check server stats\n");
+                    ret = -1;
+                }
+                else if ((3* test_ctx->cnx_server->nb_trains_sent)/2 > test_ctx->cnx_server->nb_packets_sent) {
+                    DBG_PRINTF("Datagram coalescing fails, %" PRIu64 " trains for %" PRIu64 "packets\n",
+                        test_ctx->cnx_server->nb_trains_sent, test_ctx->cnx_server->nb_packets_sent);
+                    ret = -1;
+                }
+                else if (20 * test_ctx->cnx_server->nb_retransmission_total > test_ctx->cnx_server->nb_packets_sent) {
+                    DBG_PRINTF("Too many losses, %" PRIu64 " losses for %" PRIu64 "packets\n",
+                        test_ctx->cnx_server->nb_retransmission_total, test_ctx->cnx_server->nb_packets_sent);
+                    ret = -1;
+
+                }
+            }
 
             if (ret == 0) {
                 close_time = simulated_time;
@@ -459,6 +484,16 @@ static test_api_stream_desc_t netperf_scenario_basic[] = {
 int netperf_basic_test()
 {
     int ret = netperf_one_scenario(netperf_scenario_basic, sizeof(netperf_scenario_basic),
+        NULL,
+        0, 0, 0, 0, 0, 1000000, NULL, NULL, 10 * PICOQUIC_MAX_PACKET_SIZE);
+
+    return ret;
+}
+
+int netperf_bbr_test()
+{
+    int ret = netperf_one_scenario(netperf_scenario_basic, sizeof(netperf_scenario_basic),
+        picoquic_bbr_algorithm,
         0, 0, 0, 0, 0, 1000000, NULL, NULL, 10 * PICOQUIC_MAX_PACKET_SIZE);
 
     return ret;
