@@ -6,14 +6,18 @@ environment:
     - platform: x86
       configuration: Debug
       OPENSSLDIR: C:\OpenSSL-v11-Win32
+      OPENSSL64DIR: C:\OpenSSL-v11-Win64
     - platform: x64
       configuration: Debug
+      OPENSSLDIR: C:\OpenSSL-v11-Win32
       OPENSSL64DIR: C:\OpenSSL-v11-Win64
     - platform: x86
       configuration: Release
       OPENSSLDIR: C:\OpenSSL-v11-Win32
+      OPENSSL64DIR: C:\OpenSSL-v11-Win64
     - platform: x64
       configuration: Release
+      OPENSSLDIR: C:\OpenSSL-v11-Win32
       OPENSSL64DIR: C:\OpenSSL-v11-Win64
 matrix:
   allow_failures:
@@ -28,6 +32,8 @@ build:
   project: picoquic.sln
 
 before_build:
+  - ps: dir C:\OpenSSL-v11-Win32\include
+  - ps: dir C:\OpenSSL-v11-Win64\include
   - ps: ci\build_picotls.ps1
 
 test_script:
