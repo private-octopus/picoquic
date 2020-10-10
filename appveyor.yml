@@ -27,15 +27,14 @@ environment:
     #  configuration: Debug
     #  OPENSSL64DIR: C:\OpenSSL-v11-Win64
 
-build:
-  parallel: true
-  project: picoquic.sln
+# build:
+  # parallel: true
+  # project: picoquic.sln
+
+build_script:
+  - ps: ci\build_picoquic.ps1
 
 before_build:
-  - ps: echo $Env:OPENSSLDIR
-  - ps: echo $Env:OPENSSL64DIR
-  - ps: dir C:\OpenSSL-v11-Win32\include\openssl
-  - ps: dir C:\OpenSSL-v11-Win64\include\openssl
   - ps: ci\build_picotls.ps1
 
 test_script:
