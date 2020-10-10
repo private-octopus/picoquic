@@ -19,13 +19,13 @@ environment:
       configuration: Release
       OPENSSLDIR: C:\OpenSSL-v11-Win32
       OPENSSL64DIR: C:\OpenSSL-v11-Win64
-matrix:
-  allow_failures:
+# matrix:
+  # allow_failures:
     # For some reason linking picoquicdemo.lib fails with
     # cifra.lib(chash.obj) : error LNK2001: unresolved external symbol __CheckForDebuggerJustMyCode [C:\projects\picoquic\picoquicfirst\picoquicfirst.vcxproj]
-    - platform: x64
-      configuration: Debug
-      OPENSSL64DIR: C:\OpenSSL-v11-Win64
+    #- platform: x64
+    #  configuration: Debug
+    #  OPENSSL64DIR: C:\OpenSSL-v11-Win64
 
 build:
   parallel: true
