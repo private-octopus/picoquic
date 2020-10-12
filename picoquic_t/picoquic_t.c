@@ -82,6 +82,8 @@ static const picoquic_test_def_t test_table[] = {
     { "new_cnxid", new_cnxid_test },
     { "pacing", pacing_test },
     { "tls_api", tls_api_test },
+    { "crypto_api", crypto_api_test },
+    { "crypto_picotls_openssl_backend", crypto_picotls_openssl_backend_test },
     { "tls_api_inject_hs_ack", tls_api_inject_hs_ack_test },
     { "null_sni", null_sni_test },
     { "silence_test", tls_api_silence_test },

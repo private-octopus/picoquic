@@ -53,6 +53,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
     picoquictest/bytestream_test.c
     picoquictest/cleartext_aead_test.c
+    picoquictest/crypto_api_test.c
     picoquictest/cnx_creation_test.c
     picoquictest/cnxstress.c
     picoquictest/cplusplus.cpp
@@ -61,6 +62,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
     picoquictest/parseheadertest.c
+    picoquictest/picotls_openssl_crypto_backend.c
     picoquictest/pn2pn64test.c
     picoquictest/sacktest.c
     picoquictest/skip_frame_test.c
@@ -96,8 +98,10 @@ message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
 message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
 message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
 
-include_directories(picoquic picoquictest
-    ${PTLS_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/picoquic ${PROJECT_SOURCE_DIR}/picoquictest
+    ${PTLS_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PROJECT_SOURCE_DIR})
+
+link_directories(${PROJECT_BINARY_DIR})
 
 add_library(picoquic-core
     ${PICOQUIC_LIBRARY_FILES}
