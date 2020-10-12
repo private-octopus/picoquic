@@ -14,7 +14,7 @@ endif()
 set(PICOQUIC_LIBRARY_FILES
     picoquic/bbr.c
     picoquic/bytestream.c
-	picoquic/cc_common.c
+    picoquic/cc_common.c
     picoquic/cubic.c
     picoquic/fastcc.c
     picoquic/frames.c
@@ -39,6 +39,12 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/util.c
 )
 
+set(PICOQUIC_CORE_HEADERS
+     picoquic/picoquic.h
+     picoquic/picosocks.h
+     picoquic/picoquic_utils.h
+     picoquic/picoquic_packet_loop.h)
+
 set(LOGLIB_LIBRARY_FILES
     loglib/autoqlog.c
     loglib/cidset.c
@@ -48,6 +54,10 @@ set(LOGLIB_LIBRARY_FILES
     loglib/qlog.c
     loglib/svg.c
 )
+
+set(LOGLIB_HEADERS 
+     loglib/autoqlog.h)
+
 
 set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
@@ -81,6 +91,12 @@ set(PICOHTTP_LIBRARY_FILES
 	picohttp/siduck.c
 )
 
+set(PICOHTTP_HEADERS
+     picohttp/h3zero.h
+     picohttp/democlient.h
+     picohttp/demoserver.h)
+
+
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
 )
@@ -99,7 +115,7 @@ message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
 include_directories(picoquic picoquictest
     ${PTLS_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 
-add_library(picoquic-core
+add_library(picoquic-core ${PICOQUIC_CORE_HEADERS}
     ${PICOQUIC_LIBRARY_FILES}
 )
 
@@ -215,3 +231,14 @@ add_custom_target(
     -i
     ${CLANG_FORMAT_SOURCE_FILES}
 )
+
+# Specify Install targets
+install(TARGETS picoquicdemo picolog_t picoquic-core picoquic-log picohttp-core
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib)
+
+install(FILES
+        ${PICOQUIC_CORE_HEADERS}
+        ${PICOQUIC_LOGLIB_HEADERS}
+        ${PICOHTTP_HEADERS}
+        DESTINATION include)
