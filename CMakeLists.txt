@@ -235,7 +235,9 @@ add_custom_target(
 # Specify Install targets
 install(TARGETS picoquicdemo picolog_t picoquic-core picoquic-log picohttp-core
         RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib)
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+)
 
 install(FILES
         ${PICOQUIC_CORE_HEADERS}
