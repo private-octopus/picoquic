@@ -67,7 +67,7 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "autoqlog.h"
-#include "h3zero.c"
+#include "h3zero.h"
 #include "democlient.h"
 #include "demoserver.h"
 #include "siduck.h"
