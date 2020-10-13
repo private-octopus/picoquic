@@ -512,8 +512,6 @@ int netperf_bbr_test()
 
 void natattack_port_rewrite(struct sockaddr_storage* addr, struct sockaddr* ref, uint16_t offset)
 {
-    uint16_t* pport = NULL;
-
     if (addr->ss_family == AF_INET) {
         ((struct sockaddr_in*)addr)->sin_port = ((struct sockaddr_in*)ref)->sin_port + offset;
     }
