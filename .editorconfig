@@ -1,0 +1,33 @@
+# Rules in this file were initially inferred by Visual Studio IntelliCode from the C:\Users\z003019s\Documents\projects\picoquic codebase based on best match to current usage at 13.10.2020
+# You can modify the rules from these initially generated values to suit your own policies
+# You can learn more about editorconfig here: https://docs.microsoft.com/en-us/visualstudio/ide/editorconfig-code-style-settings-reference
+
+#### Core EditorConfig Options ####
+
+[*]
+# general use utf-8
+charset = utf-8
+
+# same as .clang-format
+[*.{c,cpp,h,hpp}]
+indent_size = 4
+indent_style = space
+
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.md]
+indent_style = space
+indent_size = 3
+trim_trailing_whitespace = true
+
+[*.vcxproj*]
+indent_size = 2
+charset = utf-8-bom
+
+[*.{pl,yml}]
+indent_size = 2
+
+[Makefile]
+indent_size = 4
+indent_style = tab
