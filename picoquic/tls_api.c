@@ -26,6 +26,9 @@
 #include "picotls.h"
 #include "picoquic_internal.h"
 #include "picotls/openssl.h"
+#if !defined(_WINDOWS) || defined(_WINDOWS64)
+#include "picotls/fusion.h"
+#endif
 #if 0
 #include "picotls/ffx.h"
 #endif
@@ -1057,21 +1060,80 @@ ptls_cipher_suite_t *picoquic_cipher_suites[] = {
 #endif
     NULL };
 
-ptls_cipher_suite_t* picoquic_cipher_suite_aes128gcmsha256[] = {
-    &ptls_openssl_aes128gcmsha256,
-    NULL
-};
-
-ptls_cipher_suite_t* picoquic_cipher_suite_aes256gcmsha384[] = {
-    &ptls_openssl_aes256gcmsha384,
-    NULL
-};
-
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-ptls_cipher_suite_t* picoquic_cipher_suite_chacha20poly1305sha256[] = {
-    & ptls_openssl_chacha20poly1305sha256,
-    NULL };
+#if !defined(_WINDOWS) || defined(_WINDOWS64)
+/* Provisional definition of fusion versiosn of AESGCM */
+ptls_cipher_suite_t picoquic_fusion_aes128gcmsha256 = { PTLS_CIPHER_SUITE_AES_128_GCM_SHA256, &ptls_fusion_aes128gcm,
+                                                    &ptls_openssl_sha256 };
+ptls_cipher_suite_t picoquic_fusion_aes256gcmsha384 = { PTLS_CIPHER_SUITE_AES_256_GCM_SHA384, &ptls_fusion_aes256gcm,
+                                                    &ptls_openssl_sha384 };
 #endif
+
+/* Setting of cipher suites. This is provisional code,
+ * waiting for the crypto selection API */
+
+static int picoquic_set_cipher_suite_in_ctx(ptls_context_t* ctx, int cipher_suite_id)
+{
+    ptls_cipher_suite_t** selected_suites = (ptls_cipher_suite_t**)malloc(sizeof(ptls_cipher_suite_t*) * 4);
+    int nb_suites = 0;
+
+    int ret = 0;
+
+    if (ctx == NULL || selected_suites == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Check first if fusion is enabled */
+#if !defined(_WINDOWS) || defined(_WINDOWS64)
+        if (ptls_fusion_is_supported_by_cpu()) {
+            if (cipher_suite_id == 0 || cipher_suite_id == 128) {
+                selected_suites[nb_suites++] = &picoquic_fusion_aes128gcmsha256;
+            }
+
+            if (cipher_suite_id == 0 || cipher_suite_id == 256) {
+                selected_suites[nb_suites++] = &picoquic_fusion_aes256gcmsha384;
+            }
+        }
+#endif
+        if (nb_suites == 0) {
+            /* Fallback to openssl if fusion is not supported */
+            if (cipher_suite_id == 0 || cipher_suite_id == 128) {
+                selected_suites[nb_suites++] = &ptls_openssl_aes128gcmsha256;
+            }
+
+            if (cipher_suite_id == 0 || cipher_suite_id == 256) {
+                selected_suites[nb_suites++] = &ptls_openssl_aes256gcmsha384;
+            }
+        }
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+        if (cipher_suite_id == 0 || cipher_suite_id == 20) {
+            selected_suites[nb_suites++] = &ptls_openssl_chacha20poly1305sha256;
+        }
+#else
+        /* Consider getting ChaCha20 from mini crypto, despite poor performance */
+#endif
+        if (nb_suites == 0) {
+            ctx->cipher_suites = NULL;
+            ret = -1;
+        }
+        else {
+            while (nb_suites < 4) {
+                selected_suites[nb_suites++] = NULL;
+            }
+            ctx->cipher_suites = selected_suites;
+        }
+    }
+
+    if (ret != 0 && selected_suites != NULL) {
+        free((void*)selected_suites);
+    }
+    return ret;
+}
+
+int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    return (picoquic_set_cipher_suite_in_ctx(ctx, cipher_suite_id));
+}
 
 /*
  * Setting the master TLS context.
@@ -1096,38 +1158,44 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
 
     if (ctx == NULL) {
         ret = -1;
-    } else {
+    }
+    else {
         memset(ctx, 0, sizeof(ptls_context_t));
         ctx->random_bytes = ptls_openssl_random_bytes;
         ctx->key_exchanges = picoquic_key_exchanges; /* was:  ptls_openssl_key_exchanges; */
-        ctx->cipher_suites = picoquic_cipher_suites; /* was: ptls_openssl_cipher_suites; */
+        ret = picoquic_set_cipher_suite_in_ctx(ctx, 0); /* was: ptls_openssl_cipher_suites; */
 
-        ctx->send_change_cipher_spec = 0;
+        if (ret == 0) {
+            ctx->send_change_cipher_spec = 0;
 
-        ctx->hkdf_label_prefix__obsolete = NULL;
-        ctx->update_traffic_key = picoquic_set_update_traffic_key_callback();
+            ctx->hkdf_label_prefix__obsolete = NULL;
+            ctx->update_traffic_key = picoquic_set_update_traffic_key_callback();
 
-        if (quic->p_simulated_time == NULL) {
-            ctx->get_time = &ptls_get_time;
-        } else {
-            ptls_get_time_t* time_getter = (ptls_get_time_t*)malloc(sizeof(ptls_get_time_t) + sizeof(uint64_t*));
-            if (time_getter == NULL) {
-                ret = PICOQUIC_ERROR_MEMORY;
-            } else {
-                uint64_t** pp_simulated_time = (uint64_t**)(((char*)time_getter) + sizeof(ptls_get_time_t));
-
-                time_getter->cb = picoquic_get_simulated_time_cb;
-                *pp_simulated_time = quic->p_simulated_time;
-                ctx->get_time = time_getter;
+            if (quic->p_simulated_time == NULL) {
+                ctx->get_time = &ptls_get_time;
             }
-        }
+            else {
+                ptls_get_time_t* time_getter = (ptls_get_time_t*)malloc(sizeof(ptls_get_time_t) + sizeof(uint64_t*));
+                if (time_getter == NULL) {
+                    ret = PICOQUIC_ERROR_MEMORY;
+                }
+                else {
+                    uint64_t** pp_simulated_time = (uint64_t**)(((char*)time_getter) + sizeof(ptls_get_time_t));
 
-        if (cert_file_name != NULL && key_file_name != NULL) {
-            /* Read the certificate file */
-            if (ptls_load_certificates(ctx, (char*)cert_file_name) != 0) {
-                ret = -1;
-            } else {
-                ret = set_sign_certificate_from_key_file(key_file_name, ctx);
+                    time_getter->cb = picoquic_get_simulated_time_cb;
+                    *pp_simulated_time = quic->p_simulated_time;
+                    ctx->get_time = time_getter;
+                }
+            }
+
+            if (cert_file_name != NULL && key_file_name != NULL) {
+                /* Read the certificate file */
+                if (ptls_load_certificates(ctx, (char*)cert_file_name) != 0) {
+                    ret = -1;
+                }
+                else {
+                    ret = set_sign_certificate_from_key_file(key_file_name, ctx);
+                }
             }
         }
 
@@ -1233,41 +1301,6 @@ static void free_certificates_list(ptls_iovec_t* certs, size_t len) {
     free(certs);
 }
 
-int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
-{
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-    int ret = 0;
-
-    if (ctx == NULL) {
-        ret = -1;
-    }
-    else {
-        switch (cipher_suite_id) {
-        case 0:
-            ctx->cipher_suites = picoquic_cipher_suites;
-            break;
-        case 20:
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-            ctx->cipher_suites = picoquic_cipher_suite_chacha20poly1305sha256;
-            break;
-#else
-            ret = -1;
-            break;
-#endif
-        case 128:
-            ctx->cipher_suites = picoquic_cipher_suite_aes128gcmsha256;
-            break;
-        case 256:
-            ctx->cipher_suites = picoquic_cipher_suite_aes256gcmsha384;
-            break;
-        default:
-            ret = -1;
-            break;
-        }
-    }
-    return ret;
-}
-
 int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
@@ -1302,7 +1335,6 @@ int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id)
     }
     return ret;
 }
-
 
 void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 {
@@ -1339,6 +1371,10 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
         /* Need to be tested */
         if (ctx->save_ticket != NULL) {
             free(ctx->save_ticket);
+        }
+
+        if (ctx->cipher_suites != NULL) {
+            free((void*)ctx->cipher_suites);
         }
 
         picoquic_free_log_event(quic);
