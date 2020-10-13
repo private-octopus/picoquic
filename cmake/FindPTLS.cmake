@@ -10,6 +10,7 @@ set(PTLS_HINTS ${CMAKE_BINARY_DIR}/../picotls ../picotls)
 
 find_library(PTLS_CORE_LIBRARY picotls-core HINTS ${PTLS_HINTS})
 find_library(PTLS_OPENSSL_LIBRARY picotls-openssl HINTS ${PTLS_HINTS})
+find_library(PTLS_FUSION_LIBRARY picotls-fusion HINTS ${PTLS_HINTS})
 
 include(FindPackageHandleStandardArgs)
 # handle the QUIETLY and REQUIRED arguments and set PTLS_FOUND to TRUE
@@ -17,6 +18,7 @@ include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(PTLS REQUIRED_VARS
     PTLS_CORE_LIBRARY
     PTLS_OPENSSL_LIBRARY
+    PTLS_FUSION_LIBRARY
     PTLS_INCLUDE_DIR)
 
 if(PTLS_FOUND)
