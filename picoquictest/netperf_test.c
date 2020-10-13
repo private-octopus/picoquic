@@ -500,3 +500,183 @@ int netperf_bbr_test()
 
     return ret;
 }
+
+
+
+/* Address natting stress.
+ * The attacker has the capability to intercept traffic and rewrite addresses.
+ * It waits for a sclient to start a connection, and then keeps changing the
+ * "source IP" that appears in the client's packets. The test verifies simply that
+ * the server remains functional.
+ */
+
+void natattack_port_rewrite(struct sockaddr_storage* addr, struct sockaddr* ref, uint16_t offset)
+{
+    if (addr->ss_family == AF_INET) {
+        ((struct sockaddr_in*)addr)->sin_port = ((struct sockaddr_in*)ref)->sin_port + offset;
+    }
+    else if (addr->ss_family == AF_INET6) {
+        ((struct sockaddr_in6*)addr)->sin6_port = ((struct sockaddr_in6*)ref)->sin6_port + offset;
+    }
+}
+
+int nat_attack_loop_step(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, int* was_active,
+    uint8_t* send_buffer, size_t send_buffer_size, int nb_loops, int do_attack)
+{
+    int ret = 0;
+    int next_action = -1;
+    uint64_t next_time = UINT64_MAX;
+    uint64_t action_time;
+
+    *was_active = 0;
+
+    if ((action_time = picoquictest_sim_link_next_arrival(test_ctx->s_to_c_link, next_time)) < next_time) {
+        next_action = 0;
+        next_time = action_time;
+    }
+
+    if ((action_time = picoquictest_sim_link_next_arrival(test_ctx->c_to_s_link, next_time)) < next_time) {
+        next_action = 1;
+        next_time = action_time;
+    }
+
+    if ((action_time = picoquic_get_next_wake_time(test_ctx->qclient, *simulated_time)) < next_time) {
+        next_action = 2;
+        next_time = action_time;
+    }
+
+    if ((action_time = picoquic_get_next_wake_time(test_ctx->qserver, *simulated_time)) < next_time) {
+        next_action = 3;
+        next_time = action_time;
+    }
+
+    if (next_time == UINT64_MAX) {
+        /* No more action possible */
+        ret = -1;
+    }
+    else {
+        if (next_time > * simulated_time) {
+            *simulated_time = next_time;
+        }
+
+        switch (next_action) {
+        case 0:
+            /* rewrite destination address to client address, simulating NAT */
+            if (test_ctx->s_to_c_link->first_packet != NULL && do_attack) {
+                picoquic_store_addr(&test_ctx->s_to_c_link->first_packet->addr_to,
+                    (struct sockaddr*) & test_ctx->client_addr);
+            }
+            ret = netperf_next_arrival(test_ctx->s_to_c_link, test_ctx->qclient, *simulated_time, was_active,
+                (struct sockaddr*) & test_ctx->server_addr);
+            break;
+        case 1:
+            /* Randomize client address, simulating broken NAT */
+            if (test_ctx->c_to_s_link->first_packet != NULL && do_attack) {
+                natattack_port_rewrite(&test_ctx->c_to_s_link->first_packet->addr_from,
+                    (struct sockaddr*) & test_ctx->client_addr, (uint16_t)nb_loops);
+            }
+            ret = netperf_next_arrival(test_ctx->c_to_s_link, test_ctx->qserver, *simulated_time, was_active,
+                (struct sockaddr*) & test_ctx->client_addr);
+            if (test_ctx->cnx_server == NULL) {
+                test_ctx->cnx_server = test_ctx->qserver->cnx_list;
+            }
+            break;
+        case 2:
+            ret = netperf_next_departure(test_ctx->qclient, test_ctx->c_to_s_link, *simulated_time, was_active, send_buffer, send_buffer_size);
+            break;
+        case 3:
+            ret = netperf_next_departure(test_ctx->qserver, test_ctx->s_to_c_link, *simulated_time, was_active, send_buffer, send_buffer_size);
+            break;
+        default:
+            ret = -1;
+            break;
+        }
+    }
+
+    return ret;
+}
+
+int nat_attack_loop(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t * simulated_time, 
+    uint8_t * send_buffer, size_t send_buffer_size, int do_attack)
+{
+    int ret = 0;
+    int was_active = 0;
+    int nb_loops = 0;
+    int nb_inactive = 0;
+
+    /* Run a simplified simulation */
+    while (ret == 0 && test_ctx->cnx_client != NULL && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected)
+    {
+        ret = nat_attack_loop_step(test_ctx, simulated_time, &was_active, send_buffer, send_buffer_size, nb_loops, do_attack);
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+            if (nb_inactive > 64) {
+                DBG_PRINTF("Loop appears stuck, nb_inactive = %d", nb_inactive);
+                ret = -1;
+                break;
+            }
+        }
+        nb_loops++;
+        if (nb_loops > 100000) {
+            DBG_PRINTF("To many loops %d", nb_loops);
+            ret = -1;
+            break;
+        }
+    }
+
+    return ret;
+}
+
+int nat_attack_test()
+{
+    /* Create a connection context */
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint8_t* send_buffer = NULL;
+    size_t send_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
+    int ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0 && send_buffer_size > 0) {
+        send_buffer = (uint8_t*)malloc(send_buffer_size);
+        if (send_buffer == 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0)
+    {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, netperf_scenario_basic, sizeof(netperf_scenario_basic));
+    }
+
+    /* Run a simplified simulation */
+    if (ret == 0) {
+        ret = nat_attack_loop(test_ctx, &simulated_time, send_buffer, send_buffer_size, 1);
+    }
+
+    if (ret == 0) {
+        DBG_PRINTF("Exit at time %" PRIu64 ", received %" PRIu64 " packets at client.",
+            simulated_time, test_ctx->cnx_client->nb_packets_received);
+    }
+
+    if (send_buffer != NULL) {
+        free(send_buffer);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
