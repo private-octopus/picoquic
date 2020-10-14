@@ -667,7 +667,7 @@ int nat_attack_test()
     }
 
     if (ret == 0) {
-        ret = test_api_init_send_recv_scenario(test_ctx, netperf_scenario_basic, sizeof(netperf_scenario_basic));
+        ret = test_api_init_send_recv_scenario(test_ctx, nat_attack_scenario, sizeof(nat_attack_scenario));
     }
 
     /* Run a simplified simulation */
