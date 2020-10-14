@@ -611,12 +611,15 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+#if 0
+        /* test disabled because the results are not consistent. */
         TEST_METHOD(nat_attack)
         {
             int ret = nat_attack_test();
 
             Assert::AreEqual(ret, 0);
         }
+#endif
 
         TEST_METHOD(test_sockets)
         {

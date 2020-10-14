@@ -630,6 +630,17 @@ int nat_attack_loop(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t * simulated_
     return ret;
 }
 
+static test_api_stream_desc_t nat_attack_scenario[] = {
+    { 4, 0, 256000, 1000000 },
+    { 8, 0, 256000, 1000000 },
+    { 12, 0, 256000, 1000000 },
+    { 16, 0, 256000, 1000000 },
+    { 20, 0, 256000, 1000000 },
+    { 24, 0, 256000, 1000000 },
+    { 28, 0, 256000, 1000000 },
+    { 32, 0, 256000, 1000000 }
+};
+
 int nat_attack_test()
 {
     /* Create a connection context */
