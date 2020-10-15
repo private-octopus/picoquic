@@ -31,7 +31,7 @@
  /* Defining first the Http 3.0 variant of the server 
   */
 
-#define PICOHTTP_SERVER_FRAME_MAX 4096
+#define PICOHTTP_SERVER_FRAME_MAX 1024
 #define PICOHTTP_FIRST_COMMAND_MAX 256
 #define PICOHTTP_RESPONSE_MAX (1 << 20)
 
@@ -141,6 +141,8 @@ typedef struct st_picoquic_h09_server_callback_ctx_t {
     size_t path_table_nb;
     char const* web_folder;
 } picoquic_h09_server_callback_ctx_t;
+
+int picoquic_h09_server_process_data_header(const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, picohttp_server_stream_ctx_t* stream_ctx, size_t* r_processed);
 
 int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
