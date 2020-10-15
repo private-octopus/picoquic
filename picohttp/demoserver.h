@@ -162,8 +162,4 @@ int demo_server_is_path_sane(const uint8_t* path, size_t path_length);
 
 int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size, FILE** pF, char const* web_folder);
 
-/* For building a basic HTTP 0.9 test server */
-int http0dot9_get(uint8_t* command, size_t command_length,
-    uint8_t* response, size_t response_max, size_t* response_length);
-
 #endif /* DEMO_SERVER_H */
