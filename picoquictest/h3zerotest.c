@@ -1530,7 +1530,6 @@ int h09_header_test()
 {
     int ret = 0;
     const size_t split_test[4] = { 1024, 7, 3, 1 };
-    h09_header_test_data_t overflow;
 
     for (size_t i = 0; ret == 0 && i < nb_h09_header_data_test_cases; i++)
     {
@@ -1568,7 +1567,7 @@ int h09_header_test()
             overflow_bytes[overflow_size - 1] = (uint8_t)'\n';
             overflow_bytes[overflow_size - 2] = (uint8_t)'\n';
 
-            ret = h09_header_split_test(overflow_bytes, overflow_size, 1024, &overflow);
+            ret = h09_header_split_test(overflow_bytes, overflow_size, 1024, &overflow_case);
             if (ret < 0) {
                 DBG_PRINTF("H09 header overflow fails, split = %d, ret = %d",
                     1024, ret);
