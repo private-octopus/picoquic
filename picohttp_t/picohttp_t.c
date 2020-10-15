@@ -29,7 +29,7 @@
 #include <stdlib.h>
 
 extern size_t picohttp_nb_stress_clients;
-size_t picohttp_test_multifile_number;
+static size_t picohttp_test_multifile_number;
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
