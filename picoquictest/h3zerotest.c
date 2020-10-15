@@ -1497,9 +1497,10 @@ int h09_header_split_test(const uint8_t* bytes, size_t length, size_t split, h09
                 ret = -1;
             }
             else if (stream_ctx->ps.hq.path_length != strlen(expected->expected_path) ||
-                (expected->expected_path != NULL &&
-                memcmp(expected->expected_path, stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length) != 0)) {
-                DBG_PRINTF("Expected path %s, got %d", expected->expected_path, stream_ctx->ps.hq.path_length);
+                (stream_ctx->ps.hq.path_length > 0 && (expected->expected_path == NULL || stream_ctx->ps.hq.path != NULL ||
+                memcmp(expected->expected_path, stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length) != 0))) {
+                DBG_PRINTF("Expected path <%s>, got <%d,%x>", (expected->expected_path == NULL)?"":expected->expected_path,
+                    stream_ctx->ps.hq.path_length, stream_ctx->ps.hq.path);
                 ret = -1;
             }
             else if (stream_ctx->ps.hq.command_length != expected->expected_command_length) {
