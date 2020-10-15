@@ -960,6 +960,7 @@ int picoquic_h09_server_process_data_header(
                 }
                 else {
                     /* Too much data */
+                    stream_ctx->method = -1;
                     ret = -1;
                     break;
                 }
