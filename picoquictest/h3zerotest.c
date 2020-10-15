@@ -1447,6 +1447,7 @@ int h09_header_split_test(const uint8_t* bytes, size_t length, size_t split, h09
         malloc(sizeof(picohttp_server_stream_ctx_t));
     if (stream_ctx == NULL) {
         DBG_PRINTF("%s", "Cannot allocate stream context");
+        ret = -1;
     }
     else {
         memset(stream_ctx, 0, sizeof(picohttp_server_stream_ctx_t));
@@ -1496,7 +1497,8 @@ int h09_header_split_test(const uint8_t* bytes, size_t length, size_t split, h09
                 ret = -1;
             }
             else if (stream_ctx->ps.hq.path_length != strlen(expected->expected_path) ||
-                memcmp(expected->expected_path, stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length) != 0) {
+                (expected->expected_path != NULL &&
+                memcmp(expected->expected_path, stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length) != 0)) {
                 DBG_PRINTF("Expected path %s, got %d", expected->expected_path, stream_ctx->ps.hq.path_length);
                 ret = -1;
             }
