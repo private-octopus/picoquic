@@ -1538,7 +1538,7 @@ int h09_header_test()
         /* Simulate data arrival */
         for (int j = 0; ret == 0 && j < 4; j++) {
             ret = h09_header_split_test(
-                h09_header_data_test_case[i].test_header,
+                (const uint8_t*) h09_header_data_test_case[i].test_header,
                 strlen(h09_header_data_test_case[i].test_header),
                 split_test[j], &h09_header_data_test_case[i]);
             if (ret < 0) {
@@ -1565,8 +1565,8 @@ int h09_header_test()
             overflow_bytes[1] = 'E';
             overflow_bytes[2] = 'T';
             overflow_bytes[3] = ' ';
-            overflow_bytes[overflow_size - 1] = (uint8_t)'/n';
-            overflow_bytes[overflow_size - 2] = (uint8_t)'/n';
+            overflow_bytes[overflow_size - 1] = (uint8_t)'\n';
+            overflow_bytes[overflow_size - 2] = (uint8_t)'\n';
 
             ret = h09_header_split_test(overflow_bytes, overflow_size, 1024, &overflow);
             if (ret < 0) {
