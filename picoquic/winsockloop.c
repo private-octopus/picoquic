@@ -526,7 +526,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                         }
 
                         while (recv_bytes < sock_ctx[socket_rank]->bytes_recv) {
-                            size_t recv_length = sock_ctx[socket_rank]->bytes_recv - recv_bytes;
+                            size_t recv_length = (sock_ctx[socket_rank]->bytes_recv - recv_bytes);
 
                             if (sock_ctx[socket_rank]->udp_coalesced_size > 0 &&
                                 recv_length > sock_ctx[socket_rank]->udp_coalesced_size){
