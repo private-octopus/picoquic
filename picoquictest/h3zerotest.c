@@ -1496,16 +1496,33 @@ int h09_header_split_test(const uint8_t* bytes, size_t length, size_t split, h09
                 DBG_PRINTF("Expected proto %d, got %d", expected->expected_proto, stream_ctx->ps.hq.proto);
                 ret = -1;
             }
-            else if (stream_ctx->ps.hq.path_length != strlen(expected->expected_path) ||
-                (stream_ctx->ps.hq.path_length > 0 && (expected->expected_path == NULL || stream_ctx->ps.hq.path != NULL ||
-                memcmp(expected->expected_path, stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length) != 0))) {
-                DBG_PRINTF("Expected path <%s>, got <%d,%x>", (expected->expected_path == NULL)?"":expected->expected_path,
-                    stream_ctx->ps.hq.path_length, stream_ctx->ps.hq.path);
-                ret = -1;
-            }
             else if (stream_ctx->ps.hq.command_length != expected->expected_command_length) {
                 DBG_PRINTF("Expected command length %zu, got %zu", expected->expected_command_length, stream_ctx->ps.hq.command_length);
                 ret = -1;
+            }
+            else
+            {   
+                if (expected->expected_path == NULL) {
+                    if (stream_ctx->ps.hq.path_length > 0) {
+                        DBG_PRINTF("Expected empty, result path length %d", stream_ctx->ps.hq.path_length);
+                        ret = -1;
+                    }
+                }
+                else if (stream_ctx->ps.hq.path_length != strlen(expected->expected_path)) {
+                    DBG_PRINTF("Expected path <%s>, result path length %d", 
+                        expected->expected_path, stream_ctx->ps.hq.path_length);
+                    ret = -1;
+                }
+                else if (stream_ctx->ps.hq.path_length > 0) {
+                    if (stream_ctx->ps.hq.path == NULL) {
+                        DBG_PRINTF("Result path is NULL, length %d", stream_ctx->ps.hq.path_length);
+                        ret = -1;
+                    }
+                    else if (memcmp(expected->expected_path, stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length) != 0) {
+                        DBG_PRINTF("Result path differs from expected path <%s>", expected->expected_path);
+                        ret = -1;
+                    }
+                }
             }
         }
     }
