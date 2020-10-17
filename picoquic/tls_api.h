@@ -164,7 +164,9 @@ uint8_t * picoquic_esni_nonce(picoquic_cnx_t * cnx);
 /* Define hash functions here so applications don't need to directly interface picotls */
 #define PICOQUIC_HASH_SIZE_MAX 64
 void * picoquic_hash_create(char const * algorithm_name);
+#if 0
 size_t picoquic_hash_get_length(char const* algorithm_name);
+#endif
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context);
 void picoquic_hash_finalize(uint8_t* output, void* hash_context);
 
@@ -174,6 +176,14 @@ void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending)
 void picoquic_delete_retry_protection_contexts(picoquic_quic_t * quic);
 size_t picoquic_encode_retry_protection(void * integrity_aead, uint8_t * bytes, size_t bytes_max, size_t byte_index, const picoquic_connection_id_t * odcid);
 int picoquic_verify_retry_protection(void * integrity_aead, uint8_t * bytes, size_t * length, size_t byte_index, const picoquic_connection_id_t * odcid);
+
+/* Exportable definition of ciphersuites */
+void* picoquic_get_cipher_suite_by_id_v(int cipher_suite_id);
+
+/* Exportable version of ciphersuite definition for AES128GCM SHA256 ciphersuite */
+void* picoquic_get_aes128gcm_sha256_v();
+
+void* picoquic_get_aes128gcm_v();
 
 /* AES ECB function used for CID encryption */
 void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key);

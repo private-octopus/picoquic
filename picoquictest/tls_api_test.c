@@ -7054,13 +7054,6 @@ int packet_trace_test()
 #define QLOG_TRACE_ECN_QLOG "qlog_trace_ecn.qlog"
 #define QLOG_TRACE_AUTO_QLOG "0102030405060708.server.qlog"
 
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-const int has_chacha_poly = 1;
-#else
-const int has_chacha_poly = 0;
-#endif
-
-
 void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local,
     picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned)
 {
@@ -9304,6 +9297,7 @@ int chacha20_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int has_chacha_poly = 0;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
 
     if (ret == 0 && test_ctx == NULL) {
@@ -9312,14 +9306,18 @@ int chacha20_test()
 
     /* Set the cipher suite to chacha20
      */
-    if (ret == 0 && has_chacha_poly) {
-        ret = picoquic_set_cipher_suite(test_ctx->qclient, 20);
-    }
-
-    /* Run a basic test scenario */
     if (ret == 0) {
-        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 250000);
+        has_chacha_poly = (picoquic_set_cipher_suite(test_ctx->qclient, 20) == 0);
+
+        if (has_chacha_poly) {
+
+            /* Run a basic test scenario */
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 250000);
+        }
+        else {
+            DBG_PRINTF("%s", "Could not test CHACHA20, not supported on this platform.");
+        }
     }
 
     /* And then free the resource
