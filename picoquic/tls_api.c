@@ -306,6 +306,12 @@ static int picoquic_openssl_set_key_exchange_in_ctx(ptls_context_t* ctx, int key
     return ret;
 }
 
+/* This function is only used as part of the ESNI code. 
+ * The purpose is to obtain an "exchange context" that matches the type of key found in the
+ * file defining the ESNI key. It does not really belong in the basic "crypto provider"
+ * API, but rather in the API that handles private keys, etc.
+ * TODO: rewrite this as a function that uses generic APIs.
+ */
 static int picoquic_openssl_exchange_context_from_file(char const* esni_key_file_name,
     ptls_key_exchange_context_t** p_exchange_ctx)
 {
@@ -521,8 +527,11 @@ void picoquic_openssl_clear_crypto_errors()
 {
     ERR_clear_error();
 }
+#endif /* CRYPTO_PROVIDERS_REGION */
 
+#define CRYPTO_PROVIDERS_API_REGION 1
 
+#ifdef CRYPTO_PROVIDERS_API_REGION
 /* Implementation of generic setup functions using the default present
  * in this file. These functions may be declared in tls_api.h.
  */
@@ -545,36 +554,9 @@ int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
     return (picoquic_set_cipher_suite_in_ctx(ctx, cipher_suite_id));
 }
 
-/* Get the AES128GCM+SHA256 cipher suite required for Initial packets */
-static ptls_cipher_suite_t* picoquic_get_aes128gcm_sha256()
-{
-    return picoquic_get_selected_cipher_suite_by_id(128);
-}
-
 static ptls_cipher_suite_t* picoquic_get_cipher_suite_by_id(int cipher_suite_id)
 {
     return picoquic_get_selected_cipher_suite_by_id(cipher_suite_id);
-}
-
-void* picoquic_get_cipher_suite_by_id_v(int cipher_suite_id)
-{
-    return (void*)picoquic_get_cipher_suite_by_id(cipher_suite_id);
-}
-
-void* picoquic_get_aes128gcm_sha256_v()
-{
-    return (void*)picoquic_get_aes128gcm_sha256();
-}
-
-void* picoquic_get_aes128gcm_v()
-{
-    void* aead = NULL;
-    ptls_cipher_suite_t* cipher = picoquic_get_aes128gcm_sha256();
-
-    if (cipher != NULL) {
-        aead = (void*)(cipher->aead);
-    }
-    return aead;
 }
 
 /* Set the supported key exchange in the TLS context
@@ -591,6 +573,7 @@ static int picoquic_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchang
 
 /* Set a key exchange from a file containing a private key.
  * This is used for the implementation of ESNI.
+ * TODO: rewrite the ESNI code to use generic APIs.
  */
 int picoquic_exchange_context_from_file(char const* key_file_name,
     ptls_key_exchange_context_t** p_exchange_ctx)
@@ -600,6 +583,9 @@ int picoquic_exchange_context_from_file(char const* key_file_name,
 
 /* Obtain an AES128 ECB cipher, which is required for CID encryption
  * according the CID for load balancer specification.
+ * TODO: rewrite this as a call to the generic "get cipher suite" API,
+ * then derive the ECB function from the selection of the AEAD function.
+ * This will obviate the need of providing a specific API.
  */
 void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key)
 {
@@ -642,14 +628,6 @@ size_t picoquic_hash_get_length(char const* algorithm_name) {
     }
 
     return len;
-}
-
-void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context) {
-    ((ptls_hash_context_t*)hash_context)->update((ptls_hash_context_t*)hash_context, input, input_length);
-}
-
-void picoquic_hash_finalize(uint8_t* output, void* hash_context) {
-    ((ptls_hash_context_t*)hash_context)->final((ptls_hash_context_t*)hash_context, output, PTLS_HASH_FINAL_MODE_FREE);
 }
 
 /* Obtain the SHA256 hash, used to derive some secrets
@@ -739,8 +717,50 @@ void picoquic_clear_crypto_errors()
     picoquic_openssl_clear_crypto_errors();
 }
 
-#endif /* CRYPTO_PROVIDERS_REGION */
+#endif /* CRYPTO_PROVIDERS_API_REGION */
 
+#define CRYPTO_PROVIDERS_GENERIC_REGION 1
+
+#ifdef CRYPTO_PROVIDERS_GENERIC_REGION
+/* Generic APIs, derived from the APi to crypto providers */
+
+
+/* Get the AES128GCM+SHA256 cipher suite required for Initial packets */
+static ptls_cipher_suite_t* picoquic_get_aes128gcm_sha256()
+{
+    return picoquic_get_cipher_suite_by_id(128);
+}
+
+void* picoquic_get_aes128gcm_sha256_v()
+{
+    return (void*)picoquic_get_aes128gcm_sha256();
+}
+
+void* picoquic_get_aes128gcm_v()
+{
+    void* aead = NULL;
+    ptls_cipher_suite_t* cipher = picoquic_get_aes128gcm_sha256();
+
+    if (cipher != NULL) {
+        aead = (void*)(cipher->aead);
+    }
+    return aead;
+}
+
+void* picoquic_get_cipher_suite_by_id_v(int cipher_suite_id)
+{
+    return (void*)picoquic_get_cipher_suite_by_id(cipher_suite_id);
+}
+
+void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context) {
+    ((ptls_hash_context_t*)hash_context)->update((ptls_hash_context_t*)hash_context, input, input_length);
+}
+
+void picoquic_hash_finalize(uint8_t* output, void* hash_context) {
+    ((ptls_hash_context_t*)hash_context)->final((ptls_hash_context_t*)hash_context, output, PTLS_HASH_FINAL_MODE_FREE);
+}
+
+#endif /* CRYPTO_PROVIDERS_GENERIC_REGION */
 
 static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_t* salt);
 
