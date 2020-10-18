@@ -26,7 +26,6 @@
 #include "tls_api.h"
 #include "picoquic_utils.h"
 #include "picotls.h"
-#include "picotls/openssl.h"
 #include <string.h>
 #include "picoquictest_internal.h"
 
@@ -329,7 +328,7 @@ int pn_ctr_test()
     uint8_t in_bytes[16];
     uint8_t out_bytes[16];
     uint8_t decoded[16];
-    ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
+    ptls_aead_algorithm_t* aead = (ptls_aead_algorithm_t*)picoquic_get_aes128gcm_v();
     ptls_cipher_context_t *pn_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
 
     if (pn_enc == NULL) {
@@ -913,39 +912,45 @@ int draft17_vector_test()
     uint8_t master_secret[256];
     uint8_t client_secret[256];
     uint8_t server_secret[256];
-    ptls_cipher_suite_t cipher = { 0, &ptls_openssl_aes128gcm, &ptls_openssl_sha256 };
+    ptls_cipher_suite_t* cipher = (ptls_cipher_suite_t*)picoquic_get_aes128gcm_sha256_v();
 
-    /* Check the label expansions */
-    ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_KEY_BASE,
-        draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
-        draft17_test_server_key, sizeof(draft17_test_server_key));
+    if (cipher == NULL) {
+        DBG_PRINTF("%s", "Could not find the default cipher suite.");
+        ret = -1;
+    }
+    else {
+        /* Check the label expansions */
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_KEY_BASE,
+            draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
+            draft17_test_server_key, sizeof(draft17_test_server_key));
+    }
 
     if (ret == 0) {
-        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_IV, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_IV, PICOQUIC_LABEL_QUIC_KEY_BASE,
             draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
             draft17_test_server_iv, sizeof(draft17_test_server_iv));
     }
 
     if (ret == 0) {
-        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_HP, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_HP, PICOQUIC_LABEL_QUIC_KEY_BASE,
             draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
             draft17_test_server_pn, sizeof(draft17_test_server_pn));
     }
 
     if (ret == 0) {
-        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_KEY_BASE,
             draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret),
             draft17_test_client_key, sizeof(draft17_test_client_key));
     }
 
     if (ret == 0) {
-        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_IV, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_IV, PICOQUIC_LABEL_QUIC_KEY_BASE,
             draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret),
             draft17_test_client_iv, sizeof(draft17_test_client_iv));
     }
 
     if (ret == 0) {
-        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_HP, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_HP, PICOQUIC_LABEL_QUIC_KEY_BASE,
             draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret),
             draft17_test_client_pn, sizeof(draft17_test_client_pn));
     }
@@ -977,7 +982,7 @@ int draft17_vector_test()
             salt.base = draft17_test_salt;
             salt.len = sizeof(draft17_test_salt);
 
-            ret = picoquic_setup_initial_master_secret(&cipher, salt, draft17_test_cnx_id, master_secret);
+            ret = picoquic_setup_initial_master_secret(cipher, salt, draft17_test_cnx_id, master_secret);
 
             if (ret != 0) {
                 DBG_PRINTF("Cannot compute master secret, ret = %x\n", ret);
@@ -990,7 +995,7 @@ int draft17_vector_test()
             }
 
             if (ret == 0) {
-                ret = picoquic_setup_initial_secrets(&cipher, master_secret, client_secret, server_secret);
+                ret = picoquic_setup_initial_secrets(cipher, master_secret, client_secret, server_secret);
 
                 if (ret != 0) {
                     DBG_PRINTF("Cannot derive client and server secrets, ret = %x\n", ret);
@@ -1050,40 +1055,33 @@ static const uint8_t key_rotation_test_target_sha256[] = {
     0x0e, 0x34, 0x09, 0x19, 0x1b, 0x28, 0x46, 0x3c,
     0x38, 0xaf, 0x43, 0x34, 0x99, 0x43, 0x72, 0x57 };
 
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
 static const uint8_t key_rotation_test_target_poly[] = {
     0x00, 0x70, 0x0d, 0x33, 0x5b, 0x1c, 0x49, 0xd1,
     0xe6, 0x37, 0x1e, 0x22, 0xd4, 0xa0, 0x17, 0x6d,
     0x0e, 0x34, 0x09, 0x19, 0x1b, 0x28, 0x46, 0x3c,
     0x38, 0xaf, 0x43, 0x34, 0x99, 0x43, 0x72, 0x57 };
-#endif
-
-static ptls_cipher_suite_t *key_rotation_test_suites[] = {
-    &ptls_openssl_aes256gcmsha384, &ptls_openssl_aes128gcmsha256,
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-    &ptls_openssl_chacha20poly1305sha256,
-#endif
-    NULL };
 
 static const uint8_t * key_rotation_test_target[] = {
     key_rotation_test_target_sha384, key_rotation_test_target_sha256,
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-    key_rotation_test_target_poly, 
-#endif
+    key_rotation_test_target_poly,
     NULL };
 
 static const size_t key_rotation_test_target_size[] = {
     sizeof(key_rotation_test_target_sha384), sizeof(key_rotation_test_target_sha256),
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
     sizeof(key_rotation_test_target_poly),
-#endif
     0 };
 
 int key_rotation_vector_test()
 {
     int ret = 0;
-
+    ptls_cipher_suite_t* key_rotation_test_suites[4] = {
+        NULL, NULL, NULL, NULL };
     uint8_t new_secret[PTLS_MAX_DIGEST_SIZE];
+
+    key_rotation_test_suites[0] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(256); /* AES256GCM_SHA384 */
+    key_rotation_test_suites[1] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(128); /* AES128GCM_SHA256 */
+    key_rotation_test_suites[2] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(20); /* CHACHA0 */
+    key_rotation_test_suites[3] = NULL;
 
     memcpy(new_secret, key_rotation_test_init, PTLS_MAX_DIGEST_SIZE);
 
