@@ -191,6 +191,7 @@ int h3zero_stream_test();
 int parse_demo_scenario_test();
 int h3zero_server_test();
 int h09_server_test();
+int h09_header_test();
 int generic_server_test();
 int esni_test();
 int tls_retry_token_test();
@@ -249,6 +250,7 @@ int integrity_limit_test();
 int excess_repeat_test();
 int netperf_basic_test();
 int netperf_bbr_test();
+int nat_attack_test();
 
 int h3zero_post_test();
 int h09_post_test();

@@ -31,7 +31,7 @@
  /* Defining first the Http 3.0 variant of the server 
   */
 
-#define PICOHTTP_SERVER_FRAME_MAX 4096
+#define PICOHTTP_SERVER_FRAME_MAX 1024
 #define PICOHTTP_FIRST_COMMAND_MAX 256
 #define PICOHTTP_RESPONSE_MAX (1 << 20)
 
@@ -142,6 +142,8 @@ typedef struct st_picoquic_h09_server_callback_ctx_t {
     char const* web_folder;
 } picoquic_h09_server_callback_ctx_t;
 
+int picoquic_h09_server_process_data_header(const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, picohttp_server_stream_ctx_t* stream_ctx, size_t* r_processed);
+
 int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
@@ -159,9 +161,5 @@ size_t picoquic_demo_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iov
 int demo_server_is_path_sane(const uint8_t* path, size_t path_length);
 
 int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size, FILE** pF, char const* web_folder);
-
-/* For building a basic HTTP 0.9 test server */
-int http0dot9_get(uint8_t* command, size_t command_length,
-    uint8_t* response, size_t response_max, size_t* response_length);
 
 #endif /* DEMO_SERVER_H */

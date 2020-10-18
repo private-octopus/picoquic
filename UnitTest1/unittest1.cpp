@@ -611,6 +611,16 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+#if 0
+        /* test disabled because the results are not consistent. */
+        TEST_METHOD(nat_attack)
+        {
+            int ret = nat_attack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+#endif
+
         TEST_METHOD(test_sockets)
         {
             int ret = socket_test();
@@ -1380,6 +1390,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
         
+        TEST_METHOD(h09_header) {
+            int ret = h09_header_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(generic_server) {
             int ret = generic_server_test();
 

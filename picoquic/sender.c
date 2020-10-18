@@ -1652,10 +1652,14 @@ picoquic_pmtu_discovery_status_enum picoquic_is_mtu_probe_needed(picoquic_cnx_t*
 size_t picoquic_prepare_mtu_probe(picoquic_cnx_t* cnx,
     picoquic_path_t * path_x,
     size_t header_length, size_t checksum_length,
-    uint8_t* bytes)
+    uint8_t* bytes, size_t bytes_max)
 {
     size_t probe_length = picoquic_next_mtu_probe_length(cnx, path_x);
     size_t length = header_length;
+
+    if (probe_length > bytes_max) {
+        probe_length = bytes_max;
+    }
 
     bytes[length++] = picoquic_frame_type_ping;
     memset(&bytes[length], 0, probe_length - checksum_length - length);
@@ -2921,7 +2925,9 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
                     length = bytes_next - bytes;
 
-                    if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required) {
+                    if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required ||
+                        send_buffer_max <= path_x->send_mtu) {
+                        /* No need or no way to do pmtu discovery */
                         /* If present, send misc frame */
                         while (cnx->first_misc_frame != NULL) {
                             uint8_t* bytes_misc = bytes_next;
@@ -2971,7 +2977,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     if (ret == 0 && length <= header_length && send_buffer_max > path_x->send_mtu
                         && path_x->cwin > path_x->bytes_in_transit&& pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
                         /* Since there is no data to send, this is an opportunity to send an MTU probe */
-                        length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes);
+                        length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes, send_buffer_max);
                         packet->length = length;
                         packet->send_path = path_x;
                         packet->is_mtu_probe = 1;
@@ -3280,7 +3286,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             bytes_next, bytes_max, &more_data, &is_pure_ack);
                     }
 
-                    if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required) {
+                    if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required ||
+                        send_buffer_max <= path_x->send_mtu) {
+                        /* No need or no way to do path MTU discovery, just go on with formatting packets */
                         /* If there are not enough local CID published, create and advertise */
                         if (ret == 0) {
                             bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
@@ -3340,7 +3348,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     if (ret == 0 && length <= header_length && send_buffer_max > path_x->send_mtu
                         && path_x->cwin > path_x->bytes_in_transit&& pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
                         /* Since there is no data to send, this is an opportunity to send an MTU probe */
-                        length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes);
+                        length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes, send_buffer_max);
                         packet->length = length;
                         packet->send_path = path_x;
                         packet->is_mtu_probe = 1;
@@ -3768,6 +3776,10 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
             /* Check whether to keep coalescing multiple packets in the send buffer */
             if (send_msg_size == NULL) {
                 break;
+            }
+            else if (packet_size > *send_msg_size) {
+                /* This can only happen for the first packet in a batch. */
+                *send_msg_size = packet_size;
             }
             else if (packet_size != *send_msg_size) {
                 if (*send_length > 0) {

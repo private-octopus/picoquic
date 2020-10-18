@@ -913,7 +913,6 @@ static int picohttp_server_parse_commandline(uint8_t* command, size_t command_le
     }
 
     return ret;
-
 }
 
 /*
@@ -935,16 +934,16 @@ static int picohttp_server_parse_commandline(uint8_t* command, size_t command_le
  * header line is fully parsed (GET).
  */
 
-int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, 
-    picoquic_h09_server_callback_ctx_t* app_ctx,
-    picohttp_server_stream_ctx_t* stream_ctx)
+int picoquic_h09_server_process_data_header(
+    const uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event,
+    picohttp_server_stream_ctx_t* stream_ctx,
+    size_t * r_processed)
 {
     int ret = 0;
     size_t processed = 0;
 
-    while (processed < length) {
+    while (ret == 0 && processed < length) {
         if (stream_ctx->ps.hq.status == picohttp_server_stream_status_none) {
             /* If the command has not been received yet, try to process it */
             int crlf_present = 0;
@@ -952,7 +951,8 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
             while (processed < length && crlf_present == 0) {
                 if (bytes[processed] == '\r') {
                     /* Ignore \n, so end of header is either CRLF/CRLF, of just LF/LF, or maybe LF/CR/LF */
-                } else if (bytes[processed] == '\n') {
+                }
+                else if (bytes[processed] == '\n') {
                     crlf_present = 1;
                 }
                 else if (stream_ctx->ps.hq.command_length < sizeof(stream_ctx->frame) - 1) {
@@ -960,7 +960,9 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                 }
                 else {
                     /* Too much data */
-                    crlf_present = 1;
+                    stream_ctx->method = -1;
+                    ret = -1;
+                    break;
                 }
                 processed++;
             }
@@ -990,7 +992,29 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
             }
             processed++;
         }
-        else if (stream_ctx->ps.hq.status == picohttp_server_stream_status_receiving) {
+        else
+        {
+            break;
+        }
+    }
+
+    *r_processed = processed;
+    return ret;
+}
+
+int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, 
+    picoquic_h09_server_callback_ctx_t* app_ctx,
+    picohttp_server_stream_ctx_t* stream_ctx)
+{
+    int ret = 0;
+    size_t processed = 0;
+
+    ret = picoquic_h09_server_process_data_header(bytes, length, fin_or_event, stream_ctx, &processed);
+
+    if (ret == 0 && processed < length) {
+        if (stream_ctx->ps.hq.status == picohttp_server_stream_status_receiving) {
             /* Received data for a POST command. */
             size_t available = length - processed;
 
@@ -1019,7 +1043,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
     }
 
     /* if FIN present, process request through http 0.9 */
-    if (stream_ctx->ps.hq.status != picohttp_server_stream_status_finished) {
+    if (ret == 0 && stream_ctx->ps.hq.status != picohttp_server_stream_status_finished) {
         if (fin_or_event == picoquic_callback_stream_fin || (stream_ctx->method == 0 && stream_ctx->ps.hq.status == picohttp_server_stream_status_crlf)) {
             char buf[1024];
             uint8_t post_response[512];

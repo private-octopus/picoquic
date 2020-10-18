@@ -2493,7 +2493,7 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
             cnx->callback_fn = callback_fn;
         if (callback_ctx != NULL)
             cnx->callback_ctx = callback_ctx;
-        ret = picoquic_initialize_tls_stream(cnx, picoquic_get_quic_time(quic));
+        ret = picoquic_start_client_cnx(cnx);
         if (ret != 0) {
             /* Cannot just do partial initialization! */
             picoquic_delete_cnx(cnx);

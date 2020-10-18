@@ -1402,6 +1402,206 @@ int h09_server_test()
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, NULL, NULL, NULL);
 }
 
+/* Unit test of H09 header parsing. 
+ * test a variety of headers
+ */
+
+typedef struct st_h09_header_test_data_t {
+    char const* test_header;
+    size_t expected_parsed;
+    picohttp_server_stream_status_t expected_status;
+    int expected_method;
+    int expected_proto;
+    char const* expected_path;
+    size_t expected_command_length;
+    
+} h09_header_test_data_t;
+
+static h09_header_test_data_t h09_header_data_test_case[] = {
+#if 0
+    { "GET /\r\n\r\n", 9, picohttp_server_stream_status_receiving, 0, 0, "/", 5 },
+    { "GET /\n", 6, picohttp_server_stream_status_crlf, 0, 0, "/", 5 },
+    { "GET /\r", 6, picohttp_server_stream_status_none, 0, 0, "/", 5 },
+    { "GET /", 5, picohttp_server_stream_status_none, 0, 0, "/", 5 },
+    { "POST /bla\r\n\r\nBlablablablablablabla\nblabla\n", 
+    13, picohttp_server_stream_status_receiving, 1, 0, "/bla", 9 },
+    { "GET /hello.txt HTTP/1.1\n\
+User - Agent: curl / 7.16.3 libcurl / 7.16.3 OpenSSL / 0.9.7l zlib / 1.2.3\n\
+Host : www.example.com\n\
+Accept - Language : en, mi",
+    148, picohttp_server_stream_status_header, 0, 1, "/hello.txt", 23 },
+#endif
+    { "Abracadabra", 0, picohttp_server_stream_status_none, -1, 0, "", 0 }
+};
+
+static size_t nb_h09_header_data_test_cases = sizeof(h09_header_data_test_case) / sizeof(h09_header_test_data_t);
+
+int h09_header_split_test(const uint8_t* bytes, size_t length, size_t split, h09_header_test_data_t* expected)
+{
+    int ret = 0;
+    picohttp_server_stream_ctx_t* stream_ctx;
+    size_t total_processed = 0;
+
+    /* Create stream context */
+    stream_ctx = (picohttp_server_stream_ctx_t*)
+        malloc(sizeof(picohttp_server_stream_ctx_t));
+    if (stream_ctx == NULL) {
+        DBG_PRINTF("%s", "Cannot allocate stream context");
+        ret = -1;
+    }
+    else {
+        memset(stream_ctx, 0, sizeof(picohttp_server_stream_ctx_t));
+        stream_ctx->is_h3 = 0; /* This is http... */
+    }
+
+    for (size_t l = 0; ret == 0 && l < length; l += split) {
+        picoquic_call_back_event_t fin_or_event = picoquic_callback_stream_fin;
+        size_t available = length - l;
+        size_t processed = 0;
+
+        if (available > split) {
+            available = split;
+            fin_or_event = picoquic_callback_stream_data;
+        }
+
+        ret = picoquic_h09_server_process_data_header(bytes + l, available, fin_or_event,
+            stream_ctx, &processed);
+
+        total_processed += processed;
+        if (processed < available) {
+            break;
+        }
+    }
+
+    /* Check status */
+    if (ret == 0){
+        if (expected->expected_method < 0) {
+            DBG_PRINTF("Unexpected success, method = %d, ret = %d", expected->expected_method, ret);
+            ret = -1;
+        }
+        else {
+            if (total_processed != expected->expected_parsed) {
+                DBG_PRINTF("Expected parsed %zu, processed %zu", expected->expected_parsed, total_processed);
+                ret = -1;
+            }
+            else if (stream_ctx->ps.hq.status != expected->expected_status) {
+                DBG_PRINTF("Expected status %d, got %d", expected->expected_status, stream_ctx->ps.hq.status);
+                ret = -1;
+            }
+            else if (stream_ctx->method != expected->expected_method) {
+                DBG_PRINTF("Expected method %d, got %d", expected->expected_method, stream_ctx->method);
+                ret = -1;
+            }
+            else if (stream_ctx->ps.hq.proto != expected->expected_proto) {
+                DBG_PRINTF("Expected proto %d, got %d", expected->expected_proto, stream_ctx->ps.hq.proto);
+                ret = -1;
+            }
+            else if (stream_ctx->ps.hq.command_length != expected->expected_command_length) {
+                DBG_PRINTF("Expected command length %zu, got %zu", expected->expected_command_length, stream_ctx->ps.hq.command_length);
+                ret = -1;
+            }
+            else
+            {   
+                if (expected->expected_path == NULL) {
+                    if (stream_ctx->ps.hq.path_length > 0) {
+                        DBG_PRINTF("Expected empty, result path length %d", stream_ctx->ps.hq.path_length);
+                        ret = -1;
+                    }
+                }
+                else if (stream_ctx->ps.hq.path_length != strlen(expected->expected_path)) {
+                    DBG_PRINTF("Expected path <%s>, result path length %d", 
+                        expected->expected_path, stream_ctx->ps.hq.path_length);
+                    ret = -1;
+                }
+                else if (stream_ctx->ps.hq.path_length > 0) {
+                    if (stream_ctx->ps.hq.path == NULL) {
+                        DBG_PRINTF("Result path is NULL, length %d", stream_ctx->ps.hq.path_length);
+                        ret = -1;
+                    }
+                    else if (memcmp(expected->expected_path, stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length) != 0) {
+                        DBG_PRINTF("Result path differs from expected path <%s>", expected->expected_path);
+                        ret = -1;
+                    }
+                }
+            }
+        }
+    }
+    else {
+        /* The parsing failed. If this was expected, then not an error. */
+        if (expected->expected_method < 0) {
+            ret = 0;
+        }
+        else {
+            DBG_PRINTF("Unexpected parsing error, method = %d, ret = %d", expected->expected_method, ret);
+        }
+    }
+
+    if (stream_ctx != NULL) {
+        if (stream_ctx->ps.hq.path != NULL) {
+            free(stream_ctx->ps.hq.path);
+        }
+        free(stream_ctx);
+    }
+
+    return ret;
+}
+
+int h09_header_test()
+{
+    int ret = 0;
+    const size_t split_test[4] = { 1024, 7, 3, 1 };
+
+    for (size_t i = 0; ret == 0 && i < nb_h09_header_data_test_cases; i++)
+    {
+
+        /* Simulate data arrival */
+        for (int j = 0; ret == 0 && j < 4; j++) {
+            ret = h09_header_split_test(
+                (const uint8_t*) h09_header_data_test_case[i].test_header,
+                strlen(h09_header_data_test_case[i].test_header),
+                split_test[j], &h09_header_data_test_case[i]);
+            if (ret < 0) {
+                DBG_PRINTF("H09 header test %zu fails, split = %zu, ret = %d",
+                    i, split_test[j], ret);
+            }
+        }
+    }
+    /* If success so far, try a buffer overflow scenario */
+    if (ret == 0) {
+        h09_header_test_data_t overflow_case;
+        size_t overflow_size = 0x10000;
+        uint8_t* overflow_bytes = (uint8_t*)malloc(overflow_size);
+        
+        if (overflow_bytes == NULL) {
+            DBG_PRINTF("%s", "Cannot malloc overflow bytes.");
+            ret = -1;
+        }
+        else {
+            memset(&overflow_case, 0, sizeof(h09_header_test_data_t));
+            overflow_case.expected_method = -1;
+            memset(overflow_bytes, 'x', overflow_size);
+            overflow_bytes[0] = 'G';
+            overflow_bytes[1] = 'E';
+            overflow_bytes[2] = 'T';
+            overflow_bytes[3] = ' ';
+            overflow_bytes[overflow_size - 1] = (uint8_t)'\n';
+            overflow_bytes[overflow_size - 2] = (uint8_t)'\n';
+
+            ret = h09_header_split_test(overflow_bytes, overflow_size, 1024, &overflow_case);
+            if (ret < 0) {
+                DBG_PRINTF("H09 header overflow fails, split = %d, ret = %d",
+                    1024, ret);
+            }
+
+            free(overflow_bytes);
+        }
+    }
+
+
+    return ret;
+}
+
+
 int generic_server_test()
 {
     char const* alpn_09 = PICOHTTP_ALPN_HQ_LATEST;
@@ -2069,7 +2269,7 @@ static void demo_test_multi_scenario_free(picoquic_demo_stream_desc_t** scenario
     }
 }
 
-size_t picohttp_test_multifile_number = 64;
+static size_t picohttp_test_multifile_number = 64;
 #define MULTI_FILE_CLIENT_BIN "multi_file_client_trace.bin"
 #define MULTI_FILE_SERVER_BIN "multi_file_server_trace.bin"
 

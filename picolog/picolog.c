@@ -127,74 +127,80 @@ int main(int argc, char ** argv)
         ret = -1;
     }
 
-    if (ret == 0 && strcmp(appctx.out_format, "dump") == 0) {
-        char dump_file_name[512];
-        FILE* bin_dump = NULL;
-        size_t name_len = 0;
+    if (ret == 0) {
+        if (strcmp(appctx.out_format, "dump") == 0) {
+            char dump_file_name[512];
+            FILE* bin_dump = NULL;
+            size_t name_len = 0;
 
-        ret = picoquic_sprintf(dump_file_name, sizeof(dump_file_name), &name_len, "%s.dump", appctx.binlog_name);
-        if (ret == 0) {
-            bin_dump = picoquic_file_open(dump_file_name, "w");
-            if (bin_dump == NULL) {
-                fprintf(stderr, "Could not open dump file %s\n", dump_file_name);
-                ret = -1;
-            }
-            else {
-                ret = filedump_binlog(appctx.f_binlog, bin_dump);
-                (void)picoquic_file_close(bin_dump);
-            }
-        }
-    }
-    else {
-
-        if (appctx.template_name != NULL) {
-            appctx.f_template = picoquic_file_open(appctx.template_name, "r");
-            if (appctx.f_template == NULL) {
-                fprintf(stderr, "Could not open template file %s\n", appctx.binlog_name);
-                ret = -1;
-            }
-        }
-
-        if (ret == 0) {
-            binlog_list_cids(appctx.f_binlog, cids);
-
-            fprintf(stderr, "%s contains %"PRIst" connection(s):\n\n", appctx.binlog_name, cids->count);
-            cidset_print(stderr, cids);
-            fprintf(stderr, "\n");
-
-            if (!picoquic_is_connection_id_null(&cid)) {
-                if (!cidset_has_cid(cids, &cid)) {
-                    fprintf(stderr, "%s does not contain connection %s\n", appctx.binlog_name, cid_name);
+            ret = picoquic_sprintf(dump_file_name, sizeof(dump_file_name), &name_len, "%s.dump", appctx.binlog_name);
+            if (ret == 0) {
+                bin_dump = picoquic_file_open(dump_file_name, "w");
+                if (bin_dump == NULL) {
+                    fprintf(stderr, "Could not open dump file %s\n", dump_file_name);
                     ret = -1;
                 }
                 else {
-                    (void)cidset_delete(cids);
-                    cids = cidset_create();
-                    cidset_insert(cids, &cid);
+                    ret = filedump_binlog(appctx.f_binlog, bin_dump);
+                    (void)picoquic_file_close(bin_dump);
                 }
             }
         }
-
-        if (ret == 0) {
-            if (strcmp(appctx.out_format, "csv") == 0) {
-                ret = cidset_iterate(cids, convert_csv, &appctx);
-            }
-            else if (strcmp(appctx.out_format, "svg") == 0) {
+        else {
+            if (appctx.template_name != NULL) {
+                appctx.f_template = picoquic_file_open(appctx.template_name, "r");
                 if (appctx.f_template == NULL) {
-                    fprintf(stderr, "The svg format conversion requires a template file specified by parameter -t\n");
+                    fprintf(stderr, "Could not open template file %s\n", appctx.binlog_name);
                     ret = -1;
                 }
-                else {
-                    ret = cidset_iterate(cids, convert_svg, &appctx);
+            }
+
+            if (ret == 0) {
+                binlog_list_cids(appctx.f_binlog, cids);
+
+                fprintf(stderr, "%s contains %"PRIst" connection(s):\n\n", appctx.binlog_name, cids->count);
+                cidset_print(stderr, cids);
+                fprintf(stderr, "\n");
+
+                if (!picoquic_is_connection_id_null(&cid)) {
+                    if (!cidset_has_cid(cids, &cid)) {
+                        fprintf(stderr, "%s does not contain connection %s\n", appctx.binlog_name, cid_name);
+                        ret = -1;
+                    }
+                    else {
+                        (void)cidset_delete(cids);
+                        cids = cidset_create();
+                        if (cids != NULL) {
+                            cidset_insert(cids, &cid);
+                        }
+                        else {
+                            ret = -1;
+                        }
+                    }
                 }
             }
-            else if (strcmp(appctx.out_format, "qlog") == 0) {
-                ret = cidset_iterate(cids, convert_qlog, &appctx);
-            }
-            else {
-                fprintf(stderr, "Invalid output format '%s'. Valid formats are\n\n", appctx.out_format);
-                usage_formats();
-                ret = 1;
+
+            if (ret == 0) {
+                if (strcmp(appctx.out_format, "csv") == 0) {
+                    ret = cidset_iterate(cids, convert_csv, &appctx);
+                }
+                else if (strcmp(appctx.out_format, "svg") == 0) {
+                    if (appctx.f_template == NULL) {
+                        fprintf(stderr, "The svg format conversion requires a template file specified by parameter -t\n");
+                        ret = -1;
+                    }
+                    else {
+                        ret = cidset_iterate(cids, convert_svg, &appctx);
+                    }
+                }
+                else if (strcmp(appctx.out_format, "qlog") == 0) {
+                    ret = cidset_iterate(cids, convert_qlog, &appctx);
+                }
+                else {
+                    fprintf(stderr, "Invalid output format '%s'. Valid formats are\n\n", appctx.out_format);
+                    usage_formats();
+                    ret = 1;
+                }
             }
         }
     }

@@ -30,8 +30,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <openssl/pem.h>
-#include <picotls/openssl.h>
 #include "logwriter.h"
 #include "csv.h"
 #include "qlog.h"
@@ -4033,15 +4031,8 @@ int set_certificate_and_key_test()
         }
 
         if (ret == 0) {
-            BIO* bio_key = BIO_new_file(test_server_key_file, "rb");
-            /* Load key and convert to DER */
-            EVP_PKEY* key = PEM_read_bio_PrivateKey(bio_key, NULL, NULL, NULL);
-            int length = i2d_PrivateKey(key, NULL);
-            unsigned char* key_der = (unsigned char*)malloc(length);
-            unsigned char* tmp = key_der;
-            i2d_PrivateKey(key, &tmp);
-            EVP_PKEY_free(key);
-            BIO_free(bio_key);
+            int length;
+            uint8_t* key_der = picoquic_get_private_key_from_key_file(test_server_key_file, &length);
 
             if (picoquic_set_tls_key(test_ctx->qserver, key_der, length) != 0) {
                 ret = -1;
@@ -4049,44 +4040,23 @@ int set_certificate_and_key_test()
         }
 
         if (ret == 0) {
-            BIO* bio_key = BIO_new_file(test_server_cert_file, "rb");
-            /* Load cert and convert to DER */
-            X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
-            int length = i2d_X509(cert, NULL);
-            unsigned char* cert_der = (unsigned char*)malloc(length);
-            unsigned char* tmp = cert_der;
-            i2d_X509(cert, &tmp);
-            X509_free(cert);
-            BIO_free(bio_key);
-
-            ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t));
+            size_t count = 0;
+            ptls_iovec_t* chain = picoquic_get_certs_from_file(test_server_cert_file, &count);
             if (chain == NULL) {
                 ret = -1;
             } else {
-                chain[0] = ptls_iovec_init(cert_der, length);
-
-                picoquic_set_tls_certificate_chain(test_ctx->qserver, chain, 1);
+                picoquic_set_tls_certificate_chain(test_ctx->qserver, chain, count);
             }
         }
 
         if (ret == 0) {
-            BIO* bio_key = BIO_new_file(test_server_cert_store_file, "rb");
-            /* Load cert and convert to DER */
-            X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
-            int length = i2d_X509(cert, NULL);
-            unsigned char* cert_der = (unsigned char*)malloc(length);
-            unsigned char* tmp = cert_der;
-            i2d_X509(cert, &tmp);
-            X509_free(cert);
-            BIO_free(bio_key);
+            size_t count = 0;
+            ptls_iovec_t* chain = picoquic_get_certs_from_file(test_server_cert_store_file, &count);
 
-            ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t));
             if (chain == NULL) {
                 ret = -1;
             } else {
-                chain[0] = ptls_iovec_init(cert_der, length);
-
-                picoquic_set_tls_root_certificates(test_ctx->qserver, chain, 1);
+                picoquic_set_tls_root_certificates(test_ctx->qserver, chain, count);
             }
         }
     }
@@ -7054,13 +7024,6 @@ int packet_trace_test()
 #define QLOG_TRACE_ECN_QLOG "qlog_trace_ecn.qlog"
 #define QLOG_TRACE_AUTO_QLOG "0102030405060708.server.qlog"
 
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-const int has_chacha_poly = 1;
-#else
-const int has_chacha_poly = 0;
-#endif
-
-
 void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local,
     picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned)
 {
@@ -9304,6 +9267,7 @@ int chacha20_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int has_chacha_poly = 0;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
 
     if (ret == 0 && test_ctx == NULL) {
@@ -9312,14 +9276,18 @@ int chacha20_test()
 
     /* Set the cipher suite to chacha20
      */
-    if (ret == 0 && has_chacha_poly) {
-        ret = picoquic_set_cipher_suite(test_ctx->qclient, 20);
-    }
-
-    /* Run a basic test scenario */
     if (ret == 0) {
-        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 250000);
+        has_chacha_poly = (picoquic_set_cipher_suite(test_ctx->qclient, 20) == 0);
+
+        if (has_chacha_poly) {
+
+            /* Run a basic test scenario */
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 250000);
+        }
+        else {
+            DBG_PRINTF("%s", "Could not test CHACHA20, not supported on this platform.");
+        }
     }
 
     /* And then free the resource
