@@ -272,7 +272,7 @@ ptls_key_exchange_algorithm_t* picoquic_key_x25519[] = { &ptls_openssl_x25519, N
 #endif
 
 
-static int picoquic_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchange_id)
+static int picoquic_openssl_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchange_id)
 {
     int ret = 0;
 
@@ -305,6 +305,36 @@ static int picoquic_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchang
     }
     return ret;
 }
+
+static int picoquic_openssl_exchange_context_from_file(char const* esni_key_file_name,
+    ptls_key_exchange_context_t** p_exchange_ctx)
+{
+    int ret = 0;
+    EVP_PKEY* pkey = NULL;
+    BIO* bio = BIO_new_file(esni_key_file_name, "rb");
+    pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+    if (pkey == NULL) {
+        DBG_PRINTF("%s", "failed to load private key");
+        ret = PICOQUIC_ERROR_INVALID_FILE;
+    }
+    else {
+        *p_exchange_ctx = (ptls_key_exchange_context_t*)malloc(sizeof(ptls_key_exchange_context_t));
+        if (*p_exchange_ctx == NULL) {
+            DBG_PRINTF("%s", "no memory for ESNI private key\n");
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+        else if ((ret = ptls_openssl_create_key_exchange(p_exchange_ctx, pkey)) != 0) {
+            DBG_PRINTF("failed to load private key from file:%s:picotls-error:%d", esni_key_file_name, ret);
+            ret = PICOQUIC_ERROR_INVALID_FILE;
+            free(*p_exchange_ctx);
+            *p_exchange_ctx = NULL;
+        }
+        EVP_PKEY_free(pkey);
+    }
+    BIO_free(bio);
+    return ret;
+}
+
 
 /* Provide a certificate signature function, based on the implementation in openssl.
  */
@@ -344,10 +374,31 @@ int picoquic_set_tls_key_openssl(ptls_context_t* ctx, const uint8_t* data, size_
     return set_openssl_sign_certificate_from_key(d2i_AutoPrivateKey(NULL, &data, (long)len), ctx);
 }
 
+/* Read a private key from file using openSSL */
+static uint8_t* get_openssl_private_key_from_key_file(char const* file_name, int * key_length)
+{
+    unsigned char* key_der;
+    unsigned char* tmp;
+    int length;
+
+    BIO* bio_key = BIO_new_file(file_name, "rb");
+    /* Load key and convert to DER */
+    EVP_PKEY* key = PEM_read_bio_PrivateKey(bio_key, NULL, NULL, NULL);
+    length = i2d_PrivateKey(key, NULL);
+    key_der = (unsigned char*)malloc(length);
+    tmp = key_der;
+    i2d_PrivateKey(key, &tmp);
+    EVP_PKEY_free(key);
+    BIO_free(bio_key);
+
+    *key_length = length;
+    return key_der;
+}
+
 /* Set the certificate signature function and context using openSSL
  */
 
-static int set_openssl_sign_certificate_from_key_file(char const* keypem, ptls_context_t* ctx)
+static int set_openssl_private_key_from_key_file(char const* keypem, ptls_context_t* ctx)
 {
     int ret = 0;
     BIO* bio = BIO_new_file(keypem, "rb");
@@ -362,6 +413,115 @@ static int set_openssl_sign_certificate_from_key_file(char const* keypem, ptls_c
     BIO_free(bio);
     return ret;
 }
+
+/* Read certificates from a file using openSSL functions
+ * TODO: what if we need to read multiple certificates for the chain?
+ */
+static ptls_iovec_t* picoquic_openssl_get_certs_from_file(char const * file_name, size_t * count)
+{
+    BIO* bio_key = BIO_new_file(file_name, "rb");
+    /* Load cert and convert to DER */
+    X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
+    int length = i2d_X509(cert, NULL);
+    unsigned char* cert_der = (unsigned char*)malloc(length);
+    unsigned char* tmp = cert_der;
+    i2d_X509(cert, &tmp);
+    X509_free(cert);
+    BIO_free(bio_key);
+
+    ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t));
+    if (chain == NULL) {
+        *count = 0;
+    } else {
+        *count = 1;
+        chain[0] = ptls_iovec_init(cert_der, length);
+    }
+    return chain;
+}
+
+/* Clear certificate objects allocated via openssl for a certificate
+ */
+static void picoquic_openssl_dispose_sign_certificate(ptls_sign_certificate_t* cert)
+{
+    ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)cert);
+}
+
+/* Use openssl functions to create a certficate verifier */
+ptls_openssl_verify_certificate_t* picoquic_openssl_get_certificate_verifier(char const * cert_root_file_name,
+    unsigned int * is_cert_store_not_empty)
+{
+    ptls_openssl_verify_certificate_t * verifier = (ptls_openssl_verify_certificate_t*)malloc(sizeof(ptls_openssl_verify_certificate_t));
+    if (verifier != NULL) {
+        X509_STORE* store = X509_STORE_new();
+
+        if (cert_root_file_name != NULL && store != NULL) {
+            int file_ret = 0;
+            X509_LOOKUP* lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
+            if ((file_ret = X509_LOOKUP_load_file(lookup, cert_root_file_name, X509_FILETYPE_PEM)) != 1) {
+                DBG_PRINTF("Cannot load X509 store (%s), ret = %d\n",
+                    cert_root_file_name, file_ret);
+            }
+            else {
+                *is_cert_store_not_empty = 1;
+            }
+        }
+
+        ptls_openssl_init_verify_certificate(verifier, store);
+
+        // If we created an instance of the store, release our reference after giving it to the verify_certificate callback.
+        // The callback internally increased the reference counter by one.
+#if OPENSSL_VERSION_NUMBER > 0x10100000L
+        if (store != NULL) {
+            X509_STORE_free(store);
+        }
+#endif
+    }
+    return verifier;
+}
+
+/* Set the list of root certificates used by the client.
+ * This implementation is specific to OpenSSL, because it is tied to the 
+ * implementation of the verify certificate function. */
+
+int picoquic_openssl_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    ptls_openssl_verify_certificate_t* verify_ctx = (ptls_openssl_verify_certificate_t*)ctx->verify_certificate;
+
+    for (size_t i = 0; i < count; ++i) {
+        X509* cert = d2i_X509(NULL, (const uint8_t**)&certs[i].base, (long)certs[i].len);
+
+        if (cert == NULL) {
+            return -1;
+        }
+
+        if (X509_STORE_add_cert(verify_ctx->cert_store, cert) == 0) {
+            X509_free(cert);
+            return -2;
+        }
+
+        quic->is_cert_store_not_empty = 1;
+
+        X509_free(cert);
+    }
+
+    return 0;
+}
+
+/* Explain OPENSSL errors */
+int picoquic_open_ssl_explain_crypto_error(char const** err_file, int* err_line)
+{
+    return ERR_get_error_line(err_file, err_line);
+}
+
+/* Clear the recorded errors in the crypto stack, e.g. before
+ * processing a new message.
+ */
+void picoquic_openssl_clear_crypto_errors()
+{
+    ERR_clear_error();
+}
+
 
 /* Implementation of generic setup functions using the default present
  * in this file. These functions may be declared in tls_api.h.
@@ -415,6 +575,27 @@ void* picoquic_get_aes128gcm_v()
         aead = (void*)(cipher->aead);
     }
     return aead;
+}
+
+/* Set the supported key exchange in the TLS context
+ * Supported algorithms are defined by keyexchange_id
+ * - 0: set all supported algorithms
+ * - 20: x25519
+ * - 128 or 256: secp256r1
+ */
+
+static int picoquic_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchange_id)
+{
+    return picoquic_openssl_set_key_exchange_in_ctx(ctx, key_exchange_id);
+}
+
+/* Set a key exchange from a file containing a private key.
+ * This is used for the implementation of ESNI.
+ */
+int picoquic_exchange_context_from_file(char const* key_file_name,
+    ptls_key_exchange_context_t** p_exchange_ctx)
+{
+    return picoquic_openssl_exchange_context_from_file(key_file_name, p_exchange_ctx);
 }
 
 /* Obtain an AES128 ECB cipher, which is required for CID encryption
@@ -483,11 +664,36 @@ void* picoquic_get_sha256_v()
     return (void*)picoquic_get_sha256();
 }
 
+/* Get private key from current crypto processor */
+uint8_t* picoquic_get_private_key_from_key_file(char const* file_name, int* key_length)
+{
+    return  get_openssl_private_key_from_key_file(file_name, key_length);
+}
 
 /* Set the certificate signing function in the context */
-static int set_sign_certificate_from_key_file(char const* keypem, ptls_context_t* ctx)
+static int set_private_key_from_key_file(char const* keypem, ptls_context_t* ctx)
 {
-    return set_openssl_sign_certificate_from_key_file(keypem, ctx);
+    return set_openssl_private_key_from_key_file(keypem, ctx);
+}
+
+/* Read certificates from a file
+ */
+ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count)
+{
+    return picoquic_openssl_get_certs_from_file(file_name, count);
+}
+
+/* Clear certificate objects allocated by the crypto stack for a certficate
+ */
+void picoquic_dispose_sign_certificate(ptls_sign_certificate_t* cert)
+{
+    picoquic_openssl_dispose_sign_certificate(cert);
+}
+
+/* Set the list of root certificates used by the client. */
+int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
+{
+    return picoquic_openssl_set_tls_root_certificates(quic, certs, count);
 }
 
 /* Set the TLS Key */
@@ -497,12 +703,62 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
     return picoquic_set_tls_key_openssl(ctx, data, len);
 }
 
+/* Return the certificate verifier callback provided by the crypto stack */
+ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_root_file_name,
+    unsigned int* is_cert_store_not_empty)
+{
+    ptls_openssl_verify_certificate_t* verifier = picoquic_openssl_get_certificate_verifier(cert_root_file_name,
+        is_cert_store_not_empty);
+    return (verifier == NULL) ? NULL : &verifier->super;
+}
+
+
+/* Release a verify certificate callback function.
+ * TODO: there should be a delete function documented at the same time the
+ * callback is installed, to allow replacing one type of callback by another.
+ */
+
+void picoquic_dispose_certificate_verifier(ptls_verify_certificate_t* verifier) {
+    ptls_openssl_dispose_verify_certificate((ptls_openssl_verify_certificate_t*)verifier);
+}
+
+/* Provide a crypto provider independent interface to crypto errors.
+ * Can be called repeatedly until no error needs to be signalled. 
+ */
+
+int picoquic_explain_crypto_error(char const** err_file, int* err_line)
+{
+    return picoquic_open_ssl_explain_crypto_error(err_file, err_line);
+}
+
+/* Clear the recorded errors in the crypto stack, e.g. before
+ * processing a new message.
+ */
+void picoquic_clear_crypto_errors()
+{
+    picoquic_openssl_clear_crypto_errors();
+}
+
 #endif /* CRYPTO_PROVIDERS_REGION */
 
 
 static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_t* salt);
 
 static void picoquic_free_log_event(picoquic_quic_t* quic);
+
+void picoquic_log_crypto_errors(picoquic_cnx_t* cnx, int ret)
+{
+    unsigned long openssl_err;
+    char const* err_file = NULL;
+    int err_line = 0;
+
+    while ((openssl_err = picoquic_explain_crypto_error(&err_file, &err_line)) != 0) {
+        picoquic_log_app_message(cnx, "OpenSSL error: %lu, file %s, line %d", openssl_err,
+            (err_file == NULL) ? "?" : err_file, err_line);
+    }
+
+    picoquic_log_app_message(cnx, "Picotls returns error: %d (0x%x)", ret, ret);
+}
 
 
 int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
@@ -986,6 +1242,7 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
     }
 }
 
+
 void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic, int custom) {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
 
@@ -994,7 +1251,7 @@ void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic, int cus
     }
 
     if (custom == 0) {
-        ptls_openssl_dispose_verify_certificate((ptls_openssl_verify_certificate_t*)ctx->verify_certificate);
+        picoquic_dispose_certificate_verifier(ctx->verify_certificate);
     }
     free(ctx->verify_certificate);
 
@@ -1399,10 +1656,10 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
     /* Create a client context or a server context */
     int ret = 0;
     ptls_context_t* ctx;
-    ptls_openssl_verify_certificate_t* verifier = NULL;
     ptls_on_client_hello_t* och = NULL;
     ptls_encrypt_ticket_t* encrypt_ticket = NULL;
     ptls_save_ticket_t* save_ticket = NULL;
+    unsigned int is_cert_store_not_empty = 0;
 
     picoquic_init_crypto_provider(); /* For example, init openSSL if in use. */
 
@@ -1450,7 +1707,7 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
                     ret = -1;
                 }
                 else {
-                    ret = set_sign_certificate_from_key_file(key_file_name, ctx);
+                    ret = set_private_key_from_key_file(key_file_name, ctx);
                 }
             }
         }
@@ -1489,35 +1746,8 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
             }
         }
 
-        verifier = (ptls_openssl_verify_certificate_t*)malloc(sizeof(ptls_openssl_verify_certificate_t));
-        if (verifier == NULL) {
-            ctx->verify_certificate = NULL;
-        } else {
-            X509_STORE *store = X509_STORE_new();
-
-            if (cert_root_file_name != NULL && store != NULL) {
-                int file_ret = 0;
-                X509_LOOKUP* lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
-                if ((file_ret = X509_LOOKUP_load_file(lookup, cert_root_file_name, X509_FILETYPE_PEM)) != 1) {
-                    DBG_PRINTF("Cannot load X509 store (%s), ret = %d\n",
-                        cert_root_file_name, ret);
-                }
-                else {
-                    quic->is_cert_store_not_empty = 1;
-                }
-            }
-
-            ptls_openssl_init_verify_certificate(verifier, store);
-            ctx->verify_certificate = &verifier->super;
-
-            // If we created an instance of the store, release our reference after giving it to the verify_certificate callback.
-            // The callback internally increased the reference counter by one.
-            if (store != NULL) {
-#if OPENSSL_VERSION_NUMBER > 0x10100000L
-                X509_STORE_free(store);
-#endif
-            }
-        }
+        ctx->verify_certificate = picoquic_get_certificate_verifier(cert_root_file_name, &is_cert_store_not_empty);
+        quic->is_cert_store_not_empty = is_cert_store_not_empty;
 
         if (quic->ticket_file_name != NULL) {
             save_ticket = (ptls_save_ticket_t*)malloc(sizeof(ptls_save_ticket_t) + sizeof(picoquic_quic_t*));
@@ -1580,8 +1810,8 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
         free_certificates_list(ctx->certificates.list, ctx->certificates.count);
 
         if (ctx->sign_certificate != NULL) {
-            ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
-            free((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
+            picoquic_dispose_sign_certificate(ctx->sign_certificate);
+            free(ctx->sign_certificate);
             ctx->sign_certificate = NULL;
         }
 
@@ -1935,21 +2165,6 @@ int picoquic_add_proposed_alpn(void* tls_context, const char* alpn)
     return ret;
 }
 
-/* Log OPENSSL errors */
-void picoquic_log_openssl_errors(picoquic_cnx_t* cnx, int ret)
-{
-    unsigned long openssl_err;
-    char const* err_file = NULL;
-    int err_line = 0;
-
-    while ((openssl_err = ERR_get_error_line(&err_file, &err_line)) != 0) {
-        picoquic_log_app_message(cnx, "OpenSSL error: %lu, file %s, line %d", openssl_err,
-            (err_file == NULL) ? "?" : err_file, err_line);
-    }
-    
-    picoquic_log_app_message(cnx, "Picotls returns error: %d (0x%x)", ret, ret);
-}
-
 /* Prepare the initial message when starting a connection.
  */
 
@@ -2036,9 +2251,9 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
 
         ptls_buffer_init(&sendbuf, "", 0);
 
-        /* Clearing the global error state of openssl before calling handle message.
+        /* Clearing the global error state of the crypto provider before calling handle message.
          * This allows detection of errors during processing. */
-        ERR_clear_error();
+        picoquic_clear_crypto_errors();
         ret = ptls_handle_message(ctx->tls, &sendbuf, epoch_offsets, 0, NULL, 0, &ctx->handshake_properties);
 
         /* assume that all the data goes to epoch 0, initial */
@@ -2059,7 +2274,7 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
             }
         }
         else {
-            picoquic_log_openssl_errors(cnx, ret);
+            picoquic_log_crypto_errors(cnx, ret);
             ret = -1;
         }
         ptls_buffer_dispose(&sendbuf);
@@ -2292,9 +2507,9 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 
             ptls_buffer_init(&sendbuf, "", 0);
 
-            /* Clearing the global error state of openssl before calling handle message.
+            /* Clearing the global error state of the crypto provider before calling handle message.
              * This allows detection of errors during processing. */
-            ERR_clear_error();
+            picoquic_clear_crypto_errors();
 
             ret = ptls_handle_message(ctx->tls, &sendbuf, send_offset, epoch,
                 data->bytes + start, epoch_data, &ctx->handshake_properties);
@@ -2341,7 +2556,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                 }
             }
             else {
-                picoquic_log_openssl_errors(cnx, ret);
+                picoquic_log_crypto_errors(cnx, ret);
             }
 
             stream->consumed_offset += epoch_data;
@@ -2483,28 +2698,32 @@ int picoquic_is_tls_complete(picoquic_cnx_t* cnx)
  * Compute the 16 byte reset secret associated with a connection ID.
  * We implement it as the hash of a secret seed maintained per QUIC context
  * and the 8 bytes connection ID.
- * This is written using PTLS portable hash API, initialized
- * for now with the OpenSSL implementation. Will have to adapt if we
- * decide to use the minicrypto API.
+ * This is written portable hash APIs.
  */
 
 int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE])
 {
-    /* Using OpenSSL for now: ptls_hash_algorithm_t ptls_openssl_sha256 */
     int ret = 0;
-    ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
-    ptls_hash_context_t* hash_ctx = algo->create();
-    uint8_t final_hash[PTLS_MAX_DIGEST_SIZE];
+    ptls_hash_algorithm_t* algo = picoquic_get_sha256();
 
-    if (hash_ctx == NULL) {
+    if (algo == NULL) {
         ret = -1;
-        memset(reset_secret, 0, PICOQUIC_RESET_SECRET_SIZE);
-    } else {
-        hash_ctx->update(hash_ctx, quic->reset_seed, sizeof(quic->reset_seed));
-        hash_ctx->update(hash_ctx, cnx_id, sizeof(picoquic_connection_id_t));
-        hash_ctx->final(hash_ctx, final_hash, PTLS_HASH_FINAL_MODE_FREE);
-        memcpy(reset_secret, final_hash, PICOQUIC_RESET_SECRET_SIZE);
+    }
+    else {
+        ptls_hash_context_t* hash_ctx = algo->create();
+        uint8_t final_hash[PTLS_MAX_DIGEST_SIZE];
+
+        if (hash_ctx == NULL) {
+            ret = -1;
+            memset(reset_secret, 0, PICOQUIC_RESET_SECRET_SIZE);
+        }
+        else {
+            hash_ctx->update(hash_ctx, quic->reset_seed, sizeof(quic->reset_seed));
+            hash_ctx->update(hash_ctx, cnx_id, sizeof(picoquic_connection_id_t));
+            hash_ctx->final(hash_ctx, final_hash, PTLS_HASH_FINAL_MODE_FREE);
+            memcpy(reset_secret, final_hash, PICOQUIC_RESET_SECRET_SIZE);
+        }
     }
 
     return (ret);
@@ -2518,31 +2737,6 @@ void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* cer
 
     ctx->certificates.list = certs;
     ctx->certificates.count = count;
-}
-
-int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
-{
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-    ptls_openssl_verify_certificate_t* verify_ctx = (ptls_openssl_verify_certificate_t*)ctx->verify_certificate;
-
-    for (size_t i = 0; i < count; ++i) {
-        X509* cert = d2i_X509(NULL, (const uint8_t**)&certs[i].base, (long)certs[i].len);
-
-        if (cert == NULL) {
-            return -1;
-        }
-
-        if (X509_STORE_add_cert(verify_ctx->cert_store, cert) == 0) {
-            X509_free(cert);
-            return -2;
-        }
-
-        quic->is_cert_store_not_empty = 1;
-
-        X509_free(cert);
-    }
-
-    return 0;
 }
 
 void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {
@@ -2835,7 +3029,6 @@ void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc)
 
 int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_name)
 {
-    EVP_PKEY *pkey = NULL;
     int ret = 0;
     size_t esni_key_exchange_count = 0;
     
@@ -2846,47 +3039,8 @@ int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_na
     if (quic->esni_key_exchange[esni_key_exchange_count] != 0) {
         DBG_PRINTF("Too many ESNI private key file, %zu already\n", esni_key_exchange_count);
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-#if 0
-    }
-    else if ((fp = picoquic_file_open(esni_key_file_name, "rt")) == NULL) {
-        DBG_PRINTF("failed to open ESNI private key file:%s\n", esni_key_file_name);
-        ret = PICOQUIC_ERROR_INVALID_FILE;
-    }
-    else {
-        if ((pkey = PEM_read_PrivateKey(fp, NULL, NULL, NULL)) == NULL) {
-            DBG_PRINTF("failed to load private key from file:%s\n", picoquic_file_open);
-            ret = PICOQUIC_ERROR_INVALID_FILE;
-        }
-        else {
-#else
     } else {
-        BIO* bio = BIO_new_file(esni_key_file_name, "rb");
-        pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
-        if (pkey == NULL) {
-            DBG_PRINTF("%s", "failed to load private key");
-            ret = PICOQUIC_ERROR_INVALID_FILE;
-        } else {
-#endif
-            quic->esni_key_exchange[esni_key_exchange_count] = (ptls_key_exchange_context_t*)malloc(sizeof(ptls_key_exchange_context_t));
-            if (quic->esni_key_exchange[esni_key_exchange_count] == NULL) {
-                DBG_PRINTF("%s", "no memory for ESNI private key\n");
-                ret = PICOQUIC_ERROR_MEMORY;
-            } else if ((ret = ptls_openssl_create_key_exchange(&quic->esni_key_exchange[esni_key_exchange_count], pkey)) != 0) {
-                DBG_PRINTF("failed to load private key from file:%s:picotls-error:%d", esni_key_file_name, ret);
-                ret = PICOQUIC_ERROR_INVALID_FILE;
-                free(quic->esni_key_exchange[esni_key_exchange_count]);
-                quic->esni_key_exchange[esni_key_exchange_count] = NULL;
-            }
-            else {
-                EVP_PKEY_free(pkey);
-            }
-#if 0
-            fp = picoquic_file_close(fp);
-#endif
-        }
-#if 1
-        BIO_free(bio);
-#endif
+        ret = picoquic_exchange_context_from_file(esni_key_file_name, &quic->esni_key_exchange[esni_key_exchange_count]);
     }
 
     return ret;

@@ -170,6 +170,10 @@ size_t picoquic_hash_get_length(char const* algorithm_name);
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context);
 void picoquic_hash_finalize(uint8_t* output, void* hash_context);
 
+uint8_t* picoquic_get_private_key_from_key_file(char const* file_name, int* key_length);
+ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count);
+
+
 /* Special AEAD context definition functions used for stateless retry integrity protection */
 void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key);
 void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending);

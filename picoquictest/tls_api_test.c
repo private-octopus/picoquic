@@ -30,8 +30,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <openssl/pem.h>
-#include <picotls/openssl.h>
 #include "logwriter.h"
 #include "csv.h"
 #include "qlog.h"
@@ -4033,15 +4031,8 @@ int set_certificate_and_key_test()
         }
 
         if (ret == 0) {
-            BIO* bio_key = BIO_new_file(test_server_key_file, "rb");
-            /* Load key and convert to DER */
-            EVP_PKEY* key = PEM_read_bio_PrivateKey(bio_key, NULL, NULL, NULL);
-            int length = i2d_PrivateKey(key, NULL);
-            unsigned char* key_der = (unsigned char*)malloc(length);
-            unsigned char* tmp = key_der;
-            i2d_PrivateKey(key, &tmp);
-            EVP_PKEY_free(key);
-            BIO_free(bio_key);
+            int length;
+            uint8_t* key_der = picoquic_get_private_key_from_key_file(test_server_key_file, &length);
 
             if (picoquic_set_tls_key(test_ctx->qserver, key_der, length) != 0) {
                 ret = -1;
@@ -4049,44 +4040,23 @@ int set_certificate_and_key_test()
         }
 
         if (ret == 0) {
-            BIO* bio_key = BIO_new_file(test_server_cert_file, "rb");
-            /* Load cert and convert to DER */
-            X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
-            int length = i2d_X509(cert, NULL);
-            unsigned char* cert_der = (unsigned char*)malloc(length);
-            unsigned char* tmp = cert_der;
-            i2d_X509(cert, &tmp);
-            X509_free(cert);
-            BIO_free(bio_key);
-
-            ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t));
+            size_t count = 0;
+            ptls_iovec_t* chain = picoquic_get_certs_from_file(test_server_cert_file, &count);
             if (chain == NULL) {
                 ret = -1;
             } else {
-                chain[0] = ptls_iovec_init(cert_der, length);
-
-                picoquic_set_tls_certificate_chain(test_ctx->qserver, chain, 1);
+                picoquic_set_tls_certificate_chain(test_ctx->qserver, chain, count);
             }
         }
 
         if (ret == 0) {
-            BIO* bio_key = BIO_new_file(test_server_cert_store_file, "rb");
-            /* Load cert and convert to DER */
-            X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
-            int length = i2d_X509(cert, NULL);
-            unsigned char* cert_der = (unsigned char*)malloc(length);
-            unsigned char* tmp = cert_der;
-            i2d_X509(cert, &tmp);
-            X509_free(cert);
-            BIO_free(bio_key);
+            size_t count = 0;
+            ptls_iovec_t* chain = picoquic_get_certs_from_file(test_server_cert_store_file, &count);
 
-            ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t));
             if (chain == NULL) {
                 ret = -1;
             } else {
-                chain[0] = ptls_iovec_init(cert_der, length);
-
-                picoquic_set_tls_root_certificates(test_ctx->qserver, chain, 1);
+                picoquic_set_tls_root_certificates(test_ctx->qserver, chain, count);
             }
         }
     }
