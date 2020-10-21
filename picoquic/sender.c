@@ -2884,6 +2884,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             if ((bytes_next = picoquic_format_path_response_frame(bytes_response, bytes_max,
                 &more_data, &is_pure_ack, path_x->challenge_response)) > bytes_response) {
                 path_x->response_required = 0;
+                is_challenge_sent = 1;
             }
         }
 
@@ -3205,6 +3206,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
             if ((bytes_next = picoquic_format_path_response_frame(bytes_response, bytes_max,
                 &more_data, &is_pure_ack, path_x->challenge_response)) > bytes_response) {
                 path_x->response_required = 0;
+                is_challenge_sent = 1;
             }
         }
 
