@@ -1871,6 +1871,10 @@ int tls_api_many_losses()
     return ret;
 }
 
+/* Basic version negotiation.
+ * Verifies that client properly handles a version negotiation packet.
+ */
+
 int tls_api_version_negotiation_test()
 {
     const uint32_t version_grease = 0x0aca4a0a;
@@ -1900,6 +1904,141 @@ int tls_api_version_negotiation_test()
         if (!test_ctx->received_version_negotiation){
             DBG_PRINTF("%s", "No version negotiation notified\n");
             ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Version negotiation invariant test.
+ * Verifies that server generates a version negotiation packet, even if the
+ * connection ID lengths are larger than the current version permits.
+ */
+
+static int check_vn_invariant(uint8_t* packet, size_t packet_length, uint8_t* response, size_t response_length)
+{
+    int ret = 0;
+    size_t icid_len;
+    uint8_t * icid;
+    size_t scid_len;
+    uint8_t* scid;
+    size_t response_index = 5; /* Points to byte after VN */
+    /* Invariant parsing -- compute minimum length */
+    icid_len = packet[5];
+    icid = &packet[6];
+    scid_len = packet[5 + 1 + icid_len];
+    scid = &packet[5 + 1 + icid_len + 1];
+    /* Check that the response is long enough */
+    if (response_length < 1 + 4 + 1 + icid_len + 1 + scid_len + 4) {
+        DBG_PRINTF("Response too short, length = %zu", response_length);
+        ret = -1;
+    }
+    /* Check that response is long header */
+    if (ret == 0 && (response[0] & 0x80) != 0x80) {
+        DBG_PRINTF("Not a long header, packet[0] = 0x%02x", response[0]);
+        ret = -1;
+    }
+    /* Check that response version is 0 */
+    for (size_t i = 1; ret == 0 && i < 5; i++) {
+        if (response[i] != 0) {
+            DBG_PRINTF("Version ID not zero, packet[%zu] = 0x%02x", response[i]);
+            ret = -1;
+        }
+    }
+    /* Verify that the DCID matches incoming SCID */
+    if (ret == 0) {
+        if (response[response_index] != scid_len) {
+            DBG_PRINTF("Expected DCID length %zu, got 0x02x", scid_len, response[response_index]);
+            ret = -1;
+        }
+        else {
+            response_index++;
+            if (scid_len > 0 && memcmp(scid, response + response_index, scid_len) != 0) {
+                DBG_PRINTF("%s", "DCID does not match incoming SCID");
+                ret = -1;
+            }
+            else {
+                response_index += scid_len;
+            }
+        }
+    }
+    /* Verify that the SCID matches incoming DCID */
+    if (ret == 0) {
+        if (response[response_index] != icid_len) {
+            DBG_PRINTF("Expected ICID length %zu, got 0x02x", icid_len, response[response_index]);
+            ret = -1;
+        }
+        else {
+            response_index++;
+            if (scid_len > 0 && memcmp(icid, response + response_index, icid_len) != 0) {
+                DBG_PRINTF("%s", "SCID does not match incoming ICID");
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
+}
+
+int tls_api_version_invariant_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret != 0)
+    {
+        DBG_PRINTF("%s", "Could not create the QUIC test contexts");
+    }
+    else {
+        /* Fabricate a packet that stresses the invariants */
+        uint8_t packet[PICOQUIC_MAX_PACKET_SIZE];
+        /* Initialize first byte to long header value*/
+        packet[0] = 0xF5;
+        /* Set version to unexpected value */
+        memset(packet + 1, 0xaa, 4);
+        /* Set destination CID to 255 times "dd" */
+        packet[6] = 255;
+        memset(packet + 7, 0xdd, 255);
+        /* Set source CID to 127 times "cc" */
+        packet[262] = 127;
+        memset(packet + 263, 0xcc, 127);
+        /* Set reminder of packet to 0x55*/
+        memset(packet + 290, 0x55, PICOQUIC_MAX_PACKET_SIZE - 290);
+
+        /* Submit the packet to the server */
+        ret = picoquic_incoming_packet(test_ctx->qserver, packet, PICOQUIC_MAX_PACKET_SIZE,
+            (struct sockaddr*) & test_ctx->client_addr, (struct sockaddr*) & test_ctx->server_addr,
+            0, 0, simulated_time);
+        if (ret != 0) {
+            DBG_PRINTF("incoming invariant test returns %d (0x%x)", ret, ret);
+        }
+        else {
+            uint8_t response[PICOQUIC_MAX_PACKET_SIZE];
+            struct sockaddr_storage addr_to;
+            struct sockaddr_storage addr_from;
+            size_t send_length = 0;
+            int if_index = 0;
+            picoquic_connection_id_t log_cid;
+            picoquic_cnx_t* last_cnx = NULL;
+
+            ret = picoquic_prepare_next_packet(test_ctx->qserver, simulated_time, response, PICOQUIC_MAX_PACKET_SIZE,
+                &send_length, &addr_to, &addr_from, &if_index, &log_cid, &last_cnx);
+            if (ret != 0) {
+                DBG_PRINTF("Invariant response test returns %d (0x%x)", ret, ret);
+            }
+            else if (send_length == 0) {
+                DBG_PRINTF("%s", "Invariant response test does not return any data");
+                ret = -1;
+            }
+            else {
+                ret = check_vn_invariant(packet, PICOQUIC_MAX_PACKET_SIZE, response, send_length);
+            }
         }
     }
 
