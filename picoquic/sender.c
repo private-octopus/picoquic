@@ -2776,6 +2776,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     uint8_t* bytes_next = NULL;
     int more_data = 0;
     int stream_tried_and_failed = 0;
+    int is_challenge_padding_needed = 0;
 
     /* Perform amplification prevention check */
     if (!cnx->initial_validated &&
@@ -2842,6 +2843,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     if (bytes_next > bytes_challenge) {
                         path_x->challenge_time = current_time;
                         path_x->challenge_repeat_count++;
+                        is_challenge_padding_needed = 1;
                     }
 
                     /* add an ACK just to be nice */
@@ -2882,6 +2884,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             if ((bytes_next = picoquic_format_path_response_frame(bytes_response, bytes_max,
                 &more_data, &is_pure_ack, path_x->challenge_response)) > bytes_response) {
                 path_x->response_required = 0;
+                is_challenge_padding_needed = 1;
             }
         }
 
@@ -3031,7 +3034,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
         /* Ensure that all packets are properly padded before being sent. */
 
-        if (*is_initial_sent && cnx->client_mode) {
+        if ((*is_initial_sent && cnx->client_mode) || (is_challenge_padding_needed && length < PICOQUIC_ENFORCED_INITIAL_MTU)){
             length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
         }
         else {
@@ -3079,6 +3082,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     uint8_t* bytes_next;
     int more_data = 0;
     int ack_sent = 0;
+    int is_challenge_padding_needed = 0;
 
     packet->pc = pc;
 
@@ -3152,6 +3156,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     if (bytes_next > bytes_challenge) {
                         path_x->challenge_time = current_time;
                         path_x->challenge_repeat_count++;
+                        is_challenge_padding_needed = 1;
                     }
 
                     /* add an ACK just to be nice */
@@ -3201,6 +3206,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
             if ((bytes_next = picoquic_format_path_response_frame(bytes_response, bytes_max,
                 &more_data, &is_pure_ack, path_x->challenge_response)) > bytes_response) {
                 path_x->response_required = 0;
+                is_challenge_padding_needed = 1;
             }
         }
 
@@ -3424,7 +3430,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     if (ret == 0 && length > header_length) {
         /* Ensure that all packets are properly padded before being sent. */
 
-        if (*is_initial_sent && cnx->client_mode) {
+        if ((*is_initial_sent && cnx->client_mode) || (is_challenge_padding_needed && length < PICOQUIC_ENFORCED_INITIAL_MTU)){
             length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
         }
         else {

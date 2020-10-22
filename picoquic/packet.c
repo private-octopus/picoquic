@@ -57,9 +57,23 @@ int picoquic_parse_long_packet_header(
     uint8_t flags = 0;
 
     if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &flags)) == NULL ||
-        (bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &ph->vn)) == NULL ||
+        (bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &ph->vn)) == NULL)
+    {
+        ret = -1;
+    }
+    else if (ph->vn != 0) {
+        ph->version_index = picoquic_get_version_index(ph->vn);
+        if (ph->version_index < 0) {
+            DBG_PRINTF("Version is not recognized: 0x%08x\n", ph->vn);
+            ph->ptype = picoquic_packet_error;
+            ph->pc = 0;
+            ret = PICOQUIC_ERROR_VERSION_NOT_SUPPORTED;
+        }
+    }
+    
+    if (ret == 0 && (
         (bytes = picoquic_frames_cid_decode(bytes, bytes_max, &ph->dest_cnx_id)) == NULL ||
-        (bytes = picoquic_frames_cid_decode(bytes, bytes_max, &ph->srce_cnx_id)) == NULL) {
+        (bytes = picoquic_frames_cid_decode(bytes, bytes_max, &ph->srce_cnx_id)) == NULL)) {
         ret = -1;
     }
 
@@ -77,78 +91,69 @@ int picoquic_parse_long_packet_header(
                 /* The version negotiation should always include the cnx-id sent by the client */
                 if (quic->local_cnxid_length == 0) {
                     *pcnx = picoquic_cnx_by_net(quic, addr_from);
-                } else if (ph->dest_cnx_id.id_len == quic->local_cnxid_length){
+                }
+                else if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
                     *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
                 }
             }
         }
         else {
             size_t payload_length = 0;
+            /* If the version is supported now, the format field in the version table
+            * describes the encoding. */
+            ph->spin = 0;
+            ph->has_spin_bit = 0;
+            ph->quic_bit_is_zero = (flags & 0x40) == 0;
 
-            ph->version_index = picoquic_get_version_index(ph->vn);
+            switch ((flags >> 4) & 3) {
+            case 0: /* Initial */
+            {
+                /* special case of the initial packets. They contain a retry token between the header
+                * and the encrypted payload */
+                size_t tok_len = 0;
+                bytes = picoquic_frames_varlen_decode(bytes, bytes_max, &tok_len);
 
-            if (ph->version_index >= 0) {
-                /* If the version is supported now, the format field in the version table
-                * describes the encoding. */
-                ph->spin = 0;
-                ph->has_spin_bit = 0;
-                ph->quic_bit_is_zero = (flags & 0x40) == 0;
+                size_t bytes_left = bytes_max - bytes;
 
-                switch ((flags >> 4) & 3) {
-                case 0: /* Initial */
-                {
-                    /* special case of the initial packets. They contain a retry token between the header
-                    * and the encrypted payload */
-                    size_t tok_len = 0;
-                    bytes = picoquic_frames_varlen_decode(bytes, bytes_max, &tok_len);
-
-                    size_t bytes_left = bytes_max - bytes;
-
-                    ph->epoch = picoquic_epoch_initial;
-                    if (bytes == NULL || bytes_left < tok_len) {
-                        /* packet is malformed */
-                        ph->ptype = picoquic_packet_error;
-                        ph->pc = 0;
-                        ph->offset = length;
-                    }
-                    else {
-                        ph->ptype = picoquic_packet_initial;
-                        ph->pc = picoquic_packet_context_initial;
-                        ph->token_length = tok_len;
-                        ph->token_bytes = bytes;
-                        bytes += tok_len;
-                        ph->offset = bytes - bytes_start;
-                    }
-
-                    break;
-                }
-                case 1: /* 0-RTT Protected */
-                    ph->ptype = picoquic_packet_0rtt_protected;
-                    ph->pc = picoquic_packet_context_application;
-                    ph->epoch = picoquic_epoch_0rtt;
-                    break;
-                case 2: /* Handshake */
-                    ph->ptype = picoquic_packet_handshake;
-                    ph->pc = picoquic_packet_context_handshake;
-                    ph->epoch = picoquic_epoch_handshake;
-                    break;
-                case 3: /* Retry */
-                    ph->ptype = picoquic_packet_retry;
-                    ph->pc = picoquic_packet_context_initial;
-                    ph->epoch = picoquic_epoch_initial;
-                    break;
-                default: /* Not a valid packet type */
-                    DBG_PRINTF("Packet type is not recognized: 0x%02x\n", flags);
+                ph->epoch = picoquic_epoch_initial;
+                if (bytes == NULL || bytes_left < tok_len) {
+                    /* packet is malformed */
                     ph->ptype = picoquic_packet_error;
-                    ph->version_index = -1;
                     ph->pc = 0;
-                    break;
+                    ph->offset = length;
                 }
+                else {
+                    ph->ptype = picoquic_packet_initial;
+                    ph->pc = picoquic_packet_context_initial;
+                    ph->token_length = tok_len;
+                    ph->token_bytes = bytes;
+                    bytes += tok_len;
+                    ph->offset = bytes - bytes_start;
+                }
+
+                break;
             }
-            else {
-                DBG_PRINTF("Version is not recognized: 0x%08x\n", ph->vn);
+            case 1: /* 0-RTT Protected */
+                ph->ptype = picoquic_packet_0rtt_protected;
+                ph->pc = picoquic_packet_context_application;
+                ph->epoch = picoquic_epoch_0rtt;
+                break;
+            case 2: /* Handshake */
+                ph->ptype = picoquic_packet_handshake;
+                ph->pc = picoquic_packet_context_handshake;
+                ph->epoch = picoquic_epoch_handshake;
+                break;
+            case 3: /* Retry */
+                ph->ptype = picoquic_packet_retry;
+                ph->pc = picoquic_packet_context_initial;
+                ph->epoch = picoquic_epoch_initial;
+                break;
+            default: /* Not a valid packet type */
+                DBG_PRINTF("Packet type is not recognized: 0x%02x\n", flags);
                 ph->ptype = picoquic_packet_error;
+                ph->version_index = -1;
                 ph->pc = 0;
+                break;
             }
 
             if (ph->ptype == picoquic_packet_retry) {
@@ -772,31 +777,42 @@ int picoquic_incoming_version_negotiation(
 
 /*
  * Send a version negotiation packet in response to an incoming packet
- * sporting the wrong version number.
+ * sporting the wrong version number. This assumes that the original packet
+ * is at least 517 bytes long.
  */
 
-int picoquic_prepare_version_negotiation(
+void picoquic_prepare_version_negotiation(
     picoquic_quic_t* quic,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     unsigned long if_index_to,
-    picoquic_packet_header* ph)
+    picoquic_packet_header* ph,
+    uint8_t* original_bytes)
 {
-    int ret = -1;
     picoquic_cnx_t* cnx = NULL;
+    uint8_t dcid_length = original_bytes[5];
+    uint8_t * dcid = original_bytes + 6;
+    uint8_t scid_length = original_bytes[6 + dcid_length];
+    uint8_t* scid = original_bytes + 6 + dcid_length + 1;
 
     /* Verify that this is not a spurious error by checking whether a connection context
      * already exists */
-    if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
-        if (quic->local_cnxid_length == 0) {
-            cnx = picoquic_cnx_by_net(quic, addr_from);
+    if (dcid_length <= PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+        (void) picoquic_parse_connection_id(dcid, dcid_length, &ph->dest_cnx_id);
+        if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
+            if (quic->local_cnxid_length == 0) {
+                cnx = picoquic_cnx_by_net(quic, addr_from);
+            }
+            else {
+                cnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+            }
         }
-        else {
-            cnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+        if (cnx == NULL) {
+            cnx = picoquic_cnx_by_icid(quic, &ph->dest_cnx_id, addr_from);
         }
     }
-    if (cnx == NULL) {
-        cnx = picoquic_cnx_by_icid(quic, &ph->dest_cnx_id, addr_from);
+    else {
+        (void)picoquic_parse_connection_id(dcid, PICOQUIC_CONNECTION_ID_MAX_SIZE, &ph->dest_cnx_id);
     }
 
     /* If no connection context exists, send back a version negotiation */
@@ -815,10 +831,13 @@ int picoquic_prepare_version_negotiation(
             picoformat_32(bytes + byte_index, 0);
             byte_index += 4;
 
-            bytes[byte_index++] = ph->srce_cnx_id.id_len;
-            byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->srce_cnx_id);
-            bytes[byte_index++] = ph->dest_cnx_id.id_len;
-            byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->dest_cnx_id);
+            /* Copy the connection identifiers */
+            bytes[byte_index++] = scid_length;
+            memcpy(bytes + byte_index, scid, scid_length);
+            byte_index += scid_length;
+            bytes[byte_index++] = dcid_length;
+            memcpy(bytes + byte_index, dcid, dcid_length);
+            byte_index += dcid_length;
 
             /* Set the payload to the list of versions */
             for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
@@ -850,8 +869,6 @@ int picoquic_prepare_version_negotiation(
             picoquic_queue_stateless_packet(quic, sp);
         }
     }
-
-    return ret;
 }
 
 /*
@@ -1939,21 +1956,18 @@ int picoquic_incoming_segment(
         }
     }
 
-    if (ret == 0) {
+    if (ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED) {
+        if (packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU) {
+            /* use the result of parsing to consider version negotiation */
+            picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph, bytes);
+        }
+    } else if (ret == 0) {
         if (cnx == NULL) {
-            if (ph.version_index < 0 && ph.vn != 0) {
-                if (packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU) {
-                    /* use the result of parsing to consider version negotiation */
-                    picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph);
-                }
+            /* Unexpected packet. Reject, drop and log. */
+            if (!picoquic_is_connection_id_null(&ph.dest_cnx_id)) {
+                picoquic_process_unexpected_cnxid(quic, length, addr_from, addr_to, if_index_to, &ph);
             }
-            else {
-                /* Unexpected packet. Reject, drop and log. */
-                if (!picoquic_is_connection_id_null(&ph.dest_cnx_id)) {
-                    picoquic_process_unexpected_cnxid(quic, length, addr_from, addr_to, if_index_to, &ph);
-                }
-                ret = PICOQUIC_ERROR_DETECTED;
-            }
+            ret = PICOQUIC_ERROR_DETECTED;
         }
         else {
             cnx->quic_bit_received_0 |= ph.quic_bit_is_zero;
@@ -2071,9 +2085,12 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_RETRY || ret == PICOQUIC_ERROR_DETECTED ||
         ret == PICOQUIC_ERROR_CONNECTION_DELETED ||
         ret == PICOQUIC_ERROR_CNXID_SEGMENT ||
+        ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED ||
         ret == PICOQUIC_ERROR_AEAD_NOT_READY) {
         /* Bad packets are dropped silently */
-        if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_AEAD_NOT_READY) {
+        if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
+            ret == PICOQUIC_ERROR_AEAD_NOT_READY ||
+            ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED) {
             ret = 0;
         }
         else {
