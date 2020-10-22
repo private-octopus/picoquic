@@ -65,12 +65,12 @@ uint8_t picoquic_retry_protection_key_29[32] = {
     0x26, 0x46, 0xec, 0x06, 0xdc, 0x80, 0x96, 0x42, 0xc3, 0x0a, 0x8b, 0xaa, 0x2b, 0xaa, 0xff, 0x4c };
 
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
-    { PICOQUIC_TWENTYFIRST_INTEROP_VERSION,
+    { PICOQUIC_TWENTIETH_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_29_salt),
         picoquic_cleartext_draft_29_salt,
         sizeof(picoquic_retry_protection_key_29),
         picoquic_retry_protection_key_29 },
-    { PICOQUIC_TWENTIETH_INTEROP_VERSION,
+    { PICOQUIC_TWENTIETH_PRE_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_29_salt),
         picoquic_cleartext_draft_29_salt,
         sizeof(picoquic_retry_protection_key_29),
