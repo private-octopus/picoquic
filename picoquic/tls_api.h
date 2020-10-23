@@ -50,7 +50,7 @@ void picoquic_tlscontext_free(void* ctx);
 
 void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx);
 
-int picoquic_tls_stream_process(picoquic_cnx_t* cnx);
+int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int* data_consumed);
 int picoquic_is_tls_complete(picoquic_cnx_t* cnx);
 
 int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time);

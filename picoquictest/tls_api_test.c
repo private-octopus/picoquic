@@ -8403,6 +8403,19 @@ int large_client_hello_test()
             test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 250000);
     }
 
+    /* Verify that there is no spurious retransmission */
+    if (ret == 0) {
+        if (test_ctx->cnx_server == NULL || test_ctx->cnx_server->nb_retransmission_total > 0) {
+            DBG_PRINTF("Unexpected, server retransmitted %" PRIu64 " packets", 
+                (test_ctx->cnx_server == NULL)? UINT64_MAX:test_ctx->cnx_server->nb_retransmission_total);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->nb_retransmission_total > 0) {
+            DBG_PRINTF("Unexpected, client retransmitted %" PRIu64 " packets", test_ctx->cnx_client->nb_retransmission_total);
+            ret = -1;
+        }
+    }
+
     /* And then free the resource
      */
 
