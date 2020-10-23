@@ -2484,7 +2484,7 @@ int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_
  * should be sent at each epoch.
  */
 
-int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
+int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed)
 {
     int ret = 0;
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
@@ -2524,6 +2524,10 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
             size_t start = (size_t)(stream->consumed_offset - data->offset);
             size_t epoch_data = data->length - start;
             size_t send_offset[PICOQUIC_NUMBER_OF_EPOCH_OFFSETS] = { 0, 0, 0, 0, 0 };
+
+            if (data_consumed != NULL) {
+                *data_consumed = 1;
+            }
 
             ptls_buffer_init(&sendbuf, "", 0);
 

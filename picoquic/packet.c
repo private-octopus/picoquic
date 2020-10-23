@@ -1119,6 +1119,11 @@ int picoquic_incoming_client_initial(
 
         if (!(*pcnx)->initial_validated && (*pcnx)->pkt_ctx[picoquic_packet_context_initial].retransmit_oldest != NULL
             && packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU) {
+            /* In most cases, receiving more than 1 initial packets before validation indicates that the
+             * client is repeating data that it believes is lost. We set the initial_repeat_needed flag
+             * to trigger such repetitions. There are exceptions, e.g., clients sending large client hellos
+             * that require multiple packets. These exceptions are detected and handled during packet
+             * processing. */
             (*pcnx)->initial_repeat_needed = 1;
         }
 
@@ -1150,9 +1155,20 @@ int picoquic_incoming_client_initial(
 
             /* processing of client initial packet */
             if (ret == 0) {
+                int data_consumed = 0;
                 /* initialization of context & creation of data */
-                /* TODO: find path to send data produced by TLS. */
-                ret = picoquic_tls_stream_process(*pcnx);
+                ret = picoquic_tls_stream_process(*pcnx, &data_consumed);
+                /* The "initial_repeat_needed" flag is set if multiple initial packets are
+                 * received while the connection is not yet validated. In most cases, this indicates
+                 * that the client repeated some initial packets, or sent some gratuitous initial
+                 * packets, because it believes its own initial packet was lost. The flag forces
+                 * immediate retransmission of initial packets. However, there are cases when the
+                 * client sent large client hello messages that do not fit on a single packets. In
+                 * those cases, the flag should not be set. We detect that by testing whether new
+                 * TLS data was received in the packet. */
+                if (data_consumed) {
+                    (*pcnx)->initial_repeat_needed = 0;
+                }
             }
         }
         else if ((*pcnx)->cnx_state < picoquic_state_ready) {
@@ -1330,7 +1346,7 @@ int picoquic_incoming_server_initial(
 
             /* processing of initial packet */
             if (ret == 0) {
-                ret = picoquic_tls_stream_process(cnx);
+                ret = picoquic_tls_stream_process(cnx, NULL);
             }
         }
         else if (cnx->cnx_state < picoquic_state_ready) {
@@ -1382,7 +1398,7 @@ int picoquic_incoming_server_handshake(
 
             /* processing of initial packet */
             if (ret == 0 && restricted == 0) {
-                ret = picoquic_tls_stream_process(cnx);
+                ret = picoquic_tls_stream_process(cnx, NULL);
             }
         }
         else {
@@ -1428,7 +1444,7 @@ int picoquic_incoming_client_handshake(
                 picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
 
                 /* If TLS data present, progress the TLS state */
-                ret = picoquic_tls_stream_process(cnx);
+                ret = picoquic_tls_stream_process(cnx, NULL);
 
                 /* If TLS FIN has been received, the server side handshake is ready */
                 if (!cnx->client_mode && cnx->cnx_state < picoquic_state_ready && picoquic_is_tls_complete(cnx)) {
@@ -1503,7 +1519,7 @@ int picoquic_incoming_0rtt(
 
             if (ret == 0) {
                 /* Processing of TLS messages -- EOED */
-                ret = picoquic_tls_stream_process(cnx);
+                ret = picoquic_tls_stream_process(cnx, NULL);
             }
         }
     } else {
@@ -1819,7 +1835,7 @@ int picoquic_incoming_encrypted(
                 }
 
                 /* Processing of TLS messages  */
-                ret = picoquic_tls_stream_process(cnx);
+                ret = picoquic_tls_stream_process(cnx, NULL);
             }
 
             if (ret == 0 && picoquic_cnx_is_still_logging(cnx)) {
