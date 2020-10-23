@@ -8406,11 +8406,11 @@ int large_client_hello_test()
     /* Verify that there is no spurious retransmission */
     if (ret == 0) {
         if (test_ctx->cnx_server == NULL || test_ctx->cnx_server->nb_retransmission_total > 0) {
-            DBG_PRINTF("Unexpected, server retransmitted %d packets", test_ctx->cnx_server->nb_retransmission_total);
+            DBG_PRINTF("Unexpected, server retransmitted %" PRIu64 " packets", test_ctx->cnx_server->nb_retransmission_total);
             ret = -1;
         }
         else if (test_ctx->cnx_client->nb_retransmission_total > 0) {
-            DBG_PRINTF("Unexpected, client retransmitted %d packets", test_ctx->cnx_server->nb_retransmission_total);
+            DBG_PRINTF("Unexpected, client retransmitted %" PRIu64 " packets", test_ctx->cnx_client->nb_retransmission_total);
             ret = -1;
         }
     }
