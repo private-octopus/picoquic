@@ -147,6 +147,7 @@
   <ItemGroup>
     <ClCompile Include="bytestream.c" />
     <ClCompile Include="cc_common.c" />
+    <ClCompile Include="config.c" />
     <ClCompile Include="cubic.c" />
     <ClCompile Include="fastcc.c" />
     <ClCompile Include="frames.c" />
