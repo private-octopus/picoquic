@@ -606,7 +606,7 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, 
 }
 
 static void binlog_packet_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
-    const picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
+    picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
 {
     if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
         binlog_packet(cnx->f_binlog, &cnx->initial_cnxid, receiving, current_time, ph, bytes, bytes_max);
@@ -614,7 +614,7 @@ static void binlog_packet_ex(picoquic_cnx_t* cnx, int receiving, uint64_t curren
 }
 
 void binlog_dropped_packet(picoquic_cnx_t* cnx,
-    const picoquic_packet_header* ph,  size_t packet_size, int err,
+    picoquic_packet_header* ph,  size_t packet_size, int err,
     uint8_t * raw_data, uint64_t current_time)
 {
     FILE* f = cnx->f_binlog;
