@@ -30,6 +30,7 @@
 #include "picoquic_internal.h"
 #include "bytestream.h"
 #include "tls_api.h"
+#include "picoquic_unified_log.h"
 
 void picoquic_log_bytes(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
@@ -114,7 +115,7 @@ void picoquic_log_prefix_initial_cid64(FILE* F, uint64_t log_cnxid64)
     }
 }
 
-static void picoquic_log_address(FILE* F, struct sockaddr* addr_peer)
+static void picoquic_log_address(FILE* F, const struct sockaddr* addr_peer)
 {
     if (addr_peer->sa_family == AF_INET) {
         struct sockaddr_in* s4 = (struct sockaddr_in*)addr_peer;
@@ -146,7 +147,7 @@ static void picoquic_log_address(FILE* F, struct sockaddr* addr_peer)
 }
 
 void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* cnx,
-    struct sockaddr* addr_peer, int receiving, size_t length, uint64_t current_time)
+    const struct sockaddr* addr_peer, int receiving, size_t length, uint64_t current_time)
 {
     uint64_t delta_t = 0;
     uint64_t time_sec = 0;
@@ -525,7 +526,7 @@ void picoquic_log_packet_header(FILE* F, uint64_t log_cnxid64, picoquic_packet_h
 }
 
 void picoquic_log_negotiation_packet(FILE* F, uint64_t log_cnxid64,
-    uint8_t* bytes, size_t length, picoquic_packet_header* ph)
+    const uint8_t* bytes, size_t length, picoquic_packet_header* ph)
 {
     size_t byte_index = ph->offset;
     uint32_t vn = 0;
@@ -543,7 +544,7 @@ void picoquic_log_negotiation_packet(FILE* F, uint64_t log_cnxid64,
 }
 
 void picoquic_log_retry_packet(FILE* F, uint64_t log_cnxid64,
-    uint8_t* bytes, picoquic_packet_header* ph)
+    const uint8_t* bytes, picoquic_packet_header* ph)
 {
     size_t byte_index = ph->offset;
     int token_length = 0;
@@ -607,7 +608,7 @@ void picoquic_log_retry_packet(FILE* F, uint64_t log_cnxid64,
     }
 }
 
-size_t picoquic_log_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_stream_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index;
     uint64_t stream_id;
@@ -636,7 +637,7 @@ size_t picoquic_log_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index + data_length;
 }
 
-size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t bytes_max, int is_ecn)
+size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_t bytes_max, int is_ecn)
 {
     size_t byte_index;
     uint64_t num_block;
@@ -773,7 +774,7 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
     return byte_index;
 }
 
-size_t picoquic_log_reset_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_reset_stream_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
     uint64_t stream_id = 0;
@@ -806,7 +807,7 @@ size_t picoquic_log_reset_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max
     return byte_index;
 }
 
-size_t picoquic_log_stop_sending_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_stop_sending_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
     size_t l1 = 0;
@@ -832,7 +833,7 @@ size_t picoquic_log_stop_sending_frame(FILE* F, uint8_t* bytes, size_t bytes_max
     return byte_index;
 }
 
-size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint8_t ftype, uint64_t cnx_id64)
+size_t picoquic_log_generic_close_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint8_t ftype, uint64_t cnx_id64)
 {
     size_t byte_index = 1;
     uint64_t error_code = 0;
@@ -913,17 +914,17 @@ size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
     return byte_index;
 }
 
-size_t picoquic_log_connection_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint64_t cnx_id64)
+size_t picoquic_log_connection_close_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint64_t cnx_id64)
 {
     return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_connection_close, cnx_id64);
 }
 
-size_t picoquic_log_application_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint64_t cnx_id64)
+size_t picoquic_log_application_close_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint64_t cnx_id64)
 {
     return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_application_close, cnx_id64);
 }
 
-size_t picoquic_log_max_data_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_max_data_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
     uint64_t max_data;
@@ -942,7 +943,7 @@ size_t picoquic_log_max_data_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-size_t picoquic_log_max_stream_data_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_max_stream_data_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
     uint64_t stream_id;
@@ -965,7 +966,7 @@ size_t picoquic_log_max_stream_data_frame(FILE* F, uint8_t* bytes, size_t bytes_
     return byte_index;
 }
 
-size_t picoquic_log_max_stream_id_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint64_t frame_id)
+size_t picoquic_log_max_stream_id_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint64_t frame_id)
 {
     size_t byte_index = 1;
     const size_t min_size = 1 + picoquic_varint_skip(bytes + 1);
@@ -985,7 +986,7 @@ size_t picoquic_log_max_stream_id_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
     return byte_index;
 }
 
-size_t picoquic_log_blocked_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_blocked_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
     const size_t min_size = 1 + picoquic_varint_skip(bytes + 1);
@@ -1005,7 +1006,7 @@ size_t picoquic_log_blocked_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-size_t picoquic_log_stream_blocked_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_stream_blocked_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
     const size_t min_size = 1 + picoquic_varint_skip(bytes + 1);
@@ -1026,7 +1027,7 @@ size_t picoquic_log_stream_blocked_frame(FILE* F, uint8_t* bytes, size_t bytes_m
     return byte_index;
 }
 
-size_t picoquic_log_streams_blocked_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint64_t frame_id)
+size_t picoquic_log_streams_blocked_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint64_t frame_id)
 {
     size_t byte_index = 1;
     const size_t min_size = 1 + picoquic_varint_skip(bytes + 1);
@@ -1045,7 +1046,7 @@ size_t picoquic_log_streams_blocked_frame(FILE* F, uint8_t* bytes, size_t bytes_
     return byte_index;
 }
 
-size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_new_connection_id_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
     size_t min_size = 2u + 16u;
@@ -1059,8 +1060,6 @@ size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t byte
     l_seq = picoquic_varint_decode(&bytes[byte_index], bytes_max, &sequence);
     min_size += l_seq;
     byte_index += l_seq;
-
-
     
     l_ret = picoquic_varint_decode(&bytes[byte_index], bytes_max, &retire_before);
     min_size += l_ret;
@@ -1094,7 +1093,7 @@ size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t byte
     return byte_index;
 }
 
-size_t picoquic_log_retire_connection_id_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_retire_connection_id_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
     uint64_t sequence = 0;
@@ -1117,7 +1116,7 @@ size_t picoquic_log_retire_connection_id_frame(FILE* F, uint8_t* bytes, size_t b
     return byte_index;
 }
 
-size_t picoquic_log_new_token_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_new_token_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
     size_t min_size = 1;
@@ -1148,7 +1147,7 @@ size_t picoquic_log_new_token_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-size_t picoquic_log_path_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_path_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
     size_t challenge_length = 8;
@@ -1173,7 +1172,7 @@ size_t picoquic_log_path_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-size_t picoquic_log_crypto_hs_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_crypto_hs_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     uint64_t offset=0;
     uint64_t data_length = 0;
@@ -1209,7 +1208,7 @@ size_t picoquic_log_crypto_hs_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-size_t picoquic_log_datagram_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_datagram_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     uint8_t frame_id = bytes[0];
     unsigned int has_length = frame_id & 1;
@@ -1254,13 +1253,13 @@ size_t picoquic_log_datagram_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-size_t picoquic_log_ack_frequency_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_ack_frequency_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     uint64_t sequence = 0;
     uint64_t packets = 0;
     uint64_t microsecs = 0;
-    uint8_t* bytes_end = bytes + bytes_max;
-    uint8_t* bytes0 = bytes;
+    const uint8_t* bytes_end = bytes + bytes_max;
+    const uint8_t* bytes0 = bytes;
     size_t byte_index = 0;
 
 
@@ -1286,11 +1285,11 @@ size_t picoquic_log_ack_frequency_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
     return byte_index;
 }
 
-size_t picoquic_log_time_stamp_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_time_stamp_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     uint64_t time_stamp = 0;
-    uint8_t* bytes_end = bytes + bytes_max;
-    uint8_t* bytes0 = bytes;
+    const uint8_t* bytes_end = bytes + bytes_max;
+    const uint8_t* bytes0 = bytes;
     size_t byte_index = 0;
 
 
@@ -1316,7 +1315,7 @@ size_t picoquic_log_time_stamp_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length)
+void picoquic_log_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_t length)
 {
     size_t byte_index = 0;
 
@@ -1465,7 +1464,7 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
 }
 
 void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* cnx,
-    int receiving, picoquic_packet_header * ph, uint8_t* bytes, size_t length, int ret)
+    int receiving, picoquic_packet_header * ph, const uint8_t* bytes, size_t length, int ret)
 {
     uint64_t log_cnxid64 = 0;
     FILE * F = (FILE *)F_log;
@@ -2009,3 +2008,163 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
         va_end(args);
     }
 }
+
+void textlog_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
+{
+    if (cnx->quic->F_log != NULL) {
+        va_list args;
+        va_start(args, fmt);
+        picoquic_txtlog_message_v(cnx->quic, &cnx->initial_cnxid, fmt, args);
+        va_end(args);
+    }
+}
+
+void textlog_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time,
+    picoquic_connection_id_t * cid,
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(addr_local);
+#endif
+    picoquic_log_packet_address(quic->F_log,
+        picoquic_val64_connection_id(*cid), 
+        NULL, addr_peer, receiving, packet_length, current_time);
+}
+
+void textlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(addr_local);
+#endif
+    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        picoquic_log_packet_address(cnx->quic->F_log,
+            picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
+            cnx, addr_peer, receiving, packet_length, current_time);
+    }
+}
+
+void textlog_packet(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
+    picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
+{
+    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        picoquic_log_decrypted_segment(cnx->quic->F_log, 1, 
+            cnx, receiving, ph, bytes, bytes_max, 0);
+    }
+}
+
+void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
+    size_t packet_size, int ret, uint8_t* raw_data, uint64_t current_time)
+{
+    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        picoquic_log_decrypted_segment(cnx->quic->F_log, 1, cnx, 1, ph, raw_data, packet_size, ret);
+    }
+}
+
+void textlog_buffered_packet(picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum ptype, uint64_t current_time)
+{
+    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        FILE* F = cnx->quic->F_log;
+
+        fprintf(F, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+        picoquic_log_time(F, cnx, current_time, "T= ", ", ");
+        fprintf(F, "Keys unavailable, buffered packet type %d.\n", ptype);
+    }
+}
+
+void textlog_outgoing_packet(picoquic_cnx_t* cnx,
+    uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
+    uint8_t* send_buffer, size_t send_length, uint64_t current_time)
+{
+    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        picoquic_log_outgoing_segment(cnx->quic->F_log, 1,
+            cnx, bytes, sequence_number, length, send_buffer, send_length, pn_length);
+    }
+}
+
+void textlog_packet_lost(picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
+    picoquic_connection_id_t* dcid, size_t packet_size,
+    uint64_t current_time)
+{
+    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        FILE* F = cnx->quic->F_log;
+
+        fprintf(F, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+        picoquic_log_time(F, cnx, current_time, "T= ", ", ");
+        fprintf(F, "Lost packet type %d, number %" PRIu64 ", size %zu", ptype, sequence_number, packet_size);
+        if (dcid != NULL) {
+            fprintf(F, ", DCID ");
+            picoquic_log_connection_id(F, dcid);
+        }
+        fprintf(F, ", reason: %s\n", trigger);
+    }
+}
+
+void textlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
+    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+    const ptls_iovec_t* alpn_list, size_t alpn_count,
+    size_t param_length, uint8_t* params)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(sni);
+    UNREFERENCED_PARAMETER(sni_len);
+    UNREFERENCED_PARAMETER(alpn);
+    UNREFERENCED_PARAMETER(alpn_len);
+    UNREFERENCED_PARAMETER(alpn_list);
+    UNREFERENCED_PARAMETER(alpn_count);
+#endif
+    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        /* TODO: alpn */
+        picoquic_log_transport_extension(cnx->quic->F_log, cnx, (is_local)?0:1, 1, params, param_length);
+    }
+}
+
+void textlog_tls_ticket(picoquic_cnx_t* cnx, uint8_t* ticket, uint16_t ticket_length)
+{
+    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        picoquic_log_picotls_ticket(cnx->quic->F_log, picoquic_get_logging_cnxid(cnx),
+            ticket, ticket_length);
+    }
+}
+
+void textlog_new_connection(picoquic_cnx_t* cnx)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
+}
+
+void textlog_close_connection(picoquic_cnx_t* cnx)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
+}
+
+void textlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        picoquic_log_congestion_state(cnx->quic->F_log, cnx, current_time);
+    }
+}
+
+struct st_picoquic_unified_login_t textlog_functions = {
+    /* Per context log function */
+    picoquic_log_context_free_app_message,
+    textlog_quic_pdu,
+    /* Per connection functions */
+    textlog_app_message,
+    textlog_pdu_ex,
+    textlog_packet,
+    textlog_dropped_packet,
+    textlog_buffered_packet,
+    textlog_outgoing_packet,
+    textlog_packet_lost,
+    textlog_transport_extension,
+    textlog_tls_ticket,
+    textlog_new_connection,
+    textlog_close_connection,
+    textlog_cc_dump
+};

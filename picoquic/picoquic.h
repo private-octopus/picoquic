@@ -546,7 +546,7 @@ uint32_t picoquic_get_max_simultaneous_logs(picoquic_quic_t* quic);
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
-    struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
+    const struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
     char const* sni, char const* alpn, char client_mode);
 
 picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
@@ -706,7 +706,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
  */
 
 typedef int (*picoquic_stream_direct_receive_fn)(picoquic_cnx_t* cnx,
-    uint64_t stream_id, int fin, uint8_t* bytes, uint64_t offset, size_t length,
+    uint64_t stream_id, int fin, const uint8_t* bytes, uint64_t offset, size_t length,
     void* direct_receive_ctx);
 
 int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx,

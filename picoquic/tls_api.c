@@ -2924,8 +2924,8 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
 
     if (ret == 0) {
         /* Decode the clear text components */
-        uint8_t* bytes = text;
-        uint8_t* bytes_max = text + text_len;
+        const uint8_t* bytes = text;
+        const uint8_t* bytes_max = text + text_len;
         uint64_t token_time = PICOPARSE_64(text);
 
         if ((bytes = picoquic_frames_uint64_decode(bytes, bytes_max, &token_time)) != NULL &&

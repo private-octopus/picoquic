@@ -34,6 +34,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if 0
 uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64);
 uint8_t* picoquic_frames_varlen_decode(uint8_t* bytes, const uint8_t* bytes_max, size_t* n);
 uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n);
@@ -41,12 +42,13 @@ uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* bytes_max,
 uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t* n);
 uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n);
 uint8_t* picoquic_frames_cid_decode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* n);
+#endif
 
 int picoquic_parse_long_packet_header(
     picoquic_quic_t* quic,
-    uint8_t* bytes,
+    const uint8_t* bytes,
     size_t length,
-    struct sockaddr* addr_from,
+    const struct sockaddr* addr_from,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx)
 {
@@ -226,9 +228,9 @@ int picoquic_parse_long_packet_header(
 
 int picoquic_parse_short_packet_header(
     picoquic_quic_t* quic,
-    uint8_t* bytes,
+    const uint8_t* bytes,
     size_t length,
-    struct sockaddr* addr_from,
+    const struct sockaddr* addr_from,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
     int receiving)
@@ -305,9 +307,9 @@ int picoquic_parse_short_packet_header(
 
 int picoquic_parse_packet_header(
     picoquic_quic_t* quic,
-    uint8_t* bytes,
+    const uint8_t* bytes,
     size_t length,
-    struct sockaddr* addr_from,
+    const struct sockaddr* addr_from,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
     int receiving)
@@ -583,10 +585,10 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
 
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,
-    uint8_t* bytes,
+    const uint8_t* bytes,
     size_t length,
     size_t packet_length,
-    struct sockaddr* addr_from,
+    const struct sockaddr* addr_from,
     uint64_t current_time,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
@@ -641,11 +643,11 @@ int picoquic_parse_header_and_decrypt(
 
             if (ret == 0) {
                 if (*pcnx != NULL) {
-                    /* Remove header protection at this point */
-                    ret = picoquic_remove_header_protection(*pcnx, bytes, ph);
+                    /* Remove header protection at this point -- values of bytes will change */
+                    ret = picoquic_remove_header_protection(*pcnx, (uint8_t *)bytes, ph);
 
                     if (ret == 0) {
-                        decoded_length = picoquic_remove_packet_protection(*pcnx, bytes, ph, current_time, &already_received);
+                        decoded_length = picoquic_remove_packet_protection(*pcnx, (uint8_t *) bytes, ph, current_time, &already_received);
                     }
                     else {
                         decoded_length = ph->payload_length + 1;
@@ -736,8 +738,8 @@ int picoquic_incoming_version_negotiation(
         ret = PICOQUIC_ERROR_DETECTED;
     } else {
         /* Add DOS resilience */
-        uint8_t * v_bytes = bytes + ph->offset;
-        uint8_t* bytes_max = bytes + length;
+        const uint8_t * v_bytes = bytes + ph->offset;
+        const uint8_t* bytes_max = bytes + length;
         int nb_vn = 0;
         while (v_bytes < bytes_max) {
             uint32_t vn = 0;
@@ -1968,7 +1970,7 @@ int picoquic_incoming_segment(
         else if (is_buffered) {
             binlog_buffered_packet(cnx, ph.ptype, current_time);
         } else {
-            binlog_dropped_packet(cnx, ph.ptype, length, ret, bytes, current_time);
+            binlog_dropped_packet(cnx, &ph, length, ret, bytes, current_time);
         }
     }
 
