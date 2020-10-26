@@ -29,6 +29,7 @@
 
 #include "picoquic_internal.h"
 #include "picoquic_binlog.h"
+#include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include <stdint.h>
 #include <stdlib.h>
@@ -1938,7 +1939,18 @@ int picoquic_incoming_segment(
         *previous_dest_id = ph.dest_cnx_id;
         is_first_segment = 1;
 
+
         /* if needed, log that the packet is received */
+        if (cnx != NULL) {
+            picoquic_log_pdu(cnx, 1, current_time, addr_from, addr_to, packet_length);
+        }
+        else {
+            if (quic->F_log != NULL) {
+                picoquic_log_packet_address(quic->F_log, picoquic_val64_connection_id(ph.dest_cnx_id),
+                    cnx, addr_from, 1, packet_length, current_time);
+            }
+        }
+#if 0
         if (quic->F_log != NULL && (cnx == NULL || picoquic_cnx_is_still_logging(cnx))) {
             picoquic_log_packet_address(quic->F_log,
                 picoquic_val64_connection_id((cnx == NULL) ? ph.dest_cnx_id : picoquic_get_logging_cnxid(cnx)),
@@ -1947,6 +1959,7 @@ int picoquic_incoming_segment(
         if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
             binlog_pdu(cnx->f_binlog, log_cnxid, 1, current_time, addr_from, addr_to, packet_length);
         }
+#endif
     }
     else {
         if (ret == 0 && picoquic_compare_connection_id(previous_dest_id, &ph.dest_cnx_id) != 0) {

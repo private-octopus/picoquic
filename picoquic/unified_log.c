@@ -30,18 +30,11 @@
 #endif
 #include "picoquic_unified_log.h"
 
-/* Log an event that cannot be attached to a specific connection */
-void picoquic_log_quic_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, ...){}
-
 /* Log arrival or departure of an UDP datagram for an unknown connection */
 void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, picoquic_connection_id_t* cid,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length){}
 
-/* Log an event relating to a specific connection
- * TODO: replace by new implementation
- */
-void picoquic_txtlog_message_v(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs);
-void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list vargs);
+/* Log an event relating to a specific connection */
 
 void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
 {
@@ -65,14 +58,25 @@ void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic
     if (quic->F_log != NULL) {
         va_list args;
         va_start(args, fmt);
-        picoquic_txtlog_message_v(quic, cid, fmt, args);
+        quic->text_log_fns->log_quic_app_message(quic, cid, fmt, args);
         va_end(args);
     }
 }
 
 /* Log arrival or departure of an UDP datagram on a connection */
 void picoquic_log_pdu(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length){}
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
+{
+    if (picoquic_cnx_is_still_logging(cnx)) {
+        if (cnx->quic->F_log != NULL) {
+            cnx->quic->text_log_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length);
+        }
+
+        if (cnx->f_binlog != NULL) {
+            cnx->quic->bin_log_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length);
+        }
+    }
+}
 
 /* Log a decrypted packet - receiving = 1 if arrival, = 0 if sending */
 void picoquic_log_packet(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,

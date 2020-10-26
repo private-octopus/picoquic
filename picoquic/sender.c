@@ -21,6 +21,7 @@
 
 #include "picoquic_internal.h"
 #include "picoquic_binlog.h"
+#include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include <stdlib.h>
 #include <string.h>
@@ -3755,6 +3756,9 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
             if (packet_size > 0) {
                 cnx->nb_packets_sent++;
                 /* if needed, log that the packet is sent */
+                picoquic_log_pdu(cnx, 0, current_time,
+                    (struct sockaddr*) & addr_to_log, (struct sockaddr*) & addr_from_log, packet_size);
+#if 0
                 if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
                     picoquic_log_packet_address(cnx->quic->F_log,
                         picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
@@ -3768,6 +3772,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                     binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, 0, current_time,
                         (struct sockaddr*) & addr_to_log, (struct sockaddr*) & addr_from_log, packet_size);
                 }
+#endif
             }
 
             /* Update the wake up time for the connection */

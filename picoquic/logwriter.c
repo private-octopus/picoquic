@@ -544,7 +544,7 @@ static void binlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_t
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
 {
     if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, 1, current_time, addr_peer, addr_local, packet_length);
+        binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, receiving, current_time, addr_peer, addr_local, packet_length);
     }
 }
 
