@@ -74,6 +74,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_packet_loop.h"
+#include "picoquic_unified_log.h"
 
 #if 1
  /* Test support for UDP coalescing */

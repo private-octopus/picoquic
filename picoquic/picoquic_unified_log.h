@@ -41,6 +41,7 @@
 * be documented as well.
 */
 #include "picoquic.h"
+#include <stdarg.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,9 +119,8 @@ typedef struct st_picoquic_unified_login_t {
     picoquic_log_cc_dump_fn log_cc_dump;
 } picoquic_unified_login_t;
 
-
 /* Log an event that cannot be attached to a specific connection */
-void picoquic_log_quic_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, ...);
+void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, ...);
 
 /* Log arrival or departure of an UDP datagram for an unknown connection */
 void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, picoquic_connection_id_t* cid,

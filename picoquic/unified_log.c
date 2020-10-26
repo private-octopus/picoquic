@@ -60,6 +60,16 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
     }
 }
 
+void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, ...)
+{
+    if (quic->F_log != NULL) {
+        va_list args;
+        va_start(args, fmt);
+        picoquic_txtlog_message_v(quic, cid, fmt, args);
+        va_end(args);
+    }
+}
+
 /* Log arrival or departure of an UDP datagram on a connection */
 void picoquic_log_pdu(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length){}
