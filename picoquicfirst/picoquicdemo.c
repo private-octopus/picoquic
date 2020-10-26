@@ -50,6 +50,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/select.h>
+#include <limits.h>
 
 #define SERVER_CERT_FILE "certs/cert.pem"
 #define SERVER_KEY_FILE "certs/key.pem"
@@ -147,7 +148,7 @@ int quic_server(const char* server_name, int server_port,
     const char* esni_key_file_name, const char* esni_rr_file_name,
     char const* log_file, char const* bin_dir, char const* qlog_dir, int use_long_log,
     picoquic_congestion_algorithm_t const* cc_algorithm, char const* web_folder,
-    int initial_random)
+    int initial_random, int bdp_interval, int bdp_limit)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -201,6 +202,9 @@ int quic_server(const char* server_name, int server_port,
             if (initial_random) {
                 picoquic_set_random_initial(qserver, 1);
             }
+
+            qserver->bdp_interval = bdp_interval;
+            qserver->bdp_limit = bdp_limit;
 
             picoquic_set_key_log_file_from_env(qserver);
 
@@ -462,7 +466,7 @@ int quic_client(const char* ip_address_text, int server_port,
     int client_cnx_id_length, char const * client_scenario_text, 
     int no_disk, int use_long_log, picoquic_congestion_algorithm_t const* cc_algorithm,
     int large_client_hello, char const * out_dir, int cipher_suite_id,
-    int initial_random)
+    int initial_random, int enable_zero_rtt_bdp)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -558,6 +562,9 @@ int quic_client(const char* ip_address_text, int server_port,
                     fprintf(stderr, "Could not set cipher suite #%d.\n", cipher_suite_id);
                 }
             }
+            if (enable_zero_rtt_bdp) {
+                qclient->is_0RTT_BDP_enabled = 1;
+            }
         }
     }
 
@@ -636,6 +643,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     ret = picoquic_demo_client_start_streams(cnx_client, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
                 }
             }
+            
         }
     }
 
@@ -882,6 +890,9 @@ void usage()
     fprintf(stderr, "  -Q                    send a large client hello in order to test post quantum\n");
     fprintf(stderr, "                        readiness.\n");
     fprintf(stderr, "  -R                    randomize initial packet number\n");
+    fprintf(stderr, "  -B                    Enable 0-RTT BDP extension on client\n");
+    fprintf(stderr, "  -T bdp_interval       Delay between bdp samples in milliseconds. Default to 1000ms\n");
+    fprintf(stderr, "  -M bdp_limit          Maximum number of bdp samples to send by server\n");
 
     fprintf(stderr, "\nThe scenario argument specifies the set of files that should be retrieved,\n");
     fprintf(stderr, "and their order. The syntax is:\n");
@@ -939,6 +950,9 @@ int main(int argc, char** argv)
     char default_server_cert_file[512];
     char default_server_key_file[512];
     char * client_scenario = NULL;
+    int enable_zero_rtt_bdp = 0;
+    int bdp_interval = 1000;
+    int bdp_limit = UINT_MAX;
     int ret = 0;
 
 #ifdef _WINDOWS
@@ -948,7 +962,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:o:w:f:i:s:e:E:C:l:b:q:m:n:a:t:S:I:G:1rRhzDLQ")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:o:w:f:i:s:e:E:C:l:b:q:m:n:a:t:S:I:G:T:M:1rRhzDLQB")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1083,6 +1097,23 @@ int main(int argc, char** argv)
         case 'Q':
             large_client_hello = 1;
             break;
+        case 'B':
+            enable_zero_rtt_bdp = 1;
+            break;
+        case 'T':
+            bdp_interval = atoi(optarg);
+            if (bdp_interval < 0) {
+                fprintf(stderr, "Invalid bdp interval: %s\n", optarg);
+                usage();
+            }
+            break;
+        case 'M':
+            bdp_limit = atoi(optarg);
+            if (bdp_limit < 0) {
+                fprintf(stderr, "Invalid bdp limit: %s\n", optarg);
+                usage();
+            }
+            break;
         case 'h':
             usage();
             break;
@@ -1134,7 +1165,7 @@ int main(int argc, char** argv)
             (cnx_id_cbdata == NULL) ? NULL : (void*)cnx_id_cbdata,
             (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version,
             esni_key_file, esni_rr_file,
-            log_file, bin_dir, qlog_dir, use_long_log, cc_algorithm, www_dir, initial_random);
+            log_file, bin_dir, qlog_dir, use_long_log, cc_algorithm, www_dir, initial_random, bdp_interval, bdp_limit);
         printf("Server exit with code = %d\n", ret);
     } else {
         /* Run as client */
@@ -1142,7 +1173,7 @@ int main(int argc, char** argv)
         ret = quic_client(server_name, server_port, sni, esni_rr_file, alpn, root_trust_file, proposed_version, force_zero_share, 
             force_migration, nb_packets_before_update, mtu_max, log_file, 
             bin_dir, qlog_dir, client_cnx_id_length, client_scenario,
-            no_disk, use_long_log, cc_algorithm, large_client_hello, out_dir, cipher_suite_id, initial_random);
+            no_disk, use_long_log, cc_algorithm, large_client_hello, out_dir, cipher_suite_id, initial_random, enable_zero_rtt_bdp);
 
         printf("Client exit with code = %d\n", ret);
     }

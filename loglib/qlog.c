@@ -304,6 +304,27 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_grease_quic_bit:
                     qlog_boolean_transport_extension(f, "grease_quic_bit", s, extension_length);
                     break;
+                case picoquic_tp_recon_bytes_in_flight:
+                    qlog_vint_transport_extension(f, "recon_bytes_in_flight", s, extension_length);
+                    break;
+                case picoquic_tp_recon_min_rtt:
+                    qlog_vint_transport_extension(f, "recon_bytes_min_rtt", s, extension_length);
+                    break;
+                case picoquic_tp_recon_max_pkt_number:
+                    qlog_vint_transport_extension(f, "recon_max_pkt_number", s, extension_length);
+                    break;
+                case picoquic_tp_recon_cwin:
+                    qlog_vint_transport_extension(f, "recon_cwin", s, extension_length);
+                    break;
+                case picoquic_tp_recon_rtt_variant:
+                    qlog_vint_transport_extension(f, "recon_rtt_variant", s, extension_length);
+                    break;
+                case picoquic_tp_recon_smoothed_rtt:
+                    qlog_vint_transport_extension(f, "recon_smoothed_rtt", s, extension_length);
+                    break;
+                case picoquic_tp_recon_max_ack_delay:
+                    qlog_vint_transport_extension(f, "recon_max_ack_delay", s, extension_length);
+                    break;
                 default:
                     /* dump unknown extensions */
                     fprintf(f, "\"%" PRIx64 "\": ", extension_type);

@@ -445,6 +445,27 @@ char const* picoquic_log_tp_name(uint64_t tp_number)
     case picoquic_tp_grease_quic_bit:
         tp_name = "grease_quic_bit";
         break;
+    case picoquic_tp_recon_bytes_in_flight:
+        tp_name = "recon_bytes_in_flight";
+        break;
+    case picoquic_tp_recon_min_rtt:
+        tp_name = "recon_min_rtt";
+        break;
+    case picoquic_tp_recon_max_pkt_number:
+        tp_name = "recon_max_pkt_number";
+        break;
+    case picoquic_tp_recon_cwin:
+        tp_name = "recon_cwin";
+        break;
+    case picoquic_tp_recon_rtt_variant:
+        tp_name = "recon_rtt_variant";
+        break;
+    case picoquic_tp_recon_smoothed_rtt:
+        tp_name = "recon_smoothed_rtt";
+        break;
+    case picoquic_tp_recon_max_ack_delay:
+        tp_name = "recon_max_ack_delay";
+        break;
     default:
         break;
     }

@@ -235,6 +235,13 @@ typedef struct st_picoquic_tp_t {
     int enable_time_stamp; /* (x&1) want, (x&2) can */
     uint64_t min_ack_delay;
     int do_grease_quic_bit;
+    uint64_t recon_bytes_in_flight;
+    uint64_t recon_min_rtt;
+    uint64_t recon_max_pkt_number;
+    uint64_t recon_cwin;
+    uint64_t recon_rtt_variant;
+    uint64_t recon_smoothed_rtt;
+    uint64_t recon_max_ack_delay;
 } picoquic_tp_t;
 
 /*

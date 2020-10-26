@@ -98,6 +98,7 @@ extern "C" {
 
 #define PICOQUIC_ALPN_NUMBER_MAX 8
 
+
 /*
  * Types of frames
  */
@@ -465,7 +466,15 @@ typedef enum {
     picoquic_tp_enable_loss_bit = 0x1057,
     picoquic_tp_min_ack_delay = 0xDE1A,
     picoquic_tp_enable_time_stamp = 0x7158, /* x&1 = */
-    picoquic_tp_grease_quic_bit = 0x2ab2
+    picoquic_tp_grease_quic_bit = 0x2ab2,
+    picoquic_tp_recon_bytes_in_flight = 0x3ab1, /* draft-kuhn-quic-0rtt-bdp-07 */ 
+    picoquic_tp_recon_min_rtt = 0x3ba1, /* draft-kuhn-quic-0rtt-bdp-07 */
+    picoquic_tp_recon_max_pkt_number = 0x3bc1, /* draft-kuhn-quic-0rtt-bdp-07 */
+    picoquic_tp_recon_cwin = 0x3cb1, /* draft-kuhn-quic-0rtt-bdp-07 */
+    picoquic_tp_recon_rtt_variant = 0x3cd1, /* draft-kuhn-quic-0rtt-bdp-07 */
+    picoquic_tp_recon_smoothed_rtt = 0x3dc1, /* draft-kuhn-quic-0rtt-bdp-07 */
+    picoquic_tp_recon_max_ack_delay = 0x3de1, /* draft-kuhn-quic-0rtt-bdp-07 */ 
+
 } picoquic_tp_enum;
 
 /* Callback for converting binary log to quic log at the end of a connection. 
@@ -522,6 +531,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int log_pn_dec : 1; /* Log key hashes on key changes to debug crypto */
     unsigned int random_initial : 1; /* Randomize the initial PN number */
     unsigned int packet_train_mode : 1; /* Tune pacing for sending packet trains */
+    unsigned int is_0RTT_BDP_enabled : 1; /* 0-RTT_BDP extension is negociated */
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 
@@ -560,6 +570,9 @@ typedef struct st_picoquic_quic_t {
     void* fuzz_ctx;
     int wake_file;
     int wake_line;
+
+    int bdp_interval;
+    int bdp_limit;
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);
@@ -944,7 +957,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int quic_bit_greased : 1; /* Indicate whether the quic bit was greased at least once */
     unsigned int quic_bit_received_0 : 1; /* Indicate whether the quic bit was received as zero at least once */
     unsigned int is_half_open : 1; /* for server side connections, created but not yet complete */
-
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
     /* Idle timeout in microseconds */
@@ -1091,6 +1103,10 @@ typedef struct st_picoquic_cnx_t {
     uint64_t ack_frequency_sequence_remote;
     uint64_t ack_gap_remote;
     uint64_t ack_delay_remote;
+
+    /* Management the sending of BDP */
+    uint64_t bdp_send_time;
+    uint64_t nb_bdp_sample_sent;
 
     /* Copies of packets received too soon */
     picoquic_stateless_packet_t* first_sooner;
@@ -1450,6 +1466,15 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed);
+
+int picoquic_prepare_bdp_extensions(picoquic_cnx_t* cnx, int extension_mode,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed);
+
+int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed);
+
+int picoquic_receive_bdp_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 
 picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length, int is_pure_ack);

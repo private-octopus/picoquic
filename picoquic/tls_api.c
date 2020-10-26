@@ -75,6 +75,9 @@
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 0xFFA5
 #define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 2048
 
+#define PICOQUIC_BDP_PARAMETERS_TLS_EXTENSION 0xFFA0
+#define PICOQUIC_BDP_PARAMETERS_MAX_SIZE 2048
+
 #ifdef PTLS_ESNI_NONCE_SIZE
 #define PICOQUIC_ESNI_NONCE_SIZE PTLS_ESNI_NONCE_SIZE
 #else 
@@ -87,13 +90,18 @@ typedef struct st_picoquic_tls_ctx_t {
     picoquic_cnx_t* cnx;
     int client_mode;
     ptls_raw_extension_t ext[2];
+    ptls_raw_extension_t bdp_ext[2];
     ptls_handshake_properties_t handshake_properties;
     ptls_iovec_t alpn_vec[PICOQUIC_ALPN_NUMBER_MAX];
     int alpn_count;
     uint8_t ext_data[PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE];
+    uint8_t bdp_ext_data[PICOQUIC_BDP_PARAMETERS_MAX_SIZE];
     uint8_t ext_received[PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE];
     size_t ext_received_length;
     int ext_received_return;
+    uint8_t ext_bdp_received[PICOQUIC_BDP_PARAMETERS_MAX_SIZE];
+    size_t ext_bdp_received_length;
+    int ext_bdp_received_return;
     uint16_t esni_version;
     uint8_t esni_nonce[PICOQUIC_ESNI_NONCE_SIZE];
     uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
@@ -924,7 +932,7 @@ int picoquic_tls_collect_extensions_cb(ptls_t* tls, struct st_ptls_handshake_pro
     UNREFERENCED_PARAMETER(tls);
     UNREFERENCED_PARAMETER(properties);
 #endif
-    return type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION;
+    return type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION || type == PICOQUIC_BDP_PARAMETERS_TLS_EXTENSION;
 }
 
 void picoquic_tls_set_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ctx)
@@ -948,6 +956,29 @@ void picoquic_tls_set_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ct
 
     tls_ctx->handshake_properties.additional_extensions = tls_ctx->ext;
 }
+
+void picoquic_tls_set_bdp_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ctx)
+{
+    size_t consumed;
+    int ret = picoquic_prepare_bdp_extensions(cnx, (tls_ctx->client_mode) ? 0 : 1,
+        tls_ctx->bdp_ext_data, sizeof(tls_ctx->bdp_ext_data), &consumed);
+
+    if (ret == 0) {
+        tls_ctx->bdp_ext[0].type = PICOQUIC_BDP_PARAMETERS_TLS_EXTENSION;
+        tls_ctx->bdp_ext[0].data.base = tls_ctx->bdp_ext_data;
+        tls_ctx->bdp_ext[0].data.len = consumed;
+        tls_ctx->bdp_ext[1].type = 0xFFFF;
+        tls_ctx->bdp_ext[1].data.base = NULL;
+        tls_ctx->bdp_ext[1].data.len = 0;
+    } else {
+        tls_ctx->bdp_ext[0].type = 0xFFFF;
+        tls_ctx->bdp_ext[0].data.base = NULL;
+        tls_ctx->bdp_ext[0].data.len = 0;
+    }
+
+    tls_ctx->handshake_properties.nst_extensions = tls_ctx->bdp_ext;
+}
+
 
 /*
  * The collected extensions call back is called by the stack upon
@@ -986,6 +1017,23 @@ int picoquic_tls_collected_extensions_cb(ptls_t* tls, ptls_handshake_properties_
             if (ctx->client_mode == 0) {
                 picoquic_tls_set_extensions(ctx->cnx, ctx);
             }
+        }
+        if (slots[i_slot].type == PICOQUIC_BDP_PARAMETERS_TLS_EXTENSION) {
+            size_t copied_length = sizeof(ctx->ext_bdp_received);
+
+            /* Retrieve the bdp metadata parameters from session ticket */
+            if (ctx->client_mode == 1 && ctx->cnx->quic->is_0RTT_BDP_enabled == 1) { 
+                ret = picoquic_receive_bdp_extensions(ctx->cnx, 1,
+                slots[i_slot].data.base, slots[i_slot].data.len, &consumed);
+            }
+
+            /* Copy the extensions in the local context for further debugging */
+            ctx->ext_bdp_received_length = slots[i_slot].data.len;
+            if (copied_length > ctx->ext_bdp_received_length)
+                copied_length = ctx->ext_bdp_received_length;
+            memcpy(ctx->ext_bdp_received, slots[i_slot].data.base, copied_length);
+            ctx->ext_bdp_received_return = ret;
+            picoquic_tls_set_extensions(ctx->cnx, ctx);
         }
     }
 
@@ -1261,7 +1309,6 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
         return 0;
     }
 }
-
 
 void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic, int custom) {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
@@ -2589,6 +2636,56 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 
             ptls_buffer_dispose(&sendbuf);
         }
+
+        // Send a new session ticket
+        {
+            uint64_t current_time = picoquic_get_quic_time(cnx->quic);
+            if (cnx->bdp_send_time == 0)
+                cnx->bdp_send_time = current_time;
+            
+            if (!cnx->client_mode && ptls_handshake_is_complete(ctx->tls) && (current_time - cnx->bdp_send_time > cnx->quic->bdp_interval * 1000) 
+                && cnx->quic->bdp_limit > cnx->nb_bdp_sample_sent) {
+                picoquic_tls_set_bdp_extensions(cnx, ctx);
+                struct st_ptls_buffer_t sendbuf;
+                size_t send_offset[PICOQUIC_NUMBER_OF_EPOCH_OFFSETS] = { 0, 0, 0, 0, 0 };
+                ptls_buffer_init(&sendbuf, "", 0);
+
+                /* Clearing the global error state of openssl before calling handle message.
+                * This allows detection of errors during processing. */
+                picoquic_clear_crypto_errors();
+
+               ret = ptls_handle_message(ctx->tls, &sendbuf, send_offset, epoch, NULL, 0, &ctx->handshake_properties);
+
+               if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS ||
+                   ret == PTLS_ERROR_STATELESS_RETRY)) {
+#ifdef PTLS_ESNI_NONCE_SIZE
+            /* Find the ESNI secret if any, and copy key values to picoquic tls context */
+                   struct st_ptls_esni_secret_t* esni = ptls_get_esni_secret(ctx->tls);
+                   if (esni != NULL) {
+                       ctx->esni_version = esni->version;
+                       memcpy(ctx->esni_nonce, esni->nonce, PTLS_ESNI_NONCE_SIZE);
+                   }
+#endif
+                   if (sendbuf.off > 0) {
+                       ret = picoquic_add_to_tls_stream(cnx, sendbuf.base, sendbuf.off, epoch);
+                       if (ret == 0) {
+                           cnx->bdp_send_time = current_time;
+                           cnx->nb_bdp_sample_sent += 1;
+                       }
+                   }
+                   else {
+                       ret = 0;
+                   }
+              }
+              else {
+                  picoquic_log_crypto_errors(cnx, ret);
+                  ret = -1;
+              }
+              
+             ptls_buffer_dispose(&sendbuf);
+        }
+     }
+
 
         if (processed > 0) {
             if (ret == 0) {

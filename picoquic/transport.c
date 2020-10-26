@@ -399,6 +399,41 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_grease_quic_bit);
     }
 
+    if (cnx->local_parameters.recon_bytes_in_flight > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_bytes_in_flight, 
+             cnx->local_parameters.recon_bytes_in_flight);
+    }
+
+    if (cnx->local_parameters.recon_min_rtt > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_min_rtt,
+             cnx->local_parameters.recon_min_rtt);
+    }
+   
+    if (cnx->local_parameters.recon_max_pkt_number > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_max_pkt_number,
+             cnx->local_parameters.recon_max_pkt_number);
+    }
+
+    if (cnx->local_parameters.recon_cwin > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_cwin,
+             cnx->local_parameters.recon_cwin);
+    }
+
+    if (cnx->local_parameters.recon_rtt_variant > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_rtt_variant,
+             cnx->local_parameters.recon_rtt_variant);
+    }
+
+    if (cnx->local_parameters.recon_smoothed_rtt > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_smoothed_rtt,
+             cnx->local_parameters.recon_smoothed_rtt);
+    }
+
+    if (cnx->local_parameters.recon_max_ack_delay > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_max_ack_delay,
+             cnx->local_parameters.recon_max_ack_delay);
+    }
+
     if (bytes == NULL) {
         *consumed = 0;
         ret = PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL;
@@ -412,6 +447,50 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         if (cnx->f_binlog != NULL) {
             binlog_transport_extension(cnx, 1, NULL, 0, NULL, 0, NULL, 0, *consumed, bytes_zero);
         }
+    }
+
+    return ret;
+
+}
+
+int picoquic_prepare_bdp_extensions(picoquic_cnx_t* cnx, int extension_mode,
+    uint8_t* bytes, size_t bytes_length, size_t* consumed)
+{
+    int ret = 0;
+    uint8_t* bytes_zero = bytes;
+    uint8_t* bytes_max = bytes + bytes_length;
+
+    bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_bytes_in_flight,
+        cnx->path[0]->bytes_in_transit);
+
+    bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_min_rtt,
+        cnx->path[0]->rtt_min);
+
+    bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_max_pkt_number,
+        0);
+    
+    bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_cwin,
+        cnx->path[0]->cwin);
+
+    bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_rtt_variant,
+        cnx->path[0]->rtt_variant);
+
+    bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_smoothed_rtt,
+        cnx->path[0]->smoothed_rtt);
+
+    bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_recon_max_ack_delay,
+        cnx->path[0]->max_ack_delay);
+
+    if (bytes == NULL) {
+        *consumed = 0;
+        ret = PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL;
+    }
+    else {
+        *consumed = bytes - bytes_zero;
+        if (cnx->quic->F_log) {
+            picoquic_log_transport_extension(cnx->quic->F_log, cnx, 0, 1, bytes_zero, *consumed);
+        }
+
     }
 
     return ret;
@@ -687,6 +766,43 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         cnx->remote_parameters.do_grease_quic_bit = 1;
                     }
                     break;
+                case picoquic_tp_recon_bytes_in_flight:
+                    cnx->remote_parameters.recon_bytes_in_flight =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    cnx->quic->is_0RTT_BDP_enabled = 1;
+                    break;
+                case picoquic_tp_recon_min_rtt:
+                    cnx->remote_parameters.recon_min_rtt =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    cnx->quic->is_0RTT_BDP_enabled = 1;
+                    break;
+                case picoquic_tp_recon_max_pkt_number:
+                    cnx->remote_parameters.recon_max_pkt_number =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    cnx->quic->is_0RTT_BDP_enabled = 1;
+                    break;
+                case picoquic_tp_recon_cwin:
+                    cnx->remote_parameters.recon_cwin =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    cnx->path[0]->cwin = cnx->remote_parameters.recon_cwin;
+                    cnx->quic->is_0RTT_BDP_enabled = 1;
+                    break;
+                case picoquic_tp_recon_rtt_variant:
+                    cnx->remote_parameters.recon_rtt_variant =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    cnx->quic->is_0RTT_BDP_enabled = 1;
+                    break;
+                case picoquic_tp_recon_smoothed_rtt:
+                    cnx->remote_parameters.recon_smoothed_rtt =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    cnx->quic->is_0RTT_BDP_enabled = 1;
+                    break;
+                case picoquic_tp_recon_max_ack_delay:
+                    cnx->remote_parameters.recon_max_ack_delay =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    cnx->quic->is_0RTT_BDP_enabled = 1;
+                    break;
+
                 default:
                     /* ignore unknown extensions */
                     break;
@@ -694,6 +810,11 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
                 if (ret == 0) {
                     byte_index += (size_t)extension_length;
+                    if (cnx->quic->is_0RTT_BDP_enabled) {
+                       uint64_t current_time = picoquic_get_quic_time(cnx->quic);
+                       uint64_t recon_smoothed_rtt = cnx->remote_parameters.recon_smoothed_rtt;
+                       picoquic_update_path_rtt(cnx, cnx->path[0], current_time - recon_smoothed_rtt, current_time, 0);
+                    }
                 }
             }
         }
@@ -829,6 +950,96 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (!cnx->client_mode && !cnx->is_ack_frequency_negotiated) {
         cnx->local_parameters.min_ack_delay = 0;
     }
+
+    *consumed = byte_index;
+
+    return ret;
+}
+
+
+int picoquic_receive_bdp_extensions(picoquic_cnx_t* cnx, int extension_mode,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed)
+{
+    int ret = 0;
+    size_t byte_index = 0;
+    uint64_t present_flag = 0;
+
+
+    if (cnx->quic->F_log) {
+        picoquic_log_transport_extension(cnx->quic->F_log, cnx, 1, 1, bytes, bytes_max);
+    }
+
+    while (ret == 0 && byte_index < bytes_max) {
+        size_t ll_type = 0;
+        size_t ll_length = 0;
+        uint64_t extension_type = UINT64_MAX;
+        uint64_t extension_length = 0;
+
+        if (byte_index + 2 > bytes_max) {
+            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+        }
+        else {
+            ll_type = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &extension_type);
+            byte_index += ll_type;
+            ll_length = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &extension_length);
+            byte_index += ll_length;
+
+            if (ll_type == 0 || ll_length == 0 || byte_index + extension_length > bytes_max) {
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+            }
+            else {
+                if (extension_type < 64) {
+                    if ((present_flag & (1ull << extension_type)) != 0) {
+                        /* Malformed, already present */
+                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                    }
+                    else {
+                        present_flag |= (1ull << extension_type);
+                    }
+                }
+
+                switch (extension_type) {
+                case picoquic_tp_recon_bytes_in_flight:
+                    cnx->local_parameters.recon_bytes_in_flight =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    break;
+                case picoquic_tp_recon_min_rtt:
+                    cnx->local_parameters.recon_min_rtt =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    break;
+                case picoquic_tp_recon_max_pkt_number:
+                    cnx->local_parameters.recon_max_pkt_number =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    break;
+                case picoquic_tp_recon_cwin:
+                    cnx->local_parameters.recon_cwin =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    break;
+                case picoquic_tp_recon_rtt_variant:
+                    cnx->local_parameters.recon_rtt_variant =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    break;
+                case picoquic_tp_recon_smoothed_rtt:
+                    cnx->local_parameters.recon_smoothed_rtt =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    break;
+                case picoquic_tp_recon_max_ack_delay:
+                    cnx->local_parameters.recon_max_ack_delay =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    break;
+
+                default:
+                    /* ignore unknown extensions */
+                    break;
+                }
+
+                if (ret == 0) {
+                    byte_index += (size_t)extension_length;
+                }
+            }
+        }
+    }
+
 
     *consumed = byte_index;
 
