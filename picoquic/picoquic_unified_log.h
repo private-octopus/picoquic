@@ -48,14 +48,14 @@ extern "C" {
 #endif
 
 /* Log an event that cannot be attached to a specific connection */
-typedef void (*picoquic_log_quic_app_message_fn)(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, ...);
+typedef void (*picoquic_log_quic_app_message_fn)(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs);
 
 /* Log arrival or departure of an UDP datagram for an unknown connection */
 typedef void (*picoquic_log_quic_pdu_fn)(picoquic_quic_t* quic, int receiving, uint64_t current_time, picoquic_connection_id_t* cid,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length);
 
 /* Log an event relating to a specific connection */
-typedef void (*picoquic_log_app_message_fn)(picoquic_cnx_t* cnx, const char* fmt, ...);
+typedef void (*picoquic_log_app_message_fn)(picoquic_cnx_t* cnx, const char* fmt, va_list vargs);
 
 /* Log arrival or departure of an UDP datagram on a connection */
 typedef void (*picoquic_log_pdu_fn)(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
@@ -161,8 +161,7 @@ void picoquic_log_transport_extension(picoquic_cnx_t* cnx, int is_local,
     size_t param_length, uint8_t* params);
 
 /* log TLS ticket */
-void picoquic_log_tls_ticket(picoquic_cnx_t* cnx,
-    uint8_t* ticket, uint16_t ticket_length);
+void picoquic_log_tls_ticket(picoquic_cnx_t* cnx, uint8_t* ticket, uint16_t ticket_length);
 
 /* log the start of a connection */
 void picoquic_log_new_connection(picoquic_cnx_t* cnx);

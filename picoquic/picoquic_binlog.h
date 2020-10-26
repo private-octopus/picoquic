@@ -102,5 +102,7 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time);
  */
 int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir);
 
+/* Enable binary logs, e.g. if autoqlog is requests */
+void picoquic_enable_binlog(picoquic_quic_t* quic);
 
 #endif /* PICOQUIC_LOG_WRITER_H */

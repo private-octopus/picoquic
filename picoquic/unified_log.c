@@ -48,14 +48,14 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
     if (cnx->quic->F_log != NULL) {
         va_list args;
         va_start(args, fmt);
-        picoquic_txtlog_message_v(cnx->quic, &cnx->initial_cnxid, fmt, args);
+        cnx->quic->text_log_fns->log_app_message(cnx, fmt, args);
         va_end(args);
     }
 
     if (cnx->f_binlog != NULL) {
         va_list args;
         va_start(args, fmt);
-        picoquic_binlog_message_v(cnx, fmt, args);
+        cnx->quic->bin_log_fns->log_app_message(cnx, fmt, args);
         va_end(args);
     }
 }
@@ -103,8 +103,16 @@ void picoquic_log_transport_extension(picoquic_cnx_t* cnx, int is_local,
     size_t param_length, uint8_t* params){}
 
 /* log TLS ticket */
-void picoquic_log_tls_ticket(picoquic_cnx_t* cnx,
-    uint8_t* ticket, uint16_t ticket_length){}
+void picoquic_log_tls_ticket(picoquic_cnx_t* cnx, uint8_t* ticket, uint16_t ticket_length)
+{
+    if (cnx->quic->F_log != NULL) {
+        cnx->quic->text_log_fns->log_picotls_ticket(cnx, ticket, ticket_length);
+    }
+
+    if (cnx->f_binlog != NULL) {
+        cnx->quic->bin_log_fns->log_picotls_ticket(cnx, ticket, ticket_length);
+    }
+}
 
 /* log the start of a connection */
 void picoquic_log_new_connection(picoquic_cnx_t* cnx){}

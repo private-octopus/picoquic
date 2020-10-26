@@ -27,6 +27,7 @@
 
 #include "logreader.h"
 #include "picoquic_binlog.h"
+#include "picoquic_logger.h"
 #include "qlog.h"
 
 /*
@@ -930,25 +931,26 @@ int logger_test()
     picoquic_quic_t quic;
     memset(&cnx, 0, sizeof(cnx));
 
-    if ((F = picoquic_file_open(log_test_file, "w")) == NULL) {
+
+    cnx.quic = &quic;
+
+    if (picoquic_set_textlog(&quic, log_test_file) != 0) {
         DBG_PRINTF("failed to open file:%s\n", log_test_file);
         ret = -1;
     }
     else {
-        for (size_t i = 0; i < nb_test_skip_list; i++) {
-            picoquic_log_frames(F, 0, test_skip_list[i].val, test_skip_list[i].len);
-        }
-        picoquic_log_picotls_ticket(F, logger_test_cid,
-            log_test_ticket, (uint16_t) sizeof(log_test_ticket));
-
         cnx.initial_cnxid = logger_test_cid;
-        cnx.quic = &quic;
-        quic.F_log = F;
+
+        for (size_t i = 0; i < nb_test_skip_list; i++) {
+            picoquic_log_frames(quic.F_log, 0, test_skip_list[i].val, test_skip_list[i].len);
+        }
+        picoquic_log_tls_ticket(&cnx,
+            log_test_ticket, (uint16_t) sizeof(log_test_ticket));
 
         picoquic_log_app_message(&cnx, "%s.", "This is an app message test");
         picoquic_log_app_message(&cnx, "This is app message test #%d, severity %d.", 1, 2);
 
-        (void)picoquic_file_close(F);
+        quic.F_log = picoquic_file_close(quic.F_log);
     }
 
     if (ret == 0) {

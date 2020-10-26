@@ -29,6 +29,7 @@
 #include "tls_api.h"
 #include "picotls.h"
 #include "picoquic_unified_log.h"
+#include "picoquic_binlog.h"
 
 #define VARINT_LEN(bytes) ((size_t)1 << (((bytes)[0] & 0xC0) >> 6))
 
@@ -1061,7 +1062,7 @@ void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list var
 }
 
 /* Log an event that cannot be attached to a specific connection */
-void binlog_ignore_quic_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, ...)
+void binlog_ignore_quic_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(quic);
@@ -1085,13 +1086,10 @@ void binlog_ignore_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curre
 }
 
 /* Log an event relating to a specific connection */
-static void binlog_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
+static void binlog_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
 {
     if (cnx->f_binlog != NULL) {
-        va_list args;
-        va_start(args, fmt);
-        picoquic_binlog_message_v(cnx, fmt, args);
-        va_end(args);
+        picoquic_binlog_message_v(cnx, fmt, vargs);
     }
 }
 
@@ -1120,4 +1118,9 @@ int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir)
     quic->binlog_dir = picoquic_string_duplicate(binlog_dir);
     quic->bin_log_fns = &binlog_functions;
     return 0;
+}
+
+void picoquic_enable_binlog(picoquic_quic_t* quic)
+{
+    quic->bin_log_fns = &binlog_functions;
 }

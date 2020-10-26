@@ -1982,23 +1982,17 @@ void picoquic_txtlog_message_v(picoquic_quic_t* quic, const picoquic_connection_
     fputc('\n', F);
 }
 
-void picoquic_txtlog_context_free_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t * cid, const char* fmt, ...)
+void txtlog_context_free_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t * cid, const char* fmt, va_list vargs)
 {
     if (quic->F_log != NULL) {
-        va_list args;
-        va_start(args, fmt);
-        picoquic_txtlog_message_v(quic, cid, fmt, args);
-        va_end(args);
+        picoquic_txtlog_message_v(quic, cid, fmt, vargs);
     }
 }
 
-void textlog_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
+void textlog_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
 {
     if (cnx->quic->F_log != NULL) {
-        va_list args;
-        va_start(args, fmt);
-        picoquic_txtlog_message_v(cnx->quic, &cnx->initial_cnxid, fmt, args);
-        va_end(args);
+        picoquic_txtlog_message_v(cnx->quic, &cnx->initial_cnxid, fmt, vargs);
     }
 }
 
@@ -2135,7 +2129,7 @@ void textlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 
 struct st_picoquic_unified_login_t textlog_functions = {
     /* Per context log function */
-    picoquic_txtlog_context_free_app_message,
+    txtlog_context_free_app_message,
     textlog_quic_pdu,
     /* Per connection functions */
     textlog_app_message,
