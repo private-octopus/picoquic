@@ -63,7 +63,7 @@
 #include <openssl/ssl.h>
 #include <stdio.h>
 #include <string.h>
-#include "logwriter.h"
+#include "picoquic_binlog.h"
 
 #define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
 

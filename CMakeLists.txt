@@ -36,6 +36,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/token_store.c
     picoquic/tls_api.c
     picoquic/transport.c
+    picoquic/unified_log.c
     picoquic/util.c
 )
 
@@ -43,7 +44,10 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic.h
      picoquic/picosocks.h
      picoquic/picoquic_utils.h
-     picoquic/picoquic_packet_loop.h)
+     picoquic/picoquic_packet_loop.h
+     picoquic/picoquic_unified_log.h
+     picoquic/picoquic_logger.h
+     )
 
 set(LOGLIB_LIBRARY_FILES
     loglib/autoqlog.c

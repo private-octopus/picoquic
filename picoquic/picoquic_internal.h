@@ -1285,19 +1285,19 @@ void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* 
 
 void picoquic_log_prefix_initial_cid64(FILE* F, uint64_t log_cnxid64);
 
-void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret);
-void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret);
-void picoquic_log_transport_ids(FILE* F, picoquic_cnx_t* cnx, int log_cnxid);
-void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, uint8_t* bytes, size_t bytes_max);
+/* void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret); */
+/* void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret); */
+/* void picoquic_log_transport_ids(FILE* F, picoquic_cnx_t* cnx, int log_cnxid); */
+void picoquic_textlog_transport_extension(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, uint8_t* bytes, size_t bytes_max);
 void picoquic_log_negotiated_alpn(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, const ptls_iovec_t* list, size_t count);
-void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time);
+/* void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time); */
 void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
-void picoquic_log_retry_packet_error(FILE * F, picoquic_cnx_t * cnx, char const * message);
-void picoquic_log_path_promotion(FILE* F, picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
+/* void picoquic_log_retry_packet_error(FILE * F, picoquic_cnx_t * cnx, char const * message); */
+/* void picoquic_log_path_promotion(FILE* F, picoquic_cnx_t* cnx, int path_index, uint64_t current_time); */
 const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
-void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
-    const char* label1, const char* label2);
+/* void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
+    const char* label1, const char* label2); */
 
 #define PICOQUIC_SET_LOG(quic, F) (quic)->F_log = (void*)(F)
 

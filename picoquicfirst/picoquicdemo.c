@@ -71,6 +71,9 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "democlient.h"
 #include "demoserver.h"
 #include "siduck.h"
+#include "picoquic_unified_log.h"
+#include "picoquic_logger.h"
+#include "picoquic_binlog.h"
 /*
  * SIDUCK datagram demo call back.
  */

@@ -24,7 +24,7 @@
  */
 
 #include "picoquic_internal.h"
-#include "logwriter.h"
+#include "picoquic_binlog.h"
 #include "tls_api.h"
 #include <string.h>
 
@@ -406,7 +406,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     else {
         *consumed = bytes - bytes_zero;
         if (cnx->quic->F_log) {
-            picoquic_log_transport_extension(cnx->quic->F_log, cnx, 0, 1, bytes_zero, *consumed);
+            picoquic_textlog_transport_extension(cnx->quic->F_log, cnx, 0, 1, bytes_zero, *consumed);
         }
 
         if (cnx->f_binlog != NULL) {
@@ -458,7 +458,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     picoquic_clear_transport_extensions(cnx);
 
     if (cnx->quic->F_log) {
-        picoquic_log_transport_extension(cnx->quic->F_log, cnx, 1, 1, bytes, bytes_max);
+        picoquic_textlog_transport_extension(cnx->quic->F_log, cnx, 1, 1, bytes, bytes_max);
     }
     if (cnx->f_binlog != NULL) {
         binlog_transport_extension(cnx, 0, NULL, 0, NULL, 0, NULL, 0, bytes_max, bytes);

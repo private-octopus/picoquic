@@ -27,7 +27,7 @@
 #include "picoquic_internal.h"
 #include "bytestream.h"
 #include "logreader.h"
-#include "logwriter.h"
+#include "picoquic_binlog.h"
 #include "cidset.h"
 
 static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph);

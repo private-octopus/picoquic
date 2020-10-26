@@ -1678,7 +1678,7 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
     }
 }
 
-void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, uint8_t* bytes, size_t bytes_max)
+void picoquic_textlog_transport_extension(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, uint8_t* bytes, size_t bytes_max)
 {
     uint64_t cnx_id_64 = (log_cnxid) ? picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)) : 0;
 
@@ -1768,7 +1768,7 @@ void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t curren
        opaque extension_data<0..2^16-1>;
    } Extension;
 */
-static void picoquic_log_tls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
+static void picoquic_textlog_tls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length)
 {
     uint64_t cnx_id64 = picoquic_val64_connection_id(cnx_id);
@@ -1932,7 +1932,7 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
             ticket_length, min_length);
     } else {
         if (tls_ticket_length > 0 && tls_ticket_ptr != NULL) {
-            picoquic_log_tls_ticket(F, cnx_id, tls_ticket_ptr, (uint16_t) tls_ticket_length);
+            picoquic_textlog_tls_ticket(F, cnx_id, tls_ticket_ptr, (uint16_t) tls_ticket_length);
         }
     }
 
@@ -1988,23 +1988,6 @@ void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic
         va_list args;
         va_start(args, fmt);
         picoquic_txtlog_message_v(quic, cid, fmt, args);
-        va_end(args);
-    }
-}
-
-void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
-{
-    if (cnx->quic->F_log != NULL) {
-        va_list args;
-        va_start(args, fmt);
-        picoquic_txtlog_message_v(cnx->quic, &cnx->initial_cnxid, fmt, args);
-        va_end(args);
-    }
-
-    if (cnx->f_binlog != NULL) {
-        va_list args;
-        va_start(args, fmt);
-        picoquic_binlog_message_v(cnx, fmt, args);
         va_end(args);
     }
 }
@@ -2117,7 +2100,7 @@ void textlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
 #endif
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         /* TODO: alpn */
-        picoquic_log_transport_extension(cnx->quic->F_log, cnx, (is_local)?0:1, 1, params, param_length);
+        picoquic_textlog_transport_extension(cnx->quic->F_log, cnx, (is_local)?0:1, 1, params, param_length);
     }
 }
 
@@ -2168,3 +2151,30 @@ struct st_picoquic_unified_login_t textlog_functions = {
     textlog_close_connection,
     textlog_cc_dump
 };
+
+int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
+{
+    int ret = 0;
+    FILE* F_log;
+
+    if (quic->F_log != NULL && quic->should_close_log) {
+        (void)picoquic_file_close(quic->F_log);
+        quic->F_log = NULL;
+    }
+
+    if (textlog_file != NULL) {
+        F_log = picoquic_file_open(textlog_file, "w");
+        if (F_log == NULL) {
+            DBG_PRINTF("Cannot create log file <%s>\n", textlog_file);
+            ret = -1;
+        }
+        else {
+            quic->F_log = F_log;
+            quic->should_close_log = 1;
+        }
+
+        quic->text_log_fns = &textlog_functions;
+    }
+
+    return ret;
+}

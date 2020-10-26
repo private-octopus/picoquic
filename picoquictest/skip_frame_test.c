@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include "logreader.h"
+#include "picoquic_binlog.h"
 #include "qlog.h"
 
 /*

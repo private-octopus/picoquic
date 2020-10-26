@@ -25,6 +25,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
+#include "picoquic_binlog.h"
 
 /* Add the additional links for multipath scenario */
 static int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop)

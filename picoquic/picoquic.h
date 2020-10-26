@@ -347,16 +347,6 @@ typedef uint32_t(*picoquic_fuzz_fn)(void * fuzz_ctx, picoquic_cnx_t* cnx, uint8_
     size_t bytes_max, size_t length, size_t header_length);
 void picoquic_set_fuzz(picoquic_quic_t* quic, picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx);
 
-/* Set the binary log folder and start generating per connection traces into it.
- * Set to NULL value to stop binary tracing.
- */
-int picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_dir);
-
-/* Set the text log file and start tracing into it.
- * Set to NULL value to stop text log.
- */
-int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);
-
 /* Log application messages or other messages to the text log.
  */
 void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, ...);

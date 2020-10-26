@@ -20,7 +20,7 @@
 */
 
 #include "picoquic_internal.h"
-#include "logwriter.h"
+#include "picoquic_binlog.h"
 #include "tls_api.h"
 #include <stdlib.h>
 #include <string.h>

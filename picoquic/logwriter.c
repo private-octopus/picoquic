@@ -24,7 +24,7 @@
 */
 
 #include <stdarg.h>
-#include "logwriter.h"
+#include "picoquic_binlog.h"
 #include "bytestream.h"
 #include "tls_api.h"
 #include "picotls.h"
@@ -1113,3 +1113,11 @@ struct st_picoquic_unified_login_t binlog_functions = {
     binlog_close_connection,
     picoquic_cc_dump
 };
+
+int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir)
+{
+    quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
+    quic->binlog_dir = picoquic_string_duplicate(binlog_dir);
+    quic->bin_log_fns = &binlog_functions;
+    return 0;
+}

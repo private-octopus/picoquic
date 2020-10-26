@@ -30,7 +30,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include "logwriter.h"
+#include "picoquic_binlog.h"
 #include "csv.h"
 #include "qlog.h"
 #include "autoqlog.h"
