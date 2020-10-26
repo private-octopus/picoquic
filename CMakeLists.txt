@@ -47,6 +47,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_packet_loop.h
      picoquic/picoquic_unified_log.h
      picoquic/picoquic_logger.h
+     picoquic/picoquic_binlog.h
      )
 
 set(LOGLIB_LIBRARY_FILES
