@@ -1708,7 +1708,7 @@ void picoquic_log_transport_ids(FILE* F, picoquic_cnx_t* cnx, int log_cnxid)
     }
 }
 
-void picoquic_log_negotiated_alpn(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, const ptls_iovec_t* list, size_t count)
+void picoquic_textlog_negotiated_alpn(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, const ptls_iovec_t* list, size_t count)
 {
     uint64_t cnx_id_64 = (log_cnxid) ? picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)) : 0;
 
@@ -2079,10 +2079,9 @@ void textlog_packet_lost(picoquic_cnx_t* cnx,
     }
 }
 
-void textlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
+void textlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
     uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
-    const ptls_iovec_t* alpn_list, size_t alpn_count,
-    size_t param_length, uint8_t* params)
+    const ptls_iovec_t* alpn_list, size_t alpn_count)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(sni);
@@ -2092,6 +2091,17 @@ void textlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
     UNREFERENCED_PARAMETER(alpn_list);
     UNREFERENCED_PARAMETER(alpn_count);
 #endif
+    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        /* TODO: alpn */
+        picoquic_textlog_negotiated_alpn(cnx->quic->F_log, cnx, 
+            (is_local) ? 0 : 1, 1, alpn_list, alpn_count);
+    }
+}
+
+
+void textlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
+    size_t param_length, uint8_t* params)
+{
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         /* TODO: alpn */
         picoquic_textlog_transport_extension(cnx->quic->F_log, cnx, (is_local)?0:1, 1, params, param_length);
@@ -2139,6 +2149,7 @@ struct st_picoquic_unified_login_t textlog_functions = {
     textlog_buffered_packet,
     textlog_outgoing_packet,
     textlog_packet_lost,
+    textlog_negotiated_alpn,
     textlog_transport_extension,
     textlog_tls_ticket,
     textlog_new_connection,

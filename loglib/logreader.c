@@ -169,6 +169,11 @@ static int binlog_convert_event(bytestream * s, void * ptr)
             ret = ctx->callbacks->packet_lost(time, s, cbptr);
         }
         break;
+    case picoquic_log_event_alpn_update:
+        if (ret == 0) {
+            ret = ctx->callbacks->alpn_update(time, s, cbptr);
+        }
+        break;
     case picoquic_log_event_param_update:
         if (ret == 0) {
             ret = ctx->callbacks->param_update(time, s, cbptr);

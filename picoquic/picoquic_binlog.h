@@ -82,10 +82,13 @@ void binlog_packet_lost(picoquic_cnx_t* cnx,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time);
 
+/* Logging of SNI and ALPN negotiation */
+void binlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
+    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+    const ptls_iovec_t* alpn_list, size_t alpn_count);
+
 /* binary alternative to picoquic_log_transport_extension() */
 void binlog_transport_extension(picoquic_cnx_t * cnx, int is_local,
-    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
-    const ptls_iovec_t* alpn_list, size_t alpn_count,
     size_t param_length, uint8_t* params);
 
 /* binary alternative to picoquic_log_tls_ticket() */

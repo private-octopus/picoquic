@@ -99,11 +99,16 @@ void picoquic_log_packet_lost(picoquic_cnx_t* cnx,
     uint64_t current_time)
 {}
 
+/* Log ALPN negotiation, or results */
+void picoquic_log_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
+    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+    const ptls_iovec_t* alpn_list, size_t alpn_count);
+
 /* log transport extension -- either formatted by the loacl peer (is_local=1) or received from remote peer */
 void picoquic_log_transport_extension(picoquic_cnx_t* cnx, int is_local,
-    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
-    const ptls_iovec_t* alpn_list, size_t alpn_count,
-    size_t param_length, uint8_t* params){}
+    size_t param_length, uint8_t* params)
+{
+}
 
 /* log TLS ticket */
 void picoquic_log_tls_ticket(picoquic_cnx_t* cnx, uint8_t* ticket, uint16_t ticket_length)

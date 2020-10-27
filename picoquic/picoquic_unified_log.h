@@ -82,10 +82,13 @@ typedef void (*picoquic_log_packet_lost_fn)(picoquic_cnx_t* cnx,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time);
 
+/* log negotiated ALPN */
+typedef void (*picoquic_log_negotiated_alpn_fn)(picoquic_cnx_t* cnx, int is_local,
+    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+    const ptls_iovec_t* alpn_list, size_t alpn_count);
+
 /* log transport extension -- either formatted by the loacl peer (is_local=1) or received from remote peer */
 typedef void (*picoquic_log_transport_extension_fn)(picoquic_cnx_t* cnx, int is_local,
-    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
-    const ptls_iovec_t* alpn_list, size_t alpn_count,
     size_t param_length, uint8_t* params);
 
 /* log TLS ticket */
@@ -112,6 +115,7 @@ typedef struct st_picoquic_unified_login_t {
     picoquic_log_buffered_packet_fn log_buffered_packet;
     picoquic_log_outgoing_packet_fn log_outgoing_packet;
     picoquic_log_packet_lost_fn log_packet_lost;
+    picoquic_log_negotiated_alpn_fn log_negotiated_alpn;
     picoquic_log_transport_extension_fn log_transport_extension;
     picoquic_log_tls_ticket_fn log_picotls_ticket;
     picoquic_log_new_connection_fn log_new_connection;
@@ -154,10 +158,14 @@ void picoquic_log_packet_lost(picoquic_cnx_t* cnx,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time);
 
+/* log negotiated ALPN */
+void picoquic_log_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
+    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+    const ptls_iovec_t* alpn_list, size_t alpn_count);
+
+
 /* log transport extension -- either formatted by the loacl peer (is_local=1) or received from remote peer */
 void picoquic_log_transport_extension(picoquic_cnx_t* cnx, int is_local,
-    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
-    const ptls_iovec_t* alpn_list, size_t alpn_count,
     size_t param_length, uint8_t* params);
 
 /* log TLS ticket */

@@ -410,7 +410,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
 
         if (cnx->f_binlog != NULL) {
-            binlog_transport_extension(cnx, 1, NULL, 0, NULL, 0, NULL, 0, *consumed, bytes_zero);
+            binlog_transport_extension(cnx, 1, *consumed, bytes_zero);
         }
     }
 
@@ -461,7 +461,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         picoquic_textlog_transport_extension(cnx->quic->F_log, cnx, 1, 1, bytes, bytes_max);
     }
     if (cnx->f_binlog != NULL) {
-        binlog_transport_extension(cnx, 0, NULL, 0, NULL, 0, NULL, 0, bytes_max, bytes);
+        binlog_transport_extension(cnx, 0, bytes_max, bytes);
     }
 
     /* Set the parameters to default value zero */

@@ -746,10 +746,9 @@ void binlog_packet_lost(picoquic_cnx_t* cnx,
 }
 
 
-void binlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
+void binlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
     uint8_t const * sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
-    const ptls_iovec_t* alpn_list, size_t alpn_count,
-    size_t param_length, uint8_t * params)
+    const ptls_iovec_t* alpn_list, size_t alpn_count)
 {
     FILE* f = cnx->f_binlog;
 
@@ -757,7 +756,7 @@ void binlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     bytewrite_cid(msg, &cnx->initial_cnxid);
     bytewrite_vint(msg, picoquic_get_quic_time(cnx->quic));
-    bytewrite_vint(msg, picoquic_log_event_param_update);
+    bytewrite_vint(msg, picoquic_log_event_alpn_update);
 
     bytewrite_vint(msg, is_local);
     bytewrite_vint(msg, sni_len);
@@ -778,7 +777,28 @@ void binlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
         bytewrite_buffer(msg, alpn, alpn_len);
     }
 
+    bytestream_buf stream_head;
+    bytestream* head = bytestream_buf_init(&stream_head, 4);
+    bytewrite_int32(head, (uint32_t)bytestream_length(msg));
+
+    (void)fwrite(bytestream_data(head), bytestream_length(head), 1, f);
+    (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
+}
+
+void binlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
+    size_t param_length, uint8_t* params)
+{
+    FILE* f = cnx->f_binlog;
+
+    bytestream_buf stream_msg;
+    bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
+    bytewrite_cid(msg, &cnx->initial_cnxid);
+    bytewrite_vint(msg, picoquic_get_quic_time(cnx->quic));
+    bytewrite_vint(msg, picoquic_log_event_param_update);
+
+    bytewrite_vint(msg, is_local);
     bytewrite_vint(msg, param_length);
+
     if (param_length > 0) {
         bytewrite_buffer(msg, params, param_length);
     }
@@ -1105,6 +1125,7 @@ struct st_picoquic_unified_login_t binlog_functions = {
     binlog_buffered_packet,
     binlog_outgoing_packet,
     binlog_packet_lost,
+    binlog_negotiated_alpn,
     binlog_transport_extension,
     binlog_picotls_ticket_ex,
     binlog_new_connection,

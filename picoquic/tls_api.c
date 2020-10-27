@@ -1026,7 +1026,7 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
 #endif
 
     if (quic->F_log != NULL && quic->cnx_in_progress != NULL) {
-        picoquic_log_negotiated_alpn(quic->F_log, quic->cnx_in_progress, 1, 1, params->negotiated_protocols.list, params->negotiated_protocols.count);
+        picoquic_textlog_negotiated_alpn(quic->F_log, quic->cnx_in_progress, 1, 1, params->negotiated_protocols.list, params->negotiated_protocols.count);
     }
 
     /* Check if the client is proposing the expected ALPN */
@@ -1058,10 +1058,9 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
     }
 
     if (quic->cnx_in_progress != NULL && quic->cnx_in_progress->f_binlog != NULL) {
-        binlog_transport_extension(quic->cnx_in_progress, 
+        binlog_negotiated_alpn(quic->cnx_in_progress,
             0, params->server_name.base, params->server_name.len, alpn_found, alpn_found_length, 
-            params->negotiated_protocols.list, params->negotiated_protocols.count,
-            0, NULL);
+            params->negotiated_protocols.list, params->negotiated_protocols.count);
     }
 
     /* ALPN is mandatory in Quic. Return an error if no match found. */
@@ -2225,14 +2224,13 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
     }
 
     if (cnx->quic->F_log != NULL) {
-        picoquic_log_negotiated_alpn(cnx->quic->F_log, cnx, 0, 1, ctx->handshake_properties.client.negotiated_protocols.list, ctx->handshake_properties.client.negotiated_protocols.count);
+        picoquic_textlog_negotiated_alpn(cnx->quic->F_log, cnx, 0, 1, ctx->handshake_properties.client.negotiated_protocols.list, ctx->handshake_properties.client.negotiated_protocols.count);
     }
     if (cnx->f_binlog != NULL) {
-        binlog_transport_extension(cnx,
+        binlog_negotiated_alpn(cnx,
             1, (const uint8_t *)cnx->sni, (cnx->sni == NULL)?0:strlen(cnx->sni), NULL, 0,
             ctx->handshake_properties.client.negotiated_protocols.list, 
-            ctx->handshake_properties.client.negotiated_protocols.count,
-            0, NULL);
+            ctx->handshake_properties.client.negotiated_protocols.count);
     }
 
     /* No resumption if no alpn specified upfront, because it would make the negotiation and
@@ -2556,8 +2554,8 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed)
                             cnx->alpn = picoquic_string_duplicate(alpn);
 
                             if (cnx->f_binlog != NULL) {
-                                binlog_transport_extension(cnx, 0, NULL, 0, 
-                                    (const uint8_t *)alpn, strlen(alpn), NULL, 0, 0, NULL);
+                                binlog_negotiated_alpn(cnx, 0, NULL, 0,
+                                    (const uint8_t *)alpn, strlen(alpn), NULL, 0);
                             }
 
                             if (cnx->callback_fn != NULL) {
