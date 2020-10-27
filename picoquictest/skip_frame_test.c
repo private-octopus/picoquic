@@ -930,7 +930,7 @@ int logger_test()
     picoquic_cnx_t cnx;
     picoquic_quic_t quic;
     memset(&cnx, 0, sizeof(cnx));
-
+    memset(&quic, 0, sizeof(quic));
 
     cnx.quic = &quic;
 
