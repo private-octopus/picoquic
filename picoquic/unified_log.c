@@ -21,7 +21,6 @@
 
 #include "picoquic.h"
 #include "picoquic_internal.h"
-#include "picoquic_binlog.h"
 #include "tls_api.h"
 #include <stdlib.h>
 #include <string.h>
@@ -119,9 +118,27 @@ void picoquic_log_tls_ticket(picoquic_cnx_t* cnx, uint8_t* ticket, uint16_t tick
 }
 
 /* log the start of a connection */
-void picoquic_log_new_connection(picoquic_cnx_t* cnx){}
+void picoquic_log_new_connection(picoquic_cnx_t* cnx)
+{
+    if (cnx->quic->F_log != NULL) {
+        cnx->quic->text_log_fns->log_new_connection(cnx);
+    }
+
+    if (cnx->quic->bin_log_fns != NULL) {
+        cnx->quic->bin_log_fns->log_new_connection(cnx);
+    }
+}
 /* log the end of a connection */
-void picoquic_log_close_connection(picoquic_cnx_t* cnx){}
+void picoquic_log_close_connection(picoquic_cnx_t* cnx)
+{
+    if (cnx->quic->F_log != NULL) {
+        cnx->quic->text_log_fns->log_close_connection(cnx);
+    }
+
+    if (cnx->f_binlog != NULL) {
+        cnx->quic->bin_log_fns->log_close_connection(cnx);
+    }
+}
 
 /* log congestion control parameters */
 void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)

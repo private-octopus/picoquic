@@ -22,7 +22,7 @@
 
 #include "picoquic.h"
 #include "picoquic_internal.h"
-#include "picoquic_binlog.h"
+#include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include <stdlib.h>
 #include <string.h>
@@ -2479,7 +2479,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        binlog_new_connection(cnx);
+        picoquic_log_new_connection(cnx);
     }
 
     return cnx;
@@ -3020,7 +3020,7 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
         cnx->tls_ctx = NULL;
     }
 
-    binlog_new_connection(cnx);
+    picoquic_log_new_connection(cnx);
 
     if (ret == 0) {
         ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
@@ -3101,7 +3101,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
     picoquic_cnxid_stash_t* stashed_cnxid;
 
     if (cnx != NULL) {
-        binlog_close_connection(cnx);
+        picoquic_log_close_connection(cnx);
 
         if (cnx->is_half_open && cnx->quic->current_number_half_open > 0) {
             cnx->quic->current_number_half_open--;

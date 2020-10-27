@@ -1282,7 +1282,7 @@ int picoquic_incoming_retry(
 
     if (ret == 0) {
         /* Close the log, because it is keyed by initial_cnxid */
-        binlog_close_connection(cnx);
+        picoquic_log_close_connection(cnx);
         /* if this is the first reset, reset the original cid */
         if (cnx->original_cnxid.id_len == 0) {
             cnx->original_cnxid = cnx->initial_cnxid;
@@ -1842,7 +1842,7 @@ int picoquic_incoming_encrypted(
             }
 
             if (ret == 0 && picoquic_cnx_is_still_logging(cnx)) {
-                picoquic_cc_dump(cnx, current_time);
+                picoquic_log_cc_dump(cnx, current_time);
             }
         }
     }

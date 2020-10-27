@@ -952,7 +952,7 @@ FILE* create_binlog(char const* binlog_file, uint64_t creation_time)
  * sending a packet.
  */
 
-void picoquic_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
+void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 {
     if (cnx->f_binlog == NULL) {
         return;
@@ -1109,7 +1109,7 @@ struct st_picoquic_unified_login_t binlog_functions = {
     binlog_picotls_ticket_ex,
     binlog_new_connection,
     binlog_close_connection,
-    picoquic_cc_dump
+    binlog_cc_dump
 };
 
 int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir)
