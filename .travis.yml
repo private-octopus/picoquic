@@ -71,6 +71,7 @@ script:
   - ${EXTRA} make
   - ulimit -c unlimited -S
   - ./picoquic_ct -n -r && QUICRESULT=$?
+  - if ["$TRAVIS_OSX_IMAGE" == "xcode10.1" ]; then sh -c 'echo bt | lldp -c core -- picoquic_ct'; fi
   - ./picohttp_ct -n -r -x http_corrupt && HTTPRESULT=$?
   - if [[ ${QUICRESULT} != 0 ]]; then for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picoquic_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done; fi;
   - if [[ ${HTTPRESULT} != 0 ]]; then for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picohttp_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done; fi;
