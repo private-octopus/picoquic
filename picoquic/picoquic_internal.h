@@ -562,9 +562,9 @@ typedef struct st_picoquic_quic_t {
     char* binlog_dir;
     char* qlog_dir;
     picoquic_autoqlog_fn autoqlog_fn;
-    struct st_picoquic_unified_login_t* text_log_fns;
-    struct st_picoquic_unified_login_t* bin_log_fns;
-    struct st_picoquic_unified_login_t* qlog_fns;
+    struct st_picoquic_unified_logging_t* text_log_fns;
+    struct st_picoquic_unified_logging_t* bin_log_fns;
+    struct st_picoquic_unified_logging_t* qlog_fns;
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);

@@ -2138,7 +2138,7 @@ void textlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
     }
 }
 
-struct st_picoquic_unified_login_t textlog_functions = {
+struct st_picoquic_unified_logging_t textlog_functions = {
     /* Per context log function */
     txtlog_context_free_app_message,
     textlog_quic_pdu,

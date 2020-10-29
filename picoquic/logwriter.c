@@ -1113,7 +1113,7 @@ static void binlog_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list var
     }
 }
 
-struct st_picoquic_unified_login_t binlog_functions = {
+struct st_picoquic_unified_logging_t binlog_functions = {
     /* Per context log function */
     binlog_ignore_quic_app_message,
     binlog_ignore_quic_pdu,

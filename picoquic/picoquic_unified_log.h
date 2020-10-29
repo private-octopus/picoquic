@@ -103,7 +103,7 @@ typedef void (*picoquic_log_close_connection_fn)(picoquic_cnx_t* cnx);
 /* log congestion control parameters */
 typedef void (*picoquic_log_cc_dump_fn)(picoquic_cnx_t* cnx, uint64_t current_time);
 
-typedef struct st_picoquic_unified_login_t {
+typedef struct st_picoquic_unified_logging_t {
     /* Per context log function */
     picoquic_log_quic_app_message_fn log_quic_app_message;
     picoquic_log_quic_pdu_fn log_quic_pdu;
@@ -121,7 +121,7 @@ typedef struct st_picoquic_unified_login_t {
     picoquic_log_new_connection_fn log_new_connection;
     picoquic_log_close_connection_fn log_close_connection;
     picoquic_log_cc_dump_fn log_cc_dump;
-} picoquic_unified_login_t;
+} picoquic_unified_logging_t;
 
 /* Log an event that cannot be attached to a specific connection */
 void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, ...);
