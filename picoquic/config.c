@@ -31,6 +31,8 @@
 #include <stdint.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
+#include "picoquic_binlog.h"
+#include "picoquic_logger.h"
 
 char const* picoquic_options = "c:k:K:p:u:v:o:w:f:i:s:e:E:C:l:b:q:m:n:a:t:S:I:G:1rRhzDLQ";
 
