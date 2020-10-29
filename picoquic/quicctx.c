@@ -665,11 +665,8 @@ picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* 
     if (sp != NULL) {
         quic->pending_stateless_packet = sp->next_packet;
         sp->next_packet = NULL;
-
-        if (quic->F_log != NULL) {
-            picoquic_log_packet_address(quic->F_log, sp->cnxid_log64,
-                NULL, (struct sockaddr*)&sp->addr_to, 0, sp->length, picoquic_get_quic_time(quic));
-        }
+        picoquic_log_quic_pdu(quic, 0, picoquic_get_quic_time(quic), sp->cnxid_log64,
+            (struct sockaddr*) & sp->addr_to, (struct sockaddr*) & sp->addr_local, sp->length);
     }
 
     return sp;

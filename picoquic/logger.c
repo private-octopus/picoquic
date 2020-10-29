@@ -1997,15 +1997,16 @@ void textlog_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
 }
 
 void textlog_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time,
-    picoquic_connection_id_t * cid,
+    uint64_t cid64,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(addr_local);
 #endif
-    picoquic_log_packet_address(quic->F_log,
-        picoquic_val64_connection_id(*cid), 
-        NULL, addr_peer, receiving, packet_length, current_time);
+    if (quic->F_log != NULL) {
+        picoquic_log_packet_address(quic->F_log, cid64,
+            NULL, addr_peer, receiving, packet_length, current_time);
+    }
 }
 
 void textlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,

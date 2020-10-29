@@ -1025,10 +1025,6 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
     }
 #endif
 
-    if (quic->F_log != NULL && quic->cnx_in_progress != NULL) {
-        picoquic_textlog_negotiated_alpn(quic->F_log, quic->cnx_in_progress, 1, 1, params->negotiated_protocols.list, params->negotiated_protocols.count);
-    }
-
     /* Check if the client is proposing the expected ALPN */
     if (quic->default_alpn != NULL) {
         size_t len = strlen(quic->default_alpn);

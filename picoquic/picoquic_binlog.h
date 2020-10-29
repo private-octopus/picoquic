@@ -57,7 +57,7 @@ typedef enum {
     picoquic_log_event_frame_recv = 0x0083,
 } picoquic_log_event_type;
 
-/* binary alternative to picoquic_log_packet_address() */
+/* Log PDU arrival or departure */
 void binlog_pdu(FILE * f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length);
 

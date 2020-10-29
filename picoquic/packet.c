@@ -629,11 +629,6 @@ int picoquic_parse_header_and_decrypt(
                         if (*pcnx == NULL) {
                             DBG_PRINTF("%s", "Cannot create connection context\n");
                         }
-                        else if (quic->F_log) {
-                            picoquic_log_packet_address(quic->F_log, picoquic_val64_connection_id(ph->dest_cnx_id),
-                                *pcnx, addr_from, 1, length, current_time);
-                            fflush(quic->F_log);
-                        }
                     }
                 }
             }
@@ -863,11 +858,7 @@ void picoquic_prepare_version_negotiation(
             sp->cnxid_log64 = picoquic_val64_connection_id(sp->initial_cid);
             sp->ptype = picoquic_packet_version_negotiation;
 
-            if (quic->F_log != NULL) {
-                picoquic_log_outgoing_segment(quic->F_log, 1, NULL,
-                    bytes, 0, sp->length,
-                    bytes, sp->length, 0);
-            }
+            picoquic_log_quic_pdu(quic, 1, picoquic_get_quic_time(quic), 0, addr_to, addr_from, sp->length);
 
             picoquic_queue_stateless_packet(quic, sp);
         }
@@ -988,16 +979,9 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         sp->if_index_local = if_index_to;
         sp->cnxid_log64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
 
-        if (cnx->quic->F_log != NULL) {
-            picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
-                bytes, 0, sp->length,
-                bytes, sp->length, pn_length);
-        }
-        if (cnx->f_binlog != NULL) {
-            binlog_outgoing_packet(cnx,
-                bytes, 0, pn_length, sp->length,
-                bytes, sp->length, picoquic_get_quic_time(cnx->quic));
-        }
+        picoquic_log_outgoing_packet(cnx,
+            bytes, 0, pn_length, sp->length,
+            bytes, sp->length, picoquic_get_quic_time(cnx->quic));
 
         picoquic_queue_stateless_packet(cnx->quic, sp);
     }
@@ -1931,8 +1915,6 @@ int picoquic_incoming_segment(
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,
         current_time, &ph, &cnx, consumed, &new_context_created);
 
-    picoquic_connection_id_t* log_cnxid = (cnx != NULL) ? &cnx->initial_cnxid : &ph.dest_cnx_id;
-
     /* Verify that the segment coalescing is for the same destination ID */
     if (picoquic_is_connection_id_null(previous_dest_id)) {
         /* This is the first segment in the incoming packet */
@@ -1945,21 +1927,9 @@ int picoquic_incoming_segment(
             picoquic_log_pdu(cnx, 1, current_time, addr_from, addr_to, packet_length);
         }
         else {
-            if (quic->F_log != NULL) {
-                picoquic_log_packet_address(quic->F_log, picoquic_val64_connection_id(ph.dest_cnx_id),
-                    cnx, addr_from, 1, packet_length, current_time);
-            }
+            picoquic_log_quic_pdu(quic, 1, current_time, picoquic_val64_connection_id(ph.dest_cnx_id),
+                addr_from, addr_to, packet_length);
         }
-#if 0
-        if (quic->F_log != NULL && (cnx == NULL || picoquic_cnx_is_still_logging(cnx))) {
-            picoquic_log_packet_address(quic->F_log,
-                picoquic_val64_connection_id((cnx == NULL) ? ph.dest_cnx_id : picoquic_get_logging_cnxid(cnx)),
-                cnx, addr_from, 1, packet_length, current_time);
-        }
-        if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
-            binlog_pdu(cnx->f_binlog, log_cnxid, 1, current_time, addr_from, addr_to, packet_length);
-        }
-#endif
     }
     else {
         if (ret == 0 && picoquic_compare_connection_id(previous_dest_id, &ph.dest_cnx_id) != 0) {
@@ -1973,17 +1943,14 @@ int picoquic_incoming_segment(
     }
 
     /* Log the incoming packet */
-    if (quic->F_log != NULL && (cnx == NULL || picoquic_cnx_is_still_logging(cnx))) {
-        picoquic_log_decrypted_segment(quic->F_log, 1, cnx, 1, &ph, bytes, *consumed, ret);
-    }
-    if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
+    if (cnx != NULL) {
         if (ret == 0) {
-            binlog_packet(cnx->f_binlog, log_cnxid, 1, current_time, &ph, bytes, *consumed);
+            picoquic_log_packet(cnx, 1, current_time, &ph, bytes, *consumed);
         }
         else if (is_buffered) {
-            binlog_buffered_packet(cnx, ph.ptype, current_time);
+            picoquic_log_buffered_packet(cnx, ph.ptype, current_time);
         } else {
-            binlog_dropped_packet(cnx, &ph, length, ret, bytes, current_time);
+            picoquic_log_dropped_packet(cnx, &ph, length, ret, bytes, current_time);
         }
     }
 

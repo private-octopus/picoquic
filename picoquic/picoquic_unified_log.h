@@ -51,7 +51,7 @@ extern "C" {
 typedef void (*picoquic_log_quic_app_message_fn)(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs);
 
 /* Log arrival or departure of an UDP datagram for an unknown connection */
-typedef void (*picoquic_log_quic_pdu_fn)(picoquic_quic_t* quic, int receiving, uint64_t current_time, picoquic_connection_id_t* cid,
+typedef void (*picoquic_log_quic_pdu_fn)(picoquic_quic_t* quic, int receiving, uint64_t current_time, uint64_t cid64,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length);
 
 /* Log an event relating to a specific connection */
@@ -127,7 +127,7 @@ typedef struct st_picoquic_unified_login_t {
 void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, ...);
 
 /* Log arrival or departure of an UDP datagram for an unknown connection */
-void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, picoquic_connection_id_t* cid,
+void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, uint64_t cid64,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length);
 
 /* Log an event relating to a specific connection */

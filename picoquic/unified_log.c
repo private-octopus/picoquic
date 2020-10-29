@@ -30,8 +30,13 @@
 #include "picoquic_unified_log.h"
 
 /* Log arrival or departure of an UDP datagram for an unknown connection */
-void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, picoquic_connection_id_t* cid,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length){}
+void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, uint64_t cid64,
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
+{
+    if (quic->F_log != NULL) {
+        quic->text_log_fns->log_quic_pdu(quic, receiving, current_time, cid64, addr_peer, addr_local, packet_length);
+    }
+}
 
 /* Log an event relating to a specific connection */
 
@@ -79,25 +84,82 @@ void picoquic_log_pdu(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
 
 /* Log a decrypted packet - receiving = 1 if arrival, = 0 if sending */
 void picoquic_log_packet(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
-    struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t bytes_max){}
+    struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t bytes_max)
+{
+    if (picoquic_cnx_is_still_logging(cnx)) {
+        if (cnx->quic->F_log != NULL) {
+            cnx->quic->text_log_fns->log_packet(cnx, receiving, current_time, ph, bytes, bytes_max);
+        }
+
+        if (cnx->f_binlog != NULL) {
+            cnx->quic->bin_log_fns->log_packet(cnx, receiving, current_time, ph, bytes, bytes_max);
+        }
+    }
+}
 
 /* Report that a packet was dropped due to some error */
-void picoquic_log_dropped_packet(picoquic_cnx_t* cnx, struct st_picoquic_packet_header_t* ph, size_t packet_size, int err, uint8_t* raw_data, uint64_t current_time){}
+void picoquic_log_dropped_packet(picoquic_cnx_t* cnx, struct st_picoquic_packet_header_t* ph, size_t packet_size,
+    int err, uint8_t* raw_data, uint64_t current_time)
+{
+    if (picoquic_cnx_is_still_logging(cnx)) {
+        if (cnx->quic->F_log != NULL) {
+            cnx->quic->text_log_fns->log_dropped_packet(cnx, ph, packet_size, err, raw_data, current_time);
+        }
+
+        if (cnx->f_binlog != NULL) {
+            cnx->quic->bin_log_fns->log_dropped_packet(cnx, ph, packet_size, err, raw_data, current_time);
+        }
+    }
+}
 
 /* Report that packet was buffered waiting for decryption */
-void picoquic_log_buffered_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, uint64_t current_time){}
+void picoquic_log_buffered_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, uint64_t current_time)
+{
+    if (picoquic_cnx_is_still_logging(cnx)) {
+        if (cnx->quic->F_log != NULL) {
+            cnx->quic->text_log_fns->log_buffered_packet(cnx, ptype, current_time);
+        }
+
+        if (cnx->f_binlog != NULL) {
+            cnx->quic->bin_log_fns->log_buffered_packet(cnx, ptype, current_time);
+        }
+    }
+}
 
 /* Log that a packet was formatted, ready to be sent. */
 void picoquic_log_outgoing_packet(picoquic_cnx_t* cnx,
     uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
-    uint8_t* send_buffer, size_t send_length, uint64_t current_time){}
+    uint8_t* send_buffer, size_t send_length, uint64_t current_time)
+{
+    if (picoquic_cnx_is_still_logging(cnx)) {
+        if (cnx->quic->F_log != NULL) {
+            cnx->quic->text_log_fns->log_outgoing_packet(cnx, bytes, sequence_number, pn_length, length,
+                send_buffer, send_length, current_time);
+        }
+
+        if (cnx->f_binlog != NULL) {
+            cnx->quic->bin_log_fns->log_outgoing_packet(cnx, bytes, sequence_number, pn_length, length,
+                send_buffer, send_length, current_time);
+        }
+    }
+}
 
 /* Log packet lost events */
 void picoquic_log_packet_lost(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time)
-{}
+{
+    if (picoquic_cnx_is_still_logging(cnx)) {
+        if (cnx->quic->F_log != NULL) {
+            cnx->quic->text_log_fns->log_packet_lost(cnx, ptype, sequence_number, trigger, dcid, packet_size, current_time);
+        }
+
+        if (cnx->f_binlog != NULL) {
+            cnx->quic->bin_log_fns->log_packet_lost(cnx, ptype, sequence_number, trigger, dcid, packet_size, current_time);
+        }
+    }
+}
 
 /* Log ALPN negotiation, or results */
 void picoquic_log_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
@@ -111,7 +173,6 @@ void picoquic_log_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
     if (cnx->f_binlog != NULL) {
         cnx->quic->bin_log_fns->log_negotiated_alpn(cnx, is_local, sni, sni_len, alpn, alpn_len, alpn_list, alpn_count);
     }
-
 }
 
 /* log transport extension -- either formatted by the loacl peer (is_local=1) or received from remote peer */
