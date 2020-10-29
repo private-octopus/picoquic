@@ -22,7 +22,7 @@
 
 #include "picoquic.h"
 #include "picoquic_internal.h"
-#include "logwriter.h"
+#include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include <stdlib.h>
 #include <string.h>
@@ -665,11 +665,8 @@ picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* 
     if (sp != NULL) {
         quic->pending_stateless_packet = sp->next_packet;
         sp->next_packet = NULL;
-
-        if (quic->F_log != NULL) {
-            picoquic_log_packet_address(quic->F_log, sp->cnxid_log64,
-                NULL, (struct sockaddr*)&sp->addr_to, 0, sp->length, picoquic_get_quic_time(quic));
-        }
+        picoquic_log_quic_pdu(quic, 0, picoquic_get_quic_time(quic), sp->cnxid_log64,
+            (struct sockaddr*) & sp->addr_to, (struct sockaddr*) & sp->addr_local, sp->length);
     }
 
     return sp;
@@ -2229,7 +2226,7 @@ picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, picoquic_
 
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id, 
-    struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
+    const struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
     char const* sni, char const* alpn, char client_mode)
 {
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)malloc(sizeof(picoquic_cnx_t));
@@ -2479,7 +2476,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        binlog_new_connection(cnx);
+        picoquic_log_new_connection(cnx);
     }
 
     return cnx;
@@ -2774,38 +2771,6 @@ void picoquic_set_fuzz(picoquic_quic_t * quic, picoquic_fuzz_fn fuzz_fn, void * 
     quic->fuzz_ctx = fuzz_ctx;
 }
 
-int picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_dir)
-{
-    quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
-    quic->binlog_dir = picoquic_string_duplicate(binlog_dir);
-    return 0;
-}
-
-int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
-{
-    int ret = 0;
-    FILE* F_log;
-
-    if (quic->F_log != NULL && quic->should_close_log) {
-        (void)picoquic_file_close(quic->F_log);
-        quic->F_log = NULL;
-    }
-
-    if (textlog_file != NULL) {
-        F_log = picoquic_file_open(textlog_file, "w");
-        if (F_log == NULL) {
-            DBG_PRINTF("Cannot create log file <%s>\n", textlog_file);
-            ret = -1;
-        }
-        else {
-            quic->F_log = F_log;
-            quic->should_close_log = 1;
-        }
-    }
-
-    return ret;
-}
-
 void picoquic_set_log_level(picoquic_quic_t* quic, int log_level)
 {
     /* Only two level for now: log first 100 packets, or log everything. */
@@ -3052,7 +3017,7 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
         cnx->tls_ctx = NULL;
     }
 
-    binlog_new_connection(cnx);
+    picoquic_log_new_connection(cnx);
 
     if (ret == 0) {
         ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
@@ -3133,7 +3098,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
     picoquic_cnxid_stash_t* stashed_cnxid;
 
     if (cnx != NULL) {
-        binlog_close_connection(cnx);
+        picoquic_log_close_connection(cnx);
 
         if (cnx->is_half_open && cnx->quic->current_number_half_open > 0) {
             cnx->quic->current_number_half_open--;
@@ -3244,7 +3209,7 @@ picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id
     return ret;
 }
 
-picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr)
+picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, const struct sockaddr* addr)
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
@@ -3262,7 +3227,7 @@ picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr
 }
 
 picoquic_cnx_t* picoquic_cnx_by_icid(picoquic_quic_t* quic, picoquic_connection_id_t* icid,
-    struct sockaddr* addr)
+    const struct sockaddr* addr)
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
@@ -3280,7 +3245,7 @@ picoquic_cnx_t* picoquic_cnx_by_icid(picoquic_quic_t* quic, picoquic_connection_
     return ret;
 }
 
-picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, uint8_t* reset_secret, struct sockaddr* addr)
+picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* reset_secret, const struct sockaddr* addr)
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;

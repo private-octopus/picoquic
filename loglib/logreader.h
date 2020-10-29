@@ -43,6 +43,7 @@ typedef struct binlog_convert_cb_st {
 
     int (*connection_start)(uint64_t time, const picoquic_connection_id_t * cid, int client_mode,
         uint32_t proposed_version, const picoquic_connection_id_t * remote_cnxid, void * cbptr);
+    int(*alpn_update)(uint64_t time, bytestream* s, void* ptr);
     int(*param_update)(uint64_t time, bytestream* s, void* ptr);
     int (*pdu)(uint64_t time, int rxtx, bytestream* s, void * ptr);
     int (*packet_start)(uint64_t time, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr);

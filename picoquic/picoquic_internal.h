@@ -266,7 +266,7 @@ typedef struct st_picoquic_packet_header_t {
     unsigned int quic_bit_is_zero : 1;
 
     size_t token_length;
-    uint8_t* token_bytes;
+    const uint8_t* token_bytes;
     size_t pl_val;
 } picoquic_packet_header;
 
@@ -478,10 +478,6 @@ typedef int (*picoquic_autoqlog_fn)(picoquic_cnx_t * cnx);
  * open sockets, etc.
  */
 typedef struct st_picoquic_quic_t {
-    void * F_log;
-    char* binlog_dir;
-    char* qlog_dir;
-    picoquic_autoqlog_fn autoqlog_fn;
     void* tls_master_ctx;
     struct st_ptls_key_exchange_context_t * esni_key_exchange[16];
     picoquic_stream_data_cb_fn default_callback_fn;
@@ -560,6 +556,15 @@ typedef struct st_picoquic_quic_t {
     void* fuzz_ctx;
     int wake_file;
     int wake_line;
+
+    /* Logging APIS */
+    void* F_log;
+    char* binlog_dir;
+    char* qlog_dir;
+    picoquic_autoqlog_fn autoqlog_fn;
+    struct st_picoquic_unified_logging_t* text_log_fns;
+    struct st_picoquic_unified_logging_t* bin_log_fns;
+    struct st_picoquic_unified_logging_t* qlog_fns;
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);
@@ -1170,10 +1175,10 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
 
 /* Connection context retrieval functions */
 picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id);
-picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr);
+picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, const struct sockaddr* addr);
 picoquic_cnx_t* picoquic_cnx_by_icid(picoquic_quic_t* quic, picoquic_connection_id_t* icid,
-    struct sockaddr* addr);
-picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, uint8_t* reset_secret, struct sockaddr* addr);
+    const struct sockaddr* addr);
+picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* reset_secret, const struct sockaddr* addr);
 
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int slow_start);
@@ -1201,8 +1206,8 @@ void picoformat_64(uint8_t* bytes, uint64_t n64);
 size_t picoquic_varint_encode(uint8_t* bytes, size_t max_bytes, uint64_t n64);
 void picoquic_varint_encode_16(uint8_t* bytes, uint16_t n16);
 size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
-uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64);
-uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_frames_varint_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64);
+const uint8_t* picoquic_frames_varint_skip(const uint8_t* bytes, const uint8_t* bytes_max);
 size_t picoquic_varint_skip(const uint8_t* bytes);
 
 size_t picoquic_encode_varint_length(uint64_t n64);
@@ -1212,9 +1217,9 @@ size_t picoquic_decode_varint_length(uint8_t byte);
 
 int picoquic_parse_packet_header(
     picoquic_quic_t* quic,
-    uint8_t* bytes,
+    const uint8_t* bytes,
     size_t length,
-    struct sockaddr* addr_from,
+    const struct sockaddr* addr_from,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
     int receiving);
@@ -1255,46 +1260,15 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
 
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,
-    uint8_t* bytes,
+    const uint8_t* bytes,
     size_t length,
     size_t packet_length,
-    struct sockaddr* addr_from,
+    const struct sockaddr* addr_from,
     uint64_t current_time,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
     size_t * consumed,
     int * new_context_created);
-
-/* Handling of packet logging */
-void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* cnx,
-    int receiving, picoquic_packet_header * ph, uint8_t* bytes, size_t length, int ret);
-
-void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* cnx,
-    uint8_t * bytes,
-    uint64_t sequence_number,
-    size_t length,
-    uint8_t* send_buffer, size_t send_length, size_t pn_length);
-
-void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* cnx,
-    struct sockaddr* addr_peer, int receiving, size_t length, uint64_t current_time);
-
-void picoquic_log_prefix_initial_cid64(FILE* F, uint64_t log_cnxid64);
-
-void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret);
-void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret);
-void picoquic_log_transport_ids(FILE* F, picoquic_cnx_t* cnx, int log_cnxid);
-void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, uint8_t* bytes, size_t bytes_max);
-void picoquic_log_negotiated_alpn(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, const ptls_iovec_t* list, size_t count);
-void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time);
-void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
-    uint8_t* ticket, uint16_t ticket_length);
-void picoquic_log_retry_packet_error(FILE * F, picoquic_cnx_t * cnx, char const * message);
-void picoquic_log_path_promotion(FILE* F, picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
-const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
-void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
-    const char* label1, const char* label2);
-
-#define PICOQUIC_SET_LOG(quic, F) (quic)->F_log = (void*)(F)
 
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);
@@ -1348,7 +1322,7 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
 void picoquic_add_output_streams(picoquic_cnx_t * cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir);
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
-uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
     const uint8_t* bytes_max, uint64_t current_time);
 
 uint8_t* picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, 
@@ -1364,7 +1338,7 @@ void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_he
  * if it was not superceded by a similar frame carrying a larger max value.
  *
  * May have to split a retransmitted stream frame if it does not fit in the new packet size */
-int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
+int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, int* no_need_to_repeat);
 
 uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max,
@@ -1395,7 +1369,7 @@ int picoquic_parse_ack_header(
     uint64_t* num_block, uint64_t* largest,
     uint64_t* ack_delay, size_t* consumed,
     uint8_t ack_delay_exponent);
-uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
     const uint8_t* bytes_max, int epoch);
 uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_format_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time, picoquic_packet_context_enum pc);
@@ -1425,15 +1399,15 @@ int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_hea
 void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame);
 int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx);
 uint8_t* picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
-uint8_t* picoquic_parse_ack_frequency_frame(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* seq, uint64_t* packets, uint64_t* microsec);
+const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* seq, uint64_t* packets, uint64_t* microsec);
 uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data);
 uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time);
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);
 
-int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, size_t bytes_max,
+int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time);
 
-int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
+int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 
 int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closing_received);
 

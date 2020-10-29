@@ -317,7 +317,8 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
     return ret;
 }
 
-int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
+
+int qlog_alpn_update(uint64_t time, bytestream* s, void* ptr)
 {
     qlog_context_t* ctx = (qlog_context_t*)ptr;
     int64_t delta_time = time - ctx->start_time;
@@ -325,7 +326,6 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
     uint64_t owner = 0;
     uint64_t sni_length = 0;
     uint64_t alpn_length = 0;
-    uint64_t tp_length = 0;
     uint64_t alpn_count = 0;
     int ret = 0;
 
@@ -340,7 +340,7 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
 
     ret |= byteread_vint(s, &sni_length);
     fprintf(f, "[%"PRId64", \"transport\", \"parameters_set\", {\n    \"owner\": \"%s\"",
-        delta_time, (owner)?"local":"remote");
+        delta_time, (owner) ? "local" : "remote");
     if (sni_length > 0) {
         fprintf(f, ",\n    \"sni\": ");
         ret |= qlog_chars(f, s, sni_length);
@@ -367,6 +367,35 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
         fprintf(f, ",\n    \"alpn\": ");
         qlog_chars(f, s, alpn_length);
     }
+
+    fprintf(f, "}]");
+
+    ctx->event_count++;
+
+    return 0;
+}
+
+
+int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
+{
+    qlog_context_t* ctx = (qlog_context_t*)ptr;
+    int64_t delta_time = time - ctx->start_time;
+    FILE* f = ctx->f_txtlog;
+    uint64_t owner = 0;
+    uint64_t tp_length = 0;
+    int ret = 0;
+
+    ret |= byteread_vint(s, &owner);
+
+    if (ctx->event_count != 0) {
+        fprintf(f, ",\n");
+    }
+    else {
+        fprintf(f, "\n");
+    }
+
+    fprintf(f, "[%"PRId64", \"transport\", \"parameters_set\", {\n    \"owner\": \"%s\"",
+        delta_time, (owner)?"local":"remote");
 
     ret |= byteread_vint(s, &tp_length);
 
@@ -1345,6 +1374,7 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char
         binlog_convert_cb_t ctx;
         ctx.connection_start = qlog_connection_start;
         ctx.connection_end = qlog_connection_end;
+        ctx.alpn_update = qlog_alpn_update;
         ctx.param_update = qlog_param_update;
         ctx.pdu = qlog_pdu;
         ctx.packet_start = qlog_packet_start;

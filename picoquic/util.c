@@ -603,20 +603,20 @@ int picoquic_file_delete(char const * file_name, int * last_err)
   * These functions return NULL in case of a failure (insufficient buffer).
   */
 
-uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_max, size_t size)
+const uint8_t* picoquic_frames_fixed_skip(const uint8_t* bytes, const uint8_t* bytes_max, size_t size)
 {
     return (bytes += size) <= bytes_max ? bytes : NULL;
 }
 
 
-uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max)
+const uint8_t* picoquic_frames_varint_skip(const uint8_t* bytes, const uint8_t* bytes_max)
 {
     return bytes < bytes_max ? picoquic_frames_fixed_skip(bytes, bytes_max, VARINT_LEN(bytes)) : NULL;
 }
 
 
 /* Parse a varint. In case of an error, *n64 is unchanged, and NULL is returned */
-uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64)
+const uint8_t* picoquic_frames_varint_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64)
 {
     uint8_t length;
 
@@ -637,7 +637,7 @@ uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max,
     return bytes;
 }
 
-uint8_t* picoquic_frames_varlen_decode(uint8_t* bytes, const uint8_t* bytes_max, size_t* n)
+const uint8_t* picoquic_frames_varlen_decode(const uint8_t* bytes, const uint8_t* bytes_max, size_t* n)
 {
     uint64_t len = 0;
     bytes = picoquic_frames_varint_decode(bytes, bytes_max, &len);
@@ -645,7 +645,7 @@ uint8_t* picoquic_frames_varlen_decode(uint8_t* bytes, const uint8_t* bytes_max,
     return (*n == len) ? bytes : NULL;
 }
 
-uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n)
+const uint8_t* picoquic_frames_uint8_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n)
 {
     if (bytes < bytes_max) {
         *n = *bytes++;
@@ -657,7 +657,7 @@ uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* bytes_max, 
 }
 
 
-uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t* n)
+const uint8_t* picoquic_frames_uint16_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint16_t* n)
 {
     if (bytes + sizeof(*n) <= bytes_max) {
         *n = PICOPARSE_16(bytes);
@@ -669,7 +669,7 @@ uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* bytes_max,
     return bytes;
 }
 
-uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t* n)
+const uint8_t* picoquic_frames_uint32_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint32_t* n)
 {
     if (bytes + sizeof(*n) <= bytes_max) {
         *n = PICOPARSE_32(bytes);
@@ -681,7 +681,7 @@ uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max,
     return bytes;
 }
 
-uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n)
+const uint8_t* picoquic_frames_uint64_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n)
 {
     if (bytes + sizeof(*n) <= bytes_max) {
         *n = PICOPARSE_64(bytes);
@@ -693,7 +693,7 @@ uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max,
     return bytes;
 }
 
-uint8_t* picoquic_frames_length_data_skip(uint8_t* bytes, const uint8_t* bytes_max)
+const uint8_t* picoquic_frames_length_data_skip(const uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint64_t length;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) != NULL) {
@@ -702,7 +702,7 @@ uint8_t* picoquic_frames_length_data_skip(uint8_t* bytes, const uint8_t* bytes_m
     return bytes;
 }
 
-uint8_t* picoquic_frames_cid_decode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* cid)
+const uint8_t* picoquic_frames_cid_decode(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* cid)
 {
     bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &cid->id_len);
 

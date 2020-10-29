@@ -23,7 +23,7 @@
 #include <string.h>
 #include "picoquic_internal.h"
 #include "logreader.h"
-#include "logwriter.h"
+#include "picoquic_binlog.h"
 #include "bytestream.h"
 #include "csv.h"
 

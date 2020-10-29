@@ -97,6 +97,7 @@
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_packet_loop.h"
+#include "picoquic_unified_log.h"
 
 int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af, int nb_sockets_max)
 {

@@ -27,7 +27,7 @@
 #include "picoquic_internal.h"
 #include "bytestream.h"
 #include "logreader.h"
-#include "logwriter.h"
+#include "picoquic_binlog.h"
 #include "cidset.h"
 
 static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph);
@@ -167,6 +167,11 @@ static int binlog_convert_event(bytestream * s, void * ptr)
     case picoquic_log_event_packet_lost:
         if (ret == 0) {
             ret = ctx->callbacks->packet_lost(time, s, cbptr);
+        }
+        break;
+    case picoquic_log_event_alpn_update:
+        if (ret == 0) {
+            ret = ctx->callbacks->alpn_update(time, s, cbptr);
         }
         break;
     case picoquic_log_event_param_update:

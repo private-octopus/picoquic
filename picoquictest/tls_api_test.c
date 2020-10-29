@@ -30,7 +30,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include "logwriter.h"
+#include "picoquic_binlog.h"
 #include "csv.h"
 #include "qlog.h"
 #include "autoqlog.h"
@@ -424,7 +424,7 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx,
 }
 
 static int test_api_direct_receive_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, int fin, uint8_t* bytes, uint64_t offset, size_t length, void* direct_receive_ctx)
+    uint64_t stream_id, int fin, const uint8_t* bytes, uint64_t offset, size_t length, void* direct_receive_ctx)
 {
     int ret = 0;
     test_api_callback_t* cb_ctx = (test_api_callback_t*)direct_receive_ctx;
@@ -9047,7 +9047,8 @@ int direct_receive_test()
 
         /* Set the direct receive API for the stream number 4. */
         if (ret == 0) {
-            ret = picoquic_mark_direct_receive_stream(test_ctx->cnx_client, 4, test_api_direct_receive_callback, (void*)&test_ctx->client_callback);
+            ret = picoquic_mark_direct_receive_stream(test_ctx->cnx_client, 4, test_api_direct_receive_callback, 
+                (void*)&test_ctx->client_callback);
 
             if (ret != 0)
             {
