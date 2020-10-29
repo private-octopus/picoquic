@@ -23,19 +23,21 @@
 #define PICOQUIC_LOGGER_H
 #include <stdio.h>
 #include "picoquic.h"
+#include "picoquic_unified_log.h"
 
-void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret);
 
-void picoquic_log_packet(FILE* F, int log_cnxid, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
-    struct sockaddr* addr_peer, int receiving,
-    uint8_t* bytes, size_t length, uint64_t current_time);
-void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret);
-void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int log_cnxid);
-void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time);
+/* Set the text log file and start tracing into it.
+ * Set to NULL value to stop text log.
+ */
+int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);
+
+/* Handling of packet logging */
+
+void picoquic_log_prefix_initial_cid64(FILE* F, uint64_t log_cnxid64);
+
 void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
-const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
-void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
-    const char* label1, const char* label2);
+
+const char* picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
 
 #endif /* PICOQUIC_LOGGER_H */

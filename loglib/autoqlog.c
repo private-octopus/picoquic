@@ -28,6 +28,7 @@
 #include "bytestream.h"
 #include "qlog.h"
 #include "picoquic_internal.h"
+#include "picoquic_binlog.h"
 #include "picoquic.h"
 
 int autoqlog(picoquic_cnx_t* cnx)
@@ -75,7 +76,8 @@ int autoqlog(picoquic_cnx_t* cnx)
 
 int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
 {
-    quic->autoqlog_fn = autoqlog;
+    quic->autoqlog_fn = autoqlog; 
+    picoquic_enable_binlog(quic);
     quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
     quic->qlog_dir = picoquic_string_duplicate(qlog_dir);
     return 0;

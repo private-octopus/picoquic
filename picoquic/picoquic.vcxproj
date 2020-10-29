@@ -169,6 +169,12 @@
     <ClCompile Include="tls_api.c" />
     <ClCompile Include="token_store.c" />
     <ClCompile Include="transport.c" />
+    <ClCompile Include="unified_log.c">
+      <PreprocessToFile Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</PreprocessToFile>
+      <PreprocessToFile Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</PreprocessToFile>
+      <PreprocessToFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</PreprocessToFile>
+      <PreprocessToFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</PreprocessToFile>
+    </ClCompile>
     <ClCompile Include="util.c" />
     <ClCompile Include="winsockloop.c" />
   </ItemGroup>

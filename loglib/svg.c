@@ -49,6 +49,15 @@ int svg_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
     return 0;
 }
 
+int svg_alpn_update(uint64_t time, bytestream* s, void* ptr)
+{
+    (void)time;
+    (void)s;
+    (void)ptr;
+    return 0;
+}
+
+
 int svg_param_update(uint64_t time, bytestream* s, void* ptr)
 {
     (void)time;
@@ -203,6 +212,7 @@ int svg_convert(const picoquic_connection_id_t * cid, FILE * f_binlog, FILE * f_
     binlog_convert_cb_t ctx;
     ctx.connection_start = svg_connection_start;
     ctx.connection_end = svg_connection_end;
+    ctx.param_update = svg_alpn_update;
     ctx.param_update = svg_param_update;
     ctx.pdu = svg_pdu;
     ctx.packet_start = svg_packet_start;

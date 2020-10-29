@@ -24,10 +24,12 @@
 */
 
 #include <stdarg.h>
-#include "logwriter.h"
+#include "picoquic_binlog.h"
 #include "bytestream.h"
 #include "tls_api.h"
 #include "picotls.h"
+#include "picoquic_unified_log.h"
+#include "picoquic_binlog.h"
 
 #define VARINT_LEN(bytes) ((size_t)1 << (((bytes)[0] & 0xC0) >> 6))
 
@@ -538,6 +540,14 @@ void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uin
     (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
 }
 
+static void binlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
+{
+    if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, receiving, current_time, addr_peer, addr_local, packet_length);
+    }
+}
+
 void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
     const picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
 {
@@ -596,8 +606,16 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, 
     (void)fseek(f, 0, SEEK_END);
 }
 
+static void binlog_packet_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
+    picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
+{
+    if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        binlog_packet(cnx->f_binlog, &cnx->initial_cnxid, receiving, current_time, ph, bytes, bytes_max);
+    }
+}
+
 void binlog_dropped_packet(picoquic_cnx_t* cnx,
-    picoquic_packet_type_enum ptype,  size_t packet_size, int err,
+    picoquic_packet_header* ph,  size_t packet_size, int err,
     uint8_t * raw_data, uint64_t current_time)
 {
     FILE* f = cnx->f_binlog;
@@ -616,7 +634,7 @@ void binlog_dropped_packet(picoquic_cnx_t* cnx,
     bytewrite_cid(msg, &cnx->initial_cnxid);
     bytewrite_vint(msg, current_time);
     bytewrite_vint(msg, picoquic_log_event_packet_dropped);
-    bytewrite_vint(msg, ptype);
+    bytewrite_vint(msg, ph->ptype);
     bytewrite_vint(msg, packet_size);
     bytewrite_vint(msg, err);
     bytewrite_vint(msg, raw_size);
@@ -728,10 +746,9 @@ void binlog_packet_lost(picoquic_cnx_t* cnx,
 }
 
 
-void binlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
+void binlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
     uint8_t const * sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
-    const ptls_iovec_t* alpn_list, size_t alpn_count,
-    size_t param_length, uint8_t * params)
+    const ptls_iovec_t* alpn_list, size_t alpn_count)
 {
     FILE* f = cnx->f_binlog;
 
@@ -739,7 +756,7 @@ void binlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     bytewrite_cid(msg, &cnx->initial_cnxid);
     bytewrite_vint(msg, picoquic_get_quic_time(cnx->quic));
-    bytewrite_vint(msg, picoquic_log_event_param_update);
+    bytewrite_vint(msg, picoquic_log_event_alpn_update);
 
     bytewrite_vint(msg, is_local);
     bytewrite_vint(msg, sni_len);
@@ -760,7 +777,28 @@ void binlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
         bytewrite_buffer(msg, alpn, alpn_len);
     }
 
+    bytestream_buf stream_head;
+    bytestream* head = bytestream_buf_init(&stream_head, 4);
+    bytewrite_int32(head, (uint32_t)bytestream_length(msg));
+
+    (void)fwrite(bytestream_data(head), bytestream_length(head), 1, f);
+    (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
+}
+
+void binlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
+    size_t param_length, uint8_t* params)
+{
+    FILE* f = cnx->f_binlog;
+
+    bytestream_buf stream_msg;
+    bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
+    bytewrite_cid(msg, &cnx->initial_cnxid);
+    bytewrite_vint(msg, picoquic_get_quic_time(cnx->quic));
+    bytewrite_vint(msg, picoquic_log_event_param_update);
+
+    bytewrite_vint(msg, is_local);
     bytewrite_vint(msg, param_length);
+
     if (param_length > 0) {
         bytewrite_buffer(msg, params, param_length);
     }
@@ -791,6 +829,14 @@ void binlog_picotls_ticket(FILE* f, picoquic_connection_id_t cnx_id,
 
     (void)fwrite(bytestream_data(head), bytestream_length(head), 1, f);
     (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
+}
+
+static void binlog_picotls_ticket_ex(picoquic_cnx_t* cnx,
+    uint8_t* ticket, uint16_t ticket_length)
+{
+    if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        binlog_picotls_ticket(cnx->f_binlog, cnx->initial_cnxid, ticket, ticket_length);
+    }
 }
 
 FILE* create_binlog(char const* binlog_file, uint64_t creation_time);
@@ -926,7 +972,7 @@ FILE* create_binlog(char const* binlog_file, uint64_t creation_time)
  * sending a packet.
  */
 
-void picoquic_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
+void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 {
     if (cnx->f_binlog == NULL) {
         return;
@@ -1033,4 +1079,69 @@ void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list var
 
     (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->f_binlog);
     (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->f_binlog);
+}
+
+/* Log an event that cannot be attached to a specific connection */
+void binlog_ignore_quic_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+    UNREFERENCED_PARAMETER(cid);
+    UNREFERENCED_PARAMETER(fmt);
+#endif
+}
+
+/* Log arrival or departure of an UDP datagram for an unknown connection */
+void binlog_ignore_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, uint64_t cid64,
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+    UNREFERENCED_PARAMETER(receiving);
+    UNREFERENCED_PARAMETER(current_time);
+    UNREFERENCED_PARAMETER(addr_peer);
+    UNREFERENCED_PARAMETER(addr_local);
+    UNREFERENCED_PARAMETER(packet_length);
+#endif
+}
+
+/* Log an event relating to a specific connection */
+static void binlog_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
+{
+    if (cnx->f_binlog != NULL) {
+        picoquic_binlog_message_v(cnx, fmt, vargs);
+    }
+}
+
+struct st_picoquic_unified_logging_t binlog_functions = {
+    /* Per context log function */
+    binlog_ignore_quic_app_message,
+    binlog_ignore_quic_pdu,
+    /* Per connection functions */
+    binlog_app_message,
+    binlog_pdu_ex,
+    binlog_packet_ex,
+    binlog_dropped_packet,
+    binlog_buffered_packet,
+    binlog_outgoing_packet,
+    binlog_packet_lost,
+    binlog_negotiated_alpn,
+    binlog_transport_extension,
+    binlog_picotls_ticket_ex,
+    binlog_new_connection,
+    binlog_close_connection,
+    binlog_cc_dump
+};
+
+int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir)
+{
+    quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
+    quic->binlog_dir = picoquic_string_duplicate(binlog_dir);
+    quic->bin_log_fns = &binlog_functions;
+    return 0;
+}
+
+void picoquic_enable_binlog(picoquic_quic_t* quic)
+{
+    quic->bin_log_fns = &binlog_functions;
 }

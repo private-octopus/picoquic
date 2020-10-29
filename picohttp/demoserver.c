@@ -1158,10 +1158,9 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     picohttp_server_stream_ctx_t* stream_ctx = (picohttp_server_stream_ctx_t*)v_stream_ctx;
 
     if (picoquic_cnx_is_still_logging(cnx)) {
-        picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d (%s)\n",
-            stream_id, length, fin_or_event, picoquic_log_fin_or_event_name(fin_or_event));
+        picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d\n",
+            stream_id, length, fin_or_event);
     }
-
 
     if (callback_ctx == NULL || callback_ctx == picoquic_get_default_callback_context(cnx->quic)) {
         picoquic_h09_server_callback_ctx_t* new_ctx = first_server_callback_create_context((picohttp_server_parameters_t*)callback_ctx);

@@ -39,6 +39,7 @@
 #include "picotls.h"
 #include "tls_api.h"
 #include "autoqlog.h"
+#include "picoquic_binlog.h"
 
 /*
  * Test of the prefixed integer encoding

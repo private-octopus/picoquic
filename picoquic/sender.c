@@ -20,7 +20,7 @@
 */
 
 #include "picoquic_internal.h"
-#include "logwriter.h"
+#include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include <stdlib.h>
 #include <string.h>
@@ -655,16 +655,9 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     send_length += /* header_length */ h_length;
 
     /* if needed, log the segment before header protection is applied */
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
-            bytes, sequence_number, length,
-            send_buffer, send_length, pn_length);
-    }
-    if (cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        binlog_outgoing_packet(cnx,
-            bytes, sequence_number, pn_length, length,
-            send_buffer, send_length, current_time);
-    }
+    picoquic_log_outgoing_packet(cnx,
+        bytes, sequence_number, pn_length, length,
+        send_buffer, send_length, current_time);
 
     /* Next, encrypt the PN -- The sample is located after the pn_offset */
     sample_offset = /* header_length */ pn_offset + 4;
@@ -1423,12 +1416,11 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 /* If not pure ack, the packet will be placed in the "retransmitted" queue,
                  * in order to enable detection of spurious restransmissions */
 
-                if (cnx->f_binlog != NULL) {
-                    binlog_packet_lost(cnx, old_p->ptype, old_p->sequence_number,
+                picoquic_log_packet_lost(cnx, old_p->ptype, old_p->sequence_number,
                         (timer_based_retransmit == 0) ? "repeat" : "timer",
                         (old_p->send_path == NULL) ? NULL : &old_p->send_path->remote_cnxid,
                         old_p->length, current_time);
-                }
+
                 old_p = picoquic_dequeue_retransmit_packet(cnx, old_p, packet_is_pure_ack & do_not_detect_spurious);
 
                 /* If we have a good packet, return it */
@@ -3056,7 +3048,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
         if (picoquic_cnx_is_still_logging(cnx)) {
-            picoquic_cc_dump(cnx, current_time);
+            picoquic_log_cc_dump(cnx, current_time);
         }
     }
 
@@ -3448,7 +3440,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
         if (ret == 0 && picoquic_cnx_is_still_logging(cnx)) {
-            picoquic_cc_dump(cnx, current_time);
+            picoquic_log_cc_dump(cnx, current_time);
         }
     }
 
@@ -3755,19 +3747,8 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
             if (packet_size > 0) {
                 cnx->nb_packets_sent++;
                 /* if needed, log that the packet is sent */
-                if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-                    picoquic_log_packet_address(cnx->quic->F_log,
-                        picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
-                        cnx, (struct sockaddr*) & addr_to_log, 0, packet_size, current_time);
-                    if (cnx->f_binlog == NULL) {
-                        cnx->nb_packets_logged++;
-                    }
-                }
-                if (cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
-                    cnx->nb_packets_logged++;
-                    binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, 0, current_time,
-                        (struct sockaddr*) & addr_to_log, (struct sockaddr*) & addr_from_log, packet_size);
-                }
+                picoquic_log_pdu(cnx, 0, current_time,
+                    (struct sockaddr*) & addr_to_log, (struct sockaddr*) & addr_from_log, packet_size);
             }
 
             /* Update the wake up time for the connection */
