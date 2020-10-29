@@ -915,11 +915,7 @@ void picoquic_process_unexpected_cnxid(
             sp->initial_cid = ph->dest_cnx_id;
             sp->cnxid_log64 = picoquic_val64_connection_id(sp->initial_cid);
 
-            if (quic->F_log != NULL) {
-                picoquic_log_prefix_initial_cid64(quic->F_log, sp->cnxid_log64);
-                fprintf(quic->F_log, "Unexpected connection ID, sending stateless reset.\n");
-            }
-
+            picoquic_log_context_free_app_message(quic, &sp->initial_cid, "Unexpected connection ID, sending stateless reset.\n");
 
             picoquic_queue_stateless_packet(quic, sp);
         }
