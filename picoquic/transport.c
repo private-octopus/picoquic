@@ -24,7 +24,7 @@
  */
 
 #include "picoquic_internal.h"
-#include "picoquic_binlog.h"
+#include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include <string.h>
 
@@ -405,13 +405,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     }
     else {
         *consumed = bytes - bytes_zero;
-        if (cnx->quic->F_log) {
-            picoquic_textlog_transport_extension(cnx->quic->F_log, cnx, 0, 1, bytes_zero, *consumed);
-        }
-
-        if (cnx->f_binlog != NULL) {
-            binlog_transport_extension(cnx, 1, *consumed, bytes_zero);
-        }
+        picoquic_log_transport_extension(cnx, 1, *consumed, bytes_zero);
     }
 
     return ret;
@@ -457,12 +451,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     cnx->remote_parameters_received = 1;
     picoquic_clear_transport_extensions(cnx);
 
-    if (cnx->quic->F_log) {
-        picoquic_textlog_transport_extension(cnx->quic->F_log, cnx, 1, 1, bytes, bytes_max);
-    }
-    if (cnx->f_binlog != NULL) {
-        binlog_transport_extension(cnx, 0, bytes_max, bytes);
-    }
+    picoquic_log_transport_extension(cnx, 0, bytes_max, bytes);
 
     /* Set the parameters to default value zero */
     memset(&cnx->remote_parameters, 0, sizeof(picoquic_tp_t));
