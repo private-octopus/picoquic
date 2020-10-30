@@ -838,9 +838,8 @@ uint64_t picoquic_crypto_uniform_random(picoquic_quic_t* quic, uint64_t rnd_max)
  *
  * In order to provide a minimum of protection against casual analysis, we run
  * an obfuscation step before providing the result. The obfuscation involves 
- * an XOR with obfuscator, then multiply by a constant modulo,
- * then XOR the result with obfuscator again. The obfuscator changes 
- * each time the random generator is seeded.
+ * multiply by a constant modulo, then XOR the result with obfuscator again.
+ * The obfuscator changes each time the random generator is seeded.
  *
  * If we were really paranoid, we would want to break possible discovery by passing
  * the seeding bits from the crypto random generator through SHA256 or something
@@ -850,7 +849,11 @@ uint64_t picoquic_crypto_uniform_random(picoquic_quic_t* quic, uint64_t rnd_max)
  * that it cannot be broken.
  */
 
-static uint64_t public_random_seed[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+static uint64_t public_random_seed[16] = { /* Init from hex decimals of Pi */
+    0x243f6a8885a308d3ull, 0x13198a2e03707344ull, 0xa4093822299f31d0ull, 0x082efa98ec4e6c89ull,
+    0x452821e638d01377ull, 0xbe5466cf34e90c6cull, 0xc0ac29b7c97c50ddull, 0x3f84d5b5b5470917ull,
+    0x9216d5d98979fb1bull, 0xd1310ba698dfb5acull, 0x2ffd72dbd01adfb7ull, 0xb8e1afed6a267e96ull,
+    0xba7c9045f12c7f99ull, 0x24a19947b3916cf7ull, 0x0801f2e2858efc16ull, 0x636920d871574e69ull };
 static int public_random_index = 0;
 static const uint64_t public_random_multiplier = 1181783497276652981ull;
 static uint64_t public_random_obfuscator = 0xcafe1234deadbeefull;
@@ -871,10 +874,7 @@ static uint64_t picoquic_public_random_step(void)
 uint64_t picoquic_public_random_64(void)
 {
     uint64_t s1 = picoquic_public_random_step();
-    s1 ^= public_random_obfuscator;
-    s1 ^= ((((s1 >> 32)* public_random_multiplier)>>32) & 0xffffffff);
-    s1 ^= (((s1 & 0xFFFFFFFF) * public_random_multiplier) & 0xffffffff00000000ull);
-    s1 ^= ((((s1 >> 32)* public_random_multiplier)>>32) & 0xffffffff);
+    s1 *= public_random_multiplier;
     s1 ^= public_random_obfuscator;
     return s1;
 }
