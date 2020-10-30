@@ -849,11 +849,7 @@ uint64_t picoquic_crypto_uniform_random(picoquic_quic_t* quic, uint64_t rnd_max)
  * that it cannot be broken.
  */
 
-static uint64_t public_random_seed[16] = { /* Init from hex decimals of Pi */
-    0x243f6a8885a308d3ull, 0x13198a2e03707344ull, 0xa4093822299f31d0ull, 0x082efa98ec4e6c89ull,
-    0x452821e638d01377ull, 0xbe5466cf34e90c6cull, 0xc0ac29b7c97c50ddull, 0x3f84d5b5b5470917ull,
-    0x9216d5d98979fb1bull, 0xd1310ba698dfb5acull, 0x2ffd72dbd01adfb7ull, 0xb8e1afed6a267e96ull,
-    0xba7c9045f12c7f99ull, 0x24a19947b3916cf7ull, 0x0801f2e2858efc16ull, 0x636920d871574e69ull };
+static uint64_t public_random_seed[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
 static int public_random_index = 0;
 static const uint64_t public_random_multiplier = 1181783497276652981ull;
 static uint64_t public_random_obfuscator = 0x5555555555555555ull;
@@ -886,6 +882,7 @@ void picoquic_public_random_seed_64(uint64_t seed, int reset)
         for (uint64_t i = 0; i < 16; i++) {
             public_random_seed[i] = i + 1u;
         }
+        public_random_obfuscator = 0x5555555555555555ull;
     }
 
     public_random_seed[public_random_index] ^= seed;
