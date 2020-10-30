@@ -836,6 +836,12 @@ uint64_t picoquic_crypto_uniform_random(picoquic_quic_t* quic, uint64_t rnd_max)
  * The seed operation gets 64 bits from the crypto random generator. We then run the
  * generator 16 times to mix that input into the 1024 bits of seed[16].
  *
+ * In order to provide a minimum of protection against casual analysis, we run
+ * an obfuscation step before providing the result. The obfuscation involves 
+ * an XOR with obfuscator, then multiply by a constant modulo,
+ * then XOR the result with obfuscator again. The obfuscator changes 
+ * each time the random generator is seeded.
+ *
  * If we were really paranoid, we would want to break possible discovery by passing
  * the seeding bits from the crypto random generator through SHA256 or something
  * similar, so there would be really no way to get at the state of crypto random
@@ -847,8 +853,9 @@ uint64_t picoquic_crypto_uniform_random(picoquic_quic_t* quic, uint64_t rnd_max)
 static uint64_t public_random_seed[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
 static int public_random_index = 0;
 static const uint64_t public_random_multiplier = 1181783497276652981ull;
+static uint64_t public_random_obfuscator = 0xcafe1234deadbeefull;
 
-uint64_t picoquic_public_random_64(void)
+static uint64_t picoquic_public_random_step(void)
 {
     uint64_t s1;
     const uint64_t s0 = public_random_seed[public_random_index++];
@@ -858,7 +865,18 @@ uint64_t picoquic_public_random_64(void)
     s1 ^= s1 >> 11; // b
     s1 ^= s0 ^ (s0 >> 30); // c
     public_random_seed[public_random_index] = s1;
-    return s1 * public_random_multiplier;
+    return s1;
+}
+
+uint64_t picoquic_public_random_64(void)
+{
+    uint64_t s1 = picoquic_public_random_step();
+    s1 ^= public_random_obfuscator;
+    s1 ^= (((s1 >> 32)* public_random_multiplier) & 0xffffffff);
+    s1 ^= (((s1 & 0xFFFFFFFF) * public_random_multiplier) << 32);
+    s1 ^= (((s1 >> 32)* public_random_multiplier) & 0xffffffff);
+    s1 ^= public_random_obfuscator;
+    return s1;
 }
 
 void picoquic_public_random_seed_64(uint64_t seed, int reset)
@@ -873,17 +891,18 @@ void picoquic_public_random_seed_64(uint64_t seed, int reset)
     public_random_seed[public_random_index] ^= seed;
 
     for (int i = 0; i < 16; i++) {
-        (void)picoquic_public_random_64();
+        (void)picoquic_public_random_step();
     }
 }
 
 
 void picoquic_public_random_seed(picoquic_quic_t* quic)
 {
-    uint64_t seed;
+    uint64_t seed[3];
     picoquic_crypto_random(quic, &seed, sizeof(seed));
 
-    picoquic_public_random_seed_64(seed, 0);
+    picoquic_public_random_seed_64(seed[0], 0);
+    public_random_obfuscator = seed[1];
 }
 
 void picoquic_public_random(void* buf, size_t len)
