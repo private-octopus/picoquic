@@ -856,7 +856,7 @@ static uint64_t public_random_seed[16] = { /* Init from hex decimals of Pi */
     0xba7c9045f12c7f99ull, 0x24a19947b3916cf7ull, 0x0801f2e2858efc16ull, 0x636920d871574e69ull };
 static int public_random_index = 0;
 static const uint64_t public_random_multiplier = 1181783497276652981ull;
-static uint64_t public_random_obfuscator = 0xcafe1234deadbeefull;
+static uint64_t public_random_obfuscator = 0x5555555555555555ull;
 
 static uint64_t picoquic_public_random_step(void)
 {
@@ -864,9 +864,9 @@ static uint64_t picoquic_public_random_step(void)
     const uint64_t s0 = public_random_seed[public_random_index++];
     public_random_index &= 15;
     s1 = public_random_seed[public_random_index];
-    s1 ^= s1 << 31; // a
-    s1 ^= s1 >> 11; // b
-    s1 ^= s0 ^ (s0 >> 30); // c
+    s1 ^= (s1 << 31); // a
+    s1 ^= (s1 >> 11); // b
+    s1 ^= (s0 ^ (s0 >> 30)); // c
     public_random_seed[public_random_index] = s1;
     return s1;
 }
@@ -922,7 +922,7 @@ void picoquic_public_random(void* buf, size_t len)
 uint64_t picoquic_public_uniform_random(uint64_t rnd_max)
 {
     uint64_t rnd;
-    uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
+    uint64_t rnd_min = UINT64_MAX % rnd_max;
 
     do {
         rnd = picoquic_public_random_64();
