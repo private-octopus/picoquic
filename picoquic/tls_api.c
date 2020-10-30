@@ -872,9 +872,9 @@ uint64_t picoquic_public_random_64(void)
 {
     uint64_t s1 = picoquic_public_random_step();
     s1 ^= public_random_obfuscator;
-    s1 ^= (((s1 >> 32)* public_random_multiplier) & 0xffffffff);
-    s1 ^= (((s1 & 0xFFFFFFFF) * public_random_multiplier) << 32);
-    s1 ^= (((s1 >> 32)* public_random_multiplier) & 0xffffffff);
+    s1 ^= ((((s1 >> 32)* public_random_multiplier)>>32) & 0xffffffff);
+    s1 ^= (((s1 & 0xFFFFFFFF) * public_random_multiplier) & 0xffffffff00000000ull);
+    s1 ^= ((((s1 >> 32)* public_random_multiplier)>>32) & 0xffffffff);
     s1 ^= public_random_obfuscator;
     return s1;
 }
