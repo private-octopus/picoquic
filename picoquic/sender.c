@@ -2693,6 +2693,7 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
 
     (void)picoquic_register_net_secret(cnx);
+    picoquic_public_random_seed(cnx->quic);
 
     if (!cnx->client_mode) {
         (void)picoquic_queue_handshake_done_frame(cnx);
