@@ -1242,7 +1242,9 @@ int picoquic_incoming_retry(
         else {
             ret = picoquic_verify_retry_protection(integrity_aead, bytes, &data_length, byte_index, &cnx->initial_cnxid);
 
-            picoquic_log_app_message(cnx, "Retry packet rejected: integrity check failed");
+            if (ret != 0) {
+                picoquic_log_app_message(cnx, "Retry packet rejected: integrity check failed, ret=0x%x", ret);
+            }
         }
 
         if (ret == 0) {
