@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "0.32"
+#define PICOQUIC_VERSION "0.32a"
 
 #ifndef PICOQUIC_MAX_PACKET_SIZE
 #define PICOQUIC_MAX_PACKET_SIZE 1536
@@ -754,6 +754,8 @@ typedef struct st_picoquic_path_t {
     unsigned int last_bw_estimate_path_limited : 1;
     unsigned int path_cid_rotated : 1;
     unsigned int path_is_preferred_path : 1;
+    unsigned int is_nat_challenge : 1;
+    unsigned int got_long_packet : 1;
 
     /* number of retransmissions observed on path */
     uint64_t retrans_count;

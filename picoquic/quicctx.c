@@ -1464,6 +1464,7 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
             picoquic_register_path(cnx, cnx->path[path_id]);
             picoquic_set_path_challenge(cnx, path_id, current_time);
             cnx->path[path_id]->path_is_preferred_path = to_preferred_address;
+            cnx->path[path_id]->is_nat_challenge = 0;
         }
     }
 

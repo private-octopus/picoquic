@@ -1908,7 +1908,7 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
             /* Only send a probe if not already using that address */
             if (picoquic_compare_addr((struct sockaddr *)&dest_addr, (struct sockaddr *)&cnx->path[0]->peer_addr) != 0) {
                 struct sockaddr* local_addr = NULL;
-                if (cnx->path[0]->local_addr.ss_family != 0) {
+                if (cnx->path[0]->local_addr.ss_family != 0 && cnx->path[0]->local_addr.ss_family == dest_addr.ss_family) {
                     local_addr = (struct sockaddr*) & cnx->path[0]->local_addr;
                 }
 
@@ -2836,7 +2836,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     if (bytes_next > bytes_challenge) {
                         path_x->challenge_time = current_time;
                         path_x->challenge_repeat_count++;
-                        is_challenge_padding_needed = 1;
+                        is_challenge_padding_needed = (path_x->is_nat_challenge == 0);
                     }
 
                     /* add an ACK just to be nice */
@@ -2877,7 +2877,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             if ((bytes_next = picoquic_format_path_response_frame(bytes_response, bytes_max,
                 &more_data, &is_pure_ack, path_x->challenge_response)) > bytes_response) {
                 path_x->response_required = 0;
-                is_challenge_padding_needed = 1;
+                is_challenge_padding_needed = path_x->got_long_packet;
             }
         }
 
@@ -3149,7 +3149,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     if (bytes_next > bytes_challenge) {
                         path_x->challenge_time = current_time;
                         path_x->challenge_repeat_count++;
-                        is_challenge_padding_needed = 1;
+                        is_challenge_padding_needed = (path_x->is_nat_challenge == 0);
                     }
 
                     /* add an ACK just to be nice */
@@ -3618,7 +3618,6 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     picoquic_packet_t * packet = NULL;
     struct sockaddr_storage addr_to_log;
     struct sockaddr_storage addr_from_log;
-    int is_initial_sent = 0;
     uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
     uint64_t initial_next_time;
 
@@ -3682,6 +3681,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         while (ret == 0)
         {
             /* Create a new packet */
+            int is_initial_sent = 0;
             size_t packet_size = 0;
             size_t packet_max = send_buffer_max - *send_length;
             uint8_t* packet_buffer = send_buffer + *send_length;
