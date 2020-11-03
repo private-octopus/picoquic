@@ -2824,9 +2824,10 @@ const uint8_t* picoquic_decode_connection_close_frame(picoquic_cnx_t* cnx, const
             picoquic_frame_type_connection_close);
     }
     else {
+        picoquic_state_enum old_state = cnx->cnx_state;
         cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready_start || cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt == NULL) ? picoquic_state_disconnected : picoquic_state_closing_received;
 
-        if (cnx->callback_fn) {
+        if (cnx->callback_fn != NULL && cnx->cnx_state != old_state && cnx->cnx_state == picoquic_state_disconnected) {
             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
         }
     }

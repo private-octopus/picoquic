@@ -2585,6 +2585,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     } else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || 
         cnx->cnx_state == picoquic_state_handshake_failure || 
         cnx->cnx_state == picoquic_state_handshake_failure_resend)) {
+        picoquic_state_enum old_state = cnx->cnx_state;
+
         length = picoquic_predict_packet_header_length(
             cnx, packet_type);
         bytes_next = bytes + length;
@@ -2634,7 +2636,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         cnx->pkt_ctx[pc].ack_needed = 0;
 
-        if (cnx->callback_fn) {
+        if (cnx->callback_fn != NULL && cnx->cnx_state != old_state && cnx->cnx_state == picoquic_state_disconnected) {
             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
         }
     }
