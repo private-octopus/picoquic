@@ -640,6 +640,9 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                         }
                         else {
                             DBG_PRINTF("Cannot start sendsmg, error: %d", send_ctx->last_err);
+                            if (sock_ctx_send == NULL) {
+                                ret = 0;
+                            }
                         }
                     }
                     else {
