@@ -1990,6 +1990,12 @@ int picoquic_incoming_segment(
                         ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
                     }
                     if (ret == 0) {
+                        if (packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
+                            if (!cnx->did_receive_short_initial) {
+                                picoquic_log_app_message(cnx, "Received unpadded initial, length=%zu", packet_length);
+                            }
+                            cnx->did_receive_short_initial = 1;
+                        }
                         if (cnx->client_mode == 0) {
                             if (is_first_segment) {
                                 /* Account for the data received in handshake, but only

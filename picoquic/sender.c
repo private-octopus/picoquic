@@ -3423,7 +3423,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     if (ret == 0 && length > header_length) {
         /* Ensure that all packets are properly padded before being sent. */
 
-        if ((*is_initial_sent && cnx->client_mode) || (is_challenge_padding_needed && length < PICOQUIC_ENFORCED_INITIAL_MTU)){
+        if (*is_initial_sent || (is_challenge_padding_needed && length < PICOQUIC_ENFORCED_INITIAL_MTU)){
             length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
         }
         else {

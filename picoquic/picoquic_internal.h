@@ -951,6 +951,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int quic_bit_greased : 1; /* Indicate whether the quic bit was greased at least once */
     unsigned int quic_bit_received_0 : 1; /* Indicate whether the quic bit was received as zero at least once */
     unsigned int is_half_open : 1; /* for server side connections, created but not yet complete */
+    unsigned int did_receive_short_initial : 1; /* whether peer sent unpadded initial packet */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
