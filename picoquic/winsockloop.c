@@ -204,6 +204,7 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
 typedef struct st_picoquic_sendmsg_ctx_t {
     WSAOVERLAPPED overlap;
     struct st_picoquic_sendmsg_ctx_t* next;
+    picoquic_connection_id_t local_cnxid;
     WSABUF dataBuf;
     WSAMSG msg;
     char cmsg_buffer[1024];
@@ -440,6 +441,9 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                 else {
                     picoquic_log_app_message(last_cnx, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
                         peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
+                    picoquic_notify_destination_unreachable(last_cnx, current_time,
+                        (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
+                        sock_err);
                 }
             }
             else {
@@ -565,28 +569,20 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
             }
 
             /* Send packets that are now ready */
-            /* TODO: manage asynch send. */
             if (ret == 0 && (!send_ctx_first->is_started || send_ctx_first->is_complete)) {
                 do {
                     picoquic_recvmsg_async_ctx_t* sock_ctx_send = NULL;
                     picoquic_sendmsg_ctx_t* send_ctx = send_ctx_first;
 
                     if (send_ctx_first->is_started && send_ctx_first->is_complete) {
+                        /* TODO: the error codes should be processed faster! */
                         if (send_ctx->ret != 0) {
-                            if (last_cnx == NULL) {
-                                picoquic_log_context_free_app_message(quic, &log_cid,
-                                    "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
-                                    send_ctx->addr_dest.ss_family, send_ctx->addr_from.ss_family, send_ctx->dest_if,
-                                    send_ctx->ret, send_ctx->last_err);
-                            }
-                            else {
-                                picoquic_log_app_message(last_cnx,
-                                    "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
-                                    send_ctx->addr_dest.ss_family, send_ctx->addr_from.ss_family, send_ctx->dest_if,
-                                    send_ctx->ret, send_ctx->last_err);
-                            }
+                            picoquic_notify_destination_unreachable_by_cnxid(quic, &send_ctx->local_cnxid, current_time,
+                                (struct sockaddr*) & send_ctx->addr_dest, (struct sockaddr*) & send_ctx->addr_from,
+                                send_ctx->dest_if, send_ctx->last_err);
                         }
                     }
+
                     memset(&send_ctx->overlap, 0, sizeof(send_ctx->overlap));
                     send_ctx->is_started = 0;
                     send_ctx->is_complete = 0;
@@ -624,6 +620,10 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                             ret = -1;
                         }
                         else {
+                            if (last_cnx != NULL) {
+                                /* Store the connection ID, in case there is an error */
+                                send_ctx->local_cnxid = last_cnx->path[0]->p_local_cnxid->cnx_id;
+                            }
                             ret = picoquic_sendmsg_start(sock_ctx_send, send_ctx);
                         }
 
@@ -640,9 +640,12 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                         }
                         else {
                             DBG_PRINTF("Cannot start sendsmg, error: %d", send_ctx->last_err);
-                            if (sock_ctx_send == NULL) {
-                                ret = 0;
+                            if (last_cnx != NULL) {
+                                picoquic_notify_destination_unreachable(last_cnx, current_time,
+                                    (struct sockaddr*)& send_ctx->addr_dest, (struct sockaddr*)& send_ctx->addr_from,
+                                    send_ctx->dest_if, send_ctx->last_err);
                             }
+                            ret = 0;
                         }
                     }
                     else {

@@ -657,6 +657,27 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index);
 
+/* Socket error signalling.
+ * The application code is in charge of sending the packets prepared by the stack
+ * to the designated network address. If the stack tries to send a packet to an unreachable
+ * destination, the application may get an error indication from the socket "sendmsg"
+ * API, or its equivalent. Passing the error back to the stack allows for better
+ * handling, for example closing a connection immediately if the peer's address is
+ * unreachable, or cancelling a migration attempt if the new path is not available.
+ *
+ * The signalling is per connection, using the connection context signalled for example
+ * in the p_last_cnx parameter to the picoquic_prepare_next_packet API. The p_addr_to
+ * parameter indicates the peer's address, the destination of the failed transmission.
+ * The p_addr_from parameter indicates the source address provided by the 
+ * picoquic_prepare_next_packet API, the if_index parameter indicates the interface ID
+ * suggested by the stack. The socket_err parameter may be used by the stack for logging
+ * purposes.
+ */
+void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx,
+     uint64_t current_time, struct sockaddr* addr_peer, struct sockaddr* addr_local, int if_index, int socket_err);
+void picoquic_notify_destination_unreachable_by_cnxid(picoquic_quic_t* quic, picoquic_connection_id_t * cnxid,
+    uint64_t current_time, struct sockaddr* addr_peer, struct sockaddr* addr_local, int if_index, int socket_err);
+
 /* Handling of out of sequence stream data delivery.
  *
  * For applications like video communication, it is important to process stream data
