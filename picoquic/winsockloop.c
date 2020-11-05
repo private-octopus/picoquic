@@ -441,9 +441,11 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                 else {
                     picoquic_log_app_message(last_cnx, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
                         peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
-                    picoquic_notify_destination_unreachable(last_cnx, current_time,
-                        (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                        sock_err);
+                    if (picoquic_socket_error_implies_unreachable(sock_err)) {
+                        picoquic_notify_destination_unreachable(last_cnx, current_time,
+                            (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
+                            sock_err);
+                    }
                 }
             }
             else {
@@ -576,7 +578,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 
                     if (send_ctx_first->is_started && send_ctx_first->is_complete) {
                         /* TODO: the error codes should be processed faster! */
-                        if (send_ctx->ret != 0) {
+                        if (send_ctx->ret != 0 && picoquic_socket_error_implies_unreachable(send_ctx->last_err)) {
                             picoquic_notify_destination_unreachable_by_cnxid(quic, &send_ctx->local_cnxid, current_time,
                                 (struct sockaddr*) & send_ctx->addr_dest, (struct sockaddr*) & send_ctx->addr_from,
                                 send_ctx->dest_if, send_ctx->last_err);
@@ -618,6 +620,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                                 "Could not find socket for AF_to=%d, AF_from=%d",
                                 send_ctx->addr_dest.ss_family, send_ctx->addr_from.ss_family);
                             ret = -1;
+                            send_ctx->last_err = -1;
                         }
                         else {
                             if (last_cnx != NULL) {
@@ -640,7 +643,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                         }
                         else {
                             DBG_PRINTF("Cannot start sendsmg, error: %d", send_ctx->last_err);
-                            if (last_cnx != NULL) {
+                            if (last_cnx != NULL && picoquic_socket_error_implies_unreachable(send_ctx->last_err)) {
                                 picoquic_notify_destination_unreachable(last_cnx, current_time,
                                     (struct sockaddr*)& send_ctx->addr_dest, (struct sockaddr*)& send_ctx->addr_from,
                                     send_ctx->dest_if, send_ctx->last_err);
