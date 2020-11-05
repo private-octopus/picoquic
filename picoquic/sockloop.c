@@ -304,6 +304,9 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                         else {
                             picoquic_log_app_message(last_cnx, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
                                 peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
+                            picoquic_notify_destination_unreachable(last_cnx, current_time,
+                                (struct sockaddr*)& peer_addr, (struct sockaddr*)& local_addr, if_index,
+                                sock_err);
                         }
                     }
                 }
