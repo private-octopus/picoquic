@@ -1403,6 +1403,10 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
         }
     }
 
+    if (path_id == -1) {
+        DBG_PRINTF("%s", "Could not find path");
+    }
+
     return path_id;
 }
 
@@ -1443,7 +1447,7 @@ void picoquic_notify_destination_unreachable_by_cnxid(picoquic_quic_t * quic, pi
 {
     picoquic_cnx_t* cnx = NULL;
 
-    if (quic->local_cnxid_length == 0) {
+    if (quic->local_cnxid_length == 0 || cnxid->id_len == 0) {
         cnx = picoquic_cnx_by_net(quic, addr_peer);
     }
     else if (cnxid->id_len == quic->local_cnxid_length) {

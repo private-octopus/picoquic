@@ -623,9 +623,12 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                             send_ctx->last_err = -1;
                         }
                         else {
-                            if (last_cnx != NULL) {
+                            if (last_cnx != NULL && last_cnx->path[0]->p_local_cnxid != NULL) {
                                 /* Store the connection ID, in case there is an error */
                                 send_ctx->local_cnxid = last_cnx->path[0]->p_local_cnxid->cnx_id;
+                            }
+                            else {
+                                send_ctx->local_cnxid.id_len = 0;
                             }
                             ret = picoquic_sendmsg_start(sock_ctx_send, send_ctx);
                         }
@@ -699,6 +702,10 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                 }
             }
             if (ret == PICOQUIC_NO_ERROR_SIMULATE_NAT || ret == PICOQUIC_NO_ERROR_SIMULATE_MIGRATION) {
+                if (last_cnx == NULL) {
+                    /* Fix for cases when the last_cnx is not set for migration tests. */
+                    last_cnx = quic->cnx_list;
+                }
                 if (testing_nat) {
                     if (sock_ctx[0] != NULL) {
                         picoquic_delete_async_socket(sock_ctx[0]);
