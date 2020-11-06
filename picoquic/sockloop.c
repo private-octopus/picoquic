@@ -281,20 +281,26 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                         }
                     }
 
-                    if (testing_migration) {
-                        /* This code path is only used in the migration tests */
-                        uint16_t send_port = (local_addr.ss_family == AF_INET) ?
-                            ((struct sockaddr_in*) & local_addr)->sin_port :
-                            ((struct sockaddr_in6*) & local_addr)->sin6_port;
-
-                        if (send_port == next_port) {
-                            send_socket = s_socket[nb_sockets - 1];
-                        }
+                    if (send_socket == INVALID_SOCKET) {
+                        sock_ret = -1;
+                        sock_err = -1;
                     }
+                    else {
+                        if (testing_migration) {
+                            /* This code path is only used in the migration tests */
+                            uint16_t send_port = (local_addr.ss_family == AF_INET) ?
+                                ((struct sockaddr_in*) & local_addr)->sin_port :
+                                ((struct sockaddr_in6*) & local_addr)->sin6_port;
 
-                    sock_ret = picoquic_send_through_socket(send_socket,
-                        (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                        (const char*)send_buffer, (int)send_length, &sock_err);
+                            if (send_port == next_port) {
+                                send_socket = s_socket[nb_sockets - 1];
+                            }
+                        }
+
+                        sock_ret = picoquic_send_through_socket(send_socket,
+                            (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
+                            (const char*)send_buffer, (int)send_length, &sock_err);
+                    }
 
                     if (sock_ret <= 0) {
                         if (last_cnx == NULL) {
@@ -304,9 +310,12 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                         else {
                             picoquic_log_app_message(last_cnx, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
                                 peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
-                            picoquic_notify_destination_unreachable(last_cnx, current_time,
-                                (struct sockaddr*)& peer_addr, (struct sockaddr*)& local_addr, if_index,
-                                sock_err);
+                            
+                            if (picoquic_socket_error_implies_unreachable(sock_err)) {
+                                picoquic_notify_destination_unreachable(last_cnx, current_time,
+                                    (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
+                                    sock_err);
+                            }
                         }
                     }
                 }

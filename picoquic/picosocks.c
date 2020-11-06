@@ -1279,3 +1279,28 @@ void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
 
     picoquic_set_key_log_file(quic, keylog_filename);
 }
+
+/* Some socket errors, but not all, indicate that a destination is
+ * unreachable and that the corresponding "path" should be abandoned.
+ */
+
+int picoquic_socket_error_implies_unreachable(int sock_err)
+{
+#ifdef _WINDOWS
+    static int unreachable_errors[] = {
+        WSAEACCES, WSAEADDRNOTAVAIL, WSAEAFNOSUPPORT, WSAECONNRESET,
+        WSAEDESTADDRREQ, WSAEHOSTUNREACH, WSAENETDOWN, WSAENETRESET,
+        WSAENETUNREACH, WSAESHUTDOWN, -1 };
+#else
+    static int unreachable_errors[] = {
+        EAFNOSUPPORT, ECONNRESET, EHOSTUNREACH, ENETDOWN, ENETUNREACH, -1 };
+#endif
+    size_t nb_errors = sizeof(unreachable_errors) / sizeof(int);
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_errors; i++) {
+        ret = (sock_err == unreachable_errors[i]);
+    }
+
+    return ret;
+}
