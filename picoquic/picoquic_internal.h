@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "0.32"
+#define PICOQUIC_VERSION "0.32b"
 
 #ifndef PICOQUIC_MAX_PACKET_SIZE
 #define PICOQUIC_MAX_PACKET_SIZE 1536
@@ -754,6 +754,8 @@ typedef struct st_picoquic_path_t {
     unsigned int last_bw_estimate_path_limited : 1;
     unsigned int path_cid_rotated : 1;
     unsigned int path_is_preferred_path : 1;
+    unsigned int is_nat_challenge : 1;
+    unsigned int got_long_packet : 1;
 
     /* number of retransmissions observed on path */
     uint64_t retrans_count;
@@ -949,6 +951,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int quic_bit_greased : 1; /* Indicate whether the quic bit was greased at least once */
     unsigned int quic_bit_received_0 : 1; /* Indicate whether the quic bit was received as zero at least once */
     unsigned int is_half_open : 1; /* for server side connections, created but not yet complete */
+    unsigned int did_receive_short_initial : 1; /* whether peer sent unpadded initial packet */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -1138,7 +1141,7 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
 void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);
-int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from, int* partial_match);
+int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* addr_local, const struct sockaddr* addr_peer, int* partial_match);
 int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
 int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,

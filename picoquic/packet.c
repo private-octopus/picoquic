@@ -1242,7 +1242,9 @@ int picoquic_incoming_retry(
         else {
             ret = picoquic_verify_retry_protection(integrity_aead, bytes, &data_length, byte_index, &cnx->initial_cnxid);
 
-            picoquic_log_app_message(cnx, "Retry packet rejected: integrity check failed");
+            if (ret != 0) {
+                picoquic_log_app_message(cnx, "Retry packet rejected: integrity check failed, ret=0x%x", ret);
+            }
         }
 
         if (ret == 0) {
@@ -1663,6 +1665,11 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             if (nat_rebinding_path >= 0) {
                 /* Treat this as a NAT rebinding. Mark the old path for validation */
                 picoquic_set_path_challenge(cnx, nat_rebinding_path, current_time);
+                cnx->path[path_id]->is_nat_challenge = 1;
+                cnx->path[0]->is_nat_challenge = 1;
+            }
+            else {
+                cnx->path[path_id]->is_nat_challenge = 0;
             }
         }
         else {
@@ -1785,7 +1792,7 @@ int picoquic_incoming_encrypted(
 
             if (ret == 0) {
                 picoquic_path_t * path_x = cnx->path[path_id];
-
+                path_x->got_long_packet |= ((ph->offset + ph->payload_length) >= PICOQUIC_ENFORCED_INITIAL_MTU);
                 path_x->if_index_dest = if_index_to;
                 cnx->is_1rtt_received = 1;
                 picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
@@ -1983,6 +1990,12 @@ int picoquic_incoming_segment(
                         ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
                     }
                     if (ret == 0) {
+                        if (packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
+                            if (!cnx->did_receive_short_initial) {
+                                picoquic_log_app_message(cnx, "Received unpadded initial, length=%zu", packet_length);
+                            }
+                            cnx->did_receive_short_initial = 1;
+                        }
                         if (cnx->client_mode == 0) {
                             if (is_first_segment) {
                                 /* Account for the data received in handshake, but only

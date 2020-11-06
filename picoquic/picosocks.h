@@ -221,7 +221,12 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
  * which is accessed through system dependent API.
  */
 
+ /* Some socket errors, but not all, indicate that a destination is
+  * unreachable and that the corresponding "path" should be abandoned.
+  */
 void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic);
+
+int picoquic_socket_error_implies_unreachable(int sock_err);
 
 /* Utility functions for implementing async sockets
  */

@@ -360,12 +360,18 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
                 if (cb_ctx->force_migration && cb_ctx->migration_started == 0 && cb_ctx->address_updated &&
                     picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready &&
                     (cb_ctx->cnx_client->cnxid_stash_first != NULL || cb_ctx->force_migration == 1) &&
-                    (cb_ctx->force_migration != 3 || !cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined ||
+                    (!cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined ||
                         cb_ctx->migration_to_preferred_finished)) {
                     int mig_ret = 0;
                     cb_ctx->migration_started = 1;
                     cb_ctx->server_cid_before_migration = cb_ctx->cnx_client->path[0]->remote_cnxid;
-                    cb_ctx->client_cid_before_migration = cb_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
+                    if (cb_ctx->cnx_client->path[0]->p_local_cnxid != NULL) {
+                        cb_ctx->client_cid_before_migration = cb_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
+                    }
+                    else {
+                        /* Special case of forced migration after preferred address migration */
+                        memset(&cb_ctx->client_cid_before_migration, 0, sizeof(picoquic_connection_id_t));
+                    }
                     switch (cb_ctx->force_migration) {
                     case 1:
                         fprintf(stdout, "Switch to new port. Will test NAT rebinding support.\n");

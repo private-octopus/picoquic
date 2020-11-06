@@ -3303,6 +3303,11 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
                         use_badcrypt, hardreset, early_loss);
                     ret = -1;
                 }
+                else if (test_ctx->cnx_client->did_receive_short_initial) {
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), server sent unpadded initial.\n",
+                        use_badcrypt, hardreset);
+                    ret = -1;
+                }
             }
         }
 

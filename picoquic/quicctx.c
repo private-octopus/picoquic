@@ -1358,8 +1358,8 @@ void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t curr
 
 /* Find path by address pair
  */
-int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, 
-    const struct sockaddr* addr_from, int * partial_match)
+int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* addr_local, 
+    const struct sockaddr* addr_peer, int * partial_match)
 {
     int path_id = -1;
     int is_null_from = 0;
@@ -1367,27 +1367,30 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
 
     *partial_match = -1;
 
-    if (addr_from != NULL || addr_to != NULL) {
-        if (addr_from == NULL || addr_to == NULL) {
+    if (addr_peer != NULL || addr_local != NULL) {
+        if (addr_peer == NULL || addr_local == NULL) {
             memset(&null_addr, 0, sizeof(struct sockaddr_storage));
-            if (addr_from == NULL) {
-                addr_from = (struct sockaddr*) & null_addr;
+            if (addr_peer == NULL) {
+                addr_peer = (struct sockaddr*) & null_addr;
             }
             else {
-                addr_to = (struct sockaddr*) & null_addr;
+                addr_local = (struct sockaddr*) & null_addr;
             }
+            is_null_from = 1;
+        }
+        else if (addr_local->sa_family == 0) {
             is_null_from = 1;
         }
 
         /* Find whether an existing path matches the  pair of addresses */
         for (int i = 0; i < cnx->nb_paths; i++) {
             if (picoquic_compare_addr((struct sockaddr*) & cnx->path[i]->peer_addr,
-                addr_from) == 0) {
+                addr_peer) == 0) {
                 if (cnx->path[i]->local_addr.ss_family == 0) {
                     *partial_match = i;
                 }
                 else if (picoquic_compare_addr((struct sockaddr*) & cnx->path[i]->local_addr,
-                    addr_to) == 0) {
+                    addr_local) == 0) {
                     path_id = i;
                     break;
                 }
@@ -1400,8 +1403,62 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
         }
     }
 
+    if (path_id == -1) {
+        DBG_PRINTF("%s", "Could not find path");
+    }
+
     return path_id;
 }
+
+/* Process a destination unreachable notification. */
+void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx, uint64_t current_time,
+    struct sockaddr* addr_peer, struct sockaddr* addr_local, int if_index, int socket_err)
+{
+    if (cnx != NULL && addr_peer != NULL) {
+        int no_path_left = 1;
+        int partial_match = 0;
+        int path_id = picoquic_find_path_by_address(cnx, addr_local, addr_peer, &partial_match);
+
+        if (path_id >= 0) {
+            cnx->path[path_id]->path_is_demoted = 1;
+            cnx->path[path_id]->demotion_time = current_time;
+            cnx->path_demotion_needed = 1;
+
+            for (int i = 0; no_path_left && i < cnx->nb_paths; i++) {
+                no_path_left &= cnx->path[i]->path_is_demoted;         
+            }
+
+            if (no_path_left) {
+                picoquic_log_app_message(cnx, "Deleting connection after error on path %d,  socket error %d, if %d", path_id, socket_err, if_index);
+                cnx->cnx_state = picoquic_state_disconnected;
+                if (cnx->callback_fn) {
+                    (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
+                }
+            }
+            else {
+                picoquic_log_app_message(cnx, "Demoting path %d after socket error %d, if %d", path_id, socket_err, if_index);
+            }
+        }
+    }
+}
+
+void picoquic_notify_destination_unreachable_by_cnxid(picoquic_quic_t * quic, picoquic_connection_id_t* cnxid,
+    uint64_t current_time, struct sockaddr* addr_peer, struct sockaddr* addr_local, int if_index, int socket_err)
+{
+    picoquic_cnx_t* cnx = NULL;
+
+    if (quic->local_cnxid_length == 0 || cnxid->id_len == 0) {
+        cnx = picoquic_cnx_by_net(quic, addr_peer);
+    }
+    else if (cnxid->id_len == quic->local_cnxid_length) {
+        cnx = picoquic_cnx_by_id(quic, *cnxid);
+    }
+
+    if (cnx != NULL) {
+        picoquic_notify_destination_unreachable(cnx, current_time, addr_peer, addr_local, if_index, socket_err);
+    }
+}
+
 
 /* Assign CID to path */
 int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id)
@@ -1464,6 +1521,7 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
             picoquic_register_path(cnx, cnx->path[path_id]);
             picoquic_set_path_challenge(cnx, path_id, current_time);
             cnx->path[path_id]->path_is_preferred_path = to_preferred_address;
+            cnx->path[path_id]->is_nat_challenge = 0;
         }
     }
 
