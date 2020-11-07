@@ -1431,6 +1431,7 @@ void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx, uint64_t curre
             if (no_path_left) {
                 picoquic_log_app_message(cnx, "Deleting connection after error on path %d,  socket error %d, if %d", path_id, socket_err, if_index);
                 cnx->cnx_state = picoquic_state_disconnected;
+                cnx->local_error = PICOQUIC_ERROR_SOCKET_ERROR;
                 if (cnx->callback_fn) {
                     (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
                 }
@@ -3243,7 +3244,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
     }
 }
 
-int picoquic_is_handshake_error(uint16_t error_code)
+int picoquic_is_handshake_error(uint64_t error_code)
 {
     return ((error_code & 0xFF00) == PICOQUIC_TRANSPORT_CRYPTO_ERROR(0) ||
         error_code == PICOQUIC_TLS_HANDSHAKE_FAILED);
@@ -3469,14 +3470,21 @@ int picoquic_is_client(picoquic_cnx_t* cnx)
     return cnx->client_mode;
 }
 
-int picoquic_get_local_error(picoquic_cnx_t* cnx)
+/* Retrieve the error codes after failure of a connection or of a stream */
+
+uint64_t picoquic_get_local_error(picoquic_cnx_t* cnx)
 {
     return cnx->local_error;
 }
 
-int picoquic_get_remote_error(picoquic_cnx_t* cnx)
+uint64_t picoquic_get_remote_error(picoquic_cnx_t* cnx)
 {
     return cnx->remote_error;
+}
+
+uint64_t picoquic_get_application_error(picoquic_cnx_t* cnx)
+{
+    return cnx->remote_application_error;
 }
 
 uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_id)

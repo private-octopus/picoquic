@@ -651,7 +651,7 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
                     ret = 0;
                     if (c_ctx != NULL) {
                         if (simulate_disconnect == 0 && (
-                            c_ctx->next_bidir <= c_ctx->max_bidir ||
+                            c_ctx->next_bidir < c_ctx->max_bidir ||
                             c_ctx->nb_open_streams != 0)) {
                             ret = stress_debug_break(0);
                         }
