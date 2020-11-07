@@ -2812,9 +2812,7 @@ uint8_t * picoquic_format_connection_close_frame(picoquic_cnx_t* cnx,
 
 const uint8_t* picoquic_decode_connection_close_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max)
 {
-    uint64_t error_code = 0;
-    bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &error_code);
-    cnx->remote_error = (uint16_t)error_code;
+    bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &cnx->remote_error);
 
     if (bytes == NULL ||
         (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
@@ -2858,9 +2856,7 @@ uint8_t * picoquic_format_application_close_frame(picoquic_cnx_t* cnx,
 
 const uint8_t* picoquic_decode_application_close_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max)
 {
-    uint64_t error_code = 0;
-    bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &error_code);
-    cnx->remote_application_error = (uint16_t)error_code;
+    bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &cnx->remote_application_error);
 
     if (bytes == NULL ||
         /* TODO, maybe: skip frame type for compatibility with draft-13 */

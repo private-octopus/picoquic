@@ -90,6 +90,11 @@ extern "C" {
 #define PICOQUIC_NO_ERROR_SIMULATE_NAT (PICOQUIC_ERROR_CLASS + 48)
 #define PICOQUIC_NO_ERROR_SIMULATE_MIGRATION (PICOQUIC_ERROR_CLASS + 49)
 #define PICOQUIC_ERROR_VERSION_NOT_SUPPORTED (PICOQUIC_ERROR_CLASS + 50)
+#define PICOQUIC_ERROR_IDLE_TIMEOUT (PICOQUIC_ERROR_CLASS + 51)
+#define PICOQUIC_ERROR_REPEAT_TIMEOUT (PICOQUIC_ERROR_CLASS + 52)
+#define PICOQUIC_ERROR_HANDSHAKE_TIMEOUT (PICOQUIC_ERROR_CLASS + 53)
+#define PICOQUIC_ERROR_SOCKET_ERROR (PICOQUIC_ERROR_CLASS + 54)
+#define PICOQUIC_ERROR_VERSION_NEGOTIATION (PICOQUIC_ERROR_CLASS + 54)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -180,7 +185,7 @@ typedef struct st_ptls_iovec_t ptls_iovec_t;
 
 /* Detect whether error occured in TLS
  */
-int picoquic_is_handshake_error(uint16_t error_code);
+int picoquic_is_handshake_error(uint64_t error_code);
 
 
 typedef struct st_picoquic_quic_t picoquic_quic_t;
@@ -392,6 +397,11 @@ int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_na
 /* Set the ESNI RR. Must be called after setting the ESNI key at least once. */
 int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file_name);
 
+/* Obtain the reasons why a connection was closed */
+void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint16_t* local_reason,
+    uint16_t* remote_reason, uint16_t* local_application_reason,
+    uint16_t* remote_application_reason);
+
 /* Will be called to verify that the given data corresponds to the given signature.
  * This callback and the `verify_ctx` will be set by the `verify_certificate_cb_fn`.
  * If `data` and `sign` are empty buffers, an error occurred and `verify_ctx` should be freed.
@@ -546,7 +556,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx);
 
 int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_file_name);
 
-int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code);
+int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code);
 
 int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
     const struct sockaddr* addr_to, uint64_t current_time);
@@ -818,10 +828,13 @@ void picoquic_disable_keep_alive(picoquic_cnx_t* cnx);
 int picoquic_is_client(picoquic_cnx_t* cnx);
 
 /* Returns the local error of the given connection context. */
-int picoquic_get_local_error(picoquic_cnx_t* cnx);
+uint64_t picoquic_get_local_error(picoquic_cnx_t* cnx);
 
 /* Returns the remote error of the given connection context. */
-int picoquic_get_remote_error(picoquic_cnx_t* cnx);
+uint64_t picoquic_get_remote_error(picoquic_cnx_t* cnx);
+
+/* Returns the application error after application close */
+uint64_t picoquic_get_application_error(picoquic_cnx_t* cnx);
 
 /* Returns the remote error for the given stream. */
 uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_id);

@@ -2104,7 +2104,7 @@ int tls_api_wrong_alpn_test()
                     ret = 0;
                 }
                 else {
-                    DBG_PRINTF("Connection loop returns 0x%x\n", test_ctx->cnx_client->remote_error);
+                    DBG_PRINTF("Connection loop returns 0x%" PRIx64, test_ctx->cnx_client->remote_error);
                     ret = -1;
                 }
             }
@@ -5763,16 +5763,16 @@ int server_busy_test()
 
         if (test_ctx->cnx_server != NULL &&
             test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
-            DBG_PRINTF("Server state: %d, local error: %x\n", test_ctx->cnx_server->cnx_state, test_ctx->cnx_server->local_error);
+            DBG_PRINTF("Server state: %d, local error: %" PRIx64, test_ctx->cnx_server->cnx_state, test_ctx->cnx_server->local_error);
             ret = -1;
         }
         else if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ||
             test_ctx->cnx_client->remote_error != PICOQUIC_TRANSPORT_SERVER_BUSY) {
-            DBG_PRINTF("Client state: %d, remote error: %x", test_ctx->cnx_client->cnx_state, test_ctx->cnx_client->remote_error);
+            DBG_PRINTF("Client state: %d, remote error: %" PRIx64, test_ctx->cnx_client->cnx_state, test_ctx->cnx_client->remote_error);
             ret = -1;
         }
         else if (simulated_time > 50000ull) {
-            DBG_PRINTF("Simulated time: %llu", (unsigned long long)simulated_time);
+            DBG_PRINTF("Simulated time: %" PRIu64, (unsigned long long)simulated_time);
             ret = -1;
         }
     }

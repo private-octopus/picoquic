@@ -764,6 +764,7 @@ int picoquic_incoming_version_negotiation(
                 }
                 /* TODO: consider rewriting the version negotiation code */
                 DBG_PRINTF("%s", "Disconnect upon receiving version negotiation.\n");
+                cnx->remote_error = PICOQUIC_ERROR_VERSION_NEGOTIATION;
                 cnx->cnx_state = picoquic_state_disconnected;
                 ret = 0;
             }
@@ -1460,6 +1461,9 @@ int picoquic_incoming_stateless_reset(
     picoquic_cnx_t* cnx)
 {
     /* Stateless reset. The connection should be abandonned */
+    if (cnx->cnx_state <= picoquic_state_ready) {
+        cnx->remote_error = PICOQUIC_ERROR_STATELESS_RESET;
+    }
     cnx->cnx_state = picoquic_state_disconnected;
 
     if (cnx->callback_fn) {

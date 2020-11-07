@@ -981,10 +981,10 @@ typedef struct st_picoquic_cnx_t {
     struct st_picoquic_net_icid_key_t* net_icid_key;
     struct st_picoquic_net_secret_key_t* reset_secret_key;
     uint64_t start_time;
-    uint16_t application_error;
-    uint16_t local_error;
-    uint16_t remote_application_error;
-    uint16_t remote_error;
+    uint64_t application_error;
+    uint64_t local_error;
+    uint64_t remote_application_error;
+    uint64_t remote_error;
     uint64_t offending_frame_type;
     uint16_t retry_token_length;
     uint8_t * retry_token;
