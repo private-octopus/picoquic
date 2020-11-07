@@ -1446,6 +1446,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                              */
                             DBG_PRINTF("Too many retransmits of packet number %d, disconnect", (int)old_p->sequence_number);
                             cnx->cnx_state = picoquic_state_disconnected;
+                            cnx->local_error = PICOQUIC_ERROR_REPEAT_TIMEOUT;
                             if (cnx->callback_fn) {
                                 (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
                             }
@@ -2585,6 +2586,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     } else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || 
         cnx->cnx_state == picoquic_state_handshake_failure || 
         cnx->cnx_state == picoquic_state_handshake_failure_resend)) {
+        picoquic_state_enum old_state = cnx->cnx_state;
+
         length = picoquic_predict_packet_header_length(
             cnx, packet_type);
         bytes_next = bytes + length;
@@ -2634,7 +2637,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         cnx->pkt_ctx[pc].ack_needed = 0;
 
-        if (cnx->callback_fn) {
+        if (cnx->callback_fn != NULL && cnx->cnx_state != old_state && cnx->cnx_state == picoquic_state_disconnected) {
             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
         }
     }
@@ -2851,6 +2854,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         /* TODO: consider alt address. Also, consider other available path. */
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
                         picoquic_log_app_message(cnx, "%s", "Too many challenge retransmits, disconnect");
+                        cnx->local_error = PICOQUIC_ERROR_REPEAT_TIMEOUT;
                         cnx->cnx_state = picoquic_state_disconnected;
                         if (cnx->callback_fn) {
                             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
@@ -3174,6 +3178,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     if (path_x == cnx->path[0]) {
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
                         picoquic_log_app_message(cnx, "%s", "Too many challenge retransmits, disconnect");
+                        cnx->local_error = PICOQUIC_ERROR_REPEAT_TIMEOUT;
                         cnx->cnx_state = picoquic_state_disconnected;
                         if (cnx->callback_fn) {
                             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
@@ -3473,6 +3478,7 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
     if (current_time >= idle_timer) {
         /* Too long silence, break it. */
         cnx->cnx_state = picoquic_state_disconnected;
+        cnx->local_error = PICOQUIC_ERROR_IDLE_TIMEOUT;
         ret = PICOQUIC_ERROR_DISCONNECTED;
         if (cnx->callback_fn) {
             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
@@ -3810,14 +3816,14 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         p_addr_to, p_addr_from, if_index, NULL);
 }
 
-int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
+int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code)
 {
     int ret = 0;
 
     if (cnx->cnx_state == picoquic_state_ready ||
         cnx->cnx_state == picoquic_state_server_false_start || cnx->cnx_state == picoquic_state_client_ready_start) {
         cnx->cnx_state = picoquic_state_disconnecting;
-        cnx->application_error = reason_code;
+        cnx->application_error = application_reason_code;
     } else if (cnx->cnx_state < picoquic_state_client_ready_start) {
         cnx->cnx_state = picoquic_state_handshake_failure;
         cnx->application_error = 0;

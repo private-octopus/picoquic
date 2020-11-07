@@ -669,6 +669,21 @@ int quic_client(const char* ip_address_text, int server_port,
     }
 
     if (ret == 0) {
+        uint64_t last_err;
+        
+        if ((last_err = picoquic_get_local_error(cnx_client)) != 0) {
+            fprintf(stdout, "Connection end with local error 0x%" PRIx64 ".\n", last_err);
+            ret = -1;
+        }
+        if ((last_err = picoquic_get_remote_error(cnx_client)) != 0) {
+            fprintf(stdout, "Connection end with remote error 0x%" PRIx64 ".\n", last_err);
+            ret = -1;
+        }
+        if ((last_err = picoquic_get_application_error(cnx_client)) != 0) {
+            fprintf(stdout, "Connection end with application error 0x%" PRIx64 ".\n", last_err);
+            ret = -1;
+        }
+
         /* Report on successes and failures */
         if (cnx_client->nb_zero_rtt_sent != 0) {
             fprintf(stdout, "Out of %d zero RTT packets, %d were acked by the server.\n",

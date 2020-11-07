@@ -656,7 +656,7 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
     return ret;
 }
 
-int transport_param_error_test(int mode, uint8_t* target, size_t target_length, uint16_t local_error)
+int transport_param_error_test(int mode, uint8_t* target, size_t target_length, uint64_t local_error)
 {
     int ret = 0;
     picoquic_quic_t * quic_ctx = NULL;
