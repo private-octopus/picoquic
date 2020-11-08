@@ -2475,6 +2475,13 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->pkt_ctx[pc].highest_acknowledged_time = start_time;
             cnx->pkt_ctx[pc].ack_needed = 0;
         }
+        /* Initialize the ACK behavior. By default, picoquic abides with the recommendation to send
+         * ACK immediately if packets are received out of order (ack_ignore_order_remote = 0),
+         * but this behavior creates too many ACKS on high speed links, so picoquic will request
+         * the peer to not do that if the "delayed ACK" extension is available (ack_ignore_order_local = 1)
+         */
+        cnx->ack_ignore_order_local = 1;
+        cnx->ack_ignore_order_remote = 0;
 
         cnx->latest_progress_time = start_time;
 

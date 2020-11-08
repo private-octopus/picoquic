@@ -2761,6 +2761,9 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
         if (pc != picoquic_packet_context_application || pkt_ctx->ack_after_fin) {
             ret = 1;
         }
+        else if (pkt_ctx->out_of_order_received && !cnx->ack_ignore_order_remote) {
+            ret = 1;
+        }
         else
         {
             uint64_t ack_gap = (cnx->nb_packets_received < 128) ? 2 : cnx->ack_gap_remote;
