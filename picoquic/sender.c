@@ -2559,6 +2559,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
                 }
                 length = bytes_next - bytes;
                 cnx->pkt_ctx[pc].ack_needed = 0;
+                cnx->pkt_ctx[pc].out_of_order_received = 0;
             }
             next_time = current_time + delta_t;
             if (next_time > exit_time) {
@@ -2832,6 +2833,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             if (next_challenge_time <= current_time || path_x->challenge_repeat_count == 0) {
                 if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
                     int ack_needed = cnx->pkt_ctx[pc].ack_needed;
+                    int out_of_order_received = cnx->pkt_ctx[pc].out_of_order_received;
                     uint8_t* bytes_challenge = bytes_next;
 
                     bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, &more_data, &is_pure_ack,
@@ -2847,6 +2849,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc);
                         /* Restore the ACK needed flags, because challenges are not reliable. */
                         cnx->pkt_ctx[pc].ack_needed = ack_needed;
+                        cnx->pkt_ctx[pc].out_of_order_received = out_of_order_received;
                     }
                 }
                 else {
