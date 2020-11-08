@@ -2348,8 +2348,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                 }
             }
         }
+
         /* If local connection ID size is null, don't allow migration */
-        if (quic->local_cnxid_length == 0) {
+        if (!cnx->client_mode && quic->local_cnxid_length == 0) {
             cnx->local_parameters.migration_disabled = 1;
         }
 

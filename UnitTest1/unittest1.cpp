@@ -964,6 +964,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(migration_zero)
+        {
+            int ret = migration_zero_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(migration_fail)
         {
             int ret = migration_fail_test();

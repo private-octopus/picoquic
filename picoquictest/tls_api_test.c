@@ -5115,12 +5115,36 @@ int probe_api_test()
     return ret;
 }
 
+/* Set the CID length to specified value */
+int set_cid_length_in_context(picoquic_test_tls_api_ctx_t* test_ctx, uint8_t length, int delayed_init)
+{
+    int ret = 0;
+
+    /* Delete the old connection */
+    picoquic_delete_cnx(test_ctx->cnx_client);
+    test_ctx->cnx_client = NULL;
+    /* Change the default cnx_id length*/
+    test_ctx->qclient->local_cnxid_length = length;
+    /* re-create a client connection */
+    test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id,
+        (struct sockaddr*) & test_ctx->server_addr, 0,
+        PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+    if (test_ctx->cnx_client == NULL) {
+        ret = -1;
+    } else if (delayed_init == 0) {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    return ret;
+}
+
 /*
  * Migration test. The client is aware of the migration, and
  * starts the migration by explicitly probing a new path.
  */
 
-int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_scenario, uint64_t loss_target)
+int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_scenario, uint64_t loss_target, int cid_zero)
 {
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
@@ -5136,13 +5160,18 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
         ret = PICOQUIC_ERROR_MEMORY;
     }
 
+    /* If doing a zero_cid test, reset the client connection */
+    if (ret == 0 && cid_zero)
+    {
+        ret = set_cid_length_in_context(test_ctx, 0, 0);
+    }
+
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-
         ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
     }
 
@@ -5156,7 +5185,9 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
 
         if (ret == 0) {
             target_id = test_ctx->cnx_client->path[test_ctx->cnx_client->nb_paths-1]->remote_cnxid;
-            previous_local_id = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
+            if (!cid_zero) {
+                previous_local_id = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
+            }
         }
     }
 
@@ -5208,12 +5239,11 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
             DBG_PRINTF("%s", "The remote CNX ID did not change to selected value");
             ret = -1;
         }
-        else if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id, &previous_local_id) == 0) {
+        else if (!cid_zero && picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id, &previous_local_id) == 0) {
             DBG_PRINTF("%s", "The local CNX ID did not change to a new value");
             ret = -1;
         }
     }
-
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
@@ -5225,19 +5255,24 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
 
 int migration_test()
 {
-    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0);
+    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0);
 }
 
 int migration_test_long()
 {
-    return migration_test_scenario(test_scenario_very_long, sizeof(test_scenario_very_long), 0);
+    return migration_test_scenario(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0);
 }
 
 int migration_test_loss()
 {
     uint64_t loss_mask = 0x09;
 
-    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), loss_mask);
+    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), loss_mask, 0);
+}
+
+int migration_zero_test()
+{
+    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 1);
 }
 
 /* Failed migration test.
@@ -7763,32 +7798,23 @@ int cid_length_test_one(uint8_t length)
 
     /* Set the CID length in the client context, then recreate the connection */
     if (ret == 0) {
-        /* Delete the old connection */
-        picoquic_delete_cnx(test_ctx->cnx_client);
-        test_ctx->cnx_client = NULL;
-        /* Change the default cnx_id length*/
-        test_ctx->qclient->local_cnxid_length = length;
-        /* re-create a client connection */
-        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-            picoquic_null_connection_id, picoquic_null_connection_id,
-            (struct sockaddr*)&test_ctx->server_addr, 0,
-            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
-        if (test_ctx->cnx_client == NULL) {
+        ret = set_cid_length_in_context(test_ctx, length, 1);
+    }
+
+    /* Do a connection */
+    if (ret == 0)
+    {
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 20000, 100000);
+
+        if (ret == 0 &&
+            test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id.id_len != length) {
             ret = -1;
         }
-        else {
-            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 20000, 100000);
 
-            if (ret == 0 &&
-                test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id.id_len != length) {
-                ret = -1;
-            }
-
-            if (ret == 0 &&
-                test_ctx->cnx_server->path[0]->remote_cnxid.id_len != length) {
-                ret = -1;
-            }
+        if (ret == 0 &&
+            test_ctx->cnx_server->path[0]->remote_cnxid.id_len != length) {
+            ret = -1;
         }
     }
 
