@@ -463,7 +463,7 @@ typedef enum {
     picoquic_tp_test_large_chello = 3127,
     picoquic_tp_enable_loss_bit_old = 0x1055,
     picoquic_tp_enable_loss_bit = 0x1057,
-    picoquic_tp_min_ack_delay = 0xDE1A,
+    picoquic_tp_min_ack_delay = 0xff02de1a,
     picoquic_tp_enable_time_stamp = 0x7158, /* x&1 = */
     picoquic_tp_grease_quic_bit = 0x2ab2
 } picoquic_tp_enum;
@@ -952,6 +952,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int quic_bit_received_0 : 1; /* Indicate whether the quic bit was received as zero at least once */
     unsigned int is_half_open : 1; /* for server side connections, created but not yet complete */
     unsigned int did_receive_short_initial : 1; /* whether peer sent unpadded initial packet */
+    unsigned int ack_ignore_order_local : 1; /* Request peer to not generate immediate ack if out of order packet received */
+    unsigned int ack_ignore_order_remote : 1; /* Peer requested no immediate ack if out of order packet received */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -1402,7 +1404,7 @@ int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_hea
 void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame);
 int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx);
 uint8_t* picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
-const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* seq, uint64_t* packets, uint64_t* microsec);
+const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* seq, uint64_t* packets, uint64_t* microsec, uint8_t * ignore_order);
 uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data);
 uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time);
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);

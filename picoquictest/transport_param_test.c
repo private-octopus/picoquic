@@ -84,7 +84,7 @@ static picoquic_tp_t transport_param_test2 = {
 
 static picoquic_tp_t transport_param_test3 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 1, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0
 };
 
 static picoquic_tp_t transport_param_test4 = {
@@ -162,7 +162,7 @@ uint8_t client_param3[] = {
     picoquic_tp_initial_max_streams_bidi, 1, 0x01,
     picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
-    0x80, 0, 0xDE, 0x1A, 2, 0x43, 0xE8,
+    0xC0, 0, 0, 0, 0xFF, 0x02, 0xDE, 0x1A, 2, 0x43, 0xE8, /* min ack delay */
     0x80, 0, 0x71, 0x58, 0x01, 0x03
 };
 
@@ -467,6 +467,11 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
     else if (param->enable_time_stamp != ref->enable_time_stamp) {
         DBG_PRINTF("enable_time_stamp: got %d, expected %d\n",
             param->enable_time_stamp, ref->enable_time_stamp);
+        ret = -1;
+    }
+    else if (param->min_ack_delay != ref->min_ack_delay) {
+        DBG_PRINTF("min_ack-delay: got %" PRIu64 ", expected %" PRIu64 "\n",
+            param->min_ack_delay, ref->min_ack_delay);
         ret = -1;
     }
     else if (param->do_grease_quic_bit != ref->do_grease_quic_bit) {

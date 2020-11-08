@@ -211,7 +211,7 @@ static uint8_t test_frame_type_handshake_done[] = {
 
 static uint8_t test_frame_type_ack_frequency[] = {
     0x40, picoquic_frame_type_ack_frequency,
-    17, 0x0A, 0x44, 0x20
+    17, 0x0A, 0x44, 0x20, 0x01
 };
 
 static uint8_t test_frame_type_time_stamp[] = {
