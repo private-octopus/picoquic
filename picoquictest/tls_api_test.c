@@ -5254,7 +5254,7 @@ int migration_test_loss()
 
 int migration_zero_test()
 {
-    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 1);
+    return migration_test_scenario(test_scenario_very_long, sizeof(test_scenario_q_and_r), 0, 1);
 }
 
 /* Failed migration test.
