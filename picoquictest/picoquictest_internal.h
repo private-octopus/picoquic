@@ -171,7 +171,7 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
     char const* sni, char const* alpn, uint64_t* p_simulated_time,
     char const* ticket_file_name, char const* token_file_name,
     int force_zero_share, int delayed_init, int use_bad_crypt,
-    picoquic_connection_id_t* icid, uint32_t nb_connections);
+    picoquic_connection_id_t* icid, uint32_t nb_connections, int cid_zero);
 
 void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx);
 

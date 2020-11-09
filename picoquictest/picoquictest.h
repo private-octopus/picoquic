@@ -206,6 +206,7 @@ int socket_ecn_test();
 int null_sni_test();
 int preferred_address_test();
 int preferred_address_dis_mig_test();
+int preferred_address_zero_test();
 int cid_for_lb_test();
 int retry_protection_vector_test();
 int test_copy_for_retransmit();

@@ -998,6 +998,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(preferred_address_zero)
+        {
+            int ret = preferred_address_zero_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         
         TEST_METHOD(test_cnxid_renewal)
         {
