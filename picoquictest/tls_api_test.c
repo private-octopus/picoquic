@@ -4399,6 +4399,31 @@ int bad_client_certificate_test()
     return ret;
 }
 
+/* Set the CID length to specified value */
+int set_cid_length_in_context(picoquic_test_tls_api_ctx_t* test_ctx, uint8_t length, int delayed_init)
+{
+    int ret = 0;
+
+    /* Delete the old connection */
+    picoquic_delete_cnx(test_ctx->cnx_client);
+    test_ctx->cnx_client = NULL;
+    /* Change the default cnx_id length*/
+    test_ctx->qclient->local_cnxid_length = length;
+    /* re-create a client connection */
+    test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id,
+        (struct sockaddr*) & test_ctx->server_addr, 0,
+        PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+    if (test_ctx->cnx_client == NULL) {
+        ret = -1;
+    }
+    else if (delayed_init == 0) {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    return ret;
+}
+
 /*
 * NAT Rebinding test. The client is unaware of the migration.
 * Start with one basic transmission, then switch the client
@@ -4407,7 +4432,7 @@ int bad_client_certificate_test()
 * response, and that the connection completes.
 */
 
-int nat_rebinding_test_one(uint64_t loss_mask_data)
+int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid)
 {
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
@@ -4420,6 +4445,10 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = set_cid_length_in_context(test_ctx, 0, 0);
     }
 
     if (ret == 0) {
@@ -4499,15 +4528,24 @@ int nat_rebinding_test()
 {
     uint64_t loss_mask = 0;
 
-    return nat_rebinding_test_one(loss_mask);
+    return nat_rebinding_test_one(loss_mask, 0);
 }
 
 int nat_rebinding_loss_test()
 {
     uint64_t loss_mask = 0x2412;
 
-    return nat_rebinding_test_one(loss_mask);
+    return nat_rebinding_test_one(loss_mask, 0);
 }
+
+int nat_rebinding_zero_test()
+{
+    /* Test of NAT rebinding with zero-length client CID */
+    uint64_t loss_mask = 0;
+
+    return nat_rebinding_test_one(loss_mask, 1);
+}
+
 
 /*
 * Fast NAT Rebinding test. The client is unaware of the migration,
@@ -5110,30 +5148,6 @@ int probe_api_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
-    }
-
-    return ret;
-}
-
-/* Set the CID length to specified value */
-int set_cid_length_in_context(picoquic_test_tls_api_ctx_t* test_ctx, uint8_t length, int delayed_init)
-{
-    int ret = 0;
-
-    /* Delete the old connection */
-    picoquic_delete_cnx(test_ctx->cnx_client);
-    test_ctx->cnx_client = NULL;
-    /* Change the default cnx_id length*/
-    test_ctx->qclient->local_cnxid_length = length;
-    /* re-create a client connection */
-    test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-        picoquic_null_connection_id, picoquic_null_connection_id,
-        (struct sockaddr*) & test_ctx->server_addr, 0,
-        PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
-    if (test_ctx->cnx_client == NULL) {
-        ret = -1;
-    } else if (delayed_init == 0) {
-        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
 
     return ret;

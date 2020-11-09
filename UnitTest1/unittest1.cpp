@@ -831,21 +831,28 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
     
-        TEST_METHOD(test_nat_rebinding)
+        TEST_METHOD(nat_rebinding)
         {
             int ret = nat_rebinding_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_nat_rebinding_loss)
+        TEST_METHOD(nat_rebinding_loss)
         {
             int ret = nat_rebinding_loss_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(fast_nat_rebinding)
+        TEST_METHOD(nat_rebinding_zero)
+        {
+            int ret = nat_rebinding_zero_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(nat_rebinding_fast)
         {
             int ret = fast_nat_rebinding_test();
 
