@@ -4553,13 +4553,15 @@ int nat_rebinding_zero_test()
 /*
 * Fast NAT Rebinding test. The client is unaware of the migration,
 * and is programmed to not support migration. The NAT alternates
-* between ports based on time, or packet counts.
+* between ports based on time, or packet counts. The test checks that
+* the connection survives 6 NAT transitions at short intervals.
 */
 
 int fast_nat_rebinding_test()
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
+    const int nb_switches_required = 6;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
@@ -4578,7 +4580,7 @@ int fast_nat_rebinding_test()
 
     /* Perform a data sending loop */
     if (ret == 0) {
-        uint64_t delta_t = (test_ctx->c_to_s_link->microsec_latency + test_ctx->s_to_c_link->microsec_latency);
+        uint64_t delta_t = 5*(test_ctx->c_to_s_link->microsec_latency + test_ctx->s_to_c_link->microsec_latency);
         uint64_t next_time = simulated_time + 200000000;
         int ret = 0;
         int nb_trials = 0;
@@ -4609,15 +4611,19 @@ int fast_nat_rebinding_test()
                 if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == 0) {
                     DBG_PRINTF("Client address out of sync, port: %d", ((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port);
                 }
-                else if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == test_ctx->client_addr.sin_port) {
-                    if (switched) {
-                        switch_time = simulated_time + delta_t;
-                        switched = 0;
+                else if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == test_ctx->client_addr_natted.sin_port) {
+                    if (switched){
+                        if (simulated_time > switch_time + delta_t &&
+                            nb_switched < nb_switches_required) {
+                            switched = 0;
+                        }
                     }
-                    else if (simulated_time >= switch_time) {
+                    else
+                    {
                         /* Change the client address */
-                        test_ctx->client_addr.sin_port ^= 17;
+                        test_ctx->client_addr_natted.sin_port += 17;
                         switched = 1;
+                        switch_time = simulated_time;
                         nb_switched++;
                     }
                 }
@@ -4642,6 +4648,11 @@ int fast_nat_rebinding_test()
         }
 
         DBG_PRINTF("Exit after %d trials, %d inactive, %d switches", nb_trials, nb_inactive, nb_switched);
+
+        /* Verify that the test was effective */
+        if (ret == 0 && nb_switched < nb_switches_required) {
+            ret = -1;
+        }
 
     }
 
