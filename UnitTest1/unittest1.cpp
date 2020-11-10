@@ -831,21 +831,28 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
     
-        TEST_METHOD(test_nat_rebinding)
+        TEST_METHOD(nat_rebinding)
         {
             int ret = nat_rebinding_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_nat_rebinding_loss)
+        TEST_METHOD(nat_rebinding_loss)
         {
             int ret = nat_rebinding_loss_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(fast_nat_rebinding)
+        TEST_METHOD(nat_rebinding_zero)
+        {
+            int ret = nat_rebinding_zero_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(nat_rebinding_fast)
         {
             int ret = fast_nat_rebinding_test();
 
@@ -964,6 +971,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(migration_zero)
+        {
+            int ret = migration_zero_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(migration_fail)
         {
             int ret = migration_fail_test();
@@ -981,6 +995,13 @@ namespace UnitTest1
         TEST_METHOD(preferred_address_dis_mig)
         {
             int ret = preferred_address_dis_mig_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(preferred_address_zero)
+        {
+            int ret = preferred_address_zero_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1132,7 +1153,7 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(rebinding_stress)
+        TEST_METHOD(nat_rebinding_stress)
         {
             int ret = rebinding_stress_test();
 

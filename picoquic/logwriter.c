@@ -1020,10 +1020,12 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         bytewrite_vint(ps_msg, 0);
     }
     else {
-        uint64_t cc_state;
-        uint64_t cc_param;
+        uint64_t cc_state = 0;
+        uint64_t cc_param = 0;
 
-        cnx->congestion_alg->alg_observe(cnx->path[0], &cc_state, &cc_param);
+        if (cnx->path[0]->congestion_alg_state != NULL) {
+            cnx->congestion_alg->alg_observe(cnx->path[0], &cc_state, &cc_param);
+        }
         bytewrite_vint(ps_msg, cc_state);
         bytewrite_vint(ps_msg, cc_param);
     }

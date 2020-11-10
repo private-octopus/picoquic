@@ -1134,7 +1134,7 @@ int picoquic_incoming_client_initial(
             /* decode the incoming frames */
             if (ret == 0) {
                 ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, ph->pn64, current_time);
             }
 
             /* processing of client initial packet */
@@ -1327,7 +1327,7 @@ int picoquic_incoming_server_initial(
             }
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, ph->pn64, current_time);
             }
 
             /* processing of initial packet */
@@ -1379,7 +1379,7 @@ int picoquic_incoming_server_handshake(
             }
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, ph->pn64, current_time);
             }
 
             /* processing of initial packet */
@@ -1421,7 +1421,7 @@ int picoquic_incoming_client_handshake(
             }
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, ph->pn64, current_time);
             }
             /* processing of client clear text packet */
             if (ret == 0) {
@@ -1503,7 +1503,7 @@ int picoquic_incoming_0rtt(
             else {
                 cnx->nb_zero_rtt_received++;
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, ph->pn64, current_time);
             }
 
             if (ret == 0) {
@@ -1687,12 +1687,6 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
         }
     }
 
-#if 1
-    if (cnx->nb_paths > 2 && cnx->path[1] == cnx->path[2]) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
-
     *p_path_id = path_id;
 
     return ret;
@@ -1802,7 +1796,7 @@ int picoquic_incoming_encrypted(
                 picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
                 /* Accept the incoming frames */
                 ret = picoquic_decode_frames(cnx, cnx->path[path_id], 
-                    bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, ph->pn64, current_time);
             }
 
             if (ret == 0) {
