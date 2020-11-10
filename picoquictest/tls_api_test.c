@@ -4584,9 +4584,8 @@ int fast_nat_rebinding_test()
 
     /* Perform a data sending loop */
     if (ret == 0) {
-        uint64_t delta_t = 5*(test_ctx->c_to_s_link->microsec_latency + test_ctx->s_to_c_link->microsec_latency);
+        uint64_t delta_t = 5 * (test_ctx->c_to_s_link->microsec_latency + test_ctx->s_to_c_link->microsec_latency);
         uint64_t next_time = simulated_time + 200000000;
-        int ret = 0;
         int nb_trials = 0;
         int nb_inactive = 0;
         int max_trials = 1000000;
@@ -4615,7 +4614,7 @@ int fast_nat_rebinding_test()
                     DBG_PRINTF("Client address out of sync, port: %d", ((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port);
                 }
                 else if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == test_ctx->client_addr_natted.sin_port) {
-                    if (switched){
+                    if (switched) {
                         if (simulated_time > switch_time + delta_t &&
                             nb_switched < nb_switches_required) {
                             switched = 0;
@@ -4656,7 +4655,6 @@ int fast_nat_rebinding_test()
         if (ret == 0 && nb_switched < nb_switches_required) {
             ret = -1;
         }
-
     }
 
     /* verify that the transmission was complete */
@@ -5411,7 +5409,9 @@ int rebinding_stress_test()
     }
 
     /* Rewrite the sending loop, so we can add injection of packet copies */
-    test_ctx->client_use_multiple_addresses = 1;
+    if (ret == 0) {
+        test_ctx->client_use_multiple_addresses = 1;
+    }
 
     while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
