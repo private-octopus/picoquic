@@ -3629,10 +3629,12 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
     size_t bytes_maxsize, int epoch,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
+    uint64_t pn64,
     uint64_t current_time)
 {
     const uint8_t *bytes_max = bytes + bytes_maxsize;
     int ack_needed = 0;
+    int is_path_validating_packet = 1; /* Will be set to zero if non validating frame received */
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
     picoquic_packet_data_t packet_data;
 
@@ -3640,9 +3642,10 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
 
     while (bytes != NULL && bytes < bytes_max) {
         uint8_t first_byte = bytes[0];
+        int is_path_validating_frame = 0;
 
         if (PICOQUIC_IN_RANGE(first_byte, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-            if (epoch != 1 && epoch != 3) {
+            if (epoch != picoquic_epoch_0rtt && epoch != picoquic_epoch_1rtt) {
                 DBG_PRINTF("Data frame (0x%x), when only TLS stream is expected", first_byte);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
                 bytes = NULL;
@@ -3698,6 +3701,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
         else {
             switch (first_byte) {
             case picoquic_frame_type_padding:
+                is_path_validating_frame = 1;
                 bytes = picoquic_skip_0len_frame(bytes, bytes_max);
                 break;
             case picoquic_frame_type_reset_stream:
@@ -3743,6 +3747,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_new_connection_id:
+                is_path_validating_frame = 1;
                 bytes = picoquic_decode_new_connection_id_frame(cnx, bytes, bytes_max, current_time);
                 ack_needed = 1;
                 break;
@@ -3751,9 +3756,11 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_path_challenge:
+                is_path_validating_frame = 1;
                 bytes = picoquic_decode_path_challenge_frame(cnx, bytes, bytes_max, path_x, addr_from, addr_to);
                 break;
             case picoquic_frame_type_path_response:
+                is_path_validating_frame = 1;
                 bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max);
                 break;
             case picoquic_frame_type_crypto_hs:
@@ -3799,16 +3806,21 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 break;
             }
             }
+            is_path_validating_packet &= is_path_validating_frame;
         }
     }
 
     if (bytes != NULL) {
         process_decoded_packet_data(cnx, current_time, &packet_data);
-    }
 
-    if (bytes != NULL && ack_needed != 0) {
-        cnx->latest_progress_time = current_time;
-        picoquic_set_ack_needed(cnx, current_time, pc);
+        if (ack_needed != 0) {
+            cnx->latest_progress_time = current_time;
+            picoquic_set_ack_needed(cnx, current_time, pc);
+        }
+
+        if (epoch == picoquic_epoch_1rtt && !is_path_validating_packet && pn64 > path_x->last_non_validating_pn) {
+            path_x->last_non_validating_pn = pn64;
+        }
     }
 
     return bytes != NULL ? 0 : PICOQUIC_ERROR_DETECTED;

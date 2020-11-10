@@ -739,11 +739,12 @@ typedef struct st_picoquic_path_t {
     uint64_t challenge_time;
     uint64_t demotion_time;
     uint8_t challenge_repeat_count;
+    /* Last 1-RTT "non path validating" packet received on this path */
+    uint64_t last_non_validating_pn;
 
     /* flags */
     unsigned int mtu_probe_sent : 1;
     unsigned int path_is_published : 1;
-    unsigned int path_is_activated : 1;
     unsigned int challenge_required : 1;
     unsigned int challenge_verified : 1;
     unsigned int challenge_failed : 1;
@@ -1411,7 +1412,7 @@ uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, u
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
-    int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time);
+    int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, uint64_t current_time);
 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 

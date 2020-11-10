@@ -102,6 +102,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     int client_use_multiple_addresses;
     int do_bad_coalesce_test;
     struct sockaddr_in client_addr;
+    struct sockaddr_in client_addr_natted; /* When simulating NAT (client use NAT) */
     struct sockaddr_in client_addr_2; /* for use in multipath tests */
     struct sockaddr_in server_addr;
     test_api_callback_t client_callback;

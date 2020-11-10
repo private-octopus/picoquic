@@ -1067,6 +1067,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
         {
             if (cnx->path != NULL)
             {
+                memset (new_path, 0, new_alloc * sizeof(picoquic_path_t*));
                 if (cnx->nb_paths > 0)
                 {
                     memcpy(new_path, cnx->path, cnx->nb_paths * sizeof(picoquic_path_t *));
@@ -1204,7 +1205,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
                 DBG_PRINTF("Erase path for old packet pc: %d, seq:%" PRIu64 "\n", pc, p->sequence_number);
                 p->send_path = NULL;
             }
-            p = p->next_packet;
+            p = p->previous_packet;
         }
     }
     /* Free the data */

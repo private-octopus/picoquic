@@ -1301,18 +1301,26 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 
             if (packet->length > 0) {
                 int simulate_loss = 0;
-                if (target_link == test_ctx->c_to_s_link) {
-                    if (picoquic_compare_addr((struct sockaddr *)&test_ctx->client_addr,
-                        (struct sockaddr *)&packet->addr_from) != 0) {
-                        if (test_ctx->client_use_nat) {
+                if (target_link == test_ctx->s_to_c_link) {
+                    if (test_ctx->client_use_nat){
+                        if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted,
+                            (struct sockaddr*) & packet->addr_to) == 0) {
                             /* Rewrite the address */
-                            picoquic_store_addr(&packet->addr_from, (struct sockaddr *)&test_ctx->client_addr);
+                            picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & test_ctx->client_addr);
                         }
                         else {
                             /* Using wrong address: simulate loss */
                             simulate_loss = 1;
                         }
                     }
+                    else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr,
+                        (struct sockaddr*) & packet->addr_to) != 0) {
+                        /* Using wrong address: simulate loss */
+                        simulate_loss = 1;
+                    }
+                }
+                else if (target_link == test_ctx->c_to_s_link && test_ctx->client_use_nat) {
+                    picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & test_ctx->client_addr_natted);
                 }
 
                 if (*simulated_time < test_ctx->blackhole_end && *simulated_time >= test_ctx->blackhole_start) {
@@ -4412,21 +4420,41 @@ int bad_client_certificate_test()
 
 int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid)
 {
+    int ret;
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
     uint64_t loss_mask = 0;
     uint64_t initial_challenge = 0;
     int nb_inactive = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 8, zero_cid);
+    picoquic_connection_id_t initial_cid = { {0x19, 0x8a, 0, 0, 0, 0, 0, 0}, 8 };
+
+    if (loss_mask_data != 0) {
+        initial_cid.id[2] = 0x10;
+    }
+
+    if (zero_cid != 0) {
+        initial_cid.id[3] = 0xc1;
+    }
+
+    ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid, 8, zero_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
     }
+    else {
+        picoquic_set_log_level(test_ctx->qserver, 1);
+        ret = picoquic_set_binlog(test_ctx->qserver, ".");
+    }
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* run a receive loop until no outstanding data */
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
     }
 
     if (ret == 0) {
@@ -4434,7 +4462,8 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid)
         loss_mask = loss_mask_data; 
         
         /* Change the client address */
-        test_ctx->client_addr.sin_port += 17;
+        test_ctx->client_addr_natted = test_ctx->client_addr;
+        test_ctx->client_addr_natted.sin_port += 17;
         test_ctx->client_use_nat = 1;
         
         /* Prepare to send data */
@@ -4560,6 +4589,8 @@ int fast_nat_rebinding_test()
         int nb_switched = 0;
 
         test_ctx->client_use_nat = 1;
+        test_ctx->client_addr_natted = test_ctx->client_addr;
+        test_ctx->client_addr_natted.sin_port += 17;
         test_ctx->client_use_multiple_addresses = 1;
 
         while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && simulated_time < next_time && TEST_CLIENT_READY && TEST_SERVER_READY) {
@@ -4648,8 +4679,6 @@ int spin_bit_test()
     }
 
     if (ret == 0) {
-        test_ctx->client_use_nat = 1;
-
         /* force spinbit policy to basic, then start */
         test_ctx->cnx_client->spin_policy = picoquic_spinbit_basic;
 
@@ -5432,7 +5461,8 @@ int rebinding_stress_test()
 
         /* At some point, the client does migrate to a new address */
         if (!client_rebinding_done && test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > 128) {
-            test_ctx->client_addr.sin_port += 17;
+            test_ctx->client_addr_natted = test_ctx->client_addr;
+            test_ctx->client_addr_natted.sin_port += 17;
             test_ctx->client_use_nat = 1;
             client_rebinding_done = 1;
         }
@@ -6708,7 +6738,8 @@ int false_migration_test()
 
 /*
 * Testing what happens in case of NAT rebinding during handshake.
-* In theory, it should cause the handshake to fail
+* In theory, it may cause the handshake to fail, but in practice it does
+* not...
 */
 
 int nat_handshake_test_one(int test_rank)
@@ -6748,7 +6779,8 @@ int nat_handshake_test_one(int test_rank)
                 }
                 if (should_nat) {
                     /* Simulate a NAT rebinding */
-                    test_ctx->client_addr.sin_port += 17;
+                    test_ctx->client_addr_natted = test_ctx->client_addr;
+                    test_ctx->client_addr_natted.sin_port += 17;
                     test_ctx->client_use_nat = 1;
                     natted++;
                 }
@@ -6794,16 +6826,7 @@ int nat_handshake_test_one(int test_rank)
         DBG_PRINTF("Connection succeeded after %d natting in handshake, rank %d\n", natted, test_rank);
         ret = -1;
     }
-    else if (test_rank == 0) {
-        /* Verify that a NAT during HANDSHAKE did fail */
-        if (ret == 0) {
-            DBG_PRINTF("Connection succeeded after %d natting during handshake, rank %d\n", natted);
-            ret = -1;
-        }
-        else {
-            ret = 0;
-        }
-    }
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;

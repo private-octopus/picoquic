@@ -606,7 +606,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
             cnx->cnx_state = picoquic_state_ready;
         }
 
-        ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, epoch, NULL, NULL, simulated_time);
+        ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, epoch, NULL, NULL, 0, simulated_time);
 
         *ack_needed = cnx->pkt_ctx[pc].ack_needed;
 
