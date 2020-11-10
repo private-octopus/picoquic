@@ -1153,7 +1153,7 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(rebinding_stress)
+        TEST_METHOD(nat_rebinding_stress)
         {
             int ret = rebinding_stress_test();
 

@@ -1108,10 +1108,12 @@ static int tls_api_one_sim_link_arrival(picoquictest_sim_link_t* sim_link, struc
         /* Check the destination address  before submitting the packet */
         if (picoquic_compare_addr(target_addr, (struct sockaddr*) & packet->addr_to) == 0 ||
             (packet->addr_to.ss_family == target_addr->sa_family  && multiple_address)) {
-            ret = picoquic_incoming_packet(quic, packet->bytes, (uint32_t)packet->length,
-                (struct sockaddr*) & packet->addr_from,
-                (struct sockaddr*) & packet->addr_to, 0, recv_ecn, simulated_time);
-            *was_active |= 1;
+            if (packet->length > 16) {
+                ret = picoquic_incoming_packet(quic, packet->bytes, (uint32_t)packet->length,
+                    (struct sockaddr*) & packet->addr_from,
+                    (struct sockaddr*) & packet->addr_to, 0, recv_ecn, simulated_time);
+                *was_active |= 1;
+            }
         }
 
         if (ret != 0)
@@ -1302,21 +1304,23 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
             if (packet->length > 0) {
                 int simulate_loss = 0;
                 if (target_link == test_ctx->s_to_c_link) {
-                    if (test_ctx->client_use_nat){
-                        if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted,
-                            (struct sockaddr*) & packet->addr_to) == 0) {
-                            /* Rewrite the address */
-                            picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & test_ctx->client_addr);
+                    if (!test_ctx->client_use_multiple_addresses) {
+                        if (test_ctx->client_use_nat) {
+                            if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted,
+                                (struct sockaddr*) & packet->addr_to) == 0) {
+                                /* Rewrite the address */
+                                picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & test_ctx->client_addr);
+                            }
+                            else {
+                                /* Using wrong address: simulate loss */
+                                simulate_loss = 1;
+                            }
                         }
-                        else {
+                        else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr,
+                            (struct sockaddr*) & packet->addr_to) != 0) {
                             /* Using wrong address: simulate loss */
                             simulate_loss = 1;
                         }
-                    }
-                    else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr,
-                        (struct sockaddr*) & packet->addr_to) != 0) {
-                        /* Using wrong address: simulate loss */
-                        simulate_loss = 1;
                     }
                 }
                 else if (target_link == test_ctx->c_to_s_link && test_ctx->client_use_nat) {
@@ -4593,7 +4597,6 @@ int fast_nat_rebinding_test()
         test_ctx->client_use_nat = 1;
         test_ctx->client_addr_natted = test_ctx->client_addr;
         test_ctx->client_addr_natted.sin_port += 17;
-        test_ctx->client_use_multiple_addresses = 1;
 
         while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && simulated_time < next_time && TEST_CLIENT_READY && TEST_SERVER_READY) {
             int was_active = 0;
@@ -5384,6 +5387,7 @@ int rebinding_stress_test()
     uint64_t loss_mask = 0;
     uint64_t last_inject_time = 0;
     uint64_t random_context = 0xBABAC001;
+    picoquictest_sim_packet_t* last_client_packet_processed = NULL;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
@@ -5407,6 +5411,7 @@ int rebinding_stress_test()
     }
 
     /* Rewrite the sending loop, so we can add injection of packet copies */
+    test_ctx->client_use_multiple_addresses = 1;
 
     while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
@@ -5461,12 +5466,30 @@ int rebinding_stress_test()
         }
 
         /* Initially, the attacker relays packets to the client. Then, it gives up */
-        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < 256) {
+        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > 256) {
+            test_ctx->client_use_multiple_addresses = 0;
+        }
+
+        if (test_ctx->client_use_multiple_addresses && test_ctx->s_to_c_link->last_packet != NULL &&
+            test_ctx->s_to_c_link->last_packet != last_client_packet_processed){
+            last_client_packet_processed = test_ctx->s_to_c_link->last_packet;
             /* Packet reinjection at the client if using the special address */
-            if (test_ctx->s_to_c_link->last_packet != NULL &&
-                picoquic_compare_addr((struct sockaddr *)&hack_address, (struct sockaddr *)&test_ctx->s_to_c_link->last_packet->addr_to) == 0)
+            if (picoquic_compare_addr((struct sockaddr *)&hack_address, (struct sockaddr *)&test_ctx->s_to_c_link->last_packet->addr_to) == 0)
             {
                 picoquic_store_addr(&test_ctx->s_to_c_link->last_packet->addr_to, (struct sockaddr *)&test_ctx->client_addr);
+            }
+            else if (test_ctx->client_use_nat) {
+                if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted, (struct sockaddr*) & test_ctx->s_to_c_link->last_packet->addr_to) == 0) {
+                    picoquic_store_addr(&test_ctx->s_to_c_link->last_packet->addr_to, (struct sockaddr*) & test_ctx->client_addr);
+                }
+                else {
+                    /* This packet should be dropped on arrival */
+                    test_ctx->s_to_c_link->last_packet->length = 1;
+                }
+            }
+            else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr, (struct sockaddr*) & test_ctx->s_to_c_link->last_packet->addr_to) != 0) {
+                /* This packet should be dropped on arrival */
+                test_ctx->s_to_c_link->last_packet->length = 1;
             }
         }
 
