@@ -130,7 +130,7 @@ int migration_test_one(int mtu_drop)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
-    uint64_t max_completion_microsec = 1800000;
+    uint64_t max_completion_microsec = 2000000;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0x1a, 0x10, 0xc0, 4, 5, 6, 7, 8}, 8 };
     int ret;

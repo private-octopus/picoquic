@@ -961,7 +961,7 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
     char const* sni, char const* alpn, uint64_t* p_simulated_time, 
     char const* ticket_file_name, char const* token_file_name,
     int force_zero_share, int delayed_init, int use_bad_crypt, 
-    picoquic_connection_id_t * icid, uint32_t nb_connections)
+    picoquic_connection_id_t * icid, uint32_t nb_connections, int cid_zero)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -1030,6 +1030,9 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
             if (test_ctx->qclient == NULL || test_ctx->qserver == NULL) {
                 ret = -1;
             }
+            else if (cid_zero){
+                test_ctx->qclient->local_cnxid_length = 0;
+            }
 
             /* register the links */
             if (ret == 0) {
@@ -1081,7 +1084,7 @@ int tls_api_init_ctx_ex(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_ve
     int force_zero_share, int delayed_init, int use_bad_crypt, picoquic_connection_id_t* icid)
 {
     return tls_api_init_ctx_ex2(pctx, proposed_version, sni, alpn, p_simulated_time, ticket_file_name, token_file_name,
-        force_zero_share, delayed_init, use_bad_crypt, icid, 8);
+        force_zero_share, delayed_init, use_bad_crypt, icid, 8, 0);
 
 }
 
@@ -1105,10 +1108,12 @@ static int tls_api_one_sim_link_arrival(picoquictest_sim_link_t* sim_link, struc
         /* Check the destination address  before submitting the packet */
         if (picoquic_compare_addr(target_addr, (struct sockaddr*) & packet->addr_to) == 0 ||
             (packet->addr_to.ss_family == target_addr->sa_family  && multiple_address)) {
-            ret = picoquic_incoming_packet(quic, packet->bytes, (uint32_t)packet->length,
-                (struct sockaddr*) & packet->addr_from,
-                (struct sockaddr*) & packet->addr_to, 0, recv_ecn, simulated_time);
-            *was_active |= 1;
+            if (packet->length > 16) {
+                ret = picoquic_incoming_packet(quic, packet->bytes, (uint32_t)packet->length,
+                    (struct sockaddr*) & packet->addr_from,
+                    (struct sockaddr*) & packet->addr_to, 0, recv_ecn, simulated_time);
+                *was_active |= 1;
+            }
         }
 
         if (ret != 0)
@@ -1298,18 +1303,28 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 
             if (packet->length > 0) {
                 int simulate_loss = 0;
-                if (target_link == test_ctx->c_to_s_link) {
-                    if (picoquic_compare_addr((struct sockaddr *)&test_ctx->client_addr,
-                        (struct sockaddr *)&packet->addr_from) != 0) {
+                if (target_link == test_ctx->s_to_c_link) {
+                    if (!test_ctx->client_use_multiple_addresses) {
                         if (test_ctx->client_use_nat) {
-                            /* Rewrite the address */
-                            picoquic_store_addr(&packet->addr_from, (struct sockaddr *)&test_ctx->client_addr);
+                            if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted,
+                                (struct sockaddr*) & packet->addr_to) == 0) {
+                                /* Rewrite the address */
+                                picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & test_ctx->client_addr);
+                            }
+                            else {
+                                /* Using wrong address: simulate loss */
+                                simulate_loss = 1;
+                            }
                         }
-                        else {
+                        else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr,
+                            (struct sockaddr*) & packet->addr_to) != 0) {
                             /* Using wrong address: simulate loss */
                             simulate_loss = 1;
                         }
                     }
+                }
+                else if (target_link == test_ctx->c_to_s_link && test_ctx->client_use_nat) {
+                    picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & test_ctx->client_addr_natted);
                 }
 
                 if (*simulated_time < test_ctx->blackhole_end && *simulated_time >= test_ctx->blackhole_start) {
@@ -2131,7 +2146,7 @@ int tls_api_one_scenario_init_ex(
     picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t * simulated_time,
     uint32_t proposed_version,
     picoquic_tp_t * client_params, picoquic_tp_t * server_params,
-    picoquic_connection_id_t * icid)
+    picoquic_connection_id_t * icid, int cid_zero)
 {
     int ret = tls_api_init_ctx_ex(p_test_ctx,
         (proposed_version == 0) ? PICOQUIC_INTERNAL_TEST_VERSION_1 : proposed_version,
@@ -2166,7 +2181,7 @@ int tls_api_one_scenario_init(
     uint32_t proposed_version,
     picoquic_tp_t* client_params, picoquic_tp_t* server_params)
 {
-    return tls_api_one_scenario_init_ex(p_test_ctx, simulated_time, proposed_version, client_params, server_params, NULL);
+    return tls_api_one_scenario_init_ex(p_test_ctx, simulated_time, proposed_version, client_params, server_params, NULL, 0);
 }
 
 int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx)
@@ -4407,23 +4422,43 @@ int bad_client_certificate_test()
 * response, and that the connection completes.
 */
 
-int nat_rebinding_test_one(uint64_t loss_mask_data)
+int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid)
 {
+    int ret;
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
     uint64_t loss_mask = 0;
     uint64_t initial_challenge = 0;
     int nb_inactive = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    picoquic_connection_id_t initial_cid = { {0x19, 0x8a, 0, 0, 0, 0, 0, 0}, 8 };
+
+    if (loss_mask_data != 0) {
+        initial_cid.id[2] = 0x10;
+    }
+
+    if (zero_cid != 0) {
+        initial_cid.id[3] = 0xc1;
+    }
+
+    ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid, 8, zero_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
     }
+    else {
+        picoquic_set_log_level(test_ctx->qserver, 1);
+        ret = picoquic_set_binlog(test_ctx->qserver, ".");
+    }
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* run a receive loop until no outstanding data */
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
     }
 
     if (ret == 0) {
@@ -4431,7 +4466,8 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
         loss_mask = loss_mask_data; 
         
         /* Change the client address */
-        test_ctx->client_addr.sin_port += 17;
+        test_ctx->client_addr_natted = test_ctx->client_addr;
+        test_ctx->client_addr_natted.sin_port += 17;
         test_ctx->client_use_nat = 1;
         
         /* Prepare to send data */
@@ -4499,26 +4535,37 @@ int nat_rebinding_test()
 {
     uint64_t loss_mask = 0;
 
-    return nat_rebinding_test_one(loss_mask);
+    return nat_rebinding_test_one(loss_mask, 0);
 }
 
 int nat_rebinding_loss_test()
 {
     uint64_t loss_mask = 0x2412;
 
-    return nat_rebinding_test_one(loss_mask);
+    return nat_rebinding_test_one(loss_mask, 0);
 }
+
+int nat_rebinding_zero_test()
+{
+    /* Test of NAT rebinding with zero-length client CID */
+    uint64_t loss_mask = 0;
+
+    return nat_rebinding_test_one(loss_mask, 1);
+}
+
 
 /*
 * Fast NAT Rebinding test. The client is unaware of the migration,
 * and is programmed to not support migration. The NAT alternates
-* between ports based on time, or packet counts.
+* between ports based on time, or packet counts. The test checks that
+* the connection survives 6 NAT transitions at short intervals.
 */
 
 int fast_nat_rebinding_test()
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
+    const int nb_switches_required = 6;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
@@ -4537,9 +4584,8 @@ int fast_nat_rebinding_test()
 
     /* Perform a data sending loop */
     if (ret == 0) {
-        uint64_t delta_t = (test_ctx->c_to_s_link->microsec_latency + test_ctx->s_to_c_link->microsec_latency);
+        uint64_t delta_t = 5 * (test_ctx->c_to_s_link->microsec_latency + test_ctx->s_to_c_link->microsec_latency);
         uint64_t next_time = simulated_time + 200000000;
-        int ret = 0;
         int nb_trials = 0;
         int nb_inactive = 0;
         int max_trials = 1000000;
@@ -4548,7 +4594,8 @@ int fast_nat_rebinding_test()
         int nb_switched = 0;
 
         test_ctx->client_use_nat = 1;
-        test_ctx->client_use_multiple_addresses = 1;
+        test_ctx->client_addr_natted = test_ctx->client_addr;
+        test_ctx->client_addr_natted.sin_port += 17;
 
         while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && simulated_time < next_time && TEST_CLIENT_READY && TEST_SERVER_READY) {
             int was_active = 0;
@@ -4566,15 +4613,19 @@ int fast_nat_rebinding_test()
                 if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == 0) {
                     DBG_PRINTF("Client address out of sync, port: %d", ((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port);
                 }
-                else if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == test_ctx->client_addr.sin_port) {
+                else if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == test_ctx->client_addr_natted.sin_port) {
                     if (switched) {
-                        switch_time = simulated_time + delta_t;
-                        switched = 0;
+                        if (simulated_time > switch_time + delta_t &&
+                            nb_switched < nb_switches_required) {
+                            switched = 0;
+                        }
                     }
-                    else if (simulated_time >= switch_time) {
+                    else
+                    {
                         /* Change the client address */
-                        test_ctx->client_addr.sin_port ^= 17;
+                        test_ctx->client_addr_natted.sin_port += 17;
                         switched = 1;
+                        switch_time = simulated_time;
                         nb_switched++;
                     }
                 }
@@ -4600,6 +4651,10 @@ int fast_nat_rebinding_test()
 
         DBG_PRINTF("Exit after %d trials, %d inactive, %d switches", nb_trials, nb_inactive, nb_switched);
 
+        /* Verify that the test was effective */
+        if (ret == 0 && nb_switched < nb_switches_required) {
+            ret = -1;
+        }
     }
 
     /* verify that the transmission was complete */
@@ -4636,8 +4691,6 @@ int spin_bit_test()
     }
 
     if (ret == 0) {
-        test_ctx->client_use_nat = 1;
-
         /* force spinbit policy to basic, then start */
         test_ctx->cnx_client->spin_policy = picoquic_spinbit_basic;
 
@@ -5120,7 +5173,7 @@ int probe_api_test()
  * starts the migration by explicitly probing a new path.
  */
 
-int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_scenario, uint64_t loss_target)
+int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_scenario, uint64_t loss_target, int cid_zero)
 {
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
@@ -5129,8 +5182,8 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     picoquic_connection_id_t target_id = picoquic_null_connection_id;
     picoquic_connection_id_t previous_local_id = picoquic_null_connection_id;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 8, cid_zero);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -5142,7 +5195,6 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-
         ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
     }
 
@@ -5156,7 +5208,9 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
 
         if (ret == 0) {
             target_id = test_ctx->cnx_client->path[test_ctx->cnx_client->nb_paths-1]->remote_cnxid;
-            previous_local_id = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
+            if (!cid_zero) {
+                previous_local_id = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
+            }
         }
     }
 
@@ -5208,12 +5262,11 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
             DBG_PRINTF("%s", "The remote CNX ID did not change to selected value");
             ret = -1;
         }
-        else if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id, &previous_local_id) == 0) {
+        else if (!cid_zero && picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id, &previous_local_id) == 0) {
             DBG_PRINTF("%s", "The local CNX ID did not change to a new value");
             ret = -1;
         }
     }
-
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
@@ -5225,19 +5278,24 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
 
 int migration_test()
 {
-    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0);
+    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0);
 }
 
 int migration_test_long()
 {
-    return migration_test_scenario(test_scenario_very_long, sizeof(test_scenario_very_long), 0);
+    return migration_test_scenario(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0);
 }
 
 int migration_test_loss()
 {
     uint64_t loss_mask = 0x09;
 
-    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), loss_mask);
+    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), loss_mask, 0);
+}
+
+int migration_zero_test()
+{
+    return migration_test_scenario(test_scenario_very_long, sizeof(test_scenario_q_and_r), 0, 1);
 }
 
 /* Failed migration test.
@@ -5327,6 +5385,7 @@ int rebinding_stress_test()
     uint64_t loss_mask = 0;
     uint64_t last_inject_time = 0;
     uint64_t random_context = 0xBABAC001;
+    picoquictest_sim_packet_t* last_client_packet_processed = NULL;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
@@ -5350,6 +5409,9 @@ int rebinding_stress_test()
     }
 
     /* Rewrite the sending loop, so we can add injection of packet copies */
+    if (ret == 0) {
+        test_ctx->client_use_multiple_addresses = 1;
+    }
 
     while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
@@ -5404,18 +5466,37 @@ int rebinding_stress_test()
         }
 
         /* Initially, the attacker relays packets to the client. Then, it gives up */
-        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < 256) {
+        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > 256) {
+            test_ctx->client_use_multiple_addresses = 0;
+        }
+
+        if (test_ctx->client_use_multiple_addresses && test_ctx->s_to_c_link->last_packet != NULL &&
+            test_ctx->s_to_c_link->last_packet != last_client_packet_processed){
+            last_client_packet_processed = test_ctx->s_to_c_link->last_packet;
             /* Packet reinjection at the client if using the special address */
-            if (test_ctx->s_to_c_link->last_packet != NULL &&
-                picoquic_compare_addr((struct sockaddr *)&hack_address, (struct sockaddr *)&test_ctx->s_to_c_link->last_packet->addr_to) == 0)
+            if (picoquic_compare_addr((struct sockaddr *)&hack_address, (struct sockaddr *)&test_ctx->s_to_c_link->last_packet->addr_to) == 0)
             {
                 picoquic_store_addr(&test_ctx->s_to_c_link->last_packet->addr_to, (struct sockaddr *)&test_ctx->client_addr);
+            }
+            else if (test_ctx->client_use_nat) {
+                if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted, (struct sockaddr*) & test_ctx->s_to_c_link->last_packet->addr_to) == 0) {
+                    picoquic_store_addr(&test_ctx->s_to_c_link->last_packet->addr_to, (struct sockaddr*) & test_ctx->client_addr);
+                }
+                else {
+                    /* This packet should be dropped on arrival */
+                    test_ctx->s_to_c_link->last_packet->length = 1;
+                }
+            }
+            else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr, (struct sockaddr*) & test_ctx->s_to_c_link->last_packet->addr_to) != 0) {
+                /* This packet should be dropped on arrival */
+                test_ctx->s_to_c_link->last_packet->length = 1;
             }
         }
 
         /* At some point, the client does migrate to a new address */
         if (!client_rebinding_done && test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > 128) {
-            test_ctx->client_addr.sin_port += 17;
+            test_ctx->client_addr_natted = test_ctx->client_addr;
+            test_ctx->client_addr_natted.sin_port += 17;
             test_ctx->client_use_nat = 1;
             client_rebinding_done = 1;
         }
@@ -6691,7 +6772,8 @@ int false_migration_test()
 
 /*
 * Testing what happens in case of NAT rebinding during handshake.
-* In theory, it should cause the handshake to fail
+* In theory, it may cause the handshake to fail, but in practice it does
+* not...
 */
 
 int nat_handshake_test_one(int test_rank)
@@ -6731,7 +6813,8 @@ int nat_handshake_test_one(int test_rank)
                 }
                 if (should_nat) {
                     /* Simulate a NAT rebinding */
-                    test_ctx->client_addr.sin_port += 17;
+                    test_ctx->client_addr_natted = test_ctx->client_addr;
+                    test_ctx->client_addr_natted.sin_port += 17;
                     test_ctx->client_use_nat = 1;
                     natted++;
                 }
@@ -6777,16 +6860,7 @@ int nat_handshake_test_one(int test_rank)
         DBG_PRINTF("Connection succeeded after %d natting in handshake, rank %d\n", natted, test_rank);
         ret = -1;
     }
-    else if (test_rank == 0) {
-        /* Verify that a NAT during HANDSHAKE did fail */
-        if (ret == 0) {
-            DBG_PRINTF("Connection succeeded after %d natting during handshake, rank %d\n", natted);
-            ret = -1;
-        }
-        else {
-            ret = 0;
-        }
-    }
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
@@ -7531,7 +7605,7 @@ int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t laten
     initial_cid.id[6] = (jitter >255000) ? 0xff : (uint8_t)(jitter / 1000);
     initial_cid.id[7] = (buffer_id > 255) ? 0xff : (uint8_t)buffer_id;
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -7669,7 +7743,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     picoquic_init_transport_parameters(&client_parameters, 1);
     client_parameters.enable_time_stamp = 3;
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL, &initial_cid);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL, &initial_cid, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -7750,6 +7824,31 @@ int satellite_small_up_test()
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0);
 }
 
+/* Set the CID length to specified value */
+int set_cid_length_in_context(picoquic_test_tls_api_ctx_t* test_ctx, uint8_t length, int delayed_init)
+{
+    int ret = 0;
+
+    /* Delete the old connection */
+    picoquic_delete_cnx(test_ctx->cnx_client);
+    test_ctx->cnx_client = NULL;
+    /* Change the default cnx_id length*/
+    test_ctx->qclient->local_cnxid_length = length;
+    /* re-create a client connection */
+    test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id,
+        (struct sockaddr*) & test_ctx->server_addr, 0,
+        PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+    if (test_ctx->cnx_client == NULL) {
+        ret = -1;
+    }
+    else if (delayed_init == 0) {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    return ret;
+}
+
 /* Test that different CID length are properly supported */
 int cid_length_test_one(uint8_t length)
 {
@@ -7763,32 +7862,23 @@ int cid_length_test_one(uint8_t length)
 
     /* Set the CID length in the client context, then recreate the connection */
     if (ret == 0) {
-        /* Delete the old connection */
-        picoquic_delete_cnx(test_ctx->cnx_client);
-        test_ctx->cnx_client = NULL;
-        /* Change the default cnx_id length*/
-        test_ctx->qclient->local_cnxid_length = length;
-        /* re-create a client connection */
-        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-            picoquic_null_connection_id, picoquic_null_connection_id,
-            (struct sockaddr*)&test_ctx->server_addr, 0,
-            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
-        if (test_ctx->cnx_client == NULL) {
+        ret = set_cid_length_in_context(test_ctx, length, 1);
+    }
+
+    /* Do a connection */
+    if (ret == 0)
+    {
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 20000, 100000);
+
+        if (ret == 0 &&
+            test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id.id_len != length) {
             ret = -1;
         }
-        else {
-            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 20000, 100000);
 
-            if (ret == 0 &&
-                test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id.id_len != length) {
-                ret = -1;
-            }
-
-            if (ret == 0 &&
-                test_ctx->cnx_server->path[0]->remote_cnxid.id_len != length) {
-                ret = -1;
-            }
+        if (ret == 0 &&
+            test_ctx->cnx_server->path[0]->remote_cnxid.id_len != length) {
+            ret = -1;
         }
     }
 
@@ -7828,7 +7918,7 @@ int long_rtt_test()
     picoquic_connection_id_t initial_cid = { {0x10, 0x10, 30, 0, 0, 0, 0, 0}, 8 };
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time,
-        0, NULL, NULL, &initial_cid);
+        0, NULL, NULL, &initial_cid, 0);
 
     if (ret == 0) {
         /* set the delay estimate, then launch the test */
@@ -7877,7 +7967,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
     }
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time,
-        0, NULL, NULL, &initial_cid);
+        0, NULL, NULL, &initial_cid, 0);
 
     if (ret == 0) {
         /* set the optimistic ack policy*/
@@ -8237,7 +8327,7 @@ int null_sni_test()
  * Test whether server redirection is applied properly
  */
 
-int preferred_address_test_one(int migration_disabled)
+int preferred_address_test_one(int migration_disabled, int cid_zero)
 {
     int ret;
     uint64_t simulated_time = 0;
@@ -8264,8 +8354,8 @@ int preferred_address_test_one(int migration_disabled)
     server_parameters.prefered_address.ipv4Port = ntohs(server_preferred.sin_port);
     server_parameters.migration_disabled = migration_disabled;
 
-    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        NULL, &server_parameters);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        NULL, &server_parameters, NULL, cid_zero);
 
 
     if (ret == 0) {
@@ -8290,7 +8380,7 @@ int preferred_address_test_one(int migration_disabled)
     }
 
     /* verify that both have migrated to a new CID */
-    if (ret == 0 && 
+    if (ret == 0 && !cid_zero && 
         (test_ctx->cnx_client->path[0]->p_local_cnxid == NULL || 
             test_ctx->cnx_client->path[0]->p_local_cnxid->sequence == 0)){
         DBG_PRINTF("%s", "Client CID not updated\n");
@@ -8328,12 +8418,18 @@ int preferred_address_test_one(int migration_disabled)
 
 int preferred_address_test()
 {
-    return preferred_address_test_one(0);
+    return preferred_address_test_one(0, 0);
 }
 
 int preferred_address_dis_mig_test()
 {
-    return preferred_address_test_one(1);
+    return preferred_address_test_one(1, 0);
+}
+
+int preferred_address_zero_test()
+{
+    /* test with zero length client cid */
+    return preferred_address_test_one(0, 1);
 }
 
 /* Test that the random public generation behaves in expected ways */
@@ -9110,7 +9206,8 @@ int app_limit_cc_test_one(
     picoquic_init_transport_parameters(&client_parameters, 1);
     client_parameters.initial_max_data = 40000;
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL, &initial_cid);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters,
+        NULL, &initial_cid, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -9688,7 +9785,7 @@ int red_cc_test()
         300,
         300,
         170,
-        150
+        160
     };
 
     int ret = 0;
@@ -9804,7 +9901,7 @@ int pacing_cc_test()
         110,
         230,
         200,
-        200
+        210
     };
 
     int ret = 0;
@@ -10075,7 +10172,7 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
     picoquictest_sim_packet_t* ddos_packet_first = NULL;
     int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 10000);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 10000, 0);
 
     if (ret == 0 && (test_ctx == NULL || packet == NULL || qddos == NULL)) {
         ret = -1;

@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "0.32b"
+#define PICOQUIC_VERSION "0.32c"
 
 #ifndef PICOQUIC_MAX_PACKET_SIZE
 #define PICOQUIC_MAX_PACKET_SIZE 1536
@@ -463,7 +463,7 @@ typedef enum {
     picoquic_tp_test_large_chello = 3127,
     picoquic_tp_enable_loss_bit_old = 0x1055,
     picoquic_tp_enable_loss_bit = 0x1057,
-    picoquic_tp_min_ack_delay = 0xDE1A,
+    picoquic_tp_min_ack_delay = 0xff02de1a,
     picoquic_tp_enable_time_stamp = 0x7158, /* x&1 = */
     picoquic_tp_grease_quic_bit = 0x2ab2
 } picoquic_tp_enum;
@@ -739,11 +739,12 @@ typedef struct st_picoquic_path_t {
     uint64_t challenge_time;
     uint64_t demotion_time;
     uint8_t challenge_repeat_count;
+    /* Last 1-RTT "non path validating" packet received on this path */
+    uint64_t last_non_validating_pn;
 
     /* flags */
     unsigned int mtu_probe_sent : 1;
     unsigned int path_is_published : 1;
-    unsigned int path_is_activated : 1;
     unsigned int challenge_required : 1;
     unsigned int challenge_verified : 1;
     unsigned int challenge_failed : 1;
@@ -886,6 +887,7 @@ typedef struct st_picoquic_packet_context_t {
     unsigned int ack_of_ack_requested : 1;
     unsigned int ack_after_fin : 1;
     unsigned int sending_ecn_ack : 1;
+    unsigned int out_of_order_received : 1;
 } picoquic_packet_context_t;
 
 /*
@@ -952,6 +954,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int quic_bit_received_0 : 1; /* Indicate whether the quic bit was received as zero at least once */
     unsigned int is_half_open : 1; /* for server side connections, created but not yet complete */
     unsigned int did_receive_short_initial : 1; /* whether peer sent unpadded initial packet */
+    unsigned int ack_ignore_order_local : 1; /* Request peer to not generate immediate ack if out of order packet received */
+    unsigned int ack_ignore_order_remote : 1; /* Peer requested no immediate ack if out of order packet received */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -1402,13 +1406,13 @@ int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_hea
 void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame);
 int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx);
 uint8_t* picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
-const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* seq, uint64_t* packets, uint64_t* microsec);
+const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* seq, uint64_t* packets, uint64_t* microsec, uint8_t * ignore_order);
 uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data);
 uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time);
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
-    int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time);
+    int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, uint64_t current_time);
 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 

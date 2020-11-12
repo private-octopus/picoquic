@@ -2559,6 +2559,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
                 }
                 length = bytes_next - bytes;
                 cnx->pkt_ctx[pc].ack_needed = 0;
+                cnx->pkt_ctx[pc].out_of_order_received = 0;
             }
             next_time = current_time + delta_t;
             if (next_time > exit_time) {
@@ -2832,6 +2833,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             if (next_challenge_time <= current_time || path_x->challenge_repeat_count == 0) {
                 if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
                     int ack_needed = cnx->pkt_ctx[pc].ack_needed;
+                    int out_of_order_received = cnx->pkt_ctx[pc].out_of_order_received;
                     uint8_t* bytes_challenge = bytes_next;
 
                     bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, &more_data, &is_pure_ack,
@@ -2847,6 +2849,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc);
                         /* Restore the ACK needed flags, because challenges are not reliable. */
                         cnx->pkt_ctx[pc].ack_needed = ack_needed;
+                        cnx->pkt_ctx[pc].out_of_order_received = out_of_order_received;
                     }
                 }
                 else {
@@ -3171,6 +3174,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             if (cnx->path[i]->challenge_failed == 0) {
                                 cnx->path[0] = cnx->path[i];
                                 cnx->path[i] = path_x;
+                                break;
                             }
                         }
                     }
@@ -3582,10 +3586,23 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
             continue;
         }
         else if (cnx->path[i]->challenge_verified) {
-            /* TODO: selection logic if multiple paths are available! */
-            /* This path becomes the new default */
-            picoquic_promote_path_to_default(cnx, i, current_time);
-            path_id = 0;
+            /* logic to synchronize path selection between server and client:
+             * On the client side, this is driven by the "probe/validate" sequence; the
+             * assumption is that if the client probes a new path, it want to use it
+             * as soon as confirmed. On the server side, this is enforced by observing
+             * incoming traffic: if a path is validated and "non path validating"
+             * frames were received, then the path should be promoted. However, on
+             * the server side, we have to be careful with packet reordering, and
+             * verify that only the "most recent" packets trigger the validation
+             * logic.
+             */
+            if (cnx->client_mode || cnx->path[i]->last_non_validating_pn >=
+                cnx->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range ||
+                cnx->path[i]->is_nat_challenge) {
+                /* This path becomes the new default */
+                picoquic_promote_path_to_default(cnx, i, current_time);
+                path_id = 0;
+            }
             break;
         }
         else if (path_id < 0) {
@@ -3659,7 +3676,6 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
 
         /* Select the next path, and the corresponding addresses */
         path_id = picoquic_select_next_path(cnx, current_time, &next_wake_time);
-
 
         picoquic_store_addr(&addr_to_log, (struct sockaddr*) & cnx->path[path_id]->peer_addr);
         if (cnx->path[path_id]->local_addr.ss_family != 0) {
@@ -3802,7 +3818,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
             cnx->nb_trains_sent++;
         }
     }
-    
+
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, next_wake_time);
 
     return ret;

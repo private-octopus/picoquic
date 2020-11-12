@@ -28,7 +28,7 @@
     Datagram frame, length: 16: a0a1a2a3a4a5a6a7...
     Datagram frame, length: 16: a0a1a2a3a4a5a6a7...
     handshake_done
-    ACK Frequency: S=17, P=10, uS=1056
+    ACK Frequency: S=17, P=10, uS=1056, Ignore order: 1
     Time Stamp: 1024
 0b0c0d0e0f101112: ticket time = 1548462100832, kx = 17, suite = 1302, 61 ticket, 48 secret.
 0b0c0d0e0f101112: lifetime = 7200, age_add = 3fc0960b, 8 nonce, 32 ticket, 8 extensions.

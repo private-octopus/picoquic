@@ -369,7 +369,7 @@ char const* picoquic_log_frame_names(uint64_t frame_type)
     return frame_name;
 }
 
-char const* picoquic_log_tp_name(uint64_t tp_number)
+char const* picoquic_log_tp_name(picoquic_tp_enum tp_number)
 {
     char const * tp_name = "unknown";
 
@@ -1258,13 +1258,14 @@ size_t picoquic_log_ack_frequency_frame(FILE* F, const uint8_t* bytes, size_t by
     uint64_t sequence = 0;
     uint64_t packets = 0;
     uint64_t microsecs = 0;
+    uint8_t ignore_order = 0;
     const uint8_t* bytes_end = bytes + bytes_max;
     const uint8_t* bytes0 = bytes;
     size_t byte_index = 0;
 
 
     if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
-        (bytes = picoquic_parse_ack_frequency_frame(bytes, bytes_end, &sequence, &packets, &microsecs)) == NULL) {
+        (bytes = picoquic_parse_ack_frequency_frame(bytes, bytes_end, &sequence, &packets, &microsecs, &ignore_order)) == NULL) {
         fprintf(F, "    Malformed ACK Frequency frame: ");
         /* log format error */
         for (size_t i = 0; i < bytes_max && i < 8; i++) {
@@ -1277,8 +1278,8 @@ size_t picoquic_log_ack_frequency_frame(FILE* F, const uint8_t* bytes, size_t by
         byte_index = bytes_max;
     }
     else {
-        fprintf(F, "    ACK Frequency: S=%" PRIu64 ", P=%" PRIu64 ", uS=%" PRIu64 "\n", 
-            sequence, packets, microsecs);
+        fprintf(F, "    ACK Frequency: S=%" PRIu64 ", P=%" PRIu64 ", uS=%" PRIu64", Ignore order: %d\n", 
+            sequence, packets, microsecs, ignore_order);
         byte_index = bytes - bytes0;
     }
 
@@ -1624,8 +1625,8 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
                     if (log_cnxid != 0) {
                         picoquic_log_prefix_initial_cid64(F, cnx_id_64);
                     }
-                    fprintf(F, "        Extension type: %d (%s), length %d%s",
-                        (int)extension_type, picoquic_log_tp_name(extension_type), (int)extension_length,
+                    fprintf(F, "        Extension type: %" PRIu64 " (%s), length %d%s",
+                        extension_type, picoquic_log_tp_name((picoquic_tp_enum)extension_type), (int)extension_length,
                         (extension_length == 0) ? "" : ", ");
 
                     if (byte_index + extension_length > extensions_end) {
@@ -2165,18 +2166,25 @@ int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
 
     if (quic->F_log != NULL && quic->should_close_log) {
         (void)picoquic_file_close(quic->F_log);
-        quic->F_log = NULL;
     }
 
+    quic->F_log = NULL;
+
     if (textlog_file != NULL) {
-        F_log = picoquic_file_open(textlog_file, "w");
-        if (F_log == NULL) {
-            DBG_PRINTF("Cannot create log file <%s>\n", textlog_file);
-            ret = -1;
+        if (strcmp(textlog_file, "-") == 0) {
+            quic->F_log = stdout;
+            quic->should_close_log = 0;
         }
         else {
-            quic->F_log = F_log;
-            quic->should_close_log = 1;
+            F_log = picoquic_file_open(textlog_file, "w");
+            if (F_log == NULL) {
+                DBG_PRINTF("Cannot create log file <%s>\n", textlog_file);
+                ret = -1;
+            }
+            else {
+                quic->F_log = F_log;
+                quic->should_close_log = 1;
+            }
         }
 
         quic->text_log_fns = &textlog_functions;

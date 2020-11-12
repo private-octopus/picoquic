@@ -388,6 +388,7 @@ static const uint8_t* picoquic_log_ack_frequency_frame(FILE* f, const uint8_t* b
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Seq num */
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Packet tolerance */
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Max ACK delay */
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1); /* Ignore order */
 
     picoquic_binlog_frame(f, bytes_begin, bytes);
 
@@ -1019,10 +1020,12 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         bytewrite_vint(ps_msg, 0);
     }
     else {
-        uint64_t cc_state;
-        uint64_t cc_param;
+        uint64_t cc_state = 0;
+        uint64_t cc_param = 0;
 
-        cnx->congestion_alg->alg_observe(cnx->path[0], &cc_state, &cc_param);
+        if (cnx->path[0]->congestion_alg_state != NULL) {
+            cnx->congestion_alg->alg_observe(cnx->path[0], &cc_state, &cc_param);
+        }
         bytewrite_vint(ps_msg, cc_state);
         bytewrite_vint(ps_msg, cc_param);
     }

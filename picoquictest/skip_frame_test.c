@@ -211,7 +211,7 @@ static uint8_t test_frame_type_handshake_done[] = {
 
 static uint8_t test_frame_type_ack_frequency[] = {
     0x40, picoquic_frame_type_ack_frequency,
-    17, 0x0A, 0x44, 0x20
+    17, 0x0A, 0x44, 0x20, 0x01
 };
 
 static uint8_t test_frame_type_time_stamp[] = {
@@ -606,7 +606,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
             cnx->cnx_state = picoquic_state_ready;
         }
 
-        ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, epoch, NULL, NULL, simulated_time);
+        ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, epoch, NULL, NULL, 0, simulated_time);
 
         *ack_needed = cnx->pkt_ctx[pc].ack_needed;
 

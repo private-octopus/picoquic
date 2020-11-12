@@ -1067,6 +1067,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
         {
             if (cnx->path != NULL)
             {
+                memset (new_path, 0, new_alloc * sizeof(picoquic_path_t*));
                 if (cnx->nb_paths > 0)
                 {
                     memcpy(new_path, cnx->path, cnx->nb_paths * sizeof(picoquic_path_t *));
@@ -1204,7 +1205,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
                 DBG_PRINTF("Erase path for old packet pc: %d, seq:%" PRIu64 "\n", pc, p->sequence_number);
                 p->send_path = NULL;
             }
-            p = p->next_packet;
+            p = p->previous_packet;
         }
     }
     /* Free the data */
@@ -2348,8 +2349,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                 }
             }
         }
+
         /* If local connection ID size is null, don't allow migration */
-        if (quic->local_cnxid_length == 0) {
+        if (!cnx->client_mode && quic->local_cnxid_length == 0) {
             cnx->local_parameters.migration_disabled = 1;
         }
 
@@ -2475,6 +2477,13 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->pkt_ctx[pc].highest_acknowledged_time = start_time;
             cnx->pkt_ctx[pc].ack_needed = 0;
         }
+        /* Initialize the ACK behavior. By default, picoquic abides with the recommendation to send
+         * ACK immediately if packets are received out of order (ack_ignore_order_remote = 0),
+         * but this behavior creates too many ACKS on high speed links, so picoquic will request
+         * the peer to not do that if the "delayed ACK" extension is available (ack_ignore_order_local = 1)
+         */
+        cnx->ack_ignore_order_local = 1;
+        cnx->ack_ignore_order_remote = 0;
 
         cnx->latest_progress_time = start_time;
 

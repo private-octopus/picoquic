@@ -188,7 +188,13 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
     } 
     else {
         if (pn64 > sack->end_of_sack_range) {
+            if (pn64 > sack->end_of_sack_range + 1) {
+                cnx->pkt_ctx[pc].out_of_order_received = 1;
+            }
             cnx->pkt_ctx[pc].time_stamp_largest_received = current_microsec;
+        }
+        else if (cnx->pkt_ctx[pc].ack_needed && pn64 < cnx->pkt_ctx[pc].highest_ack_sent) {
+            cnx->pkt_ctx[pc].out_of_order_received = 1;
         }
 
         ret = picoquic_update_sack_list(sack, pn64, pn64);
