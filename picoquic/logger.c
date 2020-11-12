@@ -2166,18 +2166,25 @@ int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
 
     if (quic->F_log != NULL && quic->should_close_log) {
         (void)picoquic_file_close(quic->F_log);
-        quic->F_log = NULL;
     }
 
+    quic->F_log = NULL;
+
     if (textlog_file != NULL) {
-        F_log = picoquic_file_open(textlog_file, "w");
-        if (F_log == NULL) {
-            DBG_PRINTF("Cannot create log file <%s>\n", textlog_file);
-            ret = -1;
+        if (strcmp(textlog_file, "-") == 0) {
+            quic->F_log = stdout;
+            quic->should_close_log = 0;
         }
         else {
-            quic->F_log = F_log;
-            quic->should_close_log = 1;
+            F_log = picoquic_file_open(textlog_file, "w");
+            if (F_log == NULL) {
+                DBG_PRINTF("Cannot create log file <%s>\n", textlog_file);
+                ret = -1;
+            }
+            else {
+                quic->F_log = F_log;
+                quic->should_close_log = 1;
+            }
         }
 
         quic->text_log_fns = &textlog_functions;
