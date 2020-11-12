@@ -880,7 +880,7 @@ void usage()
     fprintf(stderr, "  -o folder             Folder where client writes downloaded files,\n");
     fprintf(stderr, "                        defaults to current directory.\n");
     fprintf(stderr, "  -w folder             Folder containing web pages served by server\n");
-    fprintf(stderr, "  -l file               Log file, Log to stdout if file = \"n\". No logging if absent.\n");
+    fprintf(stderr, "  -l file               Log file, Log to stdout if file = \"-\". No logging if absent.\n");
     fprintf(stderr, "  -b bin_dir            Binary logging to this directory. No binary logging if absent.\n");
     fprintf(stderr, "  -q qlog_dir           Qlog logging to this directory. No qlog logging if absent,\n");
     fprintf(stderr, "                        but qlogs could be extracted from binary logs using picolog\n");
