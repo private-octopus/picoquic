@@ -1759,6 +1759,7 @@ int picoquic_incoming_encrypted(
                     if (closing_received) {
                         if (cnx->client_mode) {
                             cnx->cnx_state = picoquic_state_disconnected;
+                            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
                         }
                         else {
                             cnx->cnx_state = picoquic_state_draining;
