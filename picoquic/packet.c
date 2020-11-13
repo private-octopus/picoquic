@@ -456,8 +456,12 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
                 cnx->pkt_ctx[ph->pc].first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
 
             /* Check the reserved bits */
-            ph->has_reserved_bit_set = ((first_byte & 0x80) == 0 && !cnx->is_loss_bit_enabled_incoming &&
-                (first_byte & 0x18) != 0);
+            if ((first_byte & 0x80) == 0) {
+                ph->has_reserved_bit_set = !cnx->is_loss_bit_enabled_incoming && (first_byte & 0x18) != 0;
+            }
+            else{
+                ph->has_reserved_bit_set = (first_byte & 0x0c) != 0;
+            }
         }
     }
     else {
@@ -1978,7 +1982,9 @@ int picoquic_incoming_segment(
                 break;
             case picoquic_packet_initial:
                 /* Initial packet: either crypto handshakes or acks. */
-                if ((!cnx->client_mode && picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->initial_cnxid) == 0) ||
+                if (ph.has_reserved_bit_set) {
+                    ret = PICOQUIC_ERROR_PACKET_HEADER_PARSING;
+                } else if ((!cnx->client_mode && picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->initial_cnxid) == 0) ||
                     picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id) == 0) {
                     /* Verify that the source CID matches expectation */
                     if (picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid)) {
@@ -2020,17 +2026,25 @@ int picoquic_incoming_segment(
                 ret = picoquic_incoming_retry(cnx, bytes, &ph, current_time);
                 break;
             case picoquic_packet_handshake:
-                if (cnx->client_mode)
+                if (ph.has_reserved_bit_set) {
+                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+                }
+                else if (ph.has_reserved_bit_set) {
+                    ret = PICOQUIC_ERROR_PACKET_HEADER_PARSING;
+                }
+                else if (cnx->client_mode)
                 {
                     ret = picoquic_incoming_server_handshake(cnx, bytes, addr_to, if_index_to, &ph, current_time);
                 }
-                else
+                    else
                 {
                     ret = picoquic_incoming_client_handshake(cnx, bytes, &ph, current_time);
                 }
                 break;
             case picoquic_packet_0rtt_protected:
-                if (is_first_segment) {
+                if (ph.has_reserved_bit_set) {
+                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+                } else if (is_first_segment) {
                     /* Account for the data received in handshake, but only
                      * count the packet once. Do not count it again if it is not
                      * the first segment in packet */
