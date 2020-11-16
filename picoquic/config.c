@@ -28,6 +28,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picoquic_binlog.h"
@@ -179,7 +180,7 @@ static int parse_line_params(const char* line, int offset, option_param_t* param
     return offset;
 }
 
-static int compare_option_name(const char * line, int offset, int length, char const* option_name)
+static int compare_option_name(const char * line, int offset, size_t length, char const* option_name)
 {
     int ret = -1;
     
@@ -530,7 +531,7 @@ int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
             line_number++;
             name_offset = offset;
             offset = skip_name(line, name_offset);
-            if (offset == name_offset) {
+            if (offset <= name_offset) {
                 /* Empty line */
             }
             else {
@@ -539,7 +540,7 @@ int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
                 offset = parse_line_params(line, offset, params, 5, &nb_params);
                 /* Recognize the option and apply the parameters  */
                 for (size_t i = 0; i < option_table_size; i++) {
-                    if (compare_option_name(line, name_offset, name_length, option_table[i].option_name) == 0) {
+                    if (compare_option_name(line, name_offset, (size_t)name_length, option_table[i].option_name) == 0) {
                         option_index = (int)i;
                         break;
                     }

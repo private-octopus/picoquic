@@ -89,4 +89,4 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
 #ifdef __cplusplus
 }
 #endif
-#endif PICOQUIC_CONFIG_H
+#endif /* PICOQUIC_CONFIG_H */
