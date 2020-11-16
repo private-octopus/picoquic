@@ -3331,7 +3331,11 @@ picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* res
     return ret;
 }
 
-/* Get congestion control algorithm by name */
+/* Get congestion control algorithm by name
+ * TODO: if we want to minimize code size, we should not require linking a whole library
+ * of congestion control algorithms. Intead, the application should have a list of
+ * configured algorithms, and the configuration program should select from that list.
+ */
 picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name)
 {
     picoquic_congestion_algorithm_t const* alg = NULL;

@@ -15,6 +15,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/bbr.c
     picoquic/bytestream.c
     picoquic/cc_common.c
+    picoquic/config.c
     picoquic/cubic.c
     picoquic/fastcc.c
     picoquic/frames.c
@@ -68,6 +69,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
     picoquictest/bytestream_test.c
     picoquictest/cleartext_aead_test.c
+    picoquictest/config_test.c
     picoquictest/cnx_creation_test.c
     picoquictest/cnxstress.c
     picoquictest/cplusplus.cpp
