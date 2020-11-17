@@ -822,35 +822,6 @@ int quic_client(const char* ip_address_text, int server_port,
     return ret;
 }
 
-uint32_t parse_target_version(char const* v_arg)
-{
-    /* Expect the version to be encoded in base 16 */
-    uint32_t v = 0;
-    char const* x = v_arg;
-
-    while (*x != 0) {
-        int c = *x;
-
-        if (c >= '0' && c <= '9') {
-            c -= '0';
-        } else if (c >= 'a' && c <= 'f') {
-            c -= 'a';
-            c += 10;
-        } else if (c >= 'A' && c <= 'F') {
-            c -= 'A';
-            c += 10;
-        } else {
-            v = 0;
-            break;
-        }
-        v *= 16;
-        v += c;
-        x++;
-    }
-
-    return v;
-}
-
 /* TODO: rewrite using common code */
 void usage()
 {
@@ -973,7 +944,7 @@ int main(int argc, char** argv)
                 just_once = 1;
                 break;
             default:
-                if (picoquic_config_command_line(opt, &optind, argc, argv, optarg, &config) != 0) {
+                if (picoquic_config_command_line(opt, &optind, argc, (char const **)argv, optarg, &config) != 0) {
                     usage();
                 }
                 break;

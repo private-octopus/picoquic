@@ -215,23 +215,33 @@ static uint32_t config_parse_target_version(char const* v_arg)
     return v;
 }
 
-static void config_set_string_param(char const** v, char const* p, int p_len)
+static int config_set_string_param(char const** v, const option_param_t* params, int nb_param, int x)
 {
+    int ret = 0;
     char* p_dup;
 
     if (*v != NULL) {
         free((void*)*v);
         *v = NULL;
     }
-    p_dup = malloc(p_len + 1);
-    if (p_dup != NULL) {
-        memcpy(p_dup, p, p_len);
-        p_dup[p_len] = 0;
-        *v = (char const*)p_dup;
+
+    if (params != NULL && x >= 0 && x < nb_param && params[x].param != NULL)
+    {
+        p_dup = malloc(params[x].length + 1);
+        if (p_dup != NULL) {
+            memcpy(p_dup, params[x].param, params[x].length);
+            p_dup[params[x].length] = 0;
+            *v = (char const*)p_dup;
+        }
+        else {
+            fprintf(stderr, "Cannot allocate %d characters\n", params[x].length);
+            ret = -1;
+        }
     }
     else {
-        fprintf(stderr, "Cannot allocate %d characters\n", p_len);
+        ret = -1;
     }
+    return ret;
 }
 
 static char* config_optval_string(char* buffer, int buffer_max, const char* p, int p_length)
@@ -244,46 +254,66 @@ static char* config_optval_string(char* buffer, int buffer_max, const char* p, i
     return buffer;
 }
 
-int config_atoi(const char* p, int p_length)
+static char* config_optval_param_string(char* buffer, int buffer_max, const option_param_t* params, int nb_param, int x)
+{
+    if (params == NULL || x < 0 || x >= nb_param) {
+        buffer[0] = 0;
+        return buffer;
+    }
+    else {
+        return config_optval_string(buffer, buffer_max, params[x].param, params[x].length);
+    }
+}
+
+int config_atoi(const option_param_t* params, int nb_param, int x, int* ret)
 {
     int v = 0;
 
-    for (int i = 0; i < p_length; i++) {
-        int c = p[i] - '0';
-        if (c < 0 || c > 9) {
-            v = -1;
-            break;
-        }
-        else {
-            v *= 10;
-            v += c;
+    if (params == NULL || x < 0 || x >= nb_param) {
+        *ret = -1;
+    }
+    else {
+        for (int i = 0; i < params[x].length; i++) {
+            int c = params[x].param[i] - '0';
+            if (c < 0 || c > 9) {
+                v = -1;
+                break;
+            }
+            else {
+                v *= 10;
+                v += c;
+            }
         }
     }
-
     return v;
 }
 
-uint64_t config_atoull(const char* p, int p_length)
+uint64_t config_atoull(const option_param_t* params, int nb_param, int x, int * ret)
 {
     uint64_t v = 0;
 
-    for (int i = 0; i < p_length; i++) {
-        int c = p[i];
-        unsigned int d = 0;
-        if (c >= '0' || c <= '9') {
-            d = c - '0';
+    if (params == NULL || x < 0 || x >= nb_param) {
+        *ret = -1;
+    }
+    else {
+        for (int i = 0; i < params[x].length; i++) {
+            int c = params[x].param[i];
+            unsigned int d = 0;
+            if (c >= '0' || c <= '9') {
+                d = c - '0';
+            }
+            else if (c >= 'a' || c <= 'f') {
+                d = c - 'a' + 10;
+            }
+            else if (c >= 'A' || c <= 'F') {
+                d = c - 'A' + 10;
+            }
+            else {
+                continue;
+            }
+            v <<= 4;
+            v += d;
         }
-        else if (c >= 'a' || c <= 'f') {
-            d = c - 'a' + 10;
-        }
-        else if (c >= 'A' || c <= 'F') {
-            d = c - 'A' + 10;
-        }
-        else {
-            continue;
-        }
-        v <<= 4;
-        v += d;
     }
 
     return v;
@@ -296,31 +326,31 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
 
     switch (option_desc->option_num) {
     case picoquic_option_CERT:
-        config_set_string_param(&config->server_cert_file, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->server_cert_file, params, nb_params, 0);
         break;
     case picoquic_option_KEY:
-        config_set_string_param(&config->server_key_file, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->server_key_file, params, nb_params, 0);
         break;
     case picoquic_option_ESNI_KEY:
-        config_set_string_param(&config->esni_key_file, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->esni_key_file, params, nb_params, 0);
         break;
     case picoquic_option_SERVER_PORT:
-        if ((config->server_port = config_atoi(params[0].param, params[0].length)) <= 0) {
-            fprintf(stderr, "Invalid port: %s\n", config_optval_string(opval_buffer, 256, params[0].param, params[0].length));
-            ret = -1;
+        config->server_port = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0) {
+            fprintf(stderr, "Invalid port: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
         }
         break;
     case picoquic_option_PROPOSED_VERSION:
-        if ((config->proposed_version = config_parse_target_version(config_optval_string(opval_buffer, 256, params[0].param, params[0].length))) <= 0) {
-            fprintf(stderr, "Invalid version: %s\n", config_optval_string(opval_buffer, 256, params[0].param, params[0].length));
+        if ((config->proposed_version = config_parse_target_version(config_optval_param_string(opval_buffer, 256, params, nb_params, 0))) <= 0) {
+            fprintf(stderr, "Invalid version: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
             ret = -1;
         }
         break;
     case picoquic_option_OUTDIR:
-        config_set_string_param(&config->out_dir, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->out_dir, params, nb_params, 0);
         break;
     case picoquic_option_WWWDIR:
-        config_set_string_param(&config->www_dir, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->www_dir, params, nb_params, 0);
         break;
     case picoquic_option_DO_RETRY:
         config->do_retry = 1;
@@ -329,70 +359,70 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         config->initial_random = 1;
         break;
     case picoquic_option_RESET_SEED:
-        config->reset_seed[1] = config_atoull(params[0].param, params[0].length);
-        config->reset_seed[0] = config_atoull(params[1].param, params[0].length);
+        config->reset_seed[1] = config_atoull(params, nb_params, 0, &ret);
+        config->reset_seed[0] = config_atoull(params, nb_params, 1, &ret);
         break;
     case picoquic_option_SOLUTION_DIR:
-        config_set_string_param(&config->solution_dir, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->solution_dir, params, nb_params, 0);
         break;
     case picoquic_option_CC_ALGO:
-        config_set_string_param(&config->cc_algo_id, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->cc_algo_id, params, nb_params, 0);
         break;
     case picoquic_option_DEST_IF:
-        config->dest_if = config_atoi(params[0].param, params[0].length);
+        config->dest_if = config_atoi(params, nb_params, 0, &ret);
         break;
     case picoquic_option_CIPHER_SUITE:
-        config->cipher_suite_id = config_atoi(params[0].param, params[0].length);
+        config->cipher_suite_id = config_atoi(params, nb_params, 0, &ret);
         break;
     case picoquic_option_ESNI_RR_FILE:
-        config_set_string_param(&config->esni_rr_file, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->esni_rr_file, params, nb_params, 0);
         break;
 #if 0
         /* TODO: should be rewired to use the standard function */
     case picoquic_option_INIT_CNXID:
-        config->cnx_id_cbdata = picoquic_connection_id_callback_create_ctx(config_optval_string(opval_buffer, 256, params[0].param, params[0].length), argv[*p_optind], argv[p_optind[1]]);
+        config->cnx_id_cbdata = picoquic_connection_id_callback_create_ctx(config_optval_string(opval_buffer, 256, params, nb_params, 0), argv[*p_optind], argv[p_optind[1]]);
         if (config->cnx_id_cbdata == NULL) {
-            fprintf(stderr, "could not create callback context (%s, %s, %s)\n", config_optval_string(opval_buffer, 256, params[0].param, params[0].length), argv[*p_optind], argv[p_optind[1]]);
+            fprintf(stderr, "could not create callback context (%s, %s, %s)\n", config_optval_string(opval_buffer, 256, params, nb_params, 0), argv[*p_optind], argv[p_optind[1]]);
             ret = -1;
         }
         *p_optind += 2;
         break;
 #endif
     case picoquic_option_LOG_FILE:
-        config_set_string_param(&config->log_file, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->log_file, params, nb_params, 0);
         break;
     case picoquic_option_LONG_LOG:
         config->use_long_log = 1;
         break;
     case picoquic_option_BINLOG_DIR:
-        config_set_string_param(&config->bin_dir, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->bin_dir, params, nb_params, 0);
         break;
     case picoquic_option_QLOG_DIR:
-        config_set_string_param(&config->qlog_dir, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->qlog_dir, params, nb_params, 0);
         break;
     case picoquic_option_MTU_MAX:
-        config->mtu_max = config_atoi(params[0].param, params[0].length);
+        config->mtu_max = config_atoi(params, nb_params, 0, &ret);
         if (config->mtu_max <= 0 || config->mtu_max > PICOQUIC_MAX_PACKET_SIZE) {
-            fprintf(stderr, "Invalid max mtu: %s\n", config_optval_string(opval_buffer, 256, params[0].param, params[0].length));
+            fprintf(stderr, "Invalid max mtu: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
             ret = -1;
         }
         break;
     case picoquic_option_SNI:
-        config_set_string_param(&config->sni, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->sni, params, nb_params, 0);
         break;
     case picoquic_option_ALPN:
-        config_set_string_param(&config->alpn, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->alpn, params, nb_params, 0);
         break;
     case picoquic_option_ROOT_TRUST_FILE:
-        config_set_string_param(&config->root_trust_file, params[0].param, params[0].length);
+        ret = config_set_string_param(&config->root_trust_file, params, nb_params, 0);
         break;
     case picoquic_option_FORCE_ZERO_SHARE:
         config->force_zero_share = 1;
         break;
     case picoquic_option_CNXID_LENGTH:
-        config->client_cnx_id_length = config_atoi(params[0].param, params[0].length);
+        config->client_cnx_id_length = config_atoi(params, nb_params, 0, &ret);
         if (config->client_cnx_id_length < 0 || config->client_cnx_id_length > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
-            fprintf(stderr, "Invalid connection id length: %s\n", config_optval_string(opval_buffer, 256, params[0].param, params[0].length));
+            fprintf(stderr, "Invalid connection id length: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
             ret = -1;
         }
         break;
@@ -538,8 +568,17 @@ int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
                 }
 
                 if (ret == 0) {
+                    offset = skip_name(line, offset);
+                    if (line[offset] != 0 && line[offset] != '#') {
+                        fprintf(stderr, "Unexpected character at position %d\n", offset);
+                    }
+                }
+
+                if (ret == 0) {
                     ret = config_set_option(&option_table[option_index], params, nb_params, config);
                 }
+
+
             }
         }
         picoquic_file_close(F);
