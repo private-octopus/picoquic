@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:K:p:u:v:o:w:1rRs:S:G:e:C:E:i:l:Lb:q:m:n:a:t:zf:I:DQh";
+static char* ref_option_text = "c:k:K:p:v:o:w:rRs:S:G:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQh";
 
 int config_option_letters_test()
 {
@@ -54,12 +54,8 @@ static picoquic_quic_config_t param1 = {
     "/data/log.txt", /* char const* log_file; */
     "/data/log/", /* char const* bin_dir; */
     "/data/qlog/", /* char const* qlog_dir; */
-    NULL, /* char const* ticket_file_name; */
-    NULL, /* const uint8_t* ticket_encryption_key; */
-    0, /* size_t ticket_encryption_key_length; */
     4433, /* int server_port; */
     1, /* int dest_if; */
-    0, /* int nb_packets_before_update; */
     1536, /* int mtu_max; */
     "cubic", /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     NULL, /* picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
@@ -68,23 +64,25 @@ static picoquic_quic_config_t param1 = {
     1, /* unsigned int use_long_log : 1; */
     /* Server only */
     "/data/www/", /* char const* www_dir; */
-    /* Server flags */
-    1, /* unsigned int just_once : 1; */
-    1, /* unsigned int do_retry : 1; */
     { 0x012345678abcdef, 0xfedcba9876543210}, /* uint64_t reset_seed[2]; */
+    NULL, /* const uint8_t* ticket_encryption_key; */
+    0, /* size_t ticket_encryption_key_length; */
+    /* Server flags */
+    1, /* unsigned int do_retry : 1; */
 
     /* Client only */
+    NULL, /* char const* ticket_file_name; */
+    NULL, /* char const* token_file_name; */
     NULL, /* char const* sni; */
     NULL, /* char const* alpn; */
     NULL, /* char const* out_dir; */
     NULL, /* char const* root_trust_file; */
     0, /* int cipher_suite_id; */
     0, /* uint32_t proposed_version; */
-    0,/* unsigned int force_zero_share : 1; */
+    0, /* int client_cnx_id_length; */
+    0, /* unsigned int force_zero_share : 1; */
     0, /* unsigned int no_disk : 1; */
     0, /* unsigned int large_client_hello : 1; */
-    0, /* int force_migration; */
-    0 /* int client_cnx_id_length; */
 };
 
 static char const* config_argv1[] = {
@@ -103,7 +101,6 @@ static char const* config_argv1[] = {
     "-R",
     "-L",
     "-w", "/data/www/",
-    "-1",
     "-r",
     "-s", "012345678abcdef", "0xfedcba9876543210",
     NULL
@@ -119,12 +116,8 @@ static picoquic_quic_config_t param2 = {
     NULL, /* char const* log_file; */
     NULL, /* char const* bin_dir; */
     NULL, /* char const* qlog_dir; */
-    NULL, /* char const* ticket_file_name; */
-    NULL, /* const uint8_t* ticket_encryption_key; */
-    0, /* size_t ticket_encryption_key_length; */
     0, /* int server_port; */
     0, /* int dest_if; */
-    0, /* int nb_packets_before_update; */
     0, /* int mtu_max; */
     NULL, /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     NULL, /* picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
@@ -133,23 +126,25 @@ static picoquic_quic_config_t param2 = {
     0, /* unsigned int use_long_log : 1; */
     /* Server only */
     NULL, /* char const* www_dir; */
-    /* Server flags */
-    0, /* unsigned int just_once : 1; */
-    0, /* unsigned int do_retry : 1; */
     {0, 0}, /* uint64_t reset_seed[2]; */
+    NULL, /* const uint8_t* ticket_encryption_key; */
+    0, /* size_t ticket_encryption_key_length; */
+    /* Server flags */
+    0, /* unsigned int do_retry : 1; */
 
     /* Client only */
+    NULL, /* char const* ticket_file_name; */
+    NULL, /* char const* token_file_name; */
     "test.example.com", /* char const* sni; */
     "test", /* char const* alpn; */
     "/data/w_out", /* char const* out_dir; */
     "data/certs/root.pem", /* char const* root_trust_file; */
     20, /* int cipher_suite_id; */
     0xff000020, /* uint32_t proposed_version; */
+    5, /* int client_cnx_id_length; */
     1,/* unsigned int force_zero_share : 1; */
     1, /* unsigned int no_disk : 1; */
-    1, /* unsigned int large_client_hello : 1; */
-    2, /* int force_migration; */
-    5 /* int client_cnx_id_length; */
+    1 /* unsigned int large_client_hello : 1; */
 };
 
 static const char* config_argv2[] = {
@@ -162,7 +157,6 @@ static const char* config_argv2[] = {
     "-z",
     "-D",
     "-Q",
-    "-f", "2",
     "-I", "5",
     NULL
 };
@@ -228,13 +222,11 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_string("qlog_dir", expected->qlog_dir, actual->qlog_dir);
     ret |= config_test_compare_int("qlog_dir", expected->server_port, actual->server_port);
     ret |= config_test_compare_int("dest_if", expected->dest_if, actual->dest_if);
-    ret |= config_test_compare_int("nb_packets_before_update", expected->nb_packets_before_update, actual->nb_packets_before_update);
     ret |= config_test_compare_int("mtu_max", expected->mtu_max, actual->mtu_max);
     ret |= config_test_compare_string("cc_algo_id", expected->cc_algo_id, actual->cc_algo_id);
     ret |= config_test_compare_int("initial_random", expected->initial_random, actual->initial_random);
     ret |= config_test_compare_int("use_long_log", expected->use_long_log, actual->use_long_log);
     ret |= config_test_compare_string("www_dir", expected->www_dir, actual->www_dir);
-    ret |= config_test_compare_int("just_once", expected->just_once, actual->just_once);
     ret |= config_test_compare_int("do_retry", expected->do_retry, actual->do_retry);
     /* TODO: reset_seed */
     ret |= config_test_compare_string("sni", expected->sni, actual->sni);
@@ -247,7 +239,6 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_int("force_zero_share", expected->force_zero_share, actual->force_zero_share);
     ret |= config_test_compare_int("no_disk", expected->no_disk, actual->no_disk);
     ret |= config_test_compare_int("large_client_hello", expected->large_client_hello, actual->large_client_hello);
-    ret |= config_test_compare_int("no_disk", expected->force_migration, actual->force_migration);
     ret |= config_test_compare_int("client_cnx_id_length", expected->client_cnx_id_length, actual->client_cnx_id_length);
 
     return ret;

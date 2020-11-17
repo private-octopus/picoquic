@@ -40,38 +40,39 @@ typedef struct st_picoquic_quic_config_t {
     char const* log_file;
     char const* bin_dir;
     char const* qlog_dir;
-    char const* ticket_file_name;
-    const uint8_t* ticket_encryption_key;
-    size_t ticket_encryption_key_length;
     int server_port;
     int dest_if;
-    int nb_packets_before_update;
     int mtu_max;
     char const* cc_algo_id;
     picoquic_connection_id_callback_ctx_t* cnx_id_cbdata;
+    /* TODO: control key logging */
+    /* TODO: control spin bit */
+    /* TODO: control loss bit */
+    /* TODO: control other extensions, e.g. time stamp, ack delay, multipath */
     /* Common flags */
     unsigned int initial_random : 1;
     unsigned int use_long_log : 1;
     /* Server only */
     char const* www_dir;
-    /* Server flags */
-    unsigned int just_once : 1;
-    unsigned int do_retry : 1;
     uint64_t reset_seed[2];
+    const uint8_t* ticket_encryption_key; /* TODO: allocate key. Or maybe consider this a PEM file */
+    size_t ticket_encryption_key_length;
+    /* Server flags */
+    unsigned int do_retry : 1;
 
     /* Client only */
+    char const* ticket_file_name; /* TODO: allocate key */
+    char const* token_file_name; /* TODO: allocate key */
     char const* sni;
     char const* alpn;
     char const* out_dir;
     char const* root_trust_file;
     int cipher_suite_id;
     uint32_t proposed_version;
+    int client_cnx_id_length;
     unsigned int force_zero_share : 1;
     unsigned int no_disk : 1;
     unsigned int large_client_hello : 1;
-    int force_migration;
-    int client_cnx_id_length;
-
 } picoquic_quic_config_t;
 
 int picoquic_config_option_letters(char* option_string, size_t string_max, size_t* string_length);

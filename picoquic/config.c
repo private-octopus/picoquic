@@ -20,10 +20,9 @@
 */
 
 /* Manage the configuration options for the QUIC context
- * TODO: split between common options, client options, server options?
- * TODO: separate generic option (QUIC level) and application options (per ALPN)
- * TODO: organize as hierarchy of calls, eg app -> protocol -> quic.
  * TODO: do not force linking of binlog, textlog, qlog
+ * TODO: review of connection ID function API. Separate parameters?
+ * TODO: parameters for controling Spin Bit, Loss Bits
  */
 
 #include <stdio.h>
@@ -40,11 +39,9 @@ typedef enum{
     picoquic_option_KEY,
     picoquic_option_ESNI_KEY,
     picoquic_option_SERVER_PORT,
-    picoquic_option_UPDATE_KEY_AFTER,
     picoquic_option_PROPOSED_VERSION,
     picoquic_option_OUTDIR,
     picoquic_option_WWWDIR,
-    picoquic_option_JUST_ONCE,
     picoquic_option_DO_RETRY,
     picoquic_option_INITIAL_RANDOM,
     picoquic_option_RESET_SEED,
@@ -63,7 +60,6 @@ typedef enum{
     picoquic_option_ALPN,
     picoquic_option_ROOT_TRUST_FILE,
     picoquic_option_FORCE_ZERO_SHARE,
-    picoquic_option_FORCE_MIGRATION,
     picoquic_option_CNXID_LENGTH,
     picoquic_option_NO_DISK,
     picoquic_option_LARGE_CLIENT_HELLO,
@@ -89,11 +85,9 @@ static option_table_line_t option_table[] = {
     { picoquic_option_KEY, 'k', "key", 1, "file", "key file" },
     { picoquic_option_ESNI_KEY, 'K', "esni_key", 1, "file", "ESNI private key file (default: don't use ESNI)" },
     { picoquic_option_SERVER_PORT, 'p', "port", 1, "number", "server port" },
-    { picoquic_option_UPDATE_KEY_AFTER, 'u', "update_after", 1, "", "" },
     { picoquic_option_PROPOSED_VERSION, 'v', "proposed_version", 1, "", "" },
     { picoquic_option_OUTDIR, 'o', "outdir", 1, "folder", "Folder where client writes downloaded files, defaults to current directory." },
     { picoquic_option_WWWDIR, 'w', "wwwdir", 1, "folder", "Folder containing web pages served by server" },
-    { picoquic_option_JUST_ONCE, '1', "once", 0, "", "Once: close the server after processing 1 connection." },
     { picoquic_option_DO_RETRY, 'r', "do_retry", 0, "", " Do Retry Request" },
     { picoquic_option_INITIAL_RANDOM, 'R', "initial_random", 0, "", "" },
     { picoquic_option_RESET_SEED, 's', "reset_seed", 2, "<64b 64b>", "Reset seed" },
@@ -114,8 +108,6 @@ static option_table_line_t option_table[] = {
     { picoquic_option_ALPN, 'a', "alpn", 1, "alpn", "alpn (default function of version)" },
     { picoquic_option_ROOT_TRUST_FILE, 't', "root_trust_file", 1, "file", "root trust file" },
     { picoquic_option_FORCE_ZERO_SHARE, 'z', "force_zero_share", 0, "", "Set TLS zero share behavior on client, to force HRR" },
-    { picoquic_option_FORCE_MIGRATION, 'f', "force_migration", 1, "migration_mode",
-    "Force client to migrate to start migration: 1  test NAT rebinding, 2  test CNXID renewal, 3  test migration to new address." },
     { picoquic_option_CNXID_LENGTH, 'I', "cnxid_length", 1, "length", "Length of CNX_ID used by the client, default=8" },
     { picoquic_option_NO_DISK, 'D', "no_disk", 0, "no disk: do not save received files on disk" },
     { picoquic_option_LARGE_CLIENT_HELLO, 'Q', "large_client_hello", 0,
@@ -318,12 +310,6 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
             ret = -1;
         }
         break;
-    case picoquic_option_UPDATE_KEY_AFTER:
-        if ((config->nb_packets_before_update = config_atoi(params[0].param, params[0].length)) <= 0) {
-            fprintf(stderr, "Invalid number of packets: %s\n", config_optval_string(opval_buffer, 256, params[0].param, params[0].length));
-            ret = -1;
-        }
-        break;
     case picoquic_option_PROPOSED_VERSION:
         if ((config->proposed_version = config_parse_target_version(config_optval_string(opval_buffer, 256, params[0].param, params[0].length))) <= 0) {
             fprintf(stderr, "Invalid version: %s\n", config_optval_string(opval_buffer, 256, params[0].param, params[0].length));
@@ -335,9 +321,6 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         break;
     case picoquic_option_WWWDIR:
         config_set_string_param(&config->www_dir, params[0].param, params[0].length);
-        break;
-    case picoquic_option_JUST_ONCE:
-        config->just_once = 1;
         break;
     case picoquic_option_DO_RETRY:
         config->do_retry = 1;
@@ -405,13 +388,6 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         break;
     case picoquic_option_FORCE_ZERO_SHARE:
         config->force_zero_share = 1;
-        break;
-    case picoquic_option_FORCE_MIGRATION:
-        config->force_migration = config_atoi(params[0].param, params[0].length);
-        if (config->force_migration <= 0 || config->force_migration > 3) {
-            fprintf(stderr, "Invalid migration mode: %s\n", config_optval_string(opval_buffer, 256, params[0].param, params[0].length));
-            ret = -1;
-        }
         break;
     case picoquic_option_CNXID_LENGTH:
         config->client_cnx_id_length = config_atoi(params[0].param, params[0].length);
@@ -641,7 +617,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         if (config->cc_algo_id != NULL) {
             cc_algo = picoquic_get_congestion_algorithm(config->cc_algo_id);
             if (cc_algo == NULL) {
-                fprintf(stderr, "Unrecognized congestion algorithm: %s", config->cc_algo_id);
+                fprintf(stderr, "Unrecognized congestion algorithm: %s. Using BBR isntead.\n", config->cc_algo_id);
             }
         }
         if (cc_algo == NULL) {
