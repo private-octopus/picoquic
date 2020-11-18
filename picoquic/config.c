@@ -85,11 +85,11 @@ static option_table_line_t option_table[] = {
     { picoquic_option_KEY, 'k', "key", 1, "file", "key file" },
     { picoquic_option_ESNI_KEY, 'K', "esni_key", 1, "file", "ESNI private key file (default: don't use ESNI)" },
     { picoquic_option_SERVER_PORT, 'p', "port", 1, "number", "server port" },
-    { picoquic_option_PROPOSED_VERSION, 'v', "proposed_version", 1, "", "" },
+    { picoquic_option_PROPOSED_VERSION, 'v', "proposed_version", 1, "", "Version proposed by client, e.g. -v ff000012" },
     { picoquic_option_OUTDIR, 'o', "outdir", 1, "folder", "Folder where client writes downloaded files, defaults to current directory." },
     { picoquic_option_WWWDIR, 'w', "wwwdir", 1, "folder", "Folder containing web pages served by server" },
     { picoquic_option_DO_RETRY, 'r', "do_retry", 0, "", " Do Retry Request" },
-    { picoquic_option_INITIAL_RANDOM, 'R', "initial_random", 0, "", "" },
+    { picoquic_option_INITIAL_RANDOM, 'R', "initial_random", 0, "", "randomize initial packet number" },
     { picoquic_option_RESET_SEED, 's', "reset_seed", 2, "<64b 64b>", "Reset seed" },
     { picoquic_option_SOLUTION_DIR, 'S', "solution_dir", 1, "folder", "Set the path to the source files to find the default files" },
     { picoquic_option_CC_ALGO, 'G', "cc_algo", 1, "cc_algorithm",
@@ -465,6 +465,19 @@ int picoquic_config_option_letters(char* option_string, size_t string_max, size_
         *string_length = l;
     }
     return ret;
+}
+
+void picoquic_config_usage()
+{
+    fprintf(stderr, "Picoquic options:\n");
+    for (size_t i = 0; i < option_table_size; i++) {
+        size_t spacer = strlen(option_table[i].param_sample);
+        fprintf(stderr, "  -%c %s", option_table[i].option_letter, option_table[i].param_sample);
+        while (spacer < 12) {
+            putc(' ', stderr);
+        }
+        fprintf(stderr, " %s\n", option_table[i].option_help);
+    }
 }
 
 int picoquic_config_command_line(int opt, int * p_optind, int argc, char const ** argv, char const* optarg, picoquic_quic_config_t * config)

@@ -829,6 +829,7 @@ void usage()
     fprintf(stderr, "Usage: picoquicdemo <options> [server_name [port [scenario]]] \n");
     fprintf(stderr, "  For the client mode, specify server_name and port.\n");
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
+#if 0
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -c file               cert file (default: %s)\n", SERVER_CERT_FILE);
     fprintf(stderr, "  -e if                 Send on interface (default: -1)\n");
@@ -881,6 +882,15 @@ void usage()
     fprintf(stderr, "  -Q                    send a large client hello in order to test post quantum\n");
     fprintf(stderr, "                        readiness.\n");
     fprintf(stderr, "  -R                    randomize initial packet number\n");
+#endif
+    picoquic_config_usage();
+    fprintf(stderr, "Picoquic demo options:\n");
+    fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
+    fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
+    fprintf(stderr, "                        -f 2  test CNXID renewal,\n");
+    fprintf(stderr, "                        -f 3  test migration to new address.\n");
+    fprintf(stderr, "  -u nb                 trigger key update after receiving <nb> packets on client\n");
+    fprintf(stderr, "  -1                    Once: close the server after processing 1 connection.\n");
 
     fprintf(stderr, "\nThe scenario argument specifies the set of files that should be retrieved,\n");
     fprintf(stderr, "and their order. The syntax is:\n");

@@ -76,6 +76,7 @@ typedef struct st_picoquic_quic_config_t {
 } picoquic_quic_config_t;
 
 int picoquic_config_option_letters(char* option_string, size_t string_max, size_t* string_length);
+void picoquic_config_usage();
 
 int picoquic_config_command_line(int opt, int* p_optind, int argc, char const** argv, char const* optarg, picoquic_quic_config_t* config);
 
