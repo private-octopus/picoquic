@@ -1007,5 +1007,8 @@ int main(int argc, char** argv)
 
     if (config.cnx_id_cbdata != NULL) {
         picoquic_connection_id_callback_free_ctx(config.cnx_id_cbdata);
+        config.cnx_id_cbdata = NULL;
     }
+
+    picoquic_config_clear(&config);
 }

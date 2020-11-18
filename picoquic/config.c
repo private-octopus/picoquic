@@ -587,6 +587,8 @@ int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
     return ret;
 }
 
+
+
 /* Create a QUIC Context based on configuration data.
  * Arguments from configuration:
  * - uint32_t nb_connections,
@@ -696,4 +698,71 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
     }
 
     return quic;
+}
+
+void picoquic_config_clear(picoquic_quic_config_t* config)
+{
+    if (config->solution_dir != NULL)
+    {
+        free((void*)config->solution_dir);
+    }
+    if (config->server_cert_file != NULL)
+    {
+        free((void*)config->server_cert_file);
+    }
+    if (config->server_key_file != NULL)
+    {
+        free((void*)config->server_key_file);
+    }
+    if (config->esni_rr_file != NULL)
+    {
+        free((void*)config->esni_rr_file);
+    }
+    if (config->log_file != NULL)
+    {
+        free((void*)config->log_file);
+    }
+    if (config->bin_dir != NULL)
+    {
+        free((void*)config->bin_dir);
+    }
+    if (config->qlog_dir != NULL)
+    {
+        free((void*)config->qlog_dir);
+    }
+    if (config->cc_algo_id != NULL)
+    {
+        free((void*)config->cc_algo_id);
+    }
+    /* TODO: picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
+    if (config->www_dir != NULL)
+    {
+        free((void*)config->www_dir);
+    }
+    /* TODO:  const uint8_t* ticket_encryption_key; Or maybe consider this a PEM file */
+    if (config->ticket_file_name != NULL)
+    {
+        free((void*)config->ticket_file_name);
+    }
+    if (config->token_file_name != NULL)
+    {
+        free((void*)config->token_file_name);
+    }
+    if (config->sni != NULL)
+    {
+        free((void*)config->sni);
+    }
+    if (config->alpn != NULL)
+    {
+        free((void*)config->alpn);
+    }
+    if (config->out_dir != NULL)
+    {
+        free((void*)config->out_dir);
+    }
+    if (config->root_trust_file != NULL)
+    {
+        free((void*)config->root_trust_file);
+    }
+    memset(config, 0, sizeof(picoquic_quic_config_t));
 }

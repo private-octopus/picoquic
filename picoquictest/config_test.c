@@ -289,6 +289,8 @@ int config_test_parse_command_line(const picoquic_quic_config_t* expected, const
         ret = config_test_compare(expected, &actual);
     }
 
+    picoquic_config_clear(&actual);
+
     return (ret);
 }
 
