@@ -152,7 +152,6 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config,
     picoquic_quic_t* qserver = NULL;
     uint64_t current_time = 0;
     picohttp_server_parameters_t picoquic_file_param;
-    picoquic_congestion_algorithm_t const* cc_algorithm = picoquic_bbr_algorithm;
     server_loop_cb_t loop_cb_ctx;
 
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
@@ -164,59 +163,7 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config,
     if (ret == 0) {
         current_time = picoquic_current_time();
         /* Create QUIC context */
-#if 0
-        qserver = picoquic_create(8, config->server_cert_file, config->server_key_file, NULL, NULL,
-            picoquic_demo_server_callback, &picoquic_file_param,
-            cnx_id_callback, cnx_id_callback_ctx, (uint8_t *) config->reset_seed, current_time, NULL, NULL, NULL, 0);
 
-        if (qserver == NULL) {
-            printf("Could not create server context\n");
-            ret = -1;
-        }
-        else {
-            picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
-            if (config->do_retry != 0) {
-                picoquic_set_cookie_mode(qserver, 1);
-            }
-            else {
-                picoquic_set_cookie_mode(qserver, 2);
-            }
-            qserver->mtu_max = config->mtu_max;
-
-
-            if (config->cc_algo_id != NULL) {
-                cc_algorithm = picoquic_get_congestion_algorithm(config->cc_algo_id);
-                if (cc_algorithm == NULL) {
-                    fprintf(stderr, "Unrecognized congestion algorithm: %s, using BBR instead.\n", config->cc_algo_id);
-                    cc_algorithm = picoquic_bbr_algorithm;
-                }
-            }
-            picoquic_set_default_congestion_algorithm(qserver, cc_algorithm);
-
-            picoquic_set_padding_policy(qserver, 39, 128);
-
-            picoquic_set_binlog(qserver, config->bin_dir);
-
-            picoquic_set_qlog(qserver, config->qlog_dir);
-
-            picoquic_set_textlog(qserver, config->log_file);
-
-            picoquic_set_log_level(qserver, config->use_long_log);
-
-            if (config->initial_random) {
-                picoquic_set_random_initial(qserver, 1);
-            }
-
-            picoquic_set_key_log_file_from_env(qserver);
-
-            if (config->esni_key_file != NULL && config->esni_rr_file != NULL) {
-                ret = picoquic_esni_load_key(qserver, config->esni_key_file);
-                if (ret == 0) {
-                    ret = picoquic_esni_server_setup(qserver, config->esni_rr_file);
-                }
-            }
-        }
-#else
         if (config->ticket_file_name == NULL) {
             ret = picoquic_config_set_option(config, picoquic_option_Ticket_File_Name, ticket_store_filename);
         }
@@ -240,7 +187,6 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config,
                 }
             }
         }
-#endif
     }
 
     if (ret == 0) {
@@ -505,7 +451,6 @@ int quic_client(const char* ip_address_text, int server_port,
     int is_siduck = 0;
     siduck_ctx_t* siduck_ctx = NULL;
     client_loop_cb_t loop_cb;
-    picoquic_congestion_algorithm_t const* cc_algorithm = NULL;
     const char* sni = config->sni;
 
     memset(&loop_cb, 0, sizeof(client_loop_cb_t));
