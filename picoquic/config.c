@@ -727,8 +727,13 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
             }
         }
 
-
-
+        if (config->do_retry != 0) {
+            picoquic_set_cookie_mode(quic, 1);
+        }
+        else {
+            picoquic_set_cookie_mode(quic, 2);
+        }
+        /* TODO: control whether to */
         /* picoquic_set_key_log_file_from_env(quic); */
 
         if (config->esni_key_file != NULL && config->esni_rr_file != NULL) {

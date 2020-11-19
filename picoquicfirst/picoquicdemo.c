@@ -164,6 +164,7 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config,
     if (ret == 0) {
         current_time = picoquic_current_time();
         /* Create QUIC context */
+#if 0
         qserver = picoquic_create(8, config->server_cert_file, config->server_key_file, NULL, NULL,
             picoquic_demo_server_callback, &picoquic_file_param,
             cnx_id_callback, cnx_id_callback_ctx, (uint8_t *) config->reset_seed, current_time, NULL, NULL, NULL, 0);
@@ -215,6 +216,31 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config,
                 }
             }
         }
+#else
+        if (config->ticket_file_name == NULL) {
+            ret = picoquic_config_set_option(config, picoquic_option_Ticket_File_Name, ticket_store_filename);
+        }
+        if (ret == 0 && config->token_file_name == NULL) {
+            ret = picoquic_config_set_option(config, picoquic_option_Token_File_Name, token_store_filename);
+        }
+        if (ret == 0) {
+            qserver = picoquic_create_and_configure(config, picoquic_demo_server_callback, &picoquic_file_param, current_time, NULL);
+            if (qserver == NULL) {
+                ret = -1;
+            }
+            else {
+                picoquic_set_key_log_file_from_env(qserver);
+
+                picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
+
+                qserver->mtu_max = config->mtu_max;
+                if (config->qlog_dir != NULL)
+                {
+                    picoquic_set_qlog(qserver, config->qlog_dir);
+                }
+            }
+        }
+#endif
     }
 
     if (ret == 0) {
@@ -527,55 +553,10 @@ int quic_client(const char* ip_address_text, int server_port,
     callback_ctx.last_interaction_time = current_time;
 
     if (ret == 0) {
-#if 0
-        qclient = picoquic_create(8, NULL, NULL, config->root_trust_file, config->alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL,
-            ticket_store_filename, NULL, 0);
-
-        if (qclient == NULL) {
-            ret = -1;
-        } else {
-            if (config->cc_algo_id != NULL) {
-                cc_algorithm = picoquic_get_congestion_algorithm(config->cc_algo_id);
-                if (cc_algorithm == NULL) {
-                    fprintf(stderr, "Unrecognized congestion algorithm: %s. Using BBR isntead.\n", config->cc_algo_id);
-                }
-            }
-            if (cc_algorithm == NULL) {
-                cc_algorithm = picoquic_bbr_algorithm;
-            }
-            picoquic_set_default_congestion_algorithm(qclient, cc_algorithm);
-
-            if (picoquic_load_retry_tokens(qclient, token_store_filename) != 0) {
-                fprintf(stderr, "No token file present. Will create one as <%s>.\n", token_store_filename);
-            }
-
-            if (config->force_zero_share) {
-                qclient->client_zero_share = 1;
-            }
-            qclient->mtu_max = config->mtu_max;
-
-            (void)picoquic_set_default_connection_id_length(qclient, (uint8_t)config->client_cnx_id_length);
-
-            picoquic_set_key_log_file_from_env(qclient);
-            picoquic_set_binlog(qclient, config->bin_dir);
-            picoquic_set_qlog(qclient, config->qlog_dir);
-            picoquic_set_textlog(qclient, config->log_file);
-            picoquic_set_log_level(qclient, config->use_long_log);
-            if (config->initial_random) {
-                picoquic_set_random_initial(qclient, 1);
-            }
-
-            if (config->cipher_suite_id != 0) {
-                if (picoquic_set_cipher_suite(qclient, config->cipher_suite_id) != 0) {
-                    fprintf(stderr, "Could not set cipher suite #%d.\n", config->cipher_suite_id);
-                }
-            }
-        }
-#else
-        if (ret == 0 && config->ticket_file_name == NULL) {
+        if (config->ticket_file_name == NULL) {
             ret = picoquic_config_set_option(config, picoquic_option_Ticket_File_Name, ticket_store_filename);
         }
-        if (config->token_file_name == NULL) {
+        if (ret == 0 && config->token_file_name == NULL) {
             ret = picoquic_config_set_option(config, picoquic_option_Token_File_Name, token_store_filename);
         }
         if (ret == 0) {
@@ -584,14 +565,14 @@ int quic_client(const char* ip_address_text, int server_port,
                 ret = -1;
             }
             else {
+                picoquic_set_key_log_file_from_env(qclient);
+
                 if (config->qlog_dir != NULL)
                 {
                     picoquic_set_qlog(qclient, config->qlog_dir);
                 }
             }
         }
-#endif
-
     }
 
     /* Create the client connection */
