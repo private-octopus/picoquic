@@ -77,6 +77,7 @@ typedef struct st_picoquic_quic_config_t {
     int server_port;
     int dest_if;
     int mtu_max;
+    int cnx_id_length;
     char const* cc_algo_id;
     picoquic_connection_id_callback_ctx_t* cnx_id_cbdata;
     /* TODO: control key logging */
@@ -103,7 +104,6 @@ typedef struct st_picoquic_quic_config_t {
     char const* root_trust_file;
     int cipher_suite_id;
     uint32_t proposed_version;
-    int client_cnx_id_length;
     unsigned int force_zero_share : 1;
     unsigned int no_disk : 1;
     unsigned int large_client_hello : 1;

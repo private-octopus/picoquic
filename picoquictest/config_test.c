@@ -57,6 +57,7 @@ static picoquic_quic_config_t param1 = {
     4433, /* int server_port; */
     1, /* int dest_if; */
     1536, /* int mtu_max; */
+    0, /* int cnx_id_length; */
     "cubic", /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     NULL, /* picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
     /* Common flags */
@@ -79,7 +80,6 @@ static picoquic_quic_config_t param1 = {
     NULL, /* char const* root_trust_file; */
     0, /* int cipher_suite_id; */
     0, /* uint32_t proposed_version; */
-    0, /* int client_cnx_id_length; */
     0, /* unsigned int force_zero_share : 1; */
     0, /* unsigned int no_disk : 1; */
     0, /* unsigned int large_client_hello : 1; */
@@ -119,6 +119,7 @@ static picoquic_quic_config_t param2 = {
     0, /* int server_port; */
     0, /* int dest_if; */
     0, /* int mtu_max; */
+    5, /* int cnx_id_length; */
     NULL, /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     NULL, /* picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
     /* Common flags */
@@ -141,7 +142,6 @@ static picoquic_quic_config_t param2 = {
     "data/certs/root.pem", /* char const* root_trust_file; */
     20, /* int cipher_suite_id; */
     0xff000020, /* uint32_t proposed_version; */
-    5, /* int client_cnx_id_length; */
     1,/* unsigned int force_zero_share : 1; */
     1, /* unsigned int no_disk : 1; */
     1 /* unsigned int large_client_hello : 1; */
@@ -241,7 +241,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_int("force_zero_share", expected->force_zero_share, actual->force_zero_share);
     ret |= config_test_compare_int("no_disk", expected->no_disk, actual->no_disk);
     ret |= config_test_compare_int("large_client_hello", expected->large_client_hello, actual->large_client_hello);
-    ret |= config_test_compare_int("client_cnx_id_length", expected->client_cnx_id_length, actual->client_cnx_id_length);
+    ret |= config_test_compare_int("cnx_id_length", expected->cnx_id_length, actual->cnx_id_length);
 
     return ret;
 }

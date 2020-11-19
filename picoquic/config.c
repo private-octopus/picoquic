@@ -32,6 +32,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_binlog.h"
 #include "picoquic_logger.h"
+#include "picoquic_unified_log.h"
 #include "picoquic_config.h"
 
 typedef struct st_option_param_t {
@@ -390,8 +391,8 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         config->force_zero_share = 1;
         break;
     case picoquic_option_CNXID_LENGTH:
-        config->client_cnx_id_length = config_atoi(params, nb_params, 0, &ret);
-        if (config->client_cnx_id_length < 0 || config->client_cnx_id_length > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+        config->cnx_id_length = config_atoi(params, nb_params, 0, &ret);
+        if (config->cnx_id_length < 0 || config->cnx_id_length > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
             fprintf(stderr, "Invalid connection id length: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
             ret = -1;
         }
@@ -669,7 +670,6 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
             /* TODO: option to provide cookie by default or not */
             picoquic_set_cookie_mode(quic, 2);
         }
-        /* quic->mtu_max = config->mtu_max; */
 
         if (config->cc_algo_id != NULL) {
             cc_algo = picoquic_get_congestion_algorithm(config->cc_algo_id);
@@ -682,11 +682,36 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         }
         picoquic_set_default_congestion_algorithm(quic, cc_algo);
 
+        if (config->token_file_name) {
+            if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {
+                fprintf(stderr, "No token file present. Will create one as <%s>.\n", config->token_file_name);
+            }
+        }
+
+        if (config->force_zero_share) {
+            quic->client_zero_share = 1;
+        }
+
+        if (config->mtu_max > 0) {
+            quic->mtu_max = config->mtu_max;
+        }
+
+        if (config->cnx_id_length != 0) {
+            if (picoquic_set_default_connection_id_length(quic, (uint8_t)config->cnx_id_length) != 0) {
+                fprintf(stderr, "Could not set CNX-ID length #%d.\n", config->cnx_id_length);
+            }
+        }
+
+        /* TODO: parameters to define padding policy */
         picoquic_set_padding_policy(quic, 39, 128);
 
         picoquic_set_binlog(quic, config->bin_dir);
 
-        /* picoquic_set_qlog(quic, config->qlog_dir); */
+        /* We cannot set qlog here, because of the dependency on libraries 
+         * that are not linked with picoquic by default. The application
+         * will have to call:
+         *    picoquic_set_qlog(quic, config->qlog_dir);
+         */
 
         picoquic_set_textlog(quic, config->log_file);
 
@@ -695,6 +720,14 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         if (config->initial_random) {
             picoquic_set_random_initial(quic, 1);
         }
+
+        if (config->cipher_suite_id != 0) {
+            if (picoquic_set_cipher_suite(quic, config->cipher_suite_id) != 0) {
+                fprintf(stderr, "Could not set cipher suite #%d.\n", config->cipher_suite_id);
+            }
+        }
+
+
 
         /* picoquic_set_key_log_file_from_env(quic); */
 

@@ -573,18 +573,22 @@ int quic_client(const char* ip_address_text, int server_port,
         }
 #else
         if (ret == 0 && config->ticket_file_name == NULL) {
-            /* set file name from default in config*/
             ret = picoquic_config_set_option(config, picoquic_option_Ticket_File_Name, ticket_store_filename);
         }
         if (config->token_file_name == NULL) {
-            /* TODO: set file name from default in config*/
             ret = picoquic_config_set_option(config, picoquic_option_Token_File_Name, token_store_filename);
         }
         if (ret == 0) {
             qclient = picoquic_create_and_configure(config, NULL, NULL, current_time, NULL);
-        }
-        if (qclient == NULL) {
-            ret = -1;
+            if (qclient == NULL) {
+                ret = -1;
+            }
+            else {
+                if (config->qlog_dir != NULL)
+                {
+                    picoquic_set_qlog(qclient, config->qlog_dir);
+                }
+            }
         }
 #endif
 
@@ -846,60 +850,6 @@ void usage()
     fprintf(stderr, "Usage: picoquicdemo <options> [server_name [port [scenario]]] \n");
     fprintf(stderr, "  For the client mode, specify server_name and port.\n");
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
-#if 0
-    fprintf(stderr, "Options:\n");
-    fprintf(stderr, "  -c file               cert file (default: %s)\n", SERVER_CERT_FILE);
-    fprintf(stderr, "  -e if                 Send on interface (default: -1)\n");
-    fprintf(stderr, "                           -1: receiving interface\n");
-    fprintf(stderr, "                            0: routing lookup\n");
-    fprintf(stderr, "                            n: ifindex\n");
-    fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
-    fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
-    fprintf(stderr, "                        -f 2  test CNXID renewal,\n");
-    fprintf(stderr, "                        -f 3  test migration to new address.\n");
-    fprintf(stderr, "  -h                    This help message\n");
-    fprintf(stderr, "  -i <src mask value>   Connection ID modification: (src & ~mask) || val\n");
-    fprintf(stderr, "                        Implies unconditional server cnx_id xmit\n");
-    fprintf(stderr, "                          where <src> is int:\n");
-    fprintf(stderr, "                            0: picoquic_cnx_id_random\n");
-    fprintf(stderr, "                            1: picoquic_cnx_id_remote (client)\n");
-    fprintf(stderr, "                            2: same as 0, plus encryption of unmasked data\n");
-    fprintf(stderr, "                            3: same as 0, plus encryption of all data\n");
-    fprintf(stderr, "                        val and mask must be hex strings of same length, 4 to 18\n");
-    fprintf(stderr, "  -k file               key file (default: %s)\n", SERVER_KEY_FILE);
-    fprintf(stderr, "  -K file               ESNI private key file (default: don't use ESNI)\n");
-    fprintf(stderr, "  -E file               ESNI RR file (default: don't use ESNI)\n");
-    fprintf(stderr, "  -C cipher_suite_id    specify cipher suite (e.g. -C 20 = chacha20)\n");
-    fprintf(stderr, "  -o folder             Folder where client writes downloaded files,\n");
-    fprintf(stderr, "                        defaults to current directory.\n");
-    fprintf(stderr, "  -w folder             Folder containing web pages served by server\n");
-    fprintf(stderr, "  -l file               Log file, Log to stdout if file = \"-\". No logging if absent.\n");
-    fprintf(stderr, "  -b bin_dir            Binary logging to this directory. No binary logging if absent.\n");
-    fprintf(stderr, "  -q qlog_dir           Qlog logging to this directory. No qlog logging if absent,\n");
-    fprintf(stderr, "                        but qlogs could be extracted from binary logs using picolog\n");
-    fprintf(stderr, "                        if binary logs are available.\n");
-    fprintf(stderr, "                        Production of qlogs on servers affects performance.\n");
-    fprintf(stderr, "  -L                    Log all packets. If absent, log stops after 100 packets.\n");
-    fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
-    fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
-    fprintf(stderr, "  -n sni                sni (default: server name)\n");
-    fprintf(stderr, "  -a alpn               alpn (default function of version)\n");
-    fprintf(stderr, "  -r                    Do Reset Request\n");
-    fprintf(stderr, "  -s <64b 64b>          Reset seed\n");
-    fprintf(stderr, "  -t file               root trust file\n");
-    fprintf(stderr, "  -u nb                 trigger key update after receiving <nb> packets on client\n");
-    fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff000012\n");
-    fprintf(stderr, "  -z                    Set TLS zero share behavior on client, to force HRR.\n");
-    fprintf(stderr, "  -1                    Once: close the server after processing 1 connection.\n");
-    fprintf(stderr, "  -S solution_dir       Set the path to the source files to find the default files\n");
-    fprintf(stderr, "  -I length             Length of CNX_ID used by the client, default=8\n");
-    fprintf(stderr, "  -G cc_algorithm       Use the specified congestion control algorithm:\n");
-    fprintf(stderr, "                        reno, cubic or fast. Defaults to cubic.\n");
-    fprintf(stderr, "  -D                    no disk: do not save received files on disk.\n");
-    fprintf(stderr, "  -Q                    send a large client hello in order to test post quantum\n");
-    fprintf(stderr, "                        readiness.\n");
-    fprintf(stderr, "  -R                    randomize initial packet number\n");
-#endif
     picoquic_config_usage();
     fprintf(stderr, "Picoquic demo options:\n");
     fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
