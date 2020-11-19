@@ -30,6 +30,40 @@
 extern "C" {
 #endif
 
+typedef enum {
+    picoquic_option_CERT,
+    picoquic_option_KEY,
+    picoquic_option_ESNI_KEY,
+    picoquic_option_SERVER_PORT,
+    picoquic_option_PROPOSED_VERSION,
+    picoquic_option_OUTDIR,
+    picoquic_option_WWWDIR,
+    picoquic_option_DO_RETRY,
+    picoquic_option_INITIAL_RANDOM,
+    picoquic_option_RESET_SEED,
+    picoquic_option_SOLUTION_DIR,
+    picoquic_option_CC_ALGO,
+    picoquic_option_DEST_IF,
+    picoquic_option_CIPHER_SUITE,
+    picoquic_option_ESNI_RR_FILE,
+    picoquic_option_INIT_CNXID,
+    picoquic_option_LOG_FILE,
+    picoquic_option_LONG_LOG,
+    picoquic_option_BINLOG_DIR,
+    picoquic_option_QLOG_DIR,
+    picoquic_option_MTU_MAX,
+    picoquic_option_SNI,
+    picoquic_option_ALPN,
+    picoquic_option_ROOT_TRUST_FILE,
+    picoquic_option_FORCE_ZERO_SHARE,
+    picoquic_option_CNXID_LENGTH,
+    picoquic_option_NO_DISK,
+    picoquic_option_LARGE_CLIENT_HELLO,
+    picoquic_option_Ticket_File_Name,
+    picoquic_option_Token_File_Name,
+    picoquic_option_HELP
+}  picoquic_option_enum_t;
+
 typedef struct st_picoquic_quic_config_t {
     uint32_t nb_connections;
     char const* solution_dir;
@@ -77,6 +111,7 @@ typedef struct st_picoquic_quic_config_t {
 
 int picoquic_config_option_letters(char* option_string, size_t string_max, size_t* string_length);
 void picoquic_config_usage();
+int picoquic_config_set_option(picoquic_quic_config_t* config, picoquic_option_enum_t option_num, const char* opt_val);
 
 int picoquic_config_command_line(int opt, int* p_optind, int argc, char const** argv, char const* optarg, picoquic_quic_config_t* config);
 

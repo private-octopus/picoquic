@@ -364,6 +364,9 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         }
 
         if (ret == 0) {
+            if (nb_connections == 0) {
+                nb_connections = 1;
+            }
             quic->table_cnx_by_id = picohash_create((size_t)nb_connections * 4,
                 picoquic_cnx_id_hash, picoquic_cnx_id_compare);
 

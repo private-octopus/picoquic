@@ -481,11 +481,10 @@ int quic_client(const char* ip_address_text, int server_port,
     client_loop_cb_t loop_cb;
     picoquic_congestion_algorithm_t const* cc_algorithm = NULL;
     const char* sni = config->sni;
-    const char* alpn = config->alpn;
 
     memset(&loop_cb, 0, sizeof(client_loop_cb_t));
 
-    if (alpn != NULL && (strcmp(alpn, "siduck") == 0 || strcmp(alpn, "siduck-00") == 0)) {
+    if (config->alpn != NULL && (strcmp(config->alpn, "siduck") == 0 || strcmp(config->alpn, "siduck-00") == 0)) {
         /* Set a siduck client */
         is_siduck = 1;
         siduck_ctx = siduck_create_ctx(stdout);
@@ -511,7 +510,7 @@ int quic_client(const char* ip_address_text, int server_port,
             return -1;
         }
         else {
-            ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn, config->no_disk, 0);
+            ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, config->alpn, config->no_disk, 0);
             callback_ctx.out_dir = config->out_dir;
         }
     }
@@ -528,7 +527,8 @@ int quic_client(const char* ip_address_text, int server_port,
     callback_ctx.last_interaction_time = current_time;
 
     if (ret == 0) {
-        qclient = picoquic_create(8, NULL, NULL, config->root_trust_file, alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL,
+#if 0
+        qclient = picoquic_create(8, NULL, NULL, config->root_trust_file, config->alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL,
             ticket_store_filename, NULL, 0);
 
         if (qclient == NULL) {
@@ -571,6 +571,23 @@ int quic_client(const char* ip_address_text, int server_port,
                 }
             }
         }
+#else
+        if (ret == 0 && config->ticket_file_name == NULL) {
+            /* set file name from default in config*/
+            ret = picoquic_config_set_option(config, picoquic_option_Ticket_File_Name, ticket_store_filename);
+        }
+        if (config->token_file_name == NULL) {
+            /* TODO: set file name from default in config*/
+            ret = picoquic_config_set_option(config, picoquic_option_Token_File_Name, token_store_filename);
+        }
+        if (ret == 0) {
+            qclient = picoquic_create_and_configure(config, NULL, NULL, current_time, NULL);
+        }
+        if (qclient == NULL) {
+            ret = -1;
+        }
+#endif
+
     }
 
     /* Create the client connection */
@@ -578,7 +595,7 @@ int quic_client(const char* ip_address_text, int server_port,
         /* Create a client connection */
         cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id, picoquic_null_connection_id,
             (struct sockaddr*)&loop_cb.server_address, current_time,
-            config->proposed_version, sni, alpn, 1);
+            config->proposed_version, sni, config->alpn, 1);
 
         if (cnx_client == NULL) {
             ret = -1;
@@ -789,12 +806,12 @@ int quic_client(const char* ip_address_text, int server_port,
             picoquic_log_picotls_ticket(stdout, picoquic_null_connection_id, ticket, ticket_length);
         }
 
-        if (picoquic_save_session_tickets(qclient, ticket_store_filename) != 0) {
-            fprintf(stderr, "Could not store the saved session tickets.\n");
+        if (picoquic_save_session_tickets(qclient, config->ticket_file_name) != 0) {
+            fprintf(stderr, "Could not store the saved session tickets to <%s>.\n", config->ticket_file_name);
         }
 
-        if (picoquic_save_retry_tokens(qclient, token_store_filename) != 0) {
-            fprintf(stderr, "Could not save tokens to <%s>.\n", token_store_filename);
+        if (picoquic_save_retry_tokens(qclient, config->token_file_name) != 0) {
+            fprintf(stderr, "Could not save tokens to <%s>.\n", config->token_file_name);
         }
 
         picoquic_free(qclient);

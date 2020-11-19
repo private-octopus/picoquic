@@ -34,38 +34,6 @@
 #include "picoquic_logger.h"
 #include "picoquic_config.h"
 
-typedef enum{
-    picoquic_option_CERT,
-    picoquic_option_KEY,
-    picoquic_option_ESNI_KEY,
-    picoquic_option_SERVER_PORT,
-    picoquic_option_PROPOSED_VERSION,
-    picoquic_option_OUTDIR,
-    picoquic_option_WWWDIR,
-    picoquic_option_DO_RETRY,
-    picoquic_option_INITIAL_RANDOM,
-    picoquic_option_RESET_SEED,
-    picoquic_option_SOLUTION_DIR,
-    picoquic_option_CC_ALGO,
-    picoquic_option_DEST_IF,
-    picoquic_option_CIPHER_SUITE,
-    picoquic_option_ESNI_RR_FILE,
-    picoquic_option_INIT_CNXID,
-    picoquic_option_LOG_FILE,
-    picoquic_option_LONG_LOG,
-    picoquic_option_BINLOG_DIR,
-    picoquic_option_QLOG_DIR,
-    picoquic_option_MTU_MAX,
-    picoquic_option_SNI,
-    picoquic_option_ALPN,
-    picoquic_option_ROOT_TRUST_FILE,
-    picoquic_option_FORCE_ZERO_SHARE,
-    picoquic_option_CNXID_LENGTH,
-    picoquic_option_NO_DISK,
-    picoquic_option_LARGE_CLIENT_HELLO,
-    picoquic_option_HELP
-}  picoquic_option_enum_t;
-
 typedef struct st_option_param_t {
     char const * param;
     int length;
@@ -112,6 +80,8 @@ static option_table_line_t option_table[] = {
     { picoquic_option_NO_DISK, 'D', "no_disk", 0, "no disk: do not save received files on disk" },
     { picoquic_option_LARGE_CLIENT_HELLO, 'Q', "large_client_hello", 0,
     "send a large client hello in order to test post quantum readiness" },
+    { picoquic_option_Ticket_File_Name, 'T', "ticket_file", 1, "file", "File storing the session tickets" },
+    { picoquic_option_Token_File_Name, 'N', "token_file", 1, "file", "File storing the new tokens" },
     { picoquic_option_HELP, 'h', "help", 0, "This help message" }
 };
 
@@ -432,6 +402,12 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_LARGE_CLIENT_HELLO:
         config->large_client_hello = 1;
         break;
+    case picoquic_option_Ticket_File_Name:
+        ret = config_set_string_param(&config->ticket_file_name, params, nb_params, 0);
+        break;
+    case picoquic_option_Token_File_Name:
+        ret = config_set_string_param(&config->token_file_name, params, nb_params, 0);
+        break;
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -478,6 +454,33 @@ void picoquic_config_usage()
         }
         fprintf(stderr, " %s\n", option_table[i].option_help);
     }
+}
+
+int picoquic_config_set_option(picoquic_quic_config_t* config, picoquic_option_enum_t option_num, const char * opt_val)
+{
+    int ret = 0;
+    option_table_line_t* option_desc = NULL;
+    option_param_t params[1];
+    int nb_params = 0;
+
+    for (size_t i = 0; i < option_table_size; i++) {
+        if (option_table[i].option_num == option_num) {
+            option_desc = &option_table[i];
+        }
+    }
+    if (option_desc == NULL) {
+        fprintf(stderr, "Unknow option number: %d\n", option_num);
+        ret = -1;
+    }
+    else{
+        if (opt_val != NULL) {
+            params[0].param = opt_val;
+            params[0].length = (int)strlen(opt_val);
+            nb_params = 1;
+        }
+        ret = config_set_option(option_desc, params, nb_params, config);
+    }
+    return ret;
 }
 
 int picoquic_config_command_line(int opt, int * p_optind, int argc, char const ** argv, char const* optarg, picoquic_quic_config_t * config)
