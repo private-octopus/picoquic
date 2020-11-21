@@ -22,7 +22,6 @@
 /* Manage the configuration options for the QUIC context
  * TODO: do not force linking of binlog, textlog, qlog
  * TODO: review of connection ID function API. Separate parameters?
- * TODO: parameters for controling Spin Bit, Loss Bits
  */
 
 #include <stdio.h>
