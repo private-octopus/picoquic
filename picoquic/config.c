@@ -63,6 +63,8 @@ static option_table_line_t option_table[] = {
     { picoquic_option_SOLUTION_DIR, 'S', "solution_dir", 1, "folder", "Set the path to the source files to find the default files" },
     { picoquic_option_CC_ALGO, 'G', "cc_algo", 1, "cc_algorithm",
     "Use the specified congestion control algorithm: reno, cubic, bbr or fast. Defaults to bbr." },
+    { picoquic_option_SPINBIT, 'P', "spinbit", 1, "number", "Set the default spinbit policy" },
+    { picoquic_option_LOSSBIT, 'O', "lossbit", 1, "number", "Set the default lossbit policy" },
     { picoquic_option_DEST_IF, 'e', "dest_if", 1, "if", "Send on interface (default: -1)" },
     { picoquic_option_CIPHER_SUITE, 'C', "cipher_suite", 1, "cipher_suite_id", "specify cipher suite (e.g. -C 20 = chacha20)" },
     { picoquic_option_ESNI_RR_FILE, 'E', "esni_rr_file", 1, "file", "ESNI RR file (default: don't use ESNI)" },
@@ -338,6 +340,20 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         break;
     case picoquic_option_CC_ALGO:
         ret = config_set_string_param(&config->cc_algo_id, params, nb_params, 0);
+        break;
+    case picoquic_option_SPINBIT:
+        config->spinbit_policy = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || config->spinbit_policy < 0 || config->spinbit_policy > picoquic_spinbit_on) {
+            fprintf(stderr, "Invalid spinbit policy: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = (ret == 0) ? -1 : ret;
+        }
+        break;
+    case picoquic_option_LOSSBIT:
+        config->lossbit_policy = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || config->lossbit_policy < 0 || config->lossbit_policy > picoquic_lossbit_send_receive) {
+            fprintf(stderr, "Invalid lossbit policy: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = (ret == 0) ? -1 : ret;
+        }
         break;
     case picoquic_option_DEST_IF:
         config->dest_if = config_atoi(params, nb_params, 0, &ret);
@@ -681,6 +697,9 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
             cc_algo = picoquic_bbr_algorithm;
         }
         picoquic_set_default_congestion_algorithm(quic, cc_algo);
+
+        picoquic_set_default_spinbit_policy(quic, config->spinbit_policy);
+        picoquic_set_default_lossbit_policy(quic, config->lossbit_policy);
 
         if (config->token_file_name) {
             if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {

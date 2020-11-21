@@ -169,6 +169,16 @@ typedef enum {
 } picoquic_spinbit_version_enum;
 
 /*
+* Quic loss bit variants
+*/
+
+typedef enum {
+    picoquic_lossbit_none = 0, /* No support for the spin bits */
+    picoquic_lossbit_send_only = 1, /* Able to send the loss bit, but not receive it */
+    picoquic_lossbit_send_receive = 2, /* Able to send or receive the spin bits */
+} picoquic_lossbit_version_enum;
+
+/*
  * Provisional definition of the connection ID.
  */
 #define PICOQUIC_CONNECTION_ID_MIN_SIZE 0
@@ -501,6 +511,10 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
 /* Set default spin bit policy for the context */
 void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
 
+/* Set default loss bit policy for the context */
+void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy);
+
+/* Set the length of a crypto epoch -- force rotation after that many packets sent */
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max);
 
 uint64_t picoquic_get_default_crypto_epoch_length(picoquic_quic_t* quic);

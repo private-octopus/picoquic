@@ -43,6 +43,8 @@ typedef enum {
     picoquic_option_RESET_SEED,
     picoquic_option_SOLUTION_DIR,
     picoquic_option_CC_ALGO,
+    picoquic_option_SPINBIT,
+    picoquic_option_LOSSBIT,
     picoquic_option_DEST_IF,
     picoquic_option_CIPHER_SUITE,
     picoquic_option_ESNI_RR_FILE,
@@ -81,8 +83,8 @@ typedef struct st_picoquic_quic_config_t {
     char const* cc_algo_id;
     picoquic_connection_id_callback_ctx_t* cnx_id_cbdata;
     /* TODO: control key logging */
-    /* TODO: control spin bit */
-    /* TODO: control loss bit */
+    picoquic_spinbit_version_enum spinbit_policy; /* control spin bit */
+    picoquic_lossbit_version_enum lossbit_policy; /* control loss bit */
     /* TODO: control other extensions, e.g. time stamp, ack delay, multipath */
     /* Common flags */
     unsigned int initial_random : 1;

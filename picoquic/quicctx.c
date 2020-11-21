@@ -343,6 +343,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->crypto_epoch_length_max = 0;
         quic->max_simultaneous_logs = PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS;
         quic->max_half_open_before_retry = PICOQUIC_DEFAULT_HALF_OPEN_RETRY_THRESHOLD;
+        quic->default_lossbit_policy = 0; /* For compatibility with old behavior. Consider 0 */
         picoquic_wake_list_init(quic);
 
         if (cnx_id_callback != NULL) {
@@ -463,6 +464,14 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
 void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy)
 {
     quic->default_spin_policy = default_spinbit_policy;
+}
+
+void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy)
+{
+    quic->default_lossbit_policy = default_lossbit_policy;
+    if (quic->default_tp != NULL) {
+        quic->default_tp->enable_loss_bit = (int)default_lossbit_policy;
+    }
 }
 
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max)
@@ -2337,6 +2346,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     if (cnx != NULL) {
         if (quic->default_tp == NULL) {
             picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
+            cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
         } else {
             memcpy(&cnx->local_parameters, quic->default_tp, sizeof(picoquic_tp_t));
             /* If the default parameters include preferred address, document it */
