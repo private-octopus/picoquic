@@ -340,20 +340,28 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_CC_ALGO:
         ret = config_set_string_param(&config->cc_algo_id, params, nb_params, 0);
         break;
-    case picoquic_option_SPINBIT:
-        config->spinbit_policy = config_atoi(params, nb_params, 0, &ret);
-        if (ret != 0 || config->spinbit_policy < 0 || config->spinbit_policy > picoquic_spinbit_on) {
+    case picoquic_option_SPINBIT: {
+        int v = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || v < 0 || v > (int)picoquic_spinbit_on) {
             fprintf(stderr, "Invalid spinbit policy: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
             ret = (ret == 0) ? -1 : ret;
         }
+        else {
+            config->spinbit_policy = (picoquic_spinbit_version_enum)v;
+        }
         break;
-    case picoquic_option_LOSSBIT:
-        config->lossbit_policy = config_atoi(params, nb_params, 0, &ret);
-        if (ret != 0 || config->lossbit_policy < 0 || config->lossbit_policy > picoquic_lossbit_send_receive) {
+    }
+    case picoquic_option_LOSSBIT: {
+        int v = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || v < 0 || v >(int)picoquic_lossbit_send_receive) {
             fprintf(stderr, "Invalid lossbit policy: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
             ret = (ret == 0) ? -1 : ret;
         }
+        else {
+            config->lossbit_policy = (picoquic_lossbit_version_enum)v;
+        }
         break;
+    }
     case picoquic_option_DEST_IF:
         config->dest_if = config_atoi(params, nb_params, 0, &ret);
         break;
