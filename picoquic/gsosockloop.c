@@ -45,7 +45,6 @@ int picoquic_packet_loop_gso(picoquic_quic_t* quic,
 {
     return -1;
 }
-#else
 #else /* Linux */
 
 #include <stdint.h>
