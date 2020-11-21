@@ -173,9 +173,9 @@ typedef enum {
 */
 
 typedef enum {
-    picoquic_lossbit_none = 0, /* No support for the spin bits */
+    picoquic_lossbit_none = 0, /* No support for the loss bits */
     picoquic_lossbit_send_only = 1, /* Able to send the loss bit, but not receive it */
-    picoquic_lossbit_send_receive = 2, /* Able to send or receive the spin bits */
+    picoquic_lossbit_send_receive = 2, /* Able to send or receive the loss bits */
 } picoquic_lossbit_version_enum;
 
 /*
