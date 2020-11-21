@@ -147,6 +147,7 @@
   <ItemGroup>
     <ClCompile Include="bytestream.c" />
     <ClCompile Include="cc_common.c" />
+    <ClCompile Include="config.c" />
     <ClCompile Include="cubic.c" />
     <ClCompile Include="fastcc.c" />
     <ClCompile Include="frames.c" />
@@ -184,6 +185,7 @@
     <ClInclude Include="frames.h" />
     <ClInclude Include="logwriter.h" />
     <ClInclude Include="picohash.h" />
+    <ClInclude Include="picoquic_config.h" />
     <ClInclude Include="picoquic_internal.h" />
     <ClInclude Include="picoquic_packet_loop.h" />
     <ClInclude Include="picosocks.h" />

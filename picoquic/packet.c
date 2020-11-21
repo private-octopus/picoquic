@@ -2044,13 +2044,16 @@ int picoquic_incoming_segment(
             case picoquic_packet_0rtt_protected:
                 if (ph.has_reserved_bit_set) {
                     ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
-                } else if (is_first_segment) {
-                    /* Account for the data received in handshake, but only
-                     * count the packet once. Do not count it again if it is not
-                     * the first segment in packet */
-                    cnx->initial_data_received += packet_length;
                 }
-                ret = picoquic_incoming_0rtt(cnx, bytes, &ph, current_time);
+                else {
+                    if (is_first_segment) {
+                        /* Account for the data received in handshake, but only
+                         * count the packet once. Do not count it again if it is not
+                         * the first segment in packet */
+                        cnx->initial_data_received += packet_length;
+                    }
+                    ret = picoquic_incoming_0rtt(cnx, bytes, &ph, current_time);
+                }
                 break;
             case picoquic_packet_1rtt_protected:
                 ret = picoquic_incoming_encrypted(cnx, bytes, &ph, addr_from, addr_to, if_index_to, received_ecn, current_time);

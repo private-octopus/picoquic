@@ -96,6 +96,9 @@
     <ClCompile Include="winsockloop.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="config.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="unified_log.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -138,6 +141,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picoquic_packet_loop.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picoquic_config.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

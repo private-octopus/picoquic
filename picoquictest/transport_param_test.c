@@ -1077,7 +1077,8 @@ transport_param_stream_id_test_t const transport_param_stream_id_test_table[] = 
 static size_t const nb_transport_param_stream_id_test_table =
     sizeof(transport_param_stream_id_test_table) / sizeof(transport_param_stream_id_test_t);
 
-int transport_param_stream_id_test() {
+int transport_param_stream_id_test()
+{
     int ret = 0;
 
     /* Decoding test */
