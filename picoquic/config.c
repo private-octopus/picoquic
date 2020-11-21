@@ -56,7 +56,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_PROPOSED_VERSION, 'v', "proposed_version", 1, "", "Version proposed by client, e.g. -v ff000012" },
     { picoquic_option_OUTDIR, 'o', "outdir", 1, "folder", "Folder where client writes downloaded files, defaults to current directory." },
     { picoquic_option_WWWDIR, 'w', "wwwdir", 1, "folder", "Folder containing web pages served by server" },
-    { picoquic_option_DO_RETRY, 'r', "do_retry", 0, "", " Do Retry Request" },
+    { picoquic_option_DO_RETRY, 'r', "do_retry", 0, "", "Do Retry Request" },
     { picoquic_option_INITIAL_RANDOM, 'R', "initial_random", 0, "", "randomize initial packet number" },
     { picoquic_option_RESET_SEED, 's', "reset_seed", 2, "<64b 64b>", "Reset seed" },
     { picoquic_option_SOLUTION_DIR, 'S', "solution_dir", 1, "folder", "Set the path to the source files to find the default files" },
@@ -79,8 +79,8 @@ static option_table_line_t option_table[] = {
     { picoquic_option_ROOT_TRUST_FILE, 't', "root_trust_file", 1, "file", "root trust file" },
     { picoquic_option_FORCE_ZERO_SHARE, 'z', "force_zero_share", 0, "", "Set TLS zero share behavior on client, to force HRR" },
     { picoquic_option_CNXID_LENGTH, 'I', "cnxid_length", 1, "length", "Length of CNX_ID used by the client, default=8" },
-    { picoquic_option_NO_DISK, 'D', "no_disk", 0, "no disk: do not save received files on disk" },
-    { picoquic_option_LARGE_CLIENT_HELLO, 'Q', "large_client_hello", 0,
+    { picoquic_option_NO_DISK, 'D', "no_disk", 0, "", "no disk: do not save received files on disk" },
+    { picoquic_option_LARGE_CLIENT_HELLO, 'Q', "large_client_hello", 0, "",
     "send a large client hello in order to test post quantum readiness" },
     { picoquic_option_Ticket_File_Name, 'T', "ticket_file", 1, "file", "File storing the session tickets" },
     { picoquic_option_Token_File_Name, 'N', "token_file", 1, "file", "File storing the new tokens" },
@@ -473,7 +473,7 @@ void picoquic_config_usage()
     for (size_t i = 0; i < option_table_size; i++) {
         size_t spacer = strlen(option_table[i].param_sample);
         fprintf(stderr, "  -%c %s", option_table[i].option_letter, option_table[i].param_sample);
-        while (spacer < 12) {
+        while (spacer++ < 12) {
             putc(' ', stderr);
         }
         fprintf(stderr, " %s\n", option_table[i].option_help);
