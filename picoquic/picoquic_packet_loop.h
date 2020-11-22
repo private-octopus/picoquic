@@ -60,7 +60,7 @@ int picoquic_packet_loop_gso(picoquic_quic_t* quic,
     int local_af,
     int dest_if,
     picoquic_packet_loop_cb_fn loop_callback,
-    void* loop_callback_ctx)
+    void* loop_callback_ctx);
 #endif
 
 #ifdef __cplusplus
