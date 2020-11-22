@@ -65,6 +65,7 @@ int picoquic_packet_loop_gso(picoquic_quic_t* quic,
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/udp.h>
 #include <sys/select.h>
 
 #ifndef SOCKET_TYPE
@@ -85,6 +86,19 @@ int picoquic_packet_loop_gso(picoquic_quic_t* quic,
 #include "picoquic_internal.h"
 #include "picoquic_packet_loop.h"
 #include "picoquic_unified_log.h"
+
+#ifdef UDP_SEGMENT
+static int udp_gso_available = 1;
+#else
+static int udp_gso_available = 0;
+#endif
+
+#ifdef UDP_GRO
+static int udp_gro_available = 1;
+#else
+static int udp_gro_available = 0;
+#endif
+
 
 int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE* s_socket, int* sock_af, int nb_sockets_max)
 {
@@ -144,7 +158,12 @@ int picoquic_packet_loop_gso(picoquic_quic_t* quic,
     struct sockaddr_storage addr_to;
     int if_index_to;
     uint8_t buffer[1536];
-    uint8_t send_buffer[1536];
+    uint8_t * send_buffer;
+#ifdef UDP_SEGMENT
+    size_t send_buffer_size = 0x10000;
+#else
+    size_t send_buffer_size = 1536;
+#endif
     size_t send_length = 0;
     int bytes_recv;
     uint64_t loop_count_time = current_time;
@@ -168,6 +187,13 @@ int picoquic_packet_loop_gso(picoquic_quic_t* quic,
     }
     else if (loop_callback != NULL) {
         ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx);
+    }
+
+    if (ret == 0){
+        send_buffer = malloc(send_buffer_size);
+        if (send_buffer == NULL){
+            ret = -1;
+        }
     }
 
     /* Wait for packets */
@@ -377,6 +403,10 @@ int picoquic_packet_loop_gso(picoquic_quic_t* quic,
             SOCKET_CLOSE(s_socket[i]);
             s_socket[i] = INVALID_SOCKET;
         }
+    }
+
+    if (send_buffer != NULL){
+        free(send_buffer);
     }
 
     return ret;
