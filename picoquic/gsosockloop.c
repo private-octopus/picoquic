@@ -93,12 +93,13 @@ static int udp_gso_available = 1;
 static int udp_gso_available = 0;
 #endif
 
+#if 0
 #ifdef UDP_GRO
 static int udp_gro_available = 1;
 #else
 static int udp_gro_available = 0;
 #endif
-
+#endif
 
 int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE* s_socket, int* sock_af, int nb_sockets_max)
 {
@@ -158,13 +159,11 @@ int picoquic_packet_loop_gso(picoquic_quic_t* quic,
     struct sockaddr_storage addr_to;
     int if_index_to;
     uint8_t buffer[1536];
-    uint8_t * send_buffer;
-#ifdef UDP_SEGMENT
-    size_t send_buffer_size = 0x10000;
-#else
-    size_t send_buffer_size = 1536;
-#endif
+    uint8_t * send_buffer = NULL;
     size_t send_length = 0;
+    size_t send_msg_size = 0;
+    size_t send_buffer_size = 1536;
+    size_t* send_msg_ptr = NULL;
     int bytes_recv;
     uint64_t loop_count_time = current_time;
     int nb_loops = 0;
@@ -190,6 +189,10 @@ int picoquic_packet_loop_gso(picoquic_quic_t* quic,
     }
 
     if (ret == 0){
+        if (udp_gso_available) {
+            send_buffer_size = 0xFFFF;
+            send_msg_ptr = &send_msg_size;
+        }
         send_buffer = malloc(send_buffer_size);
         if (send_buffer == NULL){
             ret = -1;
@@ -280,9 +283,10 @@ int picoquic_packet_loop_gso(picoquic_quic_t* quic,
                 int sock_ret = 0;
                 int sock_err = 0;
 
-                ret = picoquic_prepare_next_packet(quic, loop_time,
+                ret = picoquic_prepare_next_packet_ex(quic, loop_time,
                     send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx);
+                    &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx,
+                    send_msg_ptr);
 
                 if (ret == 0 && send_length > 0) {
                     SOCKET_TYPE send_socket = INVALID_SOCKET;
@@ -311,9 +315,9 @@ int picoquic_packet_loop_gso(picoquic_quic_t* quic,
                             }
                         }
 
-                        sock_ret = picoquic_send_through_socket(send_socket,
+                        sock_ret = picoquic_sendmsg(send_socket,
                             (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                            (const char*)send_buffer, (int)send_length, &sock_err);
+                            (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
                     }
 
                     if (sock_ret <= 0) {

@@ -194,7 +194,7 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config,
 #if _WINDOWS
         ret = picoquic_packet_loop_win(qserver, config->server_port, 0, config->dest_if, server_loop_cb, &loop_cb_ctx);
 #else
-        ret = picoquic_packet_loop(qserver, config->server_port, 0, config->dest_if, server_loop_cb, &loop_cb_ctx);
+        ret = picoquic_packet_loop_gso(qserver, config->server_port, 0, config->dest_if, server_loop_cb, &loop_cb_ctx);
 #endif
     }
 
@@ -614,7 +614,7 @@ int quic_client(const char* ip_address_text, int server_port,
 #ifdef _WINDOWS
         ret = picoquic_packet_loop_win(qclient, 0, loop_cb.server_address.ss_family, 0, client_loop_cb, &loop_cb);
 #else
-        ret = picoquic_packet_loop(qclient, 0, loop_cb.server_address.ss_family, 0, client_loop_cb, &loop_cb);
+        ret = picoquic_packet_loop_gso(qclient, 0, loop_cb.server_address.ss_family, 0, client_loop_cb, &loop_cb);
 #endif
     }
 
