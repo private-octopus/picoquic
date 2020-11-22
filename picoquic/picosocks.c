@@ -504,11 +504,11 @@ static void* cmsg_format_header_return_data_ptr(struct msghdr* msg, struct cmsgh
 
     if (cmsg != NULL) {
         size_t cmsg_required_space = CMSG_SPACE(cmsg_data_len);
-        *control_length += (INT)cmsg_required_space;
+        *control_length += (int)cmsg_required_space;
         memset(cmsg, 0, cmsg_required_space);
         cmsg->cmsg_level = cmsg_level;
         cmsg->cmsg_type = cmsg_type;
-        cmsg->cmsg_len = WSA_CMSG_LEN(cmsg_data_len);
+        cmsg->cmsg_len = CMSG_LEN(cmsg_data_len);
         cmsg_data_ptr = (void*)CMSG_DATA(cmsg);
         *last_cmsg = cmsg;
     }
@@ -592,7 +592,6 @@ void picoquic_socks_cmsg_format(
 #else
     struct msghdr* msg = (struct msghdr*)vmsg;
     int control_length = 0;
-    struct cmsghdr* cmsg;
     struct cmsghdr* last_cmsg = NULL;
     int is_null = 0;
 
@@ -619,9 +618,10 @@ void picoquic_socks_cmsg_format(
                 is_null = 1;
             }
 #endif
+#ifdef IP_DONTFRAG
             if (!is_null && message_length > PICOQUIC_INITIAL_MTU_IPV4) {
                 int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
-                    &control_length, IPPROTO_IP, IP_DONTFRAGMENT, sizeof(int));
+                    &control_length, IPPROTO_IP, IP_DONTFRAG, sizeof(int));
                 if (pval != NULL) {
                     *pval = 1;
                 }
@@ -629,12 +629,13 @@ void picoquic_socks_cmsg_format(
                     is_null = 1;
                 }
             }
+#endif
         }
         else {
             struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
                 &control_length, IPPROTO_IPV6, IPV6_PKTINFO, sizeof(struct in6_pktinfo));
             if (pktinfo6 != NULL) {
-                memcpy(&pktinfo6->ipi6_addr.u, &((struct sockaddr_in6*)addr_from)->sin6_addr.u, sizeof(IN6_ADDR));
+                memcpy(&pktinfo6->ipi6_addr.u, &((struct sockaddr_in6*)addr_from)->sin6_addr, sizeof(struct in6_addr));
                 pktinfo6->ipi6_ifindex = (unsigned long)dest_if;
             }
             else {
