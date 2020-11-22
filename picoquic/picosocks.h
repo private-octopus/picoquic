@@ -85,6 +85,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/udp.h>
 #include <sys/select.h>
 
 #ifndef SOCKET_TYPE
