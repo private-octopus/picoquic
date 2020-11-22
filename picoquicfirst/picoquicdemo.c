@@ -883,12 +883,14 @@ int main(int argc, char** argv)
 
         if (config.server_cert_file == NULL &&
             picoquic_get_input_path(default_server_cert_file, sizeof(default_server_cert_file), config.solution_dir, SERVER_CERT_FILE) == 0) {
-            config.server_cert_file = default_server_cert_file;
+            /* Using set option call to ensure proper memory management*/
+            picoquic_config_set_option(&config, picoquic_option_CERT, default_server_cert_file);
         }
 
         if (config.server_key_file == NULL &&
             picoquic_get_input_path(default_server_key_file, sizeof(default_server_key_file), config.solution_dir, SERVER_KEY_FILE) == 0) {
-            config.server_key_file = default_server_key_file;
+            /* Using set option call to ensure proper memory management*/
+            picoquic_config_set_option(&config, picoquic_option_KEY, default_server_key_file);
         }
 
         /* Run as server */
