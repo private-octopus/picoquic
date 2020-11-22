@@ -492,7 +492,7 @@ static void* cmsg_format_header_return_data_ptr(WSAMSG* msg, struct cmsghdr** la
 }
 #else
 static void* cmsg_format_header_return_data_ptr(struct msghdr* msg, struct cmsghdr** last_cmsg, int* control_length,
-    INT cmsg_level, INT cmsg_type, size_t cmsg_data_len)
+    int cmsg_level, int cmsg_type, size_t cmsg_data_len)
 {
     void* cmsg_data_ptr = NULL;
 #ifdef CMSG_ALIGN
@@ -594,7 +594,7 @@ void picoquic_socks_cmsg_format(
     int control_length = 0;
     struct cmsghdr* cmsg;
     struct cmsghdr* last_cmsg = NULL;
-    /* Format the control message */
+    int is_null = 0;
 
     if (addr_from != NULL && addr_from->sa_family != 0) {
         if (addr_from->sa_family == AF_INET) {
