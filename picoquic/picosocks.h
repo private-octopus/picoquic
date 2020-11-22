@@ -85,6 +85,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/udp.h>
 #include <sys/select.h>
 
 #ifndef SOCKET_TYPE
@@ -198,6 +199,13 @@ int picoquic_select_ex(SOCKET_TYPE* sockets,
     int64_t delta_t,
     int* socket_rank,
     uint64_t* current_time);
+
+int picoquic_sendmsg(SOCKET_TYPE fd,
+    struct sockaddr* addr_dest,
+    struct sockaddr* addr_from,
+    int dest_if,
+    const char* bytes, int length,
+    int send_msg_size, int * sock_err);
 
 int picoquic_send_through_socket(
     SOCKET_TYPE fd,
