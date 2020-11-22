@@ -635,7 +635,7 @@ void picoquic_socks_cmsg_format(
             struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
                 &control_length, IPPROTO_IPV6, IPV6_PKTINFO, sizeof(struct in6_pktinfo));
             if (pktinfo6 != NULL) {
-                memcpy(&pktinfo6->ipi6_addr.u, &((struct sockaddr_in6*)addr_from)->sin6_addr, sizeof(struct in6_addr));
+                memcpy(&pktinfo6->ipi6_addr, &((struct sockaddr_in6*)addr_from)->sin6_addr, sizeof(struct in6_addr));
                 pktinfo6->ipi6_ifindex = (unsigned long)dest_if;
             }
             else {
