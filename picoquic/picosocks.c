@@ -646,7 +646,7 @@ void picoquic_socks_cmsg_format(
 #ifdef IPV6_DONTFRAG
             if (!is_null) {
                 int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
-                    &control_length, IPPROTO_IPV6, IPV6_DONTFRAG, sizeof(int));
+                    &control_length, SOL_IPV6, IPV6_DONTFRAG, sizeof(int));
                 if (pval != NULL) {
                     *pval = 1;
                 }
@@ -660,7 +660,7 @@ void picoquic_socks_cmsg_format(
 #if defined(UDP_SEGMENT)
     if (!is_null && send_msg_size > 0 && send_msg_size < message_length) {
         uint16_t* pval = (uint16_t*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
-            &control_length, IPPROTO_UDP, UDP_SEGMENT, sizeof(uint16_t));
+            &control_length, SOL_UDP, UDP_SEGMENT, sizeof(uint16_t));
         if (pval != NULL) {
             *pval = (uint16_t)send_msg_size;
         }
