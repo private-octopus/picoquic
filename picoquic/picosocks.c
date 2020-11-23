@@ -490,6 +490,31 @@ static void* cmsg_format_header_return_data_ptr(WSAMSG* msg, struct cmsghdr** la
 
     return cmsg_data_ptr;
 }
+#else
+static void* cmsg_format_header_return_data_ptr(struct msghdr* msg, struct cmsghdr** last_cmsg, int* control_length,
+    int cmsg_level, int cmsg_type, size_t cmsg_data_len)
+{
+    void* cmsg_data_ptr = NULL;
+#ifdef CMSG_ALIGN
+    struct cmsghdr* cmsg = (*last_cmsg == NULL) ? CMSG_FIRSTHDR(msg) :
+        (struct cmsghdr*)((unsigned char*)(*last_cmsg) + CMSG_ALIGN((*last_cmsg)->cmsg_len));
+#else
+    struct cmsghdr* cmsg = (*last_cmsg == NULL) ? CMSG_FIRSTHDR(msg) : CMSG_NXTHDR(msg, *last_cmsg);
+#endif
+
+    if (cmsg != NULL) {
+        size_t cmsg_required_space = CMSG_SPACE(cmsg_data_len);
+        *control_length += (int)cmsg_required_space;
+        memset(cmsg, 0, cmsg_required_space);
+        cmsg->cmsg_level = cmsg_level;
+        cmsg->cmsg_type = cmsg_type;
+        cmsg->cmsg_len = CMSG_LEN(cmsg_data_len);
+        cmsg_data_ptr = (void*)CMSG_DATA(cmsg);
+        *last_cmsg = cmsg;
+    }
+
+    return cmsg_data_ptr;
+}
 #endif
 
 void picoquic_socks_cmsg_format(
@@ -517,7 +542,6 @@ void picoquic_socks_cmsg_format(
             else {
                 is_null = 1;
             }
-
             if (!is_null && message_length > PICOQUIC_INITIAL_MTU_IPV4) {
                 int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
                     &control_length, IPPROTO_IP, IP_DONTFRAGMENT, sizeof(int));
@@ -528,6 +552,7 @@ void picoquic_socks_cmsg_format(
                     is_null = 1;
                 }
             }
+
         }
         else {
             struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
@@ -551,7 +576,7 @@ void picoquic_socks_cmsg_format(
             }
         }
     }
-    if (!is_null && send_msg_size > 0) {
+    if (!is_null && send_msg_size > 0 && send_msg_size < message_length) {
         DWORD* pdw = (DWORD*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
             &control_length, IPPROTO_UDP, UDP_SEND_MSG_SIZE, sizeof(DWORD));
         if (pdw != NULL) {
@@ -567,90 +592,83 @@ void picoquic_socks_cmsg_format(
 #else
     struct msghdr* msg = (struct msghdr*)vmsg;
     int control_length = 0;
-    struct cmsghdr* cmsg;
-    /* Format the control message */
-    cmsg = CMSG_FIRSTHDR(msg);
+    struct cmsghdr* last_cmsg = NULL;
+    int is_null = 0;
 
     if (addr_from != NULL && addr_from->sa_family != 0) {
         if (addr_from->sa_family == AF_INET) {
 #ifdef IP_PKTINFO
-            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in_pktinfo)));
-            cmsg->cmsg_level = IPPROTO_IP;
-            cmsg->cmsg_type = IP_PKTINFO;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
-            struct in_pktinfo* pktinfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
-            pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
-            pktinfo->ipi_ifindex = (unsigned int)dest_if;
-            control_length += CMSG_SPACE(sizeof(struct in_pktinfo));
-#else
-            /* The IP_PKTINFO structure is not defined on BSD */
-            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in_addr)));
-            cmsg->cmsg_level = IPPROTO_IP;
-            cmsg->cmsg_type = IP_SENDSRCADDR;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_addr));
-            struct in_addr* pktinfo = (struct in_addr*)CMSG_DATA(cmsg);
-            pktinfo->s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
-            control_length += CMSG_SPACE(sizeof(struct in_addr));
-#endif
-        }
-        else if (addr_from->sa_family == AF_INET6) {
-            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in6_pktinfo)));
-            cmsg->cmsg_level = IPPROTO_IPV6;
-            cmsg->cmsg_type = IPV6_PKTINFO;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in6_pktinfo));
-            struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)CMSG_DATA(cmsg);
-            memcpy(&pktinfo6->ipi6_addr, &((struct sockaddr_in6*)addr_from)->sin6_addr, sizeof(struct in6_addr));
-            pktinfo6->ipi6_ifindex = dest_if;
-
-            control_length += CMSG_SPACE(sizeof(struct in6_pktinfo));
-        }
-        else {
-            DBG_PRINTF("Unexpected address family: %d\n", addr_from->sa_family);
-        }
-#ifdef IPV6_DONTFRAG
-        if (addr_from->sa_family == AF_INET6) {
-#ifdef CMSG_ALIGN
-            struct cmsghdr* cmsg_2 = (struct cmsghdr*)((unsigned char*)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
-            {
-#else
-            struct cmsghdr* cmsg_2 = CMSG_NXTHDR((msg), cmsg);
-            if (cmsg_2 == NULL) {
-                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+            struct in_pktinfo* pktinfo = (struct in_pktinfo*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+                &control_length, IPPROTO_IP, IP_PKTINFO, sizeof(struct in_pktinfo));
+            if (pktinfo != NULL) {
+                pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
+                pktinfo->ipi_ifindex = (unsigned long)dest_if;
             }
             else {
-#endif
-                int val = 1;
-                cmsg_2->cmsg_level = IPPROTO_IPV6;
-                cmsg_2->cmsg_type = IPV6_DONTFRAG;
-                cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
-                memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
-                control_length += CMSG_SPACE(sizeof(int));
+                is_null = 1;
             }
+#else 
+            /* The IP_PKTINFO structure is not defined on BSD */
+            struct in_addr* pktinfo = (struct in_addr*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+                &control_length, IPPROTO_IP, IP_SENDSRCADDR, sizeof(struct in_addr));
+            if (pktinfo != NULL) {
+                pktinfo->s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
+            }
+            else {
+                is_null = 1;
+            }
+#endif
+#if 0
+#ifdef IP_DONTFRAG
+            if (!is_null && message_length > PICOQUIC_INITIAL_MTU_IPV4) {
+                int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+                    &control_length, IPPROTO_IP, IP_DONTFRAG, sizeof(int));
+                if (pval != NULL) {
+                    *pval = 1;
+                }
+                else {
+                    is_null = 1;
+                }
+            }
+#endif
+#endif
         }
-#endif
-#if defined(IP_DONTFRAG)
-        if (addr_from->sa_family == AF_INET6 && length > PICOQUIC_INITIAL_MTU_IPV6) {
-#ifdef CMSG_ALIGN
-            struct cmsghdr* cmsg_2 = (struct cmsghdr*)((unsigned char*)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
-#else
-            struct cmsghdr* cmsg_2 = CMSG_NXTHDR((msg), cmsg);
-#endif
-            if (cmsg_2 == NULL) {
-                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+        else {
+            struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+                &control_length, IPPROTO_IPV6, IPV6_PKTINFO, sizeof(struct in6_pktinfo));
+            if (pktinfo6 != NULL) {
+                memcpy(&pktinfo6->ipi6_addr, &((struct sockaddr_in6*)addr_from)->sin6_addr, sizeof(struct in6_addr));
+                pktinfo6->ipi6_ifindex = (unsigned long)dest_if;
             }
-            else
-            {
-                /* On BSD systems, just use IP_DONTFRAG */
-                int val = 1;
-                cmsg_2->cmsg_level = IPPROTO_IP;
-                cmsg_2->cmsg_type = IP_DONTFRAG;
-                cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
-                memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
-                control_length += CMSG_SPACE(sizeof(int));
+            else {
+                is_null = 1;
             }
+#ifdef IPV6_DONTFRAG
+            if (!is_null) {
+                int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+                    &control_length, SOL_IPV6, IPV6_DONTFRAG, sizeof(int));
+                if (pval != NULL) {
+                    *pval = 1;
+                }
+                else {
+                    is_null = 1;
+                }
+            }
+#endif
         }
-#endif
     }
+#if defined(UDP_SEGMENT)
+    if (!is_null && send_msg_size > 0 && send_msg_size < message_length) {
+        uint16_t* pval = (uint16_t*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+            &control_length, SOL_UDP, UDP_SEGMENT, sizeof(uint16_t));
+        if (pval != NULL) {
+            *pval = (uint16_t)send_msg_size;
+        }
+        else {
+            is_null = 1;
+        }
+    }
+#endif
 
     msg->msg_controllen = control_length;
     if (control_length == 0) {
@@ -967,7 +985,9 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
     struct sockaddr* addr_dest,
     struct sockaddr* addr_from,
     int dest_if,
-    const char* bytes, int length)
+    const char* bytes, int length,
+    int send_msg_size,
+    int * sock_err)
 #ifdef _WINDOWS
 {
     GUID WSASendMsg_GUID = WSAID_WSASENDMSG;
@@ -979,7 +999,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
     WSAMSG msg;
     WSABUF dataBuf;
     int bytes_sent;
-    int last_error;
+    int last_error = 0;
 
     ret = WSAIoctl(fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
         &WSASendMsg_GUID, sizeof WSASendMsg_GUID,
@@ -1005,7 +1025,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
         msg.Control.len = sizeof(cmsg_buffer);
 
         /* Format the control message */
-        picoquic_socks_cmsg_format(&msg, length, 0, addr_from, dest_if);
+        picoquic_socks_cmsg_format(&msg, length, send_msg_size, addr_from, dest_if);
 
         /* Send the message */
         ret = WSASendMsg(fd, &msg, 0, &dwBytesSent, NULL, NULL);
@@ -1015,7 +1035,21 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
         } else {
             bytes_sent = (int)dwBytesSent;
         }
+
+        if (bytes_sent <= 0) {
+            last_error = WSAGetLastError();
+
+#ifndef DISABLE_DEBUG_PRINTF
+            DBG_PRINTF("Could not send packet on UDP socket[AF=%d]= %d!\n",
+                addr_dest->sa_family, last_error);
+#endif
+        }
     }
+
+    if (sock_err != NULL) {
+        *sock_err = last_error;
+    }
+
 
     return bytes_sent;
 }
@@ -1040,10 +1074,21 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
     msg.msg_controllen = sizeof(cmsg_buffer);
 
     /* Format the control message */
-    picoquic_socks_cmsg_format(&msg, length, 0, addr_from, dest_if);
+    picoquic_socks_cmsg_format(&msg, length, send_msg_size, addr_from, dest_if);
 
     bytes_sent = sendmsg(fd, &msg, 0);
 
+
+    if (bytes_sent <= 0) {
+        int last_error = errno;
+#ifndef DISABLE_DEBUG_PRINTF
+        DBG_PRINTF("Could not send packet on UDP socket[AF=%d]= %d!\n",
+            addr_dest->sa_family, last_error);
+#endif
+        if (sock_err != NULL) {
+            *sock_err = last_error;
+        }
+    }
     return bytes_sent;
 }
 #endif
@@ -1149,22 +1194,7 @@ int picoquic_send_through_socket(
     struct sockaddr* addr_from, int from_if,
     const char* bytes, int length, int* sock_err)
 {
-    int sent = picoquic_sendmsg(fd, addr_dest, addr_from, from_if, bytes, length);
-
-#ifndef DISABLE_DEBUG_PRINTF
-    if (sent <= 0) {
-#ifdef _WINDOWS
-        int last_error = WSAGetLastError();
-#else
-        int last_error = errno;
-#endif
-        DBG_PRINTF("Could not send packet on UDP socket[AF=%d]= %d!\n",
-            addr_dest->sa_family, last_error);
-        if (sock_err != NULL) {
-            *sock_err = last_error;
-        }
-    }
-#endif
+    int sent = picoquic_sendmsg(fd, addr_dest, addr_from, from_if, bytes, length, 0, sock_err);
 
     return sent;
 }
