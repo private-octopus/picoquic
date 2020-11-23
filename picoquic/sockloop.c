@@ -291,7 +291,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                 int sock_err = 0;
 
                 ret = picoquic_prepare_next_packet_ex(quic, loop_time,
-                    send_buffer, sizeof(send_buffer), &send_length,
+                    send_buffer, send_buffer_size, &send_length,
                     &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx,
                     send_msg_ptr);
 
