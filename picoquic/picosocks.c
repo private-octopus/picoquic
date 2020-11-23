@@ -542,7 +542,6 @@ void picoquic_socks_cmsg_format(
             else {
                 is_null = 1;
             }
-
             if (!is_null && message_length > PICOQUIC_INITIAL_MTU_IPV4) {
                 int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
                     &control_length, IPPROTO_IP, IP_DONTFRAGMENT, sizeof(int));
@@ -553,6 +552,7 @@ void picoquic_socks_cmsg_format(
                     is_null = 1;
                 }
             }
+
         }
         else {
             struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
@@ -576,7 +576,7 @@ void picoquic_socks_cmsg_format(
             }
         }
     }
-    if (!is_null && send_msg_size > 0) {
+    if (!is_null && send_msg_size > 0 && send_msg_size < length) {
         DWORD* pdw = (DWORD*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
             &control_length, IPPROTO_UDP, UDP_SEND_MSG_SIZE, sizeof(DWORD));
         if (pdw != NULL) {
@@ -618,6 +618,7 @@ void picoquic_socks_cmsg_format(
                 is_null = 1;
             }
 #endif
+#if 0
 #ifdef IP_DONTFRAG
             if (!is_null && message_length > PICOQUIC_INITIAL_MTU_IPV4) {
                 int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
@@ -629,6 +630,7 @@ void picoquic_socks_cmsg_format(
                     is_null = 1;
                 }
             }
+#endif
 #endif
         }
         else {
@@ -656,11 +658,11 @@ void picoquic_socks_cmsg_format(
         }
     }
 #if defined(UDP_SEGMENT)
-    if (!is_null && send_msg_size > 0) {
-        int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
-            &control_length, IPPROTO_UDP, IPV6_DONTFRAG, sizeof(int));
+    if (!is_null && send_msg_size > 0 && send_msg_size < message_length) {
+        uint16_t* pval = (uint16_t*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+            &control_length, IPPROTO_UDP, UDP_SEGMENT, sizeof(uint16_t));
         if (pval != NULL) {
-            *pval = send_msg_size;
+            *pval = (uint16_t)send_msg_size;
         }
         else {
             is_null = 1;
