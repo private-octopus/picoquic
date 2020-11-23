@@ -576,7 +576,7 @@ void picoquic_socks_cmsg_format(
             }
         }
     }
-    if (!is_null && send_msg_size > 0 && send_msg_size < length) {
+    if (!is_null && send_msg_size > 0 && send_msg_size < message_length) {
         DWORD* pdw = (DWORD*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
             &control_length, IPPROTO_UDP, UDP_SEND_MSG_SIZE, sizeof(DWORD));
         if (pdw != NULL) {
