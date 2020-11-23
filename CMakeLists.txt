@@ -19,7 +19,6 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/cubic.c
     picoquic/fastcc.c
     picoquic/frames.c
-    picoquic/gsosockloop.c
     picoquic/intformat.c
     picoquic/logger.c
     picoquic/logwriter.c
