@@ -1723,7 +1723,7 @@ void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
 /*
  * Processing of client encrypted packet.
  */
-int picoquic_incoming_encrypted(
+int picoquic_incoming_1rtt(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
     picoquic_packet_header* ph,
@@ -2056,7 +2056,7 @@ int picoquic_incoming_segment(
                 }
                 break;
             case picoquic_packet_1rtt_protected:
-                ret = picoquic_incoming_encrypted(cnx, bytes, &ph, addr_from, addr_to, if_index_to, received_ecn, current_time);
+                ret = picoquic_incoming_1rtt(cnx, bytes, &ph, addr_from, addr_to, if_index_to, received_ecn, current_time);
                 break;
             default:
                 /* Packet type error. Log and ignore */
