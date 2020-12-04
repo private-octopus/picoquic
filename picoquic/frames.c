@@ -1875,18 +1875,25 @@ void picoquic_estimate_max_path_bandwidth(picoquic_cnx_t* cnx, picoquic_path_t* 
 
 uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
 {
-    uint64_t ack_gap = 1;
+
+    uint64_t nb_packets = (cnx->path[0]->cwin / cnx->path[0]->send_mtu);
+    uint64_t ack_gap = (nb_packets + 3) / 4;
+    uint64_t ack_gap_min = 2;
 
     if (data_rate > PICOQUIC_BANDWIDTH_MEDIUM) {
         if (cnx->path[0]->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
-            ack_gap = 10;
+            ack_gap_min = 10;
         }
         else {
-            ack_gap = 4;
+            ack_gap_min = 4;
         }
     }
-    else {
-        ack_gap = 2;
+
+    if (ack_gap < ack_gap_min) {
+        ack_gap = ack_gap_min;
+    }
+    else if (ack_gap > 32) {
+        ack_gap = 32;
     }
 
     return ack_gap;
