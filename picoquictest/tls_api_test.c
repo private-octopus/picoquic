@@ -2371,7 +2371,7 @@ int tls_api_very_long_max_test()
 
 int tls_api_very_long_with_err_test()
 {
-    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0x30000, 128000, 0, 0, 2150000, NULL, NULL);
+    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0x30000, 128000, 0, 0, 2210000, NULL, NULL);
 }
 
 int tls_api_very_long_congestion_test()
@@ -3699,7 +3699,7 @@ int mtu_drop_test()
         13000000,
         10000000,
         12700000,
-        11000000,
+        11500000,
         11000000
     };
     int ret = 0;
@@ -7486,7 +7486,7 @@ int cubic_jitter_test()
 
 int fastcc_test()
 {
-    return congestion_control_test(picoquic_fastcc_algorithm, 3600000, 0, 0);
+    return congestion_control_test(picoquic_fastcc_algorithm, 3700000, 0, 0);
 }
 
 int fastcc_jitter_test()
@@ -9316,7 +9316,7 @@ int app_limit_cc_test()
         23500000,
         21000000,
         21000000,
-        22500000 };
+        23500000 };
     int ret = 0;
 
     for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
@@ -9894,10 +9894,10 @@ int pacing_cc_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
+        1050000,
+        900000,
+        900000,
         1000000,
-        900000,
-        900000,
-        900000,
         900000
     };
     uint64_t algo_loss[5] = {
@@ -10131,7 +10131,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
 
 int excess_repeat_test()
 {
-    const int nb_repeat_max = 64;
+    const int nb_repeat_max = 128;
     picoquic_congestion_algorithm_t* algo_list[5] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,
