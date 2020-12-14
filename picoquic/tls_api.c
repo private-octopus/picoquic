@@ -71,8 +71,8 @@
 #define UNREFERENCED_PARAMETER(x) (void)(x)
 #endif
 
-
-#define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 0xFFA5
+#define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_DRAFT 0xFFA5
+#define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_V1 0x39
 #define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 2048
 
 #ifdef PTLS_ESNI_NONCE_SIZE
@@ -928,6 +928,21 @@ uint64_t picoquic_public_uniform_random(uint64_t rnd_max)
     return rnd % rnd_max;
 }
 
+/* For an interim period, we are still supporting versions of QUIC that
+ * use the old version extension identifier, so we need a function to
+ * predict the extension ID from the QUIc version */
+uint16_t picoquic_tls_get_quic_extension_id(picoquic_cnx_t* cnx)
+{
+    int v = picoquic_supported_versions[cnx->version_index].version;
+    uint16_t quic_ext_id = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_DRAFT;
+
+    if (v == PICOQUIC_V1_VERSION || v == PICOQUIC_TWENTYFIRST_INTEROP_VERSION) {
+        quic_ext_id = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_V1;
+    }
+
+    return quic_ext_id;
+}
+            
 /*
  * The collect extensions call back is called by the picotls stack upon
  * reception of a handshake message containing extensions. It should return true (1)
@@ -940,7 +955,11 @@ int picoquic_tls_collect_extensions_cb(ptls_t* tls, struct st_ptls_handshake_pro
     UNREFERENCED_PARAMETER(tls);
     UNREFERENCED_PARAMETER(properties);
 #endif
-    return type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION;
+    /* Find the context from the TLS context */
+    picoquic_tls_ctx_t* ctx =
+        (picoquic_tls_ctx_t*)((char*)properties - offsetof(struct st_picoquic_tls_ctx_t, handshake_properties));
+
+    return picoquic_tls_get_quic_extension_id(ctx->cnx);
 }
 
 void picoquic_tls_set_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ctx)
@@ -950,7 +969,7 @@ void picoquic_tls_set_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ct
         tls_ctx->ext_data, sizeof(tls_ctx->ext_data), &consumed);
 
     if (ret == 0) {
-        tls_ctx->ext[0].type = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION;
+        tls_ctx->ext[0].type = picoquic_tls_get_quic_extension_id(cnx);
         tls_ctx->ext[0].data.base = tls_ctx->ext_data;
         tls_ctx->ext[0].data.len = consumed;
         tls_ctx->ext[1].type = 0xFFFF;
@@ -982,7 +1001,7 @@ int picoquic_tls_collected_extensions_cb(ptls_t* tls, ptls_handshake_properties_
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)((char*)properties - offsetof(struct st_picoquic_tls_ctx_t, handshake_properties));
 
     for (int i_slot = 0; slots[i_slot].type != 0xFFFF; i_slot++) {
-        if (slots[i_slot].type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION) {
+        if (slots[i_slot].type == picoquic_tls_get_quic_extension_id(ctx->cnx)) {
             size_t copied_length = sizeof(ctx->ext_received);
 
             /* Retrieve the transport parameters */
