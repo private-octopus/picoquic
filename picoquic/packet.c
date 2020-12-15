@@ -1300,6 +1300,7 @@ int picoquic_incoming_retry(
 int picoquic_incoming_server_initial(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
+    size_t packet_length,
     struct sockaddr* addr_to,
     unsigned long if_index_to,
     picoquic_packet_header* ph,
@@ -1330,10 +1331,34 @@ int picoquic_incoming_server_initial(
                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
             }
             else {
-                ret = picoquic_decode_frames(cnx, cnx->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, ph->pn64, current_time);
-            }
+                /* Verify that the packet is long enough */
+                if (packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
+                    size_t byte_index = ph->offset;
+                    int ack_needed = 0;
+                    int skip_ret = 0;
 
+                    while (skip_ret == 0 && byte_index < ph->payload_length) {
+                        size_t frame_length = 0;
+                        int frame_is_pure_ack = 0;
+                        skip_ret = picoquic_skip_frame(&bytes[byte_index],
+                            ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
+                        byte_index += frame_length;
+                        if (frame_is_pure_ack == 0) {
+                            ack_needed = 1;
+                            break;
+                        }
+                    }
+                    if (ack_needed) {
+                        picoquic_log_app_message(cnx, "Server initial too short (%zu bytes)", packet_length);
+                        ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
+                    }
+                }
+                /* If no error, process the packet */
+                if (ret == 0) {
+                    ret = picoquic_decode_frames(cnx, cnx->path[0],
+                        bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, ph->pn64, current_time);
+                }
+            }
             /* processing of initial packet */
             if (ret == 0) {
                 ret = picoquic_tls_stream_process(cnx, NULL);
@@ -2013,7 +2038,7 @@ int picoquic_incoming_segment(
                         }
                         else {
                             /* TODO: this really depends on the current receive epoch */
-                            ret = picoquic_incoming_server_initial(cnx, bytes, addr_to, if_index_to, &ph, current_time);
+                            ret = picoquic_incoming_server_initial(cnx, bytes, packet_length, addr_to, if_index_to, &ph, current_time);
                         }
                     }
                 } else {
