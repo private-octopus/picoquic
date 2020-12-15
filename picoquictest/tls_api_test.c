@@ -9200,7 +9200,7 @@ int app_limit_cc_test_one(
     uint64_t picoseq_per_byte_1 = (1000000ull * 8) / 1;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_tp_t client_parameters;
-    uint64_t cwin_limit = 100000;
+    uint64_t cwin_limit = 120000;
     picoquic_connection_id_t initial_cid = { {0xac, 0xc1, 2, 3, 4, 5, 6, 7}, 8 };
     int ret = 0;
 
@@ -9316,7 +9316,7 @@ int app_limit_cc_test()
         23500000,
         21000000,
         21000000,
-        23500000 };
+        25000000 };
     int ret = 0;
 
     for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
