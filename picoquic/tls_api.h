@@ -39,6 +39,10 @@
 #define PICOQUIC_LABEL_QUIC_BASE NULL
 #define PICOQUIC_LABEL_QUIC_KEY_BASE "tls13 quic "
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int picoquic_master_tlscontext(picoquic_quic_t* quic, char const* cert_file_name, char const* key_file_name,
     char const * cert_root_file_name, const uint8_t* ticket_key, size_t ticket_key_length);
 
@@ -196,4 +200,7 @@ void picoquic_aes128_ecb_free(void* v_aesecb);
 
 void picoquic_aes128_ecb_encrypt(void* v_aesecb, uint8_t* output, const uint8_t* input, size_t len);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /* TLS_API_H */

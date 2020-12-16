@@ -25,7 +25,9 @@
 #include "picoquic.h"
 #include "picoquic_unified_log.h"
 
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 /* Set the text log file and start tracing into it.
  * Set to NULL value to stop text log.
  */
@@ -39,5 +41,7 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
 
 const char* picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
-
+#ifdef __cplusplus
+}
+#endif
 #endif /* PICOQUIC_LOGGER_H */
