@@ -32,6 +32,11 @@
 #include "picosocks.h"
 #include "picoquictest.h"
 #include "picoquictest_internal.h"
+#include "picoquic_logger.h"
+#include "autoqlog.h"
+#include "picoquic_binlog.h"
+#include "picoquic_config.h"
+#include "tls_api.h"
 
 extern "C" {
     int cplusplustest() {
