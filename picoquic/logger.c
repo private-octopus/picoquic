@@ -328,6 +328,9 @@ char const* picoquic_log_frame_names(uint64_t frame_type)
     case picoquic_frame_type_ack:
         frame_name = "ack";
         break;
+    case picoquic_frame_type_ack_mp:
+        frame_name = "ack_mp";
+        break;
     case picoquic_frame_type_path_challenge:
         frame_name = "path_challenge";
         break;
@@ -342,6 +345,9 @@ char const* picoquic_log_frame_names(uint64_t frame_type)
         break;
     case picoquic_frame_type_ack_ecn:
         frame_name = "ack_ecn";
+        break;
+    case picoquic_frame_type_ack_mp_ecn:
+        frame_name = "ack_mp_ecn";
         break;
     case picoquic_frame_type_retire_connection_id:
         frame_name = "retire_connection_id";
@@ -358,6 +364,12 @@ char const* picoquic_log_frame_names(uint64_t frame_type)
         break;
     case picoquic_frame_type_time_stamp:
         frame_name = "time_stamp";
+        break;
+    case picoquic_frame_type_qoe:
+        frame_name = "qoe";
+        break;
+    case picoquic_frame_type_path_status:
+        frame_name = "path_status";
         break;
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
@@ -637,9 +649,10 @@ size_t picoquic_log_stream_frame(FILE* F, const uint8_t* bytes, size_t bytes_max
     return byte_index + data_length;
 }
 
-size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_t bytes_max, int is_ecn)
+size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_t bytes_max, int is_ecn, int has_path_id)
 {
     size_t byte_index;
+    uint64_t path_id = 0;
     uint64_t num_block;
     uint64_t largest;
     uint64_t ack_delay;
@@ -647,7 +660,7 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, 
     int suspended = debug_printf_reset(1);
     int ret;
 
-    ret = picoquic_parse_ack_header(bytes, bytes_max, &num_block,
+    ret = picoquic_parse_ack_header(bytes, bytes_max, &num_block, (has_path_id) ? &path_id : NULL,
         &largest, &ack_delay, &byte_index, 0);
 
     (void)debug_printf_reset(suspended);
@@ -661,6 +674,10 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, 
     }
     else {
         fprintf(F, "    ACK (nb=%u)", (int)num_block);
+    }
+
+    if (has_path_id) {
+        fprintf(F, "    path=%" PRIu64 ",", path_id);
     }
 
     /* decoding the acks */
@@ -1316,6 +1333,83 @@ size_t picoquic_log_time_stamp_frame(FILE* F, const uint8_t* bytes, size_t bytes
     return byte_index;
 }
 
+size_t picoquic_log_qoe_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+{
+    const uint8_t* bytes_end = bytes + bytes_max;
+    const uint8_t* bytes0 = bytes;
+    uint64_t path_id;
+    uint64_t length;
+    size_t byte_index = 0;
+
+
+    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &length)) == NULL ||
+        (bytes - bytes0) + length > bytes_max) {
+        fprintf(F, "    Malformed QOE frame: ");
+        /* log format error */
+        for (size_t i = 0; i < bytes_max && i < 8; i++) {
+            fprintf(F, "%02x", bytes0[i]);
+        }
+        if (bytes_max > 8) {
+            fprintf(F, "...");
+        }
+        fprintf(F, "\n");
+        byte_index = bytes_max;
+    }
+    else {
+        fprintf(F, "    QOE, path: %" PRIu64 ", length: %" PRIu64 ", v: ",
+            path_id, length);
+        for (size_t i = 0; i < 10 && i < length; i++) {
+            fprintf(F, "%02x", bytes[i]);
+        }
+        if (length > 10) {
+            fprintf(F, "...");
+        }
+        fprintf(F, "\n");
+
+        byte_index = (bytes - bytes0) + length;
+    }
+
+    return byte_index;
+}
+
+size_t picoquic_log_path_status_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+{
+    const uint8_t* bytes_end = bytes + bytes_max;
+    const uint8_t* bytes0 = bytes;
+    uint64_t path_id;
+    uint64_t status;
+    uint64_t priority;
+
+    size_t byte_index = 0;
+
+
+    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &status)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &priority)) == NULL) {
+        fprintf(F, "    Malformed Path Status frame: ");
+        /* log format error */
+        for (size_t i = 0; i < bytes_max && i < 8; i++) {
+            fprintf(F, "%02x", bytes0[i]);
+        }
+        if (bytes_max > 8) {
+            fprintf(F, "...");
+        }
+        fprintf(F, "\n");
+        byte_index = bytes_max;
+    }
+    else {
+        fprintf(F, "    Path Status, path: %" PRIu64 ", status: %" PRIu64 ", priority:  %" PRIu64 "\n",
+            path_id, status, priority);
+
+        byte_index = (bytes - bytes0);
+    }
+
+    return byte_index;
+}
+
 void picoquic_log_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_t length)
 {
     size_t byte_index = 0;
@@ -1349,10 +1443,16 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_
 
         switch (frame_id) {
         case picoquic_frame_type_ack:
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0);
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0, 0);
             break;
         case picoquic_frame_type_ack_ecn:
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1);
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1, 0);
+            break;
+        case picoquic_frame_type_ack_mp:
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0, 1);
+            break;
+        case picoquic_frame_type_ack_mp_ecn:
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1, 1);
             break;
         case picoquic_frame_type_retire_connection_id:
             byte_index += picoquic_log_retire_connection_id_frame(F, bytes + byte_index, length - byte_index);
@@ -1443,6 +1543,12 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_
             break;
         case picoquic_frame_type_time_stamp:
             byte_index += picoquic_log_time_stamp_frame(F, bytes + byte_index, length - byte_index);
+            break;
+        case picoquic_frame_type_qoe:
+            byte_index += picoquic_log_qoe_frame(F, bytes + byte_index, length - byte_index);
+            break;
+        case picoquic_frame_type_path_status:
+            byte_index += picoquic_log_path_status_frame(F, bytes + byte_index, length - byte_index);
             break;
 
         default: {

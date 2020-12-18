@@ -131,7 +131,11 @@ typedef enum {
     picoquic_frame_type_datagram = 0x30,
     picoquic_frame_type_datagram_l = 0x31,
     picoquic_frame_type_ack_frequency = 0xAF,
-    picoquic_frame_type_time_stamp = 757
+    picoquic_frame_type_time_stamp = 757,
+    picoquic_frame_type_ack_mp = 0xbaba0,
+    picoquic_frame_type_ack_mp_ecn = 0xbaba1,
+    picoquic_frame_type_qoe = 0xbaba2,
+    picoquic_frame_type_path_status = 0xbaba3
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -960,6 +964,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int did_receive_short_initial : 1; /* whether peer sent unpadded initial packet */
     unsigned int ack_ignore_order_local : 1; /* Request peer to not generate immediate ack if out of order packet received */
     unsigned int ack_ignore_order_remote : 1; /* Peer requested no immediate ack if out of order packet received */
+    unsigned int is_multipath_enabled : 1; /* Usage of multipath was negotiated */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -1300,7 +1305,7 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
  */
 int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn);
+    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn, int has_path_id);
 
 /* Computation of ack delay max and ack gap, based on RTT and Data Rate.
  * If ACK Frequency extension is used, these functions will compute the values
@@ -1377,7 +1382,7 @@ int picoquic_parse_stream_header(
 
 int picoquic_parse_ack_header(
     uint8_t const* bytes, size_t bytes_max,
-    uint64_t* num_block, uint64_t* largest,
+    uint64_t* num_block, uint64_t* path_id, uint64_t* largest,
     uint64_t* ack_delay, size_t* consumed,
     uint8_t ack_delay_exponent);
 const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,

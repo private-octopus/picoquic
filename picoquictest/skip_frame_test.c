@@ -219,6 +219,19 @@ static uint8_t test_frame_type_time_stamp[] = {
     0x44, 0
 };
 
+static uint8_t test_frame_type_qoe[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_qoe >> 24)), (uint8_t)(picoquic_frame_type_qoe >> 16),
+    (uint8_t)(picoquic_frame_type_qoe >> 8), (uint8_t)(picoquic_frame_type_qoe & 0xFF),
+    0x11, 0x08, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+};
+
+static uint8_t test_frame_type_path_status[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_status >> 24)), (uint8_t)(picoquic_frame_type_path_status >> 16),
+    (uint8_t)(picoquic_frame_type_path_status >> 8), (uint8_t)(picoquic_frame_type_path_status & 0xFF),
+    0x11, 0x01, 0x01
+};
+
+
 #define TEST_SKIP_ITEM(n, x, a, l, e) \
     {                              \
         n, x, sizeof(x), a, l, e     \
@@ -254,7 +267,9 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 1, 0, 3),
     TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3),
     TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3),
-    TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3)
+    TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3),
+    TEST_SKIP_ITEM("qoe", test_frame_type_qoe, 1, 0, 3),
+    TEST_SKIP_ITEM("path_status", test_frame_type_path_status, 0, 0, 3)
 };
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
@@ -388,6 +403,18 @@ static uint8_t test_frame_stream_hang[] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
 
+static uint8_t test_frame_type_qoe_bad[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_qoe >> 24)), (uint8_t)(picoquic_frame_type_qoe >> 16),
+    (uint8_t)(picoquic_frame_type_qoe >> 8), (uint8_t)(picoquic_frame_type_qoe & 0xFF),
+    0x11, 0x80, 0xff, 0xff, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+};
+
+static uint8_t test_frame_type_path_status_bad[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_status >> 24)), (uint8_t)(picoquic_frame_type_path_status >> 16),
+    (uint8_t)(picoquic_frame_type_path_status >> 8), (uint8_t)(picoquic_frame_type_path_status & 0xFF),
+    0x11, 0x01, 0x80
+};
+
 
 
 test_skip_frames_t test_frame_error_list[] = {
@@ -407,7 +434,9 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM("bad_ack_blocks", test_frame_type_bad_ack_blocks, 1, 0, 3),
     TEST_SKIP_ITEM("bad_crypto_hs", test_frame_type_bad_crypto_hs, 0, 0, 2),
     TEST_SKIP_ITEM("bad_datagram", test_frame_type_bad_datagram, 1, 0, 3),
-    TEST_SKIP_ITEM("stream_hang", test_frame_stream_hang, 1, 0, 3)
+    TEST_SKIP_ITEM("stream_hang", test_frame_stream_hang, 1, 0, 3),
+    TEST_SKIP_ITEM("bad_qoe", test_frame_type_qoe_bad, 1, 0, 3),
+    TEST_SKIP_ITEM("bad_path_status", test_frame_type_path_status_bad, 0, 1, 3)
 };
 
 size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_skip_frames_t);
