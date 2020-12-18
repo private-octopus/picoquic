@@ -1368,7 +1368,7 @@ size_t picoquic_log_qoe_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
         }
         fprintf(F, "\n");
 
-        byte_index = (bytes - bytes0) + length;
+        byte_index = (bytes - bytes0) + (size_t)length;
     }
 
     return byte_index;
