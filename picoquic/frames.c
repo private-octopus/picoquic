@@ -3634,7 +3634,7 @@ const uint8_t* picoquic_parse_qoe_frame(const uint8_t* bytes, const uint8_t* byt
 {
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, path_id)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, length)) != NULL) {
-        if (bytes + *length > bytes_max) {
+        if (*length > (uint64_t)(bytes_max - bytes)) {
             bytes = NULL;
         }
         else {

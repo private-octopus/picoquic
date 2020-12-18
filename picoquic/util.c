@@ -603,15 +603,16 @@ int picoquic_file_delete(char const * file_name, int * last_err)
   * These functions return NULL in case of a failure (insufficient buffer).
   */
 
-const uint8_t* picoquic_frames_fixed_skip(const uint8_t* bytes, const uint8_t* bytes_max, size_t size)
+const uint8_t* picoquic_frames_fixed_skip(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t size)
 {
-    return (bytes += size) <= bytes_max ? bytes : NULL;
+    /* Write this test so as to avoid integer overflows, especially on 32 bit arch. */
+    return size <= (uint64_t)(bytes_max - bytes) ? (bytes + size) : NULL;
 }
 
 
 const uint8_t* picoquic_frames_varint_skip(const uint8_t* bytes, const uint8_t* bytes_max)
 {
-    return bytes < bytes_max ? picoquic_frames_fixed_skip(bytes, bytes_max, VARINT_LEN(bytes)) : NULL;
+    return bytes < bytes_max ? picoquic_frames_fixed_skip(bytes, bytes_max, (uint64_t) VARINT_LEN(bytes)) : NULL;
 }
 
 
@@ -697,7 +698,7 @@ const uint8_t* picoquic_frames_length_data_skip(const uint8_t* bytes, const uint
 {
     uint64_t length;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) != NULL) {
-        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (size_t)length);
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, length);
     }
     return bytes;
 }

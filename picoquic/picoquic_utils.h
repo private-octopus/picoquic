@@ -148,7 +148,7 @@ FILE * picoquic_file_close(FILE * F);
 int picoquic_file_delete(char const* file_name, int* last_err);
 
 /* Skip and decoding functions */
-const uint8_t* picoquic_frames_fixed_skip(const uint8_t * bytes, const uint8_t * bytes_max, size_t size);
+const uint8_t* picoquic_frames_fixed_skip(const uint8_t * bytes, const uint8_t * bytes_max, uint64_t size);
 const uint8_t* picoquic_frames_varint_skip(const uint8_t * bytes, const uint8_t * bytes_max);
 const uint8_t* picoquic_frames_varint_decode(const uint8_t * bytes, const uint8_t * bytes_max, uint64_t * n64);
 const uint8_t* picoquic_frames_varlen_decode(const uint8_t * bytes, const uint8_t * bytes_max, size_t * n);
