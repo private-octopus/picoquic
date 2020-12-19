@@ -250,6 +250,7 @@ typedef struct st_picoquic_tp_t {
     int enable_time_stamp; /* (x&1) want, (x&2) can */
     uint64_t min_ack_delay;
     int do_grease_quic_bit;
+    int enable_multipath;
 } picoquic_tp_t;
 
 /*

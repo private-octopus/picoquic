@@ -458,6 +458,9 @@ char const* picoquic_log_tp_name(picoquic_tp_enum tp_number)
     case picoquic_tp_grease_quic_bit:
         tp_name = "grease_quic_bit";
         break;
+    case picoquic_tp_enable_multipath:
+        tp_name = "enable_multipath";
+        break;
     default:
         break;
     }
@@ -1338,14 +1341,14 @@ size_t picoquic_log_qoe_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
     const uint8_t* bytes_end = bytes + bytes_max;
     const uint8_t* bytes0 = bytes;
     uint64_t path_id;
-    uint64_t length;
+    size_t length;
     size_t byte_index = 0;
 
 
     if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &length)) == NULL ||
-        (bytes - bytes0) + length > bytes_max) {
+        (bytes = picoquic_frames_varlen_decode(bytes, bytes_end, &length)) == NULL ||
+        length > bytes_max - (bytes - bytes0)) {
         fprintf(F, "    Malformed QOE frame: ");
         /* log format error */
         for (size_t i = 0; i < bytes_max && i < 8; i++) {

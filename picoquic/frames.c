@@ -3630,11 +3630,11 @@ const uint8_t* picoquic_skip_qoe_frame(const uint8_t* bytes, const uint8_t* byte
 }
 
 const uint8_t* picoquic_parse_qoe_frame(const uint8_t* bytes, const uint8_t* bytes_max,
-    uint64_t* path_id, uint64_t* length, const uint8_t ** qoe_data)
+    uint64_t* path_id, size_t* length, const uint8_t ** qoe_data)
 {
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, path_id)) != NULL &&
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, length)) != NULL) {
-        if (*length > (uint64_t)(bytes_max - bytes)) {
+        (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, length)) != NULL) {
+        if (*length > (size_t)(bytes_max - bytes)) {
             bytes = NULL;
         }
         else {
@@ -3648,7 +3648,7 @@ const uint8_t* picoquic_parse_qoe_frame(const uint8_t* bytes, const uint8_t* byt
 const uint8_t* picoquic_decode_qoe_frame(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_cnx_t* cnx)
 {
     uint64_t path_id = 0;
-    uint64_t length = 0;
+    size_t length = 0;
     uint8_t* qoe_data = NULL;
 
     /* This code assumes that the frame type is already skipped */

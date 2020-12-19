@@ -472,7 +472,8 @@ typedef enum {
     picoquic_tp_enable_loss_bit = 0x1057,
     picoquic_tp_min_ack_delay = 0xff02de1a,
     picoquic_tp_enable_time_stamp = 0x7158, /* x&1 = */
-    picoquic_tp_grease_quic_bit = 0x2ab2
+    picoquic_tp_grease_quic_bit = 0x2ab2,
+    picoquic_tp_enable_multipath = 0xbaba
 } picoquic_tp_enum;
 
 /* Callback for converting binary log to quic log at the end of a connection. 
