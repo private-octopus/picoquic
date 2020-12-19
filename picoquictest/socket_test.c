@@ -33,7 +33,7 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
     int bytes_recv = 0;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_dest;
-    int dest_if;
+    int dest_if = 0;
     struct sockaddr_storage addr_back;
     int server_address_length = (server_addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
 

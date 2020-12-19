@@ -1961,7 +1961,7 @@ static int check_vn_invariant(uint8_t* packet, size_t packet_length, uint8_t* re
     /* Check that response version is 0 */
     for (size_t i = 1; ret == 0 && i < 5; i++) {
         if (response[i] != 0) {
-            DBG_PRINTF("Version ID not zero, packet[%zu] = 0x%02x", response[i]);
+            DBG_PRINTF("Version ID not zero, packet[%zu] = 0x%02x", i, response[i]);
             ret = -1;
         }
     }
@@ -9271,7 +9271,7 @@ int app_limit_cc_test_one(
                     int nb_comma = 0;
                     int c_index = 0;
 
-                    while (nb_comma < 5 && buffer[c_index] != 0 && c_index < 512) {
+                    while (nb_comma < 5 && c_index < 512 && buffer[c_index] != 0) {
                         if (buffer[c_index] == ',') {
                             nb_comma++;
                         }

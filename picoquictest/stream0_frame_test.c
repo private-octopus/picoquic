@@ -851,7 +851,7 @@ int stream_rank_test_one(size_t n, uint64_t *rank, uint64_t *stream_id,
 
         if (s != stream_id[i]) {
             DBG_PRINTF("For rank: %d, uni: %d, server: %d, expect stream %d, got %d\n",
-                (int)rank[i], is_unidir, is_server_stream, (int)stream_id[i], (int)s);
+                (int)rank[i], is_unidir, (is_server_stream)?0:1, (int)stream_id[i], (int)s);
             ret = -1;
         }
     }

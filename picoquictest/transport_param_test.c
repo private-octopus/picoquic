@@ -566,7 +566,7 @@ int transport_param_one_test(int mode, int grease, uint32_t version, uint32_t pr
     picoquic_quic_t * quic_ctx;
     picoquic_cnx_t * test_cnx;
     uint8_t buffer[256];
-    size_t encoded, decoded; 
+    size_t encoded = 0, decoded = 0; 
     uint64_t simulated_time = 0;
 
     ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
@@ -649,7 +649,7 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
     picoquic_quic_t * quic_ctx = NULL;
     picoquic_cnx_t * test_cnx = NULL;
     uint64_t simulated_time = 0;
-    size_t decoded;
+    size_t decoded = 0;
 
     ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
 

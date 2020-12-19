@@ -1746,7 +1746,7 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
                         ret = -1;
                     }
                     else {
-                        for (uint16_t i = 0; i < extension_length; i++) {
+                        for (uint64_t i = 0; i < extension_length; i++) {
                             fprintf(F, "%02x", bytes[byte_index++]);
                         }
                         fprintf(F, "\n");
