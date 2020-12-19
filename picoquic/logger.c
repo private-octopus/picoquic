@@ -1361,7 +1361,7 @@ size_t picoquic_log_qoe_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
         byte_index = bytes_max;
     }
     else {
-        fprintf(F, "    QOE, path: %" PRIu64 ", length: %" PRIu64 ", v: ",
+        fprintf(F, "    QOE, path: %" PRIu64 ", length: %zu, v: ",
             path_id, length);
         for (size_t i = 0; i < 10 && i < length; i++) {
             fprintf(F, "%02x", bytes[i]);
