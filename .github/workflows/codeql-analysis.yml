@@ -28,7 +28,6 @@ jobs:
       - run: |
           sudo apt-get install -y libssl-dev
           ./ci/build_picotls.sh
-          ./ci/build_picoquic.sh
           mkdir build
           cd build
           cmake ..
