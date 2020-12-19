@@ -3649,7 +3649,7 @@ const uint8_t* picoquic_decode_qoe_frame(const uint8_t* bytes, const uint8_t* by
 {
     uint64_t path_id = 0;
     size_t length = 0;
-    uint8_t* qoe_data = NULL;
+    const uint8_t* qoe_data = NULL;
 
     /* This code assumes that the frame type is already skipped */
     if ((bytes = picoquic_parse_qoe_frame(bytes, bytes_max, &path_id, &length, &qoe_data)) != NULL) {
