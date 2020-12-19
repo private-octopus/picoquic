@@ -835,13 +835,13 @@ int stream_output_test()
  */
 
 int stream_rank_test_one(size_t n, uint64_t *rank, uint64_t *stream_id, 
-    unsigned int is_unidir, unsigned int is_server_stream)
+    unsigned int is_unidir, unsigned int client_mode)
 {
     int ret = 0;
 
     for (size_t i = 0; i < n; i++) {
         uint64_t r = STREAM_RANK_FROM_ID(stream_id[i]);
-        uint64_t s = STREAM_ID_FROM_RANK(rank[i], is_server_stream, is_unidir);
+        uint64_t s = STREAM_ID_FROM_RANK(rank[i], client_mode, is_unidir);
 
         if (r != rank[i]) {
             DBG_PRINTF("For stream: %d, expect rank: %d, got %d\n",
@@ -851,7 +851,7 @@ int stream_rank_test_one(size_t n, uint64_t *rank, uint64_t *stream_id,
 
         if (s != stream_id[i]) {
             DBG_PRINTF("For rank: %d, uni: %d, server: %d, expect stream %d, got %d\n",
-                (int)rank[i], is_unidir, (is_server_stream)?0:1, (int)stream_id[i], (int)s);
+                (int)rank[i], is_unidir, client_mode, (int)stream_id[i], (int)s);
             ret = -1;
         }
     }
@@ -869,10 +869,10 @@ int stream_rank_test()
     size_t n = sizeof(stream_rank) / sizeof(uint64_t);
     int ret = 0;
 
-    ret |= stream_rank_test_one(n, stream_rank, stream_client_bidir, 0, 0);
-    ret |= stream_rank_test_one(n, stream_rank, stream_client_unidir, 1, 0);
-    ret |= stream_rank_test_one(n, stream_rank, stream_server_bidir, 0, 1);
-    ret |= stream_rank_test_one(n, stream_rank, stream_server_unidir, 1, 1);
+    ret |= stream_rank_test_one(n, stream_rank, stream_client_bidir, 0, 1);
+    ret |= stream_rank_test_one(n, stream_rank, stream_client_unidir, 1, 1);
+    ret |= stream_rank_test_one(n, stream_rank, stream_server_bidir, 0, 0);
+    ret |= stream_rank_test_one(n, stream_rank, stream_server_unidir, 1, 0);
 
     return ret;
 }
