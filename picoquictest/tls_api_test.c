@@ -1540,7 +1540,7 @@ static int wait_application_aead_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-static int wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
+int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t time_out_delay)
 {
     int ret = 0;
@@ -3651,7 +3651,7 @@ static int mtu_drop_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64
 
     /* Send for 1 seconds, check that MTU is discovered, and then drop the MTU size in the s_to_c direction */
     if (ret == 0) {
-        ret = wait_for_timeout(test_ctx, &simulated_time, 1000000);
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 1000000);
     }
 
     if (ret == 0) {

@@ -3585,13 +3585,134 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
  * The version 1 of Quic only supports path migration, not full multipath.
  * This code finds whether there is a path being probed that could become the
  * default path, or that needs an immediate challenge sent or replied to.
- *
  * If no other path is suitable, the code returns the default path.
+ *
+ * If multipath is enabled, the logic changes. Paths have two attributes:
+ * availability, and for paths that are available, priority. The availability
+ * criteria evolves over time:
+ * - as long as continuity is not verified, a path is not available.
+ * - if continuity is verified but the path is not "validated", the path
+ *   is marked as standby.
+ * - if the path is validated and no other path has a higher priority,
+ *   the path is available.
+ * If several paths are available at the same priority level, the code
+ * checks whether one of them is "ready to send", i.e. is not blocked
+ * by either pacing or congestion control. The first path for which the
+ * condition is verified will be selected.
+ *
+ * There are potential corner cases. If a challenge or a response is required
+ * on a path, that takes priority over sending data. A challenge may be required
+ * on a "standby" path to test continuity if no data has been received for
+ * a long time, or maybe following a packet loss episode.
+ *
+ * If all available paths are blocked by congestion control and acknowledgements
+ * need to be sent, the lowest RTT path not blocked by pacing is selected.
+ *
+ * Need to consider special code for dealing with packet losses. If a path
+ * exhibits persistent packet loss, it loses its priority and moves to "standby"
+ * state. At that point, the "challenge needed" flag is set, triggering a
+ * continuity test.
  */
+
+static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time)
+{
+    int path_id = -1;
+    int highest_priority = -1;
+    int data_path_cwin = -1;
+    int data_path_pacing = -1;
+    int challenge_path = -1;
+    uint64_t pacing_time_next = UINT64_MAX;
+    uint64_t challenge_time_next = UINT64_MAX;
+
+    for (int i = 0; i < cnx->nb_paths; i++) {
+        if (cnx->path[i]->path_is_demoted) {
+            continue;
+        }
+        else if (cnx->path[i]->challenge_failed) {
+            picoquic_demote_path(cnx, i, current_time);
+            continue;
+        }
+        else
+        {
+            if (cnx->path[i]->response_required) {
+                challenge_path = i;
+                cnx->path[i]->responder++;
+                break;
+            }
+            else if (cnx->path[i]->challenge_required && !cnx->path[i]->challenge_verified) {
+                uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, cnx->path[i]);
+                if (cnx->path[i]->challenge_repeat_count == 0 ||
+                    current_time >= next_challenge_time) {
+                    cnx->path[i]->challenger++;
+                    challenge_path = i;
+                    break;
+                }
+                else if (next_challenge_time < challenge_time_next) {
+                    challenge_time_next = next_challenge_time;
+                }
+            }
+            if (cnx->path[i]->challenge_verified) {
+                /* check priority */
+                if (cnx->path[i]->path_priority > highest_priority) {
+                    highest_priority = cnx->path[i]->path_priority;
+                    data_path_cwin = -1;
+                    data_path_pacing = -1;
+                    pacing_time_next = UINT64_MAX;
+                }
+                if (cnx->path[i]->path_priority >= highest_priority) {
+                    cnx->path[i]->polled++;
+                    if (picoquic_is_sending_authorized_by_pacing(cnx, cnx->path[i], current_time, &pacing_time_next)) {
+                        data_path_pacing = i;
+
+                        if (cnx->path[i]->bytes_in_transit < cnx->path[i]->cwin) {
+                            data_path_cwin = i;
+                        }
+                        else {
+                            cnx->path[i]->congested++;
+                        }
+                    }
+                    else {
+                        cnx->path[i]->paced++;
+                    }
+                }
+            }
+        }
+    }
+
+    if (challenge_path >= 0) {
+        path_id = challenge_path;
+    }
+    else if (data_path_cwin >= 0) {
+        path_id = data_path_cwin;
+    }
+    else if (data_path_pacing >= 0) {
+        path_id = data_path_pacing;
+    }
+    else {
+        uint64_t path_wake_time = pacing_time_next;
+        if (challenge_time_next < path_wake_time) {
+            path_wake_time = challenge_time_next;
+        }
+        if (path_wake_time < *next_wake_time) {
+            *next_wake_time = path_wake_time;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+        }
+        path_id = 0;
+    }
+
+    cnx->path[path_id]->selected++;
+
+    return path_id;
+}
 
 static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time, uint64_t * next_wake_time)
 {
     int path_id = -1;
+
+    if (cnx->is_multipath_enabled && cnx->cnx_state >= picoquic_state_ready) {
+        return picoquic_select_next_path_mp(cnx, current_time, next_wake_time);
+    }
+
     /* Select the path */
     for (int i = 1; i < cnx->nb_paths; i++) {
         if (cnx->path[i]->path_is_demoted) {

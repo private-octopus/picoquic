@@ -244,6 +244,7 @@ int chacha20_test();
 int cid_quiescence_test();
 int migration_controlled_test();
 int migration_mtu_drop_test();
+int multipath_basic_test();
 int token_reuse_api_test();
 int grease_quic_bit_test();
 int grease_quic_bit_one_way_test();

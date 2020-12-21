@@ -239,6 +239,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cid_quiescence", cid_quiescence_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
+    { "multipath_basic", multipath_basic_test },
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },
     { "pn_random", pn_random_test },

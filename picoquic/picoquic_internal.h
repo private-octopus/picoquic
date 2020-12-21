@@ -767,6 +767,9 @@ typedef struct st_picoquic_path_t {
     unsigned int is_nat_challenge : 1;
     unsigned int got_long_packet : 1;
 
+    /* Path priority, for multipath management */
+    int path_priority;
+
     /* number of retransmissions observed on path */
     uint64_t retrans_count;
 
@@ -840,6 +843,13 @@ typedef struct st_picoquic_path_t {
     uint64_t nb_losses_reported;
     uint64_t q_square;
 
+    /* Debug MP */
+    int responder;
+    int challenger;
+    int polled;
+    int paced;
+    int congested;
+    int selected;
 } picoquic_path_t;
 
 /* Crypto context. There are four such contexts:
