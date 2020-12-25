@@ -770,9 +770,17 @@ typedef struct st_picoquic_path_t {
     /* Path priority, for multipath management */
     int path_priority;
 
-    /* number of retransmissions observed on path */
+    /* Management of retransmissions in a path.
+     * The "last_1rtt_acknowledged" is used for the RACK algorithm, per path, to avoid
+     * declaring packets lost just because another path is delivering them faster.
+     * The "number of retransmit" counts the number of unsuccessful retransmissions; it
+     * is reset to zero if a new packet is acknowledged.
+     */
+    uint64_t last_1rtt_acknowledged;
+    uint64_t last_1rtt_acknowledged_at;
+    uint64_t last_packet_received_at;
+    uint64_t nb_retransmit;
     uint64_t retrans_count;
-
     /* Time measurement */
     int64_t phase_delay;
     uint64_t max_ack_delay;
@@ -844,12 +852,14 @@ typedef struct st_picoquic_path_t {
     uint64_t q_square;
 
     /* Debug MP */
+    int lost_after_delivered;
     int responder;
     int challenger;
     int polled;
     int paced;
     int congested;
     int selected;
+    int lost;
 } picoquic_path_t;
 
 /* Crypto context. There are four such contexts:
@@ -1105,6 +1115,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_path_t ** path;
     int nb_paths;
     int nb_path_alloc;
+    int last_path_polled;
     uint64_t path_sequence_next;
 
     /* Management of the CNX-ID stash */

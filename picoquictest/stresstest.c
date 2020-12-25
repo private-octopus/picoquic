@@ -1190,7 +1190,7 @@ typedef struct st_test_random_tester_t {
 static int uniform_test[4] = { 31, 32, 100, 1000 };
 
 static test_random_tester_t random_cases[] = {
-#if 1
+#ifndef COMPUTING_RANDOM_TABLE
     { 0xdeadbeefbabac001ull,
         { 0x5e15223d01b20defull, 0x9ede0d895c9bd2a6ull, 0xe3a0ed91f612c17full },
         { 0, 0, 70, 197 } },

@@ -1700,6 +1700,16 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
             picoquic_path_t * old_path = p->send_path;
 
             if (old_path != NULL) {
+                if (pc == picoquic_packet_context_application &&
+                    (p->sequence_number > old_path->last_1rtt_acknowledged ||
+                        old_path->last_1rtt_acknowledged == UINT64_MAX)) {
+                    old_path->last_1rtt_acknowledged = p->sequence_number;
+                    old_path->nb_retransmit = 0;
+                    if (old_path != cnx->path[0]) {
+                        picoquic_update_path_rtt(cnx, old_path, p->send_time, current_time, 0);
+                    }
+                }
+
                 if (p->length + p->checksum_overhead > old_path->send_mtu) {
                     old_path->send_mtu = p->length + p->checksum_overhead;
                     if (old_path->send_mtu > old_path->send_mtu_max_tried) {
@@ -1981,6 +1991,8 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
             /* Computation per RFC 6298 */
             int64_t delta_rtt = rtt_estimate - old_path->smoothed_rtt;
             int64_t delta_rtt_average = 0;
+            uint64_t alt_timer;
+
             old_path->smoothed_rtt += delta_rtt / 8;
 
             if (delta_rtt < 0) {
@@ -2009,6 +2021,11 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
 
             old_path->retransmit_timer = old_path->smoothed_rtt + 4 * old_path->rtt_variant +
                 cnx->remote_parameters.max_ack_delay;
+            alt_timer = ((5 * old_path->smoothed_rtt) >> 2) + cnx->remote_parameters.max_ack_delay;
+            if (old_path->retransmit_timer < alt_timer) {
+                old_path->retransmit_timer = alt_timer;
+            }
+
         }
         old_path->rtt_sample = rtt_estimate;
 
@@ -2032,34 +2049,27 @@ static picoquic_packet_t* picoquic_find_acked_packet(picoquic_cnx_t* cnx, uint64
 
     /* Check whether this is a new acknowledgement */
     if (largest > pkt_ctx->highest_acknowledged || pkt_ctx->highest_acknowledged == (uint64_t)((int64_t)-1)) {
+
         pkt_ctx->highest_acknowledged = largest;
         pkt_ctx->highest_acknowledged_time = current_time;
         pkt_ctx->ack_of_ack_requested = 0;
         *is_new_ack = 1;
 
-        if (ack_delay < PICOQUIC_ACK_DELAY_MAX) {
-            /* if the ACK is reasonably recent, use it to update the RTT */
-            /* find the stored copy of the largest acknowledged packet */
+        while (packet != NULL && packet->previous_packet != NULL && packet->sequence_number < largest) {
+            packet = packet->previous_packet;
+        }
 
-            while (packet != NULL && packet->previous_packet != NULL && packet->sequence_number < largest) {
-                packet = packet->previous_packet;
-            }
-
-            if (packet == NULL || packet->sequence_number != largest) {
-                /* There is no copy of this packet in store. It may have
-                 * been deleted because too old, or maybe already
-                 * retransmitted */
-            }
-            else {
-                picoquic_path_t* old_path = packet->send_path;
-
-                if (old_path != NULL) {
-                    picoquic_update_path_rtt(cnx, old_path, packet->send_time, current_time, ack_delay);
-                }
-            }
+        if (packet == NULL || packet->sequence_number != largest) {
+            /* There is no copy of this packet in store. It may have
+             * been deleted because too old, or maybe already
+             * retransmitted */
         }
         else {
-            *is_new_ack = 0;
+            picoquic_path_t* old_path = packet->send_path;
+
+            if (old_path != NULL) {
+                picoquic_update_path_rtt(cnx, old_path, packet->send_time, current_time, ack_delay);
+            }
         }
     }
 
@@ -2504,15 +2514,15 @@ static int picoquic_process_ack_range(
 
                 if (old_path != NULL) {
                     old_path->delivered += p->length;
+                    if (pc == picoquic_packet_context_application && 
+                        (p->sequence_number > old_path->last_1rtt_acknowledged ||
+                            old_path->last_1rtt_acknowledged == UINT64_MAX)){
+                        old_path->last_1rtt_acknowledged = p->sequence_number;
+                        old_path->last_1rtt_acknowledged_at = current_time;
+                        old_path->nb_retransmit = 0;
+                    }
 
                     if (cnx->congestion_alg != NULL) {
-#if 0
-                        if (cnx->pkt_ctx[pc].nb_retransmit >= 2 && p->sequence_number >= cnx->pkt_ctx[pc].retransmit_sequence) {
-                            cnx->congestion_alg->alg_notify(cnx, old_path,
-                                picoquic_congestion_notification_reset,
-                                0, 0, p->length, 0, current_time);
-                        }
-#endif
                         cnx->congestion_alg->alg_notify(cnx, old_path,
                             picoquic_congestion_notification_acknowledgement,
                             0, 0, p->length, 0, current_time);

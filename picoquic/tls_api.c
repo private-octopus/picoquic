@@ -52,9 +52,6 @@
 #if !defined(_WINDOWS) || defined(_WINDOWS64)
 #include "picotls/fusion.h"
 #endif
-#if 0
-#include "picotls/ffx.h"
-#endif
 #include "tls_api.h"
 #include <openssl/pem.h>
 #include <openssl/err.h>

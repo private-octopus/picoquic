@@ -305,12 +305,6 @@ int netperf_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
 
         nb_trials++;
-#if 0
-        /* Optional hook for step by step debugging */
-        if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->path[0]->bytes_in_transit == 0) {
-            was_active = 0;
-        }
-#endif
 
         ret = netperf_step(test_ctx, simulated_time, &was_active, send_buffer, send_buffer_size);
 

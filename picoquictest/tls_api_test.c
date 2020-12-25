@@ -1432,11 +1432,6 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
 
         nb_trials++;
-#if 1
-        if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->path[0]->bytes_in_transit == 0) {
-            was_active = 0;
-        }
-#endif
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
@@ -7685,7 +7680,7 @@ int bbr_slow_long_test()
 
 int bbr_one_second_test()
 {
-    uint64_t max_completion_time = 128000000;
+    uint64_t max_completion_time = 90000000;
     uint64_t latency = 1000000;
     uint64_t jitter = 3000;
     uint64_t buffer = 2 * (latency + jitter);

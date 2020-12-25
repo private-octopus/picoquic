@@ -50,11 +50,21 @@ static int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int m
 }
 
 /* Add the additional links for multipath scenario */
-static void multipath_test_kill_links(picoquic_test_tls_api_ctx_t* test_ctx)
+static void multipath_test_kill_links(picoquic_test_tls_api_ctx_t* test_ctx, int link_id)
 {
     /* Make sure that nothing gets sent on the old links */
-    test_ctx->c_to_s_link->next_send_time = UINT64_MAX;
-    test_ctx->s_to_c_link->next_send_time = UINT64_MAX;
+    if (link_id == 0) {
+        test_ctx->c_to_s_link->next_send_time = UINT64_MAX;
+        test_ctx->c_to_s_link->is_switched_off = 1;
+        test_ctx->s_to_c_link->next_send_time = UINT64_MAX;
+        test_ctx->s_to_c_link->is_switched_off = 1;
+    }
+    else {
+        test_ctx->c_to_s_link_2->next_send_time = UINT64_MAX;
+        test_ctx->c_to_s_link_2->is_switched_off = 1;
+        test_ctx->s_to_c_link_2->next_send_time = UINT64_MAX;
+        test_ctx->s_to_c_link_2->is_switched_off = 1;
+    }
 }
 
 /* wait until the migration completes */
@@ -119,11 +129,6 @@ int wait_client_migration_done(picoquic_test_tls_api_ctx_t* test_ctx,
 static test_api_stream_desc_t test_scenario_multipath[] = {
     { 4, 0, 257, 1000000 },
     { 8, 4, 257, 1000000 }
-#if 0
-    ,
-    { 12, 8, 257, 1000000 },
-    { 16, 12, 257, 1000000 }
-#endif
 };
 
 int migration_test_one(int mtu_drop)
@@ -193,7 +198,7 @@ int migration_test_one(int mtu_drop)
 
     /* Kill the old links, so nothing more can be sent there */
     if (ret == 0) {
-        multipath_test_kill_links(test_ctx);
+        multipath_test_kill_links(test_ctx, 0);
     }
 
     /* Perform a data sending loop */
@@ -315,7 +320,14 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-int multipath_test_one(uint64_t max_completion_microsec, int initial_drop, int final_drop)
+
+typedef enum {
+    multipath_test_basic = 0,
+    multipath_test_drop_first,
+    multipath_test_drop_second
+} multipath_test_enum_t;
+
+int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -386,12 +398,7 @@ int multipath_test_one(uint64_t max_completion_microsec, int initial_drop, int f
         ret = wait_multipath_ready(test_ctx, &simulated_time);
     }
 
-    /* If testing an immediate migration scenario, kill the old links, so nothing more can be sent there */
-    if (ret == 0 && initial_drop) {
-        multipath_test_kill_links(test_ctx);
-    }
-
-    if (ret == 0 && final_drop) {
+    if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link */
         if (ret == 0) {
@@ -404,8 +411,8 @@ int multipath_test_one(uint64_t max_completion_microsec, int initial_drop, int f
                 DBG_PRINTF("Wait for %" PRIu64 "us returns %d\n", timeout, ret);
             }
         }
-        if (ret == 0 && final_drop) {
-            multipath_test_kill_links(test_ctx);
+        if (ret == 0) {
+            multipath_test_kill_links(test_ctx, (test_id == multipath_test_drop_first) ? 0 : 1);
         }
     }
     /* Perform a final data sending loop, this time to completion  */
@@ -423,29 +430,6 @@ int multipath_test_one(uint64_t max_completion_microsec, int initial_drop, int f
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
     }
 
-#if 0
-    /* TODO: check that both links were used as expected in scenario. */
-    /* Check that the default client address on the server was migrated,
-     * as well as the default source address on the client */
-    if (ret == 0 && test_ctx->cnx_server == NULL) {
-        /* No server connection! */
-        ret = -1;
-    }
-
-    if (ret == 0) {
-        struct sockaddr* c_addr_at_server = NULL;
-        struct sockaddr* c_addr_at_client = NULL;
-        picoquic_get_peer_addr(test_ctx->cnx_server, &c_addr_at_server);
-        picoquic_get_local_addr(test_ctx->cnx_client, &c_addr_at_client);
-
-        if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_2, c_addr_at_server) != 0 ||
-            picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_2, c_addr_at_client) != 0) {
-            /* Migration was not completed */
-            ret = -1;
-        }
-    }
-#endif
-
     /* Delete the context */
     if (test_ctx == NULL) {
         tls_api_delete_ctx(test_ctx);
@@ -454,9 +438,35 @@ int multipath_test_one(uint64_t max_completion_microsec, int initial_drop, int f
     return ret;
 }
 
+/* Basic multipath test. Set up two links in parallel, verify that both are used and that
+ * the overall transmission is shorterthan if only one link was used.
+ */
+
 int multipath_basic_test()
+{
+    uint64_t max_completion_microsec = 1300000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_basic);
+}
+
+/* Drop first multipath test. Set up two links in parallel, start using them, then
+ * drop the first one of them. Check that the transmission succeeds.
+ */
+
+int multipath_drop_first_test()
 {
     uint64_t max_completion_microsec = 2000000;
 
-    return multipath_test_one(max_completion_microsec, 0, 0);
+    return multipath_test_one(max_completion_microsec, multipath_test_drop_first);
+}
+
+/* Drop second multipath test. Set up two links in parallel, start using them, then
+ * drop the second one of them. Check that the transmission succeeds.
+ */
+
+int multipath_drop_second_test()
+{
+    uint64_t max_completion_microsec = 2000000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_drop_second);
 }

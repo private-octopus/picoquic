@@ -1095,9 +1095,9 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
  * a different path, with different MTU.
  */
 
-static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc)
+static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, picoquic_path_t * path_x)
 {
-    uint64_t rto = cnx->path[0]->retransmit_timer;
+    uint64_t rto = path_x->retransmit_timer;
 
     rto <<= cnx->pkt_ctx[pc].nb_retransmit;
     if (cnx->cnx_state < picoquic_state_ready) {
@@ -1107,8 +1107,8 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
     }
     else if (rto > PICOQUIC_LARGE_RETRANSMIT_TIMER){
         uint64_t alt_rto = PICOQUIC_LARGE_RETRANSMIT_TIMER;
-        if (cnx->path[0]->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
-            alt_rto = (cnx->path[0]->smoothed_rtt * 3) >> 1;
+        if (path_x->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
+            alt_rto = (path_x->smoothed_rtt * 3) >> 1;
         }
         if (alt_rto < rto) {
             rto = alt_rto;
@@ -1126,6 +1126,11 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     int64_t delta_seq = cnx->pkt_ctx[pc].highest_acknowledged - p->sequence_number;
     int should_retransmit = 0;
     int is_timer_based = 0;
+    int is_left = 0;
+
+    if (pc == picoquic_packet_context_application && p->send_path != NULL) {
+        delta_seq = p->send_path->last_1rtt_acknowledged - p->sequence_number;
+    }
 
     if (delta_seq > 0) {
         /* By default, we use an RTO  */
@@ -1138,9 +1143,11 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
             if (retransmit_time > rack_timer_min) {
                 retransmit_time = rack_timer_min;
             }
-        } else {
-            /* When enough ulterior packets are acknowledged, we work from the right edge. */
+        }
+        else {
+            /* When enough ulterior packets are acknowledged, we work from the left edge. */
             uint64_t rack_timer_min = p->send_time + (cnx->path[0]->smoothed_rtt >> 2);
+            is_left = 1;
             if (rack_timer_min < cnx->pkt_ctx[pc].latest_time_acknowledged) {
                 retransmit_time = cnx->pkt_ctx[pc].highest_acknowledged_time;
             }
@@ -1149,7 +1156,14 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     else
     {
         /* There has not been any higher packet acknowledged, thus we fall back on timer logic. */
-        retransmit_time = p->send_time + picoquic_current_retransmit_timer(cnx, pc);
+        retransmit_time = p->send_time + picoquic_current_retransmit_timer(cnx, pc,
+            (p->send_path==NULL)?cnx->path[0]:p->send_path);
+        if (p->send_path != NULL) {
+            uint64_t alt_pto = p->send_path->last_1rtt_acknowledged_at + (p->send_path->smoothed_rtt >> 2);
+            if (alt_pto > retransmit_time) {
+                retransmit_time = alt_pto;
+            }
+        }
         is_timer_based = 1;
     }
 
@@ -1427,6 +1441,9 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 if (old_p == NULL || packet_is_pure_ack) {
                     length = 0;
                 } else {
+                    if (old_p->send_path != NULL) {
+                        old_p->send_path->lost++;
+                    }
                     if (old_p->send_path != NULL &&
                         (old_p->length + old_p->checksum_overhead) == old_p->send_path->send_mtu) {
                         old_p->send_path->nb_mtu_losses++;
@@ -1440,6 +1457,13 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     }
 
                     if (timer_based_retransmit != 0) {
+                        /* First, keep track of retransmissions per path, in order to
+                         * manage scheduling in multipath setup */
+                        if (old_p->send_path != NULL && pc == picoquic_packet_context_application &&
+                            old_p->sequence_number > old_p->send_path->last_1rtt_acknowledged) {
+                            old_p->send_path->nb_retransmit++;
+                        }
+                        /* Then, manage the total number of retransmissions across all paths. */
                         if (cnx->pkt_ctx[pc].nb_retransmit > 7 && cnx->cnx_state >= picoquic_state_ready) {
                             /*
                              * Max retransmission count was exceeded. Disconnect.
@@ -2018,7 +2042,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     /* There is a risk of deadlock if the server is doing DDOS mitigation
                      * and does not receive the Handshake sent by the client. If more than RTT has elapsed since
                      * the last handshake packet was sent, force another one to be sent. */
-                    uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_handshake);
+                    uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_handshake, cnx->path[0]);
                     uint64_t repeat_time = cnx->pkt_ctx[pc].retransmit_newest->send_time + rto;
 
                     if (repeat_time <= current_time) {
@@ -2041,7 +2065,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             /* There is a risk of deadlock if the server is doing DDOS mitigation
              * and does not repeat an initial or handshake packet that was lost. If more than RTT has elapsed since
              * the last initial packet was sent, force another one to be sent. */
-            uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_initial);
+            uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_initial, cnx->path[0]);
             uint64_t repeat_time = cnx->path[0]->latest_sent_time + rto;
             force_handshake_padding = (repeat_time <= current_time);
         }
@@ -3480,7 +3504,7 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
     uint64_t idle_timer = 0;
 
     if (cnx->cnx_state >= picoquic_state_ready) {
-        uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_application);
+        uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_application, cnx->path[0]);
         idle_timer = cnx->idle_timeout;
         if (idle_timer < 3 * rto) {
             idle_timer = 3 * rto;
@@ -3623,6 +3647,13 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     int challenge_path = -1;
     uint64_t pacing_time_next = UINT64_MAX;
     uint64_t challenge_time_next = UINT64_MAX;
+    uint64_t highest_retransmit = UINT64_MAX;
+    uint64_t last_receive = UINT64_MAX;
+
+    cnx->last_path_polled++;
+    if (cnx->last_path_polled > cnx->nb_paths) {
+        cnx->last_path_polled = 0;
+    }
 
     for (int i = 0; i < cnx->nb_paths; i++) {
         if (cnx->path[i]->path_is_demoted) {
@@ -3652,14 +3683,46 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                 }
             }
             if (cnx->path[i]->challenge_verified) {
-                /* check priority */
+                int is_polled = 0;
+                int is_new_priority = 0;
+                /* Set the congestion algorithm for the new path */
+                if (cnx->congestion_alg != NULL && cnx->path[i]->congestion_alg_state == NULL) {
+                    cnx->congestion_alg->alg_init(cnx->path[i], current_time);
+                }
+
                 if (cnx->path[i]->path_priority > highest_priority) {
+                    is_polled = 1;
+                    is_new_priority = 1;
+                }
+                else if (cnx->path[i]->path_priority == highest_priority) {
+                    if (cnx->path[i]->nb_retransmit < highest_retransmit) {
+                        is_polled = 1;
+                        is_new_priority = 1;
+                    }
+                    else if (cnx->path[i]->nb_retransmit == highest_retransmit) {
+                        if (highest_retransmit == 0 &&
+                            (cnx->path[i]->last_packet_received_at + 
+                            cnx->path[i]->retransmit_timer) > current_time) {
+                            is_polled = 1;
+                        } else if (cnx->path[i]->last_packet_received_at > last_receive) {
+                            is_polled = 1;
+                            is_new_priority = 1;
+                        }
+                        else if (cnx->path[i]->last_packet_received_at == last_receive) {
+                            is_polled = 1;
+                        }
+                    }
+                }
+
+                if (is_new_priority) {
                     highest_priority = cnx->path[i]->path_priority;
+                    highest_retransmit = cnx->path[i]->nb_retransmit;
                     data_path_cwin = -1;
                     data_path_pacing = -1;
                     pacing_time_next = UINT64_MAX;
+                    last_receive = cnx->path[i]->last_packet_received_at;
                 }
-                if (cnx->path[i]->path_priority >= highest_priority) {
+                if (is_polled){
                     cnx->path[i]->polled++;
                     if (picoquic_is_sending_authorized_by_pacing(cnx, cnx->path[i], current_time, &pacing_time_next)) {
                         data_path_pacing = i;
