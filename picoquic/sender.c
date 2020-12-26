@@ -1126,7 +1126,6 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     int64_t delta_seq = cnx->pkt_ctx[pc].highest_acknowledged - p->sequence_number;
     int should_retransmit = 0;
     int is_timer_based = 0;
-    int is_left = 0;
 
     if (pc == picoquic_packet_context_application && p->send_path != NULL) {
         delta_seq = p->send_path->last_1rtt_acknowledged - p->sequence_number;
@@ -1147,7 +1146,6 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
         else {
             /* When enough ulterior packets are acknowledged, we work from the left edge. */
             uint64_t rack_timer_min = p->send_time + (cnx->path[0]->smoothed_rtt >> 2);
-            is_left = 1;
             if (rack_timer_min < cnx->pkt_ctx[pc].latest_time_acknowledged) {
                 retransmit_time = cnx->pkt_ctx[pc].highest_acknowledged_time;
             }
