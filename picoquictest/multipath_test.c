@@ -67,6 +67,23 @@ static void multipath_test_kill_links(picoquic_test_tls_api_ctx_t* test_ctx, int
     }
 }
 
+/* Add the additional links for multipath scenario */
+static void multipath_test_sat_links(picoquic_test_tls_api_ctx_t* test_ctx, int link_id)
+{
+    if (link_id == 0) {
+        /* Use low throughput for terrestrial link. */
+        test_ctx->c_to_s_link->picosec_per_byte = 8000000ull; /* Simulate 1 Mbps */
+        test_ctx->s_to_c_link->picosec_per_byte = 8000000ull; /* Simulate 1 Mbps */
+    }
+    else {
+        /* Use higher latency for satellite link */
+        const uint64_t sat_latency = 300000;
+
+        test_ctx->c_to_s_link_2->microsec_latency = sat_latency;
+        test_ctx->s_to_c_link_2->microsec_latency = sat_latency;
+    }
+}
+
 /* wait until the migration completes */
 int wait_client_migration_done(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time)
@@ -259,14 +276,14 @@ int migration_mtu_drop_test()
  */
 
 
-void multipath_init_params(picoquic_tp_t *test_parameters)
+void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp)
 {
     memset(test_parameters, 0, sizeof(picoquic_tp_t));
 
     picoquic_init_transport_parameters(test_parameters, 1);
 
     test_parameters->enable_multipath = 1;
-    
+    test_parameters->enable_time_stamp = 1;
 }
 
 /* wait until the migration completes */
@@ -324,7 +341,8 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
 typedef enum {
     multipath_test_basic = 0,
     multipath_test_drop_first,
-    multipath_test_drop_second
+    multipath_test_drop_second,
+    multipath_test_sat_plus
 } multipath_test_enum_t;
 
 int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id)
@@ -344,12 +362,18 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = -1;
     }
     else {
+        int is_sat_test = (test_id == multipath_test_sat_plus);
+        if (is_sat_test) {
+            /* Simulate an asymmetric "satellite and landline" scenario */
+            multipath_test_sat_links(test_ctx, 0);
+        }
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         /* Set the multipath option at both client and server */
-        multipath_init_params(&server_parameters);
+        multipath_init_params(&server_parameters, is_sat_test);
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
         test_ctx->cnx_client->local_parameters.enable_multipath = 1;
+        test_ctx->cnx_client->local_parameters.enable_time_stamp = is_sat_test;
         /* Initialize the client connection */
         picoquic_start_client_cnx(test_ctx->cnx_client);
     }
@@ -385,6 +409,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     /* Add the multipath links and initiate the migration */
     if (ret == 0) {
         ret = multipath_test_add_links(test_ctx, 0);
+        if (ret == 0 && test_id == multipath_test_sat_plus) {
+            /* Simulate an asymmetric "satellite and landline" scenario */
+            multipath_test_sat_links(test_ctx, 1);
+        }
     }
 
     if (ret == 0) {
@@ -469,4 +497,14 @@ int multipath_drop_second_test()
     uint64_t max_completion_microsec = 2000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second);
+}
+
+/* Simulate the combination of a satellite link and a low latency low bandwidth
+ * terrestrial link
+ */
+int multipath_sat_plus_test()
+{
+    uint64_t max_completion_microsec = 2000000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_sat_plus);
 }

@@ -2332,6 +2332,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
         memset(cnx, 0, sizeof(picoquic_cnx_t));
         cnx->start_time = start_time;
+        cnx->phase_delay = INT64_MAX;
         cnx->client_mode = client_mode;
         if (client_mode) {
             if (picoquic_is_connection_id_null(&initial_cnx_id)) {

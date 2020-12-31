@@ -782,10 +782,16 @@ typedef struct st_picoquic_path_t {
     uint64_t nb_retransmit;
     uint64_t retrans_count;
     /* Time measurement */
-    int64_t phase_delay;
     uint64_t max_ack_delay;
     uint64_t rtt_sample;
     uint64_t one_way_delay_sample;
+    uint64_t one_way_delay_avg;
+    uint64_t one_way_delay_var;
+    uint64_t one_way_delay_min;
+    uint64_t one_way_return_avg;
+    uint64_t one_way_return_var;
+    uint64_t one_way_return_min;
+
     uint64_t smoothed_rtt;
     uint64_t rtt_variant;
     uint64_t retransmit_timer;
@@ -1015,6 +1021,7 @@ typedef struct st_picoquic_cnx_t {
     struct st_picoquic_net_icid_key_t* net_icid_key;
     struct st_picoquic_net_secret_key_t* reset_secret_key;
     uint64_t start_time;
+    int64_t phase_delay;
     uint64_t application_error;
     uint64_t local_error;
     uint64_t remote_application_error;
@@ -1145,14 +1152,18 @@ typedef struct st_picoquic_cnx_t {
 } picoquic_cnx_t;
 
 typedef struct st_picoquic_packet_data_t {
-    picoquic_path_t* acked_path; /* path for which ACK was received */
-    uint64_t last_ack_delay; /* ACK Delay in ACK frame */
     uint64_t last_time_stamp_received;
-    uint64_t largest_sent_time; /* Send time of ACKed packet (largest number acked) */
-    uint64_t delivered_prior; /* Amount delivered prior to that packet */
-    uint64_t delivered_time_prior; /* Time last delivery before acked packet sent */
-    uint64_t delivered_sent_prior; /* Time this last delivery packet was sent */
-    int rs_is_path_limited; /* Whether the path was app limited when packet was sent */
+    uint64_t last_ack_delay; /* ACK Delay in ACK frame */
+    int nb_path_ack;
+    struct {
+        picoquic_path_t* acked_path; /* path for which ACK was received */
+        uint64_t largest_sent_time; /* Send time of ACKed packet (largest number acked) */
+        uint64_t delivered_prior; /* Amount delivered prior to that packet */
+        uint64_t delivered_time_prior; /* Time last delivery before acked packet sent */
+        uint64_t delivered_sent_prior; /* Time this last delivery packet was sent */
+        int rs_is_path_limited; /* Whether the path was app limited when packet was sent */
+        uint64_t data_acked;
+    } path_ack[PICOQUIC_NB_PATH_TARGET];
 } picoquic_packet_data_t;
 
 /* Load the stash of retry tokens. */
@@ -1322,6 +1333,8 @@ int picoquic_update_sack_list(picoquic_sack_item_t* sack,
 int picoquic_check_sack_list(picoquic_sack_item_t* sack,
     uint64_t pn64_min, uint64_t pn64_max);
 
+void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet);
+
 /*
  * Process ack of ack
  */
@@ -1339,8 +1352,8 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate);
 uint64_t picoquic_compute_ack_delay_max(uint64_t rtt, uint64_t remote_min_ack_delay);
 
 /* Update the path RTT upon receiving an explict or implicit acknowledgement */
-void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, uint64_t send_time,
-    uint64_t current_time, uint64_t ack_delay);
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, picoquic_path_t* path_x,
+    uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp);
 
 /* stream management */
 picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);

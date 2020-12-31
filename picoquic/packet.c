@@ -1880,7 +1880,7 @@ int  picoquic_incoming_not_decrypted(
                 && cnx->path[0]->rtt_variant == 0 &&
                 current_time - cnx->start_time < cnx->path[0]->smoothed_rtt) {
                 /* We received a first packet from the peer! */
-                picoquic_update_path_rtt(cnx, cnx->path[0], cnx->start_time, current_time, 0);
+                picoquic_update_path_rtt(cnx, cnx->path[0], cnx->path[0], cnx->start_time, current_time, 0, 0);
             }
 
             if (length <= PICOQUIC_MAX_PACKET_SIZE &&

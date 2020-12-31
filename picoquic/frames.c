@@ -1683,9 +1683,9 @@ int picoquic_parse_ack_header(uint8_t const* bytes, size_t bytes_max,
 }
 
 
-picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
-    uint64_t start_of_range, uint64_t end_of_range, uint64_t current_time,
-    picoquic_packet_context_enum pc, picoquic_packet_t* p)
+picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
+    uint64_t start_of_range, uint64_t end_of_range, uint64_t current_time, uint64_t time_stamp,
+    picoquic_packet_context_enum pc, picoquic_packet_t* p, picoquic_packet_data_t* packet_data)
 {
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
 
@@ -1705,10 +1705,9 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                         old_path->last_1rtt_acknowledged == UINT64_MAX)) {
                     old_path->last_1rtt_acknowledged = p->sequence_number;
                     old_path->nb_retransmit = 0;
-                    if (old_path != cnx->path[0]) {
-                        picoquic_update_path_rtt(cnx, old_path, p->send_time, current_time, 0);
-                    }
                 }
+                /* Record the updated delay and CC data in packet context */
+                picoquic_record_ack_packet_data(packet_data, p);
 
                 if (p->length + p->checksum_overhead > old_path->send_mtu) {
                     old_path->send_mtu = p->length + p->checksum_overhead;
@@ -1729,11 +1728,13 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                 if (max_reorder_gap > old_path->max_reorder_gap) {
                     old_path->max_reorder_gap = max_reorder_gap;
                 }
-
+#if 0
+                /* NOT NEEDED? This will be applied when processsing the packet data */
                 if (old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT && old_path->rtt_variant == 0) {
                     /* If the RTT has not been set, use it to update the path RTT */
-                    picoquic_update_path_rtt(cnx, old_path, p->send_time, current_time, 0);
+                    picoquic_update_path_rtt(cnx, old_path, path_x, p->send_time, current_time, 0, time_stamp);
                 }
+#endif
 
                 if (old_path->nb_losses_found > 0) {
                     old_path->nb_losses_found--;
@@ -1930,13 +1931,14 @@ uint64_t picoquic_compute_ack_delay_max(uint64_t rtt, uint64_t remote_min_ack_de
     return ack_delay_max;
 }
 
+#if 0
 void picoquic_update_1wd(picoquic_cnx_t * cnx, picoquic_path_t * old_path, 
     uint64_t send_time, uint64_t ack_delay, uint64_t remote_time_stamp)
 {
     int64_t one_way_delay = 0;
 
     if (remote_time_stamp > 0) {
-        int64_t time_stamp_local = remote_time_stamp - ack_delay + cnx->start_time + old_path->phase_delay;
+        int64_t time_stamp_local = remote_time_stamp - ack_delay + cnx->start_time + cnx->phase_delay;
 
         one_way_delay = time_stamp_local - send_time;
 
@@ -1944,16 +1946,16 @@ void picoquic_update_1wd(picoquic_cnx_t * cnx, picoquic_path_t * old_path,
             int64_t correct_1wd = old_path->rtt_sample / 2;
             picoquic_log_app_message(cnx,
                 "BAD 1WD! RTS=%" PRIu64 ", AD=%"PRIu64 ", Start=%" PRIu64 ", Phi=%"PRIi64 ", Send=%" PRIu64 ", OWD=%"PRIu64 "\n",
-                remote_time_stamp, ack_delay, cnx->start_time, old_path->phase_delay, send_time, one_way_delay);
-            old_path->phase_delay += correct_1wd - one_way_delay;
+                remote_time_stamp, ack_delay, cnx->start_time, cnx->phase_delay, send_time, one_way_delay);
+            cnx->phase_delay += correct_1wd - one_way_delay;
             one_way_delay = correct_1wd;
         }
         old_path->one_way_delay_sample = one_way_delay;
     }
 }
 
-void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, uint64_t send_time,
-    uint64_t current_time, uint64_t ack_delay)
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, picoquic_path_t* ack_path, 
+    uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp)
 {
     uint64_t acknowledged_time = current_time - ack_delay;
     int64_t rtt_estimate = acknowledged_time - send_time;
@@ -1970,10 +1972,12 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
         if (old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT && old_path->rtt_variant == 0) {
             old_path->smoothed_rtt = rtt_estimate;
             old_path->rtt_variant = rtt_estimate / 2;
-            old_path->phase_delay = rtt_estimate / 2;
+            if (cnx->phase_delay == INT64_MAX) {
+                cnx->phase_delay = rtt_estimate / 2;
 
-            if (!cnx->client_mode) {
-                old_path->phase_delay = -old_path->phase_delay;
+                if (!cnx->client_mode) {
+                    cnx->phase_delay = -cnx->phase_delay;
+                }
             }
 
             old_path->rtt_min = rtt_estimate;
@@ -2040,8 +2044,242 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
         }
     }
 }
+#else
+/* In a multipath environment, a packet can accry acknowledgements for multiple paths.
+ * The packet_data context collects information about updates received for each of
+ * these paths. */
+void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet)
+{
+    picoquic_path_t* old_path = acked_packet->send_path;
 
-static picoquic_packet_t* picoquic_find_acked_packet(picoquic_cnx_t* cnx, uint64_t largest,
+    if (old_path != NULL) {
+        /* Find the path index in the packet data structure */
+        int path_i = 0;
+        while (path_i < packet_data->nb_path_ack &&
+            packet_data->path_ack[path_i].acked_path != old_path) {
+            path_i++;
+        }
+        if (path_i == packet_data->nb_path_ack) {
+            if (path_i > PICOQUIC_NB_PATH_TARGET) {
+                /* Too many ACKs in this packet -- do not update path status. */
+                return;
+            }
+            packet_data->nb_path_ack++;
+            packet_data->path_ack[path_i].acked_path = old_path;
+        }
+
+        if (packet_data->path_ack[path_i].largest_sent_time == 0) {
+            packet_data->path_ack[path_i].largest_sent_time = acked_packet->send_time;
+            packet_data->path_ack[path_i].delivered_prior = acked_packet->delivered_prior;
+            packet_data->path_ack[path_i].delivered_time_prior = acked_packet->delivered_time_prior;
+            packet_data->path_ack[path_i].delivered_sent_prior = acked_packet->delivered_sent_prior;
+            packet_data->path_ack[path_i].rs_is_path_limited = acked_packet->delivered_app_limited;
+        }
+        packet_data->path_ack[path_i].data_acked += acked_packet->length;
+    }
+}
+
+/* In a multipath environment, the acknowledgement packets will not always travel on the
+ * same path (path_x) as the original packets (old_path). When a time stamp is present,
+ * the one way delay in each direction can be computed. When there is no time stamp,
+ * if the average variations are known, we use a "likelihood" heuristic to allocate
+ * delays to the two paths. If only one path is known, all the variations are allocated to
+ * the other path. If no path is known, we split the RTT, but we only use the result 
+ * if the two paths are the same.
+ */
+static void picoquic_update_delay_avg_and_var(uint64_t* delay_avg, uint64_t* delay_var, 
+    uint64_t* delay_min, int64_t sample)
+{
+    /* TODO: compute min one way delay */
+    /* TODO: lower bound of variation based on min one way delay */
+    if (*delay_var == 0) {
+        *delay_avg = sample;
+        *delay_var = sample / 2;
+        *delay_min = sample;
+    }
+    else {
+        int64_t delta = sample - *delay_avg;
+        *delay_avg += delta / 8;
+        if (delta < 0) {
+            delta = -delta;
+        }
+        int64_t delta_var = delta - *delay_var;
+        *delay_var += delta_var / 4;
+        if (*delay_min > (uint64_t)sample) {
+            *delay_min = sample;
+        }
+    }
+}
+
+static void picoquic_update_rtt_from_one_way(picoquic_cnx_t * cnx, picoquic_path_t* old_path,
+    uint64_t rtt_estimate, uint64_t one_way_delay_estimate, uint64_t current_time)
+{
+    uint64_t alt_timer;
+
+    old_path->smoothed_rtt = old_path->one_way_delay_avg + old_path->one_way_return_avg;
+    old_path->rtt_variant = old_path->one_way_delay_var + old_path->one_way_return_var;
+    old_path->rtt_min = old_path->one_way_delay_min + old_path->one_way_return_min;
+
+    if (4 * old_path->rtt_variant < old_path->rtt_min &&
+        old_path->rtt_min < PICOQUIC_TARGET_SATELLITE_RTT) {
+        old_path->rtt_variant = old_path->rtt_min / 4;
+    }
+
+    old_path->retransmit_timer = old_path->smoothed_rtt + 4 * old_path->rtt_variant +
+        cnx->remote_parameters.max_ack_delay;
+    alt_timer = ((5 * old_path->smoothed_rtt) >> 2) + cnx->remote_parameters.max_ack_delay;
+    if (old_path->retransmit_timer < alt_timer) {
+        old_path->retransmit_timer = alt_timer;
+    }
+
+    if (PICOQUIC_MIN_RETRANSMIT_TIMER > old_path->retransmit_timer) {
+        old_path->retransmit_timer = PICOQUIC_MIN_RETRANSMIT_TIMER;
+    }
+
+    old_path->rtt_sample = rtt_estimate;
+
+    if (cnx->congestion_alg != NULL) {
+        cnx->congestion_alg->alg_notify(cnx, old_path,
+            picoquic_congestion_notification_rtt_measurement,
+            rtt_estimate, one_way_delay_estimate, 0, 0, current_time);
+    }
+}
+
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, picoquic_path_t* path_x,
+    uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp)
+{
+    uint64_t acknowledged_time = current_time - ack_delay;
+    int64_t rtt_estimate = acknowledged_time - send_time;
+
+    if (rtt_estimate > 0 && old_path != NULL && path_x != NULL) {
+        int64_t one_way_delay_sample = 0;
+        int64_t one_way_return_sample = 0;
+        int is_old_path_valid = 1;
+        int is_path_x_valid = 1;
+
+        if (time_stamp != 0) {
+            /* If the phase is not yet known, it should be set. */
+
+            /* TODO: some check on the validity of the time stamp. Ignore if the value is not
+             * plausible. */
+            int64_t time_stamp_local = time_stamp - ack_delay + cnx->start_time + cnx->phase_delay;
+            one_way_delay_sample = time_stamp_local - send_time;
+            /* One way delays should be positive, but clock drift may cause the pahse to be wrong.
+             * If that happens, we need to perform a correction. 
+             */
+        }
+        else if (old_path->one_way_delay_var != 0) {
+            if (path_x->one_way_return_var != 0) {
+                int64_t delta = rtt_estimate - old_path->one_way_delay_avg - path_x->one_way_return_avg;
+
+                delta = (((int64_t)old_path->one_way_delay_var) * delta) /
+                    (int64_t)(old_path->one_way_delay_var + path_x->one_way_return_var);
+                one_way_delay_sample = old_path->one_way_delay_avg + delta;
+            }
+            else {
+                is_old_path_valid = 0;
+                one_way_delay_sample = old_path->one_way_delay_avg;
+            }
+        }
+        else if (path_x->one_way_return_var != 0) {
+            one_way_delay_sample = rtt_estimate - path_x->one_way_return_avg;
+            is_path_x_valid = 0;
+        }
+        else if (path_x == old_path) {
+            one_way_delay_sample = rtt_estimate / 2;
+        }
+        else {
+            is_old_path_valid = 0;
+            is_path_x_valid = 0;
+        }
+
+        /* Update delay average and variation based on computations */
+        if (is_old_path_valid) {
+            picoquic_update_delay_avg_and_var(&old_path->one_way_delay_avg, &old_path->one_way_delay_var,
+                &old_path->one_way_delay_min, one_way_delay_sample);
+        }
+
+        if (is_path_x_valid) {
+            /* TODO: should this be updated multiple time per a single ACK? */
+            one_way_return_sample = rtt_estimate - one_way_delay_sample;
+
+            picoquic_update_delay_avg_and_var(&path_x->one_way_return_avg, &path_x->one_way_return_var,
+                &path_x->one_way_return_min, one_way_return_sample);
+        }
+
+        /* Compute retransmission delays and update congestion control for updated paths */
+        if (path_x == old_path) {
+            if (is_old_path_valid || is_path_x_valid) {
+                picoquic_update_rtt_from_one_way(cnx, old_path, rtt_estimate, one_way_delay_sample, current_time);
+            }
+        }
+        else if (is_old_path_valid) {
+            /* Correct the "estimate" to reflect average of forward path */
+            picoquic_update_rtt_from_one_way(cnx, old_path, one_way_delay_sample + old_path->one_way_return_avg,
+                one_way_delay_sample, current_time);
+        }
+        else if (is_path_x_valid) {
+            /* Correct the "estimate" to reflect average of return path */
+            picoquic_update_rtt_from_one_way(cnx, path_x, one_way_return_sample + path_x->one_way_delay_avg,
+                one_way_return_sample, current_time);
+        }
+
+        /* TODO: if RTT updated, reset delayed ACK parameters */
+        if (old_path == cnx->path[0]) {
+            cnx->is_ack_frequency_updated = cnx->is_ack_frequency_negotiated;
+            if (!cnx->is_ack_frequency_negotiated || cnx->cnx_state != picoquic_state_ready) {
+                cnx->ack_delay_remote = picoquic_compute_ack_delay_max(old_path->rtt_min, PICOQUIC_ACK_DELAY_MIN);
+            }
+        }
+        /* TODO: rationalize with process_decoded_packet_data */
+    }
+}
+
+/* Once all frames in a packet have been received, update the delays and congestion
+ * control varaibles for the path for which data was acknowledged.
+ */
+
+void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
+    uint64_t current_time, picoquic_packet_data_t* packet_data)
+{
+    for (int i = 0; i < packet_data->nb_path_ack; i++) {
+        picoquic_update_path_rtt(cnx, packet_data->path_ack[i].acked_path, path_x,
+            packet_data->path_ack[i].largest_sent_time, current_time, packet_data->last_ack_delay,
+            packet_data->last_time_stamp_received);
+
+        if (cnx->congestion_alg != NULL) {
+            cnx->congestion_alg->alg_notify(cnx, packet_data->path_ack[i].acked_path,
+                picoquic_congestion_notification_acknowledgement,
+                0, 0, packet_data->path_ack[i].data_acked, 0, current_time);
+        }
+#if 0
+        if (cnx->congestion_alg != NULL && cnx->is_time_stamp_enabled && packet_data->path_ack[i].acked_path->rtt_sample > 0) {
+            /* CC notification of RTT are only delayed if waiting for one way delay assessment */
+            cnx->congestion_alg->alg_notify(cnx, packet_data->path_ack[i].acked_path,
+                picoquic_congestion_notification_rtt_measurement,
+                packet_data->path_ack[i].acked_path->rtt_sample, one_way_delay, 0, 0, current_time);
+        }
+#endif
+
+        picoquic_estimate_path_bandwidth(cnx, packet_data->path_ack[i].acked_path, packet_data->path_ack[i].largest_sent_time,
+            packet_data->path_ack[i].delivered_prior, packet_data->path_ack[i].delivered_time_prior, packet_data->path_ack[i].delivered_sent_prior,
+            (packet_data->last_time_stamp_received == 0) ? current_time : packet_data->last_time_stamp_received,
+            current_time, packet_data->path_ack[i].rs_is_path_limited);
+
+        picoquic_estimate_max_path_bandwidth(cnx, packet_data->path_ack[i].acked_path, packet_data->path_ack[i].largest_sent_time,
+            (packet_data->last_time_stamp_received == 0) ? current_time : packet_data->last_time_stamp_received,
+            current_time);
+
+        if (cnx->congestion_alg != NULL && packet_data->path_ack[i].acked_path->rtt_sample > 0) {
+            cnx->congestion_alg->alg_notify(cnx, packet_data->path_ack[i].acked_path,
+                picoquic_congestion_notification_bw_measurement,
+                packet_data->path_ack[i].acked_path->rtt_sample, 0, 0, 0, current_time);
+        }
+    }
+}
+#endif
+
+static picoquic_packet_t* picoquic_find_acked_packet(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint64_t largest,
     uint64_t current_time, uint64_t ack_delay, uint64_t remote_time_stamp, picoquic_packet_context_enum pc, int* is_new_ack)
 {
     picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
@@ -2068,7 +2306,7 @@ static picoquic_packet_t* picoquic_find_acked_packet(picoquic_cnx_t* cnx, uint64
             picoquic_path_t* old_path = packet->send_path;
 
             if (old_path != NULL) {
-                picoquic_update_path_rtt(cnx, old_path, packet->send_time, current_time, ack_delay);
+                picoquic_update_path_rtt(cnx, old_path, path_x, packet->send_time, current_time, ack_delay, remote_time_stamp);
             }
         }
     }
@@ -2492,7 +2730,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
 
 static int picoquic_process_ack_range(
     picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, uint64_t highest, uint64_t range, picoquic_packet_t** ppacket,
-    uint64_t current_time)
+    uint64_t current_time, picoquic_packet_data_t* packet_data)
 {
     picoquic_packet_t* p = *ppacket;
     int ret = 0;
@@ -2503,7 +2741,6 @@ static int picoquic_process_ack_range(
             p = p->next_packet;
         } else {
             if (p->sequence_number == highest) {
-                /* TODO: RTT Estimate */
                 picoquic_packet_t* next = p->next_packet;
                 picoquic_path_t * old_path = p->send_path;
 
@@ -2522,12 +2759,16 @@ static int picoquic_process_ack_range(
                         old_path->nb_retransmit = 0;
                     }
 
+                    picoquic_record_ack_packet_data(packet_data, p);
+
+#if 0
+                    /* NOT NEEDED: will be notified when processing packet data */
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(cnx, old_path,
                             picoquic_congestion_notification_acknowledgement,
                             0, 0, p->length, 0, current_time);
                     }
-
+#endif
 
                     /* If packet is larger than the current MTU, update the MTU */
                     if ((p->length + p->checksum_overhead) == old_path->send_mtu) {
@@ -2568,7 +2809,7 @@ static int picoquic_process_ack_range(
     return ret;
 }
 
-const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const uint8_t* bytes,
     const uint8_t* bytes_max, uint64_t current_time, int epoch, int is_ecn, int has_path_id, picoquic_packet_data_t* packet_data)
 {
     uint64_t path_id = 0;
@@ -2594,8 +2835,9 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
         bytes += consumed;
 
         /* Attempt to update the RTT */
+        uint64_t time_stamp = 0;
         int is_new_ack = 0;
-        picoquic_packet_t* top_packet = picoquic_find_acked_packet(cnx, largest, current_time, ack_delay, remote_time_stamp, pc, &is_new_ack);
+        picoquic_packet_t* top_packet = picoquic_find_acked_packet(cnx, path_x, largest, current_time, ack_delay, remote_time_stamp, pc, &is_new_ack);
         picoquic_packet_t* p_retransmitted_previous = cnx->pkt_ctx[pc].retransmitted_newest;
         
         if (top_packet != NULL && is_new_ack) {
@@ -2603,8 +2845,9 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                 cnx->pkt_ctx[pc].latest_time_acknowledged = top_packet->send_time;
             }
             cnx->latest_progress_time = current_time;
-
+#if 0
             if (packet_data != NULL) {
+                time_stamp = packet_data->last_time_stamp_received;
                 packet_data->acked_path = top_packet->send_path;
                 packet_data->last_ack_delay = ack_delay;
                 packet_data->largest_sent_time = top_packet->send_time;
@@ -2613,6 +2856,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                 packet_data->delivered_sent_prior = top_packet->delivered_sent_prior;
                 packet_data->rs_is_path_limited = top_packet->delivered_app_limited;
             }
+#endif
         }
 
         do {
@@ -2634,13 +2878,14 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                 break;
             }
 
-            if (picoquic_process_ack_range(cnx, pc, largest, range, &top_packet, current_time) != 0) {
+            if (picoquic_process_ack_range(cnx, pc, largest, range, &top_packet, current_time, packet_data) != 0) {
                 bytes = NULL;
                 break;
             }
 
             if (range > 0) {
-                p_retransmitted_previous = picoquic_check_spurious_retransmission(cnx, largest + 1 - range, largest, current_time, pc, p_retransmitted_previous);
+                p_retransmitted_previous = picoquic_check_spurious_retransmission(cnx, path_x, 
+                    largest + 1 - range, largest, current_time, time_stamp, pc, p_retransmitted_previous, packet_data);
             }
 
             if (num_block-- == 0)
@@ -3738,7 +3983,7 @@ uint8_t* picoquic_format_path_status_frame(picoquic_cnx_t* cnx, uint8_t* bytes, 
  *
  * In some cases, the expected frames are "restricted" to only ACK, STREAM 0 and PADDING.
  */
-
+#if 0
 void process_decoded_packet_data(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_data_t * packet_data)
 {
     if (packet_data->acked_path != NULL) {
@@ -3778,7 +4023,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, uint64_t current_time, pic
         }
     }
 }
-
+#endif
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes,
     size_t bytes_maxsize, int epoch,
     struct sockaddr* addr_from,
@@ -3817,7 +4062,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 bytes = NULL;
                 break;
             }
-            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 0, 0, &packet_data);
+            bytes = picoquic_decode_ack_frame(cnx, path_x, bytes, bytes_max, current_time, epoch, 0, 0, &packet_data);
         }
         else if (first_byte == picoquic_frame_type_ack_ecn) {
             if (epoch == picoquic_epoch_0rtt) {
@@ -3826,7 +4071,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 bytes = NULL;
                 break;
             }
-            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1, 0, &packet_data);
+            bytes = picoquic_decode_ack_frame(cnx, path_x, bytes, bytes_max, current_time, epoch, 1, 0, &packet_data);
         }
         else if (epoch != picoquic_epoch_0rtt && epoch != picoquic_epoch_1rtt && first_byte != picoquic_frame_type_padding
             && first_byte != picoquic_frame_type_ping
@@ -3957,7 +4202,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             bytes = NULL;
                             break;
                         }
-                        bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 0, 1, &packet_data);
+                        bytes = picoquic_decode_ack_frame(cnx, path_x, bytes, bytes_max, current_time, epoch, 0, 1, &packet_data);
                         break;
                     }
                     case picoquic_frame_type_ack_ecn: {
@@ -3967,7 +4212,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             bytes = NULL;
                             break;
                         }
-                        bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1, 1, &packet_data);
+                        bytes = picoquic_decode_ack_frame(cnx, path_x, bytes, bytes_max, current_time, epoch, 1, 1, &packet_data);
                         break;
                     }
                     case picoquic_frame_type_qoe:
@@ -3993,7 +4238,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
     }
 
     if (bytes != NULL) {
-        process_decoded_packet_data(cnx, current_time, &packet_data);
+        process_decoded_packet_data(cnx, path_x, current_time, &packet_data);
 
         if (ack_needed != 0) {
             cnx->latest_progress_time = current_time;

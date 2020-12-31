@@ -242,6 +242,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_basic", multipath_basic_test },
     { "multipath_drop_first", multipath_drop_first_test },
     { "multipath_drop_second", multipath_drop_second_test },
+    { "multipath_sat_plus", multipath_sat_plus_test },
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },
     { "pn_random", pn_random_test },
