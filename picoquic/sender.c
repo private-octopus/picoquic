@@ -1161,8 +1161,16 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
             if (alt_pto > retransmit_time) {
                 retransmit_time = alt_pto;
             }
+#if 0
+            if (p->send_time > p->send_path->latest_sent_time)
+#endif
+            {
+                is_timer_based = 1;
+            }
         }
-        is_timer_based = 1;
+        else {
+            is_timer_based = 1;
+        }
     }
 
     if (p->ptype == picoquic_packet_0rtt_protected) {

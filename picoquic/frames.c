@@ -2141,7 +2141,8 @@ static void picoquic_update_rtt_from_one_way(picoquic_cnx_t * cnx, picoquic_path
     if (cnx->congestion_alg != NULL) {
         cnx->congestion_alg->alg_notify(cnx, old_path,
             picoquic_congestion_notification_rtt_measurement,
-            rtt_estimate, one_way_delay_estimate, 0, 0, current_time);
+            rtt_estimate, (cnx->is_time_stamp_enabled)?one_way_delay_estimate:0,
+            0, 0, current_time);
     }
 }
 
@@ -2285,6 +2286,12 @@ static picoquic_packet_t* picoquic_find_acked_packet(picoquic_cnx_t* cnx, picoqu
     picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
     picoquic_packet_t* packet = pkt_ctx->retransmit_oldest;
 
+#if 1
+    if (pkt_ctx->highest_acknowledged == -1) {
+        pkt_ctx = &cnx->pkt_ctx[pc];
+    }
+#endif
+
     /* Check whether this is a new acknowledgement */
     if (largest > pkt_ctx->highest_acknowledged || pkt_ctx->highest_acknowledged == (uint64_t)((int64_t)-1)) {
 
@@ -2296,7 +2303,7 @@ static picoquic_packet_t* picoquic_find_acked_packet(picoquic_cnx_t* cnx, picoqu
         while (packet != NULL && packet->previous_packet != NULL && packet->sequence_number < largest) {
             packet = packet->previous_packet;
         }
-
+#if 0
         if (packet == NULL || packet->sequence_number != largest) {
             /* There is no copy of this packet in store. It may have
              * been deleted because too old, or maybe already
@@ -2309,6 +2316,7 @@ static picoquic_packet_t* picoquic_find_acked_packet(picoquic_cnx_t* cnx, picoqu
                 picoquic_update_path_rtt(cnx, old_path, path_x, packet->send_time, current_time, ack_delay, remote_time_stamp);
             }
         }
+#endif
     }
 
     return packet;
