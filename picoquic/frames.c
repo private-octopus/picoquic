@@ -1706,7 +1706,9 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx, p
                     old_path->last_1rtt_acknowledged = p->sequence_number;
                     old_path->nb_retransmit = 0;
                 }
-                /* Record the updated delay and CC data in packet context */
+                /* Record the updated delay and CC data in packet context
+                 * TODO: verify that accounting for acked data at this point is correct.
+                 */
                 picoquic_record_ack_packet_data(packet_data, p);
 
                 if (p->length + p->checksum_overhead > old_path->send_mtu) {
@@ -2256,12 +2258,16 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         picoquic_update_path_rtt(cnx, packet_data->path_ack[i].acked_path, path_x,
             packet_data->path_ack[i].largest_sent_time, current_time, packet_data->last_ack_delay,
             packet_data->last_time_stamp_received);
-
+#if 0
+        /* Combining all the window increases at this point would reduce the CPU cost,
+         * but triggers a slightly slower cwin increase schedule compared to the 
+         * existing non-1wd code, so this change is postponed for now */
         if (cnx->congestion_alg != NULL) {
             cnx->congestion_alg->alg_notify(cnx, packet_data->path_ack[i].acked_path,
                 picoquic_congestion_notification_acknowledgement,
                 0, 0, packet_data->path_ack[i].data_acked, 0, current_time);
         }
+#endif
 #if 0
         if (cnx->congestion_alg != NULL && cnx->is_time_stamp_enabled && packet_data->path_ack[i].acked_path->rtt_sample > 0) {
             /* CC notification of RTT are only delayed if waiting for one way delay assessment */
@@ -2778,8 +2784,11 @@ static int picoquic_process_ack_range(
 
                     picoquic_record_ack_packet_data(packet_data, p);
 
-#if 0
-                    /* NOT NEEDED: will be notified when processing packet data */
+#if 1
+                    /* In theory this is not needed, the congestion window increases could just
+                     * as well be performed once per packet. However, we keep this code here in
+                     * order to maintain the same schedule of CWIN increase as the previous
+                     * non-1WD version */
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(cnx, old_path,
                             picoquic_congestion_notification_acknowledgement,
@@ -2872,6 +2881,10 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, picoquic_path_t* p
                 packet_data->delivered_time_prior = top_packet->delivered_time_prior;
                 packet_data->delivered_sent_prior = top_packet->delivered_sent_prior;
                 packet_data->rs_is_path_limited = top_packet->delivered_app_limited;
+            }
+#else 
+            if (packet_data != NULL) {
+                packet_data->last_ack_delay = ack_delay;
             }
 #endif
         }
