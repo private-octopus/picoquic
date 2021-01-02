@@ -2068,12 +2068,13 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
             packet_data->path_ack[path_i].acked_path = old_path;
         }
 
-        if (packet_data->path_ack[path_i].largest_sent_time == 0) {
+        if (!packet_data->path_ack[path_i].is_set) {
             packet_data->path_ack[path_i].largest_sent_time = acked_packet->send_time;
             packet_data->path_ack[path_i].delivered_prior = acked_packet->delivered_prior;
             packet_data->path_ack[path_i].delivered_time_prior = acked_packet->delivered_time_prior;
             packet_data->path_ack[path_i].delivered_sent_prior = acked_packet->delivered_sent_prior;
             packet_data->path_ack[path_i].rs_is_path_limited = acked_packet->delivered_app_limited;
+            packet_data->path_ack[path_i].is_set = 1;
         }
         packet_data->path_ack[path_i].data_acked += acked_packet->length;
     }
@@ -2160,7 +2161,13 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
 
         if (time_stamp != 0) {
             /* If the phase is not yet known, it should be set. */
+            if (cnx->phase_delay == INT64_MAX) {
+                cnx->phase_delay = rtt_estimate / 2;
 
+                if (!cnx->client_mode) {
+                    cnx->phase_delay = -cnx->phase_delay;
+                }
+            }
             /* TODO: some check on the validity of the time stamp. Ignore if the value is not
              * plausible. */
             int64_t time_stamp_local = time_stamp - ack_delay + cnx->start_time + cnx->phase_delay;
@@ -2168,6 +2175,9 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
             /* One way delays should be positive, but clock drift may cause the pahse to be wrong.
              * If that happens, we need to perform a correction. 
              */
+            if (one_way_delay_sample < 0) {
+                is_path_x_valid = is_path_x_valid;
+            }
         }
         else if (old_path->one_way_delay_var != 0) {
             if (path_x->one_way_return_var != 0) {
@@ -2232,7 +2242,6 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
                 cnx->ack_delay_remote = picoquic_compute_ack_delay_max(old_path->rtt_min, PICOQUIC_ACK_DELAY_MIN);
             }
         }
-        /* TODO: rationalize with process_decoded_packet_data */
     }
 }
 

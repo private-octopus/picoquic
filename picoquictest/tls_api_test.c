@@ -9773,10 +9773,10 @@ int red_cc_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        600000,
+        605000,
         500000,
         500000,
-        550000,
+        500000,
         500000
     };
     uint64_t algo_loss[5] = {
