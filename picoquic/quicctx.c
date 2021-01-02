@@ -1057,6 +1057,33 @@ int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
     return wake_delay;
 }
 
+static uint64_t picoquic_get_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    uint64_t wake_time = UINT64_MAX;
+
+    if (cnx->quic->pending_stateless_packet != NULL) {
+        wake_time = current_time;
+    } else {
+        wake_time = cnx->next_wake_time;
+    }
+
+    return wake_time;
+}
+
+int64_t picoquic_get_wake_delay(picoquic_cnx_t* cnx,
+    uint64_t current_time, int64_t delay_max)
+{
+    uint64_t next_wake_time = picoquic_get_wake_time(cnx, current_time);
+    int64_t wake_delay = next_wake_time - current_time;
+
+    if (wake_delay > delay_max || next_wake_time == UINT64_MAX) {
+        wake_delay = delay_max;
+    }
+
+    return wake_delay;
+}
+
+
 /* Other context management functions */
 
 int picoquic_get_version_index(uint32_t proposed_version)
