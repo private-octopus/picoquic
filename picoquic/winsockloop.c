@@ -76,7 +76,6 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 #include "picoquic_packet_loop.h"
 #include "picoquic_unified_log.h"
 
-#if 1
  /* Test support for UDP coalescing */
 void picoquic_socks_win_coalescing_test(int * recv_coalesced, int * send_coalesced)
 {
@@ -116,7 +115,6 @@ void picoquic_socks_win_coalescing_test(int * recv_coalesced, int * send_coalesc
         closesocket(fd);
     }
 }
-#endif
 
 /* Open a set of sockets in asynch mode. */
 int picoquic_packet_loop_open_sockets_win(int local_port, int local_af, 

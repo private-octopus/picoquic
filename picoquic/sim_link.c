@@ -40,6 +40,7 @@ picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
     picoquictest_sim_link_t* link = (picoquictest_sim_link_t*)malloc(sizeof(picoquictest_sim_link_t));
     if (link != 0) {
         double pico_d = (data_rate_in_gps <= 0) ? 0 : (8000.0 / data_rate_in_gps);
+        memset(link, 0, sizeof(picoquictest_sim_link_t));
         pico_d *= (1.024 * 1.024); /* account for binary units */
         link->next_send_time = current_time;
         link->queue_time = current_time;
@@ -185,7 +186,8 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
 
         link->queue_time = current_time + queue_delay + transmit_time;
 
-        if (packet->length > link->path_mtu || picoquictest_sim_link_testloss(link->loss_mask) != 0) {
+        if (packet->length > link->path_mtu || picoquictest_sim_link_testloss(link->loss_mask) != 0 ||
+            link->is_switched_off) {
             link->packets_dropped++;
             free(packet);
         } else {

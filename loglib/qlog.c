@@ -304,6 +304,9 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_grease_quic_bit:
                     qlog_boolean_transport_extension(f, "grease_quic_bit", s, extension_length);
                     break;
+                case picoquic_tp_enable_multipath:
+                    qlog_boolean_transport_extension(f, "enable_multipath", s, extension_length);
+                    break;
                 default:
                     /* dump unknown extensions */
                     fprintf(f, "\"%" PRIx64 "\": ", extension_type);
@@ -707,6 +710,28 @@ void qlog_time_stamp_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"time_stamp\": %"PRIu64"", time_stamp);
 }
 
+void qlog_qoe_frame(FILE* f, bytestream* s)
+{
+    uint64_t path_id = 0;
+    uint64_t length = 0;
+
+    byteread_vint(s, &path_id);
+    byteread_vint(s, &length);
+    fprintf(f, ", \"path_id\": %"PRIu64", \"length\": %"PRIu64"", path_id, length);
+}
+
+void qlog_path_status_frame(FILE* f, bytestream* s)
+{
+    uint64_t path_id = 0;
+    uint64_t status = 0;
+    uint64_t priority = 0;
+
+    byteread_vint(s, &path_id);
+    byteread_vint(s, &status);
+    byteread_vint(s, &priority);
+    fprintf(f, ", \"path_id\": %"PRIu64", \"status\": %"PRIu64", \"priority\": %"PRIu64"", path_id, status, priority);
+}
+
 void qlog_reset_stream_frame(FILE* f, bytestream* s)
 {
     uint64_t stream_id = 0;
@@ -918,11 +943,16 @@ void qlog_ack_frequency_frame(FILE* f, bytestream* s)
 void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
 {
     uint64_t largest = 0;
-    byteread_vint(s, &largest);
     uint64_t ack_delay = 0;
+    uint64_t num = 0;
+    uint64_t path_id = 0;
+    if (ftype == picoquic_frame_type_ack_mp || ftype == picoquic_frame_type_ack_mp_ecn) {
+        byteread_vint(s, &path_id);
+        fprintf(f, ", \"path_id\": %"PRIu64"", path_id);
+    }
+    byteread_vint(s, &largest);
     byteread_vint(s, &ack_delay);
     fprintf(f, ", \"ack_delay\": %"PRIu64"", ack_delay);
-    uint64_t num = 0;
     byteread_vint(s, &num);
     fprintf(f, ", \"acked_ranges\": [");
     for (uint64_t i = 0; i <= num; i++) {
@@ -941,7 +971,7 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
         largest -= range + 1;
     }
     fprintf(f, "]");
-    if (ftype == picoquic_frame_type_ack_ecn) {
+    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_ack_mp_ecn) {
         char const* ecn_name[3] = { "ect0", "ect1", "ce" };
         for (int ecnx = 0; ecnx < 3; ecnx++) {
             uint64_t ecn_v = 0;
@@ -1043,6 +1073,8 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_ack:
     case picoquic_frame_type_ack_ecn:
+    case picoquic_frame_type_ack_mp:
+    case picoquic_frame_type_ack_mp_ecn:
         qlog_ack_frame(ftype, f, s);
         break;
     case picoquic_frame_type_reset_stream:
@@ -1102,6 +1134,12 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_time_stamp:
         qlog_time_stamp_frame(f, s);
+        break;
+    case picoquic_frame_type_qoe:
+        qlog_qoe_frame(f, s);
+        break;
+    case picoquic_frame_type_path_status:
+        qlog_path_status_frame(f, s);
         break;
     default:
         s->ptr = ptr_before_type;

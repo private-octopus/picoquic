@@ -122,10 +122,16 @@ static const uint8_t* picoquic_log_stream_frame(FILE* f, const uint8_t* bytes, c
 static const uint8_t* picoquic_log_ack_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
-    uint8_t ftype = bytes[0];
+    uint64_t ftype = 0;
     uint64_t nb_blocks;
 
-    bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
+    (void) picoquic_varint_decode(bytes, bytes_max - bytes, &ftype);
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Logging the frame type, maybe multiple bytes */
+
+    if (ftype == picoquic_frame_type_ack_mp || ftype == picoquic_frame_type_ack_mp_ecn) {
+        bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Log the path_id */
+    }
 
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
@@ -138,7 +144,7 @@ static const uint8_t* picoquic_log_ack_frame(FILE* f, const uint8_t* bytes, cons
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
     }
     
-    if (ftype == picoquic_frame_type_ack_ecn) {
+    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_ack_mp_ecn) {
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
@@ -380,6 +386,37 @@ static const uint8_t* picoquic_log_time_stamp_frame(FILE* f, const uint8_t* byte
     return bytes;
 }
 
+static const uint8_t* picoquic_log_qoe_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+    size_t length;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* path_id as varint */
+    /* Length as varint plus byte stream */
+    bytes = picoquic_log_length(bytes, bytes_max, &length);
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, length);
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
+static const uint8_t* picoquic_log_path_status_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* path_id as varint */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* status as varint */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* priority as varint */
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
+
 static const uint8_t* picoquic_log_ack_frequency_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
@@ -444,6 +481,8 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         switch (ftype) {
         case picoquic_frame_type_ack:
         case picoquic_frame_type_ack_ecn:
+        case picoquic_frame_type_ack_mp:
+        case picoquic_frame_type_ack_mp_ecn:
             bytes = picoquic_log_ack_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_retire_connection_id:
@@ -511,6 +550,13 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         case picoquic_frame_type_time_stamp:
             bytes = picoquic_log_time_stamp_frame(f, bytes, bytes_max);
             break;
+        case picoquic_frame_type_qoe:
+            bytes = picoquic_log_qoe_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_path_status:
+            bytes = picoquic_log_path_status_frame(f, bytes, bytes_max);
+            break;
+
         default:
             bytes = picoquic_log_erroring_frame(f, bytes, bytes_max);
             break;

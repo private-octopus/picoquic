@@ -1432,11 +1432,6 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
 
         nb_trials++;
-#if 1
-        if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->path[0]->bytes_in_transit == 0) {
-            was_active = 0;
-        }
-#endif
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
@@ -1540,7 +1535,7 @@ static int wait_application_aead_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-static int wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
+int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t time_out_delay)
 {
     int ret = 0;
@@ -1961,7 +1956,7 @@ static int check_vn_invariant(uint8_t* packet, size_t packet_length, uint8_t* re
     /* Check that response version is 0 */
     for (size_t i = 1; ret == 0 && i < 5; i++) {
         if (response[i] != 0) {
-            DBG_PRINTF("Version ID not zero, packet[%zu] = 0x%02x", response[i]);
+            DBG_PRINTF("Version ID not zero, packet[%zu] = 0x%02x", i, response[i]);
             ret = -1;
         }
     }
@@ -3651,7 +3646,7 @@ static int mtu_drop_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64
 
     /* Send for 1 seconds, check that MTU is discovered, and then drop the MTU size in the s_to_c direction */
     if (ret == 0) {
-        ret = wait_for_timeout(test_ctx, &simulated_time, 1000000);
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 1000000);
     }
 
     if (ret == 0) {
@@ -7491,7 +7486,7 @@ int fastcc_test()
 
 int fastcc_jitter_test()
 {
-    return congestion_control_test(picoquic_fastcc_algorithm, 3650000, 5000, 5);
+    return congestion_control_test(picoquic_fastcc_algorithm, 4050000, 5000, 5);
 }
 
 int bbr_test()
@@ -7685,7 +7680,7 @@ int bbr_slow_long_test()
 
 int bbr_one_second_test()
 {
-    uint64_t max_completion_time = 128000000;
+    uint64_t max_completion_time = 90000000;
     uint64_t latency = 1000000;
     uint64_t jitter = 3000;
     uint64_t buffer = 2 * (latency + jitter);
@@ -7801,7 +7796,7 @@ int satellite_basic_test()
 int satellite_loss_test()
 {
     /* Should be less than 10 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8600000, 250, 3, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 10000000, 250, 3, 0, 1);
 }
 
 int satellite_jitter_test()
@@ -9271,7 +9266,7 @@ int app_limit_cc_test_one(
                     int nb_comma = 0;
                     int c_index = 0;
 
-                    while (nb_comma < 5 && buffer[c_index] != 0 && c_index < 512) {
+                    while (nb_comma < 5 && c_index < 512 && buffer[c_index] != 0) {
                         if (buffer[c_index] == ',') {
                             nb_comma++;
                         }
@@ -9781,8 +9776,8 @@ int red_cc_test()
         600000,
         500000,
         500000,
-        550000,
-        500000
+        500000,
+        550000
     };
     uint64_t algo_loss[5] = {
         150,

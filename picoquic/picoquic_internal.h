@@ -131,7 +131,11 @@ typedef enum {
     picoquic_frame_type_datagram = 0x30,
     picoquic_frame_type_datagram_l = 0x31,
     picoquic_frame_type_ack_frequency = 0xAF,
-    picoquic_frame_type_time_stamp = 757
+    picoquic_frame_type_time_stamp = 757,
+    picoquic_frame_type_ack_mp = 0xbaba0,
+    picoquic_frame_type_ack_mp_ecn = 0xbaba1,
+    picoquic_frame_type_qoe = 0xbaba2,
+    picoquic_frame_type_path_status = 0xbaba3
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -468,7 +472,8 @@ typedef enum {
     picoquic_tp_enable_loss_bit = 0x1057,
     picoquic_tp_min_ack_delay = 0xff02de1a,
     picoquic_tp_enable_time_stamp = 0x7158, /* x&1 = */
-    picoquic_tp_grease_quic_bit = 0x2ab2
+    picoquic_tp_grease_quic_bit = 0x2ab2,
+    picoquic_tp_enable_multipath = 0xbaba88
 } picoquic_tp_enum;
 
 /* Callback for converting binary log to quic log at the end of a connection. 
@@ -664,7 +669,7 @@ typedef struct st_picoquic_stream_head_t {
 #define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)
 #define IS_BIDIR_STREAM_ID(id)  (unsigned int)(((id) & 2) == 0)
 #define IS_LOCAL_STREAM_ID(id, client_mode)  (unsigned int)(((id)^(client_mode)) & 1)
-#define STREAM_ID_FROM_RANK(rank, is_server_stream, is_unidir) ((((uint64_t)(rank)-(uint64_t)1)<<2)|(((uint64_t)is_unidir)<<1)|((uint64_t)(is_server_stream)))
+#define STREAM_ID_FROM_RANK(rank, client_mode, is_unidir) ((((uint64_t)(rank)-(uint64_t)1)<<2)|(((uint64_t)is_unidir)<<1)|((uint64_t)(client_mode^1)))
 #define STREAM_RANK_FROM_ID(id) ((id + 4)>>2)
 #define STREAM_TYPE_FROM_ID(id) ((id)&3)
 #define NEXT_STREAM_ID_FOR_TYPE(id) ((id)+4)
@@ -762,14 +767,31 @@ typedef struct st_picoquic_path_t {
     unsigned int is_nat_challenge : 1;
     unsigned int got_long_packet : 1;
 
-    /* number of retransmissions observed on path */
-    uint64_t retrans_count;
+    /* Path priority, for multipath management */
+    int path_priority;
 
+    /* Management of retransmissions in a path.
+     * The "last_1rtt_acknowledged" is used for the RACK algorithm, per path, to avoid
+     * declaring packets lost just because another path is delivering them faster.
+     * The "number of retransmit" counts the number of unsuccessful retransmissions; it
+     * is reset to zero if a new packet is acknowledged.
+     */
+    uint64_t last_1rtt_acknowledged;
+    uint64_t last_1rtt_acknowledged_at;
+    uint64_t last_packet_received_at;
+    uint64_t nb_retransmit;
+    uint64_t retrans_count;
     /* Time measurement */
-    int64_t phase_delay;
     uint64_t max_ack_delay;
     uint64_t rtt_sample;
     uint64_t one_way_delay_sample;
+    uint64_t one_way_delay_avg;
+    uint64_t one_way_delay_var;
+    uint64_t one_way_delay_min;
+    uint64_t one_way_return_avg;
+    uint64_t one_way_return_var;
+    uint64_t one_way_return_min;
+
     uint64_t smoothed_rtt;
     uint64_t rtt_variant;
     uint64_t retransmit_timer;
@@ -835,6 +857,16 @@ typedef struct st_picoquic_path_t {
     uint64_t nb_losses_reported;
     uint64_t q_square;
 
+    /* Debug MP */
+    int lost_after_delivered;
+    int responder;
+    int challenger;
+    int polled;
+    int paced;
+    int congested;
+    int selected;
+    int lost;
+    int nb_delay_outliers;
 } picoquic_path_t;
 
 /* Crypto context. There are four such contexts:
@@ -960,6 +992,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int did_receive_short_initial : 1; /* whether peer sent unpadded initial packet */
     unsigned int ack_ignore_order_local : 1; /* Request peer to not generate immediate ack if out of order packet received */
     unsigned int ack_ignore_order_remote : 1; /* Peer requested no immediate ack if out of order packet received */
+    unsigned int is_multipath_enabled : 1; /* Usage of multipath was negotiated */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -989,6 +1022,7 @@ typedef struct st_picoquic_cnx_t {
     struct st_picoquic_net_icid_key_t* net_icid_key;
     struct st_picoquic_net_secret_key_t* reset_secret_key;
     uint64_t start_time;
+    int64_t phase_delay;
     uint64_t application_error;
     uint64_t local_error;
     uint64_t remote_application_error;
@@ -1089,6 +1123,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_path_t ** path;
     int nb_paths;
     int nb_path_alloc;
+    int last_path_polled;
     uint64_t path_sequence_next;
 
     /* Management of the CNX-ID stash */
@@ -1118,14 +1153,19 @@ typedef struct st_picoquic_cnx_t {
 } picoquic_cnx_t;
 
 typedef struct st_picoquic_packet_data_t {
-    picoquic_path_t* acked_path; /* path for which ACK was received */
-    uint64_t last_ack_delay; /* ACK Delay in ACK frame */
     uint64_t last_time_stamp_received;
-    uint64_t largest_sent_time; /* Send time of ACKed packet (largest number acked) */
-    uint64_t delivered_prior; /* Amount delivered prior to that packet */
-    uint64_t delivered_time_prior; /* Time last delivery before acked packet sent */
-    uint64_t delivered_sent_prior; /* Time this last delivery packet was sent */
-    int rs_is_path_limited; /* Whether the path was app limited when packet was sent */
+    uint64_t last_ack_delay; /* ACK Delay in ACK frame */
+    int nb_path_ack;
+    struct {
+        picoquic_path_t* acked_path; /* path for which ACK was received */
+        uint64_t largest_sent_time; /* Send time of ACKed packet (largest number acked) */
+        uint64_t delivered_prior; /* Amount delivered prior to that packet */
+        uint64_t delivered_time_prior; /* Time last delivery before acked packet sent */
+        uint64_t delivered_sent_prior; /* Time this last delivery packet was sent */
+        int rs_is_path_limited; /* Whether the path was app limited when packet was sent */
+        int is_set;
+        uint64_t data_acked;
+    } path_ack[PICOQUIC_NB_PATH_TARGET];
 } picoquic_packet_data_t;
 
 /* Load the stash of retry tokens. */
@@ -1295,12 +1335,14 @@ int picoquic_update_sack_list(picoquic_sack_item_t* sack,
 int picoquic_check_sack_list(picoquic_sack_item_t* sack,
     uint64_t pn64_min, uint64_t pn64_max);
 
+void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet);
+
 /*
  * Process ack of ack
  */
 int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn);
+    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn, int has_path_id);
 
 /* Computation of ack delay max and ack gap, based on RTT and Data Rate.
  * If ACK Frequency extension is used, these functions will compute the values
@@ -1312,8 +1354,8 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate);
 uint64_t picoquic_compute_ack_delay_max(uint64_t rtt, uint64_t remote_min_ack_delay);
 
 /* Update the path RTT upon receiving an explict or implicit acknowledgement */
-void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, uint64_t send_time,
-    uint64_t current_time, uint64_t ack_delay);
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, picoquic_path_t* path_x,
+    uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp);
 
 /* stream management */
 picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
@@ -1377,7 +1419,7 @@ int picoquic_parse_stream_header(
 
 int picoquic_parse_ack_header(
     uint8_t const* bytes, size_t bytes_max,
-    uint64_t* num_block, uint64_t* largest,
+    uint64_t* num_block, uint64_t* path_id, uint64_t* largest,
     uint64_t* ack_delay, size_t* consumed,
     uint8_t ack_delay_exponent);
 const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,

@@ -1149,6 +1149,8 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
             /* Register the sequence number */
             path_x->path_sequence = cnx->path_sequence_next;
             cnx->path_sequence_next++;
+            /* Set the first ack to -1 */
+            path_x->last_1rtt_acknowledged = UINT64_MAX;
 
             /* Set the addresses */
             picoquic_store_addr(&path_x->peer_addr, peer_addr);
@@ -2055,7 +2057,7 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
 void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir)
 {
     uint64_t old_rank = STREAM_RANK_FROM_ID(old_limit);
-    uint64_t first_new_id = STREAM_ID_FROM_RANK(old_rank + 1ull, !cnx->client_mode, !is_bidir);
+    uint64_t first_new_id = STREAM_ID_FROM_RANK(old_rank + 1ull, cnx->client_mode, !is_bidir);
     picoquic_stream_head_t* stream = picoquic_find_stream(cnx, first_new_id );
 
     while (stream) {
@@ -2357,6 +2359,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
         memset(cnx, 0, sizeof(picoquic_cnx_t));
         cnx->start_time = start_time;
+        cnx->phase_delay = INT64_MAX;
         cnx->client_mode = client_mode;
         if (client_mode) {
             if (picoquic_is_connection_id_null(&initial_cnx_id)) {

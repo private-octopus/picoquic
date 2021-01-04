@@ -1358,6 +1358,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_basic) {
+            int ret = multipath_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_drop_first) {
+            int ret = multipath_drop_first_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_drop_second) {
+            int ret = multipath_drop_second_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_sat_plus) {
+            int ret = multipath_sat_plus_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(config_option_letters) {
             int ret = config_option_letters_test();
 

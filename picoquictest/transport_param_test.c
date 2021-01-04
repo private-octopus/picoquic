@@ -74,42 +74,42 @@
 
 static picoquic_tp_t transport_param_test1 = {
     65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test2 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 0, 1
 };
 
 static picoquic_tp_t transport_param_test3 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, 0
 };
 
 static picoquic_tp_t transport_param_test4 = {
     65535, 0, 0, 0x400000, 65532, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test5 = {
     0x1000000, 0, 0, 0x1000000, 4, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test6 = {
     0x10000, 0, 0, 0xffffffff, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test7 = {
     8192, 0, 0, 16384, 5, 0, 10, 1472, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 17, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test8 = {
     65535, 0, 0, 0x400000, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test9 = {
@@ -117,17 +117,17 @@ static picoquic_tp_t transport_param_test9 = {
     { 1, { 10, 0, 0, 1}, 4433, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0,
     {{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },4},
         { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }},
-        0, 0, 0, 0, 0
+        0, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test10 = {
     65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 1, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test11 = {
     65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 1
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 1, 0
 };
 
 #define LOCAL_CONNECTION_ID  2, 3, 4, 5, 6, 7, 8, 9
@@ -153,7 +153,9 @@ uint8_t client_param2[] = {
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
     picoquic_tp_max_datagram_frame_size, 2,0x45, 0xC8,
     0x50, 0x57, 0x01, 0x01,
-    0x80, 0, 0x71, 0x58, 0x01, 0x03
+    0x80, 0, 0x71, 0x58, 0x01, 0x03,
+    0x80, (uint8_t)((picoquic_tp_enable_multipath >> 16) & 0xFF),
+    (uint8_t)((picoquic_tp_enable_multipath>>8) & 0xFF), (uint8_t)(picoquic_tp_enable_multipath&0xFF), 0x00
 };
 
 uint8_t client_param3[] = {
@@ -565,7 +567,7 @@ int transport_param_one_test(int mode, int grease, uint32_t version, uint32_t pr
     picoquic_quic_t * quic_ctx;
     picoquic_cnx_t * test_cnx;
     uint8_t buffer[256];
-    size_t encoded, decoded; 
+    size_t encoded = 0, decoded = 0; 
     uint64_t simulated_time = 0;
 
     ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
@@ -648,7 +650,7 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
     picoquic_quic_t * quic_ctx = NULL;
     picoquic_cnx_t * test_cnx = NULL;
     uint64_t simulated_time = 0;
-    size_t decoded;
+    size_t decoded = 0;
 
     ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
 

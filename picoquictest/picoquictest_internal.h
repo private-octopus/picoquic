@@ -196,6 +196,9 @@ int tls_api_one_scenario_body_connect(picoquic_test_tls_api_ctx_t* test_ctx,
 int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t* simulated_time, int max_trials);
 
+int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, uint64_t time_out_delay);
+
 int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time,
     uint64_t max_completion_microsec);
