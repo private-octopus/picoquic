@@ -35,8 +35,8 @@ static int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int m
     test_ctx->client_addr_2 = test_ctx->client_addr;
     test_ctx->client_addr_2.sin_port += 17;
     /* register the links */
-    test_ctx->c_to_s_link_2 = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
-    test_ctx->s_to_c_link_2 = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
+    test_ctx->c_to_s_link_2 = picoquictest_sim_link_create(0.01, 10000, NULL, 20000, 0);
+    test_ctx->s_to_c_link_2 = picoquictest_sim_link_create(0.01, 10000, NULL, 20000, 0);
 
     if (test_ctx->c_to_s_link_2 == NULL || test_ctx->s_to_c_link_2 == NULL) {
         ret = -1;
@@ -81,6 +81,8 @@ static void multipath_test_sat_links(picoquic_test_tls_api_ctx_t* test_ctx, int 
 
         test_ctx->c_to_s_link_2->microsec_latency = sat_latency;
         test_ctx->s_to_c_link_2->microsec_latency = sat_latency;
+        test_ctx->c_to_s_link_2->queue_delay_max = 2*sat_latency;
+        test_ctx->s_to_c_link_2->queue_delay_max = 2*sat_latency;
     }
 }
 
@@ -283,7 +285,7 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
     picoquic_init_transport_parameters(test_parameters, 1);
 
     test_parameters->enable_multipath = 1;
-    test_parameters->enable_time_stamp = 1;
+    test_parameters->enable_time_stamp = 3;
 }
 
 /* wait until the migration completes */
@@ -367,6 +369,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             /* Simulate an asymmetric "satellite and landline" scenario */
             multipath_test_sat_links(test_ctx, 0);
         }
+        test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
+        test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
+
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         /* Set the multipath option at both client and server */
@@ -380,7 +385,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
     /* establish the connection */
     if (ret == 0) {
-        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
     }
     /* verify that multipath is negotiated on both sides */
     if (ret == 0) {
@@ -472,7 +477,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
 int multipath_basic_test()
 {
-    uint64_t max_completion_microsec = 1300000;
+    uint64_t max_completion_microsec = 1100000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_basic);
 }
@@ -504,7 +509,7 @@ int multipath_drop_second_test()
  */
 int multipath_sat_plus_test()
 {
-    uint64_t max_completion_microsec = 2000000;
+    uint64_t max_completion_microsec = 5000000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_sat_plus);
+    return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus);
 }

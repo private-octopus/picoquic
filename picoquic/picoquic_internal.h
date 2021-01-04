@@ -866,6 +866,7 @@ typedef struct st_picoquic_path_t {
     int congested;
     int selected;
     int lost;
+    int nb_delay_outliers;
 } picoquic_path_t;
 
 /* Crypto context. There are four such contexts:

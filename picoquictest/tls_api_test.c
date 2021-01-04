@@ -7486,7 +7486,7 @@ int fastcc_test()
 
 int fastcc_jitter_test()
 {
-    return congestion_control_test(picoquic_fastcc_algorithm, 3650000, 5000, 5);
+    return congestion_control_test(picoquic_fastcc_algorithm, 4050000, 5000, 5);
 }
 
 int bbr_test()
@@ -7796,7 +7796,7 @@ int satellite_basic_test()
 int satellite_loss_test()
 {
     /* Should be less than 10 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8600000, 250, 3, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 10000000, 250, 3, 0, 1);
 }
 
 int satellite_jitter_test()
