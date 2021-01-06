@@ -340,6 +340,30 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                                 picoquic_notify_destination_unreachable(last_cnx, current_time,
                                     (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                                     sock_err);
+                            } else if (sock_err == EIO) {
+                                size_t packet_index = 0;
+                                size_t packet_size = send_msg_size;
+
+                                while (packet_index < send_length) {
+                                    if (packet_index + packet_size > send_length) {
+                                        packet_size = send_length - packet_index;
+                                    }
+                                    sock_ret = picoquic_sendmsg(send_socket,
+                                        (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
+                                        (const char*)(send_buffer + packet_index), (int)packet_size, 0, &sock_err);
+                                    if (sock_ret > 0) {
+                                        packet_index += packet_size;
+                                    }
+                                    else {
+                                        picoquic_log_app_message(last_cnx, "Retry with packet size=%zu fails at index %zu, ret=%d, err=%d.",
+                                            packet_size, packet_index, sock_ret, sock_err);
+                                        break;
+                                    }
+                                }
+                                if (sock_ret > 0) {
+                                    picoquic_log_app_message(last_cnx, "Retry of %zu bytes by chunks of %zu bytes succeeds.",
+                                        send_length, send_msg_size);
+                                }
                             }
                         }
                     }
