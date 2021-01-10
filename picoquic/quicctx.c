@@ -2519,12 +2519,14 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
         for (picoquic_packet_context_enum pc = 0;
             pc < picoquic_nb_packet_context; pc++) {
-            cnx->pkt_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
-            cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range = 0;
-            cnx->pkt_ctx[pc].first_sack_item.next_sack = NULL;
-            cnx->pkt_ctx[pc].highest_ack_sent = 0;
-            cnx->pkt_ctx[pc].highest_ack_sent_time = start_time;
-            cnx->pkt_ctx[pc].time_stamp_largest_received = (uint64_t)((int64_t)-1);
+            cnx->ack_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+            cnx->ack_ctx[pc].first_sack_item.end_of_sack_range = 0;
+            cnx->ack_ctx[pc].first_sack_item.next_sack = NULL;
+            cnx->ack_ctx[pc].highest_ack_sent = 0;
+            cnx->ack_ctx[pc].highest_ack_sent_time = start_time;
+            cnx->ack_ctx[pc].time_stamp_largest_received = (uint64_t)((int64_t)-1);
+            cnx->ack_ctx[pc].ack_needed = 0;
+
             if (quic->random_initial) {
                 cnx->pkt_ctx[pc].send_sequence = picoquic_crypto_uniform_random(quic, PICOQUIC_PN_RANDOM_RANGE) +
                     PICOQUIC_PN_RANDOM_MIN;
@@ -2539,7 +2541,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->pkt_ctx[pc].highest_acknowledged = cnx->pkt_ctx[pc].send_sequence - 1;
             cnx->pkt_ctx[pc].latest_time_acknowledged = start_time;
             cnx->pkt_ctx[pc].highest_acknowledged_time = start_time;
-            cnx->pkt_ctx[pc].ack_needed = 0;
         }
         /* Initialize the ACK behavior. By default, picoquic abides with the recommendation to send
          * ACK immediately if packets are received out of order (ack_ignore_order_remote = 0),
@@ -3068,6 +3069,7 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
 {
     /* TODO: special case for 0-RTT packets! */
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
+    picoquic_ack_context_t* ack_ctx = &cnx->ack_ctx[pc];
 
     while (pkt_ctx->retransmit_newest != NULL) {
         (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx->retransmit_newest, 1);
@@ -3079,18 +3081,18 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
 
     pkt_ctx->retransmitted_oldest = NULL;
 
-    while (pkt_ctx->first_sack_item.next_sack != NULL) {
-        picoquic_sack_item_t * next = pkt_ctx->first_sack_item.next_sack;
-        pkt_ctx->first_sack_item.next_sack = next->next_sack;
+    while (ack_ctx->first_sack_item.next_sack != NULL) {
+        picoquic_sack_item_t * next = ack_ctx->first_sack_item.next_sack;
+        ack_ctx->first_sack_item.next_sack = next->next_sack;
         free(next);
     }
 
-    pkt_ctx->first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
-    pkt_ctx->first_sack_item.end_of_sack_range = 0;
+    ack_ctx->first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+    ack_ctx->first_sack_item.end_of_sack_range = 0;
     /* Reset the ECN data */
-    pkt_ctx->ecn_ect0_total_local = 0;
-    pkt_ctx->ecn_ect1_total_local = 0;
-    pkt_ctx->ecn_ce_total_local = 0;
+    ack_ctx->ecn_ect0_total_local = 0;
+    ack_ctx->ecn_ect1_total_local = 0;
+    ack_ctx->ecn_ce_total_local = 0;
     pkt_ctx->ecn_ect0_total_remote = 0;
     pkt_ctx->ecn_ect1_total_remote = 0;
     pkt_ctx->ecn_ce_total_remote = 0;
@@ -3197,7 +3199,7 @@ int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
     /* Verify that a packet of the previous rotation was acked */
     if (cnx->cnx_state != picoquic_state_ready ||
         cnx->crypto_epoch_sequence >
-        cnx->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range) {
+        cnx->ack_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range) {
         ret = PICOQUIC_ERROR_KEY_ROTATION_NOT_READY;
     }
     else {

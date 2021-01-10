@@ -443,7 +443,7 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
 
             /* Build a packet number to 64 bits */
             ph->pn64 = picoquic_get_packet_number64(
-                cnx->pkt_ctx[ph->pc].first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
+                cnx->ack_ctx[ph->pc].first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
 
             /* Check the reserved bits */
             if ((first_byte & 0x80) == 0) {
@@ -1722,16 +1722,16 @@ void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
     case 0x00:
         break;
     case 0x01: /* ECN_ECT_1 */
-        cnx->pkt_ctx[pc].ecn_ect1_total_local++;
-        cnx->pkt_ctx[pc].sending_ecn_ack |= 1;
+        cnx->ack_ctx[pc].ecn_ect1_total_local++;
+        cnx->ack_ctx[pc].sending_ecn_ack |= 1;
         break;
     case 0x02: /* ECN_ECT_0 */
-        cnx->pkt_ctx[pc].ecn_ect0_total_local++;
-        cnx->pkt_ctx[pc].sending_ecn_ack |= 1;
+        cnx->ack_ctx[pc].ecn_ect0_total_local++;
+        cnx->ack_ctx[pc].sending_ecn_ack |= 1;
         break;
     case 0x03: /* ECN_CE */
-        cnx->pkt_ctx[pc].ecn_ce_total_local++;
-        cnx->pkt_ctx[pc].sending_ecn_ack |= 1;
+        cnx->ack_ctx[pc].ecn_ce_total_local++;
+        cnx->ack_ctx[pc].sending_ecn_ack |= 1;
         break;
     }
 }

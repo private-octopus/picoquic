@@ -38,7 +38,7 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc, uint64_t pn64)
 {
     int is_received = 0;
-    picoquic_sack_item_t* sack = &cnx->pkt_ctx[pc].first_sack_item;
+    picoquic_sack_item_t* sack = &cnx->ack_ctx[pc].first_sack_item;
 
     if (sack->start_of_sack_range != (uint64_t)((int64_t)-1)) {
         do {
@@ -178,23 +178,23 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
     uint64_t current_microsec)
 {
     int ret = 0;
-    picoquic_sack_item_t* sack = &cnx->pkt_ctx[pc].first_sack_item;
+    picoquic_sack_item_t* sack = &cnx->ack_ctx[pc].first_sack_item;
 
     if (sack->start_of_sack_range == (uint64_t)((int64_t)-1)) {
         /* This is the first packet ever received.. */
         sack->start_of_sack_range = pn64;
         sack->end_of_sack_range = pn64;
-        cnx->pkt_ctx[pc].time_stamp_largest_received = current_microsec;
+        cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
     } 
     else {
         if (pn64 > sack->end_of_sack_range) {
             if (pn64 > sack->end_of_sack_range + 1) {
-                cnx->pkt_ctx[pc].out_of_order_received = 1;
+                cnx->ack_ctx[pc].out_of_order_received = 1;
             }
-            cnx->pkt_ctx[pc].time_stamp_largest_received = current_microsec;
+            cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
         }
-        else if (cnx->pkt_ctx[pc].ack_needed && pn64 < cnx->pkt_ctx[pc].highest_ack_sent) {
-            cnx->pkt_ctx[pc].out_of_order_received = 1;
+        else if (cnx->ack_ctx[pc].ack_needed && pn64 < cnx->ack_ctx[pc].highest_ack_sent) {
+            cnx->ack_ctx[pc].out_of_order_received = 1;
         }
 
         ret = picoquic_update_sack_list(sack, pn64, pn64);

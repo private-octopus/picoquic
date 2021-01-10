@@ -645,13 +645,13 @@ int quic_client(const char* ip_address_text, int server_port,
         fprintf(stdout, "Quic Bit was %sgreased by the client.\n", (cnx_client->quic_bit_greased) ? "" : "NOT ");
         fprintf(stdout, "Quic Bit was %sgreased by the server.\n", (cnx_client->quic_bit_received_0) ? "" : "NOT ");
 
-        if (cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ect0_total_local != 0 ||
-            cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ect1_total_local != 0 ||
-            cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ce_total_local != 0) {
+        if (cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ect0_total_local != 0 ||
+            cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ect1_total_local != 0 ||
+            cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ce_total_local != 0) {
             fprintf(stdout, "ECN was received (ect0: %" PRIu64 ", ect1: %" PRIu64 ", ce: %" PRIu64 ").\n",
-                cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ect0_total_local,
-                cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ect1_total_local,
-                cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ce_total_local);
+                cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ect0_total_local,
+                cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ect1_total_local,
+                cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ce_total_local);
         }
         else {
             fprintf(stdout, "ECN was not received.\n");

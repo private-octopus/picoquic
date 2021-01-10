@@ -693,6 +693,64 @@ typedef struct st_picoquic_misc_frame_header_t {
     int is_pure_ack;
 } picoquic_misc_frame_header_t;
 
+/* Per epoch sequence/packet context.
+* There are three such contexts:
+* 0: Application (0-RTT and 1-RTT)
+* 1: Handshake
+* 2: Initial
+* The context holds all the data required to manage sending and
+* resending of packets.
+*/
+
+typedef struct st_picoquic_packet_context_t {
+    uint64_t send_sequence; /* picoquic_decode_ack_frame */
+    uint64_t next_sequence_hole;
+
+    uint64_t nb_retransmit;
+    uint64_t latest_retransmit_time; /* TODO: initialized, unused */
+    uint64_t retransmit_sequence; /* TODO: Used, never set! */
+    uint64_t highest_acknowledged;
+    uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
+    uint64_t highest_acknowledged_time; /* time at which the highest ack was received */
+    picoquic_packet_t* retransmit_newest;
+    picoquic_packet_t* retransmit_oldest;
+    picoquic_packet_t* retransmitted_newest;
+    picoquic_packet_t* retransmitted_oldest;
+    /* ECN Counters */
+    uint64_t ecn_ect0_total_remote;
+    uint64_t ecn_ect1_total_remote;
+    uint64_t ecn_ce_total_remote;
+    /* Flags */
+    unsigned int ack_of_ack_requested : 1; /* TODO: Initialized, unused */
+} picoquic_packet_context_t;
+
+/* Per epoch ack context.
+* There are three such contexts:
+* 0: Application (0-RTT and 1-RTT)
+* 1: Handshake
+* 2: Initial
+* The context holds all the data required to manage acknowledgments
+*/
+
+typedef struct st_picoquic_ack_context_t {
+    picoquic_sack_item_t first_sack_item; /* picoquic_format_ack_frame */
+    uint64_t time_stamp_largest_received; /* picoquic_format_ack_frame */
+    uint64_t highest_ack_sent; /* picoquic_format_ack_frame */
+    uint64_t highest_ack_sent_time; /* picoquic_format_ack_frame */
+
+    uint64_t time_oldest_unack_packet_received; /* picoquic_is_ack_needed: first packet that has not been acked yet */
+
+    /* ECN Counters */
+    uint64_t ecn_ect0_total_local; /* picoquic_format_ack_frame */
+    uint64_t ecn_ect1_total_local; /* picoquic_format_ack_frame */
+    uint64_t ecn_ce_total_local; /* picoquic_format_ack_frame */
+    /* Flags */
+    unsigned int ack_needed : 1; /* picoquic_format_ack_frame */
+    unsigned int ack_after_fin : 1; /* picoquic_format_ack_frame */
+    unsigned int sending_ecn_ack : 1; /* picoquic_format_ack_frame, picoquic_ecn_accounting */
+    unsigned int out_of_order_received : 1; /* picoquic_is_ack_needed */
+} picoquic_ack_context_t;
+
 /* Local CID.
  * Local CID are created on demand, and stashed in the CID list.
  * When the CID is created, it is registered in the QUIC context as 
@@ -708,6 +766,7 @@ typedef struct st_picoquic_local_cnxid_t {
     uint64_t sequence;
     picoquic_connection_id_t cnx_id;
 } picoquic_local_cnxid_t;
+
 
 /*
 * Per path context.
@@ -882,50 +941,6 @@ typedef struct st_picoquic_crypto_context_t {
     void* pn_dec; /* Used for PN decryption */
 } picoquic_crypto_context_t;
 
-/* Per epoch sequence/packet context.
-* There are three such contexts:
-* 0: Application (0-RTT and 1-RTT)
-* 1: Handshake
-* 2: Initial
-* The context holds all the data required to manage acknowledgments and
-* retransmissions.
-*/
-
-typedef struct st_picoquic_packet_context_t {
-    uint64_t send_sequence;
-
-    picoquic_sack_item_t first_sack_item;
-    uint64_t next_sequence_hole;
-    uint64_t time_stamp_largest_received;
-    uint64_t highest_ack_sent;
-    uint64_t highest_ack_sent_time;
-
-    uint64_t nb_retransmit;
-    uint64_t latest_retransmit_time;
-    uint64_t retransmit_sequence;
-    uint64_t highest_acknowledged;
-    uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
-    uint64_t highest_acknowledged_time; /* time at which the highest ack was received */
-    uint64_t time_oldest_unack_packet_received; /* first packet that has not been acked yet */
-    picoquic_packet_t* retransmit_newest;
-    picoquic_packet_t* retransmit_oldest;
-    picoquic_packet_t* retransmitted_newest;
-    picoquic_packet_t* retransmitted_oldest;
-    /* ECN Counters */
-    uint64_t ecn_ect0_total_local;
-    uint64_t ecn_ect1_total_local;
-    uint64_t ecn_ce_total_local;
-    uint64_t ecn_ect0_total_remote;
-    uint64_t ecn_ect1_total_remote;
-    uint64_t ecn_ce_total_remote;
-    /* Flags */
-    unsigned int ack_needed : 1;
-    unsigned int ack_of_ack_requested : 1;
-    unsigned int ack_after_fin : 1;
-    unsigned int sending_ecn_ack : 1;
-    unsigned int out_of_order_received : 1;
-} picoquic_packet_context_t;
-
 /*
 * Item in the list of the CNX-ID received from the peer, and not
 * yet used in a path or a probe.
@@ -1054,6 +1069,8 @@ typedef struct st_picoquic_cnx_t {
 
     /* Sequence and retransmission state */
     picoquic_packet_context_t pkt_ctx[picoquic_nb_packet_context];
+    /* Acknowledgement state */
+    picoquic_ack_context_t ack_ctx[picoquic_nb_packet_context];
 
     /* Statistics */
     uint64_t nb_bytes_queued;
