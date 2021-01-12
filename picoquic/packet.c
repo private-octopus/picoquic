@@ -230,7 +230,7 @@ int picoquic_parse_short_packet_header(
     /* If this is a short header, it should be possible to retrieve the connection
      * context. This depends on whether the quic context requires cnx_id or not.
      */
-    uint8_t cnxid_length = (receiving == 0 && *pcnx != NULL) ? (*pcnx)->path[0]->remote_cnxid.id_len : quic->local_cnxid_length;
+    uint8_t cnxid_length = (receiving == 0 && *pcnx != NULL) ? (*pcnx)->path[0]->p_remote_cnxid->cnx_id.id_len : quic->local_cnxid_length;
     ph->pc = picoquic_packet_context_application;
     ph->pl_val = 0; /* No actual payload length in short headers */
 
@@ -647,7 +647,7 @@ int picoquic_parse_header_and_decrypt(
                         if (ph->ptype == picoquic_packet_1rtt_protected &&
                             length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
                             memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                            (*pcnx)->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                            (*pcnx)->path[0]->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
                             ret = PICOQUIC_ERROR_STATELESS_RESET;
                         }
                         else {
@@ -939,10 +939,10 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         size_t pn_offset;
         size_t pn_length;
 
-        cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
+        cnx->path[0]->p_remote_cnxid->cnx_id = ph->srce_cnx_id;
 
         byte_index = header_length = picoquic_create_packet_header(cnx, picoquic_packet_retry,
-            0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->p_local_cnxid->cnx_id, 0,
+            0, &cnx->path[0]->p_remote_cnxid->cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id, 0,
             bytes, &pn_offset, &pn_length);
 
         /* In the old drafts, there is no header protection and the sender copies the ODCID
@@ -1303,8 +1303,8 @@ int picoquic_incoming_server_initial(
     }
 
     /* Check the server cnx id */
-    if ((!picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid) || cnx->cnx_state > picoquic_state_client_handshake_start) &&
-        picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph->srce_cnx_id) != 0) {
+    if ((!picoquic_is_connection_id_null(&cnx->path[0]->p_remote_cnxid->cnx_id) || cnx->cnx_state > picoquic_state_client_handshake_start) &&
+        picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id, &ph->srce_cnx_id) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
     }
 
@@ -1383,7 +1383,7 @@ int picoquic_incoming_server_handshake(
 #endif
     int restricted = cnx->cnx_state != picoquic_state_client_handshake_start;
     
-    if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph->srce_cnx_id) != 0) {
+    if (picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id, &ph->srce_cnx_id) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
     }
 
@@ -1430,7 +1430,7 @@ int picoquic_incoming_client_handshake(
     cnx->initial_repeat_needed = 0;
 
     if (cnx->cnx_state < picoquic_state_server_almost_ready) {
-        if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
+        if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->p_remote_cnxid->cnx_id) != 0) {
             ret = PICOQUIC_ERROR_CNXID_CHECK;
         } else {
             /* Accept the incoming frames */
@@ -1506,7 +1506,7 @@ int picoquic_incoming_0rtt(
 
     if (!(picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->initial_cnxid) == 0 ||
         picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id) == 0) ||
-        picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
+        picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->p_remote_cnxid->cnx_id) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK;
     } else if (cnx->cnx_state == picoquic_state_server_almost_ready || 
         cnx->cnx_state == picoquic_state_server_false_start ||
@@ -1671,12 +1671,16 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             }
 
             if (picoquic_assign_peer_cnxid_to_path(cnx, path_id) != 0){
-                /* Copy the destination ID from an existing path */
+                /* Use the destination ID from an existing path */
                 int alt_path = (nat_rebinding_path >= 0) ? nat_rebinding_path : 0;
-                cnx->path[path_id]->remote_cnxid = cnx->path[alt_path]->remote_cnxid;
-                cnx->path[path_id]->remote_cnxid_sequence = cnx->path[alt_path]->remote_cnxid_sequence;
-                memcpy(cnx->path[path_id]->reset_secret, cnx->path[alt_path]->reset_secret,
-                    PICOQUIC_RESET_SECRET_SIZE);
+                if (cnx->path[path_id]->p_remote_cnxid == NULL) {
+                    cnx->path[path_id]->p_remote_cnxid = cnx->path[alt_path]->p_remote_cnxid;
+                    cnx->path[path_id]->p_remote_cnxid->nb_path_references++;
+                } else if (cnx->path[path_id]->p_remote_cnxid->sequence != cnx->path[alt_path]->p_remote_cnxid->sequence) {
+                    picoquic_dereference_stashed_cnxid(cnx, cnx->path[path_id]);
+                    cnx->path[path_id]->p_remote_cnxid = cnx->path[alt_path]->p_remote_cnxid;
+                    cnx->path[path_id]->p_remote_cnxid->nb_path_references++;
+                }
             }
 
             cnx->path[path_id]->path_is_published = 1; 
@@ -2003,9 +2007,9 @@ int picoquic_incoming_segment(
                 } else if ((!cnx->client_mode && picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->initial_cnxid) == 0) ||
                     picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id) == 0) {
                     /* Verify that the source CID matches expectation */
-                    if (picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid)) {
-                        cnx->path[0]->remote_cnxid = ph.srce_cnx_id;
-                    } else if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph.srce_cnx_id) != 0) {
+                    if (picoquic_is_connection_id_null(&cnx->path[0]->p_remote_cnxid->cnx_id)) {
+                        cnx->path[0]->p_remote_cnxid->cnx_id = ph.srce_cnx_id;
+                    } else if (picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id, &ph.srce_cnx_id) != 0) {
                         DBG_PRINTF("Error wrong srce cnxid (%d), type: %d, epoch: %d, pc: %d, pn: %d\n",
                             cnx->client_mode, ph.ptype, ph.epoch, ph.pc, (int)ph.pn);
                         ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;

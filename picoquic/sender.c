@@ -536,7 +536,7 @@ size_t picoquic_predict_packet_header_length(
         }
 
         /* Compute length of a short packet header */
-        header_length = 1 + cnx->path[0]->remote_cnxid.id_len + pn_l;
+        header_length = 1 + cnx->path[0]->p_remote_cnxid->cnx_id.id_len + pn_l;
     }
     else {
         /* Compute length of a long packet header */
@@ -545,11 +545,11 @@ size_t picoquic_predict_packet_header_length(
         /* add dest-id length */
         if (cnx->client_mode && (packet_type == picoquic_packet_initial ||
             packet_type == picoquic_packet_0rtt_protected)
-            && picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid)) {
+            && picoquic_is_connection_id_null(&cnx->path[0]->p_remote_cnxid->cnx_id)) {
             header_length += cnx->initial_cnxid.id_len;
         }
         else {
-            header_length += cnx->path[0]->remote_cnxid.id_len;
+            header_length += cnx->path[0]->p_remote_cnxid->cnx_id.id_len;
         }
 
         /* add srce-id length */
@@ -609,7 +609,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     h_length = picoquic_create_packet_header(cnx, ptype,
         sequence_number, remote_cnxid, local_cnxid, header_length, send_buffer, &pn_offset, &pn_length);
     if (ptype == picoquic_packet_1rtt_protected) {
-        if (remote_cnxid != &path_x->remote_cnxid) {
+        if (remote_cnxid != &path_x->p_remote_cnxid->cnx_id) {
             /* Packet is sent to a different CID: reset the spin bit and loss bit Q to 0 */
             send_buffer[0] &= 0xDF;
             path_x->q_square = 0;
@@ -1161,16 +1161,8 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
             if (alt_pto > retransmit_time) {
                 retransmit_time = alt_pto;
             }
-#if 0
-            if (p->send_time > p->send_path->latest_sent_time)
-#endif
-            {
-                is_timer_based = 1;
-            }
         }
-        else {
-            is_timer_based = 1;
-        }
+        is_timer_based = 1;
     }
 
     if (p->ptype == picoquic_packet_0rtt_protected) {
@@ -1438,7 +1430,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
                 picoquic_log_packet_lost(cnx, old_p->ptype, old_p->sequence_number,
                         (timer_based_retransmit == 0) ? "repeat" : "timer",
-                        (old_p->send_path == NULL) ? NULL : &old_p->send_path->remote_cnxid,
+                        (old_p->send_path == NULL) ? NULL : &old_p->send_path->p_remote_cnxid->cnx_id,
                         old_p->length, current_time);
 
                 old_p = picoquic_dequeue_retransmit_packet(cnx, old_p, packet_is_pure_ack & do_not_detect_spurious);
@@ -1772,7 +1764,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        &path_x->remote_cnxid,
+        &path_x->p_remote_cnxid->cnx_id,
         &path_x->p_local_cnxid->cnx_id,
         path_x, current_time);
 
@@ -2284,7 +2276,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         picoquic_finalize_and_protect_packet(cnx, packet,
             ret, length, header_length, checksum_overhead,
             send_length, send_buffer, send_buffer_max,
-            &path_x->remote_cnxid, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
+            &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
     }
 
     return ret;
@@ -2464,7 +2456,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        &path_x->remote_cnxid, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
+        &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
 
     /* Account for data sent during handshake */
     if (!cnx->initial_validated) {
@@ -2699,7 +2691,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        &path_x->remote_cnxid, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
+        &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
 
     return ret;
 }
@@ -3091,7 +3083,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,
-        &path_x->remote_cnxid, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
+        &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
 
     if (*send_length > 0) {
         /* Account for data sent during handshake */
@@ -3489,7 +3481,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,
-        &path_x->remote_cnxid, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
+        &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
 
     if (*send_length > 0) {
         *next_wake_time = current_time;

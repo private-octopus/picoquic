@@ -767,6 +767,18 @@ typedef struct st_picoquic_local_cnxid_t {
     picoquic_connection_id_t cnx_id;
 } picoquic_local_cnxid_t;
 
+/* Remote CID.
+ * Remote CID are received from the peer. RCID #0 is received during the 
+ * handshake, RCID#1 MAY be received as part of server's transport parameters,
+ * all other RCID are received in New CID frames. */
+typedef struct st_picoquic_remote_cnxid_t {
+    struct st_picoquic_remote_cnxid_t* next;
+    uint64_t sequence;
+    picoquic_connection_id_t cnx_id;
+    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
+    int nb_path_references;
+    int needs_removal;
+} picoquic_remote_cnxid_t;
 
 /*
 * Per path context.
@@ -787,20 +799,17 @@ typedef struct st_picoquic_local_cnxid_t {
 */
 
 typedef struct st_picoquic_path_t {
-    picoquic_local_cnxid_t* p_local_cnxid;
-    picoquic_connection_id_t remote_cnxid;
+    picoquic_local_cnxid_t* p_local_cnxid; 
+    picoquic_remote_cnxid_t* p_remote_cnxid;
 
     struct st_picoquic_net_id_key_t* first_net_id;
 
     uint64_t path_sequence;
-    uint64_t remote_cnxid_sequence;
 
     /* Peer address. */
     struct sockaddr_storage peer_addr;
     struct sockaddr_storage local_addr;
     unsigned long if_index_dest;
-    /* Public reset secret, provisioned by the peer */
-    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     /* Challenge used for this path */
     uint64_t challenge_response;
     uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
@@ -940,17 +949,6 @@ typedef struct st_picoquic_crypto_context_t {
     void* pn_enc; /* Used for PN encryption */
     void* pn_dec; /* Used for PN decryption */
 } picoquic_crypto_context_t;
-
-/*
-* Item in the list of the CNX-ID received from the peer, and not
-* yet used in a path or a probe.
-*/
-typedef struct st_picoquic_cnxid_stash_t {
-    struct st_picoquic_cnxid_stash_t * next_in_stash;
-    uint64_t sequence;
-    picoquic_connection_id_t cnx_id;
-    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
-} picoquic_cnxid_stash_t;
 
 /*
 * Per connection context.
@@ -1145,7 +1143,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Management of the CNX-ID stash */
     uint64_t retire_cnxid_before;
-    picoquic_cnxid_stash_t * cnxid_stash_first;
+    picoquic_remote_cnxid_t * cnxid_stash_first;
 
     /* management of local CID stash */
     uint64_t local_cnxid_sequence_next;
@@ -1213,11 +1211,17 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
     const struct sockaddr* addr_to, uint64_t current_time, int to_preferred_address);
 
 /* Management of the CNX-ID stash */
-picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
+int picoquic_init_cnxid_stash(picoquic_cnx_t* cnx);
 
 int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
     const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes,
-    const uint8_t * secret_bytes, picoquic_cnxid_stash_t ** pstashed);
+    const uint8_t * secret_bytes, picoquic_remote_cnxid_t ** pstashed);
+
+picoquic_remote_cnxid_t* picoquic_remove_stashed_cnxid(picoquic_cnx_t* cnx, picoquic_remote_cnxid_t* removed, picoquic_remote_cnxid_t* previous);
+
+picoquic_remote_cnxid_t* picoquic_obtain_stashed_cnxid(picoquic_cnx_t* cnx);
+
+void picoquic_dereference_stashed_cnxid(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 int picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t not_before, uint64_t current_time);
 int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x);

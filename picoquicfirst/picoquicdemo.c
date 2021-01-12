@@ -337,7 +337,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
                         cb_ctx->migration_to_preferred_finished)) {
                     int mig_ret = 0;
                     cb_ctx->migration_started = 1;
-                    cb_ctx->server_cid_before_migration = cb_ctx->cnx_client->path[0]->remote_cnxid;
+                    cb_ctx->server_cid_before_migration = cb_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id;
                     if (cb_ctx->cnx_client->path[0]->p_local_cnxid != NULL) {
                         cb_ctx->client_cid_before_migration = cb_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
                     }
@@ -680,7 +680,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     (struct sockaddr*) & cnx_client->path[0]->local_addr,
                     (struct sockaddr*) & loop_cb.client_address);
                 int dest_cid_cmp = picoquic_compare_connection_id(
-                    &cnx_client->path[0]->remote_cnxid,
+                    &cnx_client->path[0]->p_remote_cnxid->cnx_id,
                     &loop_cb.server_cid_before_migration);
                 fprintf(stdout, "After migration:\n");
                 fprintf(stdout, "- Default source address %s\n", (source_addr_cmp) ? "changed" : "did not change");

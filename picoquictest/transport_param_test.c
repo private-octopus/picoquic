@@ -553,7 +553,7 @@ int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** 
         }
         else {
             (*test_cnx)->path[0]->p_local_cnxid->cnx_id = remote_cnx_id;
-            (*test_cnx)->path[0]->remote_cnxid = remote_cnx_id;
+            (*test_cnx)->path[0]->p_remote_cnxid->cnx_id = remote_cnx_id;
         }
     }
 
