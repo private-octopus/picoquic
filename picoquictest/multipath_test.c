@@ -522,10 +522,10 @@ typedef enum {
     monopath_test_basic = 0,
     monopath_test_hole,
     monopath_test_rotation
-} multipath_test_enum_t;
+} monopath_test_enum_t;
 
 /* Basic connection with the multicast option enabled. */
-int monopath_test_one(multipath_test_enum_t test_case)
+int monopath_test_one(monopath_test_enum_t test_case)
 {
     uint64_t simulated_time = 0;
     const uint64_t latency = 10000;
