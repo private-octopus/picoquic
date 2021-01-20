@@ -339,7 +339,6 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-
 typedef enum {
     multipath_test_basic = 0,
     multipath_test_drop_first,
@@ -396,6 +395,11 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
+    /* wait until the client (and thus the server) is ready */
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
     /* Prepare to send data */
     if (ret == 0) {
         ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath, sizeof(test_scenario_multipath));
@@ -404,11 +408,6 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         {
             DBG_PRINTF("Init send receive scenario returns %d\n", ret);
         }
-    }
-
-    /* wait until the client (and thus the server) is ready */
-    if (ret == 0) {
-        ret = wait_client_connection_ready(test_ctx, &simulated_time);
     }
 
     /* Add the multipath links and initiate the migration */
@@ -425,7 +424,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             (struct sockaddr*) & test_ctx->client_addr_2, simulated_time);
     }
 
-    /* Check that the two paths are estabilshed */
+    /* Check that the two paths are established */
     if (ret == 0) {
         /* TODO */
         ret = wait_multipath_ready(test_ctx, &simulated_time);
@@ -477,7 +476,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
 int multipath_basic_test()
 {
-    uint64_t max_completion_microsec = 1100000;
+    uint64_t max_completion_microsec = 1500000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_basic);
 }
@@ -488,7 +487,7 @@ int multipath_basic_test()
 
 int multipath_drop_first_test()
 {
-    uint64_t max_completion_microsec = 2000000;
+    uint64_t max_completion_microsec = 2560000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_first);
 }
@@ -499,7 +498,7 @@ int multipath_drop_first_test()
 
 int multipath_drop_second_test()
 {
-    uint64_t max_completion_microsec = 2000000;
+    uint64_t max_completion_microsec = 2560000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second);
 }
@@ -512,4 +511,110 @@ int multipath_sat_plus_test()
     uint64_t max_completion_microsec = 5000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus);
+}
+
+/* Monopath tests:
+ * Enable the multipath option, but use only a single path. The gal of the tests is to verify that
+ * these "monopath" scenarios perform just as well as if multipath was not enabled.
+ */
+
+typedef enum {
+    monopath_test_basic = 0,
+    monopath_test_hole,
+    monopath_test_rotation
+} multipath_test_enum_t;
+
+/* Basic connection with the multicast option enabled. */
+int monopath_test_one(multipath_test_enum_t test_case)
+{
+    uint64_t simulated_time = 0;
+    const uint64_t latency = 10000;
+    picoquic_tp_t client_parameters;
+    picoquic_tp_t server_parameters;
+    picoquic_connection_id_t initial_cid = { {0xba, 0xba, 1, 0, 0, 0, 0, 0}, 8 };
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = 0;
+
+    multipath_init_params(&client_parameters, 0);
+    multipath_init_params(&server_parameters, 0);
+
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Simulate satellite links: 250 mbps, 300ms delay in each direction */
+    /* Set the congestion algorithm to specified value. Also, request a packet trace */
+    if (ret == 0) {
+        /* set the delay estimate, then launch the test */
+        test_ctx->c_to_s_link->microsec_latency = latency;
+        test_ctx->s_to_c_link->microsec_latency = latency;
+
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+        /* set the binary log on the client side */
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        test_ctx->qclient->use_long_log = 1;
+        /* Since the client connection was created before the binlog was set, force log of connection header */
+        binlog_new_connection(test_ctx->cnx_client);
+
+        if (test_case == monopath_test_hole) {
+            /* set the optimistic ack policy, to trigger hole insertion at the server */
+            picoquic_set_optimistic_ack_policy(test_ctx->qserver, 29);
+            /* Reset the uniform random test */
+            picoquic_public_random_seed_64(RANDOM_PUBLIC_TEST_SEED, 1);
+        }
+
+        if (test_case == monopath_test_rotation) {
+            picoquic_set_default_crypto_epoch_length(test_ctx->qserver, 200);
+        }
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_multipath, sizeof(test_scenario_multipath), 0, 0, 0, 2 * latency,
+            2200000);
+    }
+
+    if (ret == 0){
+        if (test_case == monopath_test_hole) {
+            if (test_ctx->cnx_server->nb_packet_holes_inserted == 0) {
+                DBG_PRINTF("%s", "No holes inserted\n");
+                ret = -1;
+            }
+        }
+        else if (test_case == monopath_test_rotation) {
+            if (test_ctx->cnx_server->nb_crypto_key_rotations == 0) {
+                DBG_PRINTF("%s", "No key rotation observed.\n");
+                ret = -1;
+            }
+        }
+    }
+
+    /* Free the resource, which will close the log file.
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Basic connection with the multicast option enabled. */
+int monopath_basic_test()
+{
+    return monopath_test_one(monopath_test_basic);
+}
+
+/* Testing the defense against opportunistic acks. */
+int monopath_hole_test()
+{
+    return monopath_test_one(monopath_test_hole);
+}
+
+/* Testing key rotation in monopath context. */
+int monopath_rotation_test()
+{
+    return monopath_test_one(monopath_test_rotation);
 }

@@ -1,3 +1,5 @@
+#include "picoquic_internal.h"
+#include "picoquic_internal.h"
 
 /*
 * Author: Christian Huitema
@@ -526,7 +528,7 @@ uint8_t picoquic_get_local_cid_length(picoquic_quic_t* quic)
 int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid)
 {
     return (cid->id_len == quic->local_cnxid_length &&
-        picoquic_cnx_by_id(quic, *cid) != NULL);
+        picoquic_cnx_by_id(quic, *cid, NULL) != NULL);
 }
 
 void picoquic_set_max_simultaneous_logs(picoquic_quic_t* quic, uint32_t max_simultaneous_logs)
@@ -1507,7 +1509,7 @@ void picoquic_notify_destination_unreachable_by_cnxid(picoquic_quic_t * quic, pi
         cnx = picoquic_cnx_by_net(quic, addr_peer);
     }
     else if (cnxid->id_len == quic->local_cnxid_length) {
-        cnx = picoquic_cnx_by_id(quic, *cnxid);
+        cnx = picoquic_cnx_by_id(quic, *cnxid, NULL);
     }
 
     if (cnx != NULL) {
@@ -1598,6 +1600,35 @@ void picoquic_reset_path_mtu(picoquic_path_t* path_x)
     path_x->mtu_probe_sent = 0;
 }
 
+/* Manage ACK context and Packet context */
+void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx)
+{
+    ack_ctx->first_sack_item.start_of_sack_range = UINT64_MAX;
+    ack_ctx->first_sack_item.end_of_sack_range = 0;
+    ack_ctx->first_sack_item.next_sack = NULL;
+    ack_ctx->highest_ack_sent = 0;
+    ack_ctx->highest_ack_sent_time = cnx->start_time;
+    ack_ctx->time_stamp_largest_received = UINT64_MAX;
+    ack_ctx->ack_needed = 0;
+}
+
+void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx)
+{
+    if (cnx->quic->random_initial) {
+        pkt_ctx->send_sequence = picoquic_crypto_uniform_random(cnx->quic, PICOQUIC_PN_RANDOM_RANGE) +
+            PICOQUIC_PN_RANDOM_MIN;
+    }
+    else {
+        pkt_ctx->send_sequence = 0;
+    }
+    pkt_ctx->nb_retransmit = 0;
+    pkt_ctx->retransmit_newest = NULL;
+    pkt_ctx->retransmit_oldest = NULL;
+    pkt_ctx->highest_acknowledged = pkt_ctx->send_sequence - 1;
+    pkt_ctx->latest_time_acknowledged = cnx->start_time;
+    pkt_ctx->highest_acknowledged_time = cnx->start_time;
+}
+
 /*
  * Manage the stash of connection IDs sent by the peer 
  */
@@ -1611,18 +1642,20 @@ int picoquic_init_cnxid_stash(picoquic_cnx_t* cnx)
     else {
         cnx->cnxid_stash_first = (picoquic_remote_cnxid_t*)malloc(sizeof(picoquic_remote_cnxid_t));
         cnx->path[0]->p_remote_cnxid = cnx->cnxid_stash_first;
-
         if (cnx->cnxid_stash_first == NULL) {
             ret = PICOQUIC_TRANSPORT_INTERNAL_ERROR;
         }
         else {
             memset(cnx->cnxid_stash_first, 0, sizeof(picoquic_remote_cnxid_t));
             cnx->cnxid_stash_first->nb_path_references++;
+            picoquic_init_packet_ctx(cnx, &cnx->cnxid_stash_first->pkt_ctx);
+
             /* Initialize the reset secret to a random value. This
             * will prevent spurious matches to an all zero value, for example.
             * The real value will be set when receiving the transport parameters.
             */
             picoquic_public_random(cnx->cnxid_stash_first->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+
         }
     }
     return ret;
@@ -1689,6 +1722,7 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
                 memset(stashed, 0, sizeof(picoquic_remote_cnxid_t));
                 (void)picoquic_parse_connection_id(cnxid_bytes, cid_length, &stashed->cnx_id);
                 stashed->sequence = sequence;
+                picoquic_init_packet_ctx(cnx, &stashed->pkt_ctx);
                 memcpy(stashed->reset_secret, secret_bytes, PICOQUIC_RESET_SECRET_SIZE);
                 stashed->next = NULL;
 
@@ -2196,6 +2230,7 @@ picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoqui
 
     if (l_cid != NULL) {
         memset(l_cid, 0, sizeof(picoquic_local_cnxid_t));
+        picoquic_init_ack_ctx(cnx, &l_cid->ack_ctx);
         if (cnx->quic->local_cnxid_length == 0) {
             is_unique = 1;
         }
@@ -2213,7 +2248,7 @@ picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoqui
                     }
                 }
 
-                if (picoquic_cnx_by_id(cnx->quic, l_cid->cnx_id) == NULL) {
+                if (picoquic_cnx_by_id(cnx->quic, l_cid->cnx_id, NULL) == NULL) {
                     is_unique = 1;
                     break;
                 }
@@ -2336,6 +2371,38 @@ picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, picoquic_
     return local_cnxid;
 }
 
+picoquic_local_cnxid_t* picoquic_find_local_cnxid_by_number(picoquic_cnx_t* cnx, uint64_t sequence)
+{
+    picoquic_local_cnxid_t* local_cnxid = cnx->local_cnxid_first;
+
+    while (local_cnxid != NULL) {
+        if (local_cnxid->sequence == sequence) {
+            break;
+        }
+        else {
+            local_cnxid = local_cnxid->next;
+        }
+    }
+
+    return local_cnxid;
+}
+
+picoquic_remote_cnxid_t* picoquic_find_remote_cnxid_by_number(picoquic_cnx_t* cnx, uint64_t sequence)
+{
+    picoquic_remote_cnxid_t* remote_cnxid = cnx->cnxid_stash_first;
+
+    while (remote_cnxid != NULL) {
+        if (remote_cnxid->sequence == sequence) {
+            break;
+        }
+        else {
+            remote_cnxid = remote_cnxid->next;
+        }
+    }
+
+    return remote_cnxid;
+}
+
 /* Connection management
  */
 
@@ -2385,7 +2452,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->path[0]->p_local_cnxid = cnxid0;
             cnx->path[0]->challenge_verified = 1;
 
-            cnx->high_priority_stream_id = (uint64_t)((int64_t)-1);
+            cnx->high_priority_stream_id = UINT64_MAX;
             for (int i = 0; i < 4; i++) {
                 cnx->next_stream_id[i] = i;
             }
@@ -2518,28 +2585,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
         for (picoquic_packet_context_enum pc = 0;
             pc < picoquic_nb_packet_context; pc++) {
-            cnx->ack_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
-            cnx->ack_ctx[pc].first_sack_item.end_of_sack_range = 0;
-            cnx->ack_ctx[pc].first_sack_item.next_sack = NULL;
-            cnx->ack_ctx[pc].highest_ack_sent = 0;
-            cnx->ack_ctx[pc].highest_ack_sent_time = start_time;
-            cnx->ack_ctx[pc].time_stamp_largest_received = (uint64_t)((int64_t)-1);
-            cnx->ack_ctx[pc].ack_needed = 0;
-
-            if (quic->random_initial) {
-                cnx->pkt_ctx[pc].send_sequence = picoquic_crypto_uniform_random(quic, PICOQUIC_PN_RANDOM_RANGE) +
-                    PICOQUIC_PN_RANDOM_MIN;
-            }
-            else {
-                cnx->pkt_ctx[pc].send_sequence = 0;
-            }
-            cnx->pkt_ctx[pc].nb_retransmit = 0;
-            cnx->pkt_ctx[pc].latest_retransmit_time = 0;
-            cnx->pkt_ctx[pc].retransmit_newest = NULL;
-            cnx->pkt_ctx[pc].retransmit_oldest = NULL;
-            cnx->pkt_ctx[pc].highest_acknowledged = cnx->pkt_ctx[pc].send_sequence - 1;
-            cnx->pkt_ctx[pc].latest_time_acknowledged = start_time;
-            cnx->pkt_ctx[pc].highest_acknowledged_time = start_time;
+            picoquic_init_ack_ctx(cnx, &cnx->ack_ctx[pc]);
+            picoquic_init_packet_ctx(cnx, &cnx->pkt_ctx[pc]);
         }
         /* Initialize the ACK behavior. By default, picoquic abides with the recommendation to send
          * ACK immediately if packets are received out of order (ack_ignore_order_remote = 0),
@@ -2561,18 +2608,18 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->tls_stream[epoch].sent_offset = 0;
             cnx->tls_stream[epoch].local_error = 0;
             cnx->tls_stream[epoch].remote_error = 0;
-            cnx->tls_stream[epoch].maxdata_local = (uint64_t)((int64_t)-1);
-            cnx->tls_stream[epoch].maxdata_remote = (uint64_t)((int64_t)-1);
+            cnx->tls_stream[epoch].maxdata_local = UINT64_MAX;
+            cnx->tls_stream[epoch].maxdata_remote = UINT64_MAX;
 
             picosplay_init_tree(&cnx->tls_stream[epoch].stream_data_tree, picoquic_stream_data_node_compare, picoquic_stream_data_node_create, picoquic_stream_data_node_delete, picoquic_stream_data_node_value);
 
             /* No need to reset the state flags, as they are not used for the crypto stream */
         }
         
-        cnx->ack_frequency_sequence_local = (uint64_t)((int64_t)-1);
+        cnx->ack_frequency_sequence_local = UINT64_MAX;
         cnx->ack_gap_local = 2;
         cnx->ack_frequency_delay_local = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
-        cnx->ack_frequency_sequence_remote = (uint64_t)((int64_t)-1);
+        cnx->ack_frequency_sequence_remote = UINT64_MAX;
         cnx->ack_gap_remote = 2;
         cnx->ack_delay_remote = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
 
@@ -3071,11 +3118,11 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     picoquic_ack_context_t* ack_ctx = &cnx->ack_ctx[pc];
 
     while (pkt_ctx->retransmit_newest != NULL) {
-        (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx->retransmit_newest, 1);
+        (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->retransmit_newest, 1);
     }
     
     while (pkt_ctx->retransmitted_newest != NULL) {
-        picoquic_dequeue_retransmitted_packet(cnx, pkt_ctx->retransmitted_newest);
+        picoquic_dequeue_retransmitted_packet(cnx, pkt_ctx, pkt_ctx->retransmitted_newest);
     }
 
     pkt_ctx->retransmitted_oldest = NULL;
@@ -3086,7 +3133,7 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
         free(next);
     }
 
-    ack_ctx->first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+    ack_ctx->first_sack_item.start_of_sack_range = UINT64_MAX;
     ack_ctx->first_sack_item.end_of_sack_range = 0;
     /* Reset the ECN data */
     ack_ctx->ecn_ect0_total_local = 0;
@@ -3323,7 +3370,8 @@ int picoquic_is_handshake_error(uint64_t error_code)
 }
 
 /* Context retrieval functions */
-picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id)
+picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id,
+    struct st_picoquic_local_cnxid_t** l_cid)
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
@@ -3336,6 +3384,12 @@ picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id
 
     if (item != NULL) {
         ret = ((picoquic_cnx_id_key_t*)item->key)->cnx;
+        if (l_cid != NULL) {
+            *l_cid = ((picoquic_cnx_id_key_t*)item->key)->l_cid;
+        }
+    }
+    else if (l_cid != NULL) {
+        *l_cid = NULL;
     }
     return ret;
 }

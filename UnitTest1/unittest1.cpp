@@ -1358,6 +1358,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(monopath_basic) {
+            int ret = monopath_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(monopath_hole) {
+            int ret= monopath_hole_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(monopath_rotation) {
+            int ret = monopath_rotation_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_basic) {
             int ret = multipath_basic_test();
 

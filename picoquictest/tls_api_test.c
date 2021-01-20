@@ -36,8 +36,6 @@
 #include "autoqlog.h"
 #include "picoquictest.h"
 
-#define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
-
 static const uint8_t test_ticket_encrypt_key[32] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
@@ -327,6 +325,7 @@ static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from
     else {
         picoquic_packet_type_enum packet_type;
         picoquic_packet_context_enum pc;
+        picoquic_packet_context_t* pkt_ctx;
         size_t length = 0;
         size_t header_length;
         size_t checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
@@ -349,13 +348,17 @@ static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from
             pc = picoquic_packet_context_application;
             break;
         }
-        header_length = picoquic_predict_packet_header_length(cnx, packet_type);
+
+        pkt_ctx = (packet_type == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) ?
+            &path_x->p_remote_cnxid->pkt_ctx : &cnx->pkt_ctx[pc];
+
+        header_length = picoquic_predict_packet_header_length(cnx, packet_type, pkt_ctx);
         memcpy(packet->bytes + header_length, payload, p_length);
         length = header_length + p_length;
 
         packet->ptype = packet_type;
         packet->offset = header_length;
-        packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
+        packet->sequence_number = pkt_ctx->send_sequence;
         packet->send_time = current_time;
         packet->send_path = path_x;
         packet->pc = pc;
@@ -1456,7 +1459,7 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret; /* end of sending loop */
 }
 
-static int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
+int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, int max_trials,
     int path_target, int wait_for_ready)
 {
@@ -8026,12 +8029,6 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                 nb_inactive++;
             }
 
-            if (test_ctx->test_finished) {
-                if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                    break;
-                }
-            }
-
             /* find whether there was a new hole inserted */
             if (test_ctx->cnx_server != NULL) {
                 picoquic_packet_t * packet = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest;
@@ -8041,7 +8038,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                         hole_number = packet->sequence_number;
                         if (shall_spoof_ack) {
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
-                                hole_number, simulated_time);
+                                test_ctx->cnx_client->local_cnxid_first, hole_number, simulated_time);
                             if (ret != 0) {
                                 DBG_PRINTF("Record pn hole %d number returns %d\n", (int)hole_number, ret);
                                 break;
@@ -8051,6 +8048,12 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                         break;
                     }
                     packet = packet->previous_packet;
+                }
+            }
+
+            if (test_ctx->test_finished) {
+                if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                    break;
                 }
             }
         }
@@ -8065,16 +8068,23 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         }
         else if (test_ctx->cnx_server != NULL) {
             DBG_PRINTF("Complete after %d packets sent, %d r. by client, %d retransmits, %d spurious.\n",
-                (int)(test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence - 1),
-                (int)test_ctx->cnx_client->ack_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range,
+                (int)(test_ctx->cnx_server->nb_packets_sent),
+                (int)test_ctx->cnx_client->nb_packets_received,
                 test_ctx->cnx_server->nb_retransmission_total,
                 test_ctx->cnx_server->nb_spurious);
         }
     }
 
-    if (ret == 0 && nb_holes == 0) {
-        DBG_PRINTF("%s", "No holes inserted\n");
-        ret = -1;
+    if (ret == 0){
+        if (nb_holes <= 0) {
+            DBG_PRINTF("%s", "No holes inserted\n");
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->nb_packet_holes_inserted == 0) {
+            DBG_PRINTF("Reporting %" PRIu64 " holes inserted\n",
+                test_ctx->cnx_server->nb_packet_holes_inserted);
+            ret = -1;
+        }
     }
 
     if (shall_spoof_ack) {

@@ -78,15 +78,16 @@ int sacktest()
 
     /* Do a basic test with packet zero */
 
-    if (picoquic_is_pn_already_received(&cnx, pc, 0) != 0) {
+    if (picoquic_is_pn_already_received(&cnx, pc, cnx.local_cnxid_first, 0) != 0) {
         ret = -1;
     }
 
-    if (picoquic_record_pn_received(&cnx, pc, 0, current_time) != 0) {
+    if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first,
+        0, current_time) != 0) {
         ret = -1;
     }
 
-    if (picoquic_is_pn_already_received(&cnx, pc, 0) == 0) {
+    if (picoquic_is_pn_already_received(&cnx, pc, cnx.local_cnxid_first, 0) == 0) {
         ret = -1;
     }
 
@@ -109,22 +110,22 @@ int sacktest()
             highest_seen_time = current_time;
         }
 
-        if (picoquic_record_pn_received(&cnx, pc, test_pn64[i], current_time) != 0) {
+        if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[i], current_time) != 0) {
             ret = -1;
         }
 
         for (size_t j = 0; ret == 0 && j <= i; j++) {
-            if (picoquic_is_pn_already_received(&cnx, pc, test_pn64[j]) == 0) {
+            if (picoquic_is_pn_already_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[j]) == 0) {
                 ret = -1;
             }
 
-            if (picoquic_record_pn_received(&cnx, pc, test_pn64[j], current_time) != 1) {
+            if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[j], current_time) != 1) {
                 ret = -1;
             }
         }
 
         for (size_t j = i + 1; ret == 0 && j < nb_test_pn64; j++) {
-            if (picoquic_is_pn_already_received(&cnx, pc, test_pn64[j]) != 0) {
+            if (picoquic_is_pn_already_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[j]) != 0) {
                 ret = -1;
             }
         }
@@ -279,19 +280,19 @@ int sendacktest()
     picoquic_packet_context_enum pc = 0;
 
     memset(&cnx, 0, sizeof(cnx));
-    cnx.ack_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+    cnx.ack_ctx[pc].first_sack_item.start_of_sack_range = UINT64_MAX;
     cnx.sending_ecn_ack = 0; /* don't write an ack_ecn frame */
 
     for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
         current_time = i * 100;
 
-        if (picoquic_record_pn_received(&cnx, pc, test_pn64[i], current_time) != 0) {
+        if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[i], current_time) != 0) {
             ret = -1;
         }
 
         if (ret == 0) {
             int more_data = 0;
-            uint8_t* bytes_next = picoquic_format_ack_frame(&cnx, bytes, bytes + sizeof(bytes), &more_data, 0, pc);
+            uint8_t* bytes_next = picoquic_format_ack_frame(&cnx, bytes, bytes + sizeof(bytes), &more_data, 0, pc, 0);
 
             received_mask |= 1ull << (test_pn64[i] & 63);
 

@@ -86,7 +86,7 @@ int picoquic_parse_long_packet_header(
                     *pcnx = picoquic_cnx_by_net(quic, addr_from);
                 }
                 else if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
-                    *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                    *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id, &ph->l_cid);
                 }
             }
         }
@@ -185,7 +185,7 @@ int picoquic_parse_long_packet_header(
                     else
                     {
                         if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
-                            *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                            *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id, &ph->l_cid);
                         }
 
                         if (*pcnx == NULL && (ph->ptype == picoquic_packet_initial || ph->ptype == picoquic_packet_0rtt_protected)) {
@@ -208,7 +208,7 @@ int picoquic_parse_long_packet_header(
                         *pcnx = picoquic_cnx_by_net(quic, addr_from);
                     }
                     else if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
-                        *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                        *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id, &ph->l_cid);
                     }
                 }
             }
@@ -241,7 +241,7 @@ int picoquic_parse_short_packet_header(
         if (*pcnx == NULL)
         {
             if (quic->local_cnxid_length > 0) {
-                *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id, &ph->l_cid);
             }
             else {
                 *pcnx = picoquic_cnx_by_net(quic, addr_from);
@@ -442,8 +442,14 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
             }
 
             /* Build a packet number to 64 bits */
-            ph->pn64 = picoquic_get_packet_number64(
-                cnx->ack_ctx[ph->pc].first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
+            if (ph->ptype == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
+                ph->pn64 = picoquic_get_packet_number64(
+                    ph->l_cid->ack_ctx.first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
+            }
+            else {
+                ph->pn64 = picoquic_get_packet_number64(
+                    cnx->ack_ctx[ph->pc].first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
+            }
 
             /* Check the reserved bits */
             if ((first_byte & 0x80) == 0) {
@@ -482,7 +488,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
 
     /* verify that the packet is new */
     if (already_received != NULL) {
-        if (picoquic_is_pn_already_received(cnx, ph->pc, ph->pn64) != 0) {
+        if (picoquic_is_pn_already_received(cnx, ph->pc, ph->l_cid, ph->pn64) != 0) {
             /* Set error type: already received */
             *already_received = 1;
         }
@@ -493,13 +499,21 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
 
     if (ph->epoch == picoquic_epoch_1rtt) {
         int need_integrity_check = 1;
+        picoquic_ack_context_t* ack_ctx = (cnx->is_multipath_enabled) ?
+            &ph->l_cid->ack_ctx : &cnx->ack_ctx[picoquic_packet_context_application];
+            
         /* Manage key rotation */
         if (ph->key_phase == cnx->key_phase_dec) {
             /* AEAD Decrypt, in place */
             decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
                 bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+
+            if (decoded <= ph->payload_length && ph->pn64 < ack_ctx->crypto_rotation_sequence) {
+                ack_ctx->crypto_rotation_sequence = ph->pn64;
+            }
         }
-        else if (ph->pn64 < cnx->crypto_rotation_sequence) {
+        else if ((ack_ctx->crypto_rotation_sequence == UINT64_MAX && current_time <= cnx->crypto_rotation_time_guard) ||
+            ph->pn64 < ack_ctx->crypto_rotation_sequence) {
             /* This packet claims to be encoded with the old key */
             if (current_time > cnx->crypto_rotation_time_guard) {
                 /* Too late. Ignore the packet. Could be some kind of attack. */
@@ -532,7 +546,14 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
                 if (decoded <= ph->payload_length) {
                     /* Rotation only if the packet was correctly decrypted with the new key */
                     cnx->crypto_rotation_time_guard = current_time + cnx->path[0]->retransmit_timer;
-                    cnx->crypto_rotation_sequence = ph->pn64;
+                    if (cnx->is_multipath_enabled) {
+                        picoquic_local_cnxid_t* l_cid = cnx->local_cnxid_first;
+                        while (l_cid != NULL) {
+                            l_cid->ack_ctx.crypto_rotation_sequence = UINT64_MAX;
+                            l_cid = l_cid->next;
+                        }
+                    }
+                    ack_ctx->crypto_rotation_sequence = ph->pn64;
                     picoquic_apply_rotated_keys(cnx, 0);
                     cnx->nb_crypto_key_rotations++;
 
@@ -797,7 +818,7 @@ void picoquic_prepare_version_negotiation(
                 cnx = picoquic_cnx_by_net(quic, addr_from);
             }
             else {
-                cnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                cnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id, &ph->l_cid);
             }
         }
         if (cnx == NULL) {
@@ -1027,7 +1048,7 @@ void picoquic_ignore_incoming_handshake(
     /* If the packet contains ackable data, mark ack needed
      * in the relevant packet context */
     if (ret == 0 && ack_needed) {
-        picoquic_set_ack_needed(cnx, current_time, pc);
+        picoquic_set_ack_needed(cnx, current_time, pc, ph->l_cid);
     }
 }
 
@@ -1135,7 +1156,7 @@ int picoquic_incoming_client_initial(
             if (ret == 0) {
                 int data_consumed = 0;
                 /* initialization of context & creation of data */
-                ret = picoquic_tls_stream_process(*pcnx, &data_consumed);
+                ret = picoquic_tls_stream_process(*pcnx, &data_consumed, current_time);
                 /* The "initial_repeat_needed" flag is set if multiple initial packets are
                  * received while the connection is not yet validated. In most cases, this indicates
                  * that the client repeated some initial packets, or sent some gratuitous initial
@@ -1351,7 +1372,7 @@ int picoquic_incoming_server_initial(
             }
             /* processing of initial packet */
             if (ret == 0) {
-                ret = picoquic_tls_stream_process(cnx, NULL);
+                ret = picoquic_tls_stream_process(cnx, NULL, current_time);
             }
         }
         else if (cnx->cnx_state < picoquic_state_ready) {
@@ -1403,7 +1424,7 @@ int picoquic_incoming_server_handshake(
 
             /* processing of initial packet */
             if (ret == 0 && restricted == 0) {
-                ret = picoquic_tls_stream_process(cnx, NULL);
+                ret = picoquic_tls_stream_process(cnx, NULL, current_time);
             }
         }
         else {
@@ -1449,7 +1470,7 @@ int picoquic_incoming_client_handshake(
                 picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
 
                 /* If TLS data present, progress the TLS state */
-                ret = picoquic_tls_stream_process(cnx, NULL);
+                ret = picoquic_tls_stream_process(cnx, NULL, current_time);
 
                 /* If TLS FIN has been received, the server side handshake is ready */
                 if (!cnx->client_mode && cnx->cnx_state < picoquic_state_ready && picoquic_is_tls_complete(cnx)) {
@@ -1527,7 +1548,7 @@ int picoquic_incoming_0rtt(
 
             if (ret == 0) {
                 /* Processing of TLS messages -- EOED */
-                ret = picoquic_tls_stream_process(cnx, NULL);
+                ret = picoquic_tls_stream_process(cnx, NULL, current_time);
             }
         }
     } else {
@@ -1720,22 +1741,25 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
  * ECN Accounting. This is only called if the packet was processed successfully.
  */
 void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
-    unsigned char received_ecn, picoquic_packet_context_enum pc)
+    unsigned char received_ecn, picoquic_packet_context_enum pc, picoquic_local_cnxid_t * l_cid)
 {
+    picoquic_ack_context_t* ack_ctx = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) ?
+        &l_cid->ack_ctx : &cnx->ack_ctx[pc];
+
     switch (received_ecn & 0x03) {
     case 0x00:
         break;
     case 0x01: /* ECN_ECT_1 */
-        cnx->ack_ctx[pc].ecn_ect1_total_local++;
-        cnx->ack_ctx[pc].sending_ecn_ack |= 1;
+        ack_ctx->ecn_ect1_total_local++;
+        ack_ctx->sending_ecn_ack |= 1;
         break;
     case 0x02: /* ECN_ECT_0 */
-        cnx->ack_ctx[pc].ecn_ect0_total_local++;
-        cnx->ack_ctx[pc].sending_ecn_ack |= 1;
+        ack_ctx->ecn_ect0_total_local++;
+        ack_ctx->sending_ecn_ack |= 1;
         break;
     case 0x03: /* ECN_CE */
-        cnx->ack_ctx[pc].ecn_ce_total_local++;
-        cnx->ack_ctx[pc].sending_ecn_ack |= 1;
+        ack_ctx->ecn_ce_total_local++;
+        ack_ctx->sending_ecn_ack |= 1;
         break;
     }
 }
@@ -1790,7 +1814,7 @@ int picoquic_incoming_1rtt(
                         }
                     }
                     else {
-                        picoquic_set_ack_needed(cnx, current_time, ph->pc);
+                        picoquic_set_ack_needed(cnx, current_time, ph->pc, ph->l_cid);
                     }
                 }
             }
@@ -1848,7 +1872,7 @@ int picoquic_incoming_1rtt(
                 }
 
                 /* Processing of TLS messages  */
-                ret = picoquic_tls_stream_process(cnx, NULL);
+                ret = picoquic_tls_stream_process(cnx, NULL, current_time);
             }
 
             if (ret == 0 && picoquic_cnx_is_still_logging(cnx)) {
@@ -2108,9 +2132,9 @@ int picoquic_incoming_segment(
             ph.ptype != picoquic_packet_version_negotiation) {
             cnx->nb_packets_received++;
             /* Mark the sequence number as received */
-            ret = picoquic_record_pn_received(cnx, ph.pc, ph.pn64, receive_time);
+            ret = picoquic_record_pn_received(cnx, ph.pc, ph.l_cid, ph.pn64, receive_time);
             /* Perform ECN accounting */
-            picoquic_ecn_accounting(cnx, received_ecn, ph.pc);
+            picoquic_ecn_accounting(cnx, received_ecn, ph.pc, ph.l_cid);
         }
         if (cnx != NULL) {
             picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
@@ -2118,7 +2142,7 @@ int picoquic_incoming_segment(
     } else if (ret == PICOQUIC_ERROR_DUPLICATE) {
         /* Bad packets are dropped silently, but duplicates should be acknowledged */
         if (cnx != NULL) {
-            picoquic_set_ack_needed(cnx, current_time, ph.pc);
+            picoquic_set_ack_needed(cnx, current_time, ph.pc, ph.l_cid);
         }
         ret = -1;
     } else if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_INITIAL_TOO_SHORT ||

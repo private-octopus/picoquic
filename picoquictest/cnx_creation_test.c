@@ -169,7 +169,7 @@ int cnxcreation_test()
 
     if (ret == 0) {
         picoquic_connection_id_t bad_target = { { 1,2,3,4,5,6,7,8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 8 };
-        picoquic_cnx_t* cnx = picoquic_cnx_by_id(quic, bad_target);
+        picoquic_cnx_t* cnx = picoquic_cnx_by_id(quic, bad_target, NULL);
         if (cnx != NULL) {
             ret = -1;
         }
@@ -201,7 +201,7 @@ int cnxcreation_test()
     }
 
     for (int i = 0; ret == 0 && i < TEST_CNX_COUNT; i++) {
-        picoquic_cnx_t* cnx = picoquic_cnx_by_id(quic, test_cid[i]);
+        picoquic_cnx_t* cnx = picoquic_cnx_by_id(quic, test_cid[i], NULL);
 
         if (cnx != NULL && (i & 1) == 0) {
             ret = -1;

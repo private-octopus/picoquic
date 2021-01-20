@@ -523,19 +523,22 @@ int test_packet_encrypt_one(
     picoquic_packet_header expected_header;
     picoquic_packet_t * packet = (picoquic_packet_t *) malloc(sizeof(picoquic_packet_t));
     picoquic_packet_context_enum pc = 0;
+    picoquic_packet_context_t* pkt_ctx;
 
     if (packet == NULL) {
         DBG_PRINTF("%s", "Out of memory\n");
         ret = -1;
     }
     else {
+        pkt_ctx = (ptype == picoquic_packet_1rtt_protected && cnx_client->is_multipath_enabled) ?
+            &path_x->p_remote_cnxid->pkt_ctx : &cnx_client->pkt_ctx[pc];
         memset(packet, 0, sizeof(picoquic_packet_t));
         memset(packet->bytes, 0xbb, length);
-        header_length = picoquic_predict_packet_header_length(cnx_client, ptype);
+        header_length = picoquic_predict_packet_header_length(cnx_client, ptype, pkt_ctx);
         packet->ptype = ptype;
         packet->offset = header_length;
         packet->length = length;
-        packet->sequence_number = cnx_client->pkt_ctx[pc].send_sequence;
+        packet->sequence_number = pkt_ctx->send_sequence;
         packet->send_path = cnx_client->path[0];
 
         /* Create a packet with specified parameters */
