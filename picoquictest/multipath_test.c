@@ -343,7 +343,8 @@ typedef enum {
     multipath_test_basic = 0,
     multipath_test_drop_first,
     multipath_test_drop_second,
-    multipath_test_sat_plus
+    multipath_test_sat_plus,
+    multipath_test_renew
 } multipath_test_enum_t;
 
 int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id)
@@ -353,6 +354,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0x1b, 0x11, 0xc0, 4, 5, 6, 7, 8}, 8 };
     picoquic_tp_t server_parameters;
+    uint64_t original_r_cid_sequence = 1;
     int ret;
 
     /* Create the context but delay initialization, so the multipath option can be set */
@@ -430,7 +432,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = wait_multipath_ready(test_ctx, &simulated_time);
     }
 
-    if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second)) {
+    if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
+        test_id == multipath_test_renew)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link */
         if (ret == 0) {
@@ -444,7 +447,12 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             }
         }
         if (ret == 0) {
-            multipath_test_kill_links(test_ctx, (test_id == multipath_test_drop_first) ? 0 : 1);
+            if (test_id == multipath_test_renew) {
+                ret = picoquic_renew_connection_id(test_ctx->cnx_client, 1);
+            }
+            else {
+                multipath_test_kill_links(test_ctx, (test_id == multipath_test_drop_first) ? 0 : 1);
+            }
         }
     }
     /* Perform a final data sending loop, this time to completion  */
@@ -462,8 +470,19 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
     }
 
+    if (test_id == multipath_test_renew) {
+        if (test_ctx->cnx_client->path[1]->p_remote_cnxid->sequence == original_r_cid_sequence) {
+            DBG_PRINTF("Remote CID on client path 1 is still %" PRIu64 "\n", original_r_cid_sequence);
+            ret = -1;
+        } else if (test_ctx->cnx_server->path[1]->p_remote_cnxid->sequence == original_r_cid_sequence) {
+            DBG_PRINTF("Remote CID on server path 1 is still %" PRIu64 "\n", original_r_cid_sequence);
+            ret = -1;
+        }
+    }
+
+
     /* Delete the context */
-    if (test_ctx == NULL) {
+    if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
     }
 
@@ -511,6 +530,15 @@ int multipath_sat_plus_test()
     uint64_t max_completion_microsec = 5000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus);
+}
+
+/* Test the renewal of the connection ID on a path
+ */
+int multipath_renew_test()
+{
+    uint64_t max_completion_microsec = 5000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_renew);
 }
 
 /* Monopath tests:

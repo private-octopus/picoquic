@@ -1638,7 +1638,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
         } else if (picoquic_compare_connection_id(&cnx->path[path_id]->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0) {
             /* The peer switched to a new CID */
             cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, &ph->dest_cnx_id);
-            if (cnx->client_mode == 0 && cnx->cnxid_stash_first != NULL && path_id == 0) {
+            if (cnx->client_mode == 0 && cnx->cnxid_stash_first != NULL &&
+                (path_id == 0 || cnx->is_multipath_enabled)) {
                 /* If on a server, dereference the current CID, and pick a new one */
                 (void)picoquic_renew_connection_id(cnx, path_id);
             }
@@ -1698,7 +1699,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
                     cnx->path[path_id]->p_remote_cnxid = cnx->path[alt_path]->p_remote_cnxid;
                     cnx->path[path_id]->p_remote_cnxid->nb_path_references++;
                 } else if (cnx->path[path_id]->p_remote_cnxid->sequence != cnx->path[alt_path]->p_remote_cnxid->sequence) {
-                    picoquic_dereference_stashed_cnxid(cnx, cnx->path[path_id]);
+                    picoquic_dereference_stashed_cnxid(cnx, cnx->path[path_id], 0);
                     cnx->path[path_id]->p_remote_cnxid = cnx->path[alt_path]->p_remote_cnxid;
                     cnx->path[path_id]->p_remote_cnxid->nb_path_references++;
                 }

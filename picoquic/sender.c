@@ -344,6 +344,9 @@ picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic)
     
     if (packet == NULL) {
         packet = (picoquic_packet_t*)malloc(sizeof(picoquic_packet_t));
+        if (packet != NULL) {
+            quic->nb_packets_allocated++;
+        }
     }
     else {
         quic->p_first_packet = packet->next_packet;
@@ -362,6 +365,7 @@ void picoquic_recycle_packet(picoquic_quic_t * quic, picoquic_packet_t* packet)
     if (packet != NULL) {
         if (quic->nb_packets_in_pool >= PICOQUIC_MAX_PACKETS_IN_POOL) {
             free(packet);
+            quic->nb_packets_allocated--;
         }
         else {
             packet->next_packet = quic->p_first_packet;
@@ -872,7 +876,6 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
         packet->next_packet->previous_packet = packet;
     }
     pkt_ctx->retransmit_newest = packet;
-
     if (!packet->is_ack_trap) {
         /* Account for bytes in transit, for congestion control */
         path_x->bytes_in_transit += length;
@@ -927,7 +930,6 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
     }
     else {
         p->next_packet = NULL;
-
         /* add this packet to the retransmitted list */
         if (pkt_ctx->retransmitted_oldest == NULL) {
             pkt_ctx->retransmitted_newest = p;
@@ -1278,6 +1280,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     size_t send_buffer_max_minus_checksum,
     int * packet_is_pure_ack,
     int * do_not_detect_spurious,
+    int force_queue,
     size_t * length)
 {
     /* check if this is an ACK only packet */
@@ -1290,7 +1293,9 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
         if (old_p->send_path != NULL) {
             /* MTU probe was lost, presumably because of packet too big */
             old_p->send_path->mtu_probe_sent = 0;
-            old_p->send_path->send_mtu_max_tried = old_p->length + old_p->checksum_overhead;
+            if (!force_queue) {
+                old_p->send_path->send_mtu_max_tried = old_p->length + old_p->checksum_overhead;
+            }
         }
         /* MTU probes should not be retransmitted */
         *packet_is_pure_ack = 1;
@@ -1321,8 +1326,9 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
                     ret = picoquic_queue_stream_frame_for_retransmit(cnx, &old_p->bytes[byte_index], frame_length);
                 }
                 else {
-                    if (frame_length > send_buffer_max_minus_checksum - *length &&
-                        (old_p->ptype == picoquic_packet_0rtt_protected || old_p->ptype == picoquic_packet_1rtt_protected)) {
+                    if ((force_queue || frame_length > send_buffer_max_minus_checksum - *length) &&
+                        (old_p->ptype == picoquic_packet_0rtt_protected || 
+                            old_p->ptype == picoquic_packet_1rtt_protected)) {
                         ret = picoquic_queue_misc_frame(cnx, &old_p->bytes[byte_index], frame_length, 0);
                     }
                     else {
@@ -1447,7 +1453,6 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
                 packet->sequence_number = pkt_ctx->send_sequence;
                 packet->send_path = path_x;
                 packet->pc = pc;
-
                 *header_length = length;
 
                 switch (packet->ptype) {
@@ -1473,7 +1478,7 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
                     new_bytes,
                     send_buffer_max - checksum_length,
                     &packet_is_pure_ack,
-                    &do_not_detect_spurious,
+                    &do_not_detect_spurious, 0,
                     &length);
 
                 if (ret != 0) {
@@ -1579,6 +1584,8 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
                     
                     if (length <= packet->offset) {
                         length = 0;
+                        packet->length = 0;
+                        packet->offset = 0;
                         if (!packet_is_pure_ack) {
                             /* Pace down the next retransmission so as to not pile up error upon error */
                             path_x->pacing_bucket_nanosec -= path_x->pacing_packet_time_nanosec;

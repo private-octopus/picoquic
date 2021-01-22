@@ -5671,7 +5671,7 @@ int retire_cnxid_test()
             ret = -1;
         } else {
             ret = picoquic_queue_retire_connection_id_frame(test_ctx->cnx_client, stashed->sequence);
-            (void)picoquic_remove_stashed_cnxid(test_ctx->cnx_client, stashed, NULL);
+            (void)picoquic_remove_stashed_cnxid(test_ctx->cnx_client, stashed, NULL, 0);
         }
     }
 

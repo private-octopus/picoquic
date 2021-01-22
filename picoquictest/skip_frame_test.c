@@ -1782,7 +1782,7 @@ int test_copy_for_retransmit()
         ret = picoquic_copy_before_retransmit(&old_p, cnx, new_bytes,
             copy_retransmit_case[i].copy_max,
             &packet_is_pure_ack,
-            &do_not_detect_spurious,
+            &do_not_detect_spurious, 0,
             &length);
 
         if (ret != 0) {
