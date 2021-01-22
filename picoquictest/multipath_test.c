@@ -344,7 +344,8 @@ typedef enum {
     multipath_test_drop_first,
     multipath_test_drop_second,
     multipath_test_sat_plus,
-    multipath_test_renew
+    multipath_test_renew,
+    multipath_test_rotation
 } multipath_test_enum_t;
 
 int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id)
@@ -372,6 +373,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
         test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
         test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
+
+        if (test_id == multipath_test_rotation) {
+            picoquic_set_default_crypto_epoch_length(test_ctx->qserver, 200);
+        }
 
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
@@ -470,7 +475,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
     }
 
-    if (test_id == multipath_test_renew) {
+    if (ret == 0 && test_id == multipath_test_renew) {
         if (test_ctx->cnx_client->path[1]->p_remote_cnxid->sequence == original_r_cid_sequence) {
             DBG_PRINTF("Remote CID on client path 1 is still %" PRIu64 "\n", original_r_cid_sequence);
             ret = -1;
@@ -480,6 +485,12 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
+    if (ret == 0 && test_id == multipath_test_rotation) {
+        if (test_ctx->cnx_server->nb_crypto_key_rotations == 0) {
+            DBG_PRINTF("%s", "No key rotation observed.\n");
+            ret = -1;
+        }
+    }
 
     /* Delete the context */
     if (test_ctx != NULL) {
@@ -539,6 +550,15 @@ int multipath_renew_test()
     uint64_t max_completion_microsec = 5000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_renew);
+}
+
+/* Test key rotation in a multipath setup
+ */
+int multipath_rotation_test()
+{
+    uint64_t max_completion_microsec = 5000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_rotation);
 }
 
 /* Monopath tests:
