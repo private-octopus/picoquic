@@ -345,7 +345,8 @@ typedef enum {
     multipath_test_drop_second,
     multipath_test_sat_plus,
     multipath_test_renew,
-    multipath_test_rotation
+    multipath_test_rotation,
+    multipath_test_nat
 } multipath_test_enum_t;
 
 int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id)
@@ -438,7 +439,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
     if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
-        test_id == multipath_test_renew)) {
+        test_id == multipath_test_renew || test_id == multipath_test_nat)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link */
         if (ret == 0) {
@@ -454,6 +455,12 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         if (ret == 0) {
             if (test_id == multipath_test_renew) {
                 ret = picoquic_renew_connection_id(test_ctx->cnx_client, 1);
+            }
+            else if (test_id == multipath_test_nat) {
+                /* Change the client address */
+                test_ctx->client_addr_natted = test_ctx->client_addr;
+                test_ctx->client_addr_natted.sin_port += 7;
+                test_ctx->client_use_nat = 1;
             }
             else {
                 multipath_test_kill_links(test_ctx, (test_id == multipath_test_drop_first) ? 0 : 1);
@@ -561,6 +568,14 @@ int multipath_rotation_test()
     return  multipath_test_one(max_completion_microsec, multipath_test_rotation);
 }
 
+/* Test NAT rebinding in a multipath setup
+ */
+int multipath_nat_test()
+{
+    uint64_t max_completion_microsec = 5000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_nat);
+}
 /* Monopath tests:
  * Enable the multipath option, but use only a single path. The gal of the tests is to verify that
  * these "monopath" scenarios perform just as well as if multipath was not enabled.

@@ -1412,6 +1412,11 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_nat) {
+            int ret = multipath_nat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(config_option_letters) {
             int ret = config_option_letters_test();
 
