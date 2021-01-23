@@ -78,17 +78,17 @@ int sacktest()
 
     /* Do a basic test with packet zero */
 
-    if (picoquic_is_pn_already_received(&cnx, pc, picoquic_packet_1rtt_protected, 
+    if (picoquic_is_pn_already_received(&cnx, pc,
         cnx.local_cnxid_first, 0) != 0) {
         ret = -1;
     }
 
-    if (picoquic_record_pn_received(&cnx, pc, picoquic_packet_1rtt_protected, cnx.local_cnxid_first,
+    if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first,
         0, current_time) != 0) {
         ret = -1;
     }
 
-    if (picoquic_is_pn_already_received(&cnx, pc, picoquic_packet_1rtt_protected, 
+    if (picoquic_is_pn_already_received(&cnx, pc,
         cnx.local_cnxid_first, 0) == 0) {
         ret = -1;
     }
@@ -112,23 +112,23 @@ int sacktest()
             highest_seen_time = current_time;
         }
 
-        if (picoquic_record_pn_received(&cnx, pc, picoquic_packet_1rtt_protected, cnx.local_cnxid_first, test_pn64[i], current_time) != 0) {
+        if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[i], current_time) != 0) {
             ret = -1;
         }
 
         for (size_t j = 0; ret == 0 && j <= i; j++) {
-            if (picoquic_is_pn_already_received(&cnx, pc, picoquic_packet_1rtt_protected, 
+            if (picoquic_is_pn_already_received(&cnx, pc,
                 cnx.local_cnxid_first, test_pn64[j]) == 0) {
                 ret = -1;
             }
 
-            if (picoquic_record_pn_received(&cnx, pc, picoquic_packet_1rtt_protected, cnx.local_cnxid_first, test_pn64[j], current_time) != 1) {
+            if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[j], current_time) != 1) {
                 ret = -1;
             }
         }
 
         for (size_t j = i + 1; ret == 0 && j < nb_test_pn64; j++) {
-            if (picoquic_is_pn_already_received(&cnx, pc, picoquic_packet_1rtt_protected,
+            if (picoquic_is_pn_already_received(&cnx, pc,
                 cnx.local_cnxid_first, test_pn64[j]) != 0) {
                 ret = -1;
             }
@@ -290,7 +290,7 @@ int sendacktest()
     for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
         current_time = i * 100;
 
-        if (picoquic_record_pn_received(&cnx, pc, picoquic_packet_1rtt_protected, cnx.local_cnxid_first, test_pn64[i], current_time) != 0) {
+        if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[i], current_time) != 0) {
             ret = -1;
         }
 

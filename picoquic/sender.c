@@ -2861,14 +2861,6 @@ void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     /* Transition to false start state. */
     cnx->cnx_state = picoquic_state_server_false_start;
 
-    if (cnx->is_multipath_enabled) {
-        /* The ACK context for 0-RTT packet moves to per CID[0] packet context */
-        picoquic_ack_context_t* o_ack_ctx = &cnx->ack_ctx[picoquic_packet_context_application];
-        picoquic_ack_context_t* n_ack_ctx = &cnx->path[0]->p_local_cnxid->ack_ctx;
-        *n_ack_ctx = *o_ack_ctx;
-        picoquic_init_ack_ctx(cnx, o_ack_ctx);
-    }
-
     /* On a server that does address validation, send a NEW TOKEN frame */
     if (!cnx->client_mode && (cnx->quic->check_token || cnx->quic->provide_token)) {
         uint8_t token_buffer[256];

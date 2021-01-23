@@ -8054,7 +8054,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                         hole_number = packet->sequence_number;
                         if (shall_spoof_ack) {
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
-                                picoquic_packet_1rtt_protected, test_ctx->cnx_client->local_cnxid_first, hole_number, simulated_time);
+                                test_ctx->cnx_client->local_cnxid_first, hole_number, simulated_time);
                             if (ret != 0) {
                                 DBG_PRINTF("Record pn hole %d number returns %d\n", (int)hole_number, ret);
                                 break;

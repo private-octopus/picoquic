@@ -488,7 +488,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
 
     /* verify that the packet is new */
     if (already_received != NULL) {
-        if (picoquic_is_pn_already_received(cnx, ph->pc, ph->ptype, ph->l_cid, ph->pn64) != 0) {
+        if (picoquic_is_pn_already_received(cnx, ph->pc, ph->l_cid, ph->pn64) != 0) {
             /* Set error type: already received */
             *already_received = 1;
         }
@@ -2133,7 +2133,7 @@ int picoquic_incoming_segment(
             ph.ptype != picoquic_packet_version_negotiation) {
             cnx->nb_packets_received++;
             /* Mark the sequence number as received */
-            ret = picoquic_record_pn_received(cnx, ph.pc, ph.ptype, ph.l_cid, ph.pn64, receive_time);
+            ret = picoquic_record_pn_received(cnx, ph.pc, ph.l_cid, ph.pn64, receive_time);
             /* Perform ECN accounting */
             picoquic_ecn_accounting(cnx, received_ecn, ph.pc, ph.l_cid);
         }
