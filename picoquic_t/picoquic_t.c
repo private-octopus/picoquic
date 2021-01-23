@@ -243,6 +243,8 @@ static const picoquic_test_def_t test_table[] = {
     { "monopath_hole", monopath_hole_test },
     { "multipath_basic", multipath_basic_test },
     { "monopath_rotation", monopath_rotation_test },
+    { "monopath_0rtt", monopath_0rtt_test },
+    { "monopath_0rtt_loss", monopath_0rtt_loss_test },
     { "multipath_drop_first", multipath_drop_first_test },
     { "multipath_drop_second", multipath_drop_second_test },
     { "multipath_sat_plus", multipath_sat_plus_test },

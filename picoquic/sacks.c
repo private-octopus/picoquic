@@ -35,13 +35,14 @@
  * Check whether the packet was already received.
  */
 int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, 
-    picoquic_packet_context_enum pc, picoquic_local_cnxid_t * l_cid, uint64_t pn64)
+    picoquic_packet_context_enum pc, picoquic_packet_type_enum ptype, picoquic_local_cnxid_t * l_cid, uint64_t pn64)
 {
     int is_received = 0;
-    picoquic_sack_item_t* sack = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) ?
+    picoquic_sack_item_t* sack = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled
+        && ptype != picoquic_packet_0rtt_protected) ?
         &l_cid->ack_ctx.first_sack_item : &cnx->ack_ctx[pc].first_sack_item;
 
-    if (sack->start_of_sack_range != (uint64_t)((int64_t)-1)) {
+    if (sack->start_of_sack_range != UINT64_MAX) {
         do {
             if (pn64 > sack->end_of_sack_range)
                 break;
@@ -175,11 +176,13 @@ int picoquic_update_sack_list(picoquic_sack_item_t* sack,
 }
 
 int picoquic_record_pn_received(picoquic_cnx_t* cnx,
-    picoquic_packet_context_enum pc, picoquic_local_cnxid_t * l_cid,
+    picoquic_packet_context_enum pc, picoquic_packet_type_enum ptype,
+    picoquic_local_cnxid_t * l_cid,
     uint64_t pn64, uint64_t current_microsec)
 {
     int ret = 0;
-    picoquic_sack_item_t* sack = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled)?
+    picoquic_sack_item_t* sack = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled
+        && ptype != picoquic_packet_0rtt_protected)?
         &l_cid->ack_ctx.first_sack_item: &cnx->ack_ctx[pc].first_sack_item;
 
     if (sack->start_of_sack_range == (uint64_t)((int64_t)-1)) {

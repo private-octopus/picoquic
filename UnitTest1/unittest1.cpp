@@ -1376,6 +1376,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(monopath_0rtt) {
+            int ret = monopath_0rtt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(monopath_0rtt_loss) {
+            int ret = monopath_0rtt_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_basic) {
             int ret = multipath_basic_test();
 

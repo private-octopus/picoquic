@@ -247,6 +247,8 @@ int migration_mtu_drop_test();
 int monopath_basic_test();
 int monopath_hole_test();
 int monopath_rotation_test();
+int monopath_0rtt_test();
+int monopath_0rtt_loss_test();
 int multipath_basic_test();
 int multipath_drop_first_test();
 int multipath_drop_second_test();

@@ -3162,9 +3162,12 @@ int session_resume_test()
 
 /*
  * Zero RTT test. Like the session resume test, but with a twist...
+ * Use multipath_init_params procedure to set up parameters for the multipath test.
  */
+void multipath_init_params(picoquic_tp_t* test_parameters, int enable_time_stamp);
+
 int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, 
-    unsigned int no_coal, unsigned int long_data, uint64_t extra_delay)
+    unsigned int no_coal, unsigned int long_data, uint64_t extra_delay, int do_multipath)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -3172,6 +3175,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
     char const* alpn = PICOQUIC_TEST_ALPN;
     uint64_t loss_mask = 0;
     uint32_t proposed_version = 0;
+
+    picoquic_tp_t server_parameters;
     int ret = 0;
 
     /* Initialize an empty ticket store */
@@ -3185,7 +3190,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
         /* Set up the context, while setting the ticket store parameter for the client */
         if (ret == 0) {
             ret = tls_api_init_ctx(&test_ctx, 
-                (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 0,
+                (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 1,
                 (i == 0)?0:use_badcrypt);
 
             if (ret == 0 && no_coal) {
@@ -3195,6 +3200,17 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
             if (ret == 0 && hardreset != 0 && i == 1) {
                 picoquic_set_cookie_mode(test_ctx->qserver, 1);
             }
+
+            if (ret == 0 && do_multipath) {
+                /* Set the multipath option at both client and server */
+                multipath_init_params(&server_parameters, 0);
+                picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+                test_ctx->cnx_client->local_parameters.enable_multipath = 1;
+                test_ctx->cnx_client->local_parameters.enable_time_stamp = 0;
+            }
+
+            /* Initialize the client connection */
+            picoquic_start_client_cnx(test_ctx->cnx_client);
         }
 
         if (ret == 0 && i == 1) {
@@ -3353,7 +3369,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
 
 int zero_rtt_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 0, 0, 0);
+    return zero_rtt_test_one(0, 0, 0, 0, 0, 0, 0);
 }
 
 /*
@@ -3372,7 +3388,7 @@ int zero_rtt_loss_test()
 
     for (unsigned int i = 1; ret == 0 && i < 16; i++) {
         uint64_t early_loss = 1ull << i;
-        ret = zero_rtt_test_one(0, 0, early_loss, 0, 0, 0);
+        ret = zero_rtt_test_one(0, 0, early_loss, 0, 0, 0, 0);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT test fails when packet #%d is lost.\n", i);
         }
@@ -3390,7 +3406,7 @@ int zero_rtt_loss_test()
 
 int zero_rtt_spurious_test()
 {
-    return zero_rtt_test_one(1, 0, 0, 0, 0, 0);
+    return zero_rtt_test_one(1, 0, 0, 0, 0, 0, 0);
 }
 
 /*
@@ -3402,7 +3418,7 @@ int zero_rtt_spurious_test()
 
 int zero_rtt_retry_test()
 {
-    return zero_rtt_test_one(0, 1, 0, 0, 0, 0);
+    return zero_rtt_test_one(0, 1, 0, 0, 0, 0, 0);
 }
 
 /*
@@ -3414,7 +3430,7 @@ int zero_rtt_retry_test()
 
 int zero_rtt_no_coal_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 1, 0, 0);
+    return zero_rtt_test_one(0, 0, 0, 1, 0, 0, 0);
 }
 
 /* Test the robustness of the connection in a zero RTT scenario,
@@ -3439,7 +3455,7 @@ int zero_rtt_many_losses_test()
             }
         }
 
-        ret = zero_rtt_test_one(0, 0, loss_mask, 0, 0, 0);
+        ret = zero_rtt_test_one(0, 0, loss_mask, 0, 0, 0, 0);
         if (ret != 0) {
             DBG_PRINTF("Handshake fails for mask %d, mask = %llx", i, (unsigned long long)loss_mask);
         }
@@ -3454,7 +3470,7 @@ int zero_rtt_many_losses_test()
 
 int zero_rtt_long_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 0, 1, 0);
+    return zero_rtt_test_one(0, 0, 0, 0, 1, 0, 0);
 }
 
 /*
@@ -3468,13 +3484,13 @@ int zero_rtt_delay_test()
     const uint64_t nominal_delay_sec = 100000;
     const uint64_t nominal_delay = nominal_delay_sec * 1000000;
 
-    bad_ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay + 1000000);
+    bad_ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay + 1000000, 0);
     if (bad_ret == 0) {
         DBG_PRINTF("Zero RTT succeed despite delay = %" PRIu64, " + 1 second.", nominal_delay_sec);
         ret = -1;
     }
     else {
-        ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay - 2000000);
+        ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay - 2000000, 0);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT fails for delay = %" PRIu64, " - 2 seconds.", nominal_delay_sec);
         }
@@ -8038,7 +8054,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                         hole_number = packet->sequence_number;
                         if (shall_spoof_ack) {
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
-                                test_ctx->cnx_client->local_cnxid_first, hole_number, simulated_time);
+                                picoquic_packet_1rtt_protected, test_ctx->cnx_client->local_cnxid_first, hole_number, simulated_time);
                             if (ret != 0) {
                                 DBG_PRINTF("Record pn hole %d number returns %d\n", (int)hole_number, ret);
                                 break;

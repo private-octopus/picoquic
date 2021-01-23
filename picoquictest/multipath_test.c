@@ -681,3 +681,29 @@ int monopath_rotation_test()
 {
     return monopath_test_one(monopath_test_rotation);
 }
+
+/* The zero RTT test uses the unipath code, with a special parameter.
+ * Test both regular 0RTT set up, and case of losses.
+ */
+int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
+    unsigned int no_coal, unsigned int long_data, uint64_t extra_delay, int do_multipath);
+
+int monopath_0rtt_test()
+{
+    return zero_rtt_test_one(0, 0, 0, 0, 0, 0, 1);
+}
+
+int monopath_0rtt_loss_test()
+{
+    int ret = 0;
+
+    for (unsigned int i = 1; ret == 0 && i < 16; i++) {
+        uint64_t early_loss = 1ull << i;
+        ret = zero_rtt_test_one(0, 0, early_loss, 0, 0, 0, 1);
+        if (ret != 0) {
+            DBG_PRINTF("Monopath 0 RTT test fails when packet #%d is lost.\n", i);
+        }
+    }
+
+    return ret;
+}

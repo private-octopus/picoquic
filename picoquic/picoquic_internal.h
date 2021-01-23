@@ -1358,10 +1358,10 @@ void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx)
 
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);
 
-int picoquic_is_pn_already_received(picoquic_cnx_t* cnx,
-    picoquic_packet_context_enum pc, picoquic_local_cnxid_t * l_cid, uint64_t pn64);
-int picoquic_record_pn_received(picoquic_cnx_t* cnx,
-    picoquic_packet_context_enum pc, picoquic_local_cnxid_t* l_cid, uint64_t pn64, uint64_t current_microsec);
+int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, picoquic_packet_type_enum ptype,
+    picoquic_local_cnxid_t * l_cid, uint64_t pn64);
+int picoquic_record_pn_received(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, picoquic_packet_type_enum ptype,
+    picoquic_local_cnxid_t* l_cid, uint64_t pn64, uint64_t current_microsec);
 
 int picoquic_update_sack_list(picoquic_sack_item_t* sack,
     uint64_t pn64_min, uint64_t pn64_max);
