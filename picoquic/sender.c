@@ -3823,6 +3823,12 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
  * exhibits persistent packet loss, it loses its priority and moves to "standby"
  * state. At that point, the "challenge needed" flag is set, triggering a
  * continuity test.
+ *
+ * The multipath option bundles enabling multipath and using a separate number
+ * space per path. This is not strictly necessary. A simpler design would just make 
+ * the change in "picoquic_select_next_path_mp" below, without affecting the
+ * reminder of the protocol code. This could be enabled for example by
+ * a "multipath_simple" option.
  */
 
 static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time)

@@ -554,7 +554,7 @@ int multipath_sat_plus_test()
  */
 int multipath_renew_test()
 {
-    uint64_t max_completion_microsec = 5000000;
+    uint64_t max_completion_microsec = 3000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_renew);
 }
@@ -563,7 +563,7 @@ int multipath_renew_test()
  */
 int multipath_rotation_test()
 {
-    uint64_t max_completion_microsec = 5000000;
+    uint64_t max_completion_microsec = 3000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_rotation);
 }
@@ -572,7 +572,7 @@ int multipath_rotation_test()
  */
 int multipath_nat_test()
 {
-    uint64_t max_completion_microsec = 5000000;
+    uint64_t max_completion_microsec = 3000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_nat);
 }
