@@ -707,3 +707,77 @@ int monopath_0rtt_loss_test()
 
     return ret;
 }
+
+/*
+ * Test the multipath variant of AEAD encrypt and decrypt.
+ */
+int multipath_aead_test()
+{
+    int ret = 0;
+    const uint8_t mp_aead_secret[32] = {
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+        16, 17, 18, 19, 20, 21, 22, 23, 24, 35, 26, 27, 28, 29, 30, 31
+    };
+    /* Create AEAD contexts for encryption and decryption */
+    void* aead_encrypt = picoquic_setup_test_aead_context(1, mp_aead_secret);
+    void* aead_decrypt = picoquic_setup_test_aead_context(0, mp_aead_secret);
+
+    if (aead_encrypt == NULL || aead_decrypt == NULL) {
+        DBG_PRINTF("%s", "Could not create the AEAD contexts.\n");
+        ret = -1;
+    }
+    else {
+        /* For a series of path_id, verify that encryption and decryption works */
+        const uint64_t path_id_test[] = { 0, 1, 2, 0x0123456789abcdefull };
+        const size_t nb_paths = sizeof(path_id_test) / sizeof(uint64_t);
+        uint64_t sequence = 12345;
+        const char* aad_str = "This is a test";
+        const size_t aad_len = strlen(aad_str);
+        const uint8_t* aad = (const uint8_t*)aad_str;
+        const char* test_input_str = "The quick brown fox jumps over the lazy dog";
+        const size_t test_input_len = strlen(test_input_str);
+        const uint8_t* test_input = (const uint8_t*)test_input_str;
+        uint8_t encrypted[256];
+        uint8_t decrypted[256];
+        size_t encrypted_length;
+        size_t decrypted_length;
+
+        for (size_t i = 0; ret == 0 &&  i < nb_paths; i++) {
+            encrypted_length = picoquic_aead_encrypt_mp(encrypted, test_input, test_input_len,
+                path_id_test[i], sequence, aad, aad_len, aead_encrypt);
+            for (size_t j = 0; ret == 0 && j < nb_paths; j++) {
+                decrypted_length = picoquic_aead_decrypt_mp(decrypted, encrypted, encrypted_length,
+                    path_id_test[j], sequence, aad, aad_len, aead_encrypt);
+                if (i != j) {
+                    if (decrypted_length <= encrypted_length) {
+                        DBG_PRINTF("Unexpected success, path id encode 0x%" PRIx64 ", decode 0x%"PRIx64"\n",
+                            path_id_test[i], path_id_test[j]);
+                        ret = -1;
+                    }
+                }
+                else if (decrypted_length > encrypted_length) {
+                    DBG_PRINTF("Unexpected error, path id 0x%" PRIx64 "\n", path_id_test[i]);
+                    ret = -1;
+                }
+                else if (decrypted_length != test_input_len) {
+                    DBG_PRINTF("Length don't match, path id 0x%" PRIx64 ", in: %zu, out %zu\n",
+                        path_id_test[i], test_input_len, decrypted_length);
+                    ret = -1;
+                }
+                else if (memcmp(decrypted, test_input, test_input_len) != 0) {
+                    DBG_PRINTF("Decoded doesn't match encoded, path id 0x%" PRIx64 "\n", path_id_test[i]);
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    if (aead_encrypt != NULL) {
+        picoquic_aead_free(aead_encrypt);
+    }
+    if (aead_decrypt != NULL) {
+        picoquic_aead_free(aead_decrypt);
+    }
+
+    return ret;
+}

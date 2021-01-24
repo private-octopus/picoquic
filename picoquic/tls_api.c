@@ -2446,6 +2446,44 @@ size_t picoquic_aead_encrypt_generic(uint8_t* output, const uint8_t* input, size
     return encrypted;
 }
 
+size_t picoquic_aead_decrypt_mp(uint8_t* output, const uint8_t* input, size_t input_length,
+    uint64_t path_id, uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_context)
+{
+    size_t decrypted = 0;
+
+    if (aead_context == NULL) {
+        decrypted = SIZE_MAX;
+    }
+    else {
+        uint8_t seq32[4];
+
+        picoformat_32(seq32, (uint32_t)path_id);
+        ptls_aead_xor_iv((ptls_aead_context_t*)aead_context, seq32, sizeof(seq32));
+        decrypted = ptls_aead_decrypt((ptls_aead_context_t*)aead_context,
+            (void*)output, (const void*)input, input_length, seq_num,
+            (void*)auth_data, auth_data_length);
+        ptls_aead_xor_iv((ptls_aead_context_t*)aead_context, seq32, sizeof(seq32));
+    }
+
+    return decrypted;
+}
+
+size_t picoquic_aead_encrypt_mp(uint8_t* output, const uint8_t* input, size_t input_length,
+    uint64_t path_id, uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_context)
+{
+    size_t encrypted = 0;
+    uint8_t seq32[4];
+
+    picoformat_32(seq32, (uint32_t)path_id);
+    ptls_aead_xor_iv((ptls_aead_context_t*)aead_context, seq32, sizeof(seq32));
+    encrypted = ptls_aead_encrypt((ptls_aead_context_t*)aead_context,
+        (void*)output, (const void*)input, input_length, seq_num,
+        (void*)auth_data, auth_data_length);
+    ptls_aead_xor_iv((ptls_aead_context_t*)aead_context, seq32, sizeof(seq32));
+
+    return encrypted;
+}
+
 /* management of version specific salt, for initial packet encryption.
  */
 

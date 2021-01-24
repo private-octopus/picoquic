@@ -1388,6 +1388,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_aead) {
+            int ret = multipath_aead_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_basic) {
             int ret = multipath_basic_test();
 

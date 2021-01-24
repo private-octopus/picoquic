@@ -505,9 +505,15 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         /* Manage key rotation */
         if (ph->key_phase == cnx->key_phase_dec) {
             /* AEAD Decrypt, in place */
-            decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
-                bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
 
+            if (cnx->is_multipath_enabled && ph->ptype) {
+                decoded = picoquic_aead_decrypt_mp(bytes + ph->offset, bytes + ph->offset, ph->payload_length, 
+                    ph->l_cid->sequence, ph->pn64, bytes, ph->offset, cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+
+            } else {
+                decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
+                    bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+            }
             if (decoded <= ph->payload_length && ph->pn64 < ack_ctx->crypto_rotation_sequence) {
                 ack_ctx->crypto_rotation_sequence = ph->pn64;
             }
@@ -521,8 +527,15 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
                 need_integrity_check = 0;
             }
             else if (cnx->crypto_context_old.aead_decrypt != NULL) {
-                decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
-                    bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context_old.aead_decrypt);
+                if (cnx->is_multipath_enabled) {
+                    decoded = picoquic_aead_decrypt_mp(bytes + ph->offset, bytes + ph->offset, ph->payload_length,
+                        ph->l_cid->sequence, ph->pn64, bytes, ph->offset, cnx->crypto_context_old.aead_decrypt);
+
+                }
+                else {
+                    decoded = picoquic_aead_decrypt_generic(bytes + ph->offset, bytes + ph->offset, ph->payload_length,
+                        ph->pn64, bytes, ph->offset, cnx->crypto_context_old.aead_decrypt);
+                }
             }
             else {
                 /* old context is either not yet available, or already removed */
@@ -540,9 +553,15 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             }
             /* if decoding succeeds, the rotation should be validated */
             if (ret == 0 && cnx->crypto_context_new.aead_decrypt != NULL) {
-                decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
-                    bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context_new.aead_decrypt);
+                if (cnx->is_multipath_enabled) {
+                    decoded = picoquic_aead_decrypt_mp(bytes + ph->offset, bytes + ph->offset, ph->payload_length,
+                        ph->l_cid->sequence, ph->pn64, bytes, ph->offset, cnx->crypto_context_new.aead_decrypt);
 
+                }
+                else {
+                    decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
+                        bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context_new.aead_decrypt);
+                }
                 if (decoded <= ph->payload_length) {
                     /* Rotation only if the packet was correctly decrypted with the new key */
                     cnx->crypto_rotation_time_guard = current_time + cnx->path[0]->retransmit_timer;
@@ -582,8 +601,15 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         /* TODO: get rid of handshake some time after handshake complete */
         /* For all the other epochs, there is a single crypto context and no key rotation */
         if (cnx->crypto_context[ph->epoch].aead_decrypt != NULL) {
-            decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
-                bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[ph->epoch].aead_decrypt);
+            if (cnx->is_multipath_enabled && ph->ptype == picoquic_packet_1rtt_protected) {
+                decoded = picoquic_aead_decrypt_mp(bytes + ph->offset, bytes + ph->offset, ph->payload_length,
+                    ph->l_cid->sequence, ph->pn64, bytes, ph->offset, cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+
+            }
+            else {
+                decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
+                    bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[ph->epoch].aead_decrypt);
+            }
         }
         else {
             decoded = ph->payload_length + 1;

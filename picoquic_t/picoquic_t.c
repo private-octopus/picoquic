@@ -241,6 +241,7 @@ static const picoquic_test_def_t test_table[] = {
     { "migration_mtu_drop", migration_mtu_drop_test },
     { "monopath_basic", monopath_basic_test },
     { "monopath_hole", monopath_hole_test },
+    { "multipath_aead", multipath_aead_test },
     { "multipath_basic", multipath_basic_test },
     { "monopath_rotation", monopath_rotation_test },
     { "monopath_0rtt", monopath_0rtt_test },

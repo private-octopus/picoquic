@@ -640,7 +640,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     /* Using encryption, the "payload" length also includes the encrypted packet length */
     picoquic_update_payload_length(send_buffer, pn_offset, h_length - pn_length, length + aead_checksum_length);
 
-    /* If fuzzing is required, apply it*/
+    /* If fuzzing is required, apply it */
     if (cnx->quic->fuzz_fn != NULL) {
         if (h_length == header_length) {
             memcpy(bytes, send_buffer, header_length);
@@ -653,9 +653,17 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     }
 
     /* Encrypt the packet */
-    send_length = picoquic_aead_encrypt_generic(send_buffer + /* header_length */ h_length,
-        bytes + header_length, length - header_length,
-        sequence_number, send_buffer, /* header_length */ h_length, aead_context);
+    if (cnx->is_multipath_enabled && ptype == picoquic_packet_1rtt_protected) {
+        send_length = picoquic_aead_encrypt_mp(send_buffer + /* header_length */ h_length,
+            bytes + header_length, length - header_length, path_x->p_remote_cnxid->sequence,
+            sequence_number, send_buffer, /* header_length */ h_length, aead_context);
+
+    }
+    else {
+        send_length = picoquic_aead_encrypt_generic(send_buffer + /* header_length */ h_length,
+            bytes + header_length, length - header_length,
+            sequence_number, send_buffer, /* header_length */ h_length, aead_context);
+    }
 
     send_length += /* header_length */ h_length;
 
