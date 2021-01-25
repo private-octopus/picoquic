@@ -942,7 +942,7 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
 
         bytewrite_int8(msg, cnx->client_mode != 0);
         bytewrite_int32(msg, cnx->proposed_version);
-        bytewrite_cid(msg, &cnx->path[0]->remote_cnxid);
+        bytewrite_cid(msg, &cnx->path[0]->p_remote_cnxid->cnx_id);
 
         /* Algorithms used */
         bytewrite_cstr(msg, cnx->congestion_alg->congestion_algorithm_id);

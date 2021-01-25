@@ -86,7 +86,7 @@ int picoquic_parse_long_packet_header(
                     *pcnx = picoquic_cnx_by_net(quic, addr_from);
                 }
                 else if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
-                    *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                    *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id, &ph->l_cid);
                 }
             }
         }
@@ -185,7 +185,7 @@ int picoquic_parse_long_packet_header(
                     else
                     {
                         if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
-                            *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                            *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id, &ph->l_cid);
                         }
 
                         if (*pcnx == NULL && (ph->ptype == picoquic_packet_initial || ph->ptype == picoquic_packet_0rtt_protected)) {
@@ -208,7 +208,7 @@ int picoquic_parse_long_packet_header(
                         *pcnx = picoquic_cnx_by_net(quic, addr_from);
                     }
                     else if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
-                        *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                        *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id, &ph->l_cid);
                     }
                 }
             }
@@ -230,7 +230,7 @@ int picoquic_parse_short_packet_header(
     /* If this is a short header, it should be possible to retrieve the connection
      * context. This depends on whether the quic context requires cnx_id or not.
      */
-    uint8_t cnxid_length = (receiving == 0 && *pcnx != NULL) ? (*pcnx)->path[0]->remote_cnxid.id_len : quic->local_cnxid_length;
+    uint8_t cnxid_length = (receiving == 0 && *pcnx != NULL) ? (*pcnx)->path[0]->p_remote_cnxid->cnx_id.id_len : quic->local_cnxid_length;
     ph->pc = picoquic_packet_context_application;
     ph->pl_val = 0; /* No actual payload length in short headers */
 
@@ -241,7 +241,7 @@ int picoquic_parse_short_packet_header(
         if (*pcnx == NULL)
         {
             if (quic->local_cnxid_length > 0) {
-                *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id, &ph->l_cid);
             }
             else {
                 *pcnx = picoquic_cnx_by_net(quic, addr_from);
@@ -442,8 +442,14 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
             }
 
             /* Build a packet number to 64 bits */
-            ph->pn64 = picoquic_get_packet_number64(
-                cnx->pkt_ctx[ph->pc].first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
+            if (ph->ptype == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
+                ph->pn64 = picoquic_get_packet_number64(
+                    ph->l_cid->ack_ctx.first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
+            }
+            else {
+                ph->pn64 = picoquic_get_packet_number64(
+                    cnx->ack_ctx[ph->pc].first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
+            }
 
             /* Check the reserved bits */
             if ((first_byte & 0x80) == 0) {
@@ -482,7 +488,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
 
     /* verify that the packet is new */
     if (already_received != NULL) {
-        if (picoquic_is_pn_already_received(cnx, ph->pc, ph->pn64) != 0) {
+        if (picoquic_is_pn_already_received(cnx, ph->pc, ph->l_cid, ph->pn64) != 0) {
             /* Set error type: already received */
             *already_received = 1;
         }
@@ -493,13 +499,27 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
 
     if (ph->epoch == picoquic_epoch_1rtt) {
         int need_integrity_check = 1;
+        picoquic_ack_context_t* ack_ctx = (cnx->is_multipath_enabled) ?
+            &ph->l_cid->ack_ctx : &cnx->ack_ctx[picoquic_packet_context_application];
+            
         /* Manage key rotation */
         if (ph->key_phase == cnx->key_phase_dec) {
             /* AEAD Decrypt, in place */
-            decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
-                bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+
+            if (cnx->is_multipath_enabled && ph->ptype) {
+                decoded = picoquic_aead_decrypt_mp(bytes + ph->offset, bytes + ph->offset, ph->payload_length, 
+                    ph->l_cid->sequence, ph->pn64, bytes, ph->offset, cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+
+            } else {
+                decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
+                    bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+            }
+            if (decoded <= ph->payload_length && ph->pn64 < ack_ctx->crypto_rotation_sequence) {
+                ack_ctx->crypto_rotation_sequence = ph->pn64;
+            }
         }
-        else if (ph->pn64 < cnx->crypto_rotation_sequence) {
+        else if ((ack_ctx->crypto_rotation_sequence == UINT64_MAX && current_time <= cnx->crypto_rotation_time_guard) ||
+            ph->pn64 < ack_ctx->crypto_rotation_sequence) {
             /* This packet claims to be encoded with the old key */
             if (current_time > cnx->crypto_rotation_time_guard) {
                 /* Too late. Ignore the packet. Could be some kind of attack. */
@@ -507,8 +527,15 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
                 need_integrity_check = 0;
             }
             else if (cnx->crypto_context_old.aead_decrypt != NULL) {
-                decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
-                    bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context_old.aead_decrypt);
+                if (cnx->is_multipath_enabled) {
+                    decoded = picoquic_aead_decrypt_mp(bytes + ph->offset, bytes + ph->offset, ph->payload_length,
+                        ph->l_cid->sequence, ph->pn64, bytes, ph->offset, cnx->crypto_context_old.aead_decrypt);
+
+                }
+                else {
+                    decoded = picoquic_aead_decrypt_generic(bytes + ph->offset, bytes + ph->offset, ph->payload_length,
+                        ph->pn64, bytes, ph->offset, cnx->crypto_context_old.aead_decrypt);
+                }
             }
             else {
                 /* old context is either not yet available, or already removed */
@@ -526,13 +553,26 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             }
             /* if decoding succeeds, the rotation should be validated */
             if (ret == 0 && cnx->crypto_context_new.aead_decrypt != NULL) {
-                decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
-                    bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context_new.aead_decrypt);
+                if (cnx->is_multipath_enabled) {
+                    decoded = picoquic_aead_decrypt_mp(bytes + ph->offset, bytes + ph->offset, ph->payload_length,
+                        ph->l_cid->sequence, ph->pn64, bytes, ph->offset, cnx->crypto_context_new.aead_decrypt);
 
+                }
+                else {
+                    decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
+                        bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context_new.aead_decrypt);
+                }
                 if (decoded <= ph->payload_length) {
                     /* Rotation only if the packet was correctly decrypted with the new key */
                     cnx->crypto_rotation_time_guard = current_time + cnx->path[0]->retransmit_timer;
-                    cnx->crypto_rotation_sequence = ph->pn64;
+                    if (cnx->is_multipath_enabled) {
+                        picoquic_local_cnxid_t* l_cid = cnx->local_cnxid_first;
+                        while (l_cid != NULL) {
+                            l_cid->ack_ctx.crypto_rotation_sequence = UINT64_MAX;
+                            l_cid = l_cid->next;
+                        }
+                    }
+                    ack_ctx->crypto_rotation_sequence = ph->pn64;
                     picoquic_apply_rotated_keys(cnx, 0);
                     cnx->nb_crypto_key_rotations++;
 
@@ -561,8 +601,15 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         /* TODO: get rid of handshake some time after handshake complete */
         /* For all the other epochs, there is a single crypto context and no key rotation */
         if (cnx->crypto_context[ph->epoch].aead_decrypt != NULL) {
-            decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
-                bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[ph->epoch].aead_decrypt);
+            if (cnx->is_multipath_enabled && ph->ptype == picoquic_packet_1rtt_protected) {
+                decoded = picoquic_aead_decrypt_mp(bytes + ph->offset, bytes + ph->offset, ph->payload_length,
+                    ph->l_cid->sequence, ph->pn64, bytes, ph->offset, cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+
+            }
+            else {
+                decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
+                    bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[ph->epoch].aead_decrypt);
+            }
         }
         else {
             decoded = ph->payload_length + 1;
@@ -647,7 +694,7 @@ int picoquic_parse_header_and_decrypt(
                         if (ph->ptype == picoquic_packet_1rtt_protected &&
                             length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
                             memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                            (*pcnx)->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                            (*pcnx)->path[0]->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
                             ret = PICOQUIC_ERROR_STATELESS_RESET;
                         }
                         else {
@@ -797,7 +844,7 @@ void picoquic_prepare_version_negotiation(
                 cnx = picoquic_cnx_by_net(quic, addr_from);
             }
             else {
-                cnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                cnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id, &ph->l_cid);
             }
         }
         if (cnx == NULL) {
@@ -939,10 +986,10 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         size_t pn_offset;
         size_t pn_length;
 
-        cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
+        cnx->path[0]->p_remote_cnxid->cnx_id = ph->srce_cnx_id;
 
         byte_index = header_length = picoquic_create_packet_header(cnx, picoquic_packet_retry,
-            0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->p_local_cnxid->cnx_id, 0,
+            0, &cnx->path[0]->p_remote_cnxid->cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id, 0,
             bytes, &pn_offset, &pn_length);
 
         /* In the old drafts, there is no header protection and the sender copies the ODCID
@@ -1027,7 +1074,7 @@ void picoquic_ignore_incoming_handshake(
     /* If the packet contains ackable data, mark ack needed
      * in the relevant packet context */
     if (ret == 0 && ack_needed) {
-        picoquic_set_ack_needed(cnx, current_time, pc);
+        picoquic_set_ack_needed(cnx, current_time, pc, ph->l_cid);
     }
 }
 
@@ -1135,7 +1182,7 @@ int picoquic_incoming_client_initial(
             if (ret == 0) {
                 int data_consumed = 0;
                 /* initialization of context & creation of data */
-                ret = picoquic_tls_stream_process(*pcnx, &data_consumed);
+                ret = picoquic_tls_stream_process(*pcnx, &data_consumed, current_time);
                 /* The "initial_repeat_needed" flag is set if multiple initial packets are
                  * received while the connection is not yet validated. In most cases, this indicates
                  * that the client repeated some initial packets, or sent some gratuitous initial
@@ -1303,8 +1350,8 @@ int picoquic_incoming_server_initial(
     }
 
     /* Check the server cnx id */
-    if ((!picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid) || cnx->cnx_state > picoquic_state_client_handshake_start) &&
-        picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph->srce_cnx_id) != 0) {
+    if ((!picoquic_is_connection_id_null(&cnx->path[0]->p_remote_cnxid->cnx_id) || cnx->cnx_state > picoquic_state_client_handshake_start) &&
+        picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id, &ph->srce_cnx_id) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
     }
 
@@ -1351,7 +1398,7 @@ int picoquic_incoming_server_initial(
             }
             /* processing of initial packet */
             if (ret == 0) {
-                ret = picoquic_tls_stream_process(cnx, NULL);
+                ret = picoquic_tls_stream_process(cnx, NULL, current_time);
             }
         }
         else if (cnx->cnx_state < picoquic_state_ready) {
@@ -1383,7 +1430,7 @@ int picoquic_incoming_server_handshake(
 #endif
     int restricted = cnx->cnx_state != picoquic_state_client_handshake_start;
     
-    if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph->srce_cnx_id) != 0) {
+    if (picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id, &ph->srce_cnx_id) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
     }
 
@@ -1403,7 +1450,7 @@ int picoquic_incoming_server_handshake(
 
             /* processing of initial packet */
             if (ret == 0 && restricted == 0) {
-                ret = picoquic_tls_stream_process(cnx, NULL);
+                ret = picoquic_tls_stream_process(cnx, NULL, current_time);
             }
         }
         else {
@@ -1430,7 +1477,7 @@ int picoquic_incoming_client_handshake(
     cnx->initial_repeat_needed = 0;
 
     if (cnx->cnx_state < picoquic_state_server_almost_ready) {
-        if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
+        if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->p_remote_cnxid->cnx_id) != 0) {
             ret = PICOQUIC_ERROR_CNXID_CHECK;
         } else {
             /* Accept the incoming frames */
@@ -1449,7 +1496,7 @@ int picoquic_incoming_client_handshake(
                 picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
 
                 /* If TLS data present, progress the TLS state */
-                ret = picoquic_tls_stream_process(cnx, NULL);
+                ret = picoquic_tls_stream_process(cnx, NULL, current_time);
 
                 /* If TLS FIN has been received, the server side handshake is ready */
                 if (!cnx->client_mode && cnx->cnx_state < picoquic_state_ready && picoquic_is_tls_complete(cnx)) {
@@ -1506,7 +1553,7 @@ int picoquic_incoming_0rtt(
 
     if (!(picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->initial_cnxid) == 0 ||
         picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id) == 0) ||
-        picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
+        picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->p_remote_cnxid->cnx_id) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK;
     } else if (cnx->cnx_state == picoquic_state_server_almost_ready || 
         cnx->cnx_state == picoquic_state_server_false_start ||
@@ -1527,7 +1574,7 @@ int picoquic_incoming_0rtt(
 
             if (ret == 0) {
                 /* Processing of TLS messages -- EOED */
-                ret = picoquic_tls_stream_process(cnx, NULL);
+                ret = picoquic_tls_stream_process(cnx, NULL, current_time);
             }
         }
     } else {
@@ -1617,7 +1664,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
         } else if (picoquic_compare_connection_id(&cnx->path[path_id]->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0) {
             /* The peer switched to a new CID */
             cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, &ph->dest_cnx_id);
-            if (cnx->client_mode == 0 && cnx->cnxid_stash_first != NULL && path_id == 0) {
+            if (cnx->client_mode == 0 && cnx->cnxid_stash_first != NULL &&
+                (path_id == 0 || cnx->is_multipath_enabled)) {
                 /* If on a server, dereference the current CID, and pick a new one */
                 (void)picoquic_renew_connection_id(cnx, path_id);
             }
@@ -1671,12 +1719,16 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             }
 
             if (picoquic_assign_peer_cnxid_to_path(cnx, path_id) != 0){
-                /* Copy the destination ID from an existing path */
+                /* Use the destination ID from an existing path */
                 int alt_path = (nat_rebinding_path >= 0) ? nat_rebinding_path : 0;
-                cnx->path[path_id]->remote_cnxid = cnx->path[alt_path]->remote_cnxid;
-                cnx->path[path_id]->remote_cnxid_sequence = cnx->path[alt_path]->remote_cnxid_sequence;
-                memcpy(cnx->path[path_id]->reset_secret, cnx->path[alt_path]->reset_secret,
-                    PICOQUIC_RESET_SECRET_SIZE);
+                if (cnx->path[path_id]->p_remote_cnxid == NULL) {
+                    cnx->path[path_id]->p_remote_cnxid = cnx->path[alt_path]->p_remote_cnxid;
+                    cnx->path[path_id]->p_remote_cnxid->nb_path_references++;
+                } else if (cnx->path[path_id]->p_remote_cnxid->sequence != cnx->path[alt_path]->p_remote_cnxid->sequence) {
+                    picoquic_dereference_stashed_cnxid(cnx, cnx->path[path_id], 0);
+                    cnx->path[path_id]->p_remote_cnxid = cnx->path[alt_path]->p_remote_cnxid;
+                    cnx->path[path_id]->p_remote_cnxid->nb_path_references++;
+                }
             }
 
             cnx->path[path_id]->path_is_published = 1; 
@@ -1716,22 +1768,25 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
  * ECN Accounting. This is only called if the packet was processed successfully.
  */
 void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
-    unsigned char received_ecn, picoquic_packet_context_enum pc)
+    unsigned char received_ecn, picoquic_packet_context_enum pc, picoquic_local_cnxid_t * l_cid)
 {
+    picoquic_ack_context_t* ack_ctx = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) ?
+        &l_cid->ack_ctx : &cnx->ack_ctx[pc];
+
     switch (received_ecn & 0x03) {
     case 0x00:
         break;
     case 0x01: /* ECN_ECT_1 */
-        cnx->pkt_ctx[pc].ecn_ect1_total_local++;
-        cnx->pkt_ctx[pc].sending_ecn_ack |= 1;
+        ack_ctx->ecn_ect1_total_local++;
+        ack_ctx->sending_ecn_ack |= 1;
         break;
     case 0x02: /* ECN_ECT_0 */
-        cnx->pkt_ctx[pc].ecn_ect0_total_local++;
-        cnx->pkt_ctx[pc].sending_ecn_ack |= 1;
+        ack_ctx->ecn_ect0_total_local++;
+        ack_ctx->sending_ecn_ack |= 1;
         break;
     case 0x03: /* ECN_CE */
-        cnx->pkt_ctx[pc].ecn_ce_total_local++;
-        cnx->pkt_ctx[pc].sending_ecn_ack |= 1;
+        ack_ctx->ecn_ce_total_local++;
+        ack_ctx->sending_ecn_ack |= 1;
         break;
     }
 }
@@ -1786,7 +1841,7 @@ int picoquic_incoming_1rtt(
                         }
                     }
                     else {
-                        picoquic_set_ack_needed(cnx, current_time, ph->pc);
+                        picoquic_set_ack_needed(cnx, current_time, ph->pc, ph->l_cid);
                     }
                 }
             }
@@ -1844,7 +1899,7 @@ int picoquic_incoming_1rtt(
                 }
 
                 /* Processing of TLS messages  */
-                ret = picoquic_tls_stream_process(cnx, NULL);
+                ret = picoquic_tls_stream_process(cnx, NULL, current_time);
             }
 
             if (ret == 0 && picoquic_cnx_is_still_logging(cnx)) {
@@ -2003,9 +2058,9 @@ int picoquic_incoming_segment(
                 } else if ((!cnx->client_mode && picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->initial_cnxid) == 0) ||
                     picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id) == 0) {
                     /* Verify that the source CID matches expectation */
-                    if (picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid)) {
-                        cnx->path[0]->remote_cnxid = ph.srce_cnx_id;
-                    } else if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph.srce_cnx_id) != 0) {
+                    if (picoquic_is_connection_id_null(&cnx->path[0]->p_remote_cnxid->cnx_id)) {
+                        cnx->path[0]->p_remote_cnxid->cnx_id = ph.srce_cnx_id;
+                    } else if (picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id, &ph.srce_cnx_id) != 0) {
                         DBG_PRINTF("Error wrong srce cnxid (%d), type: %d, epoch: %d, pc: %d, pn: %d\n",
                             cnx->client_mode, ph.ptype, ph.epoch, ph.pc, (int)ph.pn);
                         ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
@@ -2104,9 +2159,9 @@ int picoquic_incoming_segment(
             ph.ptype != picoquic_packet_version_negotiation) {
             cnx->nb_packets_received++;
             /* Mark the sequence number as received */
-            ret = picoquic_record_pn_received(cnx, ph.pc, ph.pn64, receive_time);
+            ret = picoquic_record_pn_received(cnx, ph.pc, ph.l_cid, ph.pn64, receive_time);
             /* Perform ECN accounting */
-            picoquic_ecn_accounting(cnx, received_ecn, ph.pc);
+            picoquic_ecn_accounting(cnx, received_ecn, ph.pc, ph.l_cid);
         }
         if (cnx != NULL) {
             picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
@@ -2114,7 +2169,7 @@ int picoquic_incoming_segment(
     } else if (ret == PICOQUIC_ERROR_DUPLICATE) {
         /* Bad packets are dropped silently, but duplicates should be acknowledged */
         if (cnx != NULL) {
-            picoquic_set_ack_needed(cnx, current_time, ph.pc);
+            picoquic_set_ack_needed(cnx, current_time, ph.pc, ph.l_cid);
         }
         ret = -1;
     } else if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_INITIAL_TOO_SHORT ||

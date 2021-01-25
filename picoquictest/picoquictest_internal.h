@@ -38,6 +38,8 @@ extern "C" {
 #define PICOQUIC_TEST_WRONG_ALPN "picoquic-bla-bla"
 #define PICOQUIC_TEST_MAX_TEST_STREAMS 18
 
+#define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
+
 /* Test context
  */
 
@@ -179,6 +181,8 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx);
 int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t time_out, int* was_active);
 
+int tls_api_one_scenario_init_ex(picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t* simulated_time, uint32_t proposed_version, picoquic_tp_t* client_params, picoquic_tp_t* server_params, picoquic_connection_id_t* icid, int cid_zero);
+
 int tls_api_one_scenario_init(
     picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t* simulated_time,
     uint32_t proposed_version,
@@ -203,10 +207,16 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time,
     uint64_t max_completion_microsec);
 
+int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, test_api_stream_desc_t* scenario, size_t sizeof_scenario, size_t stream0_target, uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max, uint64_t max_completion_microsec);
+
 int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx);
 
 int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time);
+
+int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, int max_trials,
+    int path_target, int wait_for_ready);
 
 void picoquic_set_test_address(struct sockaddr_in * addr, uint32_t addr_val, uint16_t port);
 

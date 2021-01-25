@@ -36,8 +36,6 @@
 #include "autoqlog.h"
 #include "picoquictest.h"
 
-#define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
-
 static const uint8_t test_ticket_encrypt_key[32] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
@@ -327,6 +325,7 @@ static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from
     else {
         picoquic_packet_type_enum packet_type;
         picoquic_packet_context_enum pc;
+        picoquic_packet_context_t* pkt_ctx;
         size_t length = 0;
         size_t header_length;
         size_t checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
@@ -349,13 +348,17 @@ static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from
             pc = picoquic_packet_context_application;
             break;
         }
-        header_length = picoquic_predict_packet_header_length(cnx, packet_type);
+
+        pkt_ctx = (packet_type == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) ?
+            &path_x->p_remote_cnxid->pkt_ctx : &cnx->pkt_ctx[pc];
+
+        header_length = picoquic_predict_packet_header_length(cnx, packet_type, pkt_ctx);
         memcpy(packet->bytes + header_length, payload, p_length);
         length = header_length + p_length;
 
         packet->ptype = packet_type;
         packet->offset = header_length;
-        packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
+        packet->sequence_number = pkt_ctx->send_sequence;
         packet->send_time = current_time;
         packet->send_path = path_x;
         packet->pc = pc;
@@ -363,7 +366,7 @@ static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from
 
         picoquic_finalize_and_protect_packet(cnx, packet, 0, length, header_length, checksum_overhead,
             &sim_packet->length, sim_packet->bytes, sizeof(sim_packet->bytes),
-            &path_x->remote_cnxid, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
+            &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
         /* Forward on selected link */
         picoquictest_sim_link_submit((from_client) ? test_ctx->c_to_s_link : test_ctx->s_to_c_link, sim_packet, current_time);
     }
@@ -1240,8 +1243,8 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     picoformat_32(&packet->bytes[hl],
                         picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
                     hl += 4;
-                    packet->bytes[hl++] = test_ctx->cnx_client->path[0]->remote_cnxid.id_len;
-                    hl += picoquic_format_connection_id(&packet->bytes[hl], PICOQUIC_MAX_PACKET_SIZE - hl, test_ctx->cnx_client->path[0]->remote_cnxid);
+                    packet->bytes[hl++] = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len;
+                    hl += picoquic_format_connection_id(&packet->bytes[hl], PICOQUIC_MAX_PACKET_SIZE - hl, test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id);
                     packet->bytes[hl++] = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id.id_len;
                     hl += picoquic_format_connection_id(&packet->bytes[hl], PICOQUIC_MAX_PACKET_SIZE - hl, test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id);
                     packet->bytes[hl++] = 21;
@@ -1456,7 +1459,7 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret; /* end of sending loop */
 }
 
-static int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
+int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, int max_trials,
     int path_target, int wait_for_ready)
 {
@@ -2415,8 +2418,8 @@ int tls_api_server_reset_test()
         uint8_t ref_secret[PICOQUIC_RESET_SECRET_SIZE];
 
         (void)picoquic_create_cnxid_reset_secret(test_ctx->qserver,
-            &test_ctx->cnx_client->path[0]->remote_cnxid, ref_secret);
-        if (memcmp(test_ctx->cnx_client->path[0]->reset_secret, ref_secret,
+            &test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id, ref_secret);
+        if (memcmp(test_ctx->cnx_client->path[0]->p_remote_cnxid->reset_secret, ref_secret,
             PICOQUIC_RESET_SECRET_SIZE) != 0) {
             ret = -1;
         }
@@ -3159,9 +3162,12 @@ int session_resume_test()
 
 /*
  * Zero RTT test. Like the session resume test, but with a twist...
+ * Use multipath_init_params procedure to set up parameters for the multipath test.
  */
+void multipath_init_params(picoquic_tp_t* test_parameters, int enable_time_stamp);
+
 int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, 
-    unsigned int no_coal, unsigned int long_data, uint64_t extra_delay)
+    unsigned int no_coal, unsigned int long_data, uint64_t extra_delay, int do_multipath)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -3169,6 +3175,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
     char const* alpn = PICOQUIC_TEST_ALPN;
     uint64_t loss_mask = 0;
     uint32_t proposed_version = 0;
+
+    picoquic_tp_t server_parameters;
     int ret = 0;
 
     /* Initialize an empty ticket store */
@@ -3182,7 +3190,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
         /* Set up the context, while setting the ticket store parameter for the client */
         if (ret == 0) {
             ret = tls_api_init_ctx(&test_ctx, 
-                (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 0,
+                (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 1,
                 (i == 0)?0:use_badcrypt);
 
             if (ret == 0 && no_coal) {
@@ -3192,6 +3200,17 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
             if (ret == 0 && hardreset != 0 && i == 1) {
                 picoquic_set_cookie_mode(test_ctx->qserver, 1);
             }
+
+            if (ret == 0 && do_multipath) {
+                /* Set the multipath option at both client and server */
+                multipath_init_params(&server_parameters, 0);
+                picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+                test_ctx->cnx_client->local_parameters.enable_multipath = 1;
+                test_ctx->cnx_client->local_parameters.enable_time_stamp = 0;
+            }
+
+            /* Initialize the client connection */
+            picoquic_start_client_cnx(test_ctx->cnx_client);
         }
 
         if (ret == 0 && i == 1) {
@@ -3350,7 +3369,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
 
 int zero_rtt_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 0, 0, 0);
+    return zero_rtt_test_one(0, 0, 0, 0, 0, 0, 0);
 }
 
 /*
@@ -3369,7 +3388,7 @@ int zero_rtt_loss_test()
 
     for (unsigned int i = 1; ret == 0 && i < 16; i++) {
         uint64_t early_loss = 1ull << i;
-        ret = zero_rtt_test_one(0, 0, early_loss, 0, 0, 0);
+        ret = zero_rtt_test_one(0, 0, early_loss, 0, 0, 0, 0);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT test fails when packet #%d is lost.\n", i);
         }
@@ -3387,7 +3406,7 @@ int zero_rtt_loss_test()
 
 int zero_rtt_spurious_test()
 {
-    return zero_rtt_test_one(1, 0, 0, 0, 0, 0);
+    return zero_rtt_test_one(1, 0, 0, 0, 0, 0, 0);
 }
 
 /*
@@ -3399,7 +3418,7 @@ int zero_rtt_spurious_test()
 
 int zero_rtt_retry_test()
 {
-    return zero_rtt_test_one(0, 1, 0, 0, 0, 0);
+    return zero_rtt_test_one(0, 1, 0, 0, 0, 0, 0);
 }
 
 /*
@@ -3411,7 +3430,7 @@ int zero_rtt_retry_test()
 
 int zero_rtt_no_coal_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 1, 0, 0);
+    return zero_rtt_test_one(0, 0, 0, 1, 0, 0, 0);
 }
 
 /* Test the robustness of the connection in a zero RTT scenario,
@@ -3436,7 +3455,7 @@ int zero_rtt_many_losses_test()
             }
         }
 
-        ret = zero_rtt_test_one(0, 0, loss_mask, 0, 0, 0);
+        ret = zero_rtt_test_one(0, 0, loss_mask, 0, 0, 0, 0);
         if (ret != 0) {
             DBG_PRINTF("Handshake fails for mask %d, mask = %llx", i, (unsigned long long)loss_mask);
         }
@@ -3451,7 +3470,7 @@ int zero_rtt_many_losses_test()
 
 int zero_rtt_long_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 0, 1, 0);
+    return zero_rtt_test_one(0, 0, 0, 0, 1, 0, 0);
 }
 
 /*
@@ -3465,13 +3484,13 @@ int zero_rtt_delay_test()
     const uint64_t nominal_delay_sec = 100000;
     const uint64_t nominal_delay = nominal_delay_sec * 1000000;
 
-    bad_ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay + 1000000);
+    bad_ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay + 1000000, 0);
     if (bad_ret == 0) {
         DBG_PRINTF("Zero RTT succeed despite delay = %" PRIu64, " + 1 second.", nominal_delay_sec);
         ret = -1;
     }
     else {
-        ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay - 2000000);
+        ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay - 2000000, 0);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT fails for delay = %" PRIu64, " - 2 seconds.", nominal_delay_sec);
         }
@@ -4874,7 +4893,7 @@ int client_error_test_modal(int mode)
                 *x++ = 0x99; /* Hommage to Dilbert's random generator */
             }
             /* deliberate error: repeat the reset secret defined for path[0] */
-            memcpy(x, test_ctx->cnx_server->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+            memcpy(x, test_ctx->cnx_server->path[0]->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
             x += PICOQUIC_RESET_SECRET_SIZE;
             picoquic_queue_misc_frame(test_ctx->cnx_client, new_cnxid_error, x - new_cnxid_error, 0);
         }
@@ -4973,12 +4992,12 @@ int client_error_test()
  */
 
 int test_cnxid_count_stash(picoquic_cnx_t * cnx) {
-    picoquic_cnxid_stash_t * stash = cnx->cnxid_stash_first;
+    picoquic_remote_cnxid_t * stash = cnx->cnxid_stash_first;
     int nb = 0;
 
     while (stash != NULL) {
         nb++;
-        stash = stash->next_in_stash;
+        stash = stash->next;
     }
 
     return nb;
@@ -4987,13 +5006,9 @@ int test_cnxid_count_stash(picoquic_cnx_t * cnx) {
 int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char const * cnx_text)
 {
     int ret = 0;
-    picoquic_cnxid_stash_t * stash = cnx1->cnxid_stash_first;
+    picoquic_remote_cnxid_t * stash = cnx1->cnxid_stash_first;
     picoquic_local_cnxid_t* cid_list = cnx2->local_cnxid_first;
     int rank = 0;
-
-    if (cid_list != NULL) {
-        cid_list = cid_list->next;
-    }
 
     while (stash != NULL && cid_list != NULL) {
         if (picoquic_compare_connection_id(&stash->cnx_id, &cid_list->cnx_id) != 0) {
@@ -5002,7 +5017,7 @@ int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char
             ret = -1;
             break;
         }
-        stash = stash->next_in_stash;
+        stash = stash->next;
         cid_list = cid_list->next;
         rank++;
     }
@@ -5202,7 +5217,7 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
             (struct sockaddr *)&test_ctx->client_addr, simulated_time);
 
         if (ret == 0) {
-            target_id = test_ctx->cnx_client->path[test_ctx->cnx_client->nb_paths-1]->remote_cnxid;
+            target_id = test_ctx->cnx_client->path[test_ctx->cnx_client->nb_paths-1]->p_remote_cnxid->cnx_id;
             if (!cid_zero) {
                 previous_local_id = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
             }
@@ -5253,7 +5268,7 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
 
     /* Verify that the connection ID are what we expect */
     if (ret == 0) {
-        if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->remote_cnxid, &target_id) != 0) {
+        if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id, &target_id) != 0) {
             DBG_PRINTF("%s", "The remote CNX ID did not change to selected value");
             ret = -1;
         }
@@ -5570,7 +5585,7 @@ int cnxid_renewal_test()
     if (ret == 0) {
         ret = picoquic_renew_connection_id(test_ctx->cnx_client, 0);
         if (ret == 0) {
-            target_id = test_ctx->cnx_client->path[0]->remote_cnxid;
+            target_id = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id;
             previous_local_id = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
         }
     }
@@ -5610,7 +5625,7 @@ int cnxid_renewal_test()
 
     /* Verify that the connection ID are what we expect */
     if (ret == 0) {
-        if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->remote_cnxid, &target_id) != 0) {
+        if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id, &target_id) != 0) {
             DBG_PRINTF("%s", "The remote CNX ID migrated from the selected value");
             ret = -1;
         }
@@ -5665,14 +5680,14 @@ int retire_cnxid_test()
 
     /* Delete several connection ID */
     for (int i = 2; ret == 0 && i < PICOQUIC_NB_PATH_TARGET; i++) {
-        picoquic_cnxid_stash_t * stashed = picoquic_dequeue_cnxid_stash(test_ctx->cnx_client);
+        picoquic_remote_cnxid_t * stashed = picoquic_obtain_stashed_cnxid(test_ctx->cnx_client);
 
         if (stashed == NULL) {
             DBG_PRINTF("Could not retrieve cnx ID #%d.\n", i-1);
             ret = -1;
         } else {
             ret = picoquic_queue_retire_connection_id_frame(test_ctx->cnx_client, stashed->sequence);
-            free(stashed);
+            (void)picoquic_remove_stashed_cnxid(test_ctx->cnx_client, stashed, NULL, 0);
         }
     }
 
@@ -6240,9 +6255,9 @@ static int key_rotation_test_one(int inject_bad_packet)
         }
 
         if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > rotation_sequence &&
-            test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range >
+            test_ctx->cnx_server->ack_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range >
             test_ctx->cnx_server->crypto_epoch_sequence &&
-            test_ctx->cnx_client->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range >
+            test_ctx->cnx_client->ack_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range >
             test_ctx->cnx_client->crypto_epoch_sequence &&
             test_ctx->cnx_server->key_phase_enc == test_ctx->cnx_server->key_phase_dec &&
             test_ctx->cnx_client->key_phase_enc == test_ctx->cnx_client->key_phase_dec) {
@@ -6599,7 +6614,7 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
         picoquic_finalize_and_protect_packet(cnx, packet,
             ret, length, header_length, checksum_overhead,
             &sim_packet->length, sim_packet->bytes, PICOQUIC_MAX_PACKET_SIZE,
-            &path_x->remote_cnxid, &path_x->p_local_cnxid->cnx_id, path_x, simulated_time);
+            &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, simulated_time);
 
         picoquic_store_addr(&sim_packet->addr_from, (struct sockaddr *)&false_address);
 
@@ -6638,7 +6653,7 @@ int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size
             nb_trials++;
 
             if (nb_injected == 0) {
-                if ((target_client && test_ctx->cnx_client->pkt_ctx[false_pc].send_sequence > false_rank && test_ctx->cnx_client->path[0]->remote_cnxid.id_len != 0) ||
+                if ((target_client && test_ctx->cnx_client->pkt_ctx[false_pc].send_sequence > false_rank && test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len != 0) ||
                     (!target_client && test_ctx->cnx_server != NULL && test_ctx->cnx_server->pkt_ctx[false_pc].send_sequence > false_rank)) {
                     /* Inject a spoofed packet in the context */
                     ret = false_migration_inject(test_ctx, target_client, false_pc, simulated_time);
@@ -6798,7 +6813,7 @@ int nat_handshake_test_one(int test_rank)
 
                 switch (test_rank) {
                 case 0: /* check that at least one packet was received from the server, setting the CNX_ID */
-                    should_nat = (test_ctx->cnx_client->path[0]->remote_cnxid.id_len > 0);
+                    should_nat = (test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len > 0);
                     break;
                 case 1: /* Check that the connection is almost complete, but finished has not been sent */
                     should_nat = (test_ctx->cnx_client->crypto_context[3].aead_decrypt != NULL);
@@ -7876,7 +7891,7 @@ int cid_length_test_one(uint8_t length)
         }
 
         if (ret == 0 &&
-            test_ctx->cnx_server->path[0]->remote_cnxid.id_len != length) {
+            test_ctx->cnx_server->path[0]->p_remote_cnxid->cnx_id.id_len != length) {
             ret = -1;
         }
     }
@@ -8030,12 +8045,6 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                 nb_inactive++;
             }
 
-            if (test_ctx->test_finished) {
-                if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                    break;
-                }
-            }
-
             /* find whether there was a new hole inserted */
             if (test_ctx->cnx_server != NULL) {
                 picoquic_packet_t * packet = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest;
@@ -8045,7 +8054,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                         hole_number = packet->sequence_number;
                         if (shall_spoof_ack) {
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
-                                hole_number, simulated_time);
+                                test_ctx->cnx_client->local_cnxid_first, hole_number, simulated_time);
                             if (ret != 0) {
                                 DBG_PRINTF("Record pn hole %d number returns %d\n", (int)hole_number, ret);
                                 break;
@@ -8055,6 +8064,12 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                         break;
                     }
                     packet = packet->previous_packet;
+                }
+            }
+
+            if (test_ctx->test_finished) {
+                if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                    break;
                 }
             }
         }
@@ -8069,16 +8084,23 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         }
         else if (test_ctx->cnx_server != NULL) {
             DBG_PRINTF("Complete after %d packets sent, %d r. by client, %d retransmits, %d spurious.\n",
-                (int)(test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence - 1),
-                (int)test_ctx->cnx_client->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range,
+                (int)(test_ctx->cnx_server->nb_packets_sent),
+                (int)test_ctx->cnx_client->nb_packets_received,
                 test_ctx->cnx_server->nb_retransmission_total,
                 test_ctx->cnx_server->nb_spurious);
         }
     }
 
-    if (ret == 0 && nb_holes == 0) {
-        DBG_PRINTF("%s", "No holes inserted\n");
-        ret = -1;
+    if (ret == 0){
+        if (nb_holes <= 0) {
+            DBG_PRINTF("%s", "No holes inserted\n");
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->nb_packet_holes_inserted == 0) {
+            DBG_PRINTF("Reporting %" PRIu64 " holes inserted\n",
+                test_ctx->cnx_server->nb_packet_holes_inserted);
+            ret = -1;
+        }
     }
 
     if (shall_spoof_ack) {
@@ -9573,7 +9595,7 @@ int cid_quiescence_test()
     }
 
     if (ret == 0) {
-        previous_remote_id = test_ctx->cnx_client->path[0]->remote_cnxid;
+        previous_remote_id = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id;
         /* Prepare to send data */
         ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
     }
@@ -9583,7 +9605,7 @@ int cid_quiescence_test()
     }
 
     if (ret == 0) {
-        previous_remote_id = test_ctx->cnx_client->path[0]->remote_cnxid;
+        previous_remote_id = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id;
         simulated_time += PICOQUIC_CID_REFRESH_DELAY;
     }
 
@@ -9599,7 +9621,7 @@ int cid_quiescence_test()
     
     /* Verify that the CID has rotated */
     if (ret == 0 &&
-        picoquic_compare_connection_id(&previous_remote_id, &test_ctx->cnx_client->path[0]->remote_cnxid) == 0) {
+        picoquic_compare_connection_id(&previous_remote_id, &test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id) == 0) {
         ret = -1;
     }
     

@@ -616,7 +616,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
     }
     else {
         /* Stupid fix to ensure that the NCID decoding test will not protest */
-        cnx->path[0]->remote_cnxid.id_len = 8;
+        cnx->path[0]->p_remote_cnxid->cnx_id.id_len = 8;
 
         cnx->pkt_ctx[0].send_sequence = 0x0102030406;
 
@@ -637,7 +637,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
 
         ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, epoch, NULL, NULL, 0, simulated_time);
 
-        *ack_needed = cnx->pkt_ctx[pc].ack_needed;
+        *ack_needed = cnx->ack_ctx[pc].ack_needed;
 
         if (ret == 0 &&
             (cnx->cnx_state == picoquic_state_disconnecting ||
@@ -1248,7 +1248,7 @@ int binlog_test()
 }
 
 /* Basic test of connection ID stash, part of migration support  */
-static const picoquic_cnxid_stash_t stash_test_case[] = {
+static const picoquic_remote_cnxid_t stash_test_case[] = {
     { NULL,  1,{ { 0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 4 },
 { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 } },
 { NULL,  2,{ { 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 4 },
@@ -1263,9 +1263,9 @@ static const picoquic_connection_id_t stash_test_init_local =
 static const picoquic_connection_id_t stash_test_init_remote =
 { { 99, 99, 99, 99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 4 };
 
-static const size_t nb_stash_test_case = sizeof(stash_test_case) / sizeof(picoquic_cnxid_stash_t);
+static const size_t nb_stash_test_case = sizeof(stash_test_case) / sizeof(picoquic_remote_cnxid_t);
 
-static int cnxid_stash_compare(int test_mode, picoquic_cnxid_stash_t * stashed, size_t i)
+static int cnxid_stash_compare(int test_mode, picoquic_remote_cnxid_t * stashed, size_t i)
 {
     int ret = 0;
 
@@ -1314,7 +1314,7 @@ int cnxid_stash_test()
             picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
             simulated_time, 0, "test-sni", "test-alpn", 1);
 
-        picoquic_cnxid_stash_t * stashed = NULL;
+        picoquic_remote_cnxid_t * stashed = NULL;
 
         if (cnx == NULL) {
             DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
@@ -1322,7 +1322,7 @@ int cnxid_stash_test()
         } else {
             /* init the various connection id to a length compatible with test */
             cnx->path[0]->p_local_cnxid->cnx_id = stash_test_init_local;
-            cnx->path[0]->remote_cnxid = stash_test_init_remote;
+            cnx->path[0]->p_remote_cnxid->cnx_id = stash_test_init_remote;
         }
 
         for (size_t i = 0; ret == 0 && i < nb_stash_test_case; i++) {
@@ -1337,7 +1337,8 @@ int cnxid_stash_test()
                     ret = -1;
                 }
                 else if (test_mode == 0) {
-                    stashed = picoquic_dequeue_cnxid_stash(cnx);
+                    stashed = picoquic_obtain_stashed_cnxid(cnx);
+                    stashed->nb_path_references++;
                     ret = cnxid_stash_compare(test_mode, stashed, i);
                 }
             }
@@ -1346,14 +1347,15 @@ int cnxid_stash_test()
         /* Dequeue all in mode 1, verify order */
         if (test_mode == 1) {
             for (size_t i = 0; ret == 0 && i < nb_stash_test_case; i++) {
-                stashed = picoquic_dequeue_cnxid_stash(cnx);
+                stashed = picoquic_obtain_stashed_cnxid(cnx);
+                stashed->nb_path_references++;
                 ret = cnxid_stash_compare(test_mode, stashed, i);
             }
         }
 
         /* Verify nothing left in queue in mode 0, 1 */
         if (test_mode < 2) {
-            stashed = picoquic_dequeue_cnxid_stash(cnx);
+            stashed = picoquic_obtain_stashed_cnxid(cnx);
             if (stashed != NULL) {
                 DBG_PRINTF("Test %d, unexpected cnxid left, #%d.\n", test_mode, (int)stashed->sequence);
                 ret = -1;
@@ -1780,7 +1782,7 @@ int test_copy_for_retransmit()
         ret = picoquic_copy_before_retransmit(&old_p, cnx, new_bytes,
             copy_retransmit_case[i].copy_max,
             &packet_is_pure_ack,
-            &do_not_detect_spurious,
+            &do_not_detect_spurious, 0,
             &length);
 
         if (ret != 0) {

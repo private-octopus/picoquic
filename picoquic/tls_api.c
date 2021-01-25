@@ -2446,6 +2446,44 @@ size_t picoquic_aead_encrypt_generic(uint8_t* output, const uint8_t* input, size
     return encrypted;
 }
 
+size_t picoquic_aead_decrypt_mp(uint8_t* output, const uint8_t* input, size_t input_length,
+    uint64_t path_id, uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_context)
+{
+    size_t decrypted = 0;
+
+    if (aead_context == NULL) {
+        decrypted = SIZE_MAX;
+    }
+    else {
+        uint8_t seq32[4];
+
+        picoformat_32(seq32, (uint32_t)path_id);
+        ptls_aead_xor_iv((ptls_aead_context_t*)aead_context, seq32, sizeof(seq32));
+        decrypted = ptls_aead_decrypt((ptls_aead_context_t*)aead_context,
+            (void*)output, (const void*)input, input_length, seq_num,
+            (void*)auth_data, auth_data_length);
+        ptls_aead_xor_iv((ptls_aead_context_t*)aead_context, seq32, sizeof(seq32));
+    }
+
+    return decrypted;
+}
+
+size_t picoquic_aead_encrypt_mp(uint8_t* output, const uint8_t* input, size_t input_length,
+    uint64_t path_id, uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_context)
+{
+    size_t encrypted = 0;
+    uint8_t seq32[4];
+
+    picoformat_32(seq32, (uint32_t)path_id);
+    ptls_aead_xor_iv((ptls_aead_context_t*)aead_context, seq32, sizeof(seq32));
+    encrypted = ptls_aead_encrypt((ptls_aead_context_t*)aead_context,
+        (void*)output, (const void*)input, input_length, seq_num,
+        (void*)auth_data, auth_data_length);
+    ptls_aead_xor_iv((ptls_aead_context_t*)aead_context, seq32, sizeof(seq32));
+
+    return encrypted;
+}
+
 /* management of version specific salt, for initial packet encryption.
  */
 
@@ -2503,7 +2541,7 @@ int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_
  * should be sent at each epoch.
  */
 
-int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed)
+int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed, uint64_t current_time)
 {
     int ret = 0;
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
@@ -2632,7 +2670,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed)
                         }
                         else {
                             if (cnx->crypto_context[3].aead_encrypt != NULL) {
-                                cnx->cnx_state = picoquic_state_client_almost_ready;
+                                picoquic_client_almost_ready_transition(cnx);
                             }
                         }
                     }
@@ -2643,22 +2681,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed)
                        The server does not send any further packets, so, we can switch into false start state here.
                     */
                     if (data_pushed == 0 && ((ptls_context_t*)cnx->quic->tls_master_ctx)->require_client_authentication == 1) {
-                        cnx->cnx_state = picoquic_state_server_false_start;
-
-                        /* On a server that does address validation, send a NEW TOKEN frame */
-                        if (!cnx->client_mode && (cnx->quic->check_token||cnx->quic->provide_token)) {
-                            uint8_t token_buffer[256];
-                            size_t token_size;
-                            picoquic_connection_id_t n_cid = picoquic_null_connection_id;
-
-                            if (picoquic_prepare_retry_token(cnx->quic, (struct sockaddr *)&cnx->path[0]->peer_addr,
-                                picoquic_get_quic_time(cnx->quic) + PICOQUIC_TOKEN_DELAY_LONG, &n_cid, &n_cid, 0,
-                                token_buffer, sizeof(token_buffer), &token_size) == 0) {
-                                if (picoquic_queue_new_token_frame(cnx, token_buffer, token_size) != 0) {
-                                    picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_new_token);
-                                }
-                            }
-                        }
+                        picoquic_false_start_transition(cnx, current_time);
                     }
                     else {
                         if (cnx->crypto_context[3].aead_encrypt != NULL) {

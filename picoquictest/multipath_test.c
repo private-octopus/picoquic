@@ -339,12 +339,14 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-
 typedef enum {
     multipath_test_basic = 0,
     multipath_test_drop_first,
     multipath_test_drop_second,
-    multipath_test_sat_plus
+    multipath_test_sat_plus,
+    multipath_test_renew,
+    multipath_test_rotation,
+    multipath_test_nat
 } multipath_test_enum_t;
 
 int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id)
@@ -354,6 +356,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0x1b, 0x11, 0xc0, 4, 5, 6, 7, 8}, 8 };
     picoquic_tp_t server_parameters;
+    uint64_t original_r_cid_sequence = 1;
     int ret;
 
     /* Create the context but delay initialization, so the multipath option can be set */
@@ -371,6 +374,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
         test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
         test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
+
+        if (test_id == multipath_test_rotation) {
+            picoquic_set_default_crypto_epoch_length(test_ctx->qserver, 200);
+        }
 
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
@@ -396,6 +403,11 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
+    /* wait until the client (and thus the server) is ready */
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
     /* Prepare to send data */
     if (ret == 0) {
         ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath, sizeof(test_scenario_multipath));
@@ -404,11 +416,6 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         {
             DBG_PRINTF("Init send receive scenario returns %d\n", ret);
         }
-    }
-
-    /* wait until the client (and thus the server) is ready */
-    if (ret == 0) {
-        ret = wait_client_connection_ready(test_ctx, &simulated_time);
     }
 
     /* Add the multipath links and initiate the migration */
@@ -425,13 +432,14 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             (struct sockaddr*) & test_ctx->client_addr_2, simulated_time);
     }
 
-    /* Check that the two paths are estabilshed */
+    /* Check that the two paths are established */
     if (ret == 0) {
         /* TODO */
         ret = wait_multipath_ready(test_ctx, &simulated_time);
     }
 
-    if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second)) {
+    if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
+        test_id == multipath_test_renew || test_id == multipath_test_nat)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link */
         if (ret == 0) {
@@ -445,7 +453,18 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             }
         }
         if (ret == 0) {
-            multipath_test_kill_links(test_ctx, (test_id == multipath_test_drop_first) ? 0 : 1);
+            if (test_id == multipath_test_renew) {
+                ret = picoquic_renew_connection_id(test_ctx->cnx_client, 1);
+            }
+            else if (test_id == multipath_test_nat) {
+                /* Change the client address */
+                test_ctx->client_addr_natted = test_ctx->client_addr;
+                test_ctx->client_addr_natted.sin_port += 7;
+                test_ctx->client_use_nat = 1;
+            }
+            else {
+                multipath_test_kill_links(test_ctx, (test_id == multipath_test_drop_first) ? 0 : 1);
+            }
         }
     }
     /* Perform a final data sending loop, this time to completion  */
@@ -463,8 +482,25 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
     }
 
+    if (ret == 0 && test_id == multipath_test_renew) {
+        if (test_ctx->cnx_client->path[1]->p_remote_cnxid->sequence == original_r_cid_sequence) {
+            DBG_PRINTF("Remote CID on client path 1 is still %" PRIu64 "\n", original_r_cid_sequence);
+            ret = -1;
+        } else if (test_ctx->cnx_server->path[1]->p_remote_cnxid->sequence == original_r_cid_sequence) {
+            DBG_PRINTF("Remote CID on server path 1 is still %" PRIu64 "\n", original_r_cid_sequence);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && test_id == multipath_test_rotation) {
+        if (test_ctx->cnx_server->nb_crypto_key_rotations == 0) {
+            DBG_PRINTF("%s", "No key rotation observed.\n");
+            ret = -1;
+        }
+    }
+
     /* Delete the context */
-    if (test_ctx == NULL) {
+    if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
     }
 
@@ -477,7 +513,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
 int multipath_basic_test()
 {
-    uint64_t max_completion_microsec = 1100000;
+    uint64_t max_completion_microsec = 1500000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_basic);
 }
@@ -488,7 +524,7 @@ int multipath_basic_test()
 
 int multipath_drop_first_test()
 {
-    uint64_t max_completion_microsec = 2000000;
+    uint64_t max_completion_microsec = 2560000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_first);
 }
@@ -499,7 +535,7 @@ int multipath_drop_first_test()
 
 int multipath_drop_second_test()
 {
-    uint64_t max_completion_microsec = 2000000;
+    uint64_t max_completion_microsec = 2560000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second);
 }
@@ -512,4 +548,236 @@ int multipath_sat_plus_test()
     uint64_t max_completion_microsec = 5000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus);
+}
+
+/* Test the renewal of the connection ID on a path
+ */
+int multipath_renew_test()
+{
+    uint64_t max_completion_microsec = 3000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_renew);
+}
+
+/* Test key rotation in a multipath setup
+ */
+int multipath_rotation_test()
+{
+    uint64_t max_completion_microsec = 3000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_rotation);
+}
+
+/* Test NAT rebinding in a multipath setup
+ */
+int multipath_nat_test()
+{
+    uint64_t max_completion_microsec = 3000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_nat);
+}
+/* Monopath tests:
+ * Enable the multipath option, but use only a single path. The gal of the tests is to verify that
+ * these "monopath" scenarios perform just as well as if multipath was not enabled.
+ */
+
+typedef enum {
+    monopath_test_basic = 0,
+    monopath_test_hole,
+    monopath_test_rotation
+} monopath_test_enum_t;
+
+/* Basic connection with the multicast option enabled. */
+int monopath_test_one(monopath_test_enum_t test_case)
+{
+    uint64_t simulated_time = 0;
+    const uint64_t latency = 10000;
+    picoquic_tp_t client_parameters;
+    picoquic_tp_t server_parameters;
+    picoquic_connection_id_t initial_cid = { {0xba, 0xba, 1, 0, 0, 0, 0, 0}, 8 };
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = 0;
+
+    multipath_init_params(&client_parameters, 0);
+    multipath_init_params(&server_parameters, 0);
+
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Simulate satellite links: 250 mbps, 300ms delay in each direction */
+    /* Set the congestion algorithm to specified value. Also, request a packet trace */
+    if (ret == 0) {
+        /* set the delay estimate, then launch the test */
+        test_ctx->c_to_s_link->microsec_latency = latency;
+        test_ctx->s_to_c_link->microsec_latency = latency;
+
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+        /* set the binary log on the client side */
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        test_ctx->qclient->use_long_log = 1;
+        /* Since the client connection was created before the binlog was set, force log of connection header */
+        binlog_new_connection(test_ctx->cnx_client);
+
+        if (test_case == monopath_test_hole) {
+            /* set the optimistic ack policy, to trigger hole insertion at the server */
+            picoquic_set_optimistic_ack_policy(test_ctx->qserver, 29);
+            /* Reset the uniform random test */
+            picoquic_public_random_seed_64(RANDOM_PUBLIC_TEST_SEED, 1);
+        }
+
+        if (test_case == monopath_test_rotation) {
+            picoquic_set_default_crypto_epoch_length(test_ctx->qserver, 200);
+        }
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_multipath, sizeof(test_scenario_multipath), 0, 0, 0, 2 * latency,
+            2200000);
+    }
+
+    if (ret == 0){
+        if (test_case == monopath_test_hole) {
+            if (test_ctx->cnx_server->nb_packet_holes_inserted == 0) {
+                DBG_PRINTF("%s", "No holes inserted\n");
+                ret = -1;
+            }
+        }
+        else if (test_case == monopath_test_rotation) {
+            if (test_ctx->cnx_server->nb_crypto_key_rotations == 0) {
+                DBG_PRINTF("%s", "No key rotation observed.\n");
+                ret = -1;
+            }
+        }
+    }
+
+    /* Free the resource, which will close the log file.
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Basic connection with the multicast option enabled. */
+int monopath_basic_test()
+{
+    return monopath_test_one(monopath_test_basic);
+}
+
+/* Testing the defense against opportunistic acks. */
+int monopath_hole_test()
+{
+    return monopath_test_one(monopath_test_hole);
+}
+
+/* Testing key rotation in monopath context. */
+int monopath_rotation_test()
+{
+    return monopath_test_one(monopath_test_rotation);
+}
+
+/* The zero RTT test uses the unipath code, with a special parameter.
+ * Test both regular 0RTT set up, and case of losses.
+ */
+int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
+    unsigned int no_coal, unsigned int long_data, uint64_t extra_delay, int do_multipath);
+
+int monopath_0rtt_test()
+{
+    return zero_rtt_test_one(0, 0, 0, 0, 0, 0, 1);
+}
+
+int monopath_0rtt_loss_test()
+{
+    int ret = 0;
+
+    for (unsigned int i = 1; ret == 0 && i < 16; i++) {
+        uint64_t early_loss = 1ull << i;
+        ret = zero_rtt_test_one(0, 0, early_loss, 0, 0, 0, 1);
+        if (ret != 0) {
+            DBG_PRINTF("Monopath 0 RTT test fails when packet #%d is lost.\n", i);
+        }
+    }
+
+    return ret;
+}
+
+/*
+ * Test the multipath variant of AEAD encrypt and decrypt.
+ */
+int multipath_aead_test()
+{
+    int ret = 0;
+    const uint8_t mp_aead_secret[32] = {
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+        16, 17, 18, 19, 20, 21, 22, 23, 24, 35, 26, 27, 28, 29, 30, 31
+    };
+    /* Create AEAD contexts for encryption and decryption */
+    void* aead_encrypt = picoquic_setup_test_aead_context(1, mp_aead_secret);
+    void* aead_decrypt = picoquic_setup_test_aead_context(0, mp_aead_secret);
+
+    if (aead_encrypt == NULL || aead_decrypt == NULL) {
+        DBG_PRINTF("%s", "Could not create the AEAD contexts.\n");
+        ret = -1;
+    }
+    else {
+        /* For a series of path_id, verify that encryption and decryption works */
+        const uint64_t path_id_test[] = { 0, 1, 2, 0x0123456789abcdefull };
+        const size_t nb_paths = sizeof(path_id_test) / sizeof(uint64_t);
+        uint64_t sequence = 12345;
+        const char* aad_str = "This is a test";
+        const size_t aad_len = strlen(aad_str);
+        const uint8_t* aad = (const uint8_t*)aad_str;
+        const char* test_input_str = "The quick brown fox jumps over the lazy dog";
+        const size_t test_input_len = strlen(test_input_str);
+        const uint8_t* test_input = (const uint8_t*)test_input_str;
+        uint8_t encrypted[256];
+        uint8_t decrypted[256];
+        size_t encrypted_length;
+        size_t decrypted_length;
+
+        for (size_t i = 0; ret == 0 &&  i < nb_paths; i++) {
+            encrypted_length = picoquic_aead_encrypt_mp(encrypted, test_input, test_input_len,
+                path_id_test[i], sequence, aad, aad_len, aead_encrypt);
+            for (size_t j = 0; ret == 0 && j < nb_paths; j++) {
+                decrypted_length = picoquic_aead_decrypt_mp(decrypted, encrypted, encrypted_length,
+                    path_id_test[j], sequence, aad, aad_len, aead_decrypt);
+                if (i != j) {
+                    if (decrypted_length <= encrypted_length) {
+                        DBG_PRINTF("Unexpected success, path id encode 0x%" PRIx64 ", decode 0x%"PRIx64"\n",
+                            path_id_test[i], path_id_test[j]);
+                        ret = -1;
+                    }
+                }
+                else if (decrypted_length > encrypted_length) {
+                    DBG_PRINTF("Unexpected error, path id 0x%" PRIx64 "\n", path_id_test[i]);
+                    ret = -1;
+                }
+                else if (decrypted_length != test_input_len) {
+                    DBG_PRINTF("Length don't match, path id 0x%" PRIx64 ", in: %zu, out %zu\n",
+                        path_id_test[i], test_input_len, decrypted_length);
+                    ret = -1;
+                }
+                else if (memcmp(decrypted, test_input, test_input_len) != 0) {
+                    DBG_PRINTF("Decoded doesn't match encoded, path id 0x%" PRIx64 "\n", path_id_test[i]);
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    if (aead_encrypt != NULL) {
+        picoquic_aead_free(aead_encrypt);
+    }
+    if (aead_decrypt != NULL) {
+        picoquic_aead_free(aead_decrypt);
+    }
+
+    return ret;
 }

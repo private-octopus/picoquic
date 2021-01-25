@@ -562,7 +562,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
                     }
                     else {
-                        memcpy(cnx->path[0]->reset_secret, bytes + byte_index, PICOQUIC_RESET_SECRET_SIZE);
+                        memcpy(cnx->path[0]->p_remote_cnxid->reset_secret, bytes + byte_index, PICOQUIC_RESET_SECRET_SIZE);
                     }
                     break;
                 case picoquic_tp_ack_delay_exponent:
@@ -615,7 +615,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 case picoquic_tp_handshake_connection_id:
                     ret = picoquic_transport_param_cid_decode(cnx, bytes + byte_index, extension_length, &handshake_connection_id);
                     if (ret == 0) {
-                        if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &handshake_connection_id) != 0) {
+                        if (picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id, &handshake_connection_id) != 0) {
                             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
                         }
                         else {

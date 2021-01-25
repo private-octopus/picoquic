@@ -54,7 +54,7 @@ void picoquic_tlscontext_free(void* ctx);
 
 void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx);
 
-int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int* data_consumed);
+int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int* data_consumed, uint64_t current_time);
 int picoquic_is_tls_complete(picoquic_cnx_t* cnx);
 
 int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time);
@@ -74,9 +74,13 @@ size_t picoquic_aead_get_checksum_length(void* aead_context);
 
 size_t picoquic_aead_encrypt_generic(uint8_t* output, const uint8_t* input, size_t input_length,
     uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_context);
-
 size_t picoquic_aead_decrypt_generic(uint8_t* output, const uint8_t* input, size_t input_length,
     uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_ctx);
+
+size_t picoquic_aead_decrypt_mp(uint8_t* output, const uint8_t* input, size_t input_length, uint64_t path_id,
+    uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_context);
+size_t picoquic_aead_encrypt_mp(uint8_t* output, const uint8_t* input, size_t input_length, uint64_t path_id,
+    uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_context);
 
 uint64_t picoquic_aead_integrity_limit(void* aead_ctx);
 uint64_t picoquic_aead_confidentiality_limit(void* aead_ctx);

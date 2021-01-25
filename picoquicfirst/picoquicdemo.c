@@ -337,7 +337,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
                         cb_ctx->migration_to_preferred_finished)) {
                     int mig_ret = 0;
                     cb_ctx->migration_started = 1;
-                    cb_ctx->server_cid_before_migration = cb_ctx->cnx_client->path[0]->remote_cnxid;
+                    cb_ctx->server_cid_before_migration = cb_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id;
                     if (cb_ctx->cnx_client->path[0]->p_local_cnxid != NULL) {
                         cb_ctx->client_cid_before_migration = cb_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
                     }
@@ -645,13 +645,13 @@ int quic_client(const char* ip_address_text, int server_port,
         fprintf(stdout, "Quic Bit was %sgreased by the client.\n", (cnx_client->quic_bit_greased) ? "" : "NOT ");
         fprintf(stdout, "Quic Bit was %sgreased by the server.\n", (cnx_client->quic_bit_received_0) ? "" : "NOT ");
 
-        if (cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ect0_total_local != 0 ||
-            cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ect1_total_local != 0 ||
-            cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ce_total_local != 0) {
+        if (cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ect0_total_local != 0 ||
+            cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ect1_total_local != 0 ||
+            cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ce_total_local != 0) {
             fprintf(stdout, "ECN was received (ect0: %" PRIu64 ", ect1: %" PRIu64 ", ce: %" PRIu64 ").\n",
-                cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ect0_total_local,
-                cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ect1_total_local,
-                cnx_client->pkt_ctx[picoquic_packet_context_application].ecn_ce_total_local);
+                cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ect0_total_local,
+                cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ect1_total_local,
+                cnx_client->ack_ctx[picoquic_packet_context_application].ecn_ce_total_local);
         }
         else {
             fprintf(stdout, "ECN was not received.\n");
@@ -680,7 +680,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     (struct sockaddr*) & cnx_client->path[0]->local_addr,
                     (struct sockaddr*) & loop_cb.client_address);
                 int dest_cid_cmp = picoquic_compare_connection_id(
-                    &cnx_client->path[0]->remote_cnxid,
+                    &cnx_client->path[0]->p_remote_cnxid->cnx_id,
                     &loop_cb.server_cid_before_migration);
                 fprintf(stdout, "After migration:\n");
                 fprintf(stdout, "- Default source address %s\n", (source_addr_cmp) ? "changed" : "did not change");
@@ -705,9 +705,15 @@ int quic_client(const char* ip_address_text, int server_port,
                 fprintf(stdout, "Error when starting key rotation.\n");
             }
             else {
+                uint64_t crypto_rotation_sequence;
+                if (cnx_client->is_multipath_enabled) {
+                    crypto_rotation_sequence = cnx_client->path[0]->p_local_cnxid->ack_ctx.crypto_rotation_sequence;
+                }
+                else {
+                    crypto_rotation_sequence = cnx_client->ack_ctx[picoquic_packet_context_application].crypto_rotation_sequence;
+                }
                 fprintf(stdout, "Crypto rotation sequence: %" PRIu64 ", phase ENC: %d, phase DEC: %d\n",
-                    cnx_client->crypto_rotation_sequence,
-                    cnx_client->key_phase_enc, cnx_client->key_phase_dec);
+                    crypto_rotation_sequence, cnx_client->key_phase_enc, cnx_client->key_phase_dec);
             }
         }
 
