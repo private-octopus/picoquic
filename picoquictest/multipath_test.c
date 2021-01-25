@@ -747,7 +747,7 @@ int multipath_aead_test()
                 path_id_test[i], sequence, aad, aad_len, aead_encrypt);
             for (size_t j = 0; ret == 0 && j < nb_paths; j++) {
                 decrypted_length = picoquic_aead_decrypt_mp(decrypted, encrypted, encrypted_length,
-                    path_id_test[j], sequence, aad, aad_len, aead_encrypt);
+                    path_id_test[j], sequence, aad, aad_len, aead_decrypt);
                 if (i != j) {
                     if (decrypted_length <= encrypted_length) {
                         DBG_PRINTF("Unexpected success, path id encode 0x%" PRIx64 ", decode 0x%"PRIx64"\n",
