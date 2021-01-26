@@ -126,7 +126,10 @@ static const picoquic_test_def_t test_table[] = {
     { "excess_repeat", excess_repeat_test },
     { "netperf_basic", netperf_basic_test },
     { "netperf_bbr", netperf_bbr_test },
+#if 0
+    /* test disabled because the results are not consistent. */
     { "nat_attack", nat_attack_test },
+#endif
     { "sockets", socket_test },
     { "socket_ecn", socket_ecn_test },
     { "ticket_store", ticket_store_test },
@@ -202,7 +205,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qlog_trace_auto", qlog_trace_auto_test },
     { "qlog_trace_only", qlog_trace_only_test },
     { "qlog_trace_ecn", qlog_trace_ecn_test },
-    { "nat_rebiding_stress", rebinding_stress_test },
+    { "nat_rebinding_stress", rebinding_stress_test },
     { "ready_to_send", ready_to_send_test },
     { "cubic", cubic_test },
     { "cubic_jitter", cubic_jitter_test },
