@@ -19,7 +19,8 @@ jobs:
           submodules: 'recursive'
 
       - run: |
-          sudo apt-get install -y libssl-dev gdb
+          # TODO: install gdb
+          sudo apt-get install -y libssl-dev
           ./ci/build_picotls.sh
           cmake .
           make
@@ -29,7 +30,7 @@ jobs:
             ulimit -c unlimited -S
             ./picoquic_ct -n -r && QUICRESULT=$?
             ./picohttp_ct -n -r -x http_corrupt && HTTPRESULT=$?
-            if [[ ${QUICRESULT} != 0 ]]; then for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picoquic_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done; fi;
-            if [[ ${HTTPRESULT} != 0 ]]; then for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picohttp_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done; fi;
+            # if [[ ${QUICRESULT} != 0 ]]; then for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picoquic_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done; fi;
+            # if [[ ${HTTPRESULT} != 0 ]]; then for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picohttp_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done; fi;
             if [[ ${QUICRESULT} == 0 ]] && [[ ${HTTPRESULT} == 0 ]]; then exit 0; fi;
             exit 1
