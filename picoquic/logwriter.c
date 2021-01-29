@@ -564,6 +564,15 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
     }
 }
 
+static void binlog_compose_event_header(bytestream* msg, const picoquic_connection_id_t* cid, uint64_t current_time,
+    picoquic_log_event_type event_type)
+{
+    /* Common chunk header */
+    bytewrite_cid(msg, cid);
+    bytewrite_vint(msg, current_time);
+    bytewrite_vint(msg, (uint64_t)event_type);
+}
+
 void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
 {
@@ -571,9 +580,7 @@ void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uin
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
 
     /* Common chunk header */
-    bytewrite_cid(msg, cid);
-    bytewrite_vint(msg, current_time);
-    bytewrite_vint(msg, ((uint64_t)picoquic_log_event_pdu_sent) + receiving);
+    binlog_compose_event_header(msg, cid, current_time, picoquic_log_event_pdu_sent + receiving);
 
     /* PDU information */
     bytewrite_addr(msg, addr_peer);
@@ -607,9 +614,7 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, 
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
 
     /* Common chunk header */
-    bytewrite_cid(msg, cid);
-    bytewrite_vint(msg, current_time);
-    bytewrite_vint(msg, ((uint64_t)picoquic_log_event_packet_sent) + receiving);
+    binlog_compose_event_header(msg, cid, current_time, picoquic_log_event_packet_sent + receiving);
 
     /* packet information */
     bytewrite_vint(msg, bytes_max);
@@ -678,9 +683,9 @@ void binlog_dropped_packet(picoquic_cnx_t* cnx,
     }
 
     bytewrite_int32(msg, 0);
-    bytewrite_cid(msg, &cnx->initial_cnxid);
-    bytewrite_vint(msg, current_time);
-    bytewrite_vint(msg, picoquic_log_event_packet_dropped);
+    /* Common chunk header */
+    binlog_compose_event_header(msg, &cnx->initial_cnxid, current_time, picoquic_log_event_packet_dropped);
+    /* Event header */
     bytewrite_vint(msg, ph->ptype);
     bytewrite_vint(msg, packet_size);
     bytewrite_vint(msg, err);
@@ -700,9 +705,9 @@ void binlog_buffered_packet(picoquic_cnx_t* cnx,
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
 
     bytewrite_int32(msg, 0);
-    bytewrite_cid(msg, &cnx->initial_cnxid);
-    bytewrite_vint(msg, current_time);
-    bytewrite_vint(msg, picoquic_log_event_packet_buffered);
+    /* Common chunk header */
+    binlog_compose_event_header(msg, &cnx->initial_cnxid, current_time, picoquic_log_event_packet_buffered);
+    /* Event header */
     bytewrite_vint(msg, ptype);
     (void)bytewrite_cstr(msg, "keys_unavailable");
 
@@ -772,10 +777,9 @@ void binlog_packet_lost(picoquic_cnx_t* cnx,
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
 
     bytewrite_int32(msg, 0);
-    bytewrite_cid(msg, &cnx->initial_cnxid);
-    bytewrite_vint(msg, current_time);
-    bytewrite_vint(msg, picoquic_log_event_packet_lost);
-
+    /* Common chunk header */
+    binlog_compose_event_header(msg, &cnx->initial_cnxid, current_time, picoquic_log_event_packet_lost);
+    /* Event header */
     bytewrite_vint(msg, ptype);
     bytewrite_vint(msg, sequence_number);
     bytewrite_cstr(msg, trigger);
@@ -801,10 +805,9 @@ void binlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
 
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
-    bytewrite_cid(msg, &cnx->initial_cnxid);
-    bytewrite_vint(msg, picoquic_get_quic_time(cnx->quic));
-    bytewrite_vint(msg, picoquic_log_event_alpn_update);
-
+    /* Common chunk header */
+    binlog_compose_event_header(msg, &cnx->initial_cnxid, picoquic_get_quic_time(cnx->quic), picoquic_log_event_alpn_update);
+    /* Event header */
     bytewrite_vint(msg, is_local);
     bytewrite_vint(msg, sni_len);
     if (sni_len > 0) {
@@ -839,10 +842,9 @@ void binlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
 
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
-    bytewrite_cid(msg, &cnx->initial_cnxid);
-    bytewrite_vint(msg, picoquic_get_quic_time(cnx->quic));
-    bytewrite_vint(msg, picoquic_log_event_param_update);
-
+    /* Common chunk header */
+    binlog_compose_event_header(msg, &cnx->initial_cnxid, picoquic_get_quic_time(cnx->quic), picoquic_log_event_param_update);
+    /* Event header */
     bytewrite_vint(msg, is_local);
     bytewrite_vint(msg, param_length);
 
@@ -863,9 +865,8 @@ void binlog_picotls_ticket(FILE* f, picoquic_connection_id_t cnx_id,
 {
     bytestream_buf stream_msg;
     bytestream * msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
-    bytewrite_cid(msg, &cnx_id);
-    bytewrite_vint(msg, 0);
-    bytewrite_vint(msg, picoquic_log_event_tls_key_update);
+    /* Common chunk header */
+    binlog_compose_event_header(msg, &cnx_id, 0, picoquic_log_event_tls_key_update);
 
     bytewrite_vint(msg, ticket_length);
     bytewrite_buffer(msg, ticket, ticket_length);
@@ -936,9 +937,8 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
     if (ret == 0) {
         bytestream_buf stream_msg;
         bytestream * msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
-        bytewrite_cid(msg, &cnx->initial_cnxid);
-        bytewrite_vint(msg, cnx->start_time);
-        bytewrite_vint(msg, picoquic_log_event_new_connection);
+        /* Common chunk header */
+        binlog_compose_event_header(msg, &cnx->initial_cnxid, cnx->start_time, picoquic_log_event_new_connection);
 
         bytewrite_int8(msg, cnx->client_mode != 0);
         bytewrite_int32(msg, cnx->proposed_version);
@@ -966,9 +966,8 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
 
     bytestream_buf stream_msg;
     bytestream * msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
-    bytewrite_cid(msg, &cnx->initial_cnxid);
-    bytewrite_vint(msg, picoquic_get_quic_time(cnx->quic));
-    bytewrite_vint(msg, picoquic_log_event_connection_close);
+    /* Common chunk header */
+    binlog_compose_event_header(msg, &cnx->initial_cnxid, picoquic_get_quic_time(cnx->quic), picoquic_log_event_connection_close);
 
     bytestream_buf stream_head;
     bytestream * head = bytestream_buf_init(&stream_head, 8);
@@ -1029,10 +1028,8 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
     bytestream* ps_msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
     picoquic_path_t* path = cnx->path[0];
-
-    bytewrite_cid(ps_msg, &cnx->initial_cnxid);
-    bytewrite_vint(ps_msg, current_time);
-    bytewrite_vint(ps_msg, picoquic_log_event_cc_update);
+    /* Common chunk header */
+    binlog_compose_event_header(ps_msg, &cnx->initial_cnxid, current_time, picoquic_log_event_cc_update);
 
     bytewrite_vint(ps_msg, cnx->pkt_ctx[picoquic_packet_context_application].send_sequence);
 
@@ -1102,10 +1099,9 @@ void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list var
     size_t message_len;
     char* message_text;
     int written = -1;
+    /* Common chunk header */
+    binlog_compose_event_header(ps_msg, &cnx->initial_cnxid, picoquic_get_quic_time(cnx->quic), picoquic_log_event_info_message);
 
-    bytewrite_cid(ps_msg, &cnx->initial_cnxid);
-    bytewrite_vint(ps_msg, picoquic_get_quic_time(cnx->quic));
-    bytewrite_vint(ps_msg, picoquic_log_event_info_message);
     message_text = (char*)(ps_msg->data + ps_msg->ptr);
 #ifdef _WINDOWS
     written = vsnprintf_s(message_text,
