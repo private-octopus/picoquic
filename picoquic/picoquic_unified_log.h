@@ -62,22 +62,22 @@ typedef void (*picoquic_log_pdu_fn)(picoquic_cnx_t* cnx, int receiving, uint64_t
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length);
 
 /* Log a decrypted packet - receiving = 1 if arrival, = 0 if sending */
-typedef void (*picoquic_log_packet_fn)(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
+typedef void (*picoquic_log_packet_fn)(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int receiving, uint64_t current_time,
     struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t bytes_max);
 
 /* Report that a packet was dropped due to some error */
-typedef void (*picoquic_log_dropped_packet_fn)(picoquic_cnx_t* cnx, struct st_picoquic_packet_header_t* ph, size_t packet_size, int err, uint8_t* raw_data, uint64_t current_time);
+typedef void (*picoquic_log_dropped_packet_fn)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struct st_picoquic_packet_header_t* ph, size_t packet_size, int err, uint8_t* raw_data, uint64_t current_time);
 
 /* Report that packet was buffered waiting for decryption */
-typedef void (*picoquic_log_buffered_packet_fn)(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, uint64_t current_time);
+typedef void (*picoquic_log_buffered_packet_fn)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_type_enum ptype, uint64_t current_time);
 
 /* Log that a packet was formatted, ready to be sent. */
-typedef void (*picoquic_log_outgoing_packet_fn)(picoquic_cnx_t* cnx,
+typedef void (*picoquic_log_outgoing_packet_fn)(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time);
 
 /* Log packet lost events */
-typedef void (*picoquic_log_packet_lost_fn)(picoquic_cnx_t* cnx,
+typedef void (*picoquic_log_packet_lost_fn)(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time);
@@ -138,22 +138,22 @@ void picoquic_log_pdu(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length);
 
 /* Log a decrypted packet - receiving = 1 if arrival, = 0 if sending */
-void picoquic_log_packet(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
+void picoquic_log_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
     struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t bytes_max);
 
 /* Report that a packet was dropped due to some error */
-void picoquic_log_dropped_packet(picoquic_cnx_t* cnx, struct st_picoquic_packet_header_t* ph, size_t packet_size, int err, uint8_t* raw_data, uint64_t current_time);
+void picoquic_log_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struct st_picoquic_packet_header_t* ph, size_t packet_size, int err, uint8_t* raw_data, uint64_t current_time);
 
 /* Report that packet was buffered waiting for decryption */
-void picoquic_log_buffered_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, uint64_t current_time);
+void picoquic_log_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_type_enum ptype, uint64_t current_time);
 
 /* Log that a packet was formatted, ready to be sent. */
-void picoquic_log_outgoing_packet(picoquic_cnx_t* cnx,
+void picoquic_log_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time);
 
 /* Log packet lost events */
-void picoquic_log_packet_lost(picoquic_cnx_t* cnx,
+void picoquic_log_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time);

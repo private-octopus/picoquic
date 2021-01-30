@@ -1017,7 +1017,7 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         sp->if_index_local = if_index_to;
         sp->cnxid_log64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
 
-        picoquic_log_outgoing_packet(cnx,
+        picoquic_log_outgoing_packet(cnx, cnx->path[0],
             bytes, 0, pn_length, sp->length,
             bytes, sp->length, picoquic_get_quic_time(cnx->quic));
 
@@ -1796,6 +1796,7 @@ void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
  */
 int picoquic_incoming_1rtt(
     picoquic_cnx_t* cnx,
+    int path_id,
     uint8_t* bytes,
     picoquic_packet_header* ph,
     struct sockaddr* addr_from,
@@ -1805,7 +1806,6 @@ int picoquic_incoming_1rtt(
     uint64_t current_time)
 {
     int ret = 0;
-    int path_id = -1;
 
     /* Check the packet */
     if (cnx->cnx_state < picoquic_state_client_almost_ready) {
@@ -1850,47 +1850,33 @@ int picoquic_incoming_1rtt(
                 ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
             }
         }
-        else {
-            if (ph->payload_length == 0) {
-                /* empty payload! */
-                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
-            }
-            else if (ph->has_reserved_bit_set) {
-                /* Reserved bits were not set to zero */
-                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
-            }
-            else {
-                /* Find the arrival path and update its state */
-                ret = picoquic_find_incoming_path(cnx, ph, addr_from, addr_to, current_time, &path_id);
-            }
+        else if (ret == 0) {
+            picoquic_path_t* path_x = cnx->path[path_id];
 
-            if (ret == 0) {
-                picoquic_path_t * path_x = cnx->path[path_id];
-                path_x->got_long_packet |= ((ph->offset + ph->payload_length) >= PICOQUIC_ENFORCED_INITIAL_MTU);
-                path_x->if_index_dest = if_index_to;
-                cnx->is_1rtt_received = 1;
-                picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
-                /* Accept the incoming frames */
-                ret = picoquic_decode_frames(cnx, cnx->path[path_id], 
-                    bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, ph->pn64, current_time);
-            }
+            path_x->got_long_packet |= ((ph->offset + ph->payload_length) >= PICOQUIC_ENFORCED_INITIAL_MTU);
+            path_x->if_index_dest = if_index_to;
+            cnx->is_1rtt_received = 1;
+            picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
+            /* Accept the incoming frames */
+            ret = picoquic_decode_frames(cnx, cnx->path[path_id],
+                bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, ph->pn64, current_time);
 
             if (ret == 0) {
                 /* Compute receive bandwidth */
-                cnx->path[path_id]->received += ph->offset + ph->payload_length + 
+                path_x->received += ph->offset + ph->payload_length +
                     picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
-                if (cnx->path[path_id]->receive_rate_epoch == 0) {
-                    cnx->path[path_id]->received_prior = cnx->path[path_id]->received;
-                    cnx->path[path_id]->receive_rate_epoch = current_time;
+                if (path_x->receive_rate_epoch == 0) {
+                    path_x->received_prior = cnx->path[path_id]->received;
+                    path_x->receive_rate_epoch = current_time;
                 }
                 else {
                     uint64_t delta = current_time - cnx->path[path_id]->receive_rate_epoch;
-                    if (delta > cnx->path[path_id]->smoothed_rtt && delta > PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN) {
-                        cnx->path[path_id]->receive_rate_estimate = ((cnx->path[path_id]->received - cnx->path[path_id]->received_prior)*1000000) / delta;
-                        cnx->path[path_id]->received_prior = cnx->path[path_id]->received;
-                        cnx->path[path_id]->receive_rate_epoch = current_time;
-                        if (cnx->path[path_id]->receive_rate_estimate > cnx->path[path_id]->receive_rate_max) {
-                            cnx->path[path_id]->receive_rate_max = cnx->path[path_id]->receive_rate_estimate;
+                    if (delta > path_x->smoothed_rtt&& delta > PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN) {
+                        path_x->receive_rate_estimate = ((cnx->path[path_id]->received - cnx->path[path_id]->received_prior) * 1000000) / delta;
+                        path_x->received_prior = cnx->path[path_id]->received;
+                        path_x->receive_rate_epoch = current_time;
+                        if (path_x->receive_rate_estimate > cnx->path[path_id]->receive_rate_max) {
+                            path_x->receive_rate_max = cnx->path[path_id]->receive_rate_estimate;
                             if (path_id == 0 && !cnx->is_ack_frequency_negotiated) {
                                 cnx->ack_gap_remote = picoquic_compute_ack_gap(cnx, cnx->path[0]->receive_rate_max);
                             }
@@ -1987,6 +1973,7 @@ int picoquic_incoming_segment(
     int new_context_created = 0;
     int is_first_segment = 0;
     int is_buffered = 0;
+    int path_id = -1;
 
     /* Parse the header and decrypt the segment */
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,
@@ -2013,21 +2000,38 @@ int picoquic_incoming_segment(
             ret = PICOQUIC_ERROR_CNXID_SEGMENT;
         }
     }
+
     /* Store packet if received in advance of encryption keys */
     if (ret == PICOQUIC_ERROR_AEAD_NOT_READY &&
         cnx != NULL) {
         is_buffered = picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length, addr_from, addr_to, if_index_to, received_ecn);
     }
 
-    /* Log the incoming packet */
+    /* Find the path and if required log the incoming packet */
     if (cnx != NULL) {
+        if (ret == 0 && ph.ptype == picoquic_packet_1rtt_protected) {
+            if (ph.payload_length == 0) {
+                /* empty payload! */
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+            }
+            else if (ph.has_reserved_bit_set) {
+                /* Reserved bits were not set to zero */
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+            }
+            else {
+                /* Find the arrival path and update its state */
+                ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, current_time, &path_id);
+            }
+        }
+
         if (ret == 0) {
-            picoquic_log_packet(cnx, 1, current_time, &ph, bytes, *consumed);
+            /* TODO: identify incoming path */
+            picoquic_log_packet(cnx, (path_id < 0)?NULL:cnx->path[path_id], 1, current_time, &ph, bytes, *consumed);
         }
         else if (is_buffered) {
-            picoquic_log_buffered_packet(cnx, ph.ptype, current_time);
+            picoquic_log_buffered_packet(cnx, (path_id < 0) ? NULL : cnx->path[path_id], ph.ptype, current_time);
         } else {
-            picoquic_log_dropped_packet(cnx, &ph, length, ret, bytes, current_time);
+            picoquic_log_dropped_packet(cnx, (path_id < 0) ? NULL : cnx->path[path_id], &ph, length, ret, bytes, current_time);
         }
     }
 
@@ -2127,7 +2131,7 @@ int picoquic_incoming_segment(
                 }
                 break;
             case picoquic_packet_1rtt_protected:
-                ret = picoquic_incoming_1rtt(cnx, bytes, &ph, addr_from, addr_to, if_index_to, received_ecn, current_time);
+                ret = picoquic_incoming_1rtt(cnx, path_id, bytes, &ph, addr_from, addr_to, if_index_to, received_ecn, current_time);
                 break;
             default:
                 /* Packet type error. Log and ignore */

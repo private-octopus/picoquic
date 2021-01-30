@@ -1096,7 +1096,7 @@ FILE* create_binlog(char const* binlog_file, uint64_t creation_time);
 
 void binlog_new_connection(picoquic_cnx_t* cnx);
 
-void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
+void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, uint64_t path_id, int receiving, uint64_t current_time,
     const picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max);
 
 int binlog_test()
@@ -1158,7 +1158,7 @@ int binlog_test()
                 ph.offset = 0;
                 ph.payload_length = test_skip_list[i].len;
 
-                binlog_packet(cnx->f_binlog, &initial_cid, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len);
+                binlog_packet(cnx->f_binlog, &initial_cid, 0, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len);
             }
 
             picoquic_delete_cnx(cnx);

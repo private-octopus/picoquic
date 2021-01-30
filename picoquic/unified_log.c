@@ -83,80 +83,80 @@ void picoquic_log_pdu(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
 }
 
 /* Log a decrypted packet - receiving = 1 if arrival, = 0 if sending */
-void picoquic_log_packet(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
+void picoquic_log_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
     struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t bytes_max)
 {
     if (picoquic_cnx_is_still_logging(cnx)) {
         if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_packet(cnx, receiving, current_time, ph, bytes, bytes_max);
+            cnx->quic->text_log_fns->log_packet(cnx, path_x, receiving, current_time, ph, bytes, bytes_max);
         }
 
         if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_packet(cnx, receiving, current_time, ph, bytes, bytes_max);
+            cnx->quic->bin_log_fns->log_packet(cnx, path_x, receiving, current_time, ph, bytes, bytes_max);
         }
     }
 }
 
 /* Report that a packet was dropped due to some error */
-void picoquic_log_dropped_packet(picoquic_cnx_t* cnx, struct st_picoquic_packet_header_t* ph, size_t packet_size,
+void picoquic_log_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struct st_picoquic_packet_header_t* ph, size_t packet_size,
     int err, uint8_t* raw_data, uint64_t current_time)
 {
     if (picoquic_cnx_is_still_logging(cnx)) {
         if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_dropped_packet(cnx, ph, packet_size, err, raw_data, current_time);
+            cnx->quic->text_log_fns->log_dropped_packet(cnx, path_x, ph, packet_size, err, raw_data, current_time);
         }
 
         if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_dropped_packet(cnx, ph, packet_size, err, raw_data, current_time);
+            cnx->quic->bin_log_fns->log_dropped_packet(cnx, path_x, ph, packet_size, err, raw_data, current_time);
         }
     }
 }
 
 /* Report that packet was buffered waiting for decryption */
-void picoquic_log_buffered_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, uint64_t current_time)
+void picoquic_log_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_type_enum ptype, uint64_t current_time)
 {
     if (picoquic_cnx_is_still_logging(cnx)) {
         if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_buffered_packet(cnx, ptype, current_time);
+            cnx->quic->text_log_fns->log_buffered_packet(cnx, path_x, ptype, current_time);
         }
 
         if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_buffered_packet(cnx, ptype, current_time);
+            cnx->quic->bin_log_fns->log_buffered_packet(cnx, path_x, ptype, current_time);
         }
     }
 }
 
 /* Log that a packet was formatted, ready to be sent. */
-void picoquic_log_outgoing_packet(picoquic_cnx_t* cnx,
+void picoquic_log_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time)
 {
     if (picoquic_cnx_is_still_logging(cnx)) {
         if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_outgoing_packet(cnx, bytes, sequence_number, pn_length, length,
+            cnx->quic->text_log_fns->log_outgoing_packet(cnx, path_x, bytes, sequence_number, pn_length, length,
                 send_buffer, send_length, current_time);
         }
 
         if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_outgoing_packet(cnx, bytes, sequence_number, pn_length, length,
+            cnx->quic->bin_log_fns->log_outgoing_packet(cnx, path_x, bytes, sequence_number, pn_length, length,
                 send_buffer, send_length, current_time);
         }
     }
 }
 
 /* Log packet lost events */
-void picoquic_log_packet_lost(picoquic_cnx_t* cnx,
+void picoquic_log_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time)
 {
     if (picoquic_cnx_is_still_logging(cnx)) {
         if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_packet_lost(cnx, ptype, sequence_number, trigger, dcid, packet_size, current_time);
+            cnx->quic->text_log_fns->log_packet_lost(cnx, path_x, ptype, sequence_number, trigger, dcid, packet_size, current_time);
         }
 
         if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_packet_lost(cnx, ptype, sequence_number, trigger, dcid, packet_size, current_time);
+            cnx->quic->bin_log_fns->log_packet_lost(cnx, path_x, ptype, sequence_number, trigger, dcid, packet_size, current_time);
         }
     }
 }

@@ -62,22 +62,22 @@ void binlog_pdu(FILE * f, const picoquic_connection_id_t* cid, int receiving, ui
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length);
 
 /* binary alternative to picoquic_log_decrypted_segment() */
-void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
+void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, uint64_t path_id, int receiving, uint64_t current_time,
     const picoquic_packet_header * ph, const uint8_t* bytes, size_t bytes_max);
 
 /* Report that a packet was dropped due to some error */
-void binlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_packet_header* ph, size_t packet_size, int err, uint8_t* raw_data, uint64_t current_time);
+void binlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_header* ph, size_t packet_size, int err, uint8_t* raw_data, uint64_t current_time);
 
 /* Report that packet was buffered waiting for decryption */
-void binlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, uint64_t current_time);
+void binlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_type_enum ptype, uint64_t current_time);
 
 /* binary alternative to picoquic_log_outgoing_segment() */
-void binlog_outgoing_packet(picoquic_cnx_t* cnx,
+void binlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     uint8_t * bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time);
 
 /* Logging packet lost events */
-void binlog_packet_lost(picoquic_cnx_t* cnx,
+void binlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time);
