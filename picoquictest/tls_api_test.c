@@ -9288,7 +9288,7 @@ int app_limit_cc_test_one(
                     int nb_comma = 0;
                     int c_index = 0;
 
-                    while (nb_comma < 5 && c_index < 512 && buffer[c_index] != 0) {
+                    while (nb_comma < 6 && c_index < 512 && buffer[c_index] != 0) {
                         if (buffer[c_index] == ',') {
                             nb_comma++;
                         }

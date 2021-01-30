@@ -61,6 +61,7 @@ int picoquic_cc_bin_to_csv(FILE * f_binlog, FILE * f_csvlog)
     int ret = 0;
 
     ret |= fprintf(f_csvlog, "time, ") <= 0;
+    ret |= fprintf(f_csvlog, "path, ") <= 0;
     ret |= fprintf(f_csvlog, "sequence, ") <= 0;
     ret |= fprintf(f_csvlog, "highest ack, ") <= 0;
     ret |= fprintf(f_csvlog, "high ack time, ") <= 0;
@@ -176,8 +177,8 @@ int csv_cb(bytestream * s, void * ptr)
         (void)byteread_vint(s, &bw_max);
         (void)byteread_vint(s, &bytes_in_transit);
 
-        if (ret != 0 || fprintf(f_csvlog, "%" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ",",
-            time, sequence, (int64_t)highest_ack, high_ack_time, last_time_ack,
+        if (ret != 0 || fprintf(f_csvlog, "%" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ",",
+            time, path_id, sequence, (int64_t)highest_ack, high_ack_time, last_time_ack,
             cwin, one_way_delay, rtt_sample, SRTT, RTT_min, bandwidth_estimate, receive_rate_estimate, Send_MTU, pacing_packet_time,
             nb_retrans, nb_spurious, cwin_blkd, flow_blkd, stream_blkd, cc_state, cc_param, bw_max, bytes_in_transit) <= 0) {
             ret = -1;
