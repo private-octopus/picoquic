@@ -567,12 +567,10 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
 static void binlog_compose_event_header(bytestream* msg, const picoquic_connection_id_t* cid, uint64_t current_time,
     uint64_t path_id, picoquic_log_event_type event_type)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(path_id);
-#endif
     /* Common chunk header */
     bytewrite_cid(msg, cid);
     bytewrite_vint(msg, current_time);
+    bytewrite_vint(msg, path_id);
     bytewrite_vint(msg, (uint64_t)event_type);
 }
 

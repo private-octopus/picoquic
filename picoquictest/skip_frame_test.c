@@ -2472,9 +2472,9 @@ int app_message_overflow_test()
     if (ret == 0) {
         char test[BYTESTREAM_MAX_BUFFER_SIZE];
 
-        memset(test, 'x', sizeof(test) - 2);
-        test[sizeof(test) - 2] = '!';
-        test[sizeof(test) - 1] = 0;
+        memset(test, 'x', sizeof(test) - 3);
+        test[sizeof(test) - 3] = '!';
+        test[sizeof(test) - 2] = 0;
 
         for (int i = 0; i < 16; i++) {
             picoquic_log_app_message(cnx, "s:%s", &test[15 - i]);

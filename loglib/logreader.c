@@ -84,6 +84,9 @@ static int binlog_convert_event(bytestream * s, void * ptr)
     uint64_t time = 0;
     ret |= byteread_vint(s, &time);
 
+    uint64_t path_id = 0;
+    ret |= byteread_vint(s, &path_id);
+
     uint64_t id = 0;
     ret |= byteread_vint(s, &id);
 
