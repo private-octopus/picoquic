@@ -100,7 +100,6 @@
 [24926, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 1440, "packet_number": 2, "dcid": "030405060708090a" }, "frames": [{ 
     "frame_type": "ping"}, { 
     "frame_type": "padding"}]}],
-[24926, "recovery", "metrics_updated", {"smoothed_rtt": 21116}],
 [24926, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 39, "packet_number": 4, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[2, 2], [0, 0]]}, { 
     "frame_type": "padding"}]}],
@@ -146,7 +145,6 @@
 [97940, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 822, "packet_number": 9, "dcid": "030405060708090a" }, "frames": [{ 
     "frame_type": "stream", "id": 4, "offset": 0, "length": 257, "fin": true , "begins_with": "0001020304050607"}, { 
     "frame_type": "stream", "id": 8, "offset": 0, "length": 531, "fin": true , "begins_with": "0001020304050607"}]}],
-[97940, "recovery", "metrics_updated", {"smoothed_rtt": 20902}],
 [97940, "transport", "spin_bit_updated", { "state": false }],
 [97940, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 1424, "packet_number": 7, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[7, 9]]}, { 

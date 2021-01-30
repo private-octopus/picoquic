@@ -887,6 +887,7 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
     if (!packet->is_ack_trap) {
         /* Account for bytes in transit, for congestion control */
         path_x->bytes_in_transit += length;
+        path_x->is_cc_data_updated = 1;
         /* Update the pacing data */
         picoquic_update_pacing_after_send(path_x, current_time);
     }
@@ -930,6 +931,7 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
         else {
             p->send_path->bytes_in_transit = 0;
         }
+        p->send_path->is_cc_data_updated = 1;
     }
 
     if (should_free || p->is_ack_trap) {

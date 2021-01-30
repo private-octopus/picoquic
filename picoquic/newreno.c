@@ -187,6 +187,7 @@ static void picoquic_newreno_notify(
 #endif
     picoquic_newreno_state_t* nr_state = (picoquic_newreno_state_t*)path_x->congestion_alg_state;
 
+    path_x->is_cc_data_updated = 1;
 
     if (nr_state != NULL) {
         switch (notification) {

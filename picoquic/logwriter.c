@@ -1049,66 +1049,78 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
     bytestream_buf stream_msg;
     bytestream* ps_msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
-    picoquic_path_t* path = cnx->path[0];
-    /* Common chunk header */
-    /* TODO: understand how to provide per path data -- most probably do a loop on
-     * all available paths, and write the data for each path if multipath is enabled.
-     * verify that it works for CSV and QLOG formats.
-     */
-    binlog_compose_event_header(ps_msg, &cnx->initial_cnxid, current_time, 0, picoquic_log_event_cc_update);
+    int path_max = cnx->is_multipath_enabled ? cnx->nb_paths : 1;
 
-    bytewrite_vint(ps_msg, cnx->pkt_ctx[picoquic_packet_context_application].send_sequence);
+    for (int path_id = 0; path_id < path_max; path_id++)
+    {
+        picoquic_path_t* path = cnx->path[path_id];
 
-    if (pkt_ctx->highest_acknowledged != (uint64_t)(int64_t)-1) {
-        bytewrite_vint(ps_msg, 1);
-        bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged);
-        bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged_time - cnx->start_time);
-        bytewrite_vint(ps_msg, pkt_ctx->latest_time_acknowledged - cnx->start_time);
-    }
-    else {
-        bytewrite_vint(ps_msg, 0);
-    }
-
-    bytewrite_vint(ps_msg, path->cwin);
-    bytewrite_vint(ps_msg, path->one_way_delay_sample);
-    bytewrite_vint(ps_msg, path->rtt_sample);
-    bytewrite_vint(ps_msg, path->smoothed_rtt);
-    bytewrite_vint(ps_msg, path->rtt_min);
-    bytewrite_vint(ps_msg, path->bandwidth_estimate);
-    bytewrite_vint(ps_msg, path->receive_rate_estimate);
-    bytewrite_vint(ps_msg, path->send_mtu);
-    bytewrite_vint(ps_msg, path->pacing_packet_time_microsec);
-    bytewrite_vint(ps_msg, cnx->nb_retransmission_total);
-    bytewrite_vint(ps_msg, cnx->nb_spurious);
-    bytewrite_vint(ps_msg, cnx->cwin_blocked);
-    bytewrite_vint(ps_msg, cnx->flow_blocked);
-    bytewrite_vint(ps_msg, cnx->stream_blocked);
-
-    if (cnx->congestion_alg == NULL) {
-        bytewrite_vint(ps_msg, 0);
-        bytewrite_vint(ps_msg, 0);
-    }
-    else {
-        uint64_t cc_state = 0;
-        uint64_t cc_param = 0;
-
-        if (cnx->path[0]->congestion_alg_state != NULL) {
-            cnx->congestion_alg->alg_observe(cnx->path[0], &cc_state, &cc_param);
+        if (!path->is_cc_data_updated) {
+            continue;
         }
-        bytewrite_vint(ps_msg, cc_state);
-        bytewrite_vint(ps_msg, cc_param);
+        path->is_cc_data_updated = 0;
+
+        /* Common chunk header */
+        /* TODO: understand how to provide per path data -- most probably do a loop on
+         * all available paths, and write the data for each path if multipath is enabled.
+         * verify that it works for CSV and QLOG formats.
+         */
+        binlog_compose_event_header(ps_msg, &cnx->initial_cnxid, current_time, 
+            binlog_get_path_id(cnx, path), picoquic_log_event_cc_update);
+
+        bytewrite_vint(ps_msg, cnx->pkt_ctx[picoquic_packet_context_application].send_sequence);
+
+        if (pkt_ctx->highest_acknowledged != (uint64_t)(int64_t)-1) {
+            bytewrite_vint(ps_msg, 1);
+            bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged);
+            bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged_time - cnx->start_time);
+            bytewrite_vint(ps_msg, pkt_ctx->latest_time_acknowledged - cnx->start_time);
+        }
+        else {
+            bytewrite_vint(ps_msg, 0);
+        }
+
+        bytewrite_vint(ps_msg, path->cwin);
+        bytewrite_vint(ps_msg, path->one_way_delay_sample);
+        bytewrite_vint(ps_msg, path->rtt_sample);
+        bytewrite_vint(ps_msg, path->smoothed_rtt);
+        bytewrite_vint(ps_msg, path->rtt_min);
+        bytewrite_vint(ps_msg, path->bandwidth_estimate);
+        bytewrite_vint(ps_msg, path->receive_rate_estimate);
+        bytewrite_vint(ps_msg, path->send_mtu);
+        bytewrite_vint(ps_msg, path->pacing_packet_time_microsec);
+        bytewrite_vint(ps_msg, cnx->nb_retransmission_total);
+        bytewrite_vint(ps_msg, cnx->nb_spurious);
+        bytewrite_vint(ps_msg, cnx->cwin_blocked);
+        bytewrite_vint(ps_msg, cnx->flow_blocked);
+        bytewrite_vint(ps_msg, cnx->stream_blocked);
+
+        if (cnx->congestion_alg == NULL) {
+            bytewrite_vint(ps_msg, 0);
+            bytewrite_vint(ps_msg, 0);
+        }
+        else {
+            uint64_t cc_state = 0;
+            uint64_t cc_param = 0;
+
+            if (cnx->path[0]->congestion_alg_state != NULL) {
+                cnx->congestion_alg->alg_observe(cnx->path[0], &cc_state, &cc_param);
+            }
+            bytewrite_vint(ps_msg, cc_state);
+            bytewrite_vint(ps_msg, cc_param);
+        }
+
+        bytewrite_vint(ps_msg, path->max_bandwidth_estimate);
+        bytewrite_vint(ps_msg, path->bytes_in_transit);
+
+        bytestream_buf stream_head;
+        bytestream* ps_head = bytestream_buf_init(&stream_head, BYTESTREAM_MAX_BUFFER_SIZE);
+
+        bytewrite_int32(ps_head, (uint32_t)bytestream_length(ps_msg));
+
+        (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->f_binlog);
+        (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->f_binlog);
     }
-
-    bytewrite_vint(ps_msg, path->max_bandwidth_estimate);
-    bytewrite_vint(ps_msg, path->bytes_in_transit);
-
-    bytestream_buf stream_head;
-    bytestream* ps_head = bytestream_buf_init(&stream_head, BYTESTREAM_MAX_BUFFER_SIZE);
-
-    bytewrite_int32(ps_head, (uint32_t)bytestream_length(ps_msg));
-
-    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->f_binlog);
-    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->f_binlog);
 }
 
 /*

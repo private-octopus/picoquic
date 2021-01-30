@@ -1012,6 +1012,7 @@ static void picoquic_bbr_notify(
     UNREFERENCED_PARAMETER(lost_packet_number);
 #endif
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)path_x->congestion_alg_state;
+    path_x->is_cc_data_updated = 1;
 
     if (bbr_state != NULL) {
         switch (notification) {

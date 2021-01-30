@@ -840,6 +840,7 @@ typedef struct st_picoquic_path_t {
     unsigned int path_is_preferred_path : 1;
     unsigned int is_nat_challenge : 1;
     unsigned int got_long_packet : 1;
+    unsigned int is_cc_data_updated : 1;
 
     /* Path priority, for multipath management */
     int path_priority;
