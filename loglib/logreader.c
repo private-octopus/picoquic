@@ -132,7 +132,7 @@ static int binlog_convert_event(bytestream * s, void * ptr)
         ret |= byteread_packet_header(s, &ph);
 
         if (ret == 0) {
-            ret = ctx->callbacks->packet_start(time, packet_length, &ph, rxtx, cbptr);
+            ret = ctx->callbacks->packet_start(time, path_id, packet_length, &ph, rxtx, cbptr);
         }
 
         while (ret == 0 && bytestream_remain(s) > 0) {
@@ -159,17 +159,17 @@ static int binlog_convert_event(bytestream * s, void * ptr)
     }
     case picoquic_log_event_packet_dropped:
         if (ret == 0) {
-            ret = ctx->callbacks->packet_dropped(time, s, cbptr);
+            ret = ctx->callbacks->packet_dropped(time, path_id, s, cbptr);
         }
         break;
     case picoquic_log_event_packet_buffered:
         if (ret == 0) {
-            ret = ctx->callbacks->packet_buffered(time, s, cbptr);
+            ret = ctx->callbacks->packet_buffered(time, path_id, s, cbptr);
         }
         break;
     case picoquic_log_event_packet_lost:
         if (ret == 0) {
-            ret = ctx->callbacks->packet_lost(time, s, cbptr);
+            ret = ctx->callbacks->packet_lost(time, path_id, s, cbptr);
         }
         break;
     case picoquic_log_event_alpn_update:
@@ -184,7 +184,7 @@ static int binlog_convert_event(bytestream * s, void * ptr)
         break;
     case picoquic_log_event_cc_update:
         if (ret == 0) {
-            ret = ctx->callbacks->cc_update(time, s, cbptr);
+            ret = ctx->callbacks->cc_update(time, path_id, s, cbptr);
         }
         break;
     case picoquic_log_event_info_message:
