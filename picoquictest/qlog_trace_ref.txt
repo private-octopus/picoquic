@@ -1,6 +1,6 @@
 { "qlog_version": "draft-00", "title": "picoquic", "traces": [
 { "vantage_point": { "name": "backend-67", "type": "server" },
-"title": "picoquic", "description": "0102030405060708","event_fields": ["relative_time", "CATEGORY", "EVENT_TYPE", "DATA"],
+"title": "picoquic", "description": "0102030405060708","event_fields": ["relative_time", "category", "event", "data"],
 "configuration": {"time_units": "us"},
 "common_fields": { "protocol_type": "QUIC_HTTP3", "reference_time": "11001"},
 "events": [

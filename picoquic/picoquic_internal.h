@@ -529,6 +529,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int log_pn_dec : 1; /* Log key hashes on key changes to debug crypto */
     unsigned int random_initial : 1; /* Randomize the initial PN number */
     unsigned int packet_train_mode : 1; /* Tune pacing for sending packet trains */
+    unsigned int use_constant_challenges : 1; /* Use predictable challenges when producing constant logs. */
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 

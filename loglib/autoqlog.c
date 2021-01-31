@@ -35,7 +35,8 @@ int autoqlog(picoquic_cnx_t* cnx)
 {
     int ret = 0;
     uint64_t log_time = cnx->start_time;
-    FILE* f_binlog = picoquic_open_cc_log_file_for_read(cnx->binlog_file_name, &log_time);
+    uint16_t flags = 0;
+    FILE* f_binlog = picoquic_open_cc_log_file_for_read(cnx->binlog_file_name, &flags, &log_time);
     if (f_binlog == NULL) {
         DBG_PRINTF("Cannot open file %s for reading.\n", cnx->binlog_file_name);
         ret = -1;
@@ -55,7 +56,7 @@ int autoqlog(picoquic_cnx_t* cnx)
             ret = -1;
         }
         else {
-            ret = qlog_convert(&cnx->initial_cnxid, f_binlog, cnx->binlog_file_name, filename, cnx->quic->qlog_dir);
+            ret = qlog_convert(&cnx->initial_cnxid, f_binlog, cnx->binlog_file_name, filename, cnx->quic->qlog_dir, flags);
             picoquic_file_close(f_binlog);
             if (ret != 0) {
                 DBG_PRINTF("Cannot convert file %s to qlog, err = %d.\n", cnx->binlog_file_name, ret);

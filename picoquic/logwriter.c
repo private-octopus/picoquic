@@ -907,7 +907,7 @@ static void binlog_picotls_ticket_ex(picoquic_cnx_t* cnx,
     }
 }
 
-FILE* create_binlog(char const* binlog_file, uint64_t creation_time);
+FILE* create_binlog(char const* binlog_file, uint64_t creation_time, unsigned int multipath_enabled);
 
 void binlog_new_connection(picoquic_cnx_t * cnx)
 {
@@ -944,7 +944,8 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
     }
 
     if (ret == 0) {
-        cnx->f_binlog = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic));
+        cnx->f_binlog = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic),
+            cnx->local_parameters.enable_multipath);
         if (cnx->f_binlog == NULL) {
             cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
             ret = -1;
@@ -1009,7 +1010,7 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
     }
 }
 
-FILE* create_binlog(char const* binlog_file, uint64_t creation_time)
+FILE* create_binlog(char const* binlog_file, uint64_t creation_time, unsigned int is_multipath_supported)
 {
     FILE* f_binlog = picoquic_file_open(binlog_file, "wb");
     if (f_binlog == NULL) {
@@ -1020,7 +1021,8 @@ FILE* create_binlog(char const* binlog_file, uint64_t creation_time)
         bytestream_buf stream;
         bytestream* ps = bytestream_buf_init(&stream, 16);
         bytewrite_int32(ps, FOURCC('q', 'l', 'o', 'g'));
-        bytewrite_int32(ps, 0x01);
+        bytewrite_int16(ps, 0x01); /* version */
+        bytewrite_int16(ps, (is_multipath_supported) ? 0x01 : 0); /* flags */
         bytewrite_int64(ps, creation_time);
 
         if (fwrite(bytestream_data(ps), bytestream_length(ps), 1, f_binlog) <= 0) {

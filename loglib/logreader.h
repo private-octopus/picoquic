@@ -95,6 +95,6 @@ int binlog_list_cids(FILE * binlog, picohash_table * cids);
  */
 FILE * open_outfile(const char * cid_name, const char * binlog_name, const char * out_dir, const char * out_ext);
 
-FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t * log_time);
+FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint16_t * flags, uint64_t * log_time);
 
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);

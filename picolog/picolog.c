@@ -47,6 +47,7 @@ typedef struct app_conversion_context_st
     FILE * f_template;
 
     uint64_t log_time;
+    uint16_t flags;
 } app_conversion_context_t;
 
 int convert_csv(const picoquic_connection_id_t * cid, void * ptr);
@@ -121,7 +122,7 @@ int main(int argc, char ** argv)
 
     debug_printf_push_stream(stderr);
 
-    appctx.f_binlog = picoquic_open_cc_log_file_for_read(appctx.binlog_name, &appctx.log_time);
+    appctx.f_binlog = picoquic_open_cc_log_file_for_read(appctx.binlog_name, &appctx.flags, &appctx.log_time);
     if (appctx.f_binlog == NULL) {
         fprintf(stderr, "Could not open log file %s\n", appctx.binlog_name);
         ret = -1;
@@ -269,7 +270,7 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
 int convert_qlog(const picoquic_connection_id_t * cid, void * ptr)
 {
     const app_conversion_context_t* appctx = (const app_conversion_context_t*)ptr;
-    return qlog_convert(cid, appctx->f_binlog, appctx->binlog_name, NULL, appctx->out_dir);
+    return qlog_convert(cid, appctx->f_binlog, appctx->binlog_name, NULL, appctx->out_dir, appctx->flags);
 }
 
 int filedump_binlog(FILE* bin_log, FILE* bin_dump)

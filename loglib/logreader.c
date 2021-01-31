@@ -293,7 +293,7 @@ FILE * open_outfile(const char * cid_name, const char * binlog_name, const char 
 }
 
 /* Open the bin file for reading */
-FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t * log_time)
+FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint16_t * flags, uint64_t * log_time)
 {
     int ret = 0;
     FILE * bin_log = picoquic_file_open(bin_cc_log_name, "rb");
@@ -307,7 +307,7 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t
         bytestream * ps = bytestream_buf_init(&stream, 16);
 
         uint32_t fcc = 0;
-        uint32_t version = 0;
+        uint16_t version = 0;
 
         if (fread(stream.buf, bytestream_size(ps), 1, bin_log) <= 0) {
             ret = -1;
@@ -317,11 +317,11 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t
             ret = -1;
             DBG_PRINTF("Header for file %s does not start with magic number.\n", bin_cc_log_name);
         }
-        else if (byteread_int32(ps, &version) != 0 || version != 0x01) {
+        else if (byteread_int16(ps, &version) != 0 || version != 0x01) {
             ret = -1;
             DBG_PRINTF("Header for file %s requires unsupported version.\n", bin_cc_log_name);
         }
-        else {
+        else if (byteread_int16(ps, flags) == 0){
             ret = byteread_int64(ps, log_time);
         }
     }

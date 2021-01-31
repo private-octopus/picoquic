@@ -1092,8 +1092,9 @@ int logger_test()
 }
 
 // From logwriter.c
-FILE* create_binlog(char const* binlog_file, uint64_t creation_time);
-
+#if 0
+FILE* create_binlog(char const* binlog_file, uint64_t creation_time, unsigned int multipath_enabled);
+#endif
 void binlog_new_connection(picoquic_cnx_t* cnx);
 
 void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, uint64_t path_id, int receiving, uint64_t current_time,
@@ -1144,7 +1145,10 @@ int binlog_test()
         if (cnx == NULL) {
             DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
             ret = -1;
-        } else {
+        }
+        else {
+            picoquic_log_new_connection(cnx);
+
             for (size_t i = 0; i < nb_test_skip_list; i++) {
 
                 picoquic_packet_header ph;
@@ -1175,9 +1179,10 @@ int binlog_test()
 
         /* Convert to QLOG and verify */
         uint64_t log_time = 0;
-        FILE* f_binlog = picoquic_open_cc_log_file_for_read(binlog_test_file, &log_time);
+        uint16_t flags;
+        FILE* f_binlog = picoquic_open_cc_log_file_for_read(binlog_test_file, &flags, &log_time);
         
-        ret = qlog_convert(&initial_cid, f_binlog, binlog_test_file, NULL, ".");
+        ret = qlog_convert(&initial_cid, f_binlog, binlog_test_file, NULL, ".", flags);
         if (ret != 0) {
             DBG_PRINTF("%s", "Cannot convert the binary log into QLOG.\n");
         } else {
@@ -2467,6 +2472,9 @@ int app_message_overflow_test()
             if (cnx == NULL) {
                 ret = -1;
             }
+            else {
+                picoquic_log_new_connection(cnx);
+            }
         }
     }
     if (ret == 0) {
@@ -2488,14 +2496,15 @@ int app_message_overflow_test()
     if (ret == 0) {
         /* Convert to QLOG and verify */
         uint64_t log_time = 0;
-        FILE* f_binlog = picoquic_open_cc_log_file_for_read(qlog_overflow_bin, &log_time);
+        uint16_t flags = 0;
+        FILE* f_binlog = picoquic_open_cc_log_file_for_read(qlog_overflow_bin, &flags, &log_time);
 
         if (f_binlog == NULL) {
             DBG_PRINTF("Cannot open binlog file: %s.", qlog_overflow_bin);
             ret = -1;
         }
         else {
-            ret = qlog_convert(&initial_cid, f_binlog, qlog_overflow_file, NULL, ".");
+            ret = qlog_convert(&initial_cid, f_binlog, qlog_overflow_file, NULL, ".", flags);
             if (ret != 0) {
                 DBG_PRINTF("%s", "Cannot convert the binary log into QLOG.\n");
             }

@@ -1412,7 +1412,12 @@ void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t curr
         /* Reset the path challenge */
         cnx->path[path_id]->challenge_required = 1;
         for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-            cnx->path[path_id]->challenge[ichal] = picoquic_public_random_64();
+            if (cnx->quic->use_constant_challenges) {
+                cnx->path[path_id]->challenge[ichal] = current_time*(0xdeadbeef + ichal);
+            }
+            else {
+                cnx->path[path_id]->challenge[ichal] = picoquic_public_random_64();
+            }
         }
         cnx->path[path_id]->challenge_verified = 0;
         cnx->path[path_id]->challenge_time = current_time;
@@ -2698,7 +2703,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         }
     }
 
-    if (cnx != NULL) {
+    if (cnx != NULL && !cnx->client_mode) {
         picoquic_log_new_connection(cnx);
     }
 
@@ -2731,7 +2736,11 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
 
 int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
 {
-    int ret = picoquic_initialize_tls_stream(cnx, picoquic_get_quic_time(cnx->quic));
+    int ret = 0;
+
+    picoquic_log_new_connection(cnx);
+        
+    ret = picoquic_initialize_tls_stream(cnx, picoquic_get_quic_time(cnx->quic));
     /* A remote session ticket may have been loaded as part of initializing TLS,
      * and remote parameters may have been initialized to the initial value
      * of the previous session. Apply these new parameters. */

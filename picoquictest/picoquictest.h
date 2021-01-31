@@ -257,6 +257,7 @@ int multipath_sat_plus_test();
 int multipath_renew_test();
 int multipath_rotation_test();
 int multipath_nat_test();
+int multipath_qlog_test();
 int token_reuse_api_test();
 int grease_quic_bit_test();
 int grease_quic_bit_one_way_test();
