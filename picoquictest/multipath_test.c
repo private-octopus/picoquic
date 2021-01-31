@@ -789,7 +789,11 @@ int multipath_aead_test()
 
 #define MULTIPATH_TRACE_BIN  "0807060504030201.server.log"
 #define MULTIPATH_QLOG "multipath_qlog_test.qlog"
+#ifdef _WINDOWS
 #define MULTIPATH_QLOG_REF "picoquictest\\multipath_qlog_ref.txt"
+#else
+#define MULTIPATH_QLOG_REF "picoquictest/multipath_qlog_ref.txt"
+#endif
 
 static test_api_stream_desc_t test_scenario_multipath_qlog[] = {
     { 4, 0, 257, 10000 },
