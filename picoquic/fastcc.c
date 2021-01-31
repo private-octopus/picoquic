@@ -164,6 +164,7 @@ void picoquic_fastcc_notify(
     UNREFERENCED_PARAMETER(lost_packet_number);
 #endif
     picoquic_fastcc_state_t* fastcc_state = (picoquic_fastcc_state_t*)path_x->congestion_alg_state;
+    path_x->is_cc_data_updated = 1;
 
     if (fastcc_state != NULL) {
         if (fastcc_state->alg_state == picoquic_fastcc_freeze && 

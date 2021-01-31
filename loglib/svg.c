@@ -66,25 +66,28 @@ int svg_param_update(uint64_t time, bytestream* s, void* ptr)
     return 0;
 }
 
-int svg_packet_lost(uint64_t time, bytestream* s, void* ptr)
+int svg_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     (void)time;
+    (void)path_id;
     (void)s;
     (void)ptr;
     return 0;
 }
 
-int svg_packet_dropped(uint64_t time, bytestream* s, void* ptr)
+int svg_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     (void)time;
+    (void)path_id;
     (void)s;
     (void)ptr;
     return 0;
 }
 
-int svg_packet_buffered(uint64_t time, bytestream* s, void* ptr)
+int svg_packet_buffered(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     (void)time;
+    (void)path_id;
     (void)s;
     (void)ptr;
     return 0;
@@ -110,11 +113,13 @@ int svg_connection_end(uint64_t time, void* ptr)
 }
 
 
-int svg_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr)
+int svg_packet_start(uint64_t time, uint64_t path_id, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr)
 {
     const int event_height = 32;
     svg_context_t * svg = (svg_context_t*)ptr;
     FILE * f = svg->f_txtlog;
+
+    (void)path_id;
 
     time -= svg->start_time;
 
@@ -172,10 +177,11 @@ int svg_packet_end(void * ptr)
     return 0;
 }
 
-int svg_cc_update(uint64_t time, bytestream* s, void* ptr)
+int svg_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(time);
+    UNREFERENCED_PARAMETER(path_id);
     UNREFERENCED_PARAMETER(s);
     UNREFERENCED_PARAMETER(ptr);
 #endif
@@ -220,7 +226,7 @@ int svg_convert(const picoquic_connection_id_t * cid, FILE * f_binlog, FILE * f_
     ctx.packet_end = svg_packet_end;
     ctx.packet_lost = svg_packet_lost;
     ctx.packet_dropped = svg_packet_dropped;
-    ctx.packet_dropped = svg_packet_buffered;
+    ctx.packet_buffered = svg_packet_buffered;
     ctx.cc_update = svg_cc_update;
     ctx.info_message = svg_info_message;
     ctx.ptr = &svg;

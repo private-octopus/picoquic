@@ -668,7 +668,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     send_length += /* header_length */ h_length;
 
     /* if needed, log the segment before header protection is applied */
-    picoquic_log_outgoing_packet(cnx,
+    picoquic_log_outgoing_packet(cnx, path_x,
         bytes, sequence_number, pn_length, length,
         send_buffer, send_length, current_time);
 
@@ -887,6 +887,7 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
     if (!packet->is_ack_trap) {
         /* Account for bytes in transit, for congestion control */
         path_x->bytes_in_transit += length;
+        path_x->is_cc_data_updated = 1;
         /* Update the pacing data */
         picoquic_update_pacing_after_send(path_x, current_time);
     }
@@ -930,6 +931,7 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
         else {
             p->send_path->bytes_in_transit = 0;
         }
+        p->send_path->is_cc_data_updated = 1;
     }
 
     if (should_free || p->is_ack_trap) {
@@ -1497,7 +1499,7 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
                 /* If not pure ack, the packet will be placed in the "retransmitted" queue,
                  * in order to enable detection of spurious restransmissions */
 
-                picoquic_log_packet_lost(cnx, old_p->ptype, old_p->sequence_number,
+                picoquic_log_packet_lost(cnx, old_p->send_path, old_p->ptype, old_p->sequence_number,
                         (timer_based_retransmit == 0) ? "repeat" : "timer",
                         (old_p->send_path == NULL) ? NULL : &old_p->send_path->p_remote_cnxid->cnx_id,
                         old_p->length, current_time);

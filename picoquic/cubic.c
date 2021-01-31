@@ -220,6 +220,7 @@ static void picoquic_cubic_notify(
     UNREFERENCED_PARAMETER(lost_packet_number);
 #endif
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)path_x->congestion_alg_state;
+    path_x->is_cc_data_updated = 1;
 
     if (cubic_state != NULL) {
         switch (cubic_state->alg_state) {
@@ -448,7 +449,7 @@ static void picoquic_dcubic_notify(
     UNREFERENCED_PARAMETER(lost_packet_number);
 #endif
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)path_x->congestion_alg_state;
-
+    path_x->is_cc_data_updated = 1;
     if (cubic_state != NULL) {
         switch (cubic_state->alg_state) {
         case picoquic_cubic_alg_slow_start:

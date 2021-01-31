@@ -84,6 +84,9 @@ static int binlog_convert_event(bytestream * s, void * ptr)
     uint64_t time = 0;
     ret |= byteread_vint(s, &time);
 
+    uint64_t path_id = 0;
+    ret |= byteread_vint(s, &path_id);
+
     uint64_t id = 0;
     ret |= byteread_vint(s, &id);
 
@@ -129,7 +132,7 @@ static int binlog_convert_event(bytestream * s, void * ptr)
         ret |= byteread_packet_header(s, &ph);
 
         if (ret == 0) {
-            ret = ctx->callbacks->packet_start(time, packet_length, &ph, rxtx, cbptr);
+            ret = ctx->callbacks->packet_start(time, path_id, packet_length, &ph, rxtx, cbptr);
         }
 
         while (ret == 0 && bytestream_remain(s) > 0) {
@@ -156,17 +159,17 @@ static int binlog_convert_event(bytestream * s, void * ptr)
     }
     case picoquic_log_event_packet_dropped:
         if (ret == 0) {
-            ret = ctx->callbacks->packet_dropped(time, s, cbptr);
+            ret = ctx->callbacks->packet_dropped(time, path_id, s, cbptr);
         }
         break;
     case picoquic_log_event_packet_buffered:
         if (ret == 0) {
-            ret = ctx->callbacks->packet_buffered(time, s, cbptr);
+            ret = ctx->callbacks->packet_buffered(time, path_id, s, cbptr);
         }
         break;
     case picoquic_log_event_packet_lost:
         if (ret == 0) {
-            ret = ctx->callbacks->packet_lost(time, s, cbptr);
+            ret = ctx->callbacks->packet_lost(time, path_id, s, cbptr);
         }
         break;
     case picoquic_log_event_alpn_update:
@@ -181,7 +184,7 @@ static int binlog_convert_event(bytestream * s, void * ptr)
         break;
     case picoquic_log_event_cc_update:
         if (ret == 0) {
-            ret = ctx->callbacks->cc_update(time, s, cbptr);
+            ret = ctx->callbacks->cc_update(time, path_id, s, cbptr);
         }
         break;
     case picoquic_log_event_info_message:
@@ -290,7 +293,7 @@ FILE * open_outfile(const char * cid_name, const char * binlog_name, const char 
 }
 
 /* Open the bin file for reading */
-FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t * log_time)
+FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint16_t * flags, uint64_t * log_time)
 {
     int ret = 0;
     FILE * bin_log = picoquic_file_open(bin_cc_log_name, "rb");
@@ -304,7 +307,7 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t
         bytestream * ps = bytestream_buf_init(&stream, 16);
 
         uint32_t fcc = 0;
-        uint32_t version = 0;
+        uint16_t version = 0;
 
         if (fread(stream.buf, bytestream_size(ps), 1, bin_log) <= 0) {
             ret = -1;
@@ -314,11 +317,11 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t
             ret = -1;
             DBG_PRINTF("Header for file %s does not start with magic number.\n", bin_cc_log_name);
         }
-        else if (byteread_int32(ps, &version) != 0 || version != 0x01) {
+        else if (byteread_int16(ps, &version) != 0 || version != 0x01) {
             ret = -1;
             DBG_PRINTF("Header for file %s requires unsupported version.\n", bin_cc_log_name);
         }
-        else {
+        else if (byteread_int16(ps, flags) == 0){
             ret = byteread_int64(ps, log_time);
         }
     }

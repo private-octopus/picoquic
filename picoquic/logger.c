@@ -2132,7 +2132,7 @@ void textlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
     }
 }
 
-void textlog_packet(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
+void textlog_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
     picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
@@ -2141,7 +2141,7 @@ void textlog_packet(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
     }
 }
 
-void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
+void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_header* ph,
     size_t packet_size, int ret, uint8_t* raw_data, uint64_t current_time)
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
@@ -2149,7 +2149,7 @@ void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     }
 }
 
-void textlog_buffered_packet(picoquic_cnx_t* cnx,
+void textlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_packet_type_enum ptype, uint64_t current_time)
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
@@ -2161,7 +2161,7 @@ void textlog_buffered_packet(picoquic_cnx_t* cnx,
     }
 }
 
-void textlog_outgoing_packet(picoquic_cnx_t* cnx,
+void textlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time)
 {
@@ -2171,7 +2171,7 @@ void textlog_outgoing_packet(picoquic_cnx_t* cnx,
     }
 }
 
-void textlog_packet_lost(picoquic_cnx_t* cnx,
+void textlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time)

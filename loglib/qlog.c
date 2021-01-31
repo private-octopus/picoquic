@@ -51,6 +51,7 @@ typedef struct qlog_context_st {
     uint64_t bytes_in_transit;
     uint64_t pacing_packet_time;
 
+    unsigned int trace_flow_id : 1;
     unsigned int key_phase_sent_last : 1;
     unsigned int key_phase_sent : 1;
     unsigned int key_phase_received_last : 1;
@@ -137,6 +138,15 @@ static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
         }
         fprintf(f, "\", \"port_v6\" :%d", ntohs(s6->sin6_port));
     }
+}
+
+void qlog_event_header(FILE * f, qlog_context_t* ctx, int64_t delta_time, uint64_t path_id, char const * event_class, char const * event_name)
+{
+    fprintf(f, "[%"PRId64", ", delta_time);
+    if (ctx->trace_flow_id) {
+        fprintf(f, "%"PRId64", ", path_id);
+    }
+    fprintf(f, "\"%s\", \"%s\", {", event_class, event_name);
 }
 
 void qlog_vint_transport_extension(FILE* f, char const* ext_name, bytestream* s, uint64_t len)
@@ -342,8 +352,8 @@ int qlog_alpn_update(uint64_t time, bytestream* s, void* ptr)
     }
 
     ret |= byteread_vint(s, &sni_length);
-    fprintf(f, "[%"PRId64", \"transport\", \"parameters_set\", {\n    \"owner\": \"%s\"",
-        delta_time, (owner) ? "local" : "remote");
+    qlog_event_header(f, ctx, delta_time, 0, "transport", "parameters_set");
+    fprintf(f, "\n    \"owner\": \"%s\"", (owner) ? "local" : "remote");
     if (sni_length > 0) {
         fprintf(f, ",\n    \"sni\": ");
         ret |= qlog_chars(f, s, sni_length);
@@ -397,8 +407,9 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
         fprintf(f, "\n");
     }
 
-    fprintf(f, "[%"PRId64", \"transport\", \"parameters_set\", {\n    \"owner\": \"%s\"",
-        delta_time, (owner)?"local":"remote");
+    qlog_event_header(f, ctx, delta_time, 0, "transport", "parameters_set");
+
+    fprintf(f, "\n    \"owner\": \"%s\"", (owner)?"local":"remote");
 
     ret |= byteread_vint(s, &tp_length);
 
@@ -413,7 +424,7 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
     return 0;
 }
 
-int qlog_packet_lost(uint64_t time, bytestream* s, void* ptr)
+int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     qlog_context_t* ctx = (qlog_context_t*)ptr;
     int64_t delta_time = time - ctx->start_time;
@@ -436,8 +447,8 @@ int qlog_packet_lost(uint64_t time, bytestream* s, void* ptr)
         fprintf(f, "\n");
     }
 
-    fprintf(f, "[%"PRId64", \"recovery\", \"packet_lost\", {\n", delta_time);
-    fprintf(f, "    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
+    qlog_event_header(f, ctx, delta_time, path_id, "recovery", "packet_lost");
+    fprintf(f, "\n    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
     fprintf(f, ",\n    \"packet_number\" : %" PRIu64, sequence);
     if (trigger_length > 0) {
         fprintf(f, ",\n    \"trigger\": ");
@@ -462,7 +473,7 @@ int qlog_packet_lost(uint64_t time, bytestream* s, void* ptr)
     return 0;
 }
 
-int qlog_packet_dropped(uint64_t time, bytestream* s, void* ptr)
+int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     qlog_context_t* ctx = (qlog_context_t*)ptr;
     int64_t delta_time = time - ctx->start_time;
@@ -486,8 +497,8 @@ int qlog_packet_dropped(uint64_t time, bytestream* s, void* ptr)
         fprintf(f, "\n");
     }
 
-    fprintf(f, "[%"PRId64", \"transport\", \"packet_dropped\", {\n", delta_time);
-    fprintf(f, "    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
+    qlog_event_header(f, ctx, delta_time, path_id, "transport", "packet_dropped");
+    fprintf(f, "\n    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
     fprintf(f, ",\n    \"packet_size\" : %" PRIu64, packet_size);
     switch (err_code) {
     case PICOQUIC_ERROR_DUPLICATE:
@@ -531,7 +542,7 @@ int qlog_packet_dropped(uint64_t time, bytestream* s, void* ptr)
     return 0;
 }
 
-int qlog_packet_buffered(uint64_t time, bytestream* s, void* ptr)
+int qlog_packet_buffered(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     qlog_context_t* ctx = (qlog_context_t*)ptr;
     int64_t delta_time = time - ctx->start_time;
@@ -550,8 +561,10 @@ int qlog_packet_buffered(uint64_t time, bytestream* s, void* ptr)
         fprintf(f, "\n");
     }
 
-    fprintf(f, "[%"PRId64", \"transport\", \"packet_buffered\", {\n", delta_time);
-    fprintf(f, "    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
+    qlog_event_header(f, ctx, delta_time, path_id, "transport", "packet_buffered");
+
+
+    fprintf(f, "\n    \"type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
     fprintf(f, ",\n    \"trigger\": ");
     qlog_chars(f, s, trigger_length);
     fprintf(f, "}]");
@@ -582,8 +595,9 @@ int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
         fprintf(f, "\n");
     }
 
-    fprintf(f, "[%"PRId64", \"transport\", \"%s\", { \"byte_length\": %" PRIu64,
-        delta_time, (rxtx == 0) ? "datagram_sent" : "datagram_received", byte_length);
+    qlog_event_header(f, ctx, delta_time, 0, "transport", (rxtx == 0) ? "datagram_sent" : "datagram_received");
+
+    fprintf(f, " \"byte_length\": %" PRIu64, byte_length);
 
     if (addr_peer.ss_family != 0 &&
         picoquic_compare_addr((struct sockaddr*)&addr_peer, (struct sockaddr*) & ctx->addr_peer) != 0) {
@@ -606,7 +620,7 @@ int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
     return 0;
 }
 
-int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr)
+int qlog_packet_start(uint64_t time, uint64_t path_id, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr)
 {
     qlog_context_t * ctx = (qlog_context_t*)ptr;
     FILE * f = ctx->f_txtlog;
@@ -620,15 +634,15 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
 
     if (ph->ptype == picoquic_packet_1rtt_protected && rxtx == 0) {
         if (ctx->spin_bit_sent && (ctx->spin_bit_sent_last != ph->spin)) {
-            fprintf(f, "[%"PRId64", \"transport\", \"spin_bit_updated\", { \"state\": %s }],\n",
-                delta_time, (ph->spin) ? "true" : "false");
+            qlog_event_header(f, ctx, delta_time, path_id, "transport", "spin_bit_updated");
+            fprintf(f, " \"state\": %s }],\n", (ph->spin) ? "true" : "false");
         }
         ctx->spin_bit_sent = 1;
         ctx->spin_bit_sent_last = ph->spin;
     }
 
-    fprintf(f, "[%"PRId64", \"transport\", \"%s\", { \"packet_type\": \"%s\", \"header\": { \"packet_size\": %"PRIu64 ,
-        delta_time, (rxtx == 0)?"packet_sent":"packet_received", ptype2str(ph->ptype), size);
+    qlog_event_header(f, ctx, delta_time, path_id, "transport", (rxtx == 0) ? "packet_sent" : "packet_received");
+    fprintf(f, " \"packet_type\": \"%s\", \"header\": { \"packet_size\": %"PRIu64 , ptype2str(ph->ptype), size);
 
     if (ph->ptype != picoquic_packet_version_negotiation &&
         ph->ptype != picoquic_packet_retry) {
@@ -1177,7 +1191,7 @@ int qlog_packet_end(void * ptr)
 *                          "min_rtt":46151,"latest_rtt":46151}],
 */
 
-int qlog_cc_update(uint64_t time, bytestream* s, void* ptr)
+int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     int ret = 0;
     uint64_t sequence = 0;
@@ -1248,7 +1262,8 @@ int qlog_cc_update(uint64_t time, bytestream* s, void* ptr)
             fprintf(f, "\n");
         }
 
-        fprintf(f, "[%"PRId64", \"recovery\", \"metrics_updated\", {", delta_time);
+        qlog_event_header(f, ctx, delta_time, path_id, "recovery", "metrics_updated");
+
         if (cwin != ctx->cwin) {
             fprintf(f, "%s\"cwnd\": %" PRIu64, comma, cwin);
             ctx->cwin = cwin;
@@ -1309,7 +1324,9 @@ int qlog_info_message(uint64_t time, bytestream* s, void* ptr)
         fprintf(f, "\n");
     }
 
-    fprintf(f, "[%"PRId64", \"info\", \"message\", { \"message\": \"", delta_time);
+    qlog_event_header(f, ctx, delta_time, 0, "info", "message");
+
+    fprintf(f, " \"message\": \"");
     message_length = bytestream_remain(s);
     if (message_length > sizeof(message)) {
         message_length = sizeof(message);
@@ -1362,7 +1379,11 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
         client_mode?"client":"server");
 
     fprintf(f, "\"title\": \"picoquic\", \"description\": \"%s\",", ctx->cid_name);
-    fprintf(f, "\"event_fields\": [\"relative_time\", \"CATEGORY\", \"EVENT_TYPE\", \"DATA\"],\n");
+    if (ctx->trace_flow_id) {
+        fprintf(f, "\"event_fields\": [\"relative_time\", \"path_id\", \"category\", \"event\", \"data\"],\n");
+    } else {
+        fprintf(f, "\"event_fields\": [\"relative_time\", \"category\", \"event\", \"data\"],\n");
+    }
     fprintf(f, "\"configuration\": {\"time_units\": \"us\"},\n");
     fprintf(f, "\"common_fields\": { \"protocol_type\": \"QUIC_HTTP3\", \"reference_time\": \"%"PRIu64"\"},\n", ctx->start_time);
     fprintf(f, "\"events\": [");
@@ -1380,7 +1401,7 @@ int qlog_connection_end(uint64_t time, void * ptr)
     return 0;
 }
 
-int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char* binlog_name, const char* txt_name, const char* out_dir)
+int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char* binlog_name, const char* txt_name, const char* out_dir, uint16_t flags)
 {
     int ret = 0;
     FILE* f_txtlog = NULL;
@@ -1411,6 +1432,7 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char
         qlog.start_time = 0;
         qlog.packet_count = 0;
         qlog.state = 0;
+        qlog.trace_flow_id = (flags & 1) ? 1 : 0;
 
         binlog_convert_cb_t ctx;
         ctx.connection_start = qlog_connection_start;

@@ -7357,12 +7357,13 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog, uint8_t recv_ecn)
     /* Create a QLOG file from the .bin log file */
     if (ret == 0 && !auto_qlog) {
         uint64_t log_time = 0;
-        FILE* f_binlog = picoquic_open_cc_log_file_for_read(QLOG_TRACE_BIN, &log_time);
+        uint16_t flags;
+        FILE* f_binlog = picoquic_open_cc_log_file_for_read(QLOG_TRACE_BIN, &flags, &log_time);
         if (f_binlog == NULL) {
             ret = -1;
         }
         else {
-            ret = qlog_convert(&initial_cid, f_binlog, QLOG_TRACE_BIN, qlog_target, NULL);
+            ret = qlog_convert(&initial_cid, f_binlog, QLOG_TRACE_BIN, qlog_target, NULL, flags);
             picoquic_file_close(f_binlog);
         }
     }
@@ -9288,7 +9289,7 @@ int app_limit_cc_test_one(
                     int nb_comma = 0;
                     int c_index = 0;
 
-                    while (nb_comma < 5 && c_index < 512 && buffer[c_index] != 0) {
+                    while (nb_comma < 6 && c_index < 512 && buffer[c_index] != 0) {
                         if (buffer[c_index] == ',') {
                             nb_comma++;
                         }
