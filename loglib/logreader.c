@@ -317,11 +317,15 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint16_t
             ret = -1;
             DBG_PRINTF("Header for file %s does not start with magic number.\n", bin_cc_log_name);
         }
+        else if (byteread_int16(ps, flags) != 0) {
+            ret = -1;
+            DBG_PRINTF("Header for file %s does include flags.\n", bin_cc_log_name);
+        }
         else if (byteread_int16(ps, &version) != 0 || version != 0x01) {
             ret = -1;
             DBG_PRINTF("Header for file %s requires unsupported version.\n", bin_cc_log_name);
         }
-        else if (byteread_int16(ps, flags) == 0){
+        else {
             ret = byteread_int64(ps, log_time);
         }
     }
