@@ -1021,8 +1021,8 @@ FILE* create_binlog(char const* binlog_file, uint64_t creation_time, unsigned in
         bytestream_buf stream;
         bytestream* ps = bytestream_buf_init(&stream, 16);
         bytewrite_int32(ps, FOURCC('q', 'l', 'o', 'g'));
-        bytewrite_int16(ps, 0x01); /* version */
         bytewrite_int16(ps, (is_multipath_supported) ? 0x01 : 0); /* flags */
+        bytewrite_int16(ps, 0x01); /* version */
         bytewrite_int64(ps, creation_time);
 
         if (fwrite(bytestream_data(ps), bytestream_length(ps), 1, f_binlog) <= 0) {
