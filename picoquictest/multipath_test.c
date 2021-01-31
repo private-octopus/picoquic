@@ -952,7 +952,7 @@ int multipath_qlog_test()
 {
     int ret = 0;
 
-    (void)picoquic_file_delete(MULTIPATH_QLOG_REF, NULL);
+    (void)picoquic_file_delete(MULTIPATH_QLOG, NULL);
 
     ret = multipath_trace_test_one();
 
