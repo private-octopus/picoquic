@@ -445,7 +445,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link */
         if (ret == 0) {
-            uint64_t timeout = (test_id == multipath_test_renew)? /*max_completion_microsec/4*/320000:640000;
+            uint64_t timeout = (test_id == multipath_test_renew)? 320000:640000;
 
             ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
 

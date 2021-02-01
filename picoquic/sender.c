@@ -3844,7 +3844,6 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     uint64_t pacing_time_next = UINT64_MAX;
     uint64_t challenge_time_next = UINT64_MAX;
     uint64_t highest_retransmit = UINT64_MAX;
-    uint64_t last_receive = UINT64_MAX;
     uint64_t last_sent_pacing = UINT64_MAX;
     uint64_t last_sent_cwin = UINT64_MAX;
 
@@ -3898,26 +3897,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                         is_new_priority = 1;
                     }
                     else if (cnx->path[i]->nb_retransmit == highest_retransmit) {
-                        if (highest_retransmit == 0 &&
-                            (cnx->path[i]->last_packet_received_at + 
-                            cnx->path[i]->retransmit_timer) > current_time) {
-                            is_polled = 1;
-                        }
-#if 0
-                        else if (cnx->path[i]->last_packet_received_at > last_receive) {
-                            is_polled = 1;
-                            is_new_priority = 1;
-                        }
-                        else if (cnx->path[i]->last_packet_received_at == last_receive) {
-                            is_polled = 1;
-                        }
-#endif
-#if 1
-                        else {
-                            is_polled = 1;
-                        }
-#endif
-
+                        is_polled = 1;
                     }
                 }
 
@@ -3927,7 +3907,6 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                     data_path_cwin = -1;
                     data_path_pacing = -1;
                     pacing_time_next = UINT64_MAX;
-                    last_receive = cnx->path[i]->last_packet_received_at;
                     last_sent_pacing = UINT64_MAX;
                     last_sent_cwin = UINT64_MAX;
                 }
