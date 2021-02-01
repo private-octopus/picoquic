@@ -822,9 +822,12 @@ typedef struct st_picoquic_path_t {
     uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t challenge_time;
     uint64_t demotion_time;
+    uint64_t challenge_time_first;
     uint8_t challenge_repeat_count;
     /* Last 1-RTT "non path validating" packet received on this path */
     uint64_t last_non_validating_pn;
+    /* Last time a packet was sent on this path. */
+    uint64_t last_sent_time;
 
     /* flags */
     unsigned int mtu_probe_sent : 1;
@@ -856,8 +859,9 @@ typedef struct st_picoquic_path_t {
     uint64_t last_1rtt_acknowledged_at;
     uint64_t last_packet_received_at;
     uint64_t last_loss_event_detected;
-    uint64_t nb_retransmit;
-    uint64_t retrans_count;
+    uint64_t nb_retransmit; /* Number of timeout retransmissions since last ACK */
+    uint64_t retrans_count; /* Number of packet losses for the path */
+    uint64_t nb_spurious; /* Number of spurious retransmissiosn for the path */
     /* Time measurement */
     uint64_t max_ack_delay;
     uint64_t rtt_sample;

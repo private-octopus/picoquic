@@ -445,7 +445,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link */
         if (ret == 0) {
-            uint64_t timeout = max_completion_microsec / 4;
+            uint64_t timeout = (test_id == multipath_test_renew)? /*max_completion_microsec/4*/320000:640000;
 
             ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
 
@@ -492,6 +492,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             DBG_PRINTF("Remote CID on server path 1 is still %" PRIu64 "\n", original_r_cid_sequence);
             ret = -1;
         }
+        else if (test_ctx->cnx_server->path[1]->p_local_cnxid->sequence == original_r_cid_sequence) {
+            DBG_PRINTF("Local CID on server path 1 is still %" PRIu64 "\n", original_r_cid_sequence);
+            ret = -1;
+        }
     }
 
     if (ret == 0 && test_id == multipath_test_rotation) {
@@ -515,7 +519,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
 int multipath_basic_test()
 {
-    uint64_t max_completion_microsec = 1500000;
+    uint64_t max_completion_microsec = 1350000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_basic);
 }
@@ -526,7 +530,7 @@ int multipath_basic_test()
 
 int multipath_drop_first_test()
 {
-    uint64_t max_completion_microsec = 2560000;
+    uint64_t max_completion_microsec = 2250000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_first);
 }
@@ -537,7 +541,7 @@ int multipath_drop_first_test()
 
 int multipath_drop_second_test()
 {
-    uint64_t max_completion_microsec = 2560000;
+    uint64_t max_completion_microsec = 2250000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second);
 }
@@ -574,7 +578,7 @@ int multipath_rotation_test()
  */
 int multipath_nat_test()
 {
-    uint64_t max_completion_microsec = 3000000;
+    uint64_t max_completion_microsec = 1600000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_nat);
 }

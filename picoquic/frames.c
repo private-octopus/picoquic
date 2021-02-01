@@ -1699,6 +1699,7 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx, p
             picoquic_path_t * old_path = p->send_path;
 
             if (old_path != NULL) {
+                old_path->nb_spurious++;
                 if (pc == picoquic_packet_context_application &&
                     (p->sequence_number > old_path->last_1rtt_acknowledged ||
                         old_path->last_1rtt_acknowledged == UINT64_MAX)) {
@@ -3468,7 +3469,8 @@ uint8_t * picoquic_format_path_response_frame(uint8_t* bytes, uint8_t* bytes_max
 }
 
 
-const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max)
+const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t current_time)
 {
     uint64_t response;
 
@@ -3490,7 +3492,14 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
             }
 
             if (found_challenge) {
+                /* TODO: update the RTT if using initial value */
                 cnx->path[i]->challenge_verified = 1;
+
+                if (cnx->path[i]->smoothed_rtt == PICOQUIC_INITIAL_RTT
+                    && cnx->path[i]->rtt_variant == 0) {
+                    /* We received a first packet from the peer! */
+                    picoquic_update_path_rtt(cnx, cnx->path[i], cnx->path[i], cnx->path[i]->challenge_time_first, current_time, 0, 0);
+                }
                 break;
             }
         }
@@ -4100,7 +4109,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 break;
             case picoquic_frame_type_path_response:
                 is_path_validating_frame = 1;
-                bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max);
+                bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max, current_time);
                 break;
             case picoquic_frame_type_crypto_hs:
                 bytes = picoquic_decode_crypto_hs_frame(cnx, bytes, bytes_max, epoch);

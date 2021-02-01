@@ -1048,12 +1048,15 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 
     bytestream_buf stream_msg;
     bytestream* ps_msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
-    picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
     int path_max = cnx->is_multipath_enabled ? cnx->nb_paths : 1;
 
     for (int path_id = 0; path_id < path_max; path_id++)
     {
         picoquic_path_t* path = cnx->path[path_id];
+        picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+        if (cnx->is_multipath_enabled && cnx->path[path_id]->p_remote_cnxid != NULL) {
+            pkt_ctx = &cnx->path[path_id]->p_remote_cnxid->pkt_ctx;
+        }
 
         if (!path->is_cc_data_updated) {
             continue;
@@ -1068,7 +1071,7 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         binlog_compose_event_header(ps_msg, &cnx->initial_cnxid, current_time, 
             binlog_get_path_id(cnx, path), picoquic_log_event_cc_update);
 
-        bytewrite_vint(ps_msg, cnx->pkt_ctx[picoquic_packet_context_application].send_sequence);
+        bytewrite_vint(ps_msg, pkt_ctx->send_sequence);
 
         if (pkt_ctx->highest_acknowledged != (uint64_t)(int64_t)-1) {
             bytewrite_vint(ps_msg, 1);
@@ -1089,8 +1092,14 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         bytewrite_vint(ps_msg, path->receive_rate_estimate);
         bytewrite_vint(ps_msg, path->send_mtu);
         bytewrite_vint(ps_msg, path->pacing_packet_time_microsec);
-        bytewrite_vint(ps_msg, cnx->nb_retransmission_total);
-        bytewrite_vint(ps_msg, cnx->nb_spurious);
+        if (cnx->is_multipath_enabled) {
+            bytewrite_vint(ps_msg, path->retrans_count);
+            bytewrite_vint(ps_msg, path->nb_spurious);
+        }
+        else {
+            bytewrite_vint(ps_msg, cnx->nb_retransmission_total);
+            bytewrite_vint(ps_msg, cnx->nb_spurious);
+        }
         bytewrite_vint(ps_msg, cnx->cwin_blocked);
         bytewrite_vint(ps_msg, cnx->flow_blocked);
         bytewrite_vint(ps_msg, cnx->stream_blocked);

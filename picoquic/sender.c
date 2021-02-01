@@ -1105,6 +1105,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
         if (length > 0) {
             packet->checksum_overhead = checksum_overhead;
             picoquic_queue_for_retransmit(cnx, path_x, packet, length, current_time);
+            path_x->last_sent_time = current_time;
         } else {
             *send_length = 0;
         }
@@ -3844,6 +3845,8 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     uint64_t challenge_time_next = UINT64_MAX;
     uint64_t highest_retransmit = UINT64_MAX;
     uint64_t last_receive = UINT64_MAX;
+    uint64_t last_sent_pacing = UINT64_MAX;
+    uint64_t last_sent_cwin = UINT64_MAX;
 
     cnx->last_path_polled++;
     if (cnx->last_path_polled > cnx->nb_paths) {
@@ -3899,13 +3902,22 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                             (cnx->path[i]->last_packet_received_at + 
                             cnx->path[i]->retransmit_timer) > current_time) {
                             is_polled = 1;
-                        } else if (cnx->path[i]->last_packet_received_at > last_receive) {
+                        }
+#if 0
+                        else if (cnx->path[i]->last_packet_received_at > last_receive) {
                             is_polled = 1;
                             is_new_priority = 1;
                         }
                         else if (cnx->path[i]->last_packet_received_at == last_receive) {
                             is_polled = 1;
                         }
+#endif
+#if 1
+                        else {
+                            is_polled = 1;
+                        }
+#endif
+
                     }
                 }
 
@@ -3916,14 +3928,21 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                     data_path_pacing = -1;
                     pacing_time_next = UINT64_MAX;
                     last_receive = cnx->path[i]->last_packet_received_at;
+                    last_sent_pacing = UINT64_MAX;
+                    last_sent_cwin = UINT64_MAX;
                 }
                 if (is_polled){
                     cnx->path[i]->polled++;
                     if (picoquic_is_sending_authorized_by_pacing(cnx, cnx->path[i], current_time, &pacing_time_next)) {
-                        data_path_pacing = i;
-
+                        if (cnx->path[i]->last_sent_time < last_sent_pacing) {
+                            last_sent_pacing = cnx->path[i]->last_sent_time;
+                            data_path_pacing = i;
+                        }
                         if (cnx->path[i]->bytes_in_transit < cnx->path[i]->cwin) {
-                            data_path_cwin = i;
+                            if (cnx->path[i]->last_sent_time < last_sent_cwin) {
+                                last_sent_cwin = cnx->path[i]->last_sent_time;
+                                data_path_cwin = i;
+                            }
                         }
                         else {
                             cnx->path[i]->congested++;
