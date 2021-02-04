@@ -251,6 +251,8 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_sat_plus", multipath_sat_plus_test },
     { "multipath_renew", multipath_renew_test },
     { "multipath_rotation", multipath_rotation_test },
+    { "multipath_break1", multipath_break1_test },
+    { "multipath_back1", multipath_back1_test },
     { "multipath_nat", multipath_nat_test },
     { "multipath_qlog", multipath_qlog_test },
     { "grease_quic_bit", grease_quic_bit_test },
