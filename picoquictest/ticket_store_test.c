@@ -313,7 +313,7 @@ int token_store_test()
             size_t delta_factor = (i * nb_test_ip_addr) + j;
             uint64_t delta_time = ((uint64_t)1000) * delta_factor;
             test_ticket_time += delta_time;
-            ret = create_test_ticket(test_ticket_time, ttl, token, token_length);
+            ret = create_test_token(test_ticket_time, ttl, token, token_length);
 
             if (ret != 0) {
                 break;
