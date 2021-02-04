@@ -130,7 +130,7 @@ int ticket_store_test()
             uint64_t test_ticket_time = ticket_time / 1000;
             size_t delta_factor = (i * nb_test_alpn) + j;
             uint64_t delta_time = ((uint64_t)1000) * delta_factor;
-            test_ticket_time += delta_factor;
+            test_ticket_time += delta_time;
             ret = create_test_ticket(test_ticket_time, ttl, ticket, ticket_length);
 
             if (ret != 0) {
@@ -312,7 +312,7 @@ int token_store_test()
             uint64_t test_ticket_time = token_time / 1000;
             size_t delta_factor = (i * nb_test_ip_addr) + j;
             uint64_t delta_time = ((uint64_t)1000) * delta_factor;
-            test_ticket_time += delta_factor;
+            test_ticket_time += delta_time;
             ret = create_test_ticket(test_ticket_time, ttl, token, token_length);
 
             if (ret != 0) {
