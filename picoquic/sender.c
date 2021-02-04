@@ -1314,7 +1314,11 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     }
     else if (old_p->is_ack_trap) {
         *packet_is_pure_ack = 1;
-        *do_not_detect_spurious = 0;
+        *do_not_detect_spurious = 1;
+    }
+    else if (old_p->is_multipath_probe) {
+        *packet_is_pure_ack = 0;
+        *do_not_detect_spurious = 1;
     }
     else {
         /* Copy the relevant bytes from one packet to the next */
@@ -1530,11 +1534,19 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
                         /* First, keep track of retransmissions per path, in order to
                          * manage scheduling in multipath setup */
                         if (old_p->send_path != NULL && pc == picoquic_packet_context_application &&
-                            old_p->sequence_number > old_p->send_path->last_1rtt_acknowledged &&
+                            old_p->sequence_number > old_p->send_path->last_1rtt_acknowledged&&
                             old_p->send_time > old_p->send_path->last_loss_event_detected) {
                             old_p->send_path->nb_retransmit++;
                             old_p->send_path->last_loss_event_detected = current_time;
+                            if (old_p->send_path->nb_retransmit > 7) {
+                                /* Max retransmission reached for this path */
+                                DBG_PRINTF("%s\n", "Too many data retransmits, abandon path");
+                                picoquic_log_app_message(cnx, "%s", "Too many data retransmits, abandon path");
+                                old_p->send_path->challenge_failed = 1;
+                                cnx->path_demotion_needed = 1;
+                            }
                         }
+
                         /* Then, manage the total number of retransmissions across all paths. */
                         if (pkt_ctx->nb_retransmit > 7 && cnx->cnx_state >= picoquic_state_ready) {
                             /* TODO: only disconnect if there is no other available path */
@@ -1680,16 +1692,17 @@ int picoquic_is_pkt_ctx_backlog_empty(picoquic_packet_context_t* pkt_ctx)
 
         byte_index = p->offset;
 
+        if (!p->is_ack_trap && !p->is_multipath_probe && !p->is_mtu_probe) {
+            while (ret == 0 && byte_index < p->length) {
+                ret = picoquic_skip_frame(&p->bytes[byte_index],
+                    p->length - p->offset, &frame_length, &frame_is_pure_ack);
 
-        while (ret == 0 && byte_index < p->length) {
-            ret = picoquic_skip_frame(&p->bytes[byte_index],
-                p->length - p->offset, &frame_length, &frame_is_pure_ack);
-
-            if (!frame_is_pure_ack) {
-                backlog_empty = 0;
-                break;
+                if (!frame_is_pure_ack) {
+                    backlog_empty = 0;
+                    break;
+                }
+                byte_index += frame_length;
             }
-            byte_index += frame_length;
         }
 
         p = p->previous_packet;
@@ -3330,7 +3343,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
     /* If the number of packets sent is larger that the max length of
      * a crypto epoch, prepare a key rotation */
-    /* TODO: revise for multipath! */
     if ((cnx->nb_packets_sent - cnx->crypto_epoch_sequence >
         cnx->crypto_epoch_length_max) &&
         current_time > cnx->crypto_rotation_time_guard) {
@@ -3419,6 +3431,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, abandon path");
                         picoquic_log_app_message(cnx, "%s", "Too many challenge retransmits, abandon path");
                         path_x->challenge_failed = 1;
+                        cnx->path_demotion_needed = 1;
                     }
                 }
             }
@@ -3442,7 +3455,15 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         /* Compute the length before pacing block */
         length = bytes_next - bytes;
 
-        if (cnx->cnx_state != picoquic_state_disconnected && path_x->challenge_verified != 0) {
+        if (path_x->is_multipath_probe_needed) {
+            packet->is_multipath_probe = 1;
+            path_x->is_multipath_probe_needed = 0;
+            is_pure_ack = 0;
+            *bytes_next = picoquic_frame_type_ping;
+            length++;
+            length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+            bytes_next = bytes + length;
+        } else if (cnx->cnx_state != picoquic_state_disconnected && path_x->challenge_verified != 0) {
             /* There are no frames yet that would be exempt from pacing control, but if there
              * was they should be sent here. */
 
@@ -3878,6 +3899,12 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                 else if (next_challenge_time < challenge_time_next) {
                     challenge_time_next = next_challenge_time;
                 }
+            }
+            else if (cnx->path[i]->challenge_verified && cnx->path[i]->nb_retransmit > 0 && 
+                cnx->cnx_state == picoquic_state_ready && cnx->path[i]->bytes_in_transit == 0) {
+                cnx->path[i]->is_multipath_probe_needed = 1;
+                challenge_path = i;
+                break;
             }
             if (cnx->path[i]->challenge_verified) {
                 int is_polled = 0;

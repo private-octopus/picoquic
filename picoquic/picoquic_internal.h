@@ -353,6 +353,7 @@ typedef struct st_picoquic_packet_t {
     unsigned int is_pure_ack : 1;
     unsigned int contains_crypto : 1;
     unsigned int is_mtu_probe : 1;
+    unsigned int is_multipath_probe : 1;
     unsigned int is_ack_trap : 1;
     unsigned int delivered_app_limited : 1;
 
@@ -845,6 +846,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_nat_challenge : 1;
     unsigned int got_long_packet : 1;
     unsigned int is_cc_data_updated : 1;
+    unsigned int is_multipath_probe_needed : 1;
 
     /* Path priority, for multipath management */
     int path_priority;

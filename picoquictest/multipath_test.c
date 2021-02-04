@@ -69,6 +69,23 @@ static void multipath_test_kill_links(picoquic_test_tls_api_ctx_t* test_ctx, int
     }
 }
 
+static void multipath_test_unkill_links(picoquic_test_tls_api_ctx_t* test_ctx, int link_id, uint64_t current_time)
+{
+    /* Make sure that nothing gets sent on the old links */
+    if (link_id == 0) {
+        test_ctx->c_to_s_link->next_send_time = current_time;
+        test_ctx->c_to_s_link->is_switched_off = 0;
+        test_ctx->s_to_c_link->next_send_time = current_time;
+        test_ctx->s_to_c_link->is_switched_off = 1;
+    }
+    else {
+        test_ctx->c_to_s_link_2->next_send_time = current_time;
+        test_ctx->c_to_s_link_2->is_switched_off = 0;
+        test_ctx->s_to_c_link_2->next_send_time = current_time;
+        test_ctx->s_to_c_link_2->is_switched_off = 0;
+    }
+}
+
 /* Add the additional links for multipath scenario */
 static void multipath_test_sat_links(picoquic_test_tls_api_ctx_t* test_ctx, int link_id)
 {
@@ -348,7 +365,9 @@ typedef enum {
     multipath_test_sat_plus,
     multipath_test_renew,
     multipath_test_rotation,
-    multipath_test_nat
+    multipath_test_nat,
+    multipath_test_break1,
+    multipath_test_back1
 } multipath_test_enum_t;
 
 int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id)
@@ -370,8 +389,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
     else {
         int is_sat_test = (test_id == multipath_test_sat_plus);
-        if (is_sat_test) {
-            /* Simulate an asymmetric "satellite and landline" scenario */
+        if (is_sat_test || test_id == multipath_test_break1 || test_id == multipath_test_back1) {
+            /* Reduce the throughput of path #0 to 1 mbps.
+             * This is used to simulate an asymmetric "satellite and landline" scenario,
+             * or to simulate a long transfer and test broken path detection or repair */
             multipath_test_sat_links(test_ctx, 0);
         }
         test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
@@ -436,12 +457,12 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
     /* Check that the two paths are established */
     if (ret == 0) {
-        /* TODO */
         ret = wait_multipath_ready(test_ctx, &simulated_time);
     }
 
     if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
-        test_id == multipath_test_renew || test_id == multipath_test_nat)) {
+        test_id == multipath_test_renew || test_id == multipath_test_nat ||
+        test_id == multipath_test_break1 || test_id == multipath_test_back1)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link */
         if (ret == 0) {
@@ -467,6 +488,20 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             else {
                 multipath_test_kill_links(test_ctx, (test_id == multipath_test_drop_first) ? 0 : 1);
             }
+        }
+    }
+    /* For the "backup scenario", wait a small interval, then bring the path # 1 back up */
+    if (ret == 0 && test_id == multipath_test_back1) {
+        uint64_t timeout = 1000000;
+
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Wait for %" PRIu64 "us returns %d\n", timeout, ret);
+        }
+        else {
+            multipath_test_unkill_links(test_ctx, 1, simulated_time);
         }
     }
     /* Perform a final data sending loop, this time to completion  */
@@ -501,6 +536,27 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     if (ret == 0 && test_id == multipath_test_rotation) {
         if (test_ctx->cnx_server->nb_crypto_key_rotations == 0) {
             DBG_PRINTF("%s", "No key rotation observed.\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && test_id == multipath_test_break1) {
+        if (test_ctx->cnx_server->nb_paths != 1) {
+            DBG_PRINTF("After break, %d paths on server connection.\n", test_ctx->cnx_server->nb_paths);
+            ret = -1;
+        } else if (test_ctx->cnx_client->nb_paths != 1) {
+            DBG_PRINTF("After break, %d paths on server connection.\n", test_ctx->cnx_client->nb_paths);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && test_id == multipath_test_back1) {
+        if (test_ctx->cnx_server->nb_paths != 2) {
+            DBG_PRINTF("After break and back, %d paths on server connection.\n", test_ctx->cnx_server->nb_paths);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->nb_paths != 2) {
+            DBG_PRINTF("After break and back, %d paths on server connection.\n", test_ctx->cnx_client->nb_paths);
             ret = -1;
         }
     }
@@ -574,14 +630,33 @@ int multipath_rotation_test()
     return  multipath_test_one(max_completion_microsec, multipath_test_rotation);
 }
 
-/* Test NAT rebinding in a multipath setup
- */
+/* Test nat traversal in a multipath setup */
 int multipath_nat_test()
 {
-    uint64_t max_completion_microsec = 1600000;
+    uint64_t max_completion_microsec = 3000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_nat);
 }
+
+/* Test that breaking paths are removed after some time
+ */
+int multipath_break1_test()
+{
+    uint64_t max_completion_microsec = 18500000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_break1);
+}
+
+/* Test that breaking paths can come back up after some time
+ */
+int multipath_back1_test()
+{
+    uint64_t max_completion_microsec = 3700000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_back1);
+}
+
+
 /* Monopath tests:
  * Enable the multipath option, but use only a single path. The gal of the tests is to verify that
  * these "monopath" scenarios perform just as well as if multipath was not enabled.
