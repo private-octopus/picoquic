@@ -612,7 +612,13 @@ const uint8_t* picoquic_frames_fixed_skip(const uint8_t* bytes, const uint8_t* b
 
 const uint8_t* picoquic_frames_varint_skip(const uint8_t* bytes, const uint8_t* bytes_max)
 {
-    return bytes < bytes_max ? picoquic_frames_fixed_skip(bytes, bytes_max, (uint64_t) VARINT_LEN(bytes)) : NULL;
+    if (bytes < bytes_max) {
+        uint8_t v_len = VARINT_LEN(bytes);
+        return  picoquic_frames_fixed_skip(bytes, bytes_max, v_len);
+    }
+    else {
+        return NULL;
+    }
 }
 
 

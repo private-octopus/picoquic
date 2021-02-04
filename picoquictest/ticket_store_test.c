@@ -127,7 +127,12 @@ int ticket_store_test()
     for (size_t i = 0; ret == 0 && i < nb_test_sni; i++) {
         for (size_t j = 0; ret == 0 && j < nb_test_alpn; j++) {
             uint16_t ticket_length = (uint16_t)(64 + j * nb_test_sni + i);
-            ret = create_test_ticket((ticket_time / 1000) + 1000 * ((i * nb_test_alpn) + j), ttl, ticket, ticket_length);
+            uint64_t test_ticket_time = ticket_time / 1000;
+            size_t delta_factor = (i * nb_test_alpn) + j;
+            uint64_t delta_time = ((uint64_t)1000) * delta_factor;
+            test_ticket_time += delta_factor;
+            ret = create_test_ticket(test_ticket_time, ttl, ticket, ticket_length);
+
             if (ret != 0) {
                 break;
             }
@@ -304,7 +309,12 @@ int token_store_test()
     for (size_t i = 0; ret == 0 && i < nb_test_sni; i++) {
         for (size_t j = 0; ret == 0 && j < nb_test_ip_addr; j++) {
             uint16_t token_length = (uint16_t)(64 + j * nb_test_sni + i);
-            ret = create_test_token((token_time / 1000) + 1000 * ((i * nb_test_ip_addr) + j), ttl, token, token_length);
+            uint64_t test_ticket_time = token_time / 1000;
+            size_t delta_factor = (i * nb_test_ip_addr) + j;
+            uint64_t delta_time = ((uint64_t)1000) * delta_factor;
+            test_ticket_time += delta_factor;
+            ret = create_test_ticket(test_ticket_time, ttl, token, token_length);
+
             if (ret != 0) {
                 break;
             }

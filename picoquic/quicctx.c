@@ -1422,7 +1422,7 @@ void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t curr
         cnx->path[path_id]->challenge_time_first = current_time;
         for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
             if (cnx->quic->use_constant_challenges) {
-                cnx->path[path_id]->challenge[ichal] = current_time*(0xdeadbeef + ichal);
+                cnx->path[path_id]->challenge[ichal] = current_time*(0xdeadbeefull + ichal);
             }
             else {
                 cnx->path[path_id]->challenge[ichal] = picoquic_public_random_64();

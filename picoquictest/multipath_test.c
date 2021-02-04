@@ -188,7 +188,7 @@ int migration_test_one(int mtu_drop)
     if (mtu_drop) {
         /* The MTU drop test is specifically orientated towards verifying retransmissions,
          * which requires simulating losses */
-        loss_mask |= (1 << 31);
+        loss_mask |= (((uint64_t)1) << 31);
     }
 
     if (ret == 0 && test_ctx == NULL) {

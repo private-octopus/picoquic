@@ -1723,7 +1723,9 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
                 int alt_path = (nat_rebinding_path >= 0) ? nat_rebinding_path : 0;
                 if (cnx->path[path_id]->p_remote_cnxid == NULL) {
                     cnx->path[path_id]->p_remote_cnxid = cnx->path[alt_path]->p_remote_cnxid;
-                    cnx->path[path_id]->p_remote_cnxid->nb_path_references++;
+                    if (cnx->path[path_id]->p_remote_cnxid != NULL) {
+                        cnx->path[path_id]->p_remote_cnxid->nb_path_references++;
+                    }
                 } else if (cnx->path[path_id]->p_remote_cnxid->sequence != cnx->path[alt_path]->p_remote_cnxid->sequence) {
                     picoquic_dereference_stashed_cnxid(cnx, cnx->path[path_id], 0);
                     cnx->path[path_id]->p_remote_cnxid = cnx->path[alt_path]->p_remote_cnxid;
@@ -1863,7 +1865,7 @@ int picoquic_incoming_1rtt(
 
             if (ret == 0) {
                 /* Compute receive bandwidth */
-                path_x->received += ph->offset + ph->payload_length +
+                path_x->received += (uint64_t)ph->offset + ph->payload_length +
                     picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
                 if (path_x->receive_rate_epoch == 0) {
                     path_x->received_prior = cnx->path[path_id]->received;

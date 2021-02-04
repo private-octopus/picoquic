@@ -31,8 +31,6 @@
 #include "picoquic_unified_log.h"
 #include "picoquic_binlog.h"
 
-#define VARINT_LEN(bytes) ((size_t)1 << (((bytes)[0] & 0xC0) >> 6))
-
 static const uint8_t* picoquic_log_fixed_skip(const uint8_t* bytes, const uint8_t* bytes_max, size_t size)
 {
     return bytes == NULL ? NULL : ((bytes += size) <= bytes_max ? bytes : NULL);

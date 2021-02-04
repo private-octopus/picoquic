@@ -323,7 +323,7 @@ const uint8_t* picoquic_skip_new_connection_id_frame(const uint8_t* bytes, const
         (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
         (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
         (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &cid_length)) != NULL) {
-        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (size_t)cid_length + PICOQUIC_RESET_SECRET_SIZE);
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (uint64_t)cid_length + PICOQUIC_RESET_SECRET_SIZE);
     }
 
     return bytes;
@@ -348,7 +348,7 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
     if (bytes != NULL) {
         cnxid_bytes = bytes;
         secret_bytes = bytes + cid_length;
-        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (size_t)cid_length + PICOQUIC_RESET_SECRET_SIZE);
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (uint64_t)cid_length + PICOQUIC_RESET_SECRET_SIZE);
     }
 
     if (bytes == NULL || cid_length > PICOQUIC_CONNECTION_ID_MAX_SIZE ||

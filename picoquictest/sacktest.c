@@ -105,7 +105,7 @@ int sacktest()
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
-        current_time = i * 100 + 1;
+        current_time = ((uint64_t)i) * 100 + 1;
 
         if (test_pn64[i] > highest_seen) {
             highest_seen = test_pn64[i];
@@ -288,7 +288,7 @@ int sendacktest()
     cnx.sending_ecn_ack = 0; /* don't write an ack_ecn frame */
 
     for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
-        current_time = i * 100;
+        current_time = ((uint64_t)i) * 100;
 
         if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[i], current_time) != 0) {
             ret = -1;
