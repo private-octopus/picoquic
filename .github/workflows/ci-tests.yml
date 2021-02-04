@@ -27,7 +27,7 @@ jobs:
       - name: Perform Unit Tests
         run: |
             ulimit -c unlimited -S
-            ./picoquic_ct -n -r -x nat_attack && QUICRESULT=$?
+            ./picoquic_ct -n -r && QUICRESULT=$?
             ./picohttp_ct -n -r -x http_corrupt && HTTPRESULT=$?
             if [[ ${QUICRESULT} == 0 ]] && [[ ${HTTPRESULT} == 0 ]]; then exit 0; fi;
             exit 1

@@ -619,6 +619,16 @@ int nat_attack_loop(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t * simulated_
             ret = -1;
             break;
         }
+        if (ret != 0) {
+            break;
+        }
+
+        if (test_ctx->test_finished) {
+            if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && test_ctx->cnx_server != NULL &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                break;
+            }
+        }
     }
 
     return ret;
@@ -667,6 +677,11 @@ int nat_attack_test()
     /* Run a simplified simulation */
     if (ret == 0) {
         ret = nat_attack_loop(test_ctx, &simulated_time, send_buffer, send_buffer_size, 1);
+    }
+
+    /* Verify that data was properly received. */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
     }
 
     if (ret == 0) {
