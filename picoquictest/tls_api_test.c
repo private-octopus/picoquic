@@ -5458,7 +5458,7 @@ int rebinding_stress_test()
                 last_inject_time = server_arrival;
                 if (rand100 < 15) {
                     struct sockaddr * bad_address;
-                    if (rand100 < 10) {
+                    if (rand100 < 9) {
                         bad_address = (struct sockaddr *)&hack_address;
                     }
                     else {
