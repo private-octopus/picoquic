@@ -45,8 +45,8 @@ typedef struct st_cnx_stress_stream_ctx_t {
     uint64_t stream_id;
     uint64_t send_time;
     uint64_t nb_bytes_expected;
-    size_t nb_bytes_received;
-    size_t nb_bytes_sent;
+    uint64_t nb_bytes_received;
+    uint64_t nb_bytes_sent;
 } cnx_stress_stream_ctx_t;
 
 typedef struct st_cnx_stress_callback_ctx_t {
@@ -819,7 +819,7 @@ cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients)
             stress_ctx->message_size = 1024;
             stress_ctx->message_delay_min = INT64_MAX;
             stress_ctx->message_creation_interval = stress_ctx->next_client_deletion_time /
-                (3 * stress_ctx->nb_messages_target);
+                ((uint64_t)3 * stress_ctx->nb_messages_target);
             stress_ctx->next_message_creation_time = stress_ctx->next_client_deletion_time / 3;
             if (stress_ctx->message_creation_interval <= 0) {
                 ret = -1;
@@ -836,7 +836,7 @@ cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients)
                     memset(stress_ctx->s_ctx, 0, sizeof(cnx_stress_callback_ctx_t*) * nb_clients);
                 }
                 stress_ctx->default_ctx = cnx_stress_callback_create_context(stress_ctx, NULL, 2);
-                if (stress_ctx->s_ctx == NULL || stress_ctx->s_ctx == NULL || stress_ctx->default_ctx == NULL) {
+                if (stress_ctx->s_ctx == NULL || stress_ctx->c_ctx == NULL || stress_ctx->default_ctx == NULL) {
                     ret = -1;
                 }
                 else {

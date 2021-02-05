@@ -309,6 +309,10 @@ int varint_test()
                     DBG_PRINTF("Varint, is_new=%d: unexpected coded_length=%"PRIst, is_new_encode, coded_length);
                     ret = -1;
                 }
+                else if (coded_length > sizeof(encoding)) {
+                    DBG_PRINTF("Unexpected coded_length=%"PRIst", > sizeof(buffer)", coded_length);
+                    ret = -1;
+                }
                 else if (memcmp(encoding, test->encoding, coded_length) != 0) {
                     DBG_PRINTF("Varint, is_new=%d: unexpected coded value", is_new_encode);
                     ret = -1;

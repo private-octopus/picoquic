@@ -1175,7 +1175,7 @@ int picoquic_incoming_client_initial(
             /* decode the incoming frames */
             if (ret == 0) {
                 ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, ph->pn64, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, ph->pn64, 0, current_time);
             }
 
             /* processing of client initial packet */
@@ -1393,7 +1393,7 @@ int picoquic_incoming_server_initial(
                 /* If no error, process the packet */
                 if (ret == 0) {
                     ret = picoquic_decode_frames(cnx, cnx->path[0],
-                        bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, ph->pn64, current_time);
+                        bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, ph->pn64, 0, current_time);
                 }
             }
             /* processing of initial packet */
@@ -1445,7 +1445,7 @@ int picoquic_incoming_server_handshake(
             }
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, ph->pn64, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, ph->pn64, 0, current_time);
             }
 
             /* processing of initial packet */
@@ -1487,7 +1487,7 @@ int picoquic_incoming_client_handshake(
             }
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, ph->pn64, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, ph->pn64, 0, current_time);
             }
             /* processing of client clear text packet */
             if (ret == 0) {
@@ -1569,7 +1569,7 @@ int picoquic_incoming_0rtt(
             else {
                 cnx->nb_zero_rtt_received++;
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, ph->pn64, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, ph->pn64, 0, current_time);
             }
 
             if (ret == 0) {
@@ -1642,13 +1642,16 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     uint64_t current_time,
-    int* p_path_id)
+    int* p_path_id,
+    int* path_is_not_allocated)
 {
     int ret = 0;
     int partial_match_path = -1;
     int nat_rebinding_path = -1;
     int nat_rebinding_total = 0;
     int path_id = picoquic_find_path_by_address(cnx, addr_to, addr_from, &partial_match_path);
+
+    *path_is_not_allocated = 0;
 
     if (path_id < 0 && partial_match_path >= 0) {
         /* Document the source address and promote to full match. */
@@ -1686,6 +1689,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
                     nat_rebinding_path = i;
                 }
                 nat_rebinding_total++;
+                break;
             }
         }
 
@@ -1723,7 +1727,9 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
                 int alt_path = (nat_rebinding_path >= 0) ? nat_rebinding_path : 0;
                 if (cnx->path[path_id]->p_remote_cnxid == NULL) {
                     cnx->path[path_id]->p_remote_cnxid = cnx->path[alt_path]->p_remote_cnxid;
-                    cnx->path[path_id]->p_remote_cnxid->nb_path_references++;
+                    if (cnx->path[path_id]->p_remote_cnxid != NULL) {
+                        cnx->path[path_id]->p_remote_cnxid->nb_path_references++;
+                    }
                 } else if (cnx->path[path_id]->p_remote_cnxid->sequence != cnx->path[alt_path]->p_remote_cnxid->sequence) {
                     picoquic_dereference_stashed_cnxid(cnx, cnx->path[path_id], 0);
                     cnx->path[path_id]->p_remote_cnxid = cnx->path[alt_path]->p_remote_cnxid;
@@ -1749,6 +1755,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
         }
         else {
             DBG_PRINTF("%s", "Cannot create new path for incoming packet");
+            *path_is_not_allocated = 1;
             if (nat_rebinding_path >= 0) {
                 path_id = nat_rebinding_path;
             }
@@ -1803,6 +1810,7 @@ int picoquic_incoming_1rtt(
     struct sockaddr* addr_to,
     int if_index_to,
     unsigned char received_ecn,
+    int path_is_not_allocated,
     uint64_t current_time)
 {
     int ret = 0;
@@ -1859,11 +1867,12 @@ int picoquic_incoming_1rtt(
             picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
             /* Accept the incoming frames */
             ret = picoquic_decode_frames(cnx, cnx->path[path_id],
-                bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, ph->pn64, current_time);
+                bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, ph->pn64,
+                path_is_not_allocated, current_time);
 
             if (ret == 0) {
                 /* Compute receive bandwidth */
-                path_x->received += ph->offset + ph->payload_length +
+                path_x->received += (uint64_t)ph->offset + ph->payload_length +
                     picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
                 if (path_x->receive_rate_epoch == 0) {
                     path_x->received_prior = cnx->path[path_id]->received;
@@ -1974,6 +1983,7 @@ int picoquic_incoming_segment(
     int is_first_segment = 0;
     int is_buffered = 0;
     int path_id = -1;
+    int path_is_not_allocated = 0;
 
     /* Parse the header and decrypt the segment */
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,
@@ -2020,7 +2030,7 @@ int picoquic_incoming_segment(
             }
             else {
                 /* Find the arrival path and update its state */
-                ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, current_time, &path_id);
+                ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, current_time, &path_id, &path_is_not_allocated);
             }
         }
 
@@ -2131,7 +2141,8 @@ int picoquic_incoming_segment(
                 }
                 break;
             case picoquic_packet_1rtt_protected:
-                ret = picoquic_incoming_1rtt(cnx, path_id, bytes, &ph, addr_from, addr_to, if_index_to, received_ecn, current_time);
+                ret = picoquic_incoming_1rtt(cnx, path_id, bytes, &ph, addr_from, addr_to, if_index_to, received_ecn,
+                    path_is_not_allocated, current_time);
                 break;
             default:
                 /* Packet type error. Log and ignore */

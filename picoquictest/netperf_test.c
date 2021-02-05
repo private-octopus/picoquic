@@ -619,6 +619,16 @@ int nat_attack_loop(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t * simulated_
             ret = -1;
             break;
         }
+        if (ret != 0) {
+            break;
+        }
+
+        if (test_ctx->test_finished) {
+            if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && test_ctx->cnx_server != NULL &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                break;
+            }
+        }
     }
 
     return ret;
@@ -669,8 +679,13 @@ int nat_attack_test()
         ret = nat_attack_loop(test_ctx, &simulated_time, send_buffer, send_buffer_size, 1);
     }
 
+    /* If the client connection is still up, verify that data was properly received. */
+    if (ret == 0 && test_ctx->cnx_client->cnx_state == picoquic_state_ready) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
+
     if (ret == 0) {
-        DBG_PRINTF("Exit at time %" PRIu64 ", received %" PRIu64 " packets at client.",
+        DBG_PRINTF("Exit attack loop at time %" PRIu64 ", received %" PRIu64 " packets at client.",
             simulated_time, test_ctx->cnx_client->nb_packets_received);
     }
 

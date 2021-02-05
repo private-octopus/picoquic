@@ -131,7 +131,7 @@ void picohash_delete(picohash_table* hash_table, int delete_key_too)
         picohash_item* item = hash_table->hash_bin[i];
         while (item != NULL) {
             picohash_item* tmp = item;
-            item = tmp->next_in_bin;
+            item = item->next_in_bin;
 
             if (delete_key_too) {
                 free((void*)tmp->key);

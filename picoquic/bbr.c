@@ -196,7 +196,7 @@ typedef enum {
 #define BBR_BTL_BW_FILTER_LENGTH 10
 #define BBR_RT_PROP_FILTER_LENGTH 10
 #define BBR_HIGH_GAIN 2.8853900817779 /* 2/ln(2) */
-#define BBR_MIN_PIPE_CWND(mss) (4*mss)
+#define BBR_MIN_PIPE_CWND(mss) ((mss)*4)
 #define BBR_GAIN_CYCLE_LEN 8
 #define BBR_PROBE_RTT_INTERVAL 10000000 /* 10 sec, 10000000 microsecs */
 #define BBR_PROBE_RTT_DURATION 200000 /* 200msec, 200000 microsecs */
@@ -775,7 +775,7 @@ void BBRHandleProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x
 #endif
 
     if (bbr_state->probe_rtt_done_stamp == 0 &&
-        bytes_in_transit <= BBR_MIN_PIPE_CWND(path_x->send_mtu)) {
+        bytes_in_transit <= BBR_MIN_PIPE_CWND((uint64_t)path_x->send_mtu)) {
         bbr_state->probe_rtt_done_stamp =
             current_time + BBR_PROBE_RTT_DURATION;
         bbr_state->probe_rtt_round_done = 0;
@@ -859,8 +859,8 @@ void BBRModulateCwndForProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t
 {
     if (bbr_state->state == picoquic_bbr_alg_probe_rtt)
     {
-        if (path_x->cwin > BBR_MIN_PIPE_CWND(path_x->send_mtu)) {
-            path_x->cwin = BBR_MIN_PIPE_CWND(path_x->send_mtu);
+        if (path_x->cwin > BBR_MIN_PIPE_CWND((uint64_t)path_x->send_mtu)) {
+            path_x->cwin = BBR_MIN_PIPE_CWND((uint64_t)path_x->send_mtu);
         }
     }
 }
@@ -880,9 +880,9 @@ void BBRSetCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64
         {
             path_x->cwin += bytes_delivered;
         }
-        if (path_x->cwin < BBR_MIN_PIPE_CWND(path_x->send_mtu))
+        if (path_x->cwin < BBR_MIN_PIPE_CWND((uint64_t)path_x->send_mtu))
         {
-            path_x->cwin = BBR_MIN_PIPE_CWND(path_x->send_mtu);
+            path_x->cwin = BBR_MIN_PIPE_CWND((uint64_t)path_x->send_mtu);
         }
     }
 

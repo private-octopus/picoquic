@@ -5394,7 +5394,7 @@ int rebinding_stress_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     uint64_t last_inject_time = 0;
-    uint64_t random_context = 0xBABAC001;
+    uint64_t random_context = 0xBABAC001CAFEull;
     picoquictest_sim_packet_t* last_client_packet_processed = NULL;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
@@ -5453,12 +5453,12 @@ int rebinding_stress_test()
             uint64_t server_arrival = test_ctx->c_to_s_link->last_packet->arrival_time;
 
             if (server_arrival > last_inject_time) {
-                /* 15% chance of packet injection, 10% chances of reusing test address */
+                /* 10% chance of packet injection, 5% chances of reusing test address */
                 uint64_t rand100 = picoquic_test_uniform_random(&random_context, 100);
                 last_inject_time = server_arrival;
-                if (rand100 < 15) {
+                if (rand100 < 10) {
                     struct sockaddr * bad_address;
-                    if (rand100 < 10) {
+                    if (rand100 < 5) {
                         bad_address = (struct sockaddr *)&hack_address;
                     }
                     else {
@@ -8924,7 +8924,7 @@ int blackhole_test()
     return ret;
 }
 
-/* Verify that the code operates correctly when the ack frequency extension is no used
+/* Verify that the code operates correctly when the ack frequency extension is not used
  */
 
 int no_ack_frequency_test()
@@ -8939,8 +8939,8 @@ int no_ack_frequency_test()
         picoquic_init_transport_parameters(&client_parameters, 1);
         picoquic_init_transport_parameters(&server_parameters, 0);
 
-        client_parameters.min_ack_delay = ((uint64_t)(1u-(i & 1)))*1000u;
-        server_parameters.enable_loss_bit = (1 - ((i > 1) & 1))*1000;
+        client_parameters.min_ack_delay = (i & 1) ? 0 : 1000;
+        server_parameters.enable_loss_bit = (1 - ((i > 1) & 1));
 
         ret = tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128, 0, 0, 0, 2000000, &client_parameters, &server_parameters);
         if (ret != 0) {
@@ -9300,7 +9300,7 @@ int app_limit_cc_test_one(
                     }
                     while (c_index < 512 && buffer[c_index] >= '0' && buffer[c_index] <= '9') {
                         cwin *= 10;
-                        cwin += buffer[c_index] - '0';
+                        cwin += (uint64_t)buffer[c_index] - '0';
                         c_index++;
                     }
                     if (cwin > cwin_max) {
@@ -9514,7 +9514,7 @@ int pacing_test()
 
         /* Verify that the total send time matches expectations */
         if (ret == 0) {
-            uint64_t volume_sent = nb_target * cnx->path[0]->send_mtu;
+            uint64_t volume_sent = ((uint64_t)nb_target) * cnx->path[0]->send_mtu;
             uint64_t time_max = ((volume_sent * 1000000) / test_byte_per_sec) + 1;
             uint64_t time_min = (((volume_sent - test_quantum) * 1000000) / test_byte_per_sec) + 1;
 
@@ -10397,7 +10397,7 @@ int pn_random_test()
         /* The client connection is already created, so we force randomization of sequence numbers here */
         for (picoquic_packet_context_enum pc = picoquic_packet_context_application;
             pc < picoquic_nb_packet_context; pc++) {
-            test_ctx->cnx_client->pkt_ctx[pc].send_sequence = PICOQUIC_PN_RANDOM_MIN + 17 + pc;
+            test_ctx->cnx_client->pkt_ctx[pc].send_sequence = ((uint64_t)PICOQUIC_PN_RANDOM_MIN) + 17 + (uint64_t)pc;
         }
         /* Now, start the client connection */
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);

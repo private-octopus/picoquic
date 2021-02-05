@@ -2150,12 +2150,16 @@ static void demo_test_delete_file(char const* dir_path, char const* file_name)
 
 static char * demo_test_create_random_file_name(size_t name_length, uint64_t * random_ctx)
 {
-    char* file_name = (char*)malloc(name_length + 1);
-    if (file_name != NULL) {
-        for (size_t i = 0; i < name_length; i++) {
-            file_name[i] = 'a' + (int)picoquic_test_uniform_random(random_ctx, 'z' - 'a' + 1);
+    size_t alloc_size = name_length + 1;
+    char* file_name = NULL;
+    if (name_length < alloc_size) {
+        file_name = (char*)malloc(alloc_size);
+        if (file_name != NULL) {
+            for (size_t i = 0; i < name_length; i++) {
+                file_name[i] = 'a' + (int)picoquic_test_uniform_random(random_ctx, 'z' - 'a' + 1);
+            }
+            file_name[name_length] = 0;
         }
-        file_name[name_length] = 0;
     }
     return file_name;
 }
@@ -2212,7 +2216,7 @@ static int demo_test_multi_scenario_create(picoquic_demo_stream_desc_t** scenari
                         demo_test_delete_file(dir_download, file_name);
                         (*scenario)[i].doc_name = file_name;
                         (*scenario)[i].previous_stream_id = UINT64_MAX;
-                        (*scenario)[i].stream_id = i * 4;
+                        (*scenario)[i].stream_id = ((uint64_t)4)*i;
                         (*scenario)[i].repeat_count = 0;
                         (*stream_length)[i] = length;
                         (*scenario)[i].f_name = fn_alloc;
@@ -2642,7 +2646,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
             if (arrival != NULL) {
                 if (do_corrupt) {
                     /* simulate packet corruption in flight */
-                    uint64_t lost_byte = picoquic_test_uniform_random(&random_context, arrival->length * 4);
+                    uint64_t lost_byte = picoquic_test_uniform_random(&random_context,((uint64_t)4)* arrival->length);
                     if (lost_byte < arrival->length) {
                         arrival->bytes[lost_byte] ^= 0xFF;
                     }
@@ -2715,7 +2719,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     if (ctx_client != NULL) {
         for (size_t i = 0; i < picohttp_nb_stress_clients; i++) {
             if (ctx_client[i] != NULL) {
-                ctx_client[i] = http_stress_client_delete(ctx_client[i]);
+                (void)http_stress_client_delete(ctx_client[i]);
             }
         }
         free(ctx_client);
