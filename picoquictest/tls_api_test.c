@@ -5394,7 +5394,7 @@ int rebinding_stress_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     uint64_t last_inject_time = 0;
-    uint64_t random_context = 0xBABAC001ull;
+    uint64_t random_context = 0xBABAC001CAFEull;
     picoquictest_sim_packet_t* last_client_packet_processed = NULL;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
