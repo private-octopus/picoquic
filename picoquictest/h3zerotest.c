@@ -2150,12 +2150,16 @@ static void demo_test_delete_file(char const* dir_path, char const* file_name)
 
 static char * demo_test_create_random_file_name(size_t name_length, uint64_t * random_ctx)
 {
-    char* file_name = (char*)malloc(name_length + 1);
-    if (file_name != NULL) {
-        for (size_t i = 0; i < name_length; i++) {
-            file_name[i] = 'a' + (int)picoquic_test_uniform_random(random_ctx, 'z' - 'a' + 1);
+    size_t alloc_size = name_length + 1;
+    char* file_name = NULL;
+    if (name_length < alloc_size) {
+        file_name = (char*)malloc(alloc_size);
+        if (file_name != NULL) {
+            for (size_t i = 0; i < name_length; i++) {
+                file_name[i] = 'a' + (int)picoquic_test_uniform_random(random_ctx, 'z' - 'a' + 1);
+            }
+            file_name[name_length] = 0;
         }
-        file_name[name_length] = 0;
     }
     return file_name;
 }
