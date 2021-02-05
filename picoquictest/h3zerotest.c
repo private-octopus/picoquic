@@ -2719,7 +2719,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     if (ctx_client != NULL) {
         for (size_t i = 0; i < picohttp_nb_stress_clients; i++) {
             if (ctx_client[i] != NULL) {
-                ctx_client[i] = http_stress_client_delete(ctx_client[i]);
+                (void)http_stress_client_delete(ctx_client[i]);
             }
         }
         free(ctx_client);

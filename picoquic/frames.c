@@ -3967,7 +3967,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
     size_t bytes_maxsize, int epoch,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
-    uint64_t pn64,
+    uint64_t pn64, int path_is_not_allocated,
     uint64_t current_time)
 {
     const uint8_t *bytes_max = bytes + bytes_maxsize;
@@ -4095,7 +4095,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 break;
             case picoquic_frame_type_path_challenge:
                 is_path_validating_frame = 1;
-                bytes = picoquic_decode_path_challenge_frame(cnx, bytes, bytes_max, path_x, addr_from, addr_to);
+                bytes = picoquic_decode_path_challenge_frame(cnx, bytes, bytes_max, 
+                    (path_is_not_allocated)?NULL:path_x, addr_from, addr_to);
                 break;
             case picoquic_frame_type_path_response:
                 is_path_validating_frame = 1;
