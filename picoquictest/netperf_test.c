@@ -679,13 +679,13 @@ int nat_attack_test()
         ret = nat_attack_loop(test_ctx, &simulated_time, send_buffer, send_buffer_size, 1);
     }
 
-    /* Verify that data was properly received. */
-    if (ret == 0) {
+    /* If the client connection is still up, verify that data was properly received. */
+    if (ret == 0 && test_ctx->cnx_client->cnx_state == picoquic_state_ready) {
         ret = tls_api_one_scenario_verify(test_ctx);
     }
 
     if (ret == 0) {
-        DBG_PRINTF("Exit at time %" PRIu64 ", received %" PRIu64 " packets at client.",
+        DBG_PRINTF("Exit attack loop at time %" PRIu64 ", received %" PRIu64 " packets at client.",
             simulated_time, test_ctx->cnx_client->nb_packets_received);
     }
 

@@ -3421,7 +3421,7 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
     if (bytes_max - bytes <= (int) challenge_length) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_path_challenge);
         bytes = NULL;
-    } else if (path_x != NULL) {
+    } else {
         /*
          * Queue a response frame as response to path challenge.
          * TODO: ensure it goes out on the same path as the incoming challenge.
@@ -3431,7 +3431,9 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
         bytes++;
         challenge_response = PICOPARSE_64(bytes);
         bytes += challenge_length;
-        if ((addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->peer_addr) == 0) &&
+
+        if (path_x != NULL &&
+            (addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->peer_addr) == 0) &&
             (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)) {
             path_x->challenge_response = challenge_response;
             path_x->response_required = 1;
@@ -3458,39 +3460,34 @@ uint8_t * picoquic_format_path_response_frame(uint8_t* bytes, uint8_t* bytes_max
     return bytes;
 }
 
-
 const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
-    uint64_t current_time)
+    picoquic_path_t * path_x, uint64_t current_time)
 {
     uint64_t response;
 
     if ((bytes = picoquic_frames_uint64_decode(bytes+1, bytes_max, &response)) == NULL) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_path_response);
-
     } else {
-        int found_challenge = 0;
+        /* Per QUIC V1, path responses must come on the same path. Ignore them if this cannot be verified. */
+        if (path_x != NULL) {
+            int found_challenge = 0;
 
-        /*
-         * Check that the challenge corresponds to something that was sent locally
-         */
-        for (int i = 0; i < cnx->nb_paths; i++) {
             for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                if (response == cnx->path[i]->challenge[ichal]) {
+                if (response == path_x->challenge[ichal]) {
                     found_challenge = 1;
                     break;
                 }
             }
 
-            if (found_challenge) {
+            if (found_challenge && !path_x->challenge_verified){
                 /* TODO: update the RTT if using initial value */
-                cnx->path[i]->challenge_verified = 1;
+                path_x->challenge_verified = 1;
 
-                if (cnx->path[i]->smoothed_rtt == PICOQUIC_INITIAL_RTT
-                    && cnx->path[i]->rtt_variant == 0) {
+                if (path_x->smoothed_rtt == PICOQUIC_INITIAL_RTT
+                    && path_x->rtt_variant == 0) {
                     /* We received a first packet from the peer! */
-                    picoquic_update_path_rtt(cnx, cnx->path[i], cnx->path[i], cnx->path[i]->challenge_time_first, current_time, 0, 0);
+                    picoquic_update_path_rtt(cnx, path_x, path_x, path_x->challenge_time_first, current_time, 0, 0);
                 }
-                break;
             }
         }
     }
@@ -4100,7 +4097,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 break;
             case picoquic_frame_type_path_response:
                 is_path_validating_frame = 1;
-                bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max, current_time);
+                bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max,
+                    (path_is_not_allocated) ? NULL : path_x, current_time);
                 break;
             case picoquic_frame_type_crypto_hs:
                 bytes = picoquic_decode_crypto_hs_frame(cnx, bytes, bytes_max, epoch);
