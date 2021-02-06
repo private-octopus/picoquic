@@ -317,6 +317,9 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_enable_multipath:
                     qlog_boolean_transport_extension(f, "enable_multipath", s, extension_length);
                     break;
+                case picoquic_tp_enable_simple_multipath:
+                    qlog_boolean_transport_extension(f, "enable_simple_multipath", s, extension_length);
+                    break;
                 default:
                     /* dump unknown extensions */
                     fprintf(f, "\"%" PRIx64 "\": ", extension_type);

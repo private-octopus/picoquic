@@ -251,6 +251,7 @@ typedef struct st_picoquic_tp_t {
     uint64_t min_ack_delay;
     int do_grease_quic_bit;
     int enable_multipath;
+    int enable_simple_multipath;
 } picoquic_tp_t;
 
 /*
