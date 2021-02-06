@@ -1296,7 +1296,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
     int path_index_current = 1;
     unsigned int is_demotion_in_progress = 0;
 
-    if (cnx->is_multipath_enabled) {
+    if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
         path_index_good = 0;
         path_index_current = 0;
     }

@@ -1129,7 +1129,7 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx,
 {
     uint64_t rto = path_x->retransmit_timer;
 
-    if (!cnx->is_multipath_enabled || cnx->nb_paths == 1 || pkt_ctx->nb_retransmit < 3) {
+    if (!(cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) || cnx->nb_paths == 1 || pkt_ctx->nb_retransmit < 3) {
         rto <<= pkt_ctx->nb_retransmit;
     }
     else {
@@ -1551,7 +1551,7 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
                         if (pkt_ctx->nb_retransmit > 7 && cnx->cnx_state >= picoquic_state_ready) {
                             /* TODO: only disconnect if there is no other available path */
                             int all_paths_bad = 1;
-                            if (cnx->is_multipath_enabled) {
+                            if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
                                 for (int path_id = 0; path_id < cnx->nb_paths; path_id++) {
                                     if (cnx->path[path_id]->nb_retransmit < 8) {
                                         all_paths_bad = 0;
@@ -3992,7 +3992,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
 {
     int path_id = -1;
 
-    if (cnx->is_multipath_enabled && cnx->cnx_state >= picoquic_state_ready) {
+    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) && cnx->cnx_state >= picoquic_state_ready) {
         return picoquic_select_next_path_mp(cnx, current_time, next_wake_time);
     }
 

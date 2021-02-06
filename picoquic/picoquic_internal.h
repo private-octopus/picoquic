@@ -1021,6 +1021,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int ack_ignore_order_local : 1; /* Request peer to not generate immediate ack if out of order packet received */
     unsigned int ack_ignore_order_remote : 1; /* Peer requested no immediate ack if out of order packet received */
     unsigned int is_multipath_enabled : 1; /* Usage of multipath was negotiated */
+    unsigned int is_simple_multipath_enabled : 1; /* Usage of simple multipath was negotiated */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
