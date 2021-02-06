@@ -400,7 +400,8 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     }
 
     if (cnx->local_parameters.enable_multipath > 0 && bytes != NULL) {
-        bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_enable_multipath);
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_multipath,
+            (uint64_t)cnx->local_parameters.enable_multipath);
     }
 
 
@@ -691,12 +692,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     break;
                 case picoquic_tp_enable_multipath:
-                    if (extension_length != 0) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
-                    }
-                    else {
-                        cnx->remote_parameters.enable_multipath = 1;
-                    }
+                    cnx->remote_parameters.enable_multipath = (int)
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     break;
                 default:
                     /* ignore unknown extensions */
