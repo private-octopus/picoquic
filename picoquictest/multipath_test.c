@@ -894,7 +894,7 @@ int multipath_aead_test()
 #define SIMPLE_MULTIPATH_QLOG_REF "picoquictest\\simple_multipath_qlog_ref.txt"
 #else
 #define MULTIPATH_QLOG_REF "picoquictest/multipath_qlog_ref.txt"
-#define SIMPLE_MULTIPATH_QLOG_REF "picoquictest/multipath_qlog_ref.txt"
+#define SIMPLE_MULTIPATH_QLOG_REF "picoquictest/simple_multipath_qlog_ref.txt"
 #endif
 
 static test_api_stream_desc_t test_scenario_multipath_qlog[] = {
