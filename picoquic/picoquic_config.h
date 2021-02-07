@@ -127,6 +127,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
     uint64_t current_time,
     uint64_t* p_simulated_time);
 
+void picoquic_config_init(picoquic_quic_config_t* config);
 void picoquic_config_clear(picoquic_quic_config_t* config);
 
 #ifdef __cplusplus

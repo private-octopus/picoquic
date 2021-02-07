@@ -57,7 +57,7 @@ static picoquic_quic_config_t param1 = {
     4433, /* int server_port; */
     1, /* int dest_if; */
     1536, /* int mtu_max; */
-    0, /* int cnx_id_length; */
+    -1, /* int cnx_id_length; */
     "cubic", /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     NULL, /* picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
     3,
@@ -263,7 +263,7 @@ int config_test_parse_command_line(const picoquic_quic_config_t* expected, const
     int opt_ind = 0;
     picoquic_quic_config_t actual;
 
-    memset(&actual, 0, sizeof(picoquic_quic_config_t));
+    picoquic_config_init(&actual);
 
     while (opt_ind < argc && ret == 0) {
         const char* x = argv[opt_ind];
