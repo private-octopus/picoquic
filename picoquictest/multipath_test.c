@@ -169,6 +169,19 @@ static test_api_stream_desc_t test_scenario_multipath[] = {
     { 8, 4, 257, 1000000 }
 };
 
+static test_api_stream_desc_t test_scenario_multipath_long[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 0, 257, 1000000 },
+    { 12, 0, 257, 1000000 },
+    { 16, 0, 257, 1000000 },
+    { 20, 0, 257, 1000000 },
+    { 24, 0, 257, 1000000 },
+    { 28, 0, 257, 1000000 },
+    { 32, 0, 257, 1000000 },
+    { 36, 0, 257, 1000000 },
+    { 40, 0, 257, 1000000 }
+};
+
 int migration_test_one(int mtu_drop)
 {
     uint64_t simulated_time = 0;
@@ -384,6 +397,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     uint64_t original_r_cid_sequence = 1;
     int ret;
 
+    initial_cid.id[2] = (int)test_id;
+    initial_cid.id[3] = is_simple_multipath;
+
     /* Create the context but delay initialization, so the multipath option can be set */
     ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
@@ -453,7 +469,11 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
     /* Prepare to send data */
     if (ret == 0) {
-        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath, sizeof(test_scenario_multipath));
+        if (test_id == multipath_test_sat_plus) {
+            ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath_long, sizeof(test_scenario_multipath_long));
+        } else {
+            ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath, sizeof(test_scenario_multipath));
+        }
 
         if (ret != 0)
         {
@@ -627,7 +647,7 @@ int multipath_drop_second_test()
  */
 int multipath_sat_plus_test()
 {
-    uint64_t max_completion_microsec = 4300000;
+    uint64_t max_completion_microsec = 41000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 0);
 }
@@ -1125,8 +1145,8 @@ int simple_multipath_drop_second_test()
 
 int simple_multipath_sat_plus_test()
 {
-    /* TODO: understand why 6.4 sec instead of 4.3 */
-    uint64_t max_completion_microsec = 6400000;
+    /* TODO: Understand why 35 sec instead of theoretical 10-12 sec */
+    uint64_t max_completion_microsec = 35000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 1);
 }
