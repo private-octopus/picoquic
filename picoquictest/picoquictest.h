@@ -269,6 +269,7 @@ int simple_multipath_rotation_test();
 int simple_multipath_nat_test();
 int simple_multipath_break1_test();
 int simple_multipath_back1_test();
+int simple_multipath_qlog_test();
 int token_reuse_api_test();
 int grease_quic_bit_test();
 int grease_quic_bit_one_way_test();

@@ -888,10 +888,13 @@ int multipath_aead_test()
 
 #define MULTIPATH_TRACE_BIN  "0807060504030201.server.log"
 #define MULTIPATH_QLOG "multipath_qlog_test.qlog"
+#define SIMPLE_MULTIPATH_QLOG "simple_multipath_qlog_test.qlog"
 #ifdef _WINDOWS
 #define MULTIPATH_QLOG_REF "picoquictest\\multipath_qlog_ref.txt"
+#define SIMPLE_MULTIPATH_QLOG_REF "picoquictest\\simple_multipath_qlog_ref.txt"
 #else
 #define MULTIPATH_QLOG_REF "picoquictest/multipath_qlog_ref.txt"
+#define SIMPLE_MULTIPATH_QLOG_REF "picoquictest/multipath_qlog_ref.txt"
 #endif
 
 static test_api_stream_desc_t test_scenario_multipath_qlog[] = {
@@ -901,7 +904,7 @@ static test_api_stream_desc_t test_scenario_multipath_qlog[] = {
 
 static const picoquic_connection_id_t qlog_multipath_initial_cid = { {8, 7, 6, 5, 4, 3, 2, 1}, 8 };
 
-int multipath_trace_test_one()
+int multipath_trace_test_one(int is_simple_multipath)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -941,9 +944,9 @@ int multipath_trace_test_one()
         test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
         test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
         /* Set the multipath option at both client and server */
-        multipath_init_params(&server_parameters, 1, 0);
+        multipath_init_params(&server_parameters, 1, is_simple_multipath);
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
-        multipath_init_params(&client_parameters, 1, 0);
+        multipath_init_params(&client_parameters, 1, is_simple_multipath);
         picoquic_set_default_tp(test_ctx->qclient, &server_parameters);
 
         /* Force ciphersuite to AES128, so Client Hello has a constant format */
@@ -956,8 +959,7 @@ int multipath_trace_test_one()
         /* Delete the old connection */
         picoquic_delete_cnx(test_ctx->cnx_client);
         /* re-create a client connection, this time picking up the required connection ID */
-        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-            qlog_multipath_initial_cid, picoquic_null_connection_id,
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, qlog_multipath_initial_cid, picoquic_null_connection_id,
             (struct sockaddr*) & test_ctx->server_addr, 0,
             PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
         if (test_ctx->cnx_client == NULL) {
@@ -973,14 +975,6 @@ int multipath_trace_test_one()
     /* establish the connection */
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
-    }
-    /* verify that multipath is negotiated on both sides */
-    if (ret == 0) {
-        if (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled) {
-            DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
-                test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
-            ret = -1;
-        }
     }
 
     /* wait until the client (and thus the server) is ready */
@@ -1047,13 +1041,18 @@ int multipath_trace_test_one()
     return ret;
 }
 
-int multipath_qlog_test()
+int multipath_qlog_test_one(int is_simple_multipath)
 {
     int ret = 0;
 
-    (void)picoquic_file_delete(MULTIPATH_QLOG, NULL);
+    if (is_simple_multipath) {
+        (void)picoquic_file_delete(SIMPLE_MULTIPATH_QLOG, NULL);
+    }
+    else {
+        (void)picoquic_file_delete(MULTIPATH_QLOG, NULL);
+    }
 
-    ret = multipath_trace_test_one();
+    ret = multipath_trace_test_one(is_simple_multipath);
 
     /* Create a QLOG file from the .log file */
     if (ret == 0) {
@@ -1065,7 +1064,8 @@ int multipath_qlog_test()
             ret = -1;
         }
         else {
-            ret = qlog_convert(&qlog_multipath_initial_cid, f_binlog, MULTIPATH_TRACE_BIN, MULTIPATH_QLOG, NULL, flags);
+            ret = qlog_convert(&qlog_multipath_initial_cid, f_binlog, MULTIPATH_TRACE_BIN, 
+                (is_simple_multipath)? SIMPLE_MULTIPATH_QLOG:MULTIPATH_QLOG, NULL, flags);
             picoquic_file_close(f_binlog);
         }
     }
@@ -1076,17 +1076,22 @@ int multipath_qlog_test()
         char qlog_trace_test_ref[512];
 
         ret = picoquic_get_input_path(qlog_trace_test_ref, sizeof(qlog_trace_test_ref), picoquic_solution_dir,
-            MULTIPATH_QLOG_REF);
+            (is_simple_multipath)? SIMPLE_MULTIPATH_QLOG_REF:MULTIPATH_QLOG_REF);
 
         if (ret != 0) {
             DBG_PRINTF("%s", "Cannot set the qlog trace test ref file name.\n");
         }
         else {
-            ret = picoquic_test_compare_text_files(MULTIPATH_QLOG, qlog_trace_test_ref);
+            ret = picoquic_test_compare_text_files((is_simple_multipath) ? SIMPLE_MULTIPATH_QLOG:MULTIPATH_QLOG, qlog_trace_test_ref);
         }
     }
 
     return ret;
+}
+
+int multipath_qlog_test()
+{
+    return multipath_qlog_test_one(0);
 }
 
 /* Simple multipath tests.
@@ -1161,4 +1166,9 @@ int simple_multipath_back1_test()
     uint64_t max_completion_microsec = 5200000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_back1, 1);
+}
+
+int simple_multipath_qlog_test()
+{
+    return multipath_qlog_test_one(1);
 }
