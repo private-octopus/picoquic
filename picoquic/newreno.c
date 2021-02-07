@@ -105,13 +105,13 @@ void picoquic_newreno_sim_notify(
     case picoquic_congestion_notification_timeout:
         /* enter recovery */
         if (current_time - nr_state->recovery_start > path_x->smoothed_rtt ||
-            nr_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+            nr_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
             picoquic_newreno_sim_enter_recovery(nr_state, cnx, notification, current_time);
         }
         break;
     case picoquic_congestion_notification_spurious_repeat:
         if (current_time - nr_state->recovery_start < path_x->smoothed_rtt &&
-            nr_state->recovery_sequence > picoquic_cc_get_ack_number(cnx)) {
+            nr_state->recovery_sequence > picoquic_cc_get_ack_number(cnx, path_x)) {
             /* If spurious repeat of initial loss detected,
              * exit recovery and reset threshold to pre-entry cwin.
              */

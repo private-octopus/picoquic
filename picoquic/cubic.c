@@ -241,7 +241,7 @@ static void picoquic_cubic_notify(
             case picoquic_congestion_notification_timeout:
                 /* enter recovery */
                 if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
-                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
                     picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
                 break;
@@ -322,7 +322,7 @@ static void picoquic_cubic_notify(
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
                 if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
-                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
                     /* re-enter recovery if this is a new loss */
                     picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
@@ -368,7 +368,7 @@ static void picoquic_cubic_notify(
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
                 if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
-                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
                     /* re-enter recovery */
                     picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
@@ -423,7 +423,7 @@ static void dcubic_exit_slow_start(
     }
     else {
         if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
-            cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+            cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
             /* re-enter recovery if this is a new event */
             picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
         }
@@ -553,7 +553,7 @@ static void picoquic_dcubic_notify(
                 if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
                     cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
-                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
                         /* re-enter recovery if this is a new event */
                         picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                     }
@@ -617,7 +617,7 @@ static void picoquic_dcubic_notify(
                 if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
                     cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
-                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
                         /* re-enter recovery */
                         picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                     }

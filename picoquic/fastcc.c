@@ -169,7 +169,7 @@ void picoquic_fastcc_notify(
     if (fastcc_state != NULL) {
         if (fastcc_state->alg_state == picoquic_fastcc_freeze && 
             (current_time > fastcc_state->end_of_freeze ||
-                fastcc_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx))) {
+                fastcc_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x))) {
             if (fastcc_state->last_freeze_was_timeout) {
                 fastcc_state->alg_state = picoquic_fastcc_initial;
             }

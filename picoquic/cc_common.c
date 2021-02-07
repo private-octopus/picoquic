@@ -30,9 +30,18 @@ uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx)
     return cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
 }
 
-uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx)
+uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-    return cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged;
+    uint64_t ret = cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged;
+    if (cnx->is_multipath_enabled){
+        if (path_x->p_remote_cnxid != NULL) {
+            ret = path_x->p_remote_cnxid->pkt_ctx.highest_acknowledged;
+        }
+    }
+    else if (cnx->is_simple_multipath_enabled) {
+        ret = path_x->last_1rtt_acknowledged;
+    }
+    return ret;
 }
 
 void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t * rtt_track, uint64_t rtt)

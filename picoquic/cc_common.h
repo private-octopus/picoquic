@@ -42,7 +42,7 @@ typedef struct st_picoquic_min_max_rtt_t {
 
 uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx);
 
-uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx);
+uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 
 void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt);
 
