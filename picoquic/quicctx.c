@@ -502,6 +502,14 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
     }
 }
 
+void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option)
+{
+    if (quic->default_tp != NULL) {
+        quic->default_tp->enable_multipath = multipath_option&1;
+        quic->default_tp->enable_simple_multipath = (multipath_option>>1)&1;
+    }
+}
+
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max)
 {
     quic->crypto_epoch_length_max = (crypto_epoch_length_max == 0) ?
@@ -1296,7 +1304,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
     int path_index_current = 1;
     unsigned int is_demotion_in_progress = 0;
 
-    if (cnx->is_multipath_enabled) {
+    if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
         path_index_good = 0;
         path_index_current = 0;
     }
@@ -2353,6 +2361,7 @@ void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_
     for (int i = 0; i < cnx->nb_paths; i++) {
         if (cnx->path[i]->p_local_cnxid == l_cid) {
             cnx->path[i]->p_local_cnxid = NULL;
+            cnx->path[i]->was_local_cnxid_retired = 1;
         }
     }
 

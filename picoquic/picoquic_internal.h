@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "0.34"
+#define PICOQUIC_VERSION "0.34a"
 
 #ifndef PICOQUIC_MAX_PACKET_SIZE
 #define PICOQUIC_MAX_PACKET_SIZE 1536
@@ -476,7 +476,8 @@ typedef enum {
     picoquic_tp_min_ack_delay = 0xff02de1a,
     picoquic_tp_enable_time_stamp = 0x7158, /* x&1 = */
     picoquic_tp_grease_quic_bit = 0x2ab2,
-    picoquic_tp_enable_multipath = 0xbaba
+    picoquic_tp_enable_multipath = 0xbaba,
+    picoquic_tp_enable_simple_multipath = 0xbab5
 } picoquic_tp_enum;
 
 /* Callback for converting binary log to quic log at the end of a connection. 
@@ -847,6 +848,7 @@ typedef struct st_picoquic_path_t {
     unsigned int got_long_packet : 1;
     unsigned int is_cc_data_updated : 1;
     unsigned int is_multipath_probe_needed : 1;
+    unsigned int was_local_cnxid_retired : 1;
 
     /* Path priority, for multipath management */
     int path_priority;
@@ -1021,6 +1023,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int ack_ignore_order_local : 1; /* Request peer to not generate immediate ack if out of order packet received */
     unsigned int ack_ignore_order_remote : 1; /* Peer requested no immediate ack if out of order packet received */
     unsigned int is_multipath_enabled : 1; /* Usage of multipath was negotiated */
+    unsigned int is_simple_multipath_enabled : 1; /* Usage of simple multipath was negotiated */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
