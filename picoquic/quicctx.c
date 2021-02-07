@@ -2353,6 +2353,7 @@ void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_
     for (int i = 0; i < cnx->nb_paths; i++) {
         if (cnx->path[i]->p_local_cnxid == l_cid) {
             cnx->path[i]->p_local_cnxid = NULL;
+            cnx->path[i]->was_local_cnxid_retired = 1;
         }
     }
 

@@ -696,14 +696,32 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         cnx->remote_parameters.do_grease_quic_bit = 1;
                     }
                     break;
-                case picoquic_tp_enable_multipath:
-                    cnx->remote_parameters.enable_multipath = (int)
+                case picoquic_tp_enable_multipath: {
+                    uint64_t enable_multipath =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    if (ret == 0) {
+                        if (enable_multipath > 1) {
+                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        }
+                        else {
+                            cnx->remote_parameters.enable_multipath = (int)enable_multipath;
+                        }
+                    }
                     break;
-                case picoquic_tp_enable_simple_multipath:
-                    cnx->remote_parameters.enable_simple_multipath = (int)
+                }
+                case picoquic_tp_enable_simple_multipath: {
+                    uint64_t enable_simple_multipath =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    if (ret == 0) {
+                        if (enable_simple_multipath > 1) {
+                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        }
+                        else {
+                            cnx->remote_parameters.enable_simple_multipath = (int)enable_simple_multipath;
+                        }
+                    }
                     break;
+                }
                 default:
                     /* ignore unknown extensions */
                     break;
@@ -822,7 +840,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         cnx->do_grease_quic_bit = cnx->local_parameters.do_grease_quic_bit && cnx->remote_parameters.do_grease_quic_bit;
         cnx->is_multipath_enabled = cnx->local_parameters.enable_multipath && cnx->remote_parameters.enable_multipath;
         cnx->is_simple_multipath_enabled = cnx->local_parameters.enable_simple_multipath &&
-            cnx->remote_parameters.enable_multipath && !cnx->is_multipath_enabled;
+            cnx->remote_parameters.enable_simple_multipath && !cnx->is_multipath_enabled;
 
     }
     else
