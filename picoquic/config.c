@@ -736,7 +736,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
             quic->mtu_max = config->mtu_max;
         }
 
-        if (config->cnx_id_length != 0) {
+        if (config->cnx_id_length != -1) {
             if (picoquic_set_default_connection_id_length(quic, (uint8_t)config->cnx_id_length) != 0) {
                 fprintf(stderr, "Could not set CNX-ID length #%d.\n", config->cnx_id_length);
             }
@@ -792,6 +792,12 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
     }
 
     return quic;
+}
+
+void picoquic_config_init(picoquic_quic_config_t* config)
+{
+    memset(config, 0, sizeof(picoquic_quic_config_t));
+    config->cnx_id_length = -1;
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)
@@ -858,5 +864,5 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     {
         free((void*)config->root_trust_file);
     }
-    memset(config, 0, sizeof(picoquic_quic_config_t));
+    picoquic_config_init(config);
 }
