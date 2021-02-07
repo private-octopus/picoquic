@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:K:p:v:o:w:rRs:S:G:P:O:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:h";
+static char* ref_option_text = "c:k:K:p:v:o:w:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:h";
 
 int config_option_letters_test()
 {
@@ -62,6 +62,7 @@ static picoquic_quic_config_t param1 = {
     NULL, /* picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
     3,
     2,
+    3,
     /* Common flags */
     1, /* unsigned int initial_random : 1; */
     1, /* unsigned int use_long_log : 1; */
@@ -102,6 +103,7 @@ static char const* config_argv1[] = {
     "-G", "cubic",
     "-P", "3",
     "-O", "2",
+    "-M", "3",
     "-R",
     "-L",
     "-w", "/data/www/",
@@ -126,6 +128,7 @@ static picoquic_quic_config_t param2 = {
     5, /* int cnx_id_length; */
     NULL, /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     NULL, /* picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
+    0,
     0,
     0,
     /* Common flags */
@@ -233,6 +236,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_string("cc_algo_id", expected->cc_algo_id, actual->cc_algo_id);
     ret |= config_test_compare_int("spinbit", expected->spinbit_policy, actual->spinbit_policy);
     ret |= config_test_compare_int("lossbit", expected->lossbit_policy, actual->lossbit_policy);
+    ret |= config_test_compare_int("multipath", expected->multipath_option, actual->multipath_option);
     ret |= config_test_compare_int("initial_random", expected->initial_random, actual->initial_random);
     ret |= config_test_compare_int("use_long_log", expected->use_long_log, actual->use_long_log);
     ret |= config_test_compare_string("www_dir", expected->www_dir, actual->www_dir);

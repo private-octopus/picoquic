@@ -866,15 +866,15 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         /* Similarly, servers only announce multipath support if clients request it.
          * enable only one of multipath and simple multipath
          */
-        cnx->local_parameters.enable_simple_multipath = cnx->remote_parameters.enable_simple_multipath;
-        cnx->is_simple_multipath_enabled = cnx->remote_parameters.enable_simple_multipath;
+        cnx->local_parameters.enable_simple_multipath &= cnx->remote_parameters.enable_simple_multipath;
+        cnx->is_simple_multipath_enabled = cnx->local_parameters.enable_simple_multipath;
         if (cnx->is_simple_multipath_enabled) {
             cnx->local_parameters.enable_multipath = 0;
             cnx->is_multipath_enabled = 0;
         }
         else {
-            cnx->local_parameters.enable_multipath = cnx->remote_parameters.enable_multipath;
-            cnx->is_multipath_enabled = cnx->remote_parameters.enable_multipath;
+            cnx->local_parameters.enable_multipath &= cnx->remote_parameters.enable_multipath;
+            cnx->is_multipath_enabled = cnx->local_parameters.enable_multipath;
         }
     }
 

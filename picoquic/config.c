@@ -64,6 +64,7 @@ static option_table_line_t option_table[] = {
     "Use the specified congestion control algorithm: reno, cubic, bbr or fast. Defaults to bbr." },
     { picoquic_option_SPINBIT, 'P', "spinbit", 1, "number", "Set the default spinbit policy" },
     { picoquic_option_LOSSBIT, 'O', "lossbit", 1, "number", "Set the default lossbit policy" },
+    { picoquic_option_MULTIPATH, 'M', "multipath", 1, "number", "Multipath option: none(0), full(1), simple(2), both(3)" },
     { picoquic_option_DEST_IF, 'e', "dest_if", 1, "if", "Send on interface (default: -1)" },
     { picoquic_option_CIPHER_SUITE, 'C', "cipher_suite", 1, "cipher_suite_id", "specify cipher suite (e.g. -C 20 = chacha20)" },
     { picoquic_option_ESNI_RR_FILE, 'E', "esni_rr_file", 1, "file", "ESNI RR file (default: don't use ESNI)" },
@@ -359,6 +360,17 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         else {
             config->lossbit_policy = (picoquic_lossbit_version_enum)v;
+        }
+        break;
+    }
+    case picoquic_option_MULTIPATH: {
+        int v = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || v < 0 || v > 3) {
+            fprintf(stderr, "Invalid multipath option: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = (ret == 0) ? -1 : ret;
+        }
+        else {
+            config->multipath_option = v;
         }
         break;
     }
@@ -707,6 +719,8 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
 
         picoquic_set_default_spinbit_policy(quic, config->spinbit_policy);
         picoquic_set_default_lossbit_policy(quic, config->lossbit_policy);
+
+        picoquic_set_default_multipath_option(quic, config->multipath_option);
 
         if (config->token_file_name) {
             if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {

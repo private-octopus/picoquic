@@ -45,6 +45,7 @@ typedef enum {
     picoquic_option_CC_ALGO,
     picoquic_option_SPINBIT,
     picoquic_option_LOSSBIT,
+    picoquic_option_MULTIPATH,
     picoquic_option_DEST_IF,
     picoquic_option_CIPHER_SUITE,
     picoquic_option_ESNI_RR_FILE,
@@ -85,7 +86,8 @@ typedef struct st_picoquic_quic_config_t {
     /* TODO: control key logging */
     picoquic_spinbit_version_enum spinbit_policy; /* control spin bit */
     picoquic_lossbit_version_enum lossbit_policy; /* control loss bit */
-    /* TODO: control other extensions, e.g. time stamp, ack delay, multipath */
+    int multipath_option;
+    /* TODO: control other extensions, e.g. time stamp, ack delay */
     /* Common flags */
     unsigned int initial_random : 1;
     unsigned int use_long_log : 1;

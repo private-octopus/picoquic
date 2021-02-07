@@ -502,6 +502,14 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
     }
 }
 
+void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option)
+{
+    if (quic->default_tp != NULL) {
+        quic->default_tp->enable_multipath = multipath_option&1;
+        quic->default_tp->enable_simple_multipath = (multipath_option>>1)&1;
+    }
+}
+
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max)
 {
     quic->crypto_epoch_length_max = (crypto_epoch_length_max == 0) ?

@@ -516,6 +516,9 @@ void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbi
 /* Set default loss bit policy for the context */
 void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy);
 
+/* Set the multipath option for the context */
+void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option);
+
 /* Set the length of a crypto epoch -- force rotation after that many packets sent */
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max);
 
