@@ -97,7 +97,7 @@ extern "C" {
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 3
 
-#define PICOQUIC_ALPN_NUMBER_MAX 8
+#define PICOQUIC_ALPN_NUMBER_MAX 32
 
 /*
  * Types of frames
