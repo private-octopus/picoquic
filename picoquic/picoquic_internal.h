@@ -510,6 +510,7 @@ typedef struct st_picoquic_quic_t {
     uint32_t sequence_hole_pseudo_period; /* Optimistic ack defense */
     picoquic_spinbit_version_enum default_spin_policy;
     picoquic_lossbit_version_enum default_lossbit_policy;
+    uint32_t default_multipath_option;
     uint64_t crypto_epoch_length_max; /* Default packet interval between key rotations */
     uint32_t max_simultaneous_logs;
     uint32_t current_number_of_open_logs;
