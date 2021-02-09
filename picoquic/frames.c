@@ -2107,7 +2107,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
             if (is_old_path_valid) {
                 picoquic_update_delay_avg_and_var(&old_path->one_way_delay_avg, &old_path->one_way_delay_var,
                     &old_path->one_way_delay_min, one_way_delay_sample);
-#if 1
+#if 0
 #else
                 old_path->one_way_delay_sample = one_way_delay_sample;
 #endif
@@ -2177,7 +2177,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             cnx->congestion_alg->alg_notify(cnx, packet_data->path_ack[i].acked_path,
                 picoquic_congestion_notification_bw_measurement,
                 packet_data->path_ack[i].acked_path->rtt_sample,
-#if 1
+#if 0
                 0,
 #else
                 packet_data->path_ack[i].acked_path->one_way_delay_sample,
