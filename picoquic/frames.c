@@ -1700,11 +1700,25 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
 
             if (old_path != NULL) {
                 old_path->nb_spurious++;
-                if (pc == picoquic_packet_context_application &&
-                    (p->sequence_number > old_path->last_1rtt_acknowledged ||
-                        old_path->last_1rtt_acknowledged == UINT64_MAX)) {
-                    old_path->last_1rtt_acknowledged = p->sequence_number;
-                    old_path->nb_retransmit = 0;
+                if (!cnx->is_multipath_enabled) {
+                    if (pc == picoquic_packet_context_application &&
+                        (p->sequence_number > old_path->last_1rtt_acknowledged ||
+                            old_path->last_1rtt_acknowledged == UINT64_MAX)) {
+                        old_path->last_1rtt_acknowledged = p->sequence_number;
+                        old_path->nb_retransmit = 0;
+                    }
+                }
+                else {
+                    if (pc == picoquic_packet_context_application &&
+                        (p->send_time > old_path->last_1rtt_acknowledged_sent_at ||
+                            old_path->last_1rtt_acknowledged == UINT64_MAX)) {
+                        if (p->sequence_number > old_path->last_1rtt_acknowledged ||
+                            old_path->last_1rtt_acknowledged == UINT64_MAX) {
+                            old_path->last_1rtt_acknowledged = p->sequence_number;
+                        }
+                        old_path->last_1rtt_acknowledged_sent_at = p->send_time;
+                        old_path->nb_retransmit = 0;
+                    }
                 }
 
                 /* Record the updated delay and CC data in packet context
@@ -2093,6 +2107,10 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
             if (is_old_path_valid) {
                 picoquic_update_delay_avg_and_var(&old_path->one_way_delay_avg, &old_path->one_way_delay_var,
                     &old_path->one_way_delay_min, one_way_delay_sample);
+#if 1
+#else
+                old_path->one_way_delay_sample = one_way_delay_sample;
+#endif
             }
 
             if (is_path_x_valid) {
@@ -2158,7 +2176,13 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         if (cnx->congestion_alg != NULL && packet_data->path_ack[i].acked_path->rtt_sample > 0) {
             cnx->congestion_alg->alg_notify(cnx, packet_data->path_ack[i].acked_path,
                 picoquic_congestion_notification_bw_measurement,
-                packet_data->path_ack[i].acked_path->rtt_sample, 0, 0, 0, current_time);
+                packet_data->path_ack[i].acked_path->rtt_sample,
+#if 1
+                0,
+#else
+                packet_data->path_ack[i].acked_path->one_way_delay_sample,
+#endif
+                0, 0, current_time);
         }
     }
 }
@@ -2666,12 +2690,27 @@ static int picoquic_process_ack_range(
 
                 if (old_path != NULL) {
                     old_path->delivered += p->length;
-                    if (pc == picoquic_packet_context_application && 
-                        (p->sequence_number > old_path->last_1rtt_acknowledged ||
-                            old_path->last_1rtt_acknowledged == UINT64_MAX)){
-                        old_path->last_1rtt_acknowledged = p->sequence_number;
-                        old_path->last_1rtt_acknowledged_at = current_time;
-                        old_path->nb_retransmit = 0;
+                    if (!cnx->is_multipath_enabled) {
+                        if (pc == picoquic_packet_context_application &&
+                            (p->sequence_number > old_path->last_1rtt_acknowledged ||
+                                old_path->last_1rtt_acknowledged == UINT64_MAX)) {
+                            old_path->last_1rtt_acknowledged = p->sequence_number;
+                            old_path->last_1rtt_acknowledged_at = current_time;
+                            old_path->nb_retransmit = 0;
+                        }
+                    }
+                    else {
+                        if (pc == picoquic_packet_context_application &&
+                            (p->send_time > old_path->last_1rtt_acknowledged_sent_at ||
+                                old_path->last_1rtt_acknowledged == UINT64_MAX)) {
+                            if (p->sequence_number > old_path->last_1rtt_acknowledged ||
+                                old_path->last_1rtt_acknowledged == UINT64_MAX) {
+                                old_path->last_1rtt_acknowledged = p->sequence_number;
+                            }
+                            old_path->last_1rtt_acknowledged_sent_at = p->send_time;
+                            old_path->last_1rtt_acknowledged_at = current_time;
+                            old_path->nb_retransmit = 0;
+                        }
                     }
 
                     picoquic_record_ack_packet_data(packet_data, p);
@@ -3016,10 +3055,9 @@ void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoqui
     }
 }
 
-int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc)
+int picoquic_is_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc)
 {
     int ret = 0;
-    picoquic_ack_context_t* ack_ctx = &cnx->ack_ctx[pc];
 
     if (ack_ctx->ack_needed) {
         if (pc != picoquic_packet_context_application || ack_ctx->ack_after_fin) {
@@ -3054,6 +3092,23 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
         }
     }
     return ret;
+}
+
+int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time, picoquic_packet_context_enum pc)
+{
+    int ret = picoquic_is_ack_needed_in_ctx(cnx, &cnx->ack_ctx[pc], current_time, next_wake_time, pc);
+
+    if (cnx->is_multipath_enabled) {
+        picoquic_local_cnxid_t* l_cid = cnx->local_cnxid_first;
+
+        while (ret == 0 && l_cid != NULL) {
+            ret |= picoquic_is_ack_needed_in_ctx(cnx, &l_cid->ack_ctx, current_time, next_wake_time, pc);
+            l_cid = l_cid->next;
+        }
+    }
+
+    return ret;
+
 }
 
 /*

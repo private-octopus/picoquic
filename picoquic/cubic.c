@@ -129,7 +129,7 @@ static void picoquic_cubic_enter_recovery(picoquic_cnx_t * cnx,
     picoquic_cubic_state_t* cubic_state,
     uint64_t current_time)
 {
-    cubic_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx);
+    cubic_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
     /* Update similar to new reno, but different beta */
     cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
     /* Apply fast convergence */

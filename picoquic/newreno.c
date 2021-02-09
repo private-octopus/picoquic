@@ -47,6 +47,7 @@ void picoquic_newreno_sim_reset(picoquic_newreno_sim_state_t * nrss)
 static void picoquic_newreno_sim_enter_recovery(
     picoquic_newreno_sim_state_t* nr_state,
     picoquic_cnx_t* cnx,
+    picoquic_path_t * path_x,
     picoquic_congestion_notification_t notification,
     uint64_t current_time)
 {
@@ -65,8 +66,8 @@ static void picoquic_newreno_sim_enter_recovery(
     }
 
     nr_state->recovery_start = current_time;
-    nr_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx);
-
+    nr_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
+    nr_state->recovery_number_space = picoquic_cc_get_sequence_space_id(cnx, path_x);
     nr_state->residual_ack = 0;
 }
 
@@ -104,21 +105,44 @@ void picoquic_newreno_sim_notify(
     case picoquic_congestion_notification_repeat:
     case picoquic_congestion_notification_timeout:
         /* enter recovery */
-        if (current_time - nr_state->recovery_start > path_x->smoothed_rtt ||
-            nr_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
-            picoquic_newreno_sim_enter_recovery(nr_state, cnx, notification, current_time);
+        if (!cnx->is_multipath_enabled) {
+            if (current_time - nr_state->recovery_start > path_x->smoothed_rtt ||
+                nr_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
+                picoquic_newreno_sim_enter_recovery(nr_state, cnx, path_x, notification, current_time);
+            }
+        }
+        else {
+            if (current_time - nr_state->recovery_start > path_x->smoothed_rtt ||
+                nr_state->recovery_start <= picoquic_cc_get_ack_sent_time(cnx, path_x)) {
+                picoquic_newreno_sim_enter_recovery(nr_state, cnx, path_x, notification, current_time);
+            }
         }
         break;
     case picoquic_congestion_notification_spurious_repeat:
-        if (current_time - nr_state->recovery_start < path_x->smoothed_rtt &&
-            nr_state->recovery_sequence > picoquic_cc_get_ack_number(cnx, path_x)) {
-            /* If spurious repeat of initial loss detected,
-             * exit recovery and reset threshold to pre-entry cwin.
-             */
-            if (nr_state->ssthresh != UINT64_MAX &&
-                path_x->cwin < 2 * nr_state->ssthresh) {
-                path_x->cwin = 2 * nr_state->ssthresh;
-                nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
+        if (!cnx->is_multipath_enabled) {
+            if (current_time - nr_state->recovery_start < path_x->smoothed_rtt &&
+                nr_state->recovery_sequence > picoquic_cc_get_ack_number(cnx, path_x)) {
+                /* If spurious repeat of initial loss detected,
+                 * exit recovery and reset threshold to pre-entry cwin.
+                 */
+                if (nr_state->ssthresh != UINT64_MAX &&
+                    nr_state->cwin < 2 * nr_state->ssthresh) {
+                    nr_state->cwin = 2 * nr_state->ssthresh;
+                    nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
+                }
+            }
+        }
+        else {
+            if (current_time - nr_state->recovery_start < path_x->smoothed_rtt &&
+                nr_state->recovery_start > picoquic_cc_get_ack_sent_time(cnx, path_x)) {
+                /* If spurious repeat of initial loss detected,
+                 * exit recovery and reset threshold to pre-entry cwin.
+                 */
+                if (nr_state->ssthresh != UINT64_MAX &&
+                    nr_state->cwin < 2 * nr_state->ssthresh) {
+                    nr_state->cwin = 2 * nr_state->ssthresh;
+                    nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
+                }
             }
         }
         break;

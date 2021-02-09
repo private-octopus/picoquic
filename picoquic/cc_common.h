@@ -40,9 +40,13 @@ typedef struct st_picoquic_min_max_rtt_t {
     uint64_t samples[PICOQUIC_MIN_MAX_RTT_SCOPE];
 } picoquic_min_max_rtt_t;
 
-uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx);
+uint64_t picoquic_cc_get_sequence_space_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
+
+uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
+
+uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt);
 
@@ -71,6 +75,7 @@ typedef struct st_picoquic_newreno_sim_state_t {
     uint64_t ssthresh;
     uint64_t recovery_start;
     uint64_t recovery_sequence;
+    uint64_t recovery_number_space;
 } picoquic_newreno_sim_state_t;
 
 void picoquic_newreno_sim_reset(picoquic_newreno_sim_state_t* nrss);

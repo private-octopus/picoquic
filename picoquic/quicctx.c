@@ -1814,7 +1814,7 @@ picoquic_remote_cnxid_t* picoquic_remove_stashed_cnxid(picoquic_cnx_t* cnx, pico
                         /* Unexpected! */
                         DBG_PRINTF("Recycle stashed packet returns %d, length %zu\n", ret, length);
                     }
-                    recycled = recycled->next_packet;
+                    recycled = recycled->previous_packet;
                 }
             }
 

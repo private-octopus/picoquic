@@ -128,7 +128,7 @@ static void fastcc_notify_congestion(
     fastcc_state->last_freeze_was_timeout = is_timeout;
     fastcc_state->alg_state = picoquic_fastcc_freeze;
     fastcc_state->end_of_freeze = current_time + fastcc_state->rtt_min;
-    fastcc_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx);
+    fastcc_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
     fastcc_state->nb_cc_events = 0;
 
     if (is_delay) {
