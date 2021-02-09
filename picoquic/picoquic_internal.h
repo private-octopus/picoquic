@@ -860,6 +860,7 @@ typedef struct st_picoquic_path_t {
      * is reset to zero if a new packet is acknowledged.
      */
     uint64_t last_1rtt_acknowledged;
+    uint64_t last_1rtt_acknowledged_sent_at;
     uint64_t last_1rtt_acknowledged_at;
     uint64_t last_packet_received_at;
     uint64_t last_loss_event_detected;
@@ -1368,7 +1369,7 @@ int picoquic_parse_header_and_decrypt(
 /* handling of ACK logic */
 void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx);
 
-int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);
+int picoquic_is_ack_needed(picoquic_cnx_t* cnx,  uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);
 
 int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
     picoquic_local_cnxid_t * l_cid, uint64_t pn64);
