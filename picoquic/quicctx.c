@@ -504,6 +504,7 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option)
 {
+    quic->default_multipath_option = multipath_option;
     if (quic->default_tp != NULL) {
         quic->default_tp->enable_multipath = multipath_option&1;
         quic->default_tp->enable_simple_multipath = (multipath_option>>1)&1;
@@ -2531,6 +2532,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         if (quic->default_tp == NULL) {
             picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
             cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
+            cnx->local_parameters.enable_multipath = quic->default_multipath_option & 1;
+            cnx->local_parameters.enable_simple_multipath = (quic->default_multipath_option >> 1) & 1;
         } else {
             memcpy(&cnx->local_parameters, quic->default_tp, sizeof(picoquic_tp_t));
             /* If the default parameters include preferred address, document it */
