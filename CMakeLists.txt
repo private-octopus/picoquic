@@ -96,6 +96,7 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/democlient.c
     picohttp/demoserver.c
     picohttp/h3zero.c
+	picohttp/quicperf.c
 	picohttp/siduck.c
 )
 
