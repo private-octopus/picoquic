@@ -331,7 +331,7 @@ int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx
 {
     int ret = 0;
 
-    for (int i = 0; ret == 0 && i < ctx->nb_scenarios; i++) {
+    for (size_t i = 0; ret == 0 && i < ctx->nb_scenarios; i++) {
         if (ctx->scenarios[i].previous_stream_id == stream_id) {
             uint64_t repeat_nb = 0;
             uint64_t stream_x = ctx->scenarios[i].stream_id;
@@ -461,7 +461,7 @@ int quicperf_prepare_to_send(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicperf_
         is_fin = 1;
     } else if (sent_already + available > send_limit) {
         is_fin = 1;
-        available = send_limit - sent_already;
+        available = (size_t)(send_limit - sent_already);
     }
 
     buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, !is_fin);
