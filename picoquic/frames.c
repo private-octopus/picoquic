@@ -693,7 +693,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
             stream->fin_signalled = 1;
         }
 
-        if (cnx->callback_fn(cnx, stream->stream_id, data->bytes + start, data_length, fin_now,
+        if (!stream->stop_sending_requested && cnx->callback_fn(cnx, stream->stream_id, data->bytes + start, data_length, fin_now,
             cnx->callback_ctx, stream->app_stream_ctx) != 0) {
             picoquic_log_app_message(cnx, "Data callback on stream %" PRIu64 " returns error 0x%x",
                 stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
@@ -707,7 +707,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 
     if (stream->consumed_offset >= stream->fin_offset && stream->fin_received && !stream->fin_signalled) {
         stream->fin_signalled = 1;
-        if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_fin,
+        if (!stream->stop_sending_requested && cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_fin,
             cnx->callback_ctx, stream->app_stream_ctx) != 0) {
             picoquic_log_app_message(cnx, "FIN callback on stream %" PRIu64 " returns error 0x%x", 
                 stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);

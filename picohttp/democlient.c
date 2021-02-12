@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include "picoquic_internal.h"
 #include "h3zero.h"
+#include "quicperf.h"
 #include "democlient.h"
 
 /* List of supported protocols 
@@ -54,7 +55,8 @@ static picoquic_alpn_list_t alpn_list[] = {
     { picoquic_alpn_http_3, "h3" },
     { picoquic_alpn_http_0_9, "hq-interop"},
     { picoquic_alpn_siduck, "siduck"},
-    { picoquic_alpn_siduck, "siduck-00"}
+    { picoquic_alpn_siduck, "siduck-00"},
+    { picoquic_alpn_quicperf, QUICPERF_ALPN}
 };
 
 static size_t nb_alpn_list = sizeof(alpn_list) / sizeof(picoquic_alpn_list_t);
