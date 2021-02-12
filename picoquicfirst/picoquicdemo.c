@@ -71,6 +71,7 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "democlient.h"
 #include "demoserver.h"
 #include "siduck.h"
+#include "quicperf.h"
 #include "picoquic_unified_log.h"
 #include "picoquic_logger.h"
 #include "picoquic_binlog.h"
@@ -239,6 +240,7 @@ typedef struct st_client_loop_cb_t {
     int key_update_done;
     int zero_rtt_available;
     int is_siduck;
+    int is_quicperf;
     char const* saved_alpn;
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
@@ -261,7 +263,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
             break;
         case picoquic_packet_loop_after_receive:
             /* Post receive callback */
-            if ((!cb_ctx->is_siduck && cb_ctx->demo_callback_ctx->connection_closed) ||
+            if ((!cb_ctx->is_siduck && !cb_ctx->is_quicperf && cb_ctx->demo_callback_ctx->connection_closed) ||
                 cb_ctx->cnx_client->cnx_state == picoquic_state_disconnected) {
                 fprintf(stdout, "The connection is closed!\n");
                 ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
@@ -394,7 +396,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
                     }
                 }
 
-                if (!cb_ctx->is_siduck && cb_ctx->demo_callback_ctx->nb_open_streams == 0) {
+                if (!cb_ctx->is_siduck && !cb_ctx->is_quicperf && cb_ctx->demo_callback_ctx->nb_open_streams == 0) {
                     fprintf(stdout, "All done, Closing the connection.\n");
                     picoquic_log_app_message(cb_ctx->cnx_client, "%s", "All done, Closing the connection.");
 
@@ -420,7 +422,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
                     cb_ctx->cnx_client->is_hcid_verified);
                 cb_ctx->established = 1;
 
-                if (!cb_ctx->zero_rtt_available && !cb_ctx->is_siduck) {
+                if (!cb_ctx->zero_rtt_available && !cb_ctx->is_siduck && !cb_ctx->is_quicperf) {
                     /* Start the download scenario */
                     picoquic_demo_client_start_streams(cb_ctx->cnx_client, cb_ctx->demo_callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
                 }
@@ -450,6 +452,8 @@ int quic_client(const char* ip_address_text, int server_port,
     picoquic_demo_stream_desc_t * client_sc = NULL;
     int is_siduck = 0;
     siduck_ctx_t* siduck_ctx = NULL;
+    int is_quicperf = 0;
+    quicperf_ctx_t* quicperf_ctx = NULL;
     client_loop_cb_t loop_cb;
     const char* sni = config->sni;
 
@@ -464,6 +468,16 @@ int quic_client(const char* ip_address_text, int server_port,
             return -1;
         }
         fprintf(stdout, "Getting ready to quack\n");
+    }
+    else if (config->alpn != NULL && strcmp(config->alpn, QUICPERF_ALPN) == 0) {
+        /* Set a QUICPERF client */
+        is_quicperf = 1;
+        quicperf_ctx = quicperf_create_ctx(client_scenario_text);
+        if (quicperf_ctx == NULL) {
+            fprintf(stdout, "Could not get ready to run QUICPERF\n");
+            return -1;
+        }
+        fprintf(stdout, "Getting ready to run QUICPERF\n");
     }
     else {
         if (config->no_disk) {
@@ -535,6 +549,9 @@ int quic_client(const char* ip_address_text, int server_port,
                 picoquic_set_callback(cnx_client, siduck_callback, siduck_ctx);
                 cnx_client->local_parameters.max_datagram_frame_size = 128;
             }
+            else if (is_quicperf) {
+                picoquic_set_callback(cnx_client, quicperf_callback, quicperf_ctx);
+            }
             else {
                 picoquic_set_callback(cnx_client, picoquic_demo_client_callback, &callback_ctx);
 
@@ -581,7 +598,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);
             }
 
-            if (ret == 0 && !is_siduck) {
+            if (ret == 0 && !is_siduck && !is_quicperf) {
                 if (picoquic_is_0rtt_available(cnx_client) && (config->proposed_version & 0x0a0a0a0a) != 0x0a0a0a0a) {
                     loop_cb.zero_rtt_available = 1;
 
@@ -604,10 +621,11 @@ int quic_client(const char* ip_address_text, int server_port,
         loop_cb.force_migration = force_migration;
         loop_cb.nb_packets_before_key_update = nb_packets_before_key_update;
         loop_cb.is_siduck = is_siduck;
+        loop_cb.is_quicperf = is_quicperf;
         if (is_siduck) {
             loop_cb.siduck_ctx = siduck_ctx;
         }
-        else {
+        else if (!is_quicperf) {
             loop_cb.demo_callback_ctx = &callback_ctx;
         }
 
@@ -754,7 +772,11 @@ int quic_client(const char* ip_address_text, int server_port,
     }
 
     /* Clean up */
-    if (is_siduck) {
+    if (is_quicperf) {
+        if (quicperf_ctx != NULL) {
+            quicperf_delete_ctx(quicperf_ctx);
+        }
+    } else if (is_siduck) {
         if (siduck_ctx != NULL) {
             free(siduck_ctx);
         }

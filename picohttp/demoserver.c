@@ -30,6 +30,7 @@
 #include "democlient.h"
 #include "demoserver.h"
 #include "siduck.h"
+#include "quicperf.h"
 
 /* Stream context splay management */
 
@@ -1293,6 +1294,9 @@ int picoquic_demo_server_callback(picoquic_cnx_t* cnx,
         break;
     case picoquic_alpn_siduck:
         ret = siduck_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);
+        break;
+    case picoquic_alpn_quicperf:
+        ret = quicperf_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);
         break;
     case picoquic_alpn_http_0_9:
     default:

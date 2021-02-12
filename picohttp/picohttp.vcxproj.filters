@@ -13,6 +13,7 @@
     <ClCompile Include="siduck.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="quicperf.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h">
@@ -30,6 +31,7 @@
     <ClInclude Include="siduck.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="quicperf.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source Files">
