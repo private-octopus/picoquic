@@ -1903,10 +1903,16 @@ void picoquic_estimate_max_path_bandwidth(picoquic_cnx_t* cnx, picoquic_path_t* 
 
 uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
 {
-
     uint64_t nb_packets = (cnx->path[0]->cwin / cnx->path[0]->send_mtu);
-    uint64_t ack_gap = (nb_packets + 3) / 4;
+    uint64_t ack_gap;
     uint64_t ack_gap_min = 2;
+
+    if (!cnx->is_ack_frequency_negotiated) {
+        uint64_t packet_rate_times_1M = (data_rate * 1000000) / cnx->path[0]->send_mtu;
+        nb_packets = packet_rate_times_1M / cnx->path[0]->smoothed_rtt;
+    }
+    
+    ack_gap = (nb_packets + 3) / 4;
 
     if (data_rate > PICOQUIC_BANDWIDTH_MEDIUM) {
         if (cnx->path[0]->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
@@ -3001,6 +3007,7 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
     if (bytes > after_stamp && !is_opportunistic) {
         ack_ctx->ack_needed = 0;
         ack_ctx->ack_after_fin = 0;
+        ack_ctx->out_of_order_received = 0;
     }
 
     return bytes;
