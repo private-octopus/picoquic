@@ -170,7 +170,24 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
                 break;
             }
             else {
+                int opt_len;
+                int opt_ret;
                 events[i] = sock_ctx[i]->overlap.hEvent;
+                opt_len = sizeof(int);
+                sock_ctx[i]->so_sndbuf = 655360;
+                opt_ret = setsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_SNDBUF, (const char*)&sock_ctx[i]->so_sndbuf, opt_len);
+                if (opt_ret != 0) {
+                    int sock_error = WSAGetLastError();
+                    opt_ret = getsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_SNDBUF, (char*)&sock_ctx[i]->so_sndbuf, &opt_len);
+                    DBG_PRINTF("Cannot set SO_SNDBUF, err=%d, so_sndbuf=%d (%d)", sock_error, sock_ctx[i]->so_sndbuf, ret);
+                }
+                opt_len = sizeof(int);
+                sock_ctx[i]->so_rcvbuf = 655360;
+                opt_ret = setsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_RCVBUF, (const char*)&sock_ctx[i]->so_rcvbuf, opt_len); if (opt_ret != 0) {
+                    int sock_error = WSAGetLastError();
+                    opt_ret = getsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_RCVBUF, (char*)&sock_ctx[i]->so_rcvbuf, &opt_len);
+                    DBG_PRINTF("Cannot set SO_RCVBUF, err=%d, so_rcvbuf=%d (%d)", sock_error, sock_ctx[i]->so_rcvbuf, ret);
+                }
             }
         }
     }
