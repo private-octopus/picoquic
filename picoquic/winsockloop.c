@@ -40,6 +40,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     int local_port,
     int local_af,
     int dest_if,
+    int use_small_so_buffers,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx)
 {
@@ -118,7 +119,7 @@ void picoquic_socks_win_coalescing_test(int * recv_coalesced, int * send_coalesc
 
 /* Open a set of sockets in asynch mode. */
 int picoquic_packet_loop_open_sockets_win(int local_port, int local_af, 
-    picoquic_recvmsg_async_ctx_t** sock_ctx, int * sock_af, HANDLE * events,
+    picoquic_recvmsg_async_ctx_t** sock_ctx, int * sock_af, int use_small_so_buffers, HANDLE * events,
     int nb_sockets_max)
 {
     int ret = 0;
@@ -173,20 +174,22 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
                 int opt_len;
                 int opt_ret;
                 events[i] = sock_ctx[i]->overlap.hEvent;
-                opt_len = sizeof(int);
-                sock_ctx[i]->so_sndbuf = 655360;
-                opt_ret = setsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_SNDBUF, (const char*)&sock_ctx[i]->so_sndbuf, opt_len);
-                if (opt_ret != 0) {
-                    int sock_error = WSAGetLastError();
-                    opt_ret = getsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_SNDBUF, (char*)&sock_ctx[i]->so_sndbuf, &opt_len);
-                    DBG_PRINTF("Cannot set SO_SNDBUF, err=%d, so_sndbuf=%d (%d)", sock_error, sock_ctx[i]->so_sndbuf, ret);
-                }
-                opt_len = sizeof(int);
-                sock_ctx[i]->so_rcvbuf = 655360;
-                opt_ret = setsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_RCVBUF, (const char*)&sock_ctx[i]->so_rcvbuf, opt_len); if (opt_ret != 0) {
-                    int sock_error = WSAGetLastError();
-                    opt_ret = getsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_RCVBUF, (char*)&sock_ctx[i]->so_rcvbuf, &opt_len);
-                    DBG_PRINTF("Cannot set SO_RCVBUF, err=%d, so_rcvbuf=%d (%d)", sock_error, sock_ctx[i]->so_rcvbuf, ret);
+                if (!use_small_so_buffers) {
+                    opt_len = sizeof(int);
+                    sock_ctx[i]->so_sndbuf = 655360;
+                    opt_ret = setsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_SNDBUF, (const char*)&sock_ctx[i]->so_sndbuf, opt_len);
+                    if (opt_ret != 0) {
+                        int sock_error = WSAGetLastError();
+                        opt_ret = getsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_SNDBUF, (char*)&sock_ctx[i]->so_sndbuf, &opt_len);
+                        DBG_PRINTF("Cannot set SO_SNDBUF, err=%d, so_sndbuf=%d (%d)", sock_error, sock_ctx[i]->so_sndbuf, opt_ret);
+                    }
+                    opt_len = sizeof(int);
+                    sock_ctx[i]->so_rcvbuf = 655360;
+                    opt_ret = setsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_RCVBUF, (const char*)&sock_ctx[i]->so_rcvbuf, opt_len); if (opt_ret != 0) {
+                        int sock_error = WSAGetLastError();
+                        opt_ret = getsockopt(sock_ctx[i]->fd, SOL_SOCKET, SO_RCVBUF, (char*)&sock_ctx[i]->so_rcvbuf, &opt_len);
+                        DBG_PRINTF("Cannot set SO_RCVBUF, err=%d, so_rcvbuf=%d (%d)", sock_error, sock_ctx[i]->so_rcvbuf, opt_ret);
+                    }
                 }
             }
         }
@@ -384,6 +387,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     int local_port,
     int local_af,
     int dest_if,
+    int use_small_so_buffers,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx)
 {
@@ -408,7 +412,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 
     /* Open the sockets */
     if ((nb_sockets = picoquic_packet_loop_open_sockets_win(
-        local_port, local_af, sock_ctx, sock_af, events, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
+        local_port, local_af, sock_ctx, sock_af, use_small_so_buffers, events, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (loop_callback != NULL) {
@@ -696,7 +700,8 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
             HANDLE mig_sock_event = NULL;
             
             next_port = socket_port + 1;
-            if (picoquic_packet_loop_open_sockets_win(next_port, sock_af[0], &sock_ctx_mig, &s_mig_af, &mig_sock_event, 1) != 1){
+            if (picoquic_packet_loop_open_sockets_win(next_port, sock_af[0], &sock_ctx_mig, &s_mig_af,
+                use_small_so_buffers, &mig_sock_event, 1) != 1){
                 if (last_cnx != NULL) {
                     picoquic_log_app_message(last_cnx, "Could not create socket for migration test, port=%d, af=%d",
                         next_port, sock_af[0]);
