@@ -150,7 +150,7 @@ int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE 
         }
         else {
             if (!use_small_so_buffers) {
-                int opt_len;
+                socklen_t opt_len;
                 int opt_ret;
                 int so_sndbuf;
                 int so_rcvbuf;
@@ -169,7 +169,8 @@ int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE 
                 }
                 opt_len = sizeof(int);
                 so_rcvbuf = 655360;
-                opt_ret = setsockopt(s_socket[i], SOL_SOCKET, SO_RCVBUF, (const char*)&so_rcvbuf, opt_len); if (opt_ret != 0) {
+                opt_ret = setsockopt(s_socket[i], SOL_SOCKET, SO_RCVBUF, (const char*)&so_rcvbuf, opt_len);
+                if (opt_ret != 0) {
 #ifdef _WINDOWS
                     int sock_error = WSAGetLastError();
 #else
