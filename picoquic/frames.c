@@ -2884,7 +2884,7 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
     uint64_t multipath_sequence, int is_opportunistic)
 {
     uint64_t num_block = 0;
-    picoquic_sack_item_t* next_sack = ack_ctx->first_sack_item.next_sack;
+    picoquic_sack_item_t* next_sack = picoquic_sack_list_first_range(&ack_ctx->first_sack_item);
     uint64_t ack_delay = 0;
     uint64_t ack_range = 0;
     uint64_t ack_gap = 0;
@@ -2919,7 +2919,7 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
             /* Reserve one byte for the number of blocks */
             num_block_byte = bytes++;
             /* Encode the size of the first ack range */
-            ack_range = picoquic_sack_list_last(&ack_ctx->first_sack_item) - ack_ctx->first_sack_item.start_of_sack_range;
+            ack_range = picoquic_sack_list_last(&ack_ctx->first_sack_item) - picoquic_sack_list_first(&ack_ctx->first_sack_item);
             bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range);
         }
 
@@ -2929,13 +2929,13 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
         }
         else {
             /* Set the lowest acknowledged */
-            lowest_acknowledged = ack_ctx->first_sack_item.start_of_sack_range;
+            lowest_acknowledged = picoquic_sack_list_first(&ack_ctx->first_sack_item);
             /* Encode the ack blocks that fit in the allocated space */
             while (num_block < 32 && next_sack != NULL) {
                 uint8_t* bytes_start_range = bytes;
 
-                ack_gap = lowest_acknowledged - next_sack->end_of_sack_range - 2; /* per spec */
-                ack_range = next_sack->end_of_sack_range - next_sack->start_of_sack_range;
+                ack_gap = lowest_acknowledged - picoquic_sack_item_last(next_sack) - 2; /* per spec */
+                ack_range = picoquic_sack_item_last(next_sack) - picoquic_sack_item_first(next_sack);
 
                 if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) == NULL ||
                     (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range)) == NULL) {
@@ -2944,8 +2944,8 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
                     break;
                 }
                 else {
-                    lowest_acknowledged = next_sack->start_of_sack_range;
-                    next_sack = next_sack->next_sack;
+                    lowest_acknowledged = picoquic_sack_item_first(next_sack);
+                    next_sack = picoquic_sack_item_next(next_sack);
                     num_block++;
                 }
             }

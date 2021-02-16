@@ -294,6 +294,13 @@ uint64_t picoquic_sack_list_last(picoquic_sack_list_t* first_sack)
     return first_sack->end_of_sack_range;
 }
 
+/* Return the first range in the sack list
+ */
+picoquic_sack_item_t * picoquic_sack_list_first_range(picoquic_sack_list_t* first_sack)
+{
+    return first_sack->next_sack;
+}
+
 /* Initialize a sack list
  */
 void picoquic_sack_list_init(picoquic_sack_list_t* first_sack)
@@ -309,4 +316,32 @@ void picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, uint64_t range_m
 {
     first_sack->start_of_sack_range = range_min;
     first_sack->end_of_sack_range = range_max;
+}
+
+/* Free the elements of a sack list 
+ */
+void picoquic_sack_list_free(picoquic_sack_list_t* first_sack)
+{
+    while (first_sack->next_sack != NULL) {
+        picoquic_sack_item_t* next = first_sack->next_sack;
+        first_sack->next_sack = next->next_sack;
+        free(next);
+    }
+}
+
+/* Access to the elements in sack item
+ */
+uint64_t picoquic_sack_item_first(picoquic_sack_item_t* sack_item)
+{
+    return sack_item->start_of_sack_range;
+}
+
+uint64_t picoquic_sack_item_last(picoquic_sack_item_t* sack_item)
+{
+    return sack_item->end_of_sack_range;
+}
+
+picoquic_sack_item_t* picoquic_sack_item_next(picoquic_sack_item_t* sack_item)
+{
+    return sack_item->next_sack;
 }

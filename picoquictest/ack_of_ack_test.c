@@ -151,6 +151,7 @@ static void free_test_sack_list(picoquic_sack_item_t* sack_head)
         free(next);
     }
 }
+
 /*
  * Compare a structured list to a test range
  */

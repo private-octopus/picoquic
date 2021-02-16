@@ -1390,9 +1390,19 @@ uint64_t picoquic_sack_list_first(picoquic_sack_list_t* first_sack);
 
 uint64_t picoquic_sack_list_last(picoquic_sack_list_t* first_sack);
 
+picoquic_sack_item_t* picoquic_sack_list_first_range(picoquic_sack_list_t* first_sack);
+
 void picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
 
 void picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, uint64_t range_min, uint64_t range_max);
+
+void picoquic_sack_list_free(picoquic_sack_list_t* first_sack);
+
+uint64_t picoquic_sack_item_first(picoquic_sack_item_t* sack_item);
+
+uint64_t picoquic_sack_item_last(picoquic_sack_item_t* sack_item);
+
+picoquic_sack_item_t* picoquic_sack_item_next(picoquic_sack_item_t* sack_item);
 
 void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet);
 
