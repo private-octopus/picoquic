@@ -93,8 +93,8 @@ int sacktest()
         ret = -1;
     }
 
-    if (cnx.ack_ctx[pc].first_sack_item.start_of_sack_range != 0 ||
-        cnx.ack_ctx[pc].first_sack_item.end_of_sack_range != 0 ||
+    if (picoquic_sack_list_first(&cnx.ack_ctx[pc].first_sack_item) != 0 ||
+        picoquic_sack_list_last(&cnx.ack_ctx[pc].first_sack_item) != 0 ||
         cnx.ack_ctx[pc].first_sack_item.next_sack != NULL) {
         ret = -1;
     }

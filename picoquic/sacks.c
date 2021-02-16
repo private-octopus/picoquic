@@ -64,7 +64,7 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx,
  * Record it in the chain.
  */
 
-int picoquic_update_sack_list(picoquic_sack_item_t* sack,
+int picoquic_update_sack_list(picoquic_sack_list_t* sack,
     uint64_t pn64_min, uint64_t pn64_max)
 {
     int ret = 1; /* duplicate by default, reset to 0 if update found */
@@ -181,7 +181,7 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
     uint64_t pn64, uint64_t current_microsec)
 {
     int ret = 0;
-    picoquic_sack_item_t* sack = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled)?
+    picoquic_sack_list_t* sack = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled)?
         ((l_cid == NULL)?&cnx->path[0]->p_local_cnxid->ack_ctx.first_sack_item:
         &l_cid->ack_ctx.first_sack_item): &cnx->ack_ctx[pc].first_sack_item;
 
@@ -211,7 +211,7 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
 /*
  * Check whether the data fills a hole. returns 0 if it does, -1 otherwise.
  */
-int picoquic_check_sack_list(picoquic_sack_item_t* sack,
+int picoquic_check_sack_list(picoquic_sack_list_t* sack,
     uint64_t pn64_min, uint64_t pn64_max)
 {
     int ret = -1; /* duplicate by default, reset to 0 if update found */
@@ -241,4 +241,72 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
     }
 
     return ret;
+}
+
+/* Process acknowledgement of an acknowledgement. Mark the corresponding
+ * ranges as "already acknowledged" so they do not need to be resent.
+ */
+
+picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_list_t* first_sack, picoquic_sack_item_t* previous,
+    uint64_t start_of_range, uint64_t end_of_range)
+{
+    picoquic_sack_item_t* next = (previous == NULL) ? first_sack : previous->next_sack;
+
+    while (next != NULL) {
+        if (next->start_of_sack_range == start_of_range) {
+            if (next == first_sack) {
+                if (end_of_range < first_sack->end_of_sack_range) {
+                    first_sack->start_of_sack_range = end_of_range + 1;
+                }
+                else {
+                    first_sack->start_of_sack_range = first_sack->end_of_sack_range;
+                }
+            }
+            else if (next->end_of_sack_range == end_of_range) {
+                /* Matching range should be removed */
+                previous->next_sack = next->next_sack;
+                free(next);
+            }
+            break;
+        }
+        else if (next->end_of_sack_range > end_of_range) {
+            previous = next;
+            next = next->next_sack;
+        }
+        else {
+            break;
+        }
+    }
+
+    return previous;
+}
+
+/* Return the first element of a sack list */
+uint64_t picoquic_sack_list_first(picoquic_sack_list_t* first_sack)
+{
+    return first_sack->start_of_sack_range;
+}
+
+/* Return the last element in a sack list, or UINT64_MAX if the list is empty.
+ */
+uint64_t picoquic_sack_list_last(picoquic_sack_list_t* first_sack)
+{
+    return first_sack->end_of_sack_range;
+}
+
+/* Initialize a sack list
+ */
+void picoquic_sack_list_init(picoquic_sack_list_t* first_sack)
+{
+    first_sack->start_of_sack_range = UINT64_MAX;
+    first_sack->end_of_sack_range = 0;
+    first_sack->next_sack = NULL;
+}
+
+/* Reset a SACK list to single range
+ */
+void picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, uint64_t range_min, uint64_t range_max)
+{
+    first_sack->start_of_sack_range = range_min;
+    first_sack->end_of_sack_range = range_max;
 }

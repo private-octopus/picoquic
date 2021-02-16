@@ -601,6 +601,8 @@ typedef struct st_picoquic_sack_item_t {
     uint64_t end_of_sack_range;
 } picoquic_sack_item_t;
 
+typedef picoquic_sack_item_t picoquic_sack_list_t;
+
 /*
  * Stream head.
  * Stream contains bytes of data, which are not always delivered in order.
@@ -651,7 +653,7 @@ typedef struct st_picoquic_stream_head_t {
     void * app_stream_ctx;
     picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
     void* direct_receive_ctx; /* direct receive context */
-    picoquic_sack_item_t first_sack_item; /* Track which parts of the stream were acknowledged by the peer */
+    picoquic_sack_list_t first_sack_item; /* Track which parts of the stream were acknowledged by the peer */
     /* Flags describing the state of the stream */
     unsigned int is_active : 1; /* The application is actively managing data sending through callbacks */
     unsigned int fin_requested : 1; /* Application has requested Fin of sending stream */
@@ -738,7 +740,7 @@ typedef struct st_picoquic_packet_context_t {
 */
 
 typedef struct st_picoquic_ack_context_t {
-    picoquic_sack_item_t first_sack_item; /* picoquic_format_ack_frame */
+    picoquic_sack_list_t first_sack_item; /* picoquic_format_ack_frame */
     uint64_t time_stamp_largest_received; /* picoquic_format_ack_frame */
     uint64_t highest_ack_sent; /* picoquic_format_ack_frame */
     uint64_t highest_ack_sent_time; /* picoquic_format_ack_frame */
@@ -1376,11 +1378,21 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, picoquic_packet_context
 int picoquic_record_pn_received(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
     picoquic_local_cnxid_t* l_cid, uint64_t pn64, uint64_t current_microsec);
 
-int picoquic_update_sack_list(picoquic_sack_item_t* sack,
+int picoquic_update_sack_list(picoquic_sack_list_t* sack,
     uint64_t pn64_min, uint64_t pn64_max);
 /* Check whether the data fills a hole. returns 0 if it does, -1 otherwise. */
-int picoquic_check_sack_list(picoquic_sack_item_t* sack,
+int picoquic_check_sack_list(picoquic_sack_list_t* sack,
     uint64_t pn64_min, uint64_t pn64_max);
+
+picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_list_t* first_sack, picoquic_sack_item_t* previous, uint64_t start_of_range, uint64_t end_of_range);
+
+uint64_t picoquic_sack_list_first(picoquic_sack_list_t* first_sack);
+
+uint64_t picoquic_sack_list_last(picoquic_sack_list_t* first_sack);
+
+void picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
+
+void picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, uint64_t range_min, uint64_t range_max);
 
 void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet);
 
@@ -1390,7 +1402,7 @@ void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pk
  * Process ack of ack
  */
 int picoquic_process_ack_of_ack_frame(
-    picoquic_sack_item_t* first_sack, uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn);
+    picoquic_sack_list_t* first_sack, uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn);
 
 /* Computation of ack delay max and ack gap, based on RTT and Data Rate.
  * If ACK Frequency extension is used, these functions will compute the values
