@@ -410,7 +410,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
 
     /* Wait for packets */
     if (ret == 0) {
-        ret = picoquic_packet_loop(quic, server_port, 0, 0, NULL, NULL);
+        ret = picoquic_packet_loop(quic, server_port, 0, 0, 0, NULL, NULL);
     }
 
     /* And finish. */

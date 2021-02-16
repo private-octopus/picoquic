@@ -2691,7 +2691,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->ack_frequency_delay_local = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
         cnx->ack_frequency_sequence_remote = UINT64_MAX;
         cnx->ack_gap_remote = 2;
-        cnx->ack_delay_remote = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
+        cnx->ack_delay_remote = PICOQUIC_ACK_DELAY_MIN;
 
         picosplay_init_tree(&cnx->stream_tree, picoquic_stream_node_compare, picoquic_stream_node_create, picoquic_stream_node_delete, picoquic_stream_node_value);
 

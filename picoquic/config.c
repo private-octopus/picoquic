@@ -85,6 +85,7 @@ static option_table_line_t option_table[] = {
     "send a large client hello in order to test post quantum readiness" },
     { picoquic_option_Ticket_File_Name, 'T', "ticket_file", 1, "file", "File storing the session tickets" },
     { picoquic_option_Token_File_Name, 'N', "token_file", 1, "file", "File storing the new tokens" },
+    { picoquic_option_Small_SO_buffers, 'B', "small_so_buf", 0, "", "Do not use large SO_SNDBUF SO_RCVBUF" },
     { picoquic_option_HELP, 'h', "help", 0, "This help message" }
 };
 
@@ -443,6 +444,9 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         break;
     case picoquic_option_Token_File_Name:
         ret = config_set_string_param(&config->token_file_name, params, nb_params, 0);
+        break;
+    case picoquic_option_Small_SO_buffers:
+        config->use_small_so_buffers = 1;
         break;
     case picoquic_option_HELP:
         ret = -1;
