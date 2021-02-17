@@ -29,6 +29,7 @@ jobs:
             ulimit -c unlimited -S
             ./picoquic_ct -n -r >sanity.txt 2>&1 && QUICRESULT=$? 
             echo "running picoquic_ct returns $QUICRESULT "
+            cat sanity.txt
             last_line=`grep "SUMMARY: AddressSanitizer:" sanity.txt`
             echo $last_line
             leaked=`echo $last_line | cut -d ' ' -f 3`
