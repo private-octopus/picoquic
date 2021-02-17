@@ -31,6 +31,6 @@ jobs:
             echo "running picoquic_ct returns $QUICRESULT "
             cat sanity.txt
             leaked=`grep "SUMMARY: AddressSanitizer:" sanity.txt | cut -d ' ' -f 3`
-            previous_leak=130000000
+            previous_leak=13000000
             if [ $leaked -gt $previous_leak ]; then echo "$leaked > $previous_leak"; exit 1; else echo "$leaked <= $previous_leak"; fi
             exit 0
