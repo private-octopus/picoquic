@@ -1,0 +1,36 @@
+---
+name: "CILeaktests"
+
+on:
+  push
+
+jobs:
+  citests:
+    name: CI-Leaks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          # We must fetch at least the immediate parents so that if this is
+          # a pull request then we can checkout the head.
+          fetch-depth: 2
+          submodules: 'recursive'
+
+      - run: |
+          sudo apt-get install -y libssl-dev
+          ./ci/build_picotls.sh
+          cmake -DENABLE_ASAN=ON -DENABLE_UBSAN=on .
+          make
+
+      - name: Perform Unit Tests and Check for Leaks
+        run: |
+            ulimit -c unlimited -S
+            ./picoquic_ct -n -r && QUICRESULT=$? >sanity.txt 2>&1
+            last_line=`grep "SUMMARY: AddressSanitizer:" sanity.txt`
+            echo $last_line
+            leaked=`echo $last_line | cut -d ' ' -f 3`
+            previous_leak=12929589
+            if [ $leaked -gt $previous_leak]; then exit 1; fi
+            exit 0
