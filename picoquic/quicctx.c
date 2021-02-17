@@ -3409,6 +3409,11 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
         }
 
+        while (cnx->stream_frame_retransmit_queue != NULL) {
+            picoquic_delete_misc_or_dg(&cnx->stream_frame_retransmit_queue,
+                &cnx->stream_frame_retransmit_queue_last, cnx->stream_frame_retransmit_queue);
+        }
+
         for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
             picoquic_clear_stream(&cnx->tls_stream[epoch]);
         }
