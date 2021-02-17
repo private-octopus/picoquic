@@ -433,6 +433,10 @@ int parseheadertest()
         }
     }
 
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
     return ret;
 }
 
