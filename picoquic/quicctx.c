@@ -569,6 +569,9 @@ void picoquic_free(picoquic_quic_t* quic)
         /* Delete TLS and AEAD cntexts */
         picoquic_delete_retry_protection_contexts(quic);
 
+        /* Delete ESNI key exchange contexts */
+        picoquic_esni_free_key_exchanges(quic);
+
         if (quic->aead_encrypt_ticket_ctx != NULL) {
             picoquic_aead_free(quic->aead_encrypt_ticket_ctx);
             quic->aead_encrypt_ticket_ctx = NULL;
@@ -586,6 +589,9 @@ void picoquic_free(picoquic_quic_t* quic)
 
         /* delete the stored tickets */
         picoquic_free_tickets(&quic->p_first_ticket);
+
+        /* Delete the stored tokens */
+        picoquic_free_tokens(&quic->p_first_token);
 
         /* Deelete the reused tokens tree */
         picosplay_empty_tree(&quic->token_reuse_tree);

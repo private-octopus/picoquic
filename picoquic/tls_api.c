@@ -326,15 +326,10 @@ static int picoquic_openssl_exchange_context_from_file(char const* esni_key_file
         ret = PICOQUIC_ERROR_INVALID_FILE;
     }
     else {
-        *p_exchange_ctx = (ptls_key_exchange_context_t*)malloc(sizeof(ptls_key_exchange_context_t));
-        if (*p_exchange_ctx == NULL) {
-            DBG_PRINTF("%s", "no memory for ESNI private key\n");
-            ret = PICOQUIC_ERROR_MEMORY;
-        }
-        else if ((ret = ptls_openssl_create_key_exchange(p_exchange_ctx, pkey)) != 0) {
+        *p_exchange_ctx = NULL;
+        if ((ret = ptls_openssl_create_key_exchange(p_exchange_ctx, pkey)) != 0) {
             DBG_PRINTF("failed to load private key from file:%s:picotls-error:%d", esni_key_file_name, ret);
             ret = PICOQUIC_ERROR_INVALID_FILE;
-            free(*p_exchange_ctx);
             *p_exchange_ctx = NULL;
         }
         EVP_PKEY_free(pkey);
@@ -2122,6 +2117,15 @@ void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx)
 void picoquic_tlscontext_free(void* vctx)
 {
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)vctx;
+
+    if (ctx->client_mode) {
+        if (ctx->handshake_properties.client.esni_keys.base != NULL) {
+            free(ctx->handshake_properties.client.esni_keys.base);
+            ctx->handshake_properties.client.esni_keys.base = NULL;
+            ctx->handshake_properties.client.esni_keys.len = 0;
+        }
+    }
+
     if (ctx->tls != NULL) {
         ptls_free((ptls_t*)ctx->tls);
         ctx->tls = NULL;
@@ -3134,6 +3138,19 @@ int picoquic_esni_load_rr(char const * esni_rr_file_name, uint8_t *esnikeys, siz
     }
 
     return ret;
+}
+
+void picoquic_esni_free_key_exchanges(picoquic_quic_t* quic)
+{
+    size_t esni_key_exchange_count = 0;
+
+    while (esni_key_exchange_count < 15 &&
+        quic->esni_key_exchange[esni_key_exchange_count] != 0)
+    {
+        quic->esni_key_exchange[esni_key_exchange_count]->on_exchange(&quic->esni_key_exchange[esni_key_exchange_count], 1, NULL, ptls_iovec_init(NULL, 0));
+        quic->esni_key_exchange[esni_key_exchange_count] = NULL;
+        esni_key_exchange_count++;
+    }
 }
 
 /* Setup ESNI by providing a set of RRDATA for the specified context.
