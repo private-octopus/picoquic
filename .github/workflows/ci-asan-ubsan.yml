@@ -33,5 +33,5 @@ jobs:
             echo $last_line
             leaked=`echo $last_line | cut -d ' ' -f 3`
             previous_leak=12929589
-            if [ $leaked -gt $previous_leak]; then exit 1; fi
+            if [ $leaked -gt $previous_leak ]; then exit 1; else echo "$leaked <= $previous_leak"; fi
             exit 0
