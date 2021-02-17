@@ -200,6 +200,11 @@ static int picoquic_set_cipher_suite_in_ctx(ptls_context_t* ctx, int cipher_suit
     int nb_suites = 0;
     int ret = 0;
 
+    /* Remove previous suites (if any) */
+    if (ctx->cipher_suites != NULL) {
+        free((void*)ctx->cipher_suites);
+    }
+
     if (ctx == NULL || selected_suites == NULL) {
         ret = -1;
     }

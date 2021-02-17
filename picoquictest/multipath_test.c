@@ -288,7 +288,7 @@ int migration_test_one(int mtu_drop)
     }
 
     /* Delete the context */
-    if (test_ctx == NULL) {
+    if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
     }
 
