@@ -27,12 +27,10 @@ jobs:
       - name: Perform Unit Tests and Check for Leaks
         run: |
             ulimit -c unlimited -S
-            ./picoquic_ct -n -r >sanity.txt 2>&1 && QUICRESULT=$? 
+            ./picoquic_ct -n -r 2>sanity.txt && QUICRESULT=$? 
             echo "running picoquic_ct returns $QUICRESULT "
             cat sanity.txt
-            last_line=`grep "SUMMARY: AddressSanitizer:" sanity.txt`
-            echo $last_line
-            leaked=`echo $last_line | cut -d ' ' -f 3`
-            previous_leak=12929589
-            if [ $leaked -gt $previous_leak ]; then exit 1; else echo "$leaked <= $previous_leak"; fi
+            leaked=`grep "SUMMARY: AddressSanitizer:" sanity.txt | cut -d ' ' -f 3`
+            previous_leak=130000000
+            if [ $leaked -gt $previous_leak ]; thenecho "$leaked > $previous_leak"; exit 1; else echo "$leaked <= $previous_leak"; fi
             exit 0
