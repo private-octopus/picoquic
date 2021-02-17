@@ -4075,10 +4075,16 @@ void picoquic_lb_compat_cid_config_free(picoquic_quic_t* quic)
 {
     if (quic->cnx_id_callback_fn == picoquic_lb_compat_cid_generate &&
         quic->cnx_id_callback_ctx != NULL) {
-        picoquic_load_balancer_config_t* lb_config = (picoquic_load_balancer_config_t*)quic->cnx_id_callback_ctx;
+        picoquic_load_balancer_cid_context_t* lb_ctx = (picoquic_load_balancer_cid_context_t*)quic->cnx_id_callback_ctx;
         /* Release the encryption contexts so as to avoid memory leaks */
+        if (lb_ctx->cid_encryption_context != NULL) {
+            picoquic_aes128_ecb_free(lb_ctx->cid_encryption_context);
+        }
+        if (lb_ctx->cid_decryption_context != NULL) {
+            picoquic_aes128_ecb_free(lb_ctx->cid_decryption_context);
+        }
         /* Free the data */
-        free(lb_config);
+        free(lb_ctx);
         /* Reset the Quic context */
         quic->cnx_id_callback_fn = NULL;
         quic->cnx_id_callback_ctx = NULL;
