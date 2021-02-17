@@ -474,5 +474,9 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
         }
     }
 
+    if (send_buffer != NULL) {
+        free(send_buffer);
+    }
+
     return ret;
 }
