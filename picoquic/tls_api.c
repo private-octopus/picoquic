@@ -1883,6 +1883,22 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
             free((void*)ctx->cipher_suites);
         }
 
+        if (ctx->esni != NULL) {
+            int nb_esni_ctx = 0;
+
+            while (ctx->esni[nb_esni_ctx] != NULL) {
+                /* Relase the ESNI context data */
+                ptls_esni_dispose_context(ctx->esni[nb_esni_ctx]);
+                /* Free the allocated context */
+                free(ctx->esni[nb_esni_ctx]);
+                ctx->esni[nb_esni_ctx] = NULL;
+                /* next one */
+                nb_esni_ctx++;
+            }
+            free(ctx->esni);
+            ctx->esni = NULL;
+        }
+
         picoquic_free_log_event(quic);
     }
 }
@@ -3176,23 +3192,30 @@ int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file
 
         /* Install the ESNI data in the server context */
         if (ret == 0) {
-            ctx->esni = malloc(sizeof(*ctx->esni) * 2);
+            ctx->esni = (ptls_esni_context_t**) malloc(sizeof(ptls_esni_context_t*) * 2);
 
-            if (ctx->esni != NULL) {
-                ctx->esni[1] = NULL;
-                ctx->esni[0] = malloc(sizeof(**ctx->esni));
-            }
-
-            if (ctx->esni == NULL || ctx->esni[0] == NULL) {
+            if (ctx->esni == NULL) {
                 DBG_PRINTF("%s", "no memory for SNI allocation.\n");
                 ret = PICOQUIC_ERROR_MEMORY;
             }
             else {
-                if ((ret = ptls_esni_init_context(ctx, ctx->esni[0], ptls_iovec_init(esnikeys, esnikeys_len), quic->esni_key_exchange)) != 0) {
-                    DBG_PRINTF("failed to parse ESNI data of file:%s:error=%d\n", esni_rr_file_name, ret);
+                ctx->esni[1] = NULL;
+                ctx->esni[0] = (ptls_esni_context_t*)malloc(sizeof(ptls_esni_context_t));
+                if (ctx->esni[0] == NULL) {
+                    DBG_PRINTF("%s", "no memory for SNI allocation.\n");
+                    ret = PICOQUIC_ERROR_MEMORY;
+                    free(ctx->esni);
+                    ctx->esni = NULL;
+                }
+                else {
+                    memset(ctx->esni[0], 0, sizeof(ptls_esni_context_t));
+                    if ((ret = ptls_esni_init_context(ctx, ctx->esni[0], ptls_iovec_init(esnikeys, esnikeys_len), quic->esni_key_exchange)) != 0) {
+                        DBG_PRINTF("failed to parse ESNI data of file:%s:error=%d\n", esni_rr_file_name, ret);
+                    }
                 }
             }
         }
+        /* The data in esnikeys is only used as input in the init process */
         free(esnikeys);
     }
     else {

@@ -569,9 +569,6 @@ void picoquic_free(picoquic_quic_t* quic)
         /* Delete TLS and AEAD cntexts */
         picoquic_delete_retry_protection_contexts(quic);
 
-        /* Delete ESNI key exchange contexts */
-        picoquic_esni_free_key_exchanges(quic);
-
         if (quic->aead_encrypt_ticket_ctx != NULL) {
             picoquic_aead_free(quic->aead_encrypt_ticket_ctx);
             quic->aead_encrypt_ticket_ctx = NULL;
@@ -650,7 +647,12 @@ void picoquic_free(picoquic_quic_t* quic)
             free(quic->tls_master_ctx);
             quic->tls_master_ctx = NULL;
         }
+#if 0
+        /* Delete ESNI key exchange contexts */
+        picoquic_esni_free_key_exchanges(quic);
+#endif
 
+        /* Close the logs */
         quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
         quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
 
