@@ -2583,6 +2583,9 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
                     }
                 }
             }
+            if (token != NULL) {
+                free(token);
+            }
         }
 
         if (ret == 0) {
