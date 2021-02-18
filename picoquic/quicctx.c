@@ -3399,6 +3399,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         }
 
         picoquic_crypto_context_free(&cnx->crypto_context_new);
+        picoquic_crypto_context_free(&cnx->crypto_context_old);
 
         for (picoquic_packet_context_enum pc = 0;
             pc < picoquic_nb_packet_context; pc++) {
