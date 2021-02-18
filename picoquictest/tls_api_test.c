@@ -4237,6 +4237,10 @@ int set_certificate_and_key_test()
                 ret = -1;
             } else {
                 picoquic_set_tls_root_certificates(test_ctx->qserver, chain, count);
+                for (size_t i = 0; i < count; i++) {
+                    free(chain[i].base);
+                }
+                free(chain);
             }
         }
     }
