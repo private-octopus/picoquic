@@ -1521,11 +1521,8 @@ void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx, uint64_t curre
 
             if (no_path_left) {
                 picoquic_log_app_message(cnx, "Deleting connection after error on path %d,  socket error %d, if %d", path_id, socket_err, if_index);
-                cnx->cnx_state = picoquic_state_disconnected;
                 cnx->local_error = PICOQUIC_ERROR_SOCKET_ERROR;
-                if (cnx->callback_fn) {
-                    (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
-                }
+                picoquic_connection_disconnect(cnx);
             }
             else {
                 picoquic_log_app_message(cnx, "Demoting path %d after socket error %d, if %d", path_id, socket_err, if_index);
@@ -3321,6 +3318,16 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
     return PICOQUIC_ERROR_DETECTED;
 }
 
+void picoquic_connection_disconnect(picoquic_cnx_t* cnx)
+{
+    if (cnx->cnx_state != picoquic_state_disconnected) {
+        cnx->cnx_state = picoquic_state_disconnected;
+        if (cnx->callback_fn) {
+            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
+        }
+    }
+}
+
 int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
 {
     int ret = 0;
@@ -3368,10 +3375,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 
         if (cnx->cnx_state < picoquic_state_disconnected) {
             /* Give the application a chance to clean up its state */
-            cnx->cnx_state = picoquic_state_disconnected;
-            if (cnx->callback_fn) {
-                (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
-            }
+            picoquic_connection_disconnect(cnx);
         }
 
         if (cnx->alpn != NULL) {

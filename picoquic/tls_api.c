@@ -2310,7 +2310,7 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
 
     if (ret != 0) {
         DBG_PRINTF("Could not set up TLS parameters, error 0x%x, abandoning connection", ret);
-        cnx->cnx_state = picoquic_state_disconnected;
+        picoquic_connection_disconnect(cnx);
     } else {
         picoquic_tls_set_extensions(cnx, ctx);
 

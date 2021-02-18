@@ -1266,6 +1266,8 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
 /* Notify error on connection */
 int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_t frame_type);
 
+void picoquic_connection_disconnect(picoquic_cnx_t* cnx);
+
 /* Connection context retrieval functions */
 picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id, struct st_picoquic_local_cnxid_t ** l_cid_sequence);
 picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, const struct sockaddr* addr);
