@@ -4213,6 +4213,10 @@ int set_certificate_and_key_test()
             if (picoquic_set_tls_key(test_ctx->qserver, key_der, length) != 0) {
                 ret = -1;
             }
+
+            if (key_der != NULL) {
+                free(key_der);
+            }
         }
 
         if (ret == 0) {
