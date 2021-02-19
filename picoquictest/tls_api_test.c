@@ -2583,6 +2583,9 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
                     }
                 }
             }
+            if (token != NULL) {
+                free(token);
+            }
         }
 
         if (ret == 0) {
@@ -4210,6 +4213,10 @@ int set_certificate_and_key_test()
             if (picoquic_set_tls_key(test_ctx->qserver, key_der, length) != 0) {
                 ret = -1;
             }
+
+            if (key_der != NULL) {
+                free(key_der);
+            }
         }
 
         if (ret == 0) {
@@ -4230,6 +4237,10 @@ int set_certificate_and_key_test()
                 ret = -1;
             } else {
                 picoquic_set_tls_root_certificates(test_ctx->qserver, chain, count);
+                for (size_t i = 0; i < count; i++) {
+                    free(chain[i].base);
+                }
+                free(chain);
             }
         }
     }

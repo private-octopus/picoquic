@@ -186,7 +186,6 @@ int picoquic_store_token(picoquic_stored_token_t** pp_first_token,
                     picoquic_stored_token_t* deleted = next;
                     next = next->next_token;
                     *pprevious = next;
-                    memset((uint8_t*)&deleted->token, 0, deleted->token_length);
                     free(deleted);
                 }
                 else {

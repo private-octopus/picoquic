@@ -127,7 +127,8 @@ static int stress_server_callback(picoquic_cnx_t* cnx,
 
     if (fin_or_event == picoquic_callback_close ||
         fin_or_event == picoquic_callback_stateless_reset ||
-        fin_or_event == picoquic_callback_application_close) {
+        fin_or_event == picoquic_callback_application_close ||
+        fin_or_event == picoquic_callback_version_negotiation) {
         if (ctx != NULL) {
             free(ctx);
             picoquic_set_callback(cnx, stress_server_callback, NULL);
