@@ -1628,11 +1628,8 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
                                  * Max retransmission count was exceeded. Disconnect.
                                  */
                                 DBG_PRINTF("Too many retransmits of packet number %d, disconnect", (int)old_p->sequence_number);
-                                cnx->cnx_state = picoquic_state_disconnected;
                                 cnx->local_error = PICOQUIC_ERROR_REPEAT_TIMEOUT;
-                                if (cnx->callback_fn) {
-                                    (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
-                                }
+                                picoquic_connection_disconnect(cnx);
                                 length = 0;
                                 break;
                             }
@@ -2786,7 +2783,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
 
         if (current_time >= exit_time) {
-            cnx->cnx_state = picoquic_state_disconnected;
+            picoquic_connection_disconnect(cnx);
             *next_wake_time = current_time;
             SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
@@ -2833,7 +2830,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
 
         if (current_time >= exit_time) {
-            cnx->cnx_state = picoquic_state_disconnected;
+            picoquic_connection_disconnect(cnx);
             *next_wake_time = current_time;
             SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
@@ -2845,7 +2842,6 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     } else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || 
         cnx->cnx_state == picoquic_state_handshake_failure || 
         cnx->cnx_state == picoquic_state_handshake_failure_resend)) {
-        picoquic_state_enum old_state = cnx->cnx_state;
 
         length = picoquic_predict_packet_header_length(
             cnx, packet_type, pkt_ctx);
@@ -2882,11 +2878,11 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
                 cnx->cnx_state = picoquic_state_handshake_failure_resend;
             }
             else {
-                cnx->cnx_state = picoquic_state_disconnected;
+                picoquic_connection_disconnect(cnx);
             }
         }
         else if (cnx->cnx_state == picoquic_state_handshake_failure_resend) {
-            cnx->cnx_state = picoquic_state_disconnected;
+            picoquic_connection_disconnect(cnx);
         }
         else {
             cnx->cnx_state = picoquic_state_closing;
@@ -2895,10 +2891,6 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         *next_wake_time = current_time + delta_t;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         cnx->ack_ctx[pc].ack_needed = 0;
-
-        if (cnx->callback_fn != NULL && cnx->cnx_state != old_state && cnx->cnx_state == picoquic_state_disconnected) {
-            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
-        }
     }
     else {
         length = 0;
@@ -3149,10 +3141,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
                         picoquic_log_app_message(cnx, "%s", "Too many challenge retransmits, disconnect");
                         cnx->local_error = PICOQUIC_ERROR_REPEAT_TIMEOUT;
-                        cnx->cnx_state = picoquic_state_disconnected;
-                        if (cnx->callback_fn) {
-                            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
-                        }
+                        picoquic_connection_disconnect(cnx);
                     }
                     else {
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, abandon path");
@@ -3486,10 +3475,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
                         picoquic_log_app_message(cnx, "%s", "Too many challenge retransmits, disconnect");
                         cnx->local_error = PICOQUIC_ERROR_REPEAT_TIMEOUT;
-                        cnx->cnx_state = picoquic_state_disconnected;
-                        if (cnx->callback_fn) {
-                            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
-                        }
+                        picoquic_connection_disconnect(cnx);
                     }
                     else {
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, abandon path");
@@ -3796,12 +3782,9 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
 
     if (current_time >= idle_timer) {
         /* Too long silence, break it. */
-        cnx->cnx_state = picoquic_state_disconnected;
         cnx->local_error = PICOQUIC_ERROR_IDLE_TIMEOUT;
         ret = PICOQUIC_ERROR_DISCONNECTED;
-        if (cnx->callback_fn) {
-            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
-        }
+        picoquic_connection_disconnect(cnx);
     } else if (idle_timer < *next_wake_time) {
         *next_wake_time = idle_timer;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);

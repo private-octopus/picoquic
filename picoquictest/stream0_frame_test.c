@@ -387,6 +387,8 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
         }
     }
 
+    picosplay_empty_tree(&cnx.tls_stream[2].stream_data_tree);
+
     return ret;
 }
 

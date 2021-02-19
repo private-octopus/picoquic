@@ -818,6 +818,10 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     {
         free((void*)config->server_key_file);
     }
+    if (config->esni_key_file != NULL)
+    {
+        free((void*)config->esni_key_file);
+    }
     if (config->esni_rr_file != NULL)
     {
         free((void*)config->esni_rr_file);

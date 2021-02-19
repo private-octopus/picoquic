@@ -2583,6 +2583,9 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
                     }
                 }
             }
+            if (token != NULL) {
+                free(token);
+            }
         }
 
         if (ret == 0) {
@@ -4210,6 +4213,10 @@ int set_certificate_and_key_test()
             if (picoquic_set_tls_key(test_ctx->qserver, key_der, length) != 0) {
                 ret = -1;
             }
+
+            if (key_der != NULL) {
+                free(key_der);
+            }
         }
 
         if (ret == 0) {
@@ -4230,6 +4237,10 @@ int set_certificate_and_key_test()
                 ret = -1;
             } else {
                 picoquic_set_tls_root_certificates(test_ctx->qserver, chain, count);
+                for (size_t i = 0; i < count; i++) {
+                    free(chain[i].base);
+                }
+                free(chain);
             }
         }
     }
@@ -7155,6 +7166,9 @@ int bad_cnxid_test()
             ret = -1;
         }
         else {
+            for (size_t i = 0; i < test_ctx->nb_test_streams; i++) {
+                test_api_delete_test_stream(&test_ctx->test_stream[i]);
+            }
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
                 test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 20000, 100000);
             if (ret != 0) {
@@ -8616,6 +8630,9 @@ int ddos_amplification_test_one(int use_0rtt)
             picoquic_delete_cnx(test_ctx->cnx_server);
             /* Delete the old client connection */
             picoquic_delete_cnx(test_ctx->cnx_client);
+            for (size_t i = 0; i < test_ctx->nb_test_streams; i++) {
+                 test_api_delete_test_stream(&test_ctx->test_stream[i]);
+            }
             /* re-create a client connection, this time picking up the required connection ID */
             test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
                 picoquic_null_connection_id, picoquic_null_connection_id,

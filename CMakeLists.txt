@@ -3,12 +3,45 @@ cmake_policy(SET CMP0003 NEW)
 project(picoquic C CXX)
 find_package (Threads REQUIRED)
 
+option(ENABLE_ASAN "Enable AddressSanitizer (ASAN) for debugging" OFF)
+option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan) for debugging" OFF)
+
 set(CMAKE_C_STANDARD 11)
 
 set(CMAKE_C_FLAGS "-std=c99 -Wall -Werror -O2 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 
 if(DISABLE_DEBUG_PRINTF)
     set(CMAKE_C_FLAGS "-DDISABLE_DEBUG_PRINTF ${CMAKE_C_FLAGS}")
+endif()
+
+include(CheckCCompilerFlag)
+include(CheckCXXCompilerFlag)
+include(CMakePushCheckState)
+
+if(ENABLE_ASAN)
+	cmake_push_check_state()
+	set(CMAKE_REQUIRED_LIBRARIES "-fsanitize=address")
+	check_c_compiler_flag(-fsanitize=address C__fsanitize_address_VALID)
+	check_cxx_compiler_flag(-fsanitize=address CXX__fsanitize_address_VALID)
+	cmake_pop_check_state()
+	if(NOT C__fsanitize_address_VALID OR NOT CXX__fsanitize_address_VALID)
+		message(FATAL_ERROR "ENABLE_ASAN was requested, but not supported!")
+	endif()
+	set(CMAKE_C_FLAGS "-fsanitize=address ${CMAKE_C_FLAGS}")
+	set(CMAKE_CXX_FLAGS "-fsanitize=address ${CMAKE_CXX_FLAGS}")
+endif()
+
+if(ENABLE_UBSAN)
+	cmake_push_check_state()
+	set(CMAKE_REQUIRED_LIBRARIES "-fsanitize=undefined")
+	check_c_compiler_flag(-fsanitize=undefined C__fsanitize_undefined_VALID)
+	check_cxx_compiler_flag(-fsanitize=undefined CXX__fsanitize_undefined_VALID)
+	cmake_pop_check_state()
+	if(NOT C__fsanitize_undefined_VALID OR NOT CXX__fsanitize_undefined_VALID)
+		message(FATAL_ERROR "ENABLE_UBSAN was requested, but not supported!")
+	endif()
+	set(CMAKE_C_FLAGS "-fsanitize=undefined ${CMAKE_C_FLAGS}")
+	set(CMAKE_CXX_FLAGS "-fsanitize=undefined ${CMAKE_CXX_FLAGS}")
 endif()
 
 set(PICOQUIC_LIBRARY_FILES

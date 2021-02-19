@@ -200,6 +200,11 @@ static int picoquic_set_cipher_suite_in_ctx(ptls_context_t* ctx, int cipher_suit
     int nb_suites = 0;
     int ret = 0;
 
+    /* Remove previous suites (if any) */
+    if (ctx->cipher_suites != NULL) {
+        free((void*)ctx->cipher_suites);
+    }
+
     if (ctx == NULL || selected_suites == NULL) {
         ret = -1;
     }
@@ -321,15 +326,10 @@ static int picoquic_openssl_exchange_context_from_file(char const* esni_key_file
         ret = PICOQUIC_ERROR_INVALID_FILE;
     }
     else {
-        *p_exchange_ctx = (ptls_key_exchange_context_t*)malloc(sizeof(ptls_key_exchange_context_t));
-        if (*p_exchange_ctx == NULL) {
-            DBG_PRINTF("%s", "no memory for ESNI private key\n");
-            ret = PICOQUIC_ERROR_MEMORY;
-        }
-        else if ((ret = ptls_openssl_create_key_exchange(p_exchange_ctx, pkey)) != 0) {
+        *p_exchange_ctx = NULL;
+        if ((ret = ptls_openssl_create_key_exchange(p_exchange_ctx, pkey)) != 0) {
             DBG_PRINTF("failed to load private key from file:%s:picotls-error:%d", esni_key_file_name, ret);
             ret = PICOQUIC_ERROR_INVALID_FILE;
-            free(*p_exchange_ctx);
             *p_exchange_ctx = NULL;
         }
         EVP_PKEY_free(pkey);
@@ -492,7 +492,8 @@ int picoquic_openssl_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec
     ptls_openssl_verify_certificate_t* verify_ctx = (ptls_openssl_verify_certificate_t*)ctx->verify_certificate;
 
     for (size_t i = 0; i < count; ++i) {
-        X509* cert = d2i_X509(NULL, (const uint8_t**)&certs[i].base, (long)certs[i].len);
+        uint8_t* cert_i_base = certs[i].base;
+        X509* cert = d2i_X509(NULL, (const uint8_t**)&cert_i_base, (long)certs[i].len);
 
         if (cert == NULL) {
             return -1;
@@ -1883,6 +1884,22 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
             free((void*)ctx->cipher_suites);
         }
 
+        if (ctx->esni != NULL) {
+            int nb_esni_ctx = 0;
+
+            while (ctx->esni[nb_esni_ctx] != NULL) {
+                /* Relase the ESNI context data */
+                ptls_esni_dispose_context(ctx->esni[nb_esni_ctx]);
+                /* Free the allocated context */
+                free(ctx->esni[nb_esni_ctx]);
+                ctx->esni[nb_esni_ctx] = NULL;
+                /* next one */
+                nb_esni_ctx++;
+            }
+            free(ctx->esni);
+            ctx->esni = NULL;
+        }
+
         picoquic_free_log_event(quic);
     }
 }
@@ -2117,6 +2134,15 @@ void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx)
 void picoquic_tlscontext_free(void* vctx)
 {
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)vctx;
+
+    if (ctx->client_mode) {
+        if (ctx->handshake_properties.client.esni_keys.base != NULL) {
+            free(ctx->handshake_properties.client.esni_keys.base);
+            ctx->handshake_properties.client.esni_keys.base = NULL;
+            ctx->handshake_properties.client.esni_keys.len = 0;
+        }
+    }
+
     if (ctx->tls != NULL) {
         ptls_free((ptls_t*)ctx->tls);
         ctx->tls = NULL;
@@ -2284,7 +2310,7 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
 
     if (ret != 0) {
         DBG_PRINTF("Could not set up TLS parameters, error 0x%x, abandoning connection", ret);
-        cnx->cnx_state = picoquic_state_disconnected;
+        picoquic_connection_disconnect(cnx);
     } else {
         picoquic_tls_set_extensions(cnx, ctx);
 
@@ -3131,6 +3157,19 @@ int picoquic_esni_load_rr(char const * esni_rr_file_name, uint8_t *esnikeys, siz
     return ret;
 }
 
+void picoquic_esni_free_key_exchanges(picoquic_quic_t* quic)
+{
+    size_t esni_key_exchange_count = 0;
+
+    while (esni_key_exchange_count < 15 &&
+        quic->esni_key_exchange[esni_key_exchange_count] != 0)
+    {
+        quic->esni_key_exchange[esni_key_exchange_count]->on_exchange(&quic->esni_key_exchange[esni_key_exchange_count], 1, NULL, ptls_iovec_init(NULL, 0));
+        quic->esni_key_exchange[esni_key_exchange_count] = NULL;
+        esni_key_exchange_count++;
+    }
+}
+
 /* Setup ESNI by providing a set of RRDATA for the specified context.
  * The "esni_rr_file_name" file contains the RRDATA of _ESNI RR published for the service in the DNS.
  * The "esni_key_elements" contains a null terminated array of ptls_key_exchange_context_t* 
@@ -3154,23 +3193,30 @@ int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file
 
         /* Install the ESNI data in the server context */
         if (ret == 0) {
-            ctx->esni = malloc(sizeof(*ctx->esni) * 2);
+            ctx->esni = (ptls_esni_context_t**) malloc(sizeof(ptls_esni_context_t*) * 2);
 
-            if (ctx->esni != NULL) {
-                ctx->esni[1] = NULL;
-                ctx->esni[0] = malloc(sizeof(**ctx->esni));
-            }
-
-            if (ctx->esni == NULL || ctx->esni[0] == NULL) {
+            if (ctx->esni == NULL) {
                 DBG_PRINTF("%s", "no memory for SNI allocation.\n");
                 ret = PICOQUIC_ERROR_MEMORY;
             }
             else {
-                if ((ret = ptls_esni_init_context(ctx, ctx->esni[0], ptls_iovec_init(esnikeys, esnikeys_len), quic->esni_key_exchange)) != 0) {
-                    DBG_PRINTF("failed to parse ESNI data of file:%s:error=%d\n", esni_rr_file_name, ret);
+                ctx->esni[1] = NULL;
+                ctx->esni[0] = (ptls_esni_context_t*)malloc(sizeof(ptls_esni_context_t));
+                if (ctx->esni[0] == NULL) {
+                    DBG_PRINTF("%s", "no memory for SNI allocation.\n");
+                    ret = PICOQUIC_ERROR_MEMORY;
+                    free(ctx->esni);
+                    ctx->esni = NULL;
+                }
+                else {
+                    memset(ctx->esni[0], 0, sizeof(ptls_esni_context_t));
+                    if ((ret = ptls_esni_init_context(ctx, ctx->esni[0], ptls_iovec_init(esnikeys, esnikeys_len), quic->esni_key_exchange)) != 0) {
+                        DBG_PRINTF("failed to parse ESNI data of file:%s:error=%d\n", esni_rr_file_name, ret);
+                    }
                 }
             }
         }
+        /* The data in esnikeys is only used as input in the init process */
         free(esnikeys);
     }
     else {

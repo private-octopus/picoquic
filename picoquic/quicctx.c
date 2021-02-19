@@ -587,6 +587,9 @@ void picoquic_free(picoquic_quic_t* quic)
         /* delete the stored tickets */
         picoquic_free_tickets(&quic->p_first_ticket);
 
+        /* Delete the stored tokens */
+        picoquic_free_tokens(&quic->p_first_token);
+
         /* Deelete the reused tokens tree */
         picosplay_empty_tree(&quic->token_reuse_tree);
 
@@ -645,6 +648,7 @@ void picoquic_free(picoquic_quic_t* quic)
             quic->tls_master_ctx = NULL;
         }
 
+        /* Close the logs */
         quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
         quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
 
@@ -1517,11 +1521,8 @@ void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx, uint64_t curre
 
             if (no_path_left) {
                 picoquic_log_app_message(cnx, "Deleting connection after error on path %d,  socket error %d, if %d", path_id, socket_err, if_index);
-                cnx->cnx_state = picoquic_state_disconnected;
                 cnx->local_error = PICOQUIC_ERROR_SOCKET_ERROR;
-                if (cnx->callback_fn) {
-                    (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
-                }
+                picoquic_connection_disconnect(cnx);
             }
             else {
                 picoquic_log_app_message(cnx, "Demoting path %d after socket error %d, if %d", path_id, socket_err, if_index);
@@ -3315,6 +3316,16 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
     return PICOQUIC_ERROR_DETECTED;
 }
 
+void picoquic_connection_disconnect(picoquic_cnx_t* cnx)
+{
+    if (cnx->cnx_state != picoquic_state_disconnected) {
+        cnx->cnx_state = picoquic_state_disconnected;
+        if (cnx->callback_fn) {
+            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
+        }
+    }
+}
+
 int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
 {
     int ret = 0;
@@ -3362,10 +3373,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 
         if (cnx->cnx_state < picoquic_state_disconnected) {
             /* Give the application a chance to clean up its state */
-            cnx->cnx_state = picoquic_state_disconnected;
-            if (cnx->callback_fn) {
-                (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
-            }
+            picoquic_connection_disconnect(cnx);
         }
 
         if (cnx->alpn != NULL) {
@@ -3393,6 +3401,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         }
 
         picoquic_crypto_context_free(&cnx->crypto_context_new);
+        picoquic_crypto_context_free(&cnx->crypto_context_old);
 
         for (picoquic_packet_context_enum pc = 0;
             pc < picoquic_nb_packet_context; pc++) {
@@ -3405,6 +3414,11 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 
         while (cnx->first_datagram != NULL) {
             picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
+        }
+
+        while (cnx->stream_frame_retransmit_queue != NULL) {
+            picoquic_delete_misc_or_dg(&cnx->stream_frame_retransmit_queue,
+                &cnx->stream_frame_retransmit_queue_last, cnx->stream_frame_retransmit_queue);
         }
 
         for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
@@ -4068,10 +4082,16 @@ void picoquic_lb_compat_cid_config_free(picoquic_quic_t* quic)
 {
     if (quic->cnx_id_callback_fn == picoquic_lb_compat_cid_generate &&
         quic->cnx_id_callback_ctx != NULL) {
-        picoquic_load_balancer_config_t* lb_config = (picoquic_load_balancer_config_t*)quic->cnx_id_callback_ctx;
+        picoquic_load_balancer_cid_context_t* lb_ctx = (picoquic_load_balancer_cid_context_t*)quic->cnx_id_callback_ctx;
         /* Release the encryption contexts so as to avoid memory leaks */
+        if (lb_ctx->cid_encryption_context != NULL) {
+            picoquic_aes128_ecb_free(lb_ctx->cid_encryption_context);
+        }
+        if (lb_ctx->cid_decryption_context != NULL) {
+            picoquic_aes128_ecb_free(lb_ctx->cid_decryption_context);
+        }
         /* Free the data */
-        free(lb_config);
+        free(lb_ctx);
         /* Reset the Quic context */
         quic->cnx_id_callback_fn = NULL;
         quic->cnx_id_callback_ctx = NULL;

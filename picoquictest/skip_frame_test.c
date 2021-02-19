@@ -2438,6 +2438,9 @@ int queue_network_input_test()
         }
     }
 
+    picosplay_empty_tree(tree);
+    free(tree);
+
     return ret;
 }
 

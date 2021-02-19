@@ -253,7 +253,7 @@ int byteread_int32(bytestream * s, uint32_t * value)
     }
     else {
         const uint8_t * ptr = s->data + s->ptr;
-        *value = (ptr[0] << 24) | (ptr[1] << 16) | (ptr[2] << 8) | ptr[3];
+        *value = (((uint32_t)ptr[0]) << 24) | (((uint32_t)ptr[1]) << 16) | (((uint32_t)ptr[2]) << 8) | ptr[3];
         s->ptr += 4;
         return 0;
     }

@@ -806,7 +806,7 @@ int picoquic_incoming_version_negotiation(
                 /* TODO: consider rewriting the version negotiation code */
                 DBG_PRINTF("%s", "Disconnect upon receiving version negotiation.\n");
                 cnx->remote_error = PICOQUIC_ERROR_VERSION_NEGOTIATION;
-                cnx->cnx_state = picoquic_state_disconnected;
+                picoquic_connection_disconnect(cnx);
                 ret = 0;
             }
         }
@@ -1530,11 +1530,10 @@ int picoquic_incoming_stateless_reset(
     if (cnx->cnx_state <= picoquic_state_ready) {
         cnx->remote_error = PICOQUIC_ERROR_STATELESS_RESET;
     }
-    cnx->cnx_state = picoquic_state_disconnected;
-
     if (cnx->callback_fn) {
         (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_stateless_reset, cnx->callback_ctx, NULL);
     }
+    picoquic_connection_disconnect(cnx);
 
     return PICOQUIC_ERROR_AEAD_CHECK;
 }
@@ -1850,8 +1849,7 @@ int picoquic_incoming_1rtt(
                 if (ret == 0) {
                     if (closing_received) {
                         if (cnx->client_mode) {
-                            cnx->cnx_state = picoquic_state_disconnected;
-                            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
+                            picoquic_connection_disconnect(cnx);
                         }
                         else {
                             cnx->cnx_state = picoquic_state_draining;
