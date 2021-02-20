@@ -85,7 +85,7 @@ static option_table_line_t option_table[] = {
     "send a large client hello in order to test post quantum readiness" },
     { picoquic_option_Ticket_File_Name, 'T', "ticket_file", 1, "file", "File storing the session tickets" },
     { picoquic_option_Token_File_Name, 'N', "token_file", 1, "file", "File storing the new tokens" },
-    { picoquic_option_Small_SO_buffers, 'B', "small_so_buf", 0, "", "Do not use large SO_SNDBUF SO_RCVBUF" },
+    { picoquic_option_Socket_buffer_size, 'B', "so_buf_size", 1, "number", "Set buffer size with SO_SNDBUF SO_RCVBUF" },
     { picoquic_option_HELP, 'h', "help", 0, "This help message" }
 };
 
@@ -445,8 +445,12 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_Token_File_Name:
         ret = config_set_string_param(&config->token_file_name, params, nb_params, 0);
         break;
-    case picoquic_option_Small_SO_buffers:
-        config->use_small_so_buffers = 1;
+    case picoquic_option_Socket_buffer_size:
+        config->socket_buffer_size = config_atoi(params, nb_params, 0, &ret);
+        if (config->socket_buffer_size < 0 ) {
+            fprintf(stderr, "Invalid socket_buffer_size: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = -1;
+        }
         break;
     case picoquic_option_HELP:
         ret = -1;

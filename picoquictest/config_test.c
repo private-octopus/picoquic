@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:K:p:v:o:w:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:Bh";
+static char* ref_option_text = "c:k:K:p:v:o:w:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:h";
 
 int config_option_letters_test()
 {
@@ -58,6 +58,7 @@ static picoquic_quic_config_t param1 = {
     1, /* int dest_if; */
     1536, /* int mtu_max; */
     -1, /* int cnx_id_length; */
+    655360, /* Socket buffer size */
     "cubic", /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     NULL, /* picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
     3,
@@ -66,7 +67,6 @@ static picoquic_quic_config_t param1 = {
     /* Common flags */
     1, /* unsigned int initial_random : 1; */
     1, /* unsigned int use_long_log : 1; */
-    1, /* int use_small_so_buffers */
     /* Server only */
     "/data/www/", /* char const* www_dir; */
     { 0x012345678abcdef, 0xfedcba9876543210}, /* uint64_t reset_seed[2]; */
@@ -110,7 +110,7 @@ static char const* config_argv1[] = {
     "-w", "/data/www/",
     "-r",
     "-s", "012345678abcdef", "0xfedcba9876543210",
-    "-B",
+    "-B", "655360",
     NULL
 };
 
@@ -128,6 +128,7 @@ static picoquic_quic_config_t param2 = {
     0, /* int dest_if; */
     0, /* int mtu_max; */
     5, /* int cnx_id_length; */
+    0, /* socket_buffer_size */
     NULL, /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     NULL, /* picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
     0,
@@ -136,7 +137,6 @@ static picoquic_quic_config_t param2 = {
     /* Common flags */
     0, /* unsigned int initial_random : 1; */
     0, /* unsigned int use_long_log : 1; */
-    0, /* use_small_so_buffers */
     /* Server only */
     NULL, /* char const* www_dir; */
     {0, 0}, /* uint64_t reset_seed[2]; */
@@ -236,6 +236,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_int("port", expected->server_port, actual->server_port);
     ret |= config_test_compare_int("dest_if", expected->dest_if, actual->dest_if);
     ret |= config_test_compare_int("mtu_max", expected->mtu_max, actual->mtu_max);
+    ret |= config_test_compare_int("socket_buffer_size", expected->socket_buffer_size, actual->socket_buffer_size);
     ret |= config_test_compare_string("cc_algo_id", expected->cc_algo_id, actual->cc_algo_id);
     ret |= config_test_compare_int("spinbit", expected->spinbit_policy, actual->spinbit_policy);
     ret |= config_test_compare_int("lossbit", expected->lossbit_policy, actual->lossbit_policy);

@@ -64,7 +64,7 @@ typedef enum {
     picoquic_option_LARGE_CLIENT_HELLO,
     picoquic_option_Ticket_File_Name,
     picoquic_option_Token_File_Name,
-    picoquic_option_Small_SO_buffers,
+    picoquic_option_Socket_buffer_size,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -82,6 +82,7 @@ typedef struct st_picoquic_quic_config_t {
     int dest_if;
     int mtu_max;
     int cnx_id_length;
+    int socket_buffer_size;
     char const* cc_algo_id;
     picoquic_connection_id_callback_ctx_t* cnx_id_cbdata;
     /* TODO: control key logging */
@@ -92,7 +93,6 @@ typedef struct st_picoquic_quic_config_t {
     /* Common flags */
     unsigned int initial_random : 1;
     unsigned int use_long_log : 1;
-    unsigned int use_small_so_buffers : 1;
     /* Server only */
     char const* www_dir;
     uint64_t reset_seed[2];

@@ -194,10 +194,10 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config,
         /* Wait for packets */
 #if _WINDOWS
         ret = picoquic_packet_loop_win(qserver, config->server_port, 0, config->dest_if, 
-            config->use_small_so_buffers, server_loop_cb, &loop_cb_ctx);
+            config->socket_buffer_size, server_loop_cb, &loop_cb_ctx);
 #else
         ret = picoquic_packet_loop(qserver, config->server_port, 0, config->dest_if,
-            config->use_small_so_buffers, server_loop_cb, &loop_cb_ctx);
+            config->socket_buffer_size, server_loop_cb, &loop_cb_ctx);
 #endif
     }
 
@@ -243,7 +243,7 @@ typedef struct st_client_loop_cb_t {
     int zero_rtt_available;
     int is_siduck;
     int is_quicperf;
-    int use_small_so_buffers;
+    int socket_buffer_size;
     char const* saved_alpn;
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
@@ -625,7 +625,7 @@ int quic_client(const char* ip_address_text, int server_port,
         loop_cb.nb_packets_before_key_update = nb_packets_before_key_update;
         loop_cb.is_siduck = is_siduck;
         loop_cb.is_quicperf = is_quicperf;
-        loop_cb.use_small_so_buffers = config->use_small_so_buffers;
+        loop_cb.socket_buffer_size = config->socket_buffer_size;
         if (is_siduck) {
             loop_cb.siduck_ctx = siduck_ctx;
         }
@@ -635,10 +635,10 @@ int quic_client(const char* ip_address_text, int server_port,
 
 #ifdef _WINDOWS
         ret = picoquic_packet_loop_win(qclient, 0, loop_cb.server_address.ss_family, 0, 
-            config->use_small_so_buffers, client_loop_cb, &loop_cb);
+            config->socket_buffer_size, client_loop_cb, &loop_cb);
 #else
         ret = picoquic_packet_loop(qclient, 0, loop_cb.server_address.ss_family, 0,
-            config->use_small_so_buffers, client_loop_cb, &loop_cb);
+            config->socket_buffer_size, client_loop_cb, &loop_cb);
 #endif
     }
 
