@@ -44,7 +44,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     int local_port,
     int local_af,
     int dest_if,
-    int use_small_so_buffers,
+    int socket_buffer_size,
     picoquic_packet_loop_cb_fn loop_callback,
     void * loop_callback_ctx);
 
@@ -53,7 +53,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     int local_port,
     int local_af,
     int dest_if,
-    int use_small_so_buffers,
+    int socket_buffer_size,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx);
 #endif
