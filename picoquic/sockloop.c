@@ -110,7 +110,7 @@ static int udp_gso_available = 0;
 #endif
 
 int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af, 
-    int use_small_so_buffers, int nb_sockets_max)
+    int socket_buffer_size, int nb_sockets_max)
 {
     int nb_sockets = (local_af == AF_UNSPEC) ? 2 : 1;
 
@@ -149,14 +149,14 @@ int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE 
             break;
         }
         else {
-            if (!use_small_so_buffers) {
+            if (socket_buffer_size > 0) {
                 socklen_t opt_len;
                 int opt_ret;
                 int so_sndbuf;
                 int so_rcvbuf;
 
                 opt_len = sizeof(int);
-                so_sndbuf = 655360;
+                so_sndbuf = socket_buffer_size;
                 opt_ret = setsockopt(s_socket[i], SOL_SOCKET, SO_SNDBUF, (const char*)&so_sndbuf, opt_len);
                 if (opt_ret != 0) {
 #ifdef _WINDOWS
@@ -165,10 +165,11 @@ int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE 
                     int sock_error = errno;
 #endif
                     opt_ret = getsockopt(s_socket[i], SOL_SOCKET, SO_SNDBUF, (char*)&so_sndbuf, &opt_len);
-                    DBG_PRINTF("Cannot set SO_SNDBUF, err=%d, so_sndbuf=%d (%d)", sock_error, so_sndbuf, opt_ret);
+                    DBG_PRINTF("Cannot set SO_SNDBUF to %d, err=%d, so_sndbuf=%d (%d)",
+                        socket_buffer_size, sock_error, so_sndbuf, opt_ret);
                 }
                 opt_len = sizeof(int);
-                so_rcvbuf = 655360;
+                so_rcvbuf = socket_buffer_size;
                 opt_ret = setsockopt(s_socket[i], SOL_SOCKET, SO_RCVBUF, (const char*)&so_rcvbuf, opt_len);
                 if (opt_ret != 0) {
 #ifdef _WINDOWS
@@ -177,7 +178,8 @@ int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE 
                     int sock_error = errno;
 #endif
                     opt_ret = getsockopt(s_socket[i], SOL_SOCKET, SO_RCVBUF, (char*)&so_rcvbuf, &opt_len);
-                    DBG_PRINTF("Cannot set SO_RCVBUF, err=%d, so_rcvbuf=%d (%d)", sock_error, so_rcvbuf, opt_ret);
+                    DBG_PRINTF("Cannot set SO_RCVBUF to %d, err=%d, so_rcvbuf=%d (%d)",
+                        socket_buffer_size, sock_error, so_rcvbuf, opt_ret);
                 }
             }
         }
@@ -190,7 +192,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     int local_port,
     int local_af,
     int dest_if,
-    int use_small_so_buffers,
+    int socket_buffer_size,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx)
 {
@@ -223,7 +225,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
 #endif
     memset(sock_af, 0, sizeof(sock_af));
 
-    if ((nb_sockets = picoquic_packet_loop_open_sockets(local_port, local_af, s_socket, sock_af, use_small_so_buffers, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
+    if ((nb_sockets = picoquic_packet_loop_open_sockets(local_port, local_af, s_socket, sock_af, socket_buffer_size, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (loop_callback != NULL) {
@@ -424,7 +426,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
             int testing_nat = (ret == PICOQUIC_NO_ERROR_SIMULATE_NAT);
             
             next_port = (testing_nat) ? 0 : socket_port + 1;
-            sock_ret = picoquic_packet_loop_open_sockets(next_port, sock_af[0], &s_mig, &s_mig_af, use_small_so_buffers, 1);
+            sock_ret = picoquic_packet_loop_open_sockets(next_port, sock_af[0], &s_mig, &s_mig_af, socket_buffer_size, 1);
             if (sock_ret != 1 || s_mig == INVALID_SOCKET) {
                 if (last_cnx != NULL) {
                     picoquic_log_app_message(last_cnx, "Could not create socket for migration test, port=%d, af=%d, err=%d",
