@@ -484,49 +484,6 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     return ret;
 }
 
-static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
-    picoquic_demo_client_stream_ctx_t* stream_ctx)
-{
-    int removed_from_context = 0;
-
-    h3zero_delete_data_stream_state(&stream_ctx->stream_state);
-
-    if (stream_ctx->f_name != NULL) {
-        free(stream_ctx->f_name);
-        stream_ctx->f_name = NULL;
-    }
-
-    if (stream_ctx->F != NULL) {
-        DBG_PRINTF("Stream %" PRIu64 ", file close after %zu bytes\n", stream_ctx->stream_id, stream_ctx->received_length);
-        stream_ctx->F = picoquic_file_close(stream_ctx->F);
-    }
-
-    if (stream_ctx == ctx->first_stream) {
-        ctx->first_stream = stream_ctx->next_stream;
-        removed_from_context = 1;
-    }
-    else {
-        picoquic_demo_client_stream_ctx_t* previous = ctx->first_stream;
-
-        while (previous != NULL) {
-            if (previous->next_stream == stream_ctx) {
-                previous->next_stream = stream_ctx->next_stream;
-                removed_from_context = 1;
-                break;
-            }
-            else {
-                previous = previous->next_stream;
-            }
-        }
-    }
-
-    if (removed_from_context) {
-        ctx->nb_client_streams--;
-    }
-
-    free(stream_ctx);
-}
-
 static int picoquic_demo_client_close_stream(
     picoquic_demo_callback_ctx_t* ctx, picoquic_demo_client_stream_ctx_t* stream_ctx)
 {
@@ -707,7 +664,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                         picoquic_log_app_message(cnx, "Stream %d ended after %d bytes, ret=0x%x",
                             (int)stream_id, (int)stream_ctx->received_length, ret);
                     }
-                    picoquic_demo_client_delete_stream_context(ctx, stream_ctx);
+
                 }
             }
         }
@@ -721,10 +678,9 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
             fin_stream_id = stream_id;
             if (!ctx->no_print) {
-                fprintf(stdout, "Stream %d reset after %d bytes\n",
-                    (int)stream_id, (int)stream_ctx->received_length);
+                fprintf(stdout, "Stream %" PRIu64 " reset after %zu bytes\n",
+                    stream_id, stream_ctx->received_length);
             }
-            picoquic_demo_client_delete_stream_context(ctx, stream_ctx);
         }
         picoquic_reset_stream(cnx, stream_id, 0);
         /* TODO: higher level notify? */
@@ -766,7 +722,6 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             fin_stream_id = stream_id;
             fprintf(stdout, "Stream %d reset after %d bytes\n",
                 (int)stream_id, (int)stream_ctx->received_length);
-            picoquic_demo_client_delete_stream_context(ctx, stream_ctx);
         }
         /* TODO: Define what error. Stop sending? */
         picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
@@ -821,6 +776,50 @@ int picoquic_demo_client_initialize_context(
     ctx->delay_fin = delay_fin;
 
     return 0;
+}
+
+
+static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
+    picoquic_demo_client_stream_ctx_t * stream_ctx)
+{
+    int removed_from_context = 0;
+
+    h3zero_delete_data_stream_state(&stream_ctx->stream_state);
+
+    if (stream_ctx->f_name != NULL) {
+        free(stream_ctx->f_name);
+        stream_ctx->f_name = NULL;
+    }
+
+    if (stream_ctx->F != NULL) {
+        DBG_PRINTF("Stream %" PRIu64 ", file close after %zu bytes\n", stream_ctx->stream_id, stream_ctx->received_length);
+        stream_ctx->F = picoquic_file_close(stream_ctx->F);
+    }
+
+    if (stream_ctx == ctx->first_stream) {
+        ctx->first_stream = stream_ctx->next_stream;
+        removed_from_context = 1;
+    }
+    else {
+        picoquic_demo_client_stream_ctx_t * previous = ctx->first_stream;
+
+        while (previous != NULL) {
+            if (previous->next_stream == stream_ctx) {
+                previous->next_stream = stream_ctx->next_stream;
+                removed_from_context = 1;
+                break;
+            }
+            else {
+                previous = previous->next_stream;
+            }
+        }
+    }
+
+    if (removed_from_context) {
+        ctx->nb_client_streams--;
+    }
+
+    free(stream_ctx);
 }
 
 void picoquic_demo_client_delete_context(picoquic_demo_callback_ctx_t* ctx)
