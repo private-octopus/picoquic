@@ -2,7 +2,10 @@
 name: "CILeaktests"
 
 on:
-  push
+  push:
+  pull_request:
+    branches:
+      - master
 
 jobs:
   citests:
@@ -30,6 +33,7 @@ jobs:
             ./picoquic_ct -n -r 2>sanity.txt && QUICRESULT=$? 
             echo "running picoquic_ct returns $QUICRESULT "
             cat sanity.txt
+            if [ ${QUICRESULT} != 0 ]; then exit 1; fi;
             leaked=`grep "SUMMARY: AddressSanitizer:" sanity.txt | cut -d ' ' -f 3`
             previous_leak=0
             if [ ! -z "$leaked" ]; then
