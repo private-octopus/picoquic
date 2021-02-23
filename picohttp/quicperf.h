@@ -43,7 +43,7 @@ typedef struct st_quicperf_stream_desc_t {
 } quicperf_stream_desc_t;
 
 typedef struct st_quicperf_stream_ctx {
-    struct st_quicperf_stream_ctx* next_stream;
+    picosplay_node_t quicperf_stream_node;
     uint64_t stream_id;
     uint8_t length_header[8];
     uint64_t post_size; /* Unknown on server, from scenario on client */
@@ -66,7 +66,7 @@ typedef struct st_quicperf_ctx_t {
     size_t nb_open_streams;
     uint64_t last_interaction_time;
     quicperf_stream_desc_t* scenarios;
-    quicperf_stream_ctx_t* first_stream;
+    picosplay_tree_t quicperf_stream_tree;
 } quicperf_ctx_t;
 
 quicperf_ctx_t* quicperf_create_ctx(const char* scenario_text);
