@@ -42,6 +42,19 @@ if(ENABLE_UBSAN)
 	endif()
 	set(CMAKE_C_FLAGS "-fsanitize=undefined ${CMAKE_C_FLAGS}")
 	set(CMAKE_CXX_FLAGS "-fsanitize=undefined ${CMAKE_CXX_FLAGS}")
+
+	# Ease detecting of "Runtime errors". If such an error is found, print a verbose
+	# error report and exit the program
+	cmake_push_check_state()
+	set(CMAKE_REQUIRED_LIBRARIES "-fno-sanitize-recover")
+	check_c_compiler_flag(-fno-sanitize-recover C__fnosanitize_recover_VALID)
+	check_cxx_compiler_flag(-fno-sanitize-recover CXX__fnosanitize_recover_VALID)
+	cmake_pop_check_state()
+	if(NOT C__fnosanitize_recover_VALID OR NOT CXX__fnosanitize_recover_VALID)
+		message(FATAL_ERROR "ENABLE_UBSAN was requested, but fno-sanitize-recover is not supported!")
+	endif()
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-sanitize-recover")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-sanitize-recover")
 endif()
 
 set(PICOQUIC_LIBRARY_FILES
