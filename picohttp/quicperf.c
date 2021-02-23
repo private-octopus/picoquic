@@ -23,8 +23,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stddef.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
+#include "picosplay.h"
 #include "quicperf.h"
 
 /* management of scenarios by the quicperf client 
@@ -255,6 +257,38 @@ int quicperf_parse_scenario_desc(char const* text, size_t* nb_streams, quicperf_
     return ret;
 }
 
+/* Management of spay of stream contexts
+ */
+ /* Stream splay management */
+
+static int64_t quicperf_stream_ctx_compare(void* l, void* r)
+{
+    /* STream values are from 0 to 2^62-1, which means we are not worried with rollover */
+    return ((quicperf_stream_ctx_t*)l)->stream_id - ((quicperf_stream_ctx_t*)r)->stream_id;
+}
+
+static picosplay_node_t* quicperf_stream_ctx_create(void* value)
+{
+    return &((quicperf_stream_ctx_t*)value)->quicperf_stream_node;
+}
+
+
+static void* quicperf_stream_ctx_value(picosplay_node_t* node)
+{
+    return (void*)((char*)node - offsetof(struct st_quicperf_stream_ctx, quicperf_stream_node));
+}
+
+
+static void quicperf_stream_ctx_delete(void* tree, picosplay_node_t* node)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
+    quicperf_stream_ctx_t* stream_ctx = quicperf_stream_ctx_value(node);
+
+    free(stream_ctx);
+}
+
 /* Client work:
  * Integrate with context creation per client, on first reference.
  *
@@ -268,16 +302,12 @@ int quicperf_parse_scenario_desc(char const* text, size_t* nb_streams, quicperf_
  *
  */
 
-
 quicperf_stream_ctx_t* quicperf_find_stream_ctx(quicperf_ctx_t* ctx, uint64_t stream_id)
 {
-    quicperf_stream_ctx_t* stream_ctx = ctx->first_stream;
+    quicperf_stream_ctx_t target;
+    target.stream_id = stream_id;
 
-    while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
-        stream_ctx = stream_ctx->next_stream;
-    }
-
-    return stream_ctx;
+    return (quicperf_stream_ctx_t*)picosplay_find(&ctx->quicperf_stream_tree, (void*)&target);
 }
 
 quicperf_ctx_t* quicperf_create_ctx(const char* scenario_text)
@@ -296,6 +326,11 @@ quicperf_ctx_t* quicperf_create_ctx(const char* scenario_text)
                 ctx = NULL;
             }
         }
+
+        if (ctx != NULL) {
+            picosplay_init_tree(&ctx->quicperf_stream_tree, quicperf_stream_ctx_compare, quicperf_stream_ctx_create,
+                quicperf_stream_ctx_delete, quicperf_stream_ctx_value);
+        }
     }
 
     return ctx;
@@ -303,11 +338,8 @@ quicperf_ctx_t* quicperf_create_ctx(const char* scenario_text)
 
 void quicperf_delete_ctx(quicperf_ctx_t* ctx)
 {
-    while (ctx->first_stream != 0) {
-        quicperf_stream_ctx_t* deleted = ctx->first_stream;
-        ctx->first_stream = ctx->first_stream->next_stream;
-        free(deleted);
-    }
+    picosplay_empty_tree(&ctx->quicperf_stream_tree);
+
     if (ctx->scenarios != NULL) {
         free(ctx->scenarios);
     }
@@ -321,10 +353,14 @@ quicperf_stream_ctx_t* quicperf_create_stream_ctx(quicperf_ctx_t* ctx, uint64_t 
     if (stream_ctx != NULL) {
         memset(stream_ctx, 0, sizeof(quicperf_stream_ctx_t));
         stream_ctx->stream_id = stream_id;
-        stream_ctx->next_stream = ctx->first_stream;
-        ctx->first_stream = stream_ctx;
+        picosplay_insert(&ctx->quicperf_stream_tree, stream_ctx);
     }
     return stream_ctx;
+}
+
+void quicperf_delete_stream_ctx(quicperf_ctx_t* ctx, quicperf_stream_ctx_t* stream_ctx)
+{
+    picosplay_delete_hint(&ctx->quicperf_stream_tree, &stream_ctx->quicperf_stream_node);
 }
 
 int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t stream_id)
@@ -370,8 +406,11 @@ int quicperf_process_stream_data(picoquic_cnx_t * cnx, quicperf_ctx_t * ctx, qui
     /* Data arrival on stream #x, maybe with fin mark */
 
     if (stream_ctx == NULL && !ctx->is_client) {
-        /* If this is the first appearance of a stream on the server side, create it */
-        stream_ctx = quicperf_create_stream_ctx(ctx, stream_id);
+        stream_ctx = quicperf_find_stream_ctx(ctx, stream_id);
+        if (stream_ctx == NULL) {
+            /* If this is the first appearance of a stream on the server side, create it */
+            stream_ctx = quicperf_create_stream_ctx(ctx, stream_id);
+        }
     }
 
     if (stream_ctx == NULL) {
@@ -413,6 +452,8 @@ int quicperf_process_stream_data(picoquic_cnx_t * cnx, quicperf_ctx_t * ctx, qui
                 ret = quicperf_init_streams_from_scenario(cnx, ctx, stream_ctx->stream_id);
                 if (ctx->nb_open_streams == 0) {
                     ret = picoquic_close(cnx, QUICPERF_NO_ERROR);
+                } else if (ret == 0 && ctx->is_client) {
+                    quicperf_delete_stream_ctx(ctx, stream_ctx);
                 }
             }
         }
@@ -476,6 +517,10 @@ int quicperf_prepare_to_send(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicperf_
         }
         else {
             stream_ctx->nb_response_bytes += available;
+        }
+
+        if (is_fin && !ctx->is_client) {
+            quicperf_delete_stream_ctx(ctx, stream_ctx);
         }
     } else if (available > 0) {
         ret = picoquic_close(cnx, QUICPERF_ERROR_INTERNAL_ERROR);
@@ -552,7 +597,7 @@ int quicperf_callback(picoquic_cnx_t* cnx,
         break;
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:
-        if (ctx->is_client && ctx->first_stream == NULL) {
+        if (ctx->is_client && ctx->quicperf_stream_tree.root == NULL) {
             ret = quicperf_init_streams_from_scenario(cnx, ctx, UINT64_MAX);
             if (ret != 0 || ctx->nb_open_streams == 0) {
                 picoquic_close(cnx, QUICPERF_ERROR_INTERNAL_ERROR);

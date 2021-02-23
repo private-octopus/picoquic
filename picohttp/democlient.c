@@ -664,6 +664,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                         picoquic_log_app_message(cnx, "Stream %d ended after %d bytes, ret=0x%x",
                             (int)stream_id, (int)stream_ctx->received_length, ret);
                     }
+
                 }
             }
         }
@@ -677,8 +678,8 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
             fin_stream_id = stream_id;
             if (!ctx->no_print) {
-                fprintf(stdout, "Stream %d reset after %d bytes\n",
-                    (int)stream_id, (int)stream_ctx->received_length);
+                fprintf(stdout, "Stream %" PRIu64 " reset after %zu bytes\n",
+                    stream_id, stream_ctx->received_length);
             }
         }
         picoquic_reset_stream(cnx, stream_id, 0);
@@ -791,7 +792,7 @@ static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ct
     }
 
     if (stream_ctx->F != NULL) {
-        DBG_PRINTF("Stream %d, file open after %d bytes\n", stream_ctx->stream_id, stream_ctx->received_length);
+        DBG_PRINTF("Stream %" PRIu64 ", file close after %zu bytes\n", stream_ctx->stream_id, stream_ctx->received_length);
         stream_ctx->F = picoquic_file_close(stream_ctx->F);
     }
 

@@ -103,7 +103,6 @@ static picohttp_server_stream_ctx_t * picohttp_find_or_create_stream(
     picoquic_cnx_t* cnx,
     uint64_t stream_id,
     picosplay_tree_t * stream_tree,
-    picohttp_server_stream_ctx_t ** p_first_stream,
     int should_create,
     int is_h3)
 {
@@ -142,28 +141,11 @@ static h3zero_server_callback_ctx_t* h3zero_server_callback_create_context(picoh
 
         picosplay_init_tree(&ctx->h3_stream_tree, picohttp_stream_node_compare, picohttp_stream_node_create, picohttp_stream_node_delete, picohttp_stream_node_value);
 
-        ctx->first_stream = NULL;
-#if 0
-        ctx->buffer = (uint8_t*)malloc(PICOHTTP_RESPONSE_MAX);
-        if (ctx->buffer == NULL) {
-            free(ctx);
-            ctx = NULL;
-        }
-        else {
-            ctx->buffer_max = PICOHTTP_RESPONSE_MAX;
-            if (param != NULL) {
-                ctx->path_table = param->path_table;
-                ctx->path_table_nb = param->path_table_nb;
-                ctx->web_folder = param->web_folder;
-            }
-        }
-#else
         if (param != NULL) {
             ctx->path_table = param->path_table;
             ctx->path_table_nb = param->path_table_nb;
             ctx->web_folder = param->web_folder;
         }
-#endif
     }
 
     return ctx;
@@ -172,12 +154,6 @@ static h3zero_server_callback_ctx_t* h3zero_server_callback_create_context(picoh
 static void h3zero_server_callback_delete_context(h3zero_server_callback_ctx_t* ctx)
 {
     picosplay_empty_tree(&ctx->h3_stream_tree);
-#if 0
-    if (ctx->buffer != NULL) {
-        free(ctx->buffer);
-        ctx->buffer = NULL;
-    }
-#endif
 
     free(ctx);
 }
@@ -489,7 +465,7 @@ static int h3zero_server_callback_data(
         else {
             /* Find or create stream context */
             if (stream_ctx == NULL) {
-                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, &ctx->first_stream, 1, 1);
+                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, 1, 1);
             }
 
             if (stream_ctx == NULL) {
@@ -565,7 +541,7 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
     int ret = -1;
 
     if (stream_ctx == NULL) {
-        stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, &ctx->first_stream, 0, 1);
+        stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, 0, 1);
     }
 
     if (stream_ctx == NULL) {
@@ -580,8 +556,8 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
             /* default reply for known URL */
             ret = demo_client_prepare_to_send(context, space, stream_ctx->echo_length, &stream_ctx->echo_sent,
                 stream_ctx->F);
-            if (stream_ctx->F != NULL && stream_ctx->echo_sent >= stream_ctx->echo_length) {
-                stream_ctx->F = picoquic_file_close(stream_ctx->F);
+            if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
+                picohttp_delete_stream(&ctx->h3_stream_tree, stream_ctx);
             }
         }
     }
@@ -663,7 +639,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
             /* TODO: special case for uni streams. */
             if (stream_ctx == NULL) {
-                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, &ctx->first_stream, 0, 1);
+                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, 0, 1);
             }
             if (stream_ctx != NULL) {
                 /* reset post callback. */
@@ -688,7 +664,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_gap:
             /* Gap indication, when unreliable streams are supported */
             if (stream_ctx == NULL) {
-                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, &ctx->first_stream, 0, 1);
+                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, 0, 1);
             }
             if (stream_ctx != NULL) {
                 if (stream_ctx->path_callback != NULL) {
@@ -750,7 +726,6 @@ static picoquic_h09_server_callback_ctx_t* first_server_callback_create_context(
 
         picosplay_init_tree(&ctx->h09_stream_tree, picohttp_stream_node_compare, picohttp_stream_node_create, picohttp_stream_node_delete, picohttp_stream_node_value);
 
-        ctx->first_stream = NULL;
         if (param != NULL) {
             ctx->path_table = param->path_table;
             ctx->path_table_nb = param->path_table_nb;
@@ -1200,7 +1175,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     }
 
     if (stream_ctx == NULL) {
-        stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h09_stream_tree, &ctx->first_stream, 1, 0);
+        stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h09_stream_tree, 1, 0);
     }
 
     switch (fin_or_event) {
@@ -1238,8 +1213,8 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                     /* TODO-POST: notify callback. */
                     int ret = demo_client_prepare_to_send((void*)bytes, length, stream_ctx->echo_length, &stream_ctx->echo_sent,
                         stream_ctx->F);
-                    if (stream_ctx->F != NULL && stream_ctx->echo_sent >= stream_ctx->echo_length) {
-                        stream_ctx->F = picoquic_file_close(stream_ctx->F);
+                    if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
+                        picohttp_delete_stream(&ctx->h09_stream_tree, stream_ctx);
                     }
                     return ret;
                 }
