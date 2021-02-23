@@ -116,11 +116,6 @@ typedef struct st_picohttp_server_stream_ctx_t {
 
 typedef struct st_h3zero_server_callback_ctx_t {
     picosplay_tree_t h3_stream_tree;
-    picohttp_server_stream_ctx_t* first_stream;
-#if 0
-    size_t buffer_max;
-    uint8_t* buffer;
-#endif
     picohttp_server_path_item_t * path_table;
     size_t path_table_nb;
     char const* web_folder;
@@ -136,7 +131,6 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
 
 typedef struct st_picoquic_h09_server_callback_ctx_t {
     picosplay_tree_t h09_stream_tree;
-    picohttp_server_stream_ctx_t* first_stream;
     picohttp_server_path_item_t * path_table;
     size_t path_table_nb;
     char const* web_folder;
