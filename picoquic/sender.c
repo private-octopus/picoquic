@@ -1473,10 +1473,6 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
             /* check if this is an ACK only packet */
             int packet_is_pure_ack = 1;
             int do_not_detect_spurious = 1;
-            int frame_is_pure_ack = 0;
-            uint8_t* old_bytes = old_p->bytes;
-            size_t frame_length = 0;
-            size_t byte_index = 0; /* Used when parsing the old packet */
             size_t checksum_length = 0;
 
 	        /* we'll report it where it got lost */
@@ -1487,34 +1483,7 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
             *header_length = 0;
 
             if (old_p->ptype == picoquic_packet_0rtt_protected) {
-                /* Only retransmit as 0-RTT if contains crypto data */
-                int contains_crypto = 0;
-                byte_index = old_p->offset;
-
-                if (old_p->is_evaluated == 0) {
-                    while (ret == 0 && byte_index < old_p->length) {
-                        if (old_bytes[byte_index] == picoquic_frame_type_crypto_hs) {
-                            contains_crypto = 1;
-                            packet_is_pure_ack = 0;
-                            break;
-                        }
-                        ret = picoquic_skip_frame(&old_p->bytes[byte_index],
-                            old_p->length - byte_index, &frame_length, &frame_is_pure_ack);
-                        byte_index += frame_length;
-                    }
-                    old_p->contains_crypto = contains_crypto;
-                    old_p->is_pure_ack = packet_is_pure_ack;
-                    old_p->is_evaluated = 1;
-                } else {
-                    contains_crypto = old_p->contains_crypto;
-                    packet_is_pure_ack = old_p->is_pure_ack;
-                }
-
-                if (contains_crypto) {
-                    length = picoquic_predict_packet_header_length(cnx, picoquic_packet_0rtt_protected, pkt_ctx);
-                    packet->ptype = picoquic_packet_0rtt_protected;
-                    packet->offset = length;
-                } else if (cnx->cnx_state < picoquic_state_client_ready_start) {
+                if (cnx->cnx_state < picoquic_state_client_ready_start) {
                     should_retransmit = 0;
                 } else {
                     length = picoquic_predict_packet_header_length(cnx, picoquic_packet_1rtt_protected, pkt_ctx);
