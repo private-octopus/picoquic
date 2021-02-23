@@ -357,6 +357,11 @@ quicperf_stream_ctx_t* quicperf_create_stream_ctx(quicperf_ctx_t* ctx, uint64_t 
     return stream_ctx;
 }
 
+void quicperf_delete_stream_ctx(quicperf_ctx_t* ctx, quicperf_stream_ctx_t* stream_ctx)
+{
+    picosplay_delete_hint(&ctx->quicperf_stream_tree, &stream_ctx->quicperf_stream_node);
+}
+
 int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t stream_id)
 {
     int ret = 0;
@@ -446,6 +451,8 @@ int quicperf_process_stream_data(picoquic_cnx_t * cnx, quicperf_ctx_t * ctx, qui
                 ret = quicperf_init_streams_from_scenario(cnx, ctx, stream_ctx->stream_id);
                 if (ctx->nb_open_streams == 0) {
                     ret = picoquic_close(cnx, QUICPERF_NO_ERROR);
+                } else if (ctx->is_client) {
+                    quicperf_delete_stream_ctx(ctx, stream_ctx);
                 }
             }
         }
@@ -509,6 +516,10 @@ int quicperf_prepare_to_send(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicperf_
         }
         else {
             stream_ctx->nb_response_bytes += available;
+        }
+
+        if (is_fin && !ctx->is_client) {
+            quicperf_delete_stream_ctx(ctx, stream_ctx);
         }
     } else if (available > 0) {
         ret = picoquic_close(cnx, QUICPERF_ERROR_INTERNAL_ERROR);
