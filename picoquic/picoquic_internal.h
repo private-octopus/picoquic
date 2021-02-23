@@ -350,7 +350,6 @@ typedef struct st_picoquic_packet_t {
     picoquic_packet_context_enum pc;
     unsigned int is_evaluated : 1;
     unsigned int is_pure_ack : 1;
-    unsigned int contains_crypto : 1;
     unsigned int is_mtu_probe : 1;
     unsigned int is_multipath_probe : 1;
     unsigned int is_ack_trap : 1;
