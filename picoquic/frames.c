@@ -2601,7 +2601,7 @@ static int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* by
         stream = picoquic_find_stream(cnx, stream_id);
         if (stream != NULL) {
             (void)picoquic_update_sack_list(&stream->first_sack_item,
-                offset, offset + data_length - 1);
+                offset, offset + data_length - ((fin) ? 0 : 1));
 
             picoquic_delete_stream_if_closed(cnx, stream);
         }

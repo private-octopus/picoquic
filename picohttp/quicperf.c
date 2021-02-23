@@ -451,7 +451,7 @@ int quicperf_process_stream_data(picoquic_cnx_t * cnx, quicperf_ctx_t * ctx, qui
                 ret = quicperf_init_streams_from_scenario(cnx, ctx, stream_ctx->stream_id);
                 if (ctx->nb_open_streams == 0) {
                     ret = picoquic_close(cnx, QUICPERF_NO_ERROR);
-                } else if (ctx->is_client) {
+                } else if (ret == 0 && ctx->is_client) {
                     quicperf_delete_stream_ctx(ctx, stream_ctx);
                 }
             }
