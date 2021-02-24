@@ -291,13 +291,12 @@ const uint8_t* picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, const uin
 
 uint8_t * picoquic_format_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t * bytes_max, int * more_data, int * is_pure_ack, picoquic_local_cnxid_t* l_cid)
 {
-    /* TODO: Encoding retire before, currently 0. */
     uint8_t* bytes0 = bytes;
 
     if (l_cid != NULL && l_cid->sequence != 0 && l_cid->cnx_id.id_len > 0) {
         if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_new_connection_id)) == NULL ||
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, l_cid->sequence)) == NULL ||
-            (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, 0)) == NULL ||
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->local_cnxid_retire_before)) == NULL ||
             (bytes = picoquic_frames_cid_encode(bytes, bytes_max, &l_cid->cnx_id)) == NULL ||
             (bytes + PICOQUIC_RESET_SECRET_SIZE) > bytes_max) {
             *more_data = 1;
@@ -357,15 +356,14 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
             picoquic_frame_type_new_connection_id);
         bytes = NULL;
     } else {
-        uint16_t ret = 0;
+        uint16_t ret = (uint16_t)picoquic_enqueue_cnxid_stash(cnx, retire_before,
+            sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
 
-        if (bytes != NULL && retire_before > cnx->retire_cnxid_before) {
-            /* TODO: retire the now deprecated CID */
+        if (ret == 0 && retire_before > cnx->retire_cnxid_before) {
+            /* retire the now deprecated CID */
             ret = (uint16_t)picoquic_remove_not_before_cid(cnx, retire_before, current_time);
         }
-        if (ret == 0 && sequence >= cnx->retire_cnxid_before) {
-            ret = (uint16_t)picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
-        }
+
         if (ret != 0) {
             picoquic_connection_error(cnx, ret, picoquic_frame_type_new_connection_id);
             bytes = NULL;

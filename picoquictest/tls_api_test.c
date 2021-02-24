@@ -5045,10 +5045,9 @@ int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char
     }
 
     return ret;
-
 }
 
-int transmit_cnxid_test()
+int transmit_cnxid_test_one(int retire_before)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -5063,6 +5062,18 @@ int transmit_cnxid_test()
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
         ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
+    }
+
+    if (ret == 0 && retire_before) {
+        /* The server formats a new CID frame that forces expiration of all its previously
+         * defined connection identifiers. Then, run a synchronization loop until no
+         * outstanding data.
+         */
+        ret = picoquic_set_local_cnxid_retire_before(test_ctx->cnx_server, UINT64_MAX);
+
+        if (ret == 0) {
+            ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
+        }
     }
 
     if (ret == 0) {
@@ -5082,12 +5093,36 @@ int transmit_cnxid_test()
         ret = transmit_cnxid_test_stash(test_ctx->cnx_server, test_ctx->cnx_client, "server");
     }
 
+    if (ret == 0 && retire_before) {
+        /* Verify that all CID in the client stash have valid sequence numbers. */
+        picoquic_remote_cnxid_t* stashed = test_ctx->cnx_client->cnxid_stash_first;
+
+        while (stashed != NULL && ret == 0) {
+            if (stashed->sequence < test_ctx->cnx_server->local_cnxid_retire_before) {
+                DBG_PRINTF("Old CID %" PRIu64 " still on client.\n", stashed->sequence);
+                ret = -1;
+                break;
+            }
+            stashed = stashed->next;
+        }
+    }
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
     }
 
     return ret;
+}
+
+int transmit_cnxid_test()
+{
+    return transmit_cnxid_test_one(0);
+}
+
+int transmit_cnxid_retire_before_test()
+{
+    return transmit_cnxid_test_one(1);
 }
 
 /*

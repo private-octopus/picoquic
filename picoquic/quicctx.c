@@ -1693,7 +1693,7 @@ int picoquic_init_cnxid_stash(picoquic_cnx_t* cnx)
     return ret;
 }
 
-int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
+int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx, uint64_t retire_before_next,
     const uint64_t sequence, const uint8_t cid_length, const uint8_t* cnxid_bytes,
     const uint8_t* secret_bytes, picoquic_remote_cnxid_t** pstashed)
 {
@@ -1704,6 +1704,11 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
     picoquic_remote_cnxid_t* next_stash = cnx->cnxid_stash_first;
     picoquic_remote_cnxid_t* last_stash = NULL;
     picoquic_remote_cnxid_t* stashed = NULL;
+    int nb_cid_retired_before = 0;
+
+    if (retire_before_next < cnx->retire_cnxid_before) {
+        retire_before_next = cnx->retire_cnxid_before;
+    }
 
     /* verify the format */
     if (picoquic_parse_connection_id(cnxid_bytes, cid_length, &cnx_id) == 0) {
@@ -1734,6 +1739,9 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
             ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
         }
         else {
+            if (next_stash->sequence < retire_before_next) {
+                nb_cid_retired_before++;
+            }
             nb_cid_received++;
         }
         last_stash = next_stash;
@@ -1741,7 +1749,7 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
     }
 
     if (ret == 0 && is_duplicate == 0) {
-        if (nb_cid_received >= cnx->local_parameters.active_connection_id_limit) {
+        if (nb_cid_received >= cnx->local_parameters.active_connection_id_limit + nb_cid_retired_before) {
             ret = PICOQUIC_TRANSPORT_CONNECTION_ID_LIMIT_ERROR;
         }
         else {
@@ -2402,6 +2410,12 @@ void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_
     /* Clear the associated ack context */
     picoquic_clear_ack_ctx(&l_cid->ack_ctx);
 
+    /* Update the expired count if necessary */
+    if (l_cid->sequence < cnx->local_cnxid_retire_before &&
+        cnx->nb_local_cnxid_expired > 0) {
+        cnx->nb_local_cnxid_expired--;
+    }
+
     /* Delete and done */
     free(l_cid);
 }
@@ -2422,6 +2436,35 @@ void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t sequence)
     if (local_cnxid != NULL) {
         picoquic_delete_local_cnxid(cnx, local_cnxid);
     }
+}
+
+int picoquic_set_local_cnxid_retire_before(picoquic_cnx_t* cnx, uint64_t local_cnxid_retire_before)
+{
+    int ret = 0;
+
+    if (local_cnxid_retire_before == UINT64_MAX) {
+        local_cnxid_retire_before = cnx->local_cnxid_sequence_next;
+    }
+    else if (local_cnxid_retire_before > cnx->local_cnxid_sequence_next ||
+        local_cnxid_retire_before <= cnx->local_cnxid_retire_before) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_local_cnxid_t* l_cid = cnx->local_cnxid_first;
+        cnx->local_cnxid_retire_before = local_cnxid_retire_before;
+        cnx->nb_local_cnxid_expired = 0;
+
+        while (l_cid != NULL) {
+            if (l_cid->sequence < cnx->local_cnxid_retire_before) {
+                cnx->nb_local_cnxid_expired++;
+            }
+            l_cid = l_cid->next;
+        }
+
+        cnx->next_wake_time = picoquic_get_quic_time(cnx->quic);
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_QUICCTX);
+    }
+    return ret;
 }
 
 picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* cnxid)

@@ -1331,7 +1331,7 @@ int cnxid_stash_test()
         }
 
         for (size_t i = 0; ret == 0 && i < nb_stash_test_case; i++) {
-            ret = picoquic_enqueue_cnxid_stash(cnx,
+            ret = picoquic_enqueue_cnxid_stash(cnx, 0,
                 stash_test_case[i].sequence, stash_test_case[i].cnx_id.id_len,
                 stash_test_case[i].cnx_id.id, stash_test_case[i].reset_secret, &stashed);
             if (ret != 0) {

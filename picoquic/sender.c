@@ -2084,7 +2084,7 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
         int ipv6_received = cnx->remote_parameters.prefered_address.ipv6Port != 0;
 
         /* Add the connection ID to the local stash */
-        ret = picoquic_enqueue_cnxid_stash(cnx, 1,
+        ret = picoquic_enqueue_cnxid_stash(cnx, 0, 1,
             cnx->remote_parameters.prefered_address.connection_id.id_len,
             cnx->remote_parameters.prefered_address.connection_id.id,
             cnx->remote_parameters.prefered_address.statelessResetToken,
@@ -2882,8 +2882,8 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
 {
     while ((cnx->remote_parameters.migration_disabled == 0 || cnx->remote_parameters.prefered_address.is_defined) &&
         cnx->local_parameters.migration_disabled == 0 &&
-        cnx->nb_local_cnxid < (int)(cnx->remote_parameters.active_connection_id_limit) &&
-        cnx->nb_local_cnxid <= PICOQUIC_NB_PATH_TARGET) {
+        cnx->nb_local_cnxid < ((int)(cnx->remote_parameters.active_connection_id_limit) + cnx->nb_local_cnxid_expired) &&
+        cnx->nb_local_cnxid <= (PICOQUIC_NB_PATH_TARGET+cnx->nb_local_cnxid_expired)) {
         uint8_t* bytes0 = bytes;
         picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, NULL);
 

@@ -283,14 +283,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_cnxid_stash)
+        TEST_METHOD(new_cnxid_stash)
         {
             int ret = cnxid_stash_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_new_cnxid)
+        TEST_METHOD(new_cnxid)
         {
             int ret = new_cnxid_test();
 
@@ -934,9 +934,16 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_transmit_cnxid)
+        TEST_METHOD(cnxid_transmit)
         {
             int ret = transmit_cnxid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cnxid_transmit_retire)
+        {
+            int ret = transmit_cnxid_retire_before_test();
 
             Assert::AreEqual(ret, 0);
         }
