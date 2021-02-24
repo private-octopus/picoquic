@@ -1941,7 +1941,9 @@ int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path
     int ret = 0;
     picoquic_remote_cnxid_t * stashed = NULL;
 
-    if (cnx->remote_parameters.migration_disabled != 0 ||
+    if ((cnx->remote_parameters.migration_disabled != 0 &&
+        path_x->p_remote_cnxid != NULL &&
+        path_x->p_remote_cnxid->sequence >= cnx->retire_cnxid_before)||
         cnx->local_parameters.migration_disabled != 0) {
         /* Do not switch cnx_id if migration is disabled */
         ret = PICOQUIC_ERROR_MIGRATION_DISABLED;

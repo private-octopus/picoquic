@@ -941,9 +941,15 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(cnxid_transmit_retire)
+        TEST_METHOD(cnxid_transmit_r_before)
         {
             int ret = transmit_cnxid_retire_before_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cnxid_transmit_r_disable){
+            int ret = transmit_cnxid_retire_disable_test();
 
             Assert::AreEqual(ret, 0);
         }

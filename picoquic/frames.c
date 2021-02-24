@@ -361,6 +361,7 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
 
         if (ret == 0 && retire_before > cnx->retire_cnxid_before) {
             /* retire the now deprecated CID */
+            cnx->retire_cnxid_before = retire_before;
             ret = (uint16_t)picoquic_remove_not_before_cid(cnx, retire_before, current_time);
         }
 

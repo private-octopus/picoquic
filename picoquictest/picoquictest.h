@@ -143,6 +143,7 @@ int cnxid_stash_test();
 int new_cnxid_test();
 int transmit_cnxid_test();
 int transmit_cnxid_retire_before_test();
+int transmit_cnxid_retire_disable_test();
 int probe_api_test();
 int migration_test();
 int migration_test_long(); 

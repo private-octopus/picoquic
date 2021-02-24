@@ -5047,13 +5047,22 @@ int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char
     return ret;
 }
 
-int transmit_cnxid_test_one(int retire_before)
+int transmit_cnxid_test_one(int retire_before, int disable_migration)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t test_parameters;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && disable_migration) {
+        memset(&test_parameters, 0, sizeof(picoquic_tp_t));
+
+        picoquic_init_transport_parameters(&test_parameters, 0);
+        test_parameters.migration_disabled = 1;
+        picoquic_set_default_tp(test_ctx->qserver, &test_parameters);
+    }
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -5076,7 +5085,7 @@ int transmit_cnxid_test_one(int retire_before)
         }
     }
 
-    if (ret == 0) {
+    if (ret == 0 && !disable_migration) {
         if (test_ctx->cnx_client->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
             DBG_PRINTF("Only %d CID created on client.\n", test_ctx->cnx_client->nb_local_cnxid);
             ret = -1;
@@ -5117,12 +5126,17 @@ int transmit_cnxid_test_one(int retire_before)
 
 int transmit_cnxid_test()
 {
-    return transmit_cnxid_test_one(0);
+    return transmit_cnxid_test_one(0, 0);
 }
 
 int transmit_cnxid_retire_before_test()
 {
-    return transmit_cnxid_test_one(1);
+    return transmit_cnxid_test_one(1, 0);
+}
+
+int transmit_cnxid_retire_disable_test()
+{
+    return transmit_cnxid_test_one(1, 1);
 }
 
 /*
