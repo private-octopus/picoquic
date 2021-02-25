@@ -171,6 +171,7 @@ static const picoquic_test_def_t test_table[] = {
     { "random_gauss", random_gauss_test},
     { "random_public_tester", random_public_tester_test},
     { "cnxid_transmit", transmit_cnxid_test },
+    { "cnxid_transmit_disable", transmit_cnxid_disable_test },
     { "cnxid_transmit_r_before", transmit_cnxid_retire_before_test },
     { "cnxid_transmit_r_disable", transmit_cnxid_retire_disable_test },
     { "probe_api", probe_api_test },

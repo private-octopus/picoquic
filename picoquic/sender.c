@@ -2885,10 +2885,13 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
     picoquic_check_local_cnxid_ttl(cnx, current_time, next_wake_time);
 
     /* Push new CID if needed */
-    while ((cnx->remote_parameters.migration_disabled == 0 || 
+    while (
+#if 0
+        (cnx->remote_parameters.migration_disabled == 0 || 
         cnx->remote_parameters.prefered_address.is_defined) &&
         (cnx->local_parameters.migration_disabled == 0 ||
             cnx->local_cnxid_retire_before >= cnx->local_cnxid_sequence_next) &&
+#endif
         cnx->nb_local_cnxid < ((int)(cnx->remote_parameters.active_connection_id_limit) + cnx->nb_local_cnxid_expired) &&
         cnx->nb_local_cnxid <= (PICOQUIC_NB_PATH_TARGET+cnx->nb_local_cnxid_expired)) {
         uint8_t* bytes0 = bytes;

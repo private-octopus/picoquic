@@ -5097,7 +5097,7 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration)
         }
     }
 
-    if (ret == 0 && !disable_migration) {
+    if (ret == 0) {
         if (test_ctx->cnx_client->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
             DBG_PRINTF("Only %d CID created on client.\n", test_ctx->cnx_client->nb_local_cnxid);
             ret = -1;
@@ -5139,6 +5139,11 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration)
 int transmit_cnxid_test()
 {
     return transmit_cnxid_test_one(0, 0);
+}
+
+int transmit_cnxid_disable_test()
+{
+    return transmit_cnxid_test_one(0, 1);
 }
 
 int transmit_cnxid_retire_before_test()
