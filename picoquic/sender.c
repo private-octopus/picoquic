@@ -2084,7 +2084,7 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
         int ipv6_received = cnx->remote_parameters.prefered_address.ipv6Port != 0;
 
         /* Add the connection ID to the local stash */
-        ret = picoquic_enqueue_cnxid_stash(cnx, 1,
+        ret = picoquic_enqueue_cnxid_stash(cnx, 0, 1,
             cnx->remote_parameters.prefered_address.connection_id.id_len,
             cnx->remote_parameters.prefered_address.connection_id.id,
             cnx->remote_parameters.prefered_address.statelessResetToken,
@@ -2878,14 +2878,24 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 }
 
 /* Create required ID, register, and format the corresponding connection ID frame */
-uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t * bytes_max, int * more_data, int * is_pure_ack)
+uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t * bytes_max,
+    uint64_t current_time, uint64_t * next_wake_time, int * more_data, int * is_pure_ack)
 {
-    while ((cnx->remote_parameters.migration_disabled == 0 || cnx->remote_parameters.prefered_address.is_defined) &&
-        cnx->local_parameters.migration_disabled == 0 &&
-        cnx->nb_local_cnxid < (int)(cnx->remote_parameters.active_connection_id_limit) &&
-        cnx->nb_local_cnxid <= PICOQUIC_NB_PATH_TARGET) {
+    /* Check whether time has comed to obsolete local CID */
+    picoquic_check_local_cnxid_ttl(cnx, current_time, next_wake_time);
+
+    /* Push new CID if needed */
+    while (
+#if 0
+        (cnx->remote_parameters.migration_disabled == 0 || 
+        cnx->remote_parameters.prefered_address.is_defined) &&
+        (cnx->local_parameters.migration_disabled == 0 ||
+            cnx->local_cnxid_retire_before >= cnx->local_cnxid_sequence_next) &&
+#endif
+        cnx->nb_local_cnxid < ((int)(cnx->remote_parameters.active_connection_id_limit) + cnx->nb_local_cnxid_expired) &&
+        cnx->nb_local_cnxid <= (PICOQUIC_NB_PATH_TARGET+cnx->nb_local_cnxid_expired)) {
         uint8_t* bytes0 = bytes;
-        picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, NULL);
+        picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, NULL, current_time);
 
         if (l_cid == NULL) {
             /* OOPS, memory error */
@@ -3191,7 +3201,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
                         /* If there are not enough published CID, create and advertise */
                         if (ret == 0) {
-                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max,
+                                current_time, next_wake_time, &more_data, &is_pure_ack);
                         }
 
                         /* Start of CC controlled frames */
@@ -3566,7 +3577,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         /* No need or no way to do path MTU discovery, just go on with formatting packets */
                         /* If there are not enough local CID published, create and advertise */
                         if (ret == 0) {
-                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max,
+                                current_time, next_wake_time, &more_data, &is_pure_ack);
                         }
 
                         /* Start of CC controlled frames */

@@ -5045,16 +5045,32 @@ int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char
     }
 
     return ret;
-
 }
 
-int transmit_cnxid_test()
+int transmit_cnxid_test_one(int retire_before, int disable_migration)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
+    /* We set the default ttl to 5 seconds, which is longer than the
+     * delay set inside tls_api_synch_to_empty_loop */
+    const uint64_t sync_empty_loop_timeout = 4000000;
+    const uint64_t default_connection_id_ttl = 5000000;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t test_parameters;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && disable_migration) {
+        memset(&test_parameters, 0, sizeof(picoquic_tp_t));
+
+        picoquic_init_transport_parameters(&test_parameters, 0);
+        test_parameters.migration_disabled = 1;
+        picoquic_set_default_tp(test_ctx->qserver, &test_parameters);
+    }
+
+    if (ret == 0 && retire_before) {
+        picoquic_set_default_connection_id_ttl(test_ctx->qserver, default_connection_id_ttl);
+    }
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -5063,6 +5079,22 @@ int transmit_cnxid_test()
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
         ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
+    }
+
+    if (ret == 0 && retire_before) {
+        /* wait until the TTL of local CID expires */
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, default_connection_id_ttl - sync_empty_loop_timeout);
+
+        if (ret == 0 && test_ctx->cnx_server->local_cnxid_retire_before == 0) {
+            DBG_PRINTF("Retire before did not progress: %" PRIu64 ".\n",
+                test_ctx->cnx_server->local_cnxid_retire_before);
+            ret = -1;
+        }
+
+        /* Now, wait until the next batch of connection ID is sent. */
+        if (ret == 0) {
+            ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
+        }
     }
 
     if (ret == 0) {
@@ -5082,12 +5114,46 @@ int transmit_cnxid_test()
         ret = transmit_cnxid_test_stash(test_ctx->cnx_server, test_ctx->cnx_client, "server");
     }
 
+    if (ret == 0 && retire_before) {
+        /* Verify that all CID in the client stash have valid sequence numbers. */
+        picoquic_remote_cnxid_t* stashed = test_ctx->cnx_client->cnxid_stash_first;
+
+        while (stashed != NULL && ret == 0) {
+            if (stashed->sequence < test_ctx->cnx_server->local_cnxid_retire_before) {
+                DBG_PRINTF("Old CID %" PRIu64 " still on client.\n", stashed->sequence);
+                ret = -1;
+                break;
+            }
+            stashed = stashed->next;
+        }
+    }
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
     }
 
     return ret;
+}
+
+int transmit_cnxid_test()
+{
+    return transmit_cnxid_test_one(0, 0);
+}
+
+int transmit_cnxid_disable_test()
+{
+    return transmit_cnxid_test_one(0, 1);
+}
+
+int transmit_cnxid_retire_before_test()
+{
+    return transmit_cnxid_test_one(1, 0);
+}
+
+int transmit_cnxid_retire_disable_test()
+{
+    return transmit_cnxid_test_one(1, 1);
 }
 
 /*
@@ -5464,10 +5530,10 @@ int rebinding_stress_test()
             uint64_t server_arrival = test_ctx->c_to_s_link->last_packet->arrival_time;
 
             if (server_arrival > last_inject_time) {
-                /* 10% chance of packet injection, 5% chances of reusing test address */
+                /* 9% chance of packet injection, 5% chances of reusing test address */
                 uint64_t rand100 = picoquic_test_uniform_random(&random_context, 100);
                 last_inject_time = server_arrival;
-                if (rand100 < 10) {
+                if (rand100 < 9) {
                     struct sockaddr * bad_address;
                     if (rand100 < 5) {
                         bad_address = (struct sockaddr *)&hack_address;
