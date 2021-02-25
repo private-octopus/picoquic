@@ -5530,10 +5530,10 @@ int rebinding_stress_test()
             uint64_t server_arrival = test_ctx->c_to_s_link->last_packet->arrival_time;
 
             if (server_arrival > last_inject_time) {
-                /* 10% chance of packet injection, 5% chances of reusing test address */
+                /* 9% chance of packet injection, 5% chances of reusing test address */
                 uint64_t rand100 = picoquic_test_uniform_random(&random_context, 100);
                 last_inject_time = server_arrival;
-                if (rand100 < 10) {
+                if (rand100 < 9) {
                     struct sockaddr * bad_address;
                     if (rand100 < 5) {
                         bad_address = (struct sockaddr *)&hack_address;
