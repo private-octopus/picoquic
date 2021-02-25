@@ -545,6 +545,10 @@ int picoquic_save_retry_tokens(picoquic_quic_t* quic, char const* token_store_fi
  * Value must be compatible with what the cnx_id_callback() expects on a server */
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length);
 
+void picoquic_set_default_connection_id_ttl(picoquic_quic_t* quic, uint64_t ttl_usec);
+
+uint64_t picoquic_get_default_connection_id_ttl(picoquic_quic_t* quic);
+
 void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max);
 
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn);

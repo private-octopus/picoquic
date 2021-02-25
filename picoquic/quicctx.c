@@ -372,6 +372,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->max_simultaneous_logs = PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS;
         quic->max_half_open_before_retry = PICOQUIC_DEFAULT_HALF_OPEN_RETRY_THRESHOLD;
         quic->default_lossbit_policy = 0; /* For compatibility with old behavior. Consider 0 */
+        quic->local_cnxid_ttl = UINT64_MAX;
         picoquic_wake_list_init(quic);
 
         if (cnx_id_callback != NULL) {
@@ -2297,7 +2298,8 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
  * Local CID are created and registered on demand.
  */
 
-picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* suggested_value)
+picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* suggested_value,
+    uint64_t current_time)
 {
     picoquic_local_cnxid_t* l_cid = NULL;
     int is_unique = 0;
@@ -2306,6 +2308,7 @@ picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoqui
 
     if (l_cid != NULL) {
         memset(l_cid, 0, sizeof(picoquic_local_cnxid_t));
+        l_cid->create_time = current_time;
         picoquic_init_ack_ctx(cnx, &l_cid->ack_ctx);
         if (cnx->quic->local_cnxid_length == 0) {
             is_unique = 1;
@@ -2543,7 +2546,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->initial_cnxid = initial_cnx_id;
         cnx->quic = quic;
         /* Create the connection ID number 0 */
-        cnxid0 = picoquic_create_local_cnxid(cnx, NULL);
+        cnxid0 = picoquic_create_local_cnxid(cnx, NULL, start_time);
 
         /* Initialize the connection ID stash */
         
@@ -2585,7 +2588,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             /* If the default parameters include preferred address, document it */
             if (cnx->local_parameters.prefered_address.is_defined) {
                 /* Create an additional CID */
-                picoquic_local_cnxid_t* cnxid1 = picoquic_create_local_cnxid(cnx, NULL);
+                picoquic_local_cnxid_t* cnxid1 = picoquic_create_local_cnxid(cnx, NULL, start_time);
                 if (cnxid1 != NULL){
                     /* copy the connection ID into the local parameter */
                     cnx->local_parameters.prefered_address.connection_id = cnxid1->cnx_id;
@@ -3112,6 +3115,16 @@ int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid
     }
 
     return ret;
+}
+
+void picoquic_set_default_connection_id_ttl(picoquic_quic_t* quic, uint64_t ttl_usec)
+{
+    quic->local_cnxid_ttl = ttl_usec;
+}
+
+uint64_t picoquic_get_default_connection_id_ttl(picoquic_quic_t* quic)
+{
+    return quic->local_cnxid_ttl;
 }
 
 void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max)

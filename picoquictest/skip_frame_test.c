@@ -621,7 +621,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         cnx->pkt_ctx[0].send_sequence = 0x0102030406;
 
         /* create a local cid  which can be retired with a connection_id_retire frame */
-        (void)picoquic_create_local_cnxid(cnx, NULL);
+        (void)picoquic_create_local_cnxid(cnx, NULL, simulated_time);
 
         /* enable time stamp so it can be used in test */
         cnx->is_time_stamp_enabled = 1;
@@ -1408,7 +1408,7 @@ int new_cnxid_test()
         }
         else {
             /* Create a new local CID */
-            picoquic_local_cnxid_t* local_cid = picoquic_create_local_cnxid(cnx, NULL);
+            picoquic_local_cnxid_t* local_cid = picoquic_create_local_cnxid(cnx, NULL, simulated_time);
             
             if (local_cid == NULL) {
                 DBG_PRINTF("%s", "Cannot create local cnxid\n");
