@@ -1168,6 +1168,7 @@ typedef struct st_picoquic_cnx_t {
     /* management of local CID stash */
     uint64_t local_cnxid_sequence_next;
     uint64_t local_cnxid_retire_before;
+    uint64_t local_cnxid_oldest_created;
     int nb_local_cnxid;
     int nb_local_cnxid_expired;
     picoquic_local_cnxid_t* local_cnxid_first;
@@ -1493,7 +1494,7 @@ void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t * strea
 picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* suggested_value, uint64_t current_time);
 void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
 void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t sequence);
-int picoquic_set_local_cnxid_retire_before(picoquic_cnx_t* cnx, uint64_t local_cnxid_retire_before);
+void picoquic_check_local_cnxid_ttl(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time);
 picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* cnxid);
 picoquic_local_cnxid_t* picoquic_find_local_cnxid_by_number(picoquic_cnx_t* cnx, uint64_t sequence);
 picoquic_remote_cnxid_t* picoquic_find_remote_cnxid_by_number(picoquic_cnx_t* cnx, uint64_t sequence);

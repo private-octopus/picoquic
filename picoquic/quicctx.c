@@ -2443,33 +2443,34 @@ void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t sequence)
     }
 }
 
-int picoquic_set_local_cnxid_retire_before(picoquic_cnx_t* cnx, uint64_t local_cnxid_retire_before)
+void picoquic_check_local_cnxid_ttl(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time)
 {
-    int ret = 0;
-
-    if (local_cnxid_retire_before == UINT64_MAX) {
-        local_cnxid_retire_before = cnx->local_cnxid_sequence_next;
-    }
-    else if (local_cnxid_retire_before > cnx->local_cnxid_sequence_next ||
-        local_cnxid_retire_before <= cnx->local_cnxid_retire_before) {
-        ret = -1;
-    }
-    if (ret == 0) {
+    if (current_time - cnx->local_cnxid_oldest_created >= cnx->quic->local_cnxid_ttl) {
         picoquic_local_cnxid_t* l_cid = cnx->local_cnxid_first;
-        cnx->local_cnxid_retire_before = local_cnxid_retire_before;
-        cnx->nb_local_cnxid_expired = 0;
+        cnx->local_cnxid_oldest_created = current_time;
 
+        cnx->nb_local_cnxid_expired = 0;
         while (l_cid != NULL) {
-            if (l_cid->sequence < cnx->local_cnxid_retire_before) {
+            if ((current_time - l_cid->create_time) >= cnx->quic->local_cnxid_ttl) {
                 cnx->nb_local_cnxid_expired++;
+                if (l_cid->sequence >= cnx->local_cnxid_retire_before) {
+                    cnx->local_cnxid_retire_before = l_cid->sequence + 1;
+                }
+            }
+            else if (l_cid->create_time < cnx->local_cnxid_oldest_created) {
+                cnx->local_cnxid_oldest_created = l_cid->create_time;
             }
             l_cid = l_cid->next;
         }
 
-        cnx->next_wake_time = picoquic_get_quic_time(cnx->quic);
+        cnx->next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_QUICCTX);
+    } else {
+        if (*next_wake_time - cnx->local_cnxid_oldest_created > cnx->quic->local_cnxid_ttl) {
+            *next_wake_time = cnx->local_cnxid_oldest_created + cnx->quic->local_cnxid_ttl;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_QUICCTX);
+        }
     }
-    return ret;
 }
 
 picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* cnxid)
@@ -2547,6 +2548,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->quic = quic;
         /* Create the connection ID number 0 */
         cnxid0 = picoquic_create_local_cnxid(cnx, NULL, start_time);
+        cnx->local_cnxid_oldest_created = start_time;
 
         /* Initialize the connection ID stash */
         

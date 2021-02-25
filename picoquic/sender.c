@@ -2879,8 +2879,12 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 
 /* Create required ID, register, and format the corresponding connection ID frame */
 uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t * bytes_max,
-    uint64_t current_time, int * more_data, int * is_pure_ack)
+    uint64_t current_time, uint64_t * next_wake_time, int * more_data, int * is_pure_ack)
 {
+    /* Check whether time has comed to obsolete local CID */
+    picoquic_check_local_cnxid_ttl(cnx, current_time, next_wake_time);
+
+    /* Push new CID if needed */
     while ((cnx->remote_parameters.migration_disabled == 0 || 
         cnx->remote_parameters.prefered_address.is_defined) &&
         (cnx->local_parameters.migration_disabled == 0 ||
@@ -3194,7 +3198,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
                         /* If there are not enough published CID, create and advertise */
                         if (ret == 0) {
-                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max, current_time, &more_data, &is_pure_ack);
+                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max,
+                                current_time, next_wake_time, &more_data, &is_pure_ack);
                         }
 
                         /* Start of CC controlled frames */
@@ -3569,7 +3574,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         /* No need or no way to do path MTU discovery, just go on with formatting packets */
                         /* If there are not enough local CID published, create and advertise */
                         if (ret == 0) {
-                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max, current_time, &more_data, &is_pure_ack);
+                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max,
+                                current_time, next_wake_time, &more_data, &is_pure_ack);
                         }
 
                         /* Start of CC controlled frames */

@@ -5051,6 +5051,10 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
+    /* We set the default ttl to 5 seconds, which is longer than the
+     * delay set inside tls_api_synch_to_empty_loop */
+    const uint64_t sync_empty_loop_timeout = 4000000;
+    const uint64_t default_connection_id_ttl = 5000000;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_tp_t test_parameters;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
@@ -5064,6 +5068,10 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration)
         picoquic_set_default_tp(test_ctx->qserver, &test_parameters);
     }
 
+    if (ret == 0 && retire_before) {
+        picoquic_set_default_connection_id_ttl(test_ctx->qserver, default_connection_id_ttl);
+    }
+
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
@@ -5074,12 +5082,16 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration)
     }
 
     if (ret == 0 && retire_before) {
-        /* The server formats a new CID frame that forces expiration of all its previously
-         * defined connection identifiers. Then, run a synchronization loop until no
-         * outstanding data.
-         */
-        ret = picoquic_set_local_cnxid_retire_before(test_ctx->cnx_server, UINT64_MAX);
+        /* wait until the TTL of local CID expires */
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, default_connection_id_ttl - sync_empty_loop_timeout);
 
+        if (ret == 0 && test_ctx->cnx_server->local_cnxid_retire_before == 0) {
+            DBG_PRINTF("Retire before did not progress: %" PRIu64 ".\n",
+                test_ctx->cnx_server->local_cnxid_retire_before);
+            ret = -1;
+        }
+
+        /* Now, wait until the next batch of connection ID is sent. */
         if (ret == 0) {
             ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
         }
