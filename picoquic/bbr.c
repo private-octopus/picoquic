@@ -212,6 +212,7 @@ typedef enum {
 #define BBR_LT_BW_RATIO_INVERSE 8
 #define BBR_LT_BW_BYTES_PER_SEC_DIFF 4000
 #define BBR_LT_BW_MAX_RTTS 48
+#define BBR_HYSTART_THRESHOLD_RTT 50000
 
 
 static const double bbr_pacing_gain_cycle[BBR_GAIN_CYCLE_LEN] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.25, 0.75};
@@ -1035,7 +1036,7 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_spurious_repeat:
             break;
         case picoquic_congestion_notification_rtt_measurement:
-            if (bbr_state->state == picoquic_bbr_alg_startup && path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
+            if (bbr_state->state == picoquic_bbr_alg_startup && path_x->rtt_min > BBR_HYSTART_THRESHOLD_RTT) {
                 BBREnterStartupLongRTT(bbr_state, path_x);
             }
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {

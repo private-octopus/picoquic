@@ -95,6 +95,17 @@ static test_api_stream_desc_t test_scenario_sustained[] = {
     { 16, 12, 257, 1000000 }
 };
 
+static test_api_stream_desc_t test_scenario_sustained2[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 0, 257, 1000000 },
+    { 12, 0, 257, 1000000 },
+    { 16, 0, 257, 1000000 },
+    { 20, 0, 257, 1000000 },
+    { 24, 0, 257, 1000000 },
+    { 28, 0, 257, 1000000 },
+    { 32, 0, 257, 1000000 }
+};
+
 static test_api_stream_desc_t test_scenario_key_rotation[] = {
     { 4, 0, 257, 1000000 },
     { 8, 4, 1000000, 257 }
@@ -9994,12 +10005,12 @@ static int multi_segment_test_one(picoquic_congestion_algorithm_t* cc_algo, uint
     }
 
     if (ret == 0) {
-        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2* latency_target, &simulated_time);
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, latency_target, &simulated_time);
     }
 
     /* Prepare to send data */
     if (ret == 0) {
-        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_sustained, sizeof(test_scenario_sustained));
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_sustained2, sizeof(test_scenario_sustained2));
     }
 
     /* Try to complete the data sending loop */
@@ -10030,11 +10041,11 @@ int multi_segment_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        900000,
-        900000,
-        1100000,
-        1200000,
-        1100000
+        1050000,
+        1150000,
+        1300000,
+        1350000,
+        1050000
     };
     int ret = 0;
 

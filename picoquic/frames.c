@@ -2596,7 +2596,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
             break;
         }
 
-        if (p->bytes[byte_index] == picoquic_frame_type_ack) {
+        if (ftype == picoquic_frame_type_ack) {
             ret = picoquic_process_ack_of_ack_frame(&cnx->ack_ctx[p->pc].first_sack_item,
                 &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
             byte_index += frame_length;
@@ -2604,7 +2604,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
             ret = picoquic_process_ack_of_ack_frame(&cnx->ack_ctx[p->pc].first_sack_item,
                 &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
             byte_index += frame_length;
-        } else if (p->bytes[byte_index] == picoquic_frame_type_ack_mp) {
+        } else if (ftype == picoquic_frame_type_ack_mp) {
             ret = picoquic_process_ack_of_ack_mp_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
             byte_index += frame_length;
         }
@@ -2612,14 +2612,14 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
             ret = picoquic_process_ack_of_ack_mp_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
             byte_index += frame_length;
         }
-        else if (PICOQUIC_IN_RANGE(p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
+        else if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             ret = picoquic_process_ack_of_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
             if (p->send_path != NULL && p->send_time > p->send_path->last_time_acked_data_frame_sent) {
                 p->send_path->last_time_acked_data_frame_sent = p->send_time;
             }
         } else {
-            if (PICOQUIC_IN_RANGE(p->bytes[byte_index], picoquic_frame_type_datagram, picoquic_frame_type_datagram_l) &&
+            if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_datagram, picoquic_frame_type_datagram_l) &&
                 p->send_path != NULL && p->send_time > p->send_path->last_time_acked_data_frame_sent) {
                 p->send_path->last_time_acked_data_frame_sent = p->send_time;
             }
