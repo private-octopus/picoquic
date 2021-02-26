@@ -724,6 +724,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multi_segment)
+        {
+            int ret = multi_segment_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(pacing_cc)
         {
             int ret = pacing_cc_test();

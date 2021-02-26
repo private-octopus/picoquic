@@ -278,6 +278,7 @@ int grease_quic_bit_test();
 int grease_quic_bit_one_way_test();
 int pn_random_test();
 int red_cc_test();
+int multi_segment_test();
 int pacing_cc_test();
 int integrity_limit_test();
 int excess_repeat_test();
