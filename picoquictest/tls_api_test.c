@@ -957,6 +957,10 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
         picoquictest_sim_link_delete(test_ctx->s_to_c_link_2);
     }
 
+    if (test_ctx->send_buffer != NULL) {
+        free(test_ctx->send_buffer);
+    }
+
     free(test_ctx);
 }
 
@@ -964,7 +968,7 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
     char const* sni, char const* alpn, uint64_t* p_simulated_time, 
     char const* ticket_file_name, char const* token_file_name,
     int force_zero_share, int delayed_init, int use_bad_crypt, 
-    picoquic_connection_id_t * icid, uint32_t nb_connections, int cid_zero)
+    picoquic_connection_id_t * icid, uint32_t nb_connections, int cid_zero, size_t send_buffer_size)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -1048,6 +1052,21 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
             }
 
             if (ret == 0) {
+                /* Create the send buffer as requested */
+                if (send_buffer_size == 0) {
+                    test_ctx->send_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
+                }
+                else {
+                    test_ctx->send_buffer_size = send_buffer_size;
+                    test_ctx->use_udp_gso = 1;
+                }
+                test_ctx->send_buffer = (uint8_t*)malloc(test_ctx->send_buffer_size);
+                if (test_ctx->send_buffer == NULL) {
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
                 /* Apply the zero share parameter if required */
                 if (force_zero_share != 0)
                 {
@@ -1087,7 +1106,7 @@ int tls_api_init_ctx_ex(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_ve
     int force_zero_share, int delayed_init, int use_bad_crypt, picoquic_connection_id_t* icid)
 {
     return tls_api_init_ctx_ex2(pctx, proposed_version, sni, alpn, p_simulated_time, ticket_file_name, token_file_name,
-        force_zero_share, delayed_init, use_bad_crypt, icid, 8, 0);
+        force_zero_share, delayed_init, use_bad_crypt, icid, 8, 0, 0);
 
 }
 
@@ -1199,25 +1218,38 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     if (next_action >= 1 && next_action <= 3) {
+#if 0
         /* If there is something to send, do it now */
         picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
 
         if (packet == NULL || test_ctx->cnx_client == NULL) {
             ret = -1;
         }
+#else
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+#endif
         else {
+            struct sockaddr_storage addr_from;
+            struct sockaddr_storage addr_to;
+            size_t send_length = 0;
+            size_t segment_size = 0;
+            size_t * p_segment_size = (test_ctx->use_udp_gso) ? &segment_size : NULL;
+
             if (next_action == 1) {
                 picoquic_stateless_packet_t* sp = picoquic_dequeue_stateless_packet(test_ctx->qserver);
 
                 if (sp != NULL) {
                     if (sp->length > 0) {
                         *was_active |= 1;
-                        memcpy(&packet->addr_from, &sp->addr_local,
-                            (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-                        memcpy(&packet->addr_to, &sp->addr_to,
-                            (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-                        memcpy(packet->bytes, sp->bytes, sp->length);
-                        packet->length = sp->length;
+                        picoquic_store_addr(&addr_from, (struct sockaddr*) & sp->addr_local);
+                        picoquic_store_addr(&addr_to, (struct sockaddr*) & sp->addr_to);
+                        memcpy(test_ctx->send_buffer, sp->bytes, sp->length);
+                        send_length = sp->length;
+                        if (p_segment_size != NULL) {
+                            *p_segment_size = send_length;
+                        }
 
                         if (test_ctx->s_to_c_link_2 != NULL &&
                             picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_2,
@@ -1234,41 +1266,45 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
             else if (next_action == 2) {
                 /* check whether the client has something to send */
                 uint8_t coalesced_length = 0;
+                size_t send_buffer_size = test_ctx->send_buffer_size;
 
                 if (test_ctx->do_bad_coalesce_test && test_ctx->cnx_client->cnx_state > picoquic_state_server_handshake) {
                     uint32_t hl = 0;
-                    memmove(packet->bytes + coalesced_length, packet->bytes, packet->length);
+                    send_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
+                    p_segment_size = NULL;
 
-                    packet->bytes[hl++] = 0xE0; /* handshake */
-                    picoformat_32(&packet->bytes[hl],
+                    test_ctx->send_buffer[hl++] = 0xE0; /* handshake */
+                    picoformat_32(&test_ctx->send_buffer[hl],
                         picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
                     hl += 4;
-                    packet->bytes[hl++] = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len;
-                    hl += picoquic_format_connection_id(&packet->bytes[hl], PICOQUIC_MAX_PACKET_SIZE - hl, test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id);
-                    packet->bytes[hl++] = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id.id_len;
-                    hl += picoquic_format_connection_id(&packet->bytes[hl], PICOQUIC_MAX_PACKET_SIZE - hl, test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id);
-                    packet->bytes[hl++] = 21;
-                    picoquic_public_random(&packet->bytes[hl], 21);
+                    test_ctx->send_buffer[hl++] = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len;
+                    hl += picoquic_format_connection_id(&test_ctx->send_buffer[hl],
+                        send_buffer_size - hl, test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id);
+                    test_ctx->send_buffer[hl++] = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id.id_len;
+                    hl += picoquic_format_connection_id(&test_ctx->send_buffer[hl],
+                        send_buffer_size - hl, test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id);
+                    test_ctx->send_buffer[hl++] = 21;
+                    picoquic_public_random(&test_ctx->send_buffer[hl], 21);
                     coalesced_length = hl + 21;
                 }
-                ret = picoquic_prepare_packet(test_ctx->cnx_client, *simulated_time,
-                    packet->bytes + coalesced_length, PICOQUIC_MAX_PACKET_SIZE - coalesced_length, &packet->length,
-                    &packet->addr_to, &packet->addr_from, NULL);
+                ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, *simulated_time,
+                    test_ctx->send_buffer + coalesced_length, send_buffer_size - coalesced_length, &send_length,
+                    &addr_to, &addr_from, NULL, p_segment_size);
                 if (ret != 0)
                 {
                     /* useless test, but makes it easier to add a breakpoint under debugger */
                     ret = -1;
                 }
-                else if (packet->length > 0) {
-                    packet->length += coalesced_length;
+                else if (send_length > 0) {
+                    send_length += coalesced_length;
                     /* queue in c_to_s */
-                    if (packet->addr_from.ss_family == 0) {
-                        memcpy(&packet->addr_from, &test_ctx->client_addr, sizeof(struct sockaddr_in));
+                    if (addr_from.ss_family == 0) {
+                        picoquic_store_addr(&addr_from, (struct sockaddr*)& test_ctx->client_addr);
                     }
 
                     if (test_ctx->c_to_s_link_2 != NULL &&
                         picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_2,
-                        (struct sockaddr*) & packet->addr_from) == 0) {
+                        (struct sockaddr*) & addr_from) == 0) {
                         target_link = test_ctx->c_to_s_link_2;
                     }
                     else {
@@ -1277,9 +1313,9 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 }
             }
             else if (next_action == 3) {
-                ret = picoquic_prepare_packet(test_ctx->cnx_server, *simulated_time,
-                    packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-                    &packet->addr_to, &packet->addr_from, NULL);
+                ret = picoquic_prepare_packet_ex(test_ctx->cnx_server, *simulated_time,
+                    test_ctx->send_buffer, test_ctx->send_buffer_size, &send_length,
+                    &addr_to, &addr_from, NULL, p_segment_size);
                 if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                     ret = 0;
                 } else if (ret != 0)
@@ -1287,15 +1323,15 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     /* useless test, but makes it easier to add a breakpoint under debugger */
                     ret = -1;
                 }
-                else if (packet->length > 0) {
+                else if (send_length > 0) {
                     /* copy and queue in s to c */
-                    if (packet->addr_from.ss_family == 0) {
-                        memcpy(&packet->addr_from, &test_ctx->server_addr, sizeof(struct sockaddr_in));
+                    if (addr_from.ss_family == 0) {
+                        picoquic_store_addr(&addr_from, (struct sockaddr*)&test_ctx->server_addr);
                     }
 
                     if (test_ctx->s_to_c_link_2 != NULL &&
                         picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_2,
-                        (struct sockaddr*) & packet->addr_to) == 0) {
+                        (struct sockaddr*) & addr_to) == 0) {
                         target_link = test_ctx->s_to_c_link_2;
                     }
                     else {
@@ -1304,15 +1340,15 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 }
             }
 
-            if (packet->length > 0) {
+            if (send_length > 0) {
                 int simulate_loss = 0;
                 if (target_link == test_ctx->s_to_c_link) {
                     if (!test_ctx->client_use_multiple_addresses) {
                         if (test_ctx->client_use_nat) {
                             if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted,
-                                (struct sockaddr*) & packet->addr_to) == 0) {
+                                (struct sockaddr*) & addr_to) == 0) {
                                 /* Rewrite the address */
-                                picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & test_ctx->client_addr);
+                                picoquic_store_addr(&addr_to, (struct sockaddr*) & test_ctx->client_addr);
                             }
                             else {
                                 /* Using wrong address: simulate loss */
@@ -1320,14 +1356,14 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                             }
                         }
                         else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr,
-                            (struct sockaddr*) & packet->addr_to) != 0) {
+                            (struct sockaddr*) & addr_to) != 0) {
                             /* Using wrong address: simulate loss */
                             simulate_loss = 1;
                         }
                     }
                 }
                 else if (target_link == test_ctx->c_to_s_link && test_ctx->client_use_nat) {
-                    picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & test_ctx->client_addr_natted);
+                    picoquic_store_addr(&addr_from, (struct sockaddr*) & test_ctx->client_addr_natted);
                 }
 
                 if (*simulated_time < test_ctx->blackhole_end && *simulated_time >= test_ctx->blackhole_start) {
@@ -1335,15 +1371,33 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 }
 
                 if (simulate_loss == 0) {
-                    picoquictest_sim_link_submit(target_link, packet, *simulated_time);
+                    size_t size_sent = 0;
+                    uint8_t *  send_buffer = test_ctx->send_buffer;
+                    if (p_segment_size == NULL) {
+                        segment_size = PICOQUIC_MAX_PACKET_SIZE;
+                    }
+                    while (ret == 0 && size_sent < send_length) {
+                        picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+
+                        if (packet == NULL) {
+                            ret = -1;
+                        }
+                        else {
+                            picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & addr_from);
+                            picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & addr_to);
+                            packet->length = send_length - size_sent;
+                            if (packet->length > segment_size) {
+                                packet->length = segment_size;
+                            }
+                            memcpy(packet->bytes, send_buffer, packet->length);
+                            picoquictest_sim_link_submit(target_link, packet, *simulated_time);
+                            size_sent += segment_size;
+                            send_buffer += segment_size;
+                        }
+                    }
                 }
-                else {
-                    free(packet);
-                }
+
                 *was_active |= 1;
-            }
-            else {
-                free(packet);
             }
         }
     }
@@ -4467,7 +4521,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid)
     }
 
     ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid, 8, zero_cid);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid, 8, zero_cid, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -5045,16 +5099,32 @@ int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char
     }
 
     return ret;
-
 }
 
-int transmit_cnxid_test()
+int transmit_cnxid_test_one(int retire_before, int disable_migration)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
+    /* We set the default ttl to 5 seconds, which is longer than the
+     * delay set inside tls_api_synch_to_empty_loop */
+    const uint64_t sync_empty_loop_timeout = 4000000;
+    const uint64_t default_connection_id_ttl = 5000000;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t test_parameters;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && disable_migration) {
+        memset(&test_parameters, 0, sizeof(picoquic_tp_t));
+
+        picoquic_init_transport_parameters(&test_parameters, 0);
+        test_parameters.migration_disabled = 1;
+        picoquic_set_default_tp(test_ctx->qserver, &test_parameters);
+    }
+
+    if (ret == 0 && retire_before) {
+        picoquic_set_default_connection_id_ttl(test_ctx->qserver, default_connection_id_ttl);
+    }
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -5063,6 +5133,22 @@ int transmit_cnxid_test()
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
         ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
+    }
+
+    if (ret == 0 && retire_before) {
+        /* wait until the TTL of local CID expires */
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, default_connection_id_ttl - sync_empty_loop_timeout);
+
+        if (ret == 0 && test_ctx->cnx_server->local_cnxid_retire_before == 0) {
+            DBG_PRINTF("Retire before did not progress: %" PRIu64 ".\n",
+                test_ctx->cnx_server->local_cnxid_retire_before);
+            ret = -1;
+        }
+
+        /* Now, wait until the next batch of connection ID is sent. */
+        if (ret == 0) {
+            ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
+        }
     }
 
     if (ret == 0) {
@@ -5082,12 +5168,46 @@ int transmit_cnxid_test()
         ret = transmit_cnxid_test_stash(test_ctx->cnx_server, test_ctx->cnx_client, "server");
     }
 
+    if (ret == 0 && retire_before) {
+        /* Verify that all CID in the client stash have valid sequence numbers. */
+        picoquic_remote_cnxid_t* stashed = test_ctx->cnx_client->cnxid_stash_first;
+
+        while (stashed != NULL && ret == 0) {
+            if (stashed->sequence < test_ctx->cnx_server->local_cnxid_retire_before) {
+                DBG_PRINTF("Old CID %" PRIu64 " still on client.\n", stashed->sequence);
+                ret = -1;
+                break;
+            }
+            stashed = stashed->next;
+        }
+    }
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
     }
 
     return ret;
+}
+
+int transmit_cnxid_test()
+{
+    return transmit_cnxid_test_one(0, 0);
+}
+
+int transmit_cnxid_disable_test()
+{
+    return transmit_cnxid_test_one(0, 1);
+}
+
+int transmit_cnxid_retire_before_test()
+{
+    return transmit_cnxid_test_one(1, 0);
+}
+
+int transmit_cnxid_retire_disable_test()
+{
+    return transmit_cnxid_test_one(1, 1);
 }
 
 /*
@@ -5204,7 +5324,7 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     picoquic_connection_id_t previous_local_id = picoquic_null_connection_id;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 8, cid_zero);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 8, cid_zero, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -5464,10 +5584,10 @@ int rebinding_stress_test()
             uint64_t server_arrival = test_ctx->c_to_s_link->last_packet->arrival_time;
 
             if (server_arrival > last_inject_time) {
-                /* 10% chance of packet injection, 5% chances of reusing test address */
+                /* 9% chance of packet injection, 5% chances of reusing test address */
                 uint64_t rand100 = picoquic_test_uniform_random(&random_context, 100);
                 last_inject_time = server_arrival;
-                if (rand100 < 10) {
+                if (rand100 < 9) {
                     struct sockaddr * bad_address;
                     if (rand100 < 5) {
                         bad_address = (struct sockaddr *)&hack_address;
@@ -9839,6 +9959,95 @@ int red_cc_test()
     return ret;
 }
 
+/* Sending multiple segments.
+ * This tests whether the simulation correctly supports the equivalent of UDP GSO. It
+ * also tests whether the congestion control works well with these multiple segments
+ */
+
+
+static int multi_segment_test_one(picoquic_congestion_algorithm_t* cc_algo, uint64_t target_time, size_t send_buffer_size)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    const uint64_t latency_target = 35000;
+    const uint64_t picosec_per_byte = (1000000ull * 8) / 100;
+
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x5e, 0x90, 0xe0, 0x40, 0, 6, 7, 8}, 8 };
+    int ret;
+
+    initial_cid.id[4] = cc_algo->congestion_algorithm_number;
+
+    ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid, 8, 0, send_buffer_size);
+
+    if (ret == 0) {
+        /* Set parameters to simulate random early drop */
+        test_ctx->c_to_s_link->microsec_latency = latency_target;
+        test_ctx->c_to_s_link->picosec_per_byte = picosec_per_byte;
+        test_ctx->s_to_c_link->microsec_latency = latency_target;
+        test_ctx->s_to_c_link->picosec_per_byte = picosec_per_byte;
+        /* Set the CC algorithm to selected value */
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2* latency_target, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_sustained, sizeof(test_scenario_sustained));
+    }
+
+    /* Try to complete the data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, target_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int multi_segment_test()
+{
+    picoquic_congestion_algorithm_t* algo_list[5] = {
+        picoquic_newreno_algorithm,
+        picoquic_cubic_algorithm,
+        picoquic_dcubic_algorithm,
+        picoquic_fastcc_algorithm,
+        picoquic_bbr_algorithm
+    };
+    uint64_t algo_time[5] = {
+        900000,
+        900000,
+        1100000,
+        1200000,
+        1100000
+    };
+    int ret = 0;
+
+    for (int i = 0; i < 5 && ret == 0; i++) {
+        ret = multi_segment_test_one(algo_list[i], algo_time[i], 65536);
+        if (ret != 0) {
+            DBG_PRINTF("Multi segment test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
+        }
+    }
+
+    return ret;
+}
+
 /* Test effects of leaky bucket pacer
  */
 
@@ -10211,7 +10420,7 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
     picoquictest_sim_packet_t* ddos_packet_first = NULL;
     int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 10000, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 10000, 0, 0);
 
     if (ret == 0 && (test_ctx == NULL || packet == NULL || qddos == NULL)) {
         ret = -1;

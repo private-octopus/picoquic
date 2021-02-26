@@ -283,14 +283,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_cnxid_stash)
+        TEST_METHOD(new_cnxid_stash)
         {
             int ret = cnxid_stash_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_new_cnxid)
+        TEST_METHOD(new_cnxid)
         {
             int ret = new_cnxid_test();
 
@@ -724,6 +724,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multi_segment)
+        {
+            int ret = multi_segment_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(pacing_cc)
         {
             int ret = pacing_cc_test();
@@ -934,9 +941,29 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_transmit_cnxid)
+        TEST_METHOD(cnxid_transmit)
         {
             int ret = transmit_cnxid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cnxid_transmit_disable)
+        {
+            int ret = transmit_cnxid_disable_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cnxid_transmit_r_before)
+        {
+            int ret = transmit_cnxid_retire_before_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cnxid_transmit_r_disable){
+            int ret = transmit_cnxid_retire_disable_test();
 
             Assert::AreEqual(ret, 0);
         }

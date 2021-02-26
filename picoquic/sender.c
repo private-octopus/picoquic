@@ -1473,10 +1473,6 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
             /* check if this is an ACK only packet */
             int packet_is_pure_ack = 1;
             int do_not_detect_spurious = 1;
-            int frame_is_pure_ack = 0;
-            uint8_t* old_bytes = old_p->bytes;
-            size_t frame_length = 0;
-            size_t byte_index = 0; /* Used when parsing the old packet */
             size_t checksum_length = 0;
 
 	        /* we'll report it where it got lost */
@@ -1487,34 +1483,7 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
             *header_length = 0;
 
             if (old_p->ptype == picoquic_packet_0rtt_protected) {
-                /* Only retransmit as 0-RTT if contains crypto data */
-                int contains_crypto = 0;
-                byte_index = old_p->offset;
-
-                if (old_p->is_evaluated == 0) {
-                    while (ret == 0 && byte_index < old_p->length) {
-                        if (old_bytes[byte_index] == picoquic_frame_type_crypto_hs) {
-                            contains_crypto = 1;
-                            packet_is_pure_ack = 0;
-                            break;
-                        }
-                        ret = picoquic_skip_frame(&old_p->bytes[byte_index],
-                            old_p->length - byte_index, &frame_length, &frame_is_pure_ack);
-                        byte_index += frame_length;
-                    }
-                    old_p->contains_crypto = contains_crypto;
-                    old_p->is_pure_ack = packet_is_pure_ack;
-                    old_p->is_evaluated = 1;
-                } else {
-                    contains_crypto = old_p->contains_crypto;
-                    packet_is_pure_ack = old_p->is_pure_ack;
-                }
-
-                if (contains_crypto) {
-                    length = picoquic_predict_packet_header_length(cnx, picoquic_packet_0rtt_protected, pkt_ctx);
-                    packet->ptype = picoquic_packet_0rtt_protected;
-                    packet->offset = length;
-                } else if (cnx->cnx_state < picoquic_state_client_ready_start) {
+                if (cnx->cnx_state < picoquic_state_client_ready_start) {
                     should_retransmit = 0;
                 } else {
                     length = picoquic_predict_packet_header_length(cnx, picoquic_packet_1rtt_protected, pkt_ctx);
@@ -2115,7 +2084,7 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
         int ipv6_received = cnx->remote_parameters.prefered_address.ipv6Port != 0;
 
         /* Add the connection ID to the local stash */
-        ret = picoquic_enqueue_cnxid_stash(cnx, 1,
+        ret = picoquic_enqueue_cnxid_stash(cnx, 0, 1,
             cnx->remote_parameters.prefered_address.connection_id.id_len,
             cnx->remote_parameters.prefered_address.connection_id.id,
             cnx->remote_parameters.prefered_address.statelessResetToken,
@@ -2909,14 +2878,24 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 }
 
 /* Create required ID, register, and format the corresponding connection ID frame */
-uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t * bytes_max, int * more_data, int * is_pure_ack)
+uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t * bytes_max,
+    uint64_t current_time, uint64_t * next_wake_time, int * more_data, int * is_pure_ack)
 {
-    while ((cnx->remote_parameters.migration_disabled == 0 || cnx->remote_parameters.prefered_address.is_defined) &&
-        cnx->local_parameters.migration_disabled == 0 &&
-        cnx->nb_local_cnxid < (int)(cnx->remote_parameters.active_connection_id_limit) &&
-        cnx->nb_local_cnxid <= PICOQUIC_NB_PATH_TARGET) {
+    /* Check whether time has comed to obsolete local CID */
+    picoquic_check_local_cnxid_ttl(cnx, current_time, next_wake_time);
+
+    /* Push new CID if needed */
+    while (
+#if 0
+        (cnx->remote_parameters.migration_disabled == 0 || 
+        cnx->remote_parameters.prefered_address.is_defined) &&
+        (cnx->local_parameters.migration_disabled == 0 ||
+            cnx->local_cnxid_retire_before >= cnx->local_cnxid_sequence_next) &&
+#endif
+        cnx->nb_local_cnxid < ((int)(cnx->remote_parameters.active_connection_id_limit) + cnx->nb_local_cnxid_expired) &&
+        cnx->nb_local_cnxid <= (PICOQUIC_NB_PATH_TARGET+cnx->nb_local_cnxid_expired)) {
         uint8_t* bytes0 = bytes;
-        picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, NULL);
+        picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, NULL, current_time);
 
         if (l_cid == NULL) {
             /* OOPS, memory error */
@@ -3222,7 +3201,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
                         /* If there are not enough published CID, create and advertise */
                         if (ret == 0) {
-                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max,
+                                current_time, next_wake_time, &more_data, &is_pure_ack);
                         }
 
                         /* Start of CC controlled frames */
@@ -3597,7 +3577,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         /* No need or no way to do path MTU discovery, just go on with formatting packets */
                         /* If there are not enough local CID published, create and advertise */
                         if (ret == 0) {
-                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max,
+                                current_time, next_wake_time, &more_data, &is_pure_ack);
                         }
 
                         /* Start of CC controlled frames */

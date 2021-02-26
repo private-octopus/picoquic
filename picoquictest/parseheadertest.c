@@ -349,7 +349,7 @@ int parseheadertest()
             }
             else {
                 /* Update the local cnx_id so it be predictable in tests */
-                picoquic_local_cnxid_t* local_cnxid0 = picoquic_create_local_cnxid(cnx_10, &test_cnxid_local);
+                picoquic_local_cnxid_t* local_cnxid0 = picoquic_create_local_cnxid(cnx_10, &test_cnxid_local, 0);
                 if (local_cnxid0 == NULL) {
                     DBG_PRINTF("%s", "Cannot create the new CNX_ID");
                     ret = -1;

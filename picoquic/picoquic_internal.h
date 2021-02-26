@@ -350,7 +350,6 @@ typedef struct st_picoquic_packet_t {
     picoquic_packet_context_enum pc;
     unsigned int is_evaluated : 1;
     unsigned int is_pure_ack : 1;
-    unsigned int contains_crypto : 1;
     unsigned int is_mtu_probe : 1;
     unsigned int is_multipath_probe : 1;
     unsigned int is_ack_trap : 1;
@@ -503,6 +502,8 @@ typedef struct st_picoquic_quic_t {
     picoquic_stored_ticket_t * p_first_ticket;
     picoquic_stored_token_t * p_first_token;
     picosplay_tree_t token_reuse_tree; /* detection of token reuse */
+    uint8_t local_cnxid_length;
+    uint64_t local_cnxid_ttl; /* Max time to live of Connection ID in microsec, init to "forever" */
     uint32_t mtu_max;
     uint32_t padding_multiple_default;
     uint32_t padding_minsize_default;
@@ -563,7 +564,6 @@ typedef struct st_picoquic_quic_t {
     picoquic_verify_certificate_cb_fn verify_certificate_callback_fn;
     picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
     void* verify_certificate_ctx;
-    uint8_t local_cnxid_length;
 
     picoquic_tp_t * default_tp;
 
@@ -773,6 +773,7 @@ typedef struct st_picoquic_local_cnxid_t {
     struct st_picoquic_local_cnxid_t* next;
     struct st_picoquic_cnx_id_key_t* first_cnx_id;
     uint64_t sequence;
+    uint64_t create_time;
     picoquic_connection_id_t cnx_id;
     picoquic_ack_context_t ack_ctx;
 } picoquic_local_cnxid_t;
@@ -1168,7 +1169,10 @@ typedef struct st_picoquic_cnx_t {
 
     /* management of local CID stash */
     uint64_t local_cnxid_sequence_next;
+    uint64_t local_cnxid_retire_before;
+    uint64_t local_cnxid_oldest_created;
     int nb_local_cnxid;
+    int nb_local_cnxid_expired;
     picoquic_local_cnxid_t* local_cnxid_first;
 
     /* Management of ACK frequency */
@@ -1234,7 +1238,7 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
 /* Management of the CNX-ID stash */
 int picoquic_init_cnxid_stash(picoquic_cnx_t* cnx);
 
-int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
+int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx, uint64_t retire_before_next,
     const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes,
     const uint8_t * secret_bytes, picoquic_remote_cnxid_t ** pstashed);
 
@@ -1509,9 +1513,10 @@ uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_win
 uint8_t* picoquic_format_max_streams_frame_if_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 void picoquic_clear_stream(picoquic_stream_head_t* stream);
 void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t * stream);
-picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* suggested_value);
+picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* suggested_value, uint64_t current_time);
 void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
 void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t sequence);
+void picoquic_check_local_cnxid_ttl(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time);
 picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* cnxid);
 picoquic_local_cnxid_t* picoquic_find_local_cnxid_by_number(picoquic_cnx_t* cnx, uint64_t sequence);
 picoquic_remote_cnxid_t* picoquic_find_remote_cnxid_by_number(picoquic_cnx_t* cnx, uint64_t sequence);
