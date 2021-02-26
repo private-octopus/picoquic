@@ -116,6 +116,10 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     picoquictest_sim_link_t* s_to_c_link;
     picoquictest_sim_link_t* s_to_c_link_2;
     int received_version_negotiation;
+    /* Management of UDP multiple message simulation */
+    uint8_t* send_buffer;
+    size_t send_buffer_size;
+    int use_udp_gso;
 
     /* Stream 0 is reserved for the "infinite stream" simulation */
     size_t stream0_target;
@@ -174,7 +178,7 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
     char const* sni, char const* alpn, uint64_t* p_simulated_time,
     char const* ticket_file_name, char const* token_file_name,
     int force_zero_share, int delayed_init, int use_bad_crypt,
-    picoquic_connection_id_t* icid, uint32_t nb_connections, int cid_zero);
+    picoquic_connection_id_t* icid, uint32_t nb_connections, int cid_zero, size_t send_buffer_size);
 
 void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx);
 
