@@ -2093,10 +2093,6 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         else if (path_x->one_way_return_var != 0) {
             one_way_delay_sample = rtt_estimate - path_x->one_way_return_avg;
             is_path_x_valid = 0;
-
-            if (one_way_delay_sample < 0) {
-                is_path_x_valid = is_path_x_valid;
-            }
         }
         else if (path_x == old_path) {
             one_way_delay_sample = rtt_estimate / 2;
