@@ -91,6 +91,8 @@ int picoquic_update_sack_list(picoquic_sack_list_t* sack,
                         /* add at end of range */
                         sack->end_of_sack_range = pn64_max;
                     }
+                    /* Reset the number of time sent, since the range was modified */
+                    sack->nb_times_sent = 0;
 
                     /* Check whether there is a need to continue */
                     if (pn64_min >= sack->start_of_sack_range) {
@@ -108,6 +110,8 @@ int picoquic_update_sack_list(picoquic_sack_list_t* sack,
                 } else if (previous != NULL && pn64_max + 1 >= previous->start_of_sack_range) {
                     /* Extend the previous range */
                     previous->start_of_sack_range = pn64_min;
+                    /* Reset the number of time sent, since the range was extended */
+                    previous->nb_times_sent = 0;
                     break;
                 } else {
                     /* Found a new hole */
@@ -119,6 +123,7 @@ int picoquic_update_sack_list(picoquic_sack_list_t* sack,
                         /* swap old and new, so it works even if previous == NULL */
                         new_hole->start_of_sack_range = sack->start_of_sack_range;
                         new_hole->end_of_sack_range = sack->end_of_sack_range;
+                        new_hole->nb_times_sent = 0;
                         new_hole->next_sack = sack->next_sack;
                         sack->start_of_sack_range = pn64_min;
                         sack->end_of_sack_range = pn64_max;
@@ -132,8 +137,9 @@ int picoquic_update_sack_list(picoquic_sack_list_t* sack,
                     ret = 0;
 
                     if (sack->next_sack == NULL) {
-                        /* Just extend the last range */
+                        /* Just extend the last range, reset nb times sent */
                         sack->start_of_sack_range = pn64_min;
+                        sack->nb_times_sent = 0;
                         break;
                     } else {
                         /* continue with reminder. */
@@ -149,6 +155,7 @@ int picoquic_update_sack_list(picoquic_sack_list_t* sack,
                 ret = 0;
                 if (pn64_max + 1 == sack->start_of_sack_range) {
                     sack->start_of_sack_range = pn64_min;
+                    sack->nb_times_sent = 0;
                 } else {
                     /* this is an old packet, beyond the current range of SACK */
                     /* Found a new hole */
@@ -161,6 +168,7 @@ int picoquic_update_sack_list(picoquic_sack_list_t* sack,
                         new_hole->start_of_sack_range = pn64_min;
                         new_hole->end_of_sack_range = pn64_max;
                         new_hole->next_sack = NULL;
+                        new_hole->nb_times_sent = 0;
                         sack->next_sack = new_hole;
                     }
                 }
@@ -308,6 +316,7 @@ void picoquic_sack_list_init(picoquic_sack_list_t* first_sack)
     first_sack->start_of_sack_range = UINT64_MAX;
     first_sack->end_of_sack_range = 0;
     first_sack->next_sack = NULL;
+    first_sack->nb_times_sent = 0;
 }
 
 /* Reset a SACK list to single range
@@ -316,6 +325,7 @@ void picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, uint64_t range_m
 {
     first_sack->start_of_sack_range = range_min;
     first_sack->end_of_sack_range = range_max;
+    first_sack->nb_times_sent = 0;
 }
 
 /* Free the elements of a sack list 
@@ -345,3 +355,14 @@ picoquic_sack_item_t* picoquic_sack_item_next(picoquic_sack_item_t* sack_item)
 {
     return sack_item->next_sack;
 }
+
+int picoquic_sack_item_nb_times_sent(picoquic_sack_item_t* sack_item)
+{
+    return sack_item->nb_times_sent;
+}
+
+void picoquic_sack_item_record_sent(picoquic_sack_item_t* sack_item)
+{
+    sack_item->nb_times_sent++;
+}
+

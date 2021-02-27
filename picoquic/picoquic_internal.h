@@ -599,6 +599,7 @@ typedef struct st_picoquic_sack_item_t {
     struct st_picoquic_sack_item_t* next_sack;
     uint64_t start_of_sack_range;
     uint64_t end_of_sack_range;
+    int nb_times_sent;
 } picoquic_sack_item_t;
 
 typedef picoquic_sack_item_t picoquic_sack_list_t;
@@ -1409,6 +1410,10 @@ uint64_t picoquic_sack_item_first(picoquic_sack_item_t* sack_item);
 uint64_t picoquic_sack_item_last(picoquic_sack_item_t* sack_item);
 
 picoquic_sack_item_t* picoquic_sack_item_next(picoquic_sack_item_t* sack_item);
+
+int picoquic_sack_item_nb_times_sent(picoquic_sack_item_t* sack_item);
+
+void picoquic_sack_item_record_sent(picoquic_sack_item_t* sack_item);
 
 void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet);
 

@@ -2924,21 +2924,26 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
             lowest_acknowledged = picoquic_sack_list_first(&ack_ctx->first_sack_item);
             /* Encode the ack blocks that fit in the allocated space */
             while (num_block < 32 && next_sack != NULL) {
-                uint8_t* bytes_start_range = bytes;
+                if (num_block < 4 || picoquic_sack_item_nb_times_sent(next_sack) < 4) {
+                    uint8_t* bytes_start_range = bytes;
+                    ack_gap = lowest_acknowledged - picoquic_sack_item_last(next_sack) - 2; /* per spec */
+                    ack_range = picoquic_sack_item_last(next_sack) - picoquic_sack_item_first(next_sack);
 
-                ack_gap = lowest_acknowledged - picoquic_sack_item_last(next_sack) - 2; /* per spec */
-                ack_range = picoquic_sack_item_last(next_sack) - picoquic_sack_item_first(next_sack);
-
-                if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) == NULL ||
-                    (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range)) == NULL) {
-                    bytes = bytes_start_range;
-                    *more_data = 1;
-                    break;
+                    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) == NULL ||
+                        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range)) == NULL) {
+                        bytes = bytes_start_range;
+                        *more_data = 1;
+                        break;
+                    }
+                    else {
+                        picoquic_sack_item_record_sent(next_sack);
+                        lowest_acknowledged = picoquic_sack_item_first(next_sack);
+                        next_sack = picoquic_sack_item_next(next_sack);
+                        num_block++;
+                    }
                 }
                 else {
-                    lowest_acknowledged = picoquic_sack_item_first(next_sack);
                     next_sack = picoquic_sack_item_next(next_sack);
-                    num_block++;
                 }
             }
             /* When numbers are lower than 64, varint encoding fits on one byte */

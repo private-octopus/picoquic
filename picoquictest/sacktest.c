@@ -50,10 +50,10 @@ static struct expected_ack_t expected_ack[] = {
     { 12, 1, 3 },
     { 13, 2, 3 },
     { 17, 0, 4 },
-    { 19, 0, 5 },
-    { 21, 0, 6 },
-    { 21, 0, 5 },
-    { 21, 0, 5 },
+    { 19, 0, 4 },
+    { 21, 0, 4 },
+    { 21, 0, 4 },
+    { 21, 0, 4 },
     { 21, 5, 4 },
     { 21, 5, 4 },
     { 21, 5, 4 },
@@ -159,7 +159,7 @@ static void ack_range_mask(uint64_t* mask, uint64_t highest, uint64_t range)
 }
 
 static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
-    struct expected_ack_t* expected_ack, uint64_t expected_mask)
+    struct expected_ack_t* expected_ack, uint64_t * previous_mask, uint64_t expected_mask)
 {
     int ret = 0;
     size_t byte_index = 1;
@@ -261,9 +261,11 @@ static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
         }
 
         if (ret == 0) {
+            acked_mask |= *previous_mask;
             if (acked_mask != expected_mask) {
                 ret = -1;
             }
+            *previous_mask = acked_mask;
         }
     }
 
@@ -276,6 +278,7 @@ int sendacktest()
     picoquic_cnx_t cnx;
     uint64_t current_time;
     uint64_t received_mask = 0;
+    uint64_t previous_mask = 0;
     uint8_t bytes[256];
     picoquic_packet_context_enum pc = 0;
 
@@ -297,7 +300,7 @@ int sendacktest()
             received_mask |= 1ull << (test_pn64[i] & 63);
 
             if (ret == 0) {
-                ret = basic_ack_parse(bytes, bytes_next - bytes, &expected_ack[i], received_mask);
+                ret = basic_ack_parse(bytes, bytes_next - bytes, &expected_ack[i], &previous_mask, received_mask);
             }
 
             if (ret != 0) {

@@ -10041,11 +10041,11 @@ int multi_segment_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        1050000,
-        1150000,
-        1300000,
-        1350000,
-        1050000
+        1060000,
+        1070000,
+        1360000,
+        1370000,
+        1010000
     };
     int ret = 0;
 

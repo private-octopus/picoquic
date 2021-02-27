@@ -105,6 +105,32 @@ static void multipath_test_sat_links(picoquic_test_tls_api_ctx_t* test_ctx, int 
     }
 }
 
+/* Use higher data rate for multipath perf scenario */
+static void multipath_test_perf_links(picoquic_test_tls_api_ctx_t* test_ctx, int link_id)
+{
+    const uint64_t wifi_latency = 15000;
+    const uint64_t lte_latency = 30000;
+    const uint64_t wifi_picosec = 8000000ull / 50;
+    const uint64_t lte_picosec = 8000000ull / 40;
+
+    if (link_id == 0) {
+        test_ctx->c_to_s_link->microsec_latency = wifi_latency;
+        test_ctx->s_to_c_link->microsec_latency = wifi_latency;
+        test_ctx->c_to_s_link->queue_delay_max = 2 * wifi_latency;
+        test_ctx->s_to_c_link->queue_delay_max = 2 * wifi_latency;
+        test_ctx->c_to_s_link->picosec_per_byte = wifi_picosec;
+        test_ctx->s_to_c_link->picosec_per_byte = wifi_picosec;
+    }
+    else {
+        test_ctx->c_to_s_link_2->microsec_latency = lte_latency;
+        test_ctx->s_to_c_link_2->microsec_latency = lte_latency;
+        test_ctx->c_to_s_link_2->queue_delay_max = 2 * lte_latency;
+        test_ctx->s_to_c_link_2->queue_delay_max = 2 * lte_latency;
+        test_ctx->c_to_s_link_2->picosec_per_byte = lte_picosec;
+        test_ctx->s_to_c_link_2->picosec_per_byte = lte_picosec;
+    }
+}
+
 /* wait until the migration completes */
 int wait_client_migration_done(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time)
@@ -344,7 +370,7 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     while (*simulated_time < time_out &&
         ret == 0 &&
         test_ctx->cnx_client->cnx_state == picoquic_state_ready &&
-        nb_trials < 1024 &&
+        nb_trials < 5000 &&
         nb_inactive < 64 &&
         (test_ctx->cnx_client->nb_paths != 2 ||
         !test_ctx->cnx_client->path[1]->challenge_verified ||
@@ -384,7 +410,8 @@ typedef enum {
     multipath_test_rotation,
     multipath_test_nat,
     multipath_test_break1,
-    multipath_test_back1
+    multipath_test_back1,
+    multipath_test_perf
 } multipath_test_enum_t;
 
 int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id, int is_simple_multipath)
@@ -395,14 +422,20 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     picoquic_connection_id_t initial_cid = { {0x1b, 0x11, 0xc0, 4, 5, 6, 7, 8}, 8 };
     picoquic_tp_t server_parameters;
     uint64_t original_r_cid_sequence = 1;
+    uint64_t send_buffer_size = 0;
     int ret;
 
     initial_cid.id[2] = (int)test_id;
     initial_cid.id[3] = is_simple_multipath;
 
+    if (test_id == multipath_test_perf) {
+        send_buffer_size = 65536;
+    }
+
     /* Create the context but delay initialization, so the multipath option can be set */
-    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid,
+        8, 0, send_buffer_size);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -414,6 +447,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
              * This is used to simulate an asymmetric "satellite and landline" scenario,
              * or to simulate a long transfer and test broken path detection or repair */
             multipath_test_sat_links(test_ctx, 0);
+        }
+        else if (test_id == multipath_test_perf) {
+            multipath_test_perf_links(test_ctx, 0);
         }
         test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
         test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
@@ -469,7 +505,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
     /* Prepare to send data */
     if (ret == 0) {
-        if (test_id == multipath_test_sat_plus) {
+        if (test_id == multipath_test_sat_plus || test_id == multipath_test_perf) {
             ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath_long, sizeof(test_scenario_multipath_long));
         } else {
             ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath, sizeof(test_scenario_multipath));
@@ -487,6 +523,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         if (ret == 0 && test_id == multipath_test_sat_plus) {
             /* Simulate an asymmetric "satellite and landline" scenario */
             multipath_test_sat_links(test_ctx, 1);
+        }
+        else if (test_id == multipath_test_perf) {
+            multipath_test_perf_links(test_ctx, 1);
         }
     }
 
@@ -637,7 +676,7 @@ int multipath_drop_first_test()
 
 int multipath_drop_second_test()
 {
-    uint64_t max_completion_microsec = 1300000;
+    uint64_t max_completion_microsec = 1450000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second, 0);
 }
@@ -694,6 +733,14 @@ int multipath_back1_test()
     uint64_t max_completion_microsec = 3200000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_back1, 0);
+}
+
+/* Test that a typical wifi+lte scenario provides good performance */
+int multipath_perf_test()
+{
+    uint64_t max_completion_microsec = 1400000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_perf, 0);
 }
 
 
@@ -1146,7 +1193,7 @@ int simple_multipath_drop_second_test()
 int simple_multipath_sat_plus_test()
 {
     /* Close to theoretical 10-12 sec! */
-    uint64_t max_completion_microsec = 12500000;
+    uint64_t max_completion_microsec = 12800000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 1);
 }
@@ -1185,6 +1232,13 @@ int simple_multipath_back1_test()
     uint64_t max_completion_microsec = 5500000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_back1, 1);
+}
+
+int simple_multipath_perf_test()
+{
+    uint64_t max_completion_microsec = 1800000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
 }
 
 int simple_multipath_qlog_test()
