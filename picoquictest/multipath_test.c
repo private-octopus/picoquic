@@ -422,7 +422,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     picoquic_connection_id_t initial_cid = { {0x1b, 0x11, 0xc0, 4, 5, 6, 7, 8}, 8 };
     picoquic_tp_t server_parameters;
     uint64_t original_r_cid_sequence = 1;
-    uint64_t send_buffer_size = 0;
+    size_t send_buffer_size = 0;
     int ret;
 
     initial_cid.id[2] = (int)test_id;
