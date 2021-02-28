@@ -1330,8 +1330,7 @@ size_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
     uint64_t sequence_number,
-    picoquic_connection_id_t * dest_cnxid,
-    picoquic_connection_id_t * srce_cnxid,
+    picoquic_path_t* path_x,
     size_t header_length,
     uint8_t* bytes,
     size_t* pn_offset,
@@ -1354,8 +1353,6 @@ void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx); /* For debugging potential 
 void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,
     size_t * send_length, uint8_t * send_buffer, size_t send_buffer_max,
-    picoquic_connection_id_t * remote_cnxid,
-    picoquic_connection_id_t * local_cnxid,
     picoquic_path_t * path_x, uint64_t current_time);
 
 void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, uint64_t current_time);

@@ -419,7 +419,7 @@ int parseheadertest()
             cnx_10->path[0]->p_remote_cnxid->cnx_id = test_cnxid_r10;
         }
         header_length = picoquic_create_packet_header(cnx_10, test_entries[i].ph->ptype,
-            test_entries[i].ph->pn, &cnx_10->path[0]->p_remote_cnxid->cnx_id, &cnx_10->path[0]->p_local_cnxid->cnx_id, 0, packet, &pn_offset, &pn_length);
+            test_entries[i].ph->pn, cnx_10->path[0], 0, packet, &pn_offset, &pn_length);
         picoquic_update_payload_length(packet, pn_offset, pn_offset, pn_offset +
             test_entries[i].ph->payload_length);
         
@@ -548,8 +548,7 @@ int test_packet_encrypt_one(
         /* Create a packet with specified parameters */
         picoquic_finalize_and_protect_packet(cnx_client, packet,
             ret, length, header_length, checksum_overhead,
-            &send_length, send_buffer, PICOQUIC_MAX_PACKET_SIZE, 
-            &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id,
+            &send_length, send_buffer, PICOQUIC_MAX_PACKET_SIZE,
             path_x, current_time);
 
         expected_header.ptype = packet->ptype;
