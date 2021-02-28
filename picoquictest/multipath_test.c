@@ -450,6 +450,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
         else if (test_id == multipath_test_perf) {
             multipath_test_perf_links(test_ctx, 0);
+            picoquic_set_default_congestion_algorithm(test_ctx->qserver, picoquic_bbr_algorithm);
         }
         test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
         test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
@@ -738,7 +739,7 @@ int multipath_back1_test()
 /* Test that a typical wifi+lte scenario provides good performance */
 int multipath_perf_test()
 {
-    uint64_t max_completion_microsec = 1400000;
+    uint64_t max_completion_microsec = 1450000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 0);
 }
@@ -1236,7 +1237,7 @@ int simple_multipath_back1_test()
 
 int simple_multipath_perf_test()
 {
-    uint64_t max_completion_microsec = 1800000;
+    uint64_t max_completion_microsec = 1450000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
 }
