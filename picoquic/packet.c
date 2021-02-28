@@ -989,7 +989,7 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         cnx->path[0]->p_remote_cnxid->cnx_id = ph->srce_cnx_id;
 
         byte_index = header_length = picoquic_create_packet_header(cnx, picoquic_packet_retry,
-            0, &cnx->path[0]->p_remote_cnxid->cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id, 0,
+            0, cnx->path[0], 0,
             bytes, &pn_offset, &pn_length);
 
         /* In the old drafts, there is no header protection and the sender copies the ODCID

@@ -388,19 +388,13 @@ size_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
     uint64_t sequence_number,
-    picoquic_connection_id_t * remote_cnxid,
-    picoquic_connection_id_t * local_cnxid,
+    picoquic_path_t* path_x,
     size_t header_length,
     uint8_t* bytes,
     size_t* pn_offset,
     size_t* pn_length)
 {
     size_t length = 0;
-    picoquic_connection_id_t dest_cnx_id =
-        (cnx->client_mode && (packet_type == picoquic_packet_initial ||
-            packet_type == picoquic_packet_0rtt_protected)
-            && picoquic_is_connection_id_null(remote_cnxid)) ?
-        cnx->initial_cnxid : *remote_cnxid;
 
     /* Prepare the packet header */
     if (packet_type == picoquic_packet_1rtt_protected) {
@@ -417,7 +411,8 @@ size_t picoquic_create_packet_header(
 
         length = 0;
         bytes[length++] = (K | C | picoquic_spin_function_table[cnx->spin_policy].spinbit_outgoing(cnx));
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
+        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length,
+            path_x->p_remote_cnxid->cnx_id);
 
         *pn_offset = length;
         if (header_length > length && header_length < length + 4) {
@@ -442,7 +437,12 @@ size_t picoquic_create_packet_header(
         length += pn_l;
     }
     else {
-        /* Create a long packet -- default encode PP=3 */
+        /* Create a long packet */
+        picoquic_connection_id_t dest_cnx_id =
+            (cnx->client_mode && (packet_type == picoquic_packet_initial ||
+                packet_type == picoquic_packet_0rtt_protected)
+                && picoquic_is_connection_id_null(&path_x->p_remote_cnxid->cnx_id)) ?
+            cnx->initial_cnxid : path_x->p_remote_cnxid->cnx_id;
 
         switch (packet_type) {
         case picoquic_packet_initial:
@@ -478,8 +478,8 @@ size_t picoquic_create_packet_header(
 
         bytes[length++] = dest_cnx_id.id_len;
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
-        bytes[length++] = local_cnxid->id_len;
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, *local_cnxid);
+        bytes[length++] = path_x->p_local_cnxid->cnx_id.id_len;
+        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, path_x->p_local_cnxid->cnx_id);
 
         /* Special case of packet initial -- encode token as part of header */
         if (packet_type == picoquic_packet_initial) {
@@ -595,8 +595,6 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, 
     uint64_t sequence_number,
-    picoquic_connection_id_t * remote_cnxid,
-    picoquic_connection_id_t * local_cnxid,
     size_t length, size_t header_length,
     uint8_t* send_buffer, size_t send_buffer_max,
     void * aead_context, void* pn_enc,
@@ -612,14 +610,8 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
 
     /* Create the packet header just before encrypting the content */
     h_length = picoquic_create_packet_header(cnx, ptype,
-        sequence_number, remote_cnxid, local_cnxid, header_length, send_buffer, &pn_offset, &pn_length);
+        sequence_number, path_x, header_length, send_buffer, &pn_offset, &pn_length);
     if (ptype == picoquic_packet_1rtt_protected) {
-        if (remote_cnxid != &path_x->p_remote_cnxid->cnx_id) {
-            /* Packet is sent to a different CID: reset the spin bit and loss bit Q to 0 */
-            send_buffer[0] &= 0xDF;
-            path_x->q_square = 0;
-        }
-
         if (cnx->is_loss_bit_enabled_outgoing) {
             first_mask = 0x07;
             path_x->q_square++;
@@ -1032,8 +1024,6 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
     picoquic_packet_t * packet, int ret, 
     size_t length, size_t header_length, size_t checksum_overhead,
     size_t * send_length, uint8_t * send_buffer, size_t send_buffer_max,
-    picoquic_connection_id_t * remote_cnxid,
-    picoquic_connection_id_t * local_cnxid,
     picoquic_path_t * path_x, uint64_t current_time)
 {
     if (length != 0 && length < header_length) {
@@ -1060,28 +1050,24 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
             break;
         case picoquic_packet_initial:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
-                remote_cnxid, local_cnxid,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[picoquic_epoch_initial].aead_encrypt, cnx->crypto_context[picoquic_epoch_initial].pn_enc,
                 path_x, current_time);
             break;
         case picoquic_packet_handshake:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
-                remote_cnxid, local_cnxid,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt, cnx->crypto_context[picoquic_epoch_handshake].pn_enc,
                 path_x, current_time);
             break;
         case picoquic_packet_retry:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
-                remote_cnxid, local_cnxid,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[picoquic_epoch_0rtt].aead_encrypt, cnx->crypto_context[picoquic_epoch_0rtt].pn_enc,
                 path_x, current_time);
             break;
         case picoquic_packet_0rtt_protected:
-            length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number, 
-                remote_cnxid, local_cnxid,
+            length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[picoquic_epoch_0rtt].aead_encrypt, cnx->crypto_context[picoquic_epoch_0rtt].pn_enc,
                 path_x, current_time);
@@ -1089,7 +1075,6 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
         case picoquic_packet_1rtt_protected:
             /* TODO: if multipath, use 96 bit nonce */
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
-                remote_cnxid, local_cnxid,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[picoquic_epoch_1rtt].aead_encrypt, cnx->crypto_context[picoquic_epoch_1rtt].pn_enc,
                 path_x, current_time);
@@ -1954,8 +1939,6 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        &path_x->p_remote_cnxid->cnx_id,
-        &path_x->p_local_cnxid->cnx_id,
         path_x, current_time);
 
     if (length > 0) {
@@ -2467,7 +2450,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         picoquic_finalize_and_protect_packet(cnx, packet,
             ret, length, header_length, checksum_overhead,
             send_length, send_buffer, send_buffer_max,
-            &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
+            path_x, current_time);
     }
 
     return ret;
@@ -2634,7 +2617,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
+        path_x, current_time);
 
     /* Account for data sent during handshake */
     if (!cnx->initial_validated) {
@@ -2872,7 +2855,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
+        path_x, current_time);
 
     return ret;
 }
@@ -3305,7 +3288,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,
-        &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
+        path_x, current_time);
 
     if (*send_length > 0) {
         /* Account for data sent during handshake */
@@ -3723,7 +3706,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,
-        &path_x->p_remote_cnxid->cnx_id, &path_x->p_local_cnxid->cnx_id, path_x, current_time);
+        path_x, current_time);
 
     if (*send_length > 0) {
         *next_wake_time = current_time;
