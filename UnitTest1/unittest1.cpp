@@ -1473,6 +1473,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_perf) {
+            int ret = multipath_perf_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_qlog) {
             int ret = multipath_qlog_test();
 
@@ -1529,6 +1535,12 @@ namespace UnitTest1
 
         TEST_METHOD(simple_multipath_back1) {
             int ret = simple_multipath_back1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(simple_multipath_perf) {
+            int ret = simple_multipath_perf_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -1636,9 +1636,8 @@ void picoquic_reset_path_mtu(picoquic_path_t* path_x)
 /* Manage ACK context and Packet context */
 void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx)
 {
-    ack_ctx->first_sack_item.start_of_sack_range = UINT64_MAX;
-    ack_ctx->first_sack_item.end_of_sack_range = 0;
-    ack_ctx->first_sack_item.next_sack = NULL;
+    picoquic_sack_list_init(&ack_ctx->first_sack_item);
+
     ack_ctx->highest_ack_sent = 0;
     ack_ctx->highest_ack_sent_time = cnx->start_time;
     ack_ctx->time_stamp_largest_received = UINT64_MAX;
@@ -3272,9 +3271,8 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     pkt_ctx->retransmitted_oldest = NULL;
 
     picoquic_clear_ack_ctx(ack_ctx);
+    picoquic_sack_list_init(&ack_ctx->first_sack_item);
 
-    ack_ctx->first_sack_item.start_of_sack_range = UINT64_MAX;
-    ack_ctx->first_sack_item.end_of_sack_range = 0;
     /* Reset the ECN data */
     ack_ctx->ecn_ect0_total_local = 0;
     ack_ctx->ecn_ect1_total_local = 0;
@@ -3395,7 +3393,7 @@ int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
     /* Verify that a packet of the previous rotation was acked */
     if (cnx->cnx_state != picoquic_state_ready ||
         cnx->crypto_epoch_sequence >
-        cnx->ack_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range) {
+        picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_application].first_sack_item)) {
         ret = PICOQUIC_ERROR_KEY_ROTATION_NOT_READY;
     }
     else {

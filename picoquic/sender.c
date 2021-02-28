@@ -2399,10 +2399,10 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
          * server is performing anti-dos mitigation and the client has nothing to repeat */
         if ((packet->ptype == picoquic_packet_initial && cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt == NULL &&
             cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_newest == NULL &&
-            cnx->ack_ctx[picoquic_packet_context_initial].first_sack_item.end_of_sack_range != UINT64_MAX) ||
+            picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_initial].first_sack_item) != UINT64_MAX) ||
             (packet->ptype == picoquic_packet_handshake &&
                 cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_newest == NULL &&
-                cnx->ack_ctx[picoquic_packet_context_handshake].first_sack_item.end_of_sack_range == UINT64_MAX &&
+                picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_handshake].first_sack_item) == UINT64_MAX &&
                 cnx->pkt_ctx[picoquic_packet_context_handshake].send_sequence == 0))
         {
             uint64_t try_time_next = cnx->path[0]->latest_sent_time + cnx->path[0]->smoothed_rtt;
@@ -2678,7 +2678,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     case picoquic_state_handshake_failure:
         /* TODO: check whether closing can be requested in "initial" mode */
         if (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt != NULL &&
-            cnx->ack_ctx[picoquic_packet_context_handshake].first_sack_item.start_of_sack_range != (uint64_t)((int64_t)-1)) {
+            picoquic_sack_list_first(&cnx->ack_ctx[picoquic_packet_context_handshake].first_sack_item) != UINT64_MAX) {
             pc = picoquic_packet_context_handshake;
             packet_type = picoquic_packet_handshake;
             epoch = picoquic_epoch_handshake;
@@ -4045,7 +4045,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
              * logic.
              */
             if (cnx->client_mode || cnx->path[i]->last_non_validating_pn >=
-                cnx->ack_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range ||
+                picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_application].first_sack_item) ||
                 cnx->path[i]->is_nat_challenge) {
                 /* This path becomes the new default */
                 picoquic_promote_path_to_default(cnx, i, current_time);

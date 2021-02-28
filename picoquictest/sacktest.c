@@ -50,10 +50,10 @@ static struct expected_ack_t expected_ack[] = {
     { 12, 1, 3 },
     { 13, 2, 3 },
     { 17, 0, 4 },
-    { 19, 0, 5 },
-    { 21, 0, 6 },
-    { 21, 0, 5 },
-    { 21, 0, 5 },
+    { 19, 0, 4 },
+    { 21, 0, 4 },
+    { 21, 0, 4 },
+    { 21, 0, 4 },
     { 21, 5, 4 },
     { 21, 5, 4 },
     { 21, 5, 4 },
@@ -74,7 +74,7 @@ int sacktest()
     picoquic_packet_context_enum pc = 0;
 
     memset(&cnx, 0, sizeof(cnx));
-    cnx.ack_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+    picoquic_sack_list_init(&cnx.ack_ctx[pc].first_sack_item);
 
     /* Do a basic test with packet zero */
 
@@ -93,15 +93,15 @@ int sacktest()
         ret = -1;
     }
 
-    if (cnx.ack_ctx[pc].first_sack_item.start_of_sack_range != 0 ||
-        cnx.ack_ctx[pc].first_sack_item.end_of_sack_range != 0 ||
-        cnx.ack_ctx[pc].first_sack_item.next_sack != NULL) {
+    if (picoquic_sack_list_first(&cnx.ack_ctx[pc].first_sack_item) != 0 ||
+        picoquic_sack_list_last(&cnx.ack_ctx[pc].first_sack_item) != 0 ||
+        picoquic_sack_list_first_range(&cnx.ack_ctx[pc].first_sack_item) != NULL) {
         ret = -1;
     }
     else {
         /* reset for the next test */
         memset(&cnx, 0, sizeof(cnx));
-        cnx.ack_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+        picoquic_sack_list_init(&cnx.ack_ctx[pc].first_sack_item);
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
@@ -136,20 +136,16 @@ int sacktest()
     }
 
     if (ret == 0) {
-        if (cnx.ack_ctx[pc].first_sack_item.end_of_sack_range != 21 ||
-            cnx.ack_ctx[pc].first_sack_item.start_of_sack_range != 0 ||
+        if (picoquic_sack_list_last(&cnx.ack_ctx[pc].first_sack_item) != 21 ||
+            picoquic_sack_list_first(&cnx.ack_ctx[pc].first_sack_item) != 0 ||
             cnx.ack_ctx[pc].time_stamp_largest_received != highest_seen_time ||
-            cnx.ack_ctx[pc].first_sack_item.next_sack != NULL) {
+            picoquic_sack_list_first_range(&cnx.ack_ctx[pc].first_sack_item) != NULL) {
             ret = -1;
         }
     }
 
-    /* Reset the sack lists*/
-    while (cnx.ack_ctx[pc].first_sack_item.next_sack != NULL) {
-        picoquic_sack_item_t * next = cnx.ack_ctx[pc].first_sack_item.next_sack;
-        cnx.ack_ctx[pc].first_sack_item.next_sack = next->next_sack;
-        free(next);
-    }
+    /* Free the sack lists*/
+    picoquic_sack_list_free(&cnx.ack_ctx[pc].first_sack_item);
 
     return ret;
 }
@@ -163,7 +159,7 @@ static void ack_range_mask(uint64_t* mask, uint64_t highest, uint64_t range)
 }
 
 static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
-    struct expected_ack_t* expected_ack, uint64_t expected_mask)
+    struct expected_ack_t* expected_ack, uint64_t * previous_mask, uint64_t expected_mask)
 {
     int ret = 0;
     size_t byte_index = 1;
@@ -265,9 +261,11 @@ static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
         }
 
         if (ret == 0) {
+            acked_mask |= *previous_mask;
             if (acked_mask != expected_mask) {
                 ret = -1;
             }
+            *previous_mask = acked_mask;
         }
     }
 
@@ -280,11 +278,12 @@ int sendacktest()
     picoquic_cnx_t cnx;
     uint64_t current_time;
     uint64_t received_mask = 0;
+    uint64_t previous_mask = 0;
     uint8_t bytes[256];
     picoquic_packet_context_enum pc = 0;
 
     memset(&cnx, 0, sizeof(cnx));
-    cnx.ack_ctx[pc].first_sack_item.start_of_sack_range = UINT64_MAX;
+    picoquic_sack_list_init(&cnx.ack_ctx[pc].first_sack_item);
     cnx.sending_ecn_ack = 0; /* don't write an ack_ecn frame */
 
     for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
@@ -301,7 +300,7 @@ int sendacktest()
             received_mask |= 1ull << (test_pn64[i] & 63);
 
             if (ret == 0) {
-                ret = basic_ack_parse(bytes, bytes_next - bytes, &expected_ack[i], received_mask);
+                ret = basic_ack_parse(bytes, bytes_next - bytes, &expected_ack[i], &previous_mask, received_mask);
             }
 
             if (ret != 0) {
@@ -335,10 +334,9 @@ static const size_t nb_ack_range = sizeof(ack_range) / sizeof(test_ack_range_t);
 int ackrange_test()
 {
     int ret = 0;
-    picoquic_sack_item_t sack0;
+    picoquic_sack_list_t sack0;
 
-    memset(&sack0, 0, sizeof(picoquic_sack_item_t));
-    sack0.start_of_sack_range = (uint64_t)((int64_t)-1);
+    picoquic_sack_list_init(&sack0);
 
     for (size_t i = 0; i < nb_ack_range; i++) {
         ret = picoquic_check_sack_list(&sack0,
@@ -363,15 +361,15 @@ int ackrange_test()
         }
     }
 
-    if (ret == 0 && sack0.start_of_sack_range != 0) {
+    if (ret == 0 && picoquic_sack_list_first(&sack0) != 0) {
         ret = -1;
     }
 
-    if (ret == 0 && sack0.end_of_sack_range != 7500) {
+    if (ret == 0 && picoquic_sack_list_last(&sack0)!= 7500) {
         ret = -1;
     }
 
-    if (ret == 0 && sack0.next_sack != NULL) {
+    if (ret == 0 && picoquic_sack_list_first_range(&sack0) != NULL) {
         ret = -1;
     }
 

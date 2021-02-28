@@ -444,11 +444,11 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
             /* Build a packet number to 64 bits */
             if (ph->ptype == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
                 ph->pn64 = picoquic_get_packet_number64(
-                    ph->l_cid->ack_ctx.first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
+                    picoquic_sack_list_last(&ph->l_cid->ack_ctx.first_sack_item), ph->pnmask, ph->pn);
             }
             else {
                 ph->pn64 = picoquic_get_packet_number64(
-                    cnx->ack_ctx[ph->pc].first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
+                    picoquic_sack_list_last(&cnx->ack_ctx[ph->pc].first_sack_item), ph->pnmask, ph->pn);
             }
 
             /* Check the reserved bits */

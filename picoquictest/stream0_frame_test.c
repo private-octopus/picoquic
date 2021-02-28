@@ -656,8 +656,7 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
         if (R_or_F == 0) {
             stream->fin_requested = 1;
             stream->fin_sent = 1;
-            stream->first_sack_item.start_of_sack_range = 0;
-            stream->first_sack_item.end_of_sack_range = stream->sent_offset;
+            picoquic_sack_list_reset(&stream->first_sack_item, 0, stream->sent_offset);
         }
         else {
             stream->reset_requested = 1;

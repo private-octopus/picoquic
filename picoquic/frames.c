@@ -2202,39 +2202,6 @@ static picoquic_packet_t* picoquic_find_acked_packet(picoquic_cnx_t* cnx, picoqu
     return packet;
 }
 
-static picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_item_t* first_sack, picoquic_sack_item_t* previous,
-    uint64_t start_of_range, uint64_t end_of_range)
-{
-    picoquic_sack_item_t* next = (previous == NULL)? first_sack: previous->next_sack;
-
-    while (next != NULL) {
-        if (next->start_of_sack_range == start_of_range) {
-            if (next == first_sack) {
-                if (end_of_range < first_sack->end_of_sack_range) {
-                    first_sack->start_of_sack_range = end_of_range + 1;
-                }
-                else {
-                    first_sack->start_of_sack_range = first_sack->end_of_sack_range;
-                }
-            }
-            else if (next->end_of_sack_range == end_of_range) {
-                /* Matching range should be removed */
-                previous->next_sack = next->next_sack;
-                free(next);
-            }
-            break;
-        } else if (next->end_of_sack_range > end_of_range) {
-            previous = next;
-            next = next->next_sack;
-        }
-        else {
-            break;
-        }
-    }
-
-    return previous;
-}
-
 static int picoquic_process_ack_of_ack_body(
     picoquic_sack_item_t* first_sack, uint64_t largest, uint64_t num_block,
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn)
@@ -2893,7 +2860,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
 
             cnx->congestion_alg->alg_notify(cnx, cnx->path[0],
                 picoquic_congestion_notification_ecn_ec,
-                0, 0, 0, cnx->ack_ctx[pc].first_sack_item.end_of_sack_range, current_time);
+                0, 0, 0, picoquic_sack_list_last(&cnx->ack_ctx[pc].first_sack_item), current_time);
         }
     }
 
@@ -2905,7 +2872,7 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
     uint64_t multipath_sequence, int is_opportunistic)
 {
     uint64_t num_block = 0;
-    picoquic_sack_item_t* next_sack = ack_ctx->first_sack_item.next_sack;
+    picoquic_sack_item_t* next_sack = picoquic_sack_list_first_range(&ack_ctx->first_sack_item);
     uint64_t ack_delay = 0;
     uint64_t ack_range = 0;
     uint64_t ack_gap = 0;
@@ -2917,7 +2884,7 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
         (((is_ecn) ? picoquic_frame_type_ack_mp_ecn : picoquic_frame_type_ack_mp));
 
     /* Check that there something to acknowledge */
-    if (ack_ctx->first_sack_item.start_of_sack_range != UINT64_MAX) {
+    if (picoquic_sack_list_first(&ack_ctx->first_sack_item) != UINT64_MAX) {
         uint8_t* num_block_byte = NULL;
 
         if (current_time > ack_ctx->time_stamp_largest_received) {
@@ -2935,12 +2902,12 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
         if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_type_byte)) != NULL &&
             (multipath_sequence == UINT64_MAX ||
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, multipath_sequence)) != NULL) &&
-            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_ctx->first_sack_item.end_of_sack_range)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_sack_list_last(&ack_ctx->first_sack_item))) != NULL &&
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_delay)) != NULL) {
             /* Reserve one byte for the number of blocks */
             num_block_byte = bytes++;
             /* Encode the size of the first ack range */
-            ack_range = ack_ctx->first_sack_item.end_of_sack_range - ack_ctx->first_sack_item.start_of_sack_range;
+            ack_range = picoquic_sack_list_last(&ack_ctx->first_sack_item) - picoquic_sack_list_first(&ack_ctx->first_sack_item);
             bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range);
         }
 
@@ -2950,31 +2917,36 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
         }
         else {
             /* Set the lowest acknowledged */
-            lowest_acknowledged = ack_ctx->first_sack_item.start_of_sack_range;
+            lowest_acknowledged = picoquic_sack_list_first(&ack_ctx->first_sack_item);
             /* Encode the ack blocks that fit in the allocated space */
             while (num_block < 32 && next_sack != NULL) {
-                uint8_t* bytes_start_range = bytes;
+                if (num_block < 4 || picoquic_sack_item_nb_times_sent(next_sack) < 4) {
+                    uint8_t* bytes_start_range = bytes;
+                    ack_gap = lowest_acknowledged - picoquic_sack_item_last(next_sack) - 2; /* per spec */
+                    ack_range = picoquic_sack_item_last(next_sack) - picoquic_sack_item_first(next_sack);
 
-                ack_gap = lowest_acknowledged - next_sack->end_of_sack_range - 2; /* per spec */
-                ack_range = next_sack->end_of_sack_range - next_sack->start_of_sack_range;
-
-                if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) == NULL ||
-                    (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range)) == NULL) {
-                    bytes = bytes_start_range;
-                    *more_data = 1;
-                    break;
+                    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) == NULL ||
+                        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range)) == NULL) {
+                        bytes = bytes_start_range;
+                        *more_data = 1;
+                        break;
+                    }
+                    else {
+                        picoquic_sack_item_record_sent(next_sack);
+                        lowest_acknowledged = picoquic_sack_item_first(next_sack);
+                        next_sack = picoquic_sack_item_next(next_sack);
+                        num_block++;
+                    }
                 }
                 else {
-                    lowest_acknowledged = next_sack->start_of_sack_range;
-                    next_sack = next_sack->next_sack;
-                    num_block++;
+                    next_sack = picoquic_sack_item_next(next_sack);
                 }
             }
             /* When numbers are lower than 64, varint encoding fits on one byte */
             *num_block_byte = (uint8_t)num_block;
 
             /* Remember the ACK value and time */
-            ack_ctx->highest_ack_sent = ack_ctx->first_sack_item.end_of_sack_range;
+            ack_ctx->highest_ack_sent = picoquic_sack_list_last(&ack_ctx->first_sack_item);
             ack_ctx->highest_ack_sent_time = current_time;
         }
 
@@ -3064,7 +3036,7 @@ int picoquic_is_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* a
         else
         {
             uint64_t ack_gap = (cnx->nb_packets_received < 128) ? 2 : cnx->ack_gap_remote;
-            if (ack_ctx->highest_ack_sent + ack_gap <= ack_ctx->first_sack_item.end_of_sack_range ||
+            if (ack_ctx->highest_ack_sent + ack_gap <= picoquic_sack_list_last(&ack_ctx->first_sack_item) ||
                 ack_ctx->time_oldest_unack_packet_received + cnx->ack_delay_remote <= current_time) {
                 ret = 1;
             }
@@ -3076,10 +3048,10 @@ int picoquic_is_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* a
             }
         }
     }
-    else if (ack_ctx->highest_ack_sent + 8 <= ack_ctx->first_sack_item.end_of_sack_range &&
+    else if (ack_ctx->highest_ack_sent + 8 <= picoquic_sack_list_last(&ack_ctx->first_sack_item) &&
         ack_ctx->highest_ack_sent_time + cnx->ack_delay_remote <= current_time) {
         /* Force sending an ack-of-ack from time to time, as a low priority action */
-        if (ack_ctx->first_sack_item.end_of_sack_range == (uint64_t)((int64_t)-1)) {
+        if (picoquic_sack_list_last(&ack_ctx->first_sack_item) == UINT64_MAX) {
             ret = 0;
         }
         else {
