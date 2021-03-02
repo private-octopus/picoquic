@@ -2786,6 +2786,23 @@ int demo_alpn_test()
         }
     }
 
+    /* Try the list of correct values with extra zero */
+    for (int i = 0; ret == 0 && alpn_good_list[i] != NULL; i++) {
+        char buf[256];
+        picoquic_alpn_enum x;
+        size_t len = strlen(alpn_good_list[i]);
+
+        memset(buf, 0, sizeof(buf));
+        memcpy(buf, alpn_good_list[i], len);
+        x = picoquic_parse_alpn_nz(buf, len+1);
+        if (x != picoquic_alpn_undef) {
+            DBG_PRINTF("For ALPN = \"%s\\0...\", got proto %d instead of %d",
+                alpn_good_list[i], x, picoquic_alpn_undef);
+            ret = -1;
+            break;
+        }
+    }
+
     /* Same test, but with large buffer */
     for (int i = 0; ret == 0 && alpn_good_list[i] != NULL; i++) {
         char buf[256];
