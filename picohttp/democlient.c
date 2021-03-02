@@ -105,6 +105,11 @@ picoquic_alpn_enum picoquic_parse_alpn_nz(char const* alpn, size_t len)
                 code = alpn_list[i].alpn_code;
                 break;
             }
+#if 1
+            /* Deliberate access violation, to test ASAN reports */
+            int x = alpn_list[i].alpn_val[64];
+            DBG_PRINTF("ASAN should block this, x=0x%02x", x);
+#endif
         }
     }
 
