@@ -48,7 +48,7 @@ jobs:
                 echo "No leaks detected in picoquic_ct"
             fi
             ./picohttp_ct -n -r 1>http_ct.txt 2>sanity.txt || QUICHTTPRESULT=$? 
-            echo "running picohttp_ct returns $QUICHTTPRESULT "
+            echo "running picohttp_ct returns <$QUICHTTPRESULT> "
             cat sanity.txt
             if [ ! -z ${QUICHTTPRESULT} ]; then
                 if [ ${QUICHTTPRESULT} != 0 ]; then exit 1; fi;
