@@ -742,16 +742,32 @@ int quic_client(const char* ip_address_text, int server_port,
         }
 
         if (picoquic_get_data_received(cnx_client) > 0) {
-            double duration_usec = (double)(picoquic_get_quic_time(qclient) - picoquic_get_cnx_start_time(cnx_client));
+            uint64_t start_time = picoquic_get_cnx_start_time(cnx_client);
+            uint64_t close_time = picoquic_get_quic_time(qclient);
+            double duration_usec = (double)(close_time - start_time);
 
             if (duration_usec > 0) {
-                double receive_rate_mbps = 8.0 * ((double)picoquic_get_data_received(cnx_client)) / duration_usec;
-                fprintf(stdout, "Received %llu bytes in %f seconds, %f Mbps.\n",
-                    (unsigned long long)picoquic_get_data_received(cnx_client),
-                    duration_usec / 1000000.0, receive_rate_mbps);
-                picoquic_log_app_message(cnx_client, "Received %llu bytes in %f seconds, %f Mbps.",
-                    (unsigned long long)picoquic_get_data_received(cnx_client),
-                    duration_usec / 1000000.0, receive_rate_mbps);
+                if (is_quicperf) {
+                    double duration_sec = duration_usec / 1000000.0;
+                    printf("Connection_duration_sec: %f\n", duration_sec);
+                    printf("Nb_transactions: %" PRIu64"\n", quicperf_ctx->nb_streams);
+                    printf("Upload_bytes: %" PRIu64"\n", quicperf_ctx->data_sent);
+                    printf("Download_bytes: %" PRIu64"\n", quicperf_ctx->data_received);
+                    printf("TPS: %f\n", ((double)quicperf_ctx->nb_streams) * 8.0 / duration_sec);
+                    printf("Upload_Mbps: %f\n", ((double)quicperf_ctx->data_sent) * 8.0 / duration_usec);
+                    printf("Download_Mbps: %f\n", ((double)quicperf_ctx->data_received) * 8.0 / duration_usec);
+                    picoquic_log_app_message(cnx_client, "Received %" PRIu64 " bytes in %f seconds, %f Mbps.",
+                        picoquic_get_data_received(cnx_client), duration_usec, ((double)quicperf_ctx->data_received) * 8.0 / duration_usec);
+                }
+                else {
+                    double receive_rate_mbps = 8.0 * ((double)picoquic_get_data_received(cnx_client)) / duration_usec;
+                    fprintf(stdout, "Received %" PRIu64 " bytes in %f seconds, %f Mbps.\n",
+                        picoquic_get_data_received(cnx_client),
+                        duration_usec / 1000000.0, receive_rate_mbps);
+                    picoquic_log_app_message(cnx_client, "Received %" PRIu64 " bytes in %f seconds, %f Mbps.",
+                        picoquic_get_data_received(cnx_client),
+                        duration_usec / 1000000.0, receive_rate_mbps);
+                }
             }
         }
     }
