@@ -33,30 +33,31 @@
 typedef struct st_picoquic_alpn_list_t {
     picoquic_alpn_enum alpn_code;
     char const* alpn_val;
+    size_t len;
 } picoquic_alpn_list_t;
 
 static picoquic_alpn_list_t alpn_list[] = {
-    { picoquic_alpn_http_3, "h3-34" },
-    { picoquic_alpn_http_0_9, "hq-34"},
-    { picoquic_alpn_http_3, "h3-33" },
-    { picoquic_alpn_http_0_9, "hq-33"},
-    { picoquic_alpn_http_3, "h3-32" },
-    { picoquic_alpn_http_0_9, "hq-32"},
-    { picoquic_alpn_http_3, "h3-31" },
-    { picoquic_alpn_http_0_9, "hq-31"},
-    { picoquic_alpn_http_3, "h3-29" },
-    { picoquic_alpn_http_0_9, "hq-29"},
-    { picoquic_alpn_http_3, "h3-30" },
-    { picoquic_alpn_http_0_9, "hq-30"},
-    { picoquic_alpn_http_3, "h3-28" },
-    { picoquic_alpn_http_0_9, "hq-28"},
-    { picoquic_alpn_http_3, "h3-27" },
-    { picoquic_alpn_http_0_9, "hq-27"},
-    { picoquic_alpn_http_3, "h3" },
-    { picoquic_alpn_http_0_9, "hq-interop"},
-    { picoquic_alpn_siduck, "siduck"},
-    { picoquic_alpn_siduck, "siduck-00"},
-    { picoquic_alpn_quicperf, QUICPERF_ALPN}
+    { picoquic_alpn_http_3, "h3-34", 5 },
+    { picoquic_alpn_http_0_9, "hq-34", 5 },
+    { picoquic_alpn_http_3, "h3-33", 5 },
+    { picoquic_alpn_http_0_9, "hq-33", 5 },
+    { picoquic_alpn_http_3, "h3-32", 5 },
+    { picoquic_alpn_http_0_9, "hq-32", 5 },
+    { picoquic_alpn_http_3, "h3-31", 5 },
+    { picoquic_alpn_http_0_9, "hq-31", 5 },
+    { picoquic_alpn_http_3, "h3-29", 5 },
+    { picoquic_alpn_http_0_9, "hq-29", 5 },
+    { picoquic_alpn_http_3, "h3-30", 5 },
+    { picoquic_alpn_http_0_9, "hq-30", 5 },
+    { picoquic_alpn_http_3, "h3-28", 5 },
+    { picoquic_alpn_http_0_9, "hq-28", 5 },
+    { picoquic_alpn_http_3, "h3-27", 5 },
+    { picoquic_alpn_http_0_9, "hq-27", 5 },
+    { picoquic_alpn_http_3, "h3", 2 },
+    { picoquic_alpn_http_0_9, "hq-interop", 10 },
+    { picoquic_alpn_siduck, "siduck", 6 },
+    { picoquic_alpn_siduck, "siduck-00", 9 },
+    { picoquic_alpn_quicperf, QUICPERF_ALPN, QUICPERF_ALPN_LEN}
 };
 
 static size_t nb_alpn_list = sizeof(alpn_list) / sizeof(picoquic_alpn_list_t);
@@ -99,8 +100,8 @@ picoquic_alpn_enum picoquic_parse_alpn_nz(char const* alpn, size_t len)
 
     if (alpn != NULL) {
         for (size_t i = 0; i < nb_alpn_list; i++) {
-            if (memcmp(alpn, alpn_list[i].alpn_val, len) == 0 &&
-                alpn_list[i].alpn_val[len] == 0) {
+            if (len == alpn_list[i].len &&
+                memcmp(alpn, alpn_list[i].alpn_val, len) == 0) {
                 code = alpn_list[i].alpn_code;
                 break;
             }
