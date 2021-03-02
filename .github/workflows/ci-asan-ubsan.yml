@@ -30,8 +30,7 @@ jobs:
       - name: Perform Unit Tests and Check for Leaks
         run: |
             ulimit -c unlimited -S
-            ./picoquic_ct -n -r 2>sanity.txt
-            QUICRESULT=$? 
+            ./picoquic_ct -n -r 2>sanity.txt || QUICRESULT=$? 
             echo "running picoquic_ct returns $QUICRESULT "
             cat sanity.txt
             if [ ${QUICRESULT} != 0 ]; then exit 1; fi;
@@ -46,8 +45,7 @@ jobs:
             else
                 echo "No leaks detected in picoquic_ct"
             fi
-            ./picohttp_ct -n -r 2>sanity.txt
-            QUICHTTPRESULT=$? 
+            ./picohttp_ct -n -r 2>sanity.txt || QUICHTTPRESULT=$? 
             echo "running picohttp_ct returns $QUICHTTPRESULT "
             cat sanity.txt
             if [ ${QUICHTTPRESULT} != 0 ]; then exit 1; fi;
@@ -60,6 +58,6 @@ jobs:
                     echo "$leaked <= $previous_leak";
                 fi
             else
-                echo "No leaks detected in picoquic_ct"
+                echo "No leaks detected in picohttp_ct"
             fi
             exit 0
