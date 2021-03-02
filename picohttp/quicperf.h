@@ -23,6 +23,7 @@
 #define QUICPERF_H
 
 #define QUICPERF_ALPN "perf"
+#define QUICPERF_ALPN_LEN 4
 
 #define QUICPERF_NO_ERROR 0
 #define QUICPERF_ERROR_NOT_IMPLEMENTED 1
@@ -67,6 +68,10 @@ typedef struct st_quicperf_ctx_t {
     uint64_t last_interaction_time;
     quicperf_stream_desc_t* scenarios;
     picosplay_tree_t quicperf_stream_tree;
+    /* Statistics gathered on client */
+    uint64_t data_sent;
+    uint64_t data_received;
+    uint64_t nb_streams;
 } quicperf_ctx_t;
 
 quicperf_ctx_t* quicperf_create_ctx(const char* scenario_text);

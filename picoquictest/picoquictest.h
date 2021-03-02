@@ -292,6 +292,7 @@ int config_option_test();
 
 int h3zero_post_test();
 int h09_post_test();
+int demo_alpn_test();
 int demo_file_sanitize_test();
 int demo_file_access_test();
 int demo_server_file_test();

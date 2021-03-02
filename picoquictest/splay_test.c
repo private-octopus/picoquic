@@ -41,7 +41,8 @@ static int_node_t * new_int_node(int x) {
     return i_n;
 }
 
-static int64_t compare_int(void *l, void *r) {
+static int64_t compare_int(void* l, void* r) {
+
     return (int64_t)((int_node_t*)l)->v - ((int_node_t*)r)->v;
 }
 
@@ -210,7 +211,9 @@ int splay_test() {
         }
 
         for (int i = 0; ret == 0 && i < 7; i++) {
-            picosplay_delete(tree, &values[i]);
+            int_node_t to_delete = { 0 };
+            to_delete.v = values[i];
+            picosplay_delete(tree, &to_delete);
             /* Verify sanity and count after each deletion */
             count = check_node_sanity(tree->root, NULL, NULL, &compare_int);
             if (count != 6 - i) {

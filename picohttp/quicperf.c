@@ -420,6 +420,7 @@ int quicperf_process_stream_data(picoquic_cnx_t * cnx, quicperf_ctx_t * ctx, qui
     else if (ctx->is_client) {
         if (!stream_ctx->is_closed) {
             stream_ctx->nb_response_bytes += length;
+            ctx->data_received += length;
 
             if (stream_ctx->stop_for_fin) {
                 if (stream_ctx->nb_response_bytes >= stream_ctx->response_size) {
@@ -447,7 +448,11 @@ int quicperf_process_stream_data(picoquic_cnx_t * cnx, quicperf_ctx_t * ctx, qui
                 ret = picoquic_close(cnx, QUICPERF_ERROR_TOO_MUCH_DATA_SENT);
             }
 
-            if (stream_ctx->is_closed) {
+            if (stream_ctx->is_closed || fin_or_event == picoquic_callback_stream_fin) {
+                ctx->nb_streams++;
+            }
+
+            if (stream_ctx->is_closed){
                 ctx->nb_open_streams--;
                 ret = quicperf_init_streams_from_scenario(cnx, ctx, stream_ctx->stream_id);
                 if (ctx->nb_open_streams == 0) {
@@ -504,7 +509,9 @@ int quicperf_prepare_to_send(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicperf_
         is_fin = 1;
         available = (size_t)(send_limit - sent_already);
     }
-
+    if (ctx->is_client) {
+        ctx->data_sent += available;
+    }
     buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, !is_fin);
     if (buffer != NULL) {
         while (ctx->is_client && stream_ctx->nb_post_bytes < 8 && available > 0) {
@@ -561,6 +568,7 @@ int quicperf_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_prepare_to_send:
         if (stream_ctx == NULL) {
             /* Unexpected */
+            ret = -1;
         }
         else {
             ret = quicperf_prepare_to_send(cnx, ctx, stream_ctx, bytes, length);
@@ -576,6 +584,7 @@ int quicperf_callback(picoquic_cnx_t* cnx,
         if (stream_ctx != NULL) {
             if (ctx->is_client) {
                 /* Unexpected. Treat as protocol error */
+                ret = -1;
             }
             else {
                 stream_ctx->is_stopped = 1;
