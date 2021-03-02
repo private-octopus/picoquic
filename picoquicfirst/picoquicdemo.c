@@ -753,7 +753,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     printf("Nb_transactions: %" PRIu64"\n", quicperf_ctx->nb_streams);
                     printf("Upload_bytes: %" PRIu64"\n", quicperf_ctx->data_sent);
                     printf("Download_bytes: %" PRIu64"\n", quicperf_ctx->data_received);
-                    printf("TPS: %f\n", ((double)quicperf_ctx->nb_streams) * 8.0 / duration_sec);
+                    printf("TPS: %f\n", ((double)quicperf_ctx->nb_streams) / duration_sec);
                     printf("Upload_Mbps: %f\n", ((double)quicperf_ctx->data_sent) * 8.0 / duration_usec);
                     printf("Download_Mbps: %f\n", ((double)quicperf_ctx->data_received) * 8.0 / duration_usec);
                     picoquic_log_app_message(cnx_client, "Received %" PRIu64 " bytes in %f seconds, %f Mbps.",
