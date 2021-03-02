@@ -1953,6 +1953,10 @@ int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path
 
         if (stashed == NULL) {
             ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
+        }
+        else if (stashed->sequence == path_x->p_remote_cnxid->sequence) {
+            /* If the available cnx_id is same as old one, we do nothing */
+            ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
         } else {
             picoquic_dereference_stashed_cnxid(cnx, path_x, 0);
 
