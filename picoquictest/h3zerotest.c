@@ -888,6 +888,10 @@ int h3zero_qpack_fuzz_test()
         DBG_PRINTF("qpack_fuzz: %d goods out of %d trials", n_good, n_trials);
     }
 
+    if (bytes != NULL) {
+        free(bytes);
+    }
+
     return ret;
 }
 
