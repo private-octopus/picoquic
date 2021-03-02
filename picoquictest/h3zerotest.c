@@ -2751,3 +2751,56 @@ int http_corrupt_rdpn_test()
 {
     return http_stress_test_one(1, 0, 1);
 }
+
+/* Test the selection of ALPN
+ */
+char const* alpn_good_list[] = {
+    "h3-34", "hq-34", "h3-29", "hq-29", "h3", "hq-interop", "siduck", "siduck-00", "perf", NULL };
+picoquic_alpn_enum alpn_proto_list[] = {
+    picoquic_alpn_http_3, picoquic_alpn_http_0_9, picoquic_alpn_http_3, picoquic_alpn_http_0_9,
+    picoquic_alpn_http_3, picoquic_alpn_http_0_9,
+    picoquic_alpn_siduck, picoquic_alpn_siduck,
+    picoquic_alpn_quicperf };
+char const* alpn_bad_list[] = {
+    "h3-00", "hq", "hq-interop-00", "siduck-99", "", "unknown", NULL };
+
+int demo_alpn_test()
+{
+    int ret = 0;
+    /* Try the list of correct and incorrect values */
+    for (int i = 0; ret == 0 && alpn_good_list[i] != NULL; i++) {
+        picoquic_alpn_enum x = picoquic_parse_alpn_nz(alpn_good_list[i], strlen(alpn_good_list[i]));
+        if (x != alpn_proto_list[i]) {
+            DBG_PRINTF("For ALPN = \"%s\", got proto %d instead of %d", alpn_good_list[i], x, alpn_proto_list[i]);
+            ret = -1;
+            break;
+        }
+    }
+
+    for (int i = 0; ret == 0 && alpn_bad_list[i] != NULL; i++) {
+        picoquic_alpn_enum x = picoquic_parse_alpn_nz(alpn_bad_list[i], strlen(alpn_bad_list[i]));
+        if (x != picoquic_alpn_undef) {
+            DBG_PRINTF("For ALPN = \"%s\", got proto %d instead of %d", alpn_bad_list[i], x, picoquic_alpn_undef);
+            ret = -1;
+            break;
+        }
+    }
+
+    /* Same test, but with large buffer */
+    for (int i = 0; ret == 0 && alpn_good_list[i] != NULL; i++) {
+        char buf[256];
+        picoquic_alpn_enum x;
+
+        memset(buf, 'a', sizeof(buf));
+        memcpy(buf, alpn_good_list[i], strlen(alpn_good_list[i]));
+        x = picoquic_parse_alpn_nz(buf, sizeof(buf));
+        if (x != picoquic_alpn_undef) {
+            DBG_PRINTF("For ALPN = \"%saaaaaaaaaaaaaa...\", got proto %d instead of %d", 
+                alpn_good_list[i], x, picoquic_alpn_undef);
+            ret = -1;
+            break;
+        }
+    }
+
+    return ret;
+}
