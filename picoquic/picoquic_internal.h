@@ -99,7 +99,7 @@ extern "C" {
 #define PICOQUIC_ALPN_NUMBER_MAX 32
 
 /*
- * Types of frames
+ * Types of frames.
  */
 typedef enum {
     picoquic_frame_type_padding = 0,
@@ -446,40 +446,43 @@ int picoquic_load_tokens(picoquic_stored_token_t** pp_first_token,
 void picoquic_free_tokens(picoquic_stored_token_t** pp_first_token);
 
 /*
- * Transport parameters, as defined by the QUIC transport specification
+ * Transport parameters, as defined by the QUIC transport specification.
+ * The initial code defined the type as an enum, but the binary representation
+ * of the enum type is not strictly defined in C. Values like "0xff02de1"
+ * could end up represented as a negative integer, and then converted to
+ * the 64 bit representation "0xffffffffff02de1", which is not good.
+ * We changed that to using macro for definition.
  */
-
-typedef enum {
-    picoquic_tp_original_connection_id = 0,
-    picoquic_tp_idle_timeout = 1,
-    picoquic_tp_stateless_reset_token = 2,
-    picoquic_tp_max_packet_size = 3,
-    picoquic_tp_initial_max_data = 4,
-    picoquic_tp_initial_max_stream_data_bidi_local = 5,
-    picoquic_tp_initial_max_stream_data_bidi_remote = 6,
-    picoquic_tp_initial_max_stream_data_uni = 7,
-    picoquic_tp_initial_max_streams_bidi = 8,
-    picoquic_tp_initial_max_streams_uni = 9,
-    picoquic_tp_ack_delay_exponent = 10,
-    picoquic_tp_max_ack_delay = 11,
-    picoquic_tp_disable_migration = 12,
-    picoquic_tp_server_preferred_address = 13,
-    picoquic_tp_active_connection_id_limit = 14,
-    picoquic_tp_handshake_connection_id = 15,
-    picoquic_tp_retry_connection_id = 16,
-    picoquic_tp_max_datagram_frame_size = 32 /* per draft-pauly-quic-datagram-05 */,
-    picoquic_tp_test_large_chello = 3127,
-    picoquic_tp_enable_loss_bit_old = 0x1055,
-    picoquic_tp_enable_loss_bit = 0x1057,
-    picoquic_tp_min_ack_delay = 0xff02de1a,
-    picoquic_tp_enable_time_stamp = 0x7158, /* x&1 = */
-    picoquic_tp_grease_quic_bit = 0x2ab2,
-    picoquic_tp_enable_multipath = 0xbaba,
-    picoquic_tp_enable_simple_multipath = 0xbab5
-} picoquic_tp_enum;
+typedef uint64_t picoquic_tp_enum;
+#define picoquic_tp_original_connection_id 0 
+#define picoquic_tp_idle_timeout 1 
+#define picoquic_tp_stateless_reset_token 2 
+#define picoquic_tp_max_packet_size 3 
+#define picoquic_tp_initial_max_data 4 
+#define picoquic_tp_initial_max_stream_data_bidi_local 5 
+#define picoquic_tp_initial_max_stream_data_bidi_remote 6 
+#define picoquic_tp_initial_max_stream_data_uni 7 
+#define picoquic_tp_initial_max_streams_bidi 8 
+#define picoquic_tp_initial_max_streams_uni 9 
+#define picoquic_tp_ack_delay_exponent 10 
+#define picoquic_tp_max_ack_delay 11 
+#define picoquic_tp_disable_migration 12 
+#define picoquic_tp_server_preferred_address 13 
+#define picoquic_tp_active_connection_id_limit 14 
+#define picoquic_tp_handshake_connection_id 15 
+#define picoquic_tp_retry_connection_id 16 
+#define picoquic_tp_max_datagram_frame_size 32 /* per draft-pauly-quic-datagram-05 */ 
+#define picoquic_tp_test_large_chello 3127 
+#define picoquic_tp_enable_loss_bit_old 0x1055 
+#define picoquic_tp_enable_loss_bit 0x1057 
+#define picoquic_tp_min_ack_delay 0xff02de1aull 
+#define picoquic_tp_enable_time_stamp 0x7158  /* x&1 */
+#define picoquic_tp_grease_quic_bit 0x2ab2 
+#define picoquic_tp_enable_multipath 0xbaba 
+#define picoquic_tp_enable_simple_multipath 0xbab5 
 
 /* Callback for converting binary log to quic log at the end of a connection. 
- * This is kept private for now, and will only be set through the "set quic log"
+ * This is kept private for now; and will only be set through the "set quic log"
  * API.
  */
 typedef int (*picoquic_autoqlog_fn)(picoquic_cnx_t * cnx);
