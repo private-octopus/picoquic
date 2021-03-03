@@ -30,10 +30,12 @@ jobs:
       - name: Perform Unit Tests and Check for Leaks
         run: |
             ulimit -c unlimited -S
-            ./picoquic_ct -n -r 2>sanity.txt && QUICRESULT=$? 
-            echo "running picoquic_ct returns $QUICRESULT "
+            ./picoquic_ct -n -r 1>quic_ct.txt 2>sanity.txt || QUICRESULT=$? 
+            echo "running picoquic_ct returns <$QUICRESULT> "
             cat sanity.txt
-            if [ ${QUICRESULT} != 0 ]; then exit 1; fi;
+            if [ ! -z ${QUICRESULT} ]; then
+                if [ ${QUICRESULT} != 0 ]; then exit 1; fi;
+            fi
             leaked=`grep "SUMMARY: AddressSanitizer:" sanity.txt | cut -d ' ' -f 3`
             previous_leak=0
             if [ ! -z "$leaked" ]; then
@@ -43,6 +45,23 @@ jobs:
                     echo "$leaked <= $previous_leak";
                 fi
             else
-                echo "No leaks detected"
+                echo "No leaks detected in picoquic_ct"
+            fi
+            ./picohttp_ct -n -r 1>http_ct.txt 2>sanity.txt || QUICHTTPRESULT=$? 
+            echo "running picohttp_ct returns <$QUICHTTPRESULT> "
+            cat sanity.txt
+            if [ ! -z ${QUICHTTPRESULT} ]; then
+                if [ ${QUICHTTPRESULT} != 0 ]; then exit 1; fi;
+            fi
+            leaked=`grep "SUMMARY: AddressSanitizer:" sanity.txt | cut -d ' ' -f 3`
+            previous_leak=0
+            if [ ! -z "$leaked" ]; then
+                if [ $leaked -gt $previous_leak ]; then
+                    echo "$leaked > $previous_leak"; exit 1;
+                else
+                    echo "$leaked <= $previous_leak";
+                fi
+            else
+                echo "No leaks detected in picohttp_ct"
             fi
             exit 0
