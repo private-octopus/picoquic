@@ -756,6 +756,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     printf("TPS: %f\n", ((double)quicperf_ctx->nb_streams) / duration_sec);
                     printf("Upload_Mbps: %f\n", ((double)quicperf_ctx->data_sent) * 8.0 / duration_usec);
                     printf("Download_Mbps: %f\n", ((double)quicperf_ctx->data_received) * 8.0 / duration_usec);
+
                     picoquic_log_app_message(cnx_client, "Received %" PRIu64 " bytes in %f seconds, %f Mbps.",
                         picoquic_get_data_received(cnx_client), duration_usec, ((double)quicperf_ctx->data_received) * 8.0 / duration_usec);
                 }
@@ -768,6 +769,17 @@ int quic_client(const char* ip_address_text, int server_port,
                         picoquic_get_data_received(cnx_client),
                         duration_usec / 1000000.0, receive_rate_mbps);
                 }
+                /* Print those for debugging the effects of ack frequency and flow control */
+                printf("max_data_local: %" PRIu64 "\n", cnx_client->maxdata_local);
+                printf("max_max_stream_data_local: %" PRIu64 "\n", cnx_client->max_max_stream_data_local);
+                printf("max_data_remote: %" PRIu64 "\n", cnx_client->maxdata_remote);
+                printf("max_max_stream_data_remote: %" PRIu64 "\n", cnx_client->max_max_stream_data_remote);
+                printf("ack_delay_remote: %" PRIu64 " ... %" PRIu64 "\n",
+                    cnx_client->min_ack_delay_remote, cnx_client->max_ack_delay_remote);
+                printf("max_ack_gap_remote: %" PRIu64 "\n", cnx_client->max_ack_gap_remote);
+                printf("ack_delay_local: %" PRIu64 " ... %" PRIu64 "\n",
+                    cnx_client->min_ack_delay_local, cnx_client->max_ack_delay_local);
+                printf("max_ack_gap_local: %" PRIu64 "\n", cnx_client->max_ack_gap_local);
             }
         }
     }

@@ -538,7 +538,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
                     cnx->max_stream_id_bidir_remote =
                         (cnx->remote_parameters.initial_max_stream_id_bidir == 0xFFFFFFFF) ? 0 : cnx->remote_parameters.initial_max_stream_id_bidir;
-
+                    cnx->max_max_stream_data_remote = cnx->max_stream_id_bidir_remote;
                     picoquic_add_output_streams(cnx, old_limit, cnx->max_stream_id_bidir_remote, 1);
                     break;
                 }
