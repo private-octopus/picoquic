@@ -2746,6 +2746,13 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->ack_frequency_sequence_remote = UINT64_MAX;
         cnx->ack_gap_remote = 2;
         cnx->ack_delay_remote = PICOQUIC_ACK_DELAY_MIN;
+        cnx->max_ack_delay_remote = cnx->ack_delay_remote;
+        cnx->max_ack_gap_remote = cnx->ack_gap_remote;
+        cnx->max_ack_delay_local = cnx->ack_frequency_delay_local;
+        cnx->max_ack_gap_local = cnx->ack_gap_local;
+        cnx->min_ack_delay_remote = cnx->ack_delay_remote;
+        cnx->min_ack_delay_local = cnx->ack_frequency_delay_local;
+
 
         picosplay_init_tree(&cnx->stream_tree, picoquic_stream_node_compare, picoquic_stream_node_create, picoquic_stream_node_delete, picoquic_stream_node_value);
 
@@ -2822,6 +2829,8 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
     cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
     cnx->max_stream_id_bidir_remote = cnx->remote_parameters.initial_max_stream_id_bidir;
     cnx->max_stream_id_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
+    cnx->max_max_data = cnx->maxdata_remote;
+    cnx->max_max_stream_data = cnx->max_stream_id_bidir_remote;
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 

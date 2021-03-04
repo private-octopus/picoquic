@@ -1112,6 +1112,14 @@ typedef struct st_picoquic_cnx_t {
     uint64_t nb_spurious;
     uint64_t nb_crypto_key_rotations;
     uint64_t nb_packet_holes_inserted;
+    uint64_t max_max_data;
+    uint64_t max_max_stream_data;
+    uint64_t max_ack_delay_remote;
+    uint64_t max_ack_gap_remote;
+    uint64_t max_ack_delay_local;
+    uint64_t max_ack_gap_local;
+    uint64_t min_ack_delay_remote;
+    uint64_t min_ack_delay_local;
     unsigned int cwin_blocked : 1;
     unsigned int flow_blocked : 1;
     unsigned int stream_blocked : 1;

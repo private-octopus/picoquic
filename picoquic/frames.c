@@ -3202,6 +3202,9 @@ const uint8_t* picoquic_decode_max_data_frame(picoquic_cnx_t* cnx, const uint8_t
     } else if (maxdata > cnx->maxdata_remote) {
         cnx->maxdata_remote = maxdata;
         cnx->sent_blocked_frame = 0;
+        if (maxdata > cnx->max_max_data) {
+            cnx->max_max_data = maxdata;
+        }
     }
 
     return bytes;
@@ -3250,6 +3253,9 @@ const uint8_t* picoquic_decode_max_stream_data_frame(picoquic_cnx_t* cnx, const 
     if (stream != NULL && maxdata > stream->maxdata_remote) {
         /* TODO: call back if the stream was blocked? */
         stream->maxdata_remote = maxdata;
+        if (maxdata > cnx->max_max_stream_data) {
+            cnx->max_max_stream_data = maxdata;
+        }
     }
 
 
@@ -3767,6 +3773,16 @@ const uint8_t* picoquic_decode_ack_frequency_frame(const uint8_t* bytes, const u
                 cnx->ack_gap_remote = packets;
                 cnx->ack_delay_remote = microsec;
                 cnx->ack_ignore_order_remote = (ignore_order) ? 1 : 0;
+                /* Keep track of statistics on ACK parameters */
+                if (packets > cnx->max_ack_gap_remote) {
+                    cnx->max_ack_gap_remote = packets;
+                }
+                if (microsec > cnx->max_ack_delay_remote) {
+                    cnx->max_ack_delay_remote = microsec;
+                }
+                else if (microsec < cnx->min_ack_delay_remote) {
+                    cnx->min_ack_delay_remote = microsec;
+                }
             }
         }
     }
