@@ -1112,8 +1112,8 @@ typedef struct st_picoquic_cnx_t {
     uint64_t nb_spurious;
     uint64_t nb_crypto_key_rotations;
     uint64_t nb_packet_holes_inserted;
-    uint64_t max_max_data;
-    uint64_t max_max_stream_data;
+    uint64_t max_max_stream_data_local;
+    uint64_t max_max_stream_data_remote;
     uint64_t max_ack_delay_remote;
     uint64_t max_ack_gap_remote;
     uint64_t max_ack_delay_local;
@@ -1521,7 +1521,7 @@ uint8_t* picoquic_format_connection_close_frame(picoquic_cnx_t* cnx, uint8_t* by
 uint8_t* picoquic_format_application_close_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_format_required_max_stream_data_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_format_max_data_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t maxdata_increase);
-uint8_t* picoquic_format_max_stream_data_frame(picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t new_max_data);
+uint8_t* picoquic_format_max_stream_data_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t new_max_data);
 uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_window); /* Trigger sending more data if window increases */
 uint8_t* picoquic_format_max_streams_frame_if_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 void picoquic_clear_stream(picoquic_stream_head_t* stream);

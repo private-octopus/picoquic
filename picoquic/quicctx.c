@@ -2829,8 +2829,8 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
     cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
     cnx->max_stream_id_bidir_remote = cnx->remote_parameters.initial_max_stream_id_bidir;
     cnx->max_stream_id_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
-    cnx->max_max_data = cnx->maxdata_remote;
-    cnx->max_max_stream_data = cnx->max_stream_id_bidir_remote;
+    cnx->max_max_stream_data_remote = cnx->remote_parameters.initial_max_data;
+    cnx->max_max_stream_data_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 

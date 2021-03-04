@@ -214,7 +214,7 @@ int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t
             int is_pure_ack = 1;
 
             if (max_required > stream->maxdata_local) {
-                uint8_t* bytes_next = picoquic_format_max_stream_data_frame(stream, buffer + consumed, bytes_max, &more_data, &is_pure_ack, max_required);
+                uint8_t* bytes_next = picoquic_format_max_stream_data_frame(cnx, stream, buffer + consumed, bytes_max, &more_data, &is_pure_ack, max_required);
                 bytes_next = picoquic_format_max_data_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, expected_data_size);
                 if ((length = bytes_next - buffer) > 0) {
                     ret = picoquic_queue_misc_frame(cnx, buffer, length, is_pure_ack);

@@ -3202,9 +3202,6 @@ const uint8_t* picoquic_decode_max_data_frame(picoquic_cnx_t* cnx, const uint8_t
     } else if (maxdata > cnx->maxdata_remote) {
         cnx->maxdata_remote = maxdata;
         cnx->sent_blocked_frame = 0;
-        if (maxdata > cnx->max_max_data) {
-            cnx->max_max_data = maxdata;
-        }
     }
 
     return bytes;
@@ -3214,8 +3211,8 @@ const uint8_t* picoquic_decode_max_data_frame(picoquic_cnx_t* cnx, const uint8_t
  * Max stream data frame
  */
 
-uint8_t* picoquic_format_max_stream_data_frame(picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max,
-    int* more_data, int* is_pure_ack, uint64_t new_max_data)
+uint8_t* picoquic_format_max_stream_data_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t new_max_data)
 {
     uint8_t* bytes0 = bytes;
 
@@ -3223,6 +3220,9 @@ uint8_t* picoquic_format_max_stream_data_frame(picoquic_stream_head_t* stream, u
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, stream->stream_id)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, new_max_data)) != NULL) {
         stream->maxdata_local = new_max_data;
+        if (new_max_data > cnx->max_max_stream_data_local) {
+            cnx->max_max_stream_data_local = new_max_data;
+        }
         *is_pure_ack = 0;
     }
     else {
@@ -3253,8 +3253,8 @@ const uint8_t* picoquic_decode_max_stream_data_frame(picoquic_cnx_t* cnx, const 
     if (stream != NULL && maxdata > stream->maxdata_remote) {
         /* TODO: call back if the stream was blocked? */
         stream->maxdata_remote = maxdata;
-        if (maxdata > cnx->max_max_stream_data) {
-            cnx->max_max_stream_data = maxdata;
+        if (maxdata > cnx->max_max_stream_data_remote) {
+            cnx->max_max_stream_data_remote = maxdata;
         }
     }
 
@@ -3275,7 +3275,7 @@ uint8_t * picoquic_format_required_max_stream_data_frames(picoquic_cnx_t* cnx,
             if (!stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
                 bytes0 = bytes;
 
-                if ((bytes = picoquic_format_max_stream_data_frame(stream, bytes, bytes_max, more_data, is_pure_ack, stream->maxdata_local + new_window)) == bytes0) {
+                if ((bytes = picoquic_format_max_stream_data_frame(cnx, stream, bytes, bytes_max, more_data, is_pure_ack, stream->maxdata_local + new_window)) == bytes0) {
                     /* not enough space for this frame. */
                     break;
                 }
