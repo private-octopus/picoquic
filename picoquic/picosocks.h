@@ -56,7 +56,7 @@
 #define socklen_t int
 #endif
 /* clang-format on */
-#else /* Linux */
+#else /* Linux, FreeBSD */
 
 #include "getopt.h"
 #include <stdint.h>
@@ -67,6 +67,10 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#ifndef SOL_IPV6 /* required on FreeBSD */
+#define SOL_IPV6 IPPROTO_IPV6
+#endif
 
 #ifndef __USE_XOPEN2K
 #define __USE_XOPEN2K
