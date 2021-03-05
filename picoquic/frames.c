@@ -1910,7 +1910,16 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
         uint64_t packet_rate_times_1M = (data_rate * 1000000) / cnx->path[0]->send_mtu;
         nb_packets = packet_rate_times_1M / cnx->path[0]->smoothed_rtt;
     }
-    
+#if 1
+    if (cnx->path[0]->smoothed_rtt < 4 * PICOQUIC_ACK_DELAY_MIN) {
+        uint64_t mult = 4;
+        if (cnx->path[0]->smoothed_rtt > PICOQUIC_ACK_DELAY_MIN) {
+            mult = ((uint64_t)(4 * PICOQUIC_ACK_DELAY_MIN)) / cnx->path[0]->smoothed_rtt;
+        }
+        nb_packets *= mult;
+    }
+#endif
+
     ack_gap = (nb_packets + 3) / 4;
 
     if (data_rate > PICOQUIC_BANDWIDTH_MEDIUM) {
@@ -1925,9 +1934,28 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
     if (ack_gap < ack_gap_min) {
         ack_gap = ack_gap_min;
     }
+#if 0
     else if (ack_gap > 32) {
         ack_gap = 32;
     }
+#else
+    else if (ack_gap > 32) {
+        if (cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled ||
+            cnx->congestion_alg == NULL ||
+            cnx->congestion_alg->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_NEW_RENO ||
+            cnx->congestion_alg->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST
+            ) {
+            /* TODO: better understand combination of ack delay and multipath! */
+            ack_gap = 32;
+        }
+        else {
+            ack_gap = 32 + ((nb_packets - 128) / 8);
+            if (ack_gap > 64) {
+                ack_gap = 64;
+            }
+        }
+    }
+#endif
 
     return ack_gap;
 }
