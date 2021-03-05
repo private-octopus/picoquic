@@ -1940,20 +1940,20 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
     }
 #else
     else if (ack_gap > 32) {
-#if 0
-        ack_gap = 32 +((nb_packets - 128) / 16);
-#else
-        ack_gap = 32 + ((nb_packets - 128) / 8);
-#endif
-#if 1
-        if (ack_gap > 64) {
-            ack_gap = 64;
+        if (cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled ||
+            cnx->congestion_alg == NULL ||
+            cnx->congestion_alg->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_NEW_RENO ||
+            cnx->congestion_alg->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST
+            ) {
+            /* TODO: better understand combination of ack delay and multipath! */
+            ack_gap = 32;
         }
-#else
-        if (ack_gap > 128) {
-            ack_gap = 128;
+        else {
+            ack_gap = 32 + ((nb_packets - 128) / 8);
+            if (ack_gap > 64) {
+                ack_gap = 64;
+            }
         }
-#endif
     }
 #endif
 
