@@ -3,6 +3,8 @@ name: "CITests"
 
 on:
   push:
+    branches:
+      - master
   pull_request:
     branches:
       - master
@@ -10,7 +12,7 @@ on:
 jobs:
   citests:
     name: CI-Tests
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
       - name: Checkout repository
@@ -22,7 +24,7 @@ jobs:
           submodules: 'recursive'
 
       - run: |
-          sudo apt-get install -y libssl-dev
+          brew reinstall openssl
           ./ci/build_picotls.sh
           cmake .
           make
