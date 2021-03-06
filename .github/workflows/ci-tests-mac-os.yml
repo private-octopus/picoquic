@@ -1,5 +1,5 @@
 ---
-name: "CITests"
+name: "CITestsMacOS"
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 
 jobs:
   citests:
-    name: CI-Tests
+    name: CI-Tests-MacOS
     runs-on: macos-latest
 
     steps:
