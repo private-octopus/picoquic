@@ -14,8 +14,8 @@ jobs:
     name: CI-Tests-Clang
     runs-on: ubuntu-latest
     env:
-        - CC=clang
-        - CXX=clang++
+        CC: clang
+        CXX: clang++
 
     steps:
       - name: Checkout repository
