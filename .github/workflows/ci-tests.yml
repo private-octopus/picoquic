@@ -10,7 +10,7 @@ on:
 jobs:
   citests:
     name: CI-Tests
-    runs-on: ubuntu-latest
+    runs-on: [ ubuntu-latest, macos-latest ]
 
     steps:
       - name: Checkout repository
