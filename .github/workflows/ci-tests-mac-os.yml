@@ -1,5 +1,5 @@
 ---
-name: "CITests"
+name: "CITestsMacOS"
 
 on:
   push:
@@ -11,8 +11,8 @@ on:
 
 jobs:
   citests:
-    name: CI-Tests
-    runs-on: ubuntu-latest
+    name: CI-Tests-MacOS
+    runs-on: macos-latest
 
     steps:
       - name: Checkout repository
@@ -24,7 +24,8 @@ jobs:
           submodules: 'recursive'
 
       - run: |
-          sudo apt-get install -y libssl-dev
+          brew reinstall openssl
+          export PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig"
           ./ci/build_picotls.sh
           cmake .
           make

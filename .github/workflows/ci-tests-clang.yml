@@ -1,5 +1,5 @@
 ---
-name: "CITests"
+name: "CITestsClang"
 
 on:
   push:
@@ -11,8 +11,11 @@ on:
 
 jobs:
   citests:
-    name: CI-Tests
+    name: CI-Tests-Clang
     runs-on: ubuntu-latest
+    env:
+        CC: clang
+        CXX: clang++
 
     steps:
       - name: Checkout repository
@@ -24,7 +27,11 @@ jobs:
           submodules: 'recursive'
 
       - run: |
+          sudo apt-get install clangd
           sudo apt-get install -y libssl-dev
+          echo $CC
+          echo $CXX
+          $CC --version
           ./ci/build_picotls.sh
           cmake .
           make
