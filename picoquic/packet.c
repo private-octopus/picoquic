@@ -2015,7 +2015,10 @@ int picoquic_incoming_segment(
     else {
         if (ret == 0 && picoquic_compare_connection_id(previous_dest_id, &ph.dest_cnx_id) != 0) {
             ret = PICOQUIC_ERROR_CNXID_SEGMENT;
-        }
+        } else if (ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED) {
+            /* A coalesced packet with unknown version is likely some kind of padding */
+            ret = PICOQUIC_ERROR_CNXID_SEGMENT;
+	}
     }
 
     /* Store packet if received in advance of encryption keys */
