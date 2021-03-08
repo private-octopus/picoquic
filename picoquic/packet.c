@@ -1981,7 +1981,8 @@ int picoquic_incoming_segment(
     unsigned char received_ecn,
     uint64_t current_time,
     uint64_t receive_time,
-    picoquic_connection_id_t* previous_dest_id)
+    picoquic_connection_id_t* previous_dest_id,
+    picoquic_cnx_t ** first_cnx)
 {
     int ret = 0;
     picoquic_cnx_t* cnx = NULL;
@@ -2001,6 +2002,7 @@ int picoquic_incoming_segment(
         /* This is the first segment in the incoming packet */
         *previous_dest_id = ph.dest_cnx_id;
         is_first_segment = 1;
+        *first_cnx = cnx;
 
 
         /* if needed, log that the packet is received */
@@ -2015,10 +2017,16 @@ int picoquic_incoming_segment(
     else {
         if (ret == 0 && picoquic_compare_connection_id(previous_dest_id, &ph.dest_cnx_id) != 0) {
             ret = PICOQUIC_ERROR_CNXID_SEGMENT;
-        } else if (ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED) {
+        }
+        else if (ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED) {
             /* A coalesced packet with unknown version is likely some kind of padding */
             ret = PICOQUIC_ERROR_CNXID_SEGMENT;
-	}
+        }
+
+        if (ret == PICOQUIC_ERROR_CNXID_SEGMENT && *first_cnx != cnx && *first_cnx != NULL) {
+            /* Log the drop segment information in the context of the first connection */
+            picoquic_log_dropped_packet(*first_cnx, NULL, &ph, length, ret, bytes, current_time);
+        }
     }
 
     /* Store packet if received in advance of encryption keys */
@@ -2246,6 +2254,7 @@ int picoquic_incoming_packet(
     size_t consumed_index = 0;
     int ret = 0;
     picoquic_connection_id_t previous_destid = picoquic_null_connection_id;
+    picoquic_cnx_t* first_cnx = NULL;
 
 
     while (consumed_index < packet_length) {
@@ -2253,7 +2262,8 @@ int picoquic_incoming_packet(
 
         ret = picoquic_incoming_segment(quic, bytes + consumed_index, 
             packet_length - consumed_index, packet_length,
-            &consumed, addr_from, addr_to, if_index_to, received_ecn, current_time, current_time, &previous_destid);
+            &consumed, addr_from, addr_to, if_index_to, received_ecn, current_time, current_time,
+            &previous_destid, &first_cnx);
 
         if (ret == 0) {
             consumed_index += consumed;
@@ -2300,6 +2310,7 @@ void picoquic_process_sooner_packets(picoquic_cnx_t* cnx, uint64_t current_time)
             size_t consumed_index = 0;
             int ret = 0;
             picoquic_connection_id_t previous_destid = picoquic_null_connection_id;
+            picoquic_cnx_t* first_cnx = NULL;
 
 
             while (consumed_index < packet->length) {
@@ -2308,7 +2319,7 @@ void picoquic_process_sooner_packets(picoquic_cnx_t* cnx, uint64_t current_time)
                 ret = picoquic_incoming_segment(cnx->quic, packet->bytes + consumed_index,
                     packet->length - consumed_index, packet->length,
                     &consumed, (struct sockaddr*) & packet->addr_to, (struct sockaddr*) & packet->addr_local, packet->if_index_local,
-                    packet->received_ecn, current_time, packet->receive_time, &previous_destid);
+                    packet->received_ecn, current_time, packet->receive_time, &previous_destid, &first_cnx);
 
                 if (ret == 0 && consumed > 0) {
                     consumed_index += consumed;
