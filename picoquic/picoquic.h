@@ -549,11 +549,23 @@ void picoquic_set_default_connection_id_ttl(picoquic_quic_t* quic, uint64_t ttl_
 
 uint64_t picoquic_get_default_connection_id_ttl(picoquic_quic_t* quic);
 
+/* Setting the max mtu that can be found or tried using path MTU discovery.*/
 void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max);
 
+/* Set the ALPN function used to verify incoming ALPN */
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn);
 
+/* Set the default callback function for new connections.
+ * This must be defined for every server implementation.
+ */
 void picoquic_set_default_callback(picoquic_quic_t * quic, picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);
+
+/* Set the minimum interval between consecutive stateless reset packets.
+ * This limits the potential blowback of stateless reset packets when nder DoS attacks.
+ * A value of zero will set no interval.
+ * Default to PICOQUIC_MICROSEC_STATELESS_RESET_INTERVAL_DEFAULT
+ */
+void picoquic_set_default_stateless_reset_min_interval(picoquic_quic_t* quic, uint64_t min_interval_usec);
 
 /* Set and get the maximum number of simultaneously logged connections.
 * If that number is too high, the maximum number of open files will be hit 

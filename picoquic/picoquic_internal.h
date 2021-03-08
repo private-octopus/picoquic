@@ -81,6 +81,8 @@ extern "C" {
 #define PICOQUIC_MICROSEC_HANDSHAKE_MAX 30000000ull /* 30 seconds for now */
 #define PICOQUIC_MICROSEC_WAIT_MAX 10000000ull /* 10 seconds for now */
 
+#define PICOQUIC_MICROSEC_STATELESS_RESET_INTERVAL_DEFAULT 100000ull /* max 10 stateless reset by second by default */
+
 #define PICOQUIC_CWIN_INITIAL (10 * PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
@@ -525,7 +527,8 @@ typedef struct st_picoquic_quic_t {
     uint32_t current_number_of_open_logs;
     uint32_t max_half_open_before_retry;
     uint32_t current_number_half_open;
-
+    uint64_t stateless_reset_next_time; /* Next time Stateless Reset or VN packet can be sent */
+    uint64_t stateless_reset_min_interval; /* Enforced interval between two stateless reset packets */
     /* Flags */
     unsigned int check_token : 1;
     unsigned int force_check_token : 1;

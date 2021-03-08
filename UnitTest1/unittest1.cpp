@@ -228,6 +228,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(stateless_blowback) {
+            int ret = test_stateless_blowback();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_sendack)
 		{
 			int ret = sendacktest();
