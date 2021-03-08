@@ -208,6 +208,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qlog_trace_only", qlog_trace_only_test },
     { "qlog_trace_ecn", qlog_trace_ecn_test },
     { "nat_rebinding_stress", rebinding_stress_test },
+    { "random_padding", random_padding_test },
     { "ready_to_send", ready_to_send_test },
     { "cubic", cubic_test },
     { "cubic_jitter", cubic_jitter_test },

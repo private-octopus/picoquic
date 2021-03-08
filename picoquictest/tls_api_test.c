@@ -34,6 +34,7 @@
 #include "csv.h"
 #include "qlog.h"
 #include "autoqlog.h"
+#include "picoquic_logger.h"
 #include "picoquictest.h"
 
 static const uint8_t test_ticket_encrypt_key[32] = {
@@ -10820,6 +10821,123 @@ int test_stateless_blowback()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Test that random padding of coalesced packets has no unexpected side effects.
+ */
+char const* random_padding_text_log = "random_padding_log.txt";
+
+int random_padding_test_one(size_t pad_length, uint64_t* random_context, uint8_t test_id)
+{
+    int ret;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint32_t proposed_version = PICOQUIC_INTEROP_VERSION_LATEST;
+    picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+    picoquic_connection_id_t initial_cid = { {0x8a, 0x8d, 0x08, 0x9a, 0xdd, 0, 0, 0}, 8 };
+
+    ret = picoquic_save_tickets(NULL, simulated_time, ticket_file_name);
+    initial_cid.id[5] = test_id;
+    
+    ret = tls_api_init_ctx_ex(&test_ctx, proposed_version, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time,
+            ticket_file_name, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret != 0 || packet == NULL)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        /* Start logging on the server */
+        picoquic_set_textlog(test_ctx->qserver, random_padding_text_log);
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+    }
+
+    if (ret == 0) {
+        /* Prepare a first packet from the client to the server */
+        ret = picoquic_prepare_packet(test_ctx->cnx_client, simulated_time,
+            packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+            &packet->addr_to, &packet->addr_from, NULL);
+        picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & test_ctx->client_addr);
+
+        if (packet->length == 0) {
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+        }
+        if (ret != 0)
+        {
+            DBG_PRINTF("Could not create first client packet, ret=%x\n", ret);
+        }
+        else if (packet->length + pad_length > PICOQUIC_MAX_PACKET_SIZE) {
+            DBG_PRINTF("Cannot insert %uz bytes after length %uz\n", pad_length, packet->length);
+            ret = -1;
+        }
+        else {
+            /* Insert random padding */
+            picoquic_test_random_bytes(random_context, packet->bytes + packet->length, pad_length);
+            packet->bytes[packet->length] |= 0x80;
+            packet->length += pad_length;
+            simulated_time += test_ctx->c_to_s_link->microsec_latency;
+
+            ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
+                (struct sockaddr*) & packet->addr_from,
+                (struct sockaddr*) & packet->addr_to, 0, test_ctx->recv_ecn_server,
+                simulated_time);
+
+            if (ret == 0) {
+                picoquic_cnx_t* next = test_ctx->qserver->cnx_list;
+
+                while (next != NULL && picoquic_compare_connection_id(&next->initial_cnxid, &test_ctx->cnx_client->initial_cnxid) != 0) {
+                    next = next->next_in_table;
+                }
+
+                if (next != NULL) {
+                    test_ctx->cnx_server = next;
+                }
+                else {
+                    ret = -1;
+                    DBG_PRINTF("Could not create server side connection, ret = %d\n", ret);
+                }
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* Perform a connection loop to verify it goes OK */
+        ret = tls_api_connection_loop(test_ctx, &loss_mask,
+            2*test_ctx->c_to_s_link->microsec_latency, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection loop returns %d\n", ret);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    if (packet != NULL) {
+        free(packet);
+    }
+
+    return ret;
+}
+
+int random_padding_test()
+{
+    uint64_t random_context = 0x1234567890abcdef;
+
+    int ret = random_padding_test_one(128, &random_context, 0);
+
+    if (ret == 0) {
+        ret = random_padding_test_one(16, &random_context, 1);
     }
 
     return ret;
