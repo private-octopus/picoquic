@@ -10695,7 +10695,7 @@ int test_stateless_blowback_one(picoquic_quic_t* quic, uint64_t * simulated_time
     *was_sent = 0;
 
     /* Format random 1 RTT packet */
-    filler = 0xff ^ ((uint8_t)simulated_time & 0xff);
+    filler = 0xff ^ (((uint8_t)*simulated_time) & 0xff);
     memset(bytes, filler, sizeof(bytes));
     bytes[0] &= 0x7f;
     picoquic_set_test_address(&addr_peer, 0x01010101, 1234);
