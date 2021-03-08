@@ -10681,3 +10681,146 @@ int pn_random_test()
 
     return ret;
 }
+
+/* Test the stateless reset blowback control mechanism
+ */
+int test_stateless_blowback_one(picoquic_quic_t* quic, uint64_t * simulated_time, int * was_sent)
+{
+    int ret = 0;
+    uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
+    size_t length = PICOQUIC_MAX_PACKET_SIZE;
+    uint8_t filler;
+    struct sockaddr_in addr_peer, addr_srv;
+
+    *was_sent = 0;
+
+    /* Format random 1 RTT packet */
+    filler = 0xff ^ (((uint8_t)*simulated_time) & 0xff);
+    memset(bytes, filler, sizeof(bytes));
+    bytes[0] &= 0x7f;
+    picoquic_set_test_address(&addr_peer, 0x01010101, 1234);
+    picoquic_set_test_address(&addr_srv, 0x02020202, 4567);
+
+    /* Submit as incoming */
+    ret = picoquic_incoming_packet(quic, bytes, length, (struct sockaddr*) & addr_peer,
+        (struct sockaddr*) & addr_srv, 0, 0, *simulated_time);
+
+    /* Try read stateless packet */
+    if (ret == 0) {
+        picoquic_cnx_t* cnx;
+        picoquic_connection_id_t cid_log;
+        struct sockaddr_storage s_addr_to, s_addr_from;
+        int if_index;
+        ret = picoquic_prepare_next_packet(quic, *simulated_time, bytes, sizeof(bytes), &length,
+            &s_addr_to, &s_addr_from, &if_index, &cid_log, &cnx);
+        if (ret == 0 && length > 0) {
+            *was_sent = 1;
+        }
+    }
+
+    return ret;
+}
+
+int test_stateless_blowback()
+{
+    int was_sent = 0;
+    uint64_t new_interval = 2 * PICOQUIC_MICROSEC_STATELESS_RESET_INTERVAL_DEFAULT;
+
+    /* Create a context with the default timer. */
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+
+    picoquic_connection_id_t initial_cid = { {0xb1, 0x08, 0xba, 0xcc, 0, 0, 0, 0}, 8 };
+    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
+        &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+    if (test_ctx->qserver->stateless_reset_min_interval != PICOQUIC_MICROSEC_STATELESS_RESET_INTERVAL_DEFAULT) {
+        DBG_PRINTF("Stateless reset interval set to T=%" PRIu64, test_ctx->qserver->stateless_reset_min_interval);
+        ret = -1;
+
+    }
+
+    /* Format a random packet and submit it, verify that the stateless reset is queued */
+    if (ret == 0) {
+        ret = test_stateless_blowback_one(test_ctx->qserver, &simulated_time, &was_sent);
+        if (ret == 0 && !was_sent) {
+            DBG_PRINTF("First stateless reset was not sent at T=%" PRIu64, simulated_time);
+            ret = -1;
+        }
+    }
+
+    /* Progress by 1/2 specified interval, retry, it should not work  */
+    if (ret == 0) {
+        simulated_time += test_ctx->qserver->stateless_reset_min_interval;
+        ret = test_stateless_blowback_one(test_ctx->qserver, &simulated_time, &was_sent);
+        if (ret == 0 && !was_sent) {
+            DBG_PRINTF("Second stateless reset was not sent at T=%" PRIu64, simulated_time);
+            ret = -1;
+        }
+    }
+    
+    /* Progress by 1x specified interval, retry, it should work  */
+    if (ret == 0) {
+        simulated_time += test_ctx->qserver->stateless_reset_min_interval / 2;
+        ret = test_stateless_blowback_one(test_ctx->qserver, &simulated_time, &was_sent);
+        if (ret == 0 && was_sent) {
+            DBG_PRINTF("Third stateless reset was sent at T=%" PRIu64, simulated_time);
+            ret = -1;
+        }
+    }
+
+    /* Reset the interval to twice the previous value */
+    if (ret == 0) {
+        picoquic_set_default_stateless_reset_min_interval(test_ctx->qserver, new_interval);
+        if (test_ctx->qserver->stateless_reset_min_interval != new_interval) {
+            DBG_PRINTF("Stateless reset interval set to T=%" PRIu64, test_ctx->qserver->stateless_reset_min_interval);
+            ret = -1;
+        }
+    }
+    
+    /* Progress by 0.75x new interval, retry, it should work  */
+    if (ret == 0) {
+        simulated_time += (new_interval - new_interval / 4);
+        ret = test_stateless_blowback_one(test_ctx->qserver, &simulated_time, &was_sent);
+        if (ret == 0 && !was_sent) {
+            DBG_PRINTF("After new interval,  stateless reset was not sent at T=%" PRIu64, simulated_time);
+            ret = -1;
+        }
+    }
+
+    /* Reset the interval to zero */
+    if (ret == 0) {
+        picoquic_set_default_stateless_reset_min_interval(test_ctx->qserver, 0);
+        if (test_ctx->qserver->stateless_reset_min_interval != 0) {
+            DBG_PRINTF("Stateless reset interval set to T=%" PRIu64, test_ctx->qserver->stateless_reset_min_interval);
+            ret = -1;
+        }
+    }
+
+    /* Try immediately, it should not work  */
+    if (ret == 0) {
+        ret = test_stateless_blowback_one(test_ctx->qserver, &simulated_time, &was_sent);
+        if (ret == 0 && !was_sent) {
+            DBG_PRINTF("After zero interval,  stateless reset was not sent at T=%" PRIu64, simulated_time);
+            ret = -1;
+        }
+    }
+
+    /* Add 1 microsec, it should work  */
+    if (ret == 0) {
+        simulated_time += 1;
+        ret = test_stateless_blowback_one(test_ctx->qserver, &simulated_time, &was_sent);
+        if (ret == 0 && !was_sent) {
+            DBG_PRINTF("After zero +1 interval,  stateless reset was not sent at T=%" PRIu64, simulated_time);
+            ret = -1;
+        }
+    }
+
+    /* Free the resurce and return */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

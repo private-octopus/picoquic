@@ -373,6 +373,8 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->max_half_open_before_retry = PICOQUIC_DEFAULT_HALF_OPEN_RETRY_THRESHOLD;
         quic->default_lossbit_policy = 0; /* For compatibility with old behavior. Consider 0 */
         quic->local_cnxid_ttl = UINT64_MAX;
+        quic->stateless_reset_next_time = current_time;
+        quic->stateless_reset_min_interval = PICOQUIC_MICROSEC_STATELESS_RESET_INTERVAL_DEFAULT;
         picoquic_wake_list_init(quic);
 
         if (cnx_id_callback != NULL) {
@@ -3160,6 +3162,12 @@ void picoquic_set_default_callback(picoquic_quic_t* quic,
 {
     quic->default_callback_fn = callback_fn;
     quic->default_callback_ctx = callback_ctx;
+}
+
+void picoquic_set_default_stateless_reset_min_interval(picoquic_quic_t* quic, uint64_t min_interval_usec)
+{
+    quic->stateless_reset_next_time = picoquic_get_quic_time(quic);
+    quic->stateless_reset_min_interval = min_interval_usec;
 }
 
 void picoquic_set_callback(picoquic_cnx_t* cnx,

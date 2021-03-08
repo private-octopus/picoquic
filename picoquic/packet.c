@@ -851,9 +851,6 @@ void picoquic_prepare_version_negotiation(
             cnx = picoquic_cnx_by_icid(quic, &ph->dest_cnx_id, addr_from);
         }
     }
-    else {
-        (void)picoquic_parse_connection_id(dcid, PICOQUIC_CONNECTION_ID_MAX_SIZE, &ph->dest_cnx_id);
-    }
 
     /* If no connection context exists, send back a version negotiation */
     if (cnx == NULL) {
@@ -922,10 +919,12 @@ void picoquic_process_unexpected_cnxid(
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     unsigned long if_index_to,
-    picoquic_packet_header* ph)
+    picoquic_packet_header* ph,
+    uint64_t current_time)
 {
     if (length > PICOQUIC_RESET_PACKET_MIN_SIZE && 
-        ph->ptype == picoquic_packet_1rtt_protected) {
+        ph->ptype == picoquic_packet_1rtt_protected &&
+        quic->stateless_reset_next_time <= current_time) {
         picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
         if (sp != NULL) {
             size_t pad_size = length - PICOQUIC_RESET_SECRET_SIZE -1;
@@ -960,6 +959,7 @@ void picoquic_process_unexpected_cnxid(
             picoquic_log_context_free_app_message(quic, &sp->initial_cid, "Unexpected connection ID, sending stateless reset.\n");
 
             picoquic_queue_stateless_packet(quic, sp);
+            quic->stateless_reset_next_time = current_time + quic->stateless_reset_min_interval;
         }
     }
 }
@@ -2064,7 +2064,7 @@ int picoquic_incoming_segment(
         if (cnx == NULL) {
             /* Unexpected packet. Reject, drop and log. */
             if (!picoquic_is_connection_id_null(&ph.dest_cnx_id)) {
-                picoquic_process_unexpected_cnxid(quic, length, addr_from, addr_to, if_index_to, &ph);
+                picoquic_process_unexpected_cnxid(quic, length, addr_from, addr_to, if_index_to, &ph, current_time);
             }
             ret = PICOQUIC_ERROR_DETECTED;
         }

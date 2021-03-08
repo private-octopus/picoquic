@@ -66,6 +66,7 @@ static const picoquic_test_def_t test_table[] = {
     { "stream_output", stream_output_test },
     { "stream_retransmit_copy", test_copy_for_retransmit },
     { "stream_retransmit_format", test_format_for_retransmit },
+    { "stateless_blowback", test_stateless_blowback },
     { "sendack", sendacktest },
     { "ackrange", ackrange_test },
     { "ack_of_ack", ack_of_ack_test },
