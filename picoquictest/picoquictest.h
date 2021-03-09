@@ -308,6 +308,9 @@ int http_drop_test();
 int http_esni_test();
 int h3_long_file_name_test();
 int h3_multi_file_test();
+int h3_multi_file_loss_test();
+int h09_multi_file_test();
+int h09_multi_file_loss_test();
 
 int cplusplustest();
 
