@@ -1714,8 +1714,26 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h09_multi_file) {
+            int ret = h09_multi_file_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_multi_file_loss) {
+            int ret = h09_multi_file_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3_multi_file) {
             int ret = h3_multi_file_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3_multi_file_loss) {
+            int ret = h3_multi_file_loss_test();
 
             Assert::AreEqual(ret, 0);
         }

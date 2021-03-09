@@ -558,6 +558,7 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
                 stream_ctx->F);
             if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
                 picohttp_delete_stream(&ctx->h3_stream_tree, stream_ctx);
+                (void)picoquic_set_app_stream_ctx(cnx, stream_id, NULL);
             }
         }
     }
@@ -1215,6 +1216,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                         stream_ctx->F);
                     if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
                         picohttp_delete_stream(&ctx->h09_stream_tree, stream_ctx);
+                        (void)picoquic_set_app_stream_ctx(cnx, stream_id, NULL);
                     }
                     return ret;
                 }
