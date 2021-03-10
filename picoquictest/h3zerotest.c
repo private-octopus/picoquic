@@ -1836,6 +1836,7 @@ int demo_file_access_test()
     size_t f_size = 0;
     size_t echo_size = 0;
     char buf[128];
+    char* file_path;
     const int nb_blocks = 16;
 
     FILE* F = picoquic_file_open(path + 1, "wb");
@@ -1854,7 +1855,8 @@ int demo_file_access_test()
     }
 
     if (ret == 0) {
-        ret = demo_server_try_file_path((uint8_t*)path, strlen(path), &echo_size, &F, folder);
+        ret = demo_server_try_file_path((uint8_t*)path, strlen(path), &echo_size,
+            &file_path, folder);
         if (ret != 0) {
             DBG_PRINTF("Could not try file path <%s> <%s>, ret = %d", folder, path, ret);
         }
@@ -1863,16 +1865,23 @@ int demo_file_access_test()
             ret = -1;
         }
         else {
-            for (int i = 0; ret == 0 && i < nb_blocks; i++) {
-                int nb_read = (int)fread(buf, 1, sizeof(buf), F);
-                if (nb_read != (int)sizeof(buf)) {
-                    ret = -1;
-                }
-                else {
-                    for (size_t j = 0; j < sizeof(buf); j++) {
-                        if (buf[j] != i) {
-                            ret = -1;
-                            break;
+            F = picoquic_file_open(file_path, "rb");
+            if (F == NULL) {
+                DBG_PRINTF("Could not open file path: <%s>", file_path);
+                ret = -1;
+            }
+            else {
+                for (int i = 0; ret == 0 && i < nb_blocks; i++) {
+                    int nb_read = (int)fread(buf, 1, sizeof(buf), F);
+                    if (nb_read != (int)sizeof(buf)) {
+                        ret = -1;
+                    }
+                    else {
+                        for (size_t j = 0; j < sizeof(buf); j++) {
+                            if (buf[j] != i) {
+                                ret = -1;
+                                break;
+                            }
                         }
                     }
                 }
@@ -1881,6 +1890,10 @@ int demo_file_access_test()
 
         if (F != NULL) {
             F = picoquic_file_close(F);
+        }
+        if (file_path != NULL) {
+            free(file_path);
+            file_path = NULL;
         }
     }
 
@@ -1892,22 +1905,25 @@ int demo_file_access_test()
     }
 
     if (ret == 0) {
-        if (demo_server_try_file_path((uint8_t*)path, strlen(path), &echo_size, &F, folder) == 0) {
+        if (demo_server_try_file_path((uint8_t*)path, strlen(path), &echo_size, &file_path, folder) == 0) {
             DBG_PRINTF("Could open deleted file path <%s> <%s>", folder, path);
             ret = -1;
         }
-        if (F != NULL) {
-            F = picoquic_file_close(F);
+        if (file_path != NULL) {
+            free(file_path);
+            file_path = NULL;
         }
     }
 
     if (ret == 0) {
-        if (demo_server_try_file_path((uint8_t*)bad_path, strlen(bad_path), &echo_size, &F, folder) == 0) {
+        if (demo_server_try_file_path((uint8_t*)bad_path, strlen(bad_path), &echo_size,
+            &file_path, folder) == 0) {
             DBG_PRINTF("Could open deleted bad path <%s> <%s>", folder, bad_path);
             ret = -1;
         }
-        if (F != NULL) {
-            F = picoquic_file_close(F);
+        if (file_path != NULL) {
+            free(file_path);
+            file_path = NULL;
         }
     }
 
@@ -2332,7 +2348,8 @@ int h3_multi_file_test()
 
 int h3_multi_file_loss_test()
 {
-    return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, 3u << 10);
+    uint64_t loss_pattern = 0xa243FFB700000ull;
+    return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, loss_pattern);
 }
 
 int h09_multi_file_test()
@@ -2342,8 +2359,9 @@ int h09_multi_file_test()
 
 int h09_multi_file_loss_test()
 {
+    uint64_t loss_pattern = 0xa243FFB700000ull; 
     return http_multi_file_test_one(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, 
-        3u<<10);
+        loss_pattern);
 }
 
 
