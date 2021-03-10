@@ -485,11 +485,12 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     return ret;
 }
 
-static int picoquic_demo_client_close_stream(
+static int picoquic_demo_client_close_stream(picoquic_cnx_t * cnx,
     picoquic_demo_callback_ctx_t* ctx, picoquic_demo_client_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
     if (stream_ctx != NULL && stream_ctx->is_open) {
+        picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
         if (stream_ctx->f_name != NULL) {
             free(stream_ctx->f_name);
             stream_ctx->f_name = NULL;
@@ -588,15 +589,12 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_stream_data:
     case picoquic_callback_stream_fin:
         /* Data arrival on stream #x, maybe with fin mark */
-        /* TODO: parse the frames. */
-        /* TODO: check settings frame */
         if (stream_ctx == NULL) {
             stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
         }
         if (stream_ctx != NULL && stream_ctx->is_open) {
             if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
                 ret = picoquic_demo_client_open_stream_file(cnx, ctx, stream_ctx);
-                stream_ctx->is_file_open = 1;
             }
             if (ret == 0 && length > 0) {
                 switch (ctx->alpn) {
@@ -655,7 +653,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             }
 
             if (fin_or_event == picoquic_callback_stream_fin) {
-                if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
+                if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
                     fin_stream_id = stream_id;
                     if (stream_id <= 64 && !ctx->no_print) {
                         fprintf(stdout, "Stream %d ended after %d bytes\n",
@@ -665,7 +663,6 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                         picoquic_log_app_message(cnx, "Stream %d ended after %d bytes, ret=0x%x",
                             (int)stream_id, (int)stream_ctx->received_length, ret);
                     }
-
                 }
             }
         }
@@ -676,7 +673,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         if (stream_ctx == NULL) {
             stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
         }
-        if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
+        if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
             fin_stream_id = stream_id;
             if (!ctx->no_print) {
                 fprintf(stdout, "Stream %" PRIu64 " reset after %zu bytes\n",
@@ -719,7 +716,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         if (stream_ctx == NULL) {
             stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
         }
-        if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
+        if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
             fin_stream_id = stream_id;
             fprintf(stdout, "Stream %d reset after %d bytes\n",
                 (int)stream_id, (int)stream_ctx->received_length);

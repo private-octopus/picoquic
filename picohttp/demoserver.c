@@ -45,7 +45,6 @@ static picosplay_node_t * picohttp_stream_node_create(void * value)
     return &((picohttp_server_stream_ctx_t *)value)->http_stream_node;
 }
 
-
 static void * picohttp_stream_node_value(picosplay_node_t * node)
 {
     return (void*)((char*)node - offsetof(struct st_picohttp_server_stream_ctx_t, http_stream_node));
@@ -53,6 +52,10 @@ static void * picohttp_stream_node_value(picosplay_node_t * node)
 
 static void picohttp_clear_stream_ctx(picohttp_server_stream_ctx_t* stream_ctx)
 {
+    if (stream_ctx->file_path != NULL) {
+        free(stream_ctx->file_path);
+        stream_ctx->file_path = NULL;
+    }
     if (stream_ctx->F != NULL) {
         stream_ctx->F = picoquic_file_close(stream_ctx->F);
     }
@@ -80,9 +83,9 @@ static void picohttp_stream_node_delete(void * tree, picosplay_node_t * node)
     free(stream_ctx);
 }
 
-void picohttp_delete_stream(picosplay_tree_t * http_stream_tree, picohttp_server_stream_ctx_t* stream)
+void picohttp_delete_stream(picosplay_tree_t * http_stream_tree, picohttp_server_stream_ctx_t* stream_ctx)
 {
-    picosplay_delete(http_stream_tree, &stream->http_stream_node);
+    picosplay_delete(http_stream_tree, &stream_ctx->http_stream_node);
 }
 
 static picohttp_server_stream_ctx_t* picohttp_find_stream(picosplay_tree_t * stream_tree, uint64_t stream_id)
@@ -227,13 +230,16 @@ int demo_server_is_path_sane(const uint8_t* path, size_t path_length)
     return ret;
 }
 
-int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size, FILE** pF, char const* web_folder)
+int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size,
+    char** file_path, char const* web_folder)
 {
     int ret = -1;
-    char file_name[1024];
     size_t len = strlen(web_folder);
+    size_t file_name_len = len + path_length + 1;
+    char* file_name = malloc(file_name_len);
+    FILE* F;
 
-    if (len + path_length + 1 <= sizeof(file_name) && demo_server_is_path_sane(path, path_length) == 0) {
+    if (file_name != NULL && demo_server_is_path_sane(path, path_length) == 0) {
         memcpy(file_name, web_folder, len);
 #ifdef _WINDOWS
         if (len == 0 || file_name[len - 1] != '\\') {
@@ -250,29 +256,32 @@ int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* e
         len += path_length - 1;
         file_name[len] = 0;
 
-        *pF = picoquic_file_open(file_name, "rb");
+        F = picoquic_file_open(file_name, "rb");
 
-        if (*pF != NULL) {
+        if (F != NULL) {
             long sz;
-            fseek(*pF, 0, SEEK_END);
-            sz = ftell(*pF);
+            fseek(F, 0, SEEK_END);
+            sz = ftell(F);
 
-            if (sz <= 0) {
-                *pF = picoquic_file_close(*pF);
-            }
-            else {
+            if (sz > 0) {
                 *echo_size = (size_t)sz;
-                fseek(*pF, 0, SEEK_SET);
+                fseek(F, 0, SEEK_SET);
                 ret = 0;
+                *file_path = file_name;
             }
+            picoquic_file_close(F);
         }
+    }
+
+    if (ret != 0 && file_name != NULL){
+        free(file_name);
     }
 
     return ret;
 }
 
-
-static int demo_server_parse_path(const uint8_t * path, size_t path_length, size_t * echo_size, FILE ** pF, char const * web_folder)
+static int demo_server_parse_path(const uint8_t * path, size_t path_length, size_t * echo_size, 
+    char ** file_path, char const * web_folder)
 {
     int ret = 0;
 
@@ -286,7 +295,8 @@ static int demo_server_parse_path(const uint8_t * path, size_t path_length, size
     if (path == NULL || path_length == 0 || path[0] != '/') {
         ret = -1;
     }
-    else if (web_folder != NULL && demo_server_try_file_path(path, path_length, echo_size, pF, web_folder) == 0) {
+    else if (web_folder != NULL && demo_server_try_file_path(path, path_length, echo_size,
+        file_path, web_folder) == 0) {
         ret = 0;
     }
     else if (path_length > 1 && (path_length != 11 || memcmp(path, "/index.html", 11) != 0)) {
@@ -303,6 +313,27 @@ static int demo_server_parse_path(const uint8_t * path, size_t path_length, size
         if (ret == 0) {
             *echo_size = x;
         }
+    }
+
+    return ret;
+}
+
+/* Prepare to send. This is the same code as on the client side, except for the
+ * delayed opening of the data file */
+static int demo_server_prepare_to_send(void* context, size_t space, picohttp_server_stream_ctx_t* stream_ctx)
+{
+    int ret = 0;
+
+    if (stream_ctx->F == NULL && stream_ctx->file_path != NULL) {
+        stream_ctx->F = picoquic_file_open(stream_ctx->file_path, "rb");
+        if (stream_ctx->F == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = demo_client_prepare_to_send(context, space, stream_ctx->echo_length, &stream_ctx->echo_sent,
+            stream_ctx->F);
     }
 
     return ret;
@@ -334,7 +365,8 @@ static int h3zero_server_process_request_frame(
         o_bytes = h3zero_create_bad_method_header_frame(o_bytes, o_bytes_max);
     }
     else if (stream_ctx->ps.stream_state.header.method == h3zero_method_get &&
-        demo_server_parse_path(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, &stream_ctx->echo_length, &stream_ctx->F, app_ctx->web_folder) != 0) {
+        demo_server_parse_path(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length,
+            &stream_ctx->echo_length, &stream_ctx->file_path, app_ctx->web_folder) != 0) {
         /* If unknown, 404 */
         o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
         /* TODO: consider known-url?data construct */
@@ -554,8 +586,7 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
         }
         else {
             /* default reply for known URL */
-            ret = demo_client_prepare_to_send(context, space, stream_ctx->echo_length, &stream_ctx->echo_sent,
-                stream_ctx->F);
+            ret = demo_server_prepare_to_send(context, space, stream_ctx);
             if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
                 picohttp_delete_stream(&ctx->h3_stream_tree, stream_ctx);
                 (void)picoquic_set_app_stream_ctx(cnx, stream_id, NULL);
@@ -1034,8 +1065,8 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                 stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
 
             if (stream_ctx->method == 0) {
-                if (demo_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, &stream_ctx->echo_length,
-                    &stream_ctx->F, app_ctx->web_folder)) {
+                if (demo_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length,
+                    &stream_ctx->echo_length, &stream_ctx->file_path, app_ctx->web_folder)) {
                     is_not_found = 1;
                 }
             }
@@ -1212,8 +1243,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                 }
                 else {
                     /* TODO-POST: notify callback. */
-                    int ret = demo_client_prepare_to_send((void*)bytes, length, stream_ctx->echo_length, &stream_ctx->echo_sent,
-                        stream_ctx->F);
+                    int ret = demo_server_prepare_to_send((void*)bytes, length, stream_ctx);
                     if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
                         picohttp_delete_stream(&ctx->h09_stream_tree, stream_ctx);
                         (void)picoquic_set_app_stream_ctx(cnx, stream_id, NULL);
