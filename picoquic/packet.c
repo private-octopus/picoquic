@@ -2113,6 +2113,8 @@ int picoquic_incoming_segment(
                             }
                             ret = picoquic_incoming_client_initial(&cnx, bytes, packet_length,
                                 addr_from, addr_to, if_index_to, &ph, current_time, new_context_created);
+                            /* Reset the value of first_cnx, as the context may have been deleted */
+                            *first_cnx = cnx;
                         }
                         else {
                             /* TODO: this really depends on the current receive epoch */
