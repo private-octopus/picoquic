@@ -780,6 +780,8 @@ int quic_client(const char* ip_address_text, int server_port,
                 printf("ack_delay_local: %" PRIu64 " ... %" PRIu64 "\n",
                     cnx_client->min_ack_delay_local, cnx_client->max_ack_delay_local);
                 printf("max_ack_gap_local: %" PRIu64 "\n", cnx_client->max_ack_gap_local);
+                printf("max_mtu_sent: %zu\n", cnx_client->max_mtu_sent);
+                printf("max_mtu_received: %zu\n", cnx_client->max_mtu_received);
             }
         }
     }

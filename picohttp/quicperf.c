@@ -606,6 +606,7 @@ int quicperf_callback(picoquic_cnx_t* cnx,
         break;
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:
+        picoquic_cnx_set_pmtud_required(cnx, 1);
         if (ctx->is_client && ctx->quicperf_stream_tree.root == NULL) {
             ret = quicperf_init_streams_from_scenario(cnx, ctx, UINT64_MAX);
             if (ret != 0 || ctx->nb_open_streams == 0) {

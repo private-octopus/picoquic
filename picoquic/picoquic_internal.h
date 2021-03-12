@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "0.34d"
+#define PICOQUIC_VERSION "0.34e"
 
 #ifndef PICOQUIC_MAX_PACKET_SIZE
 #define PICOQUIC_MAX_PACKET_SIZE 1536
@@ -1041,6 +1041,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int ack_ignore_order_remote : 1; /* Peer requested no immediate ack if out of order packet received */
     unsigned int is_multipath_enabled : 1; /* Usage of multipath was negotiated */
     unsigned int is_simple_multipath_enabled : 1; /* Usage of simple multipath was negotiated */
+    unsigned int is_sending_large_buffer : 1; /* Buffer provided by application is sufficient for PMTUD */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -1109,6 +1110,8 @@ typedef struct st_picoquic_cnx_t {
     uint32_t nb_zero_rtt_sent;
     uint32_t nb_zero_rtt_acked;
     uint32_t nb_zero_rtt_received;
+    size_t max_mtu_sent;
+    size_t max_mtu_received;
     uint64_t nb_packets_received;
     uint64_t nb_trains_sent;
     uint64_t nb_trains_short;
