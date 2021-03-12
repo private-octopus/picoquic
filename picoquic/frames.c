@@ -675,6 +675,30 @@ int picoquic_parse_stream_header(const uint8_t* bytes, size_t bytes_max,
     *consumed = byte_index;
     return ret;
 }
+#if 1
+static void picoquic_stream_data_chunk_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
+    uint8_t * bytes, size_t data_length)
+{
+    picoquic_call_back_event_t fin_now = picoquic_callback_stream_data;
+    int call_back_needed = data_length > 0;
+
+    stream->consumed_offset += data_length;
+
+    if (stream->consumed_offset >= stream->fin_offset && stream->fin_received && !stream->fin_signalled) {
+        fin_now = picoquic_callback_stream_fin;
+        stream->fin_signalled = 1;
+        call_back_needed = 1;
+    }
+
+    if (call_back_needed && !stream->stop_sending_requested && 
+        cnx->callback_fn(cnx, stream->stream_id, bytes, data_length, fin_now,
+        cnx->callback_ctx, stream->app_stream_ctx) != 0) {
+        picoquic_log_app_message(cnx, "Data callback (%d, l=%zu) on stream %" PRIu64 " returns error 0x%x",
+            fin_now, data_length, stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+    }
+}
+#endif
 
 void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
 {
@@ -682,11 +706,16 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 
     while ((data = (picoquic_stream_data_node_t*)picosplay_first(&stream->stream_data_tree)) != NULL && data->offset <= stream->consumed_offset) {
         size_t start = (size_t)(stream->consumed_offset - data->offset);
+#if 1
+        if (data->length >= start) {
+            size_t data_length = data->length - start;
+            picoquic_stream_data_chunk_callback(cnx, stream, data->bytes + start, data_length);
+        }
+#else 
         size_t data_length = data->length - start;
         picoquic_call_back_event_t fin_now = picoquic_callback_stream_data;
 
         stream->consumed_offset += data_length;
-
         if (stream->consumed_offset >= stream->fin_offset && stream->fin_received && !stream->fin_signalled){
             fin_now = picoquic_callback_stream_fin;
             stream->fin_signalled = 1;
@@ -698,12 +727,14 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
                 stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
-
+#endif
         picosplay_delete_hint(&stream->stream_data_tree, &data->stream_data_node);
     }
 
     /* handle the case where the fin frame does not carry any data */
-
+#if 1
+    picoquic_stream_data_chunk_callback(cnx, stream, NULL, 0);
+#else
     if (stream->consumed_offset >= stream->fin_offset && stream->fin_received && !stream->fin_signalled) {
         stream->fin_signalled = 1;
         if (!stream->stop_sending_requested && cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_fin,
@@ -713,6 +744,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
     }
+#endif
 }
 
 static int add_chunk_node(picosplay_tree_t* tree, uint64_t offset, size_t length, const uint8_t* bytes, int* chunk_added)
@@ -852,6 +884,23 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                 ret = picoquic_connection_error(cnx, (uint16_t)err, 0);
             }
         }
+#if 1
+        else if (stream->consumed_offset >= offset && cnx->callback_fn != NULL){
+            if (new_fin_offset >= stream->consumed_offset) {
+                /* Arrival of in sequence bytes */
+                uint64_t delivered_index = stream->consumed_offset - offset;
+                uint64_t data_length = length - delivered_index;
+
+                /* Ugly cast, but the callback requires a non-const pointer */
+                picoquic_stream_data_chunk_callback(cnx, stream, (uint8_t *)bytes + delivered_index, data_length);
+                /* Adjust the tree if needed */
+                picoquic_stream_data_callback(cnx, stream);
+            }
+            else {
+                /* Nothing to do with these incoming data, they are duplicate */
+            }
+        }
+#endif
         else {
             int new_data_available = 0;
 
