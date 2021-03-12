@@ -1910,7 +1910,7 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
         uint64_t packet_rate_times_1M = (data_rate * 1000000) / cnx->path[0]->send_mtu;
         nb_packets = packet_rate_times_1M / cnx->path[0]->smoothed_rtt;
     }
-#if 1
+
     if (cnx->path[0]->smoothed_rtt < 4 * PICOQUIC_ACK_DELAY_MIN) {
         uint64_t mult = 4;
         if (cnx->path[0]->smoothed_rtt > PICOQUIC_ACK_DELAY_MIN) {
@@ -1918,7 +1918,6 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
         }
         nb_packets *= mult;
     }
-#endif
 
     ack_gap = (nb_packets + 3) / 4;
 

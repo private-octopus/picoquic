@@ -3231,15 +3231,22 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         }
                     } /* end of PMTU not required */
 
-                    if (ret == 0 && length <= header_length && send_buffer_max > path_x->send_mtu
-                        && path_x->cwin > path_x->bytes_in_transit&& pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
-                        /* Since there is no data to send, this is an opportunity to send an MTU probe */
-                        length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes, send_buffer_max);
-                        packet->length = length;
-                        packet->send_path = path_x;
-                        packet->is_mtu_probe = 1;
-                        path_x->mtu_probe_sent = 1;
-                        is_pure_ack = 0;
+                    if (ret == 0 && length <= header_length 
+                        && path_x->cwin > path_x->bytes_in_transit && pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
+                        if (send_buffer_max > path_x->send_mtu) {
+                            /* Since there is no data to send, this is an opportunity to send an MTU probe */
+                            length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes, send_buffer_max);
+                            packet->length = length;
+                            packet->send_path = path_x;
+                            packet->is_mtu_probe = 1;
+                            path_x->mtu_probe_sent = 1;
+                            is_pure_ack = 0;
+                        }
+                        else if (cnx->is_sending_large_buffer) {
+                            /* Should attempt PMTU discovery at next opportunity */
+                            *next_wake_time = current_time;
+                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                        }
                     }
                 } /* end of PMTU references */
             } /* end of CC */
@@ -4137,18 +4144,29 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         }
         initial_next_time = next_wake_time;
 
+        if (send_buffer_max > cnx->path[path_id]->send_mtu) {
+            cnx->is_sending_large_buffer = 1;
+        }
+
         while (ret == 0)
         {
-            /* Create a new packet */
+            /* Create a new packet, which may include several segments */
             int is_initial_sent = 0;
             size_t packet_size = 0;
             size_t packet_max = send_buffer_max - *send_length;
             uint8_t* packet_buffer = send_buffer + *send_length;
             /* Reset the wake time to the initial value after sending packets */
             next_wake_time = initial_next_time;
+
+            if (send_msg_size != NULL && *send_msg_size > 0 && *send_length > 0) {
+                /* Consecutive packets should not be larger than first packet */
+                packet_max = *send_msg_size;
+            }
+
             /* Send the available segments in that packet. */
             while (ret == 0)
             {
+                /* Create the segments that fit in the new packet */
                 size_t available = packet_max;
                 size_t segment_length = 0;
 
@@ -4205,6 +4223,9 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 }
             }
             if (packet_size > 0) {
+                if (packet_size > cnx->max_mtu_sent) {
+                    cnx->max_mtu_sent = packet_size;
+                }
                 cnx->nb_packets_sent++;
                 /* if needed, log that the packet is sent */
                 picoquic_log_pdu(cnx, 0, current_time,

@@ -2277,6 +2277,10 @@ int picoquic_incoming_packet(
         }
     }
 
+    if (first_cnx != NULL && packet_length > first_cnx->max_mtu_received) {
+        first_cnx->max_mtu_received = packet_length;
+    }
+
     return ret;
 }
 
