@@ -221,7 +221,8 @@ uint8_t * picoquic_format_stream_reset_frame(picoquic_cnx_t* cnx, picoquic_strea
 
             /* Free the queued data */
             while (stream->send_queue != NULL) {
-                picoquic_stream_data_node_t* next = stream->send_queue->next_stream_data;
+                picoquic_stream_queue_node_t* next = stream->send_queue->next_stream_data;
+
                 if (stream->send_queue->bytes != NULL) {
                     free(stream->send_queue->bytes);
                 }
@@ -675,9 +676,9 @@ int picoquic_parse_stream_header(const uint8_t* bytes, size_t bytes_max,
     *consumed = byte_index;
     return ret;
 }
-#if 1
+
 static void picoquic_stream_data_chunk_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
-    uint8_t * bytes, size_t data_length)
+    const uint8_t * bytes, size_t data_length)
 {
     picoquic_call_back_event_t fin_now = picoquic_callback_stream_data;
     int call_back_needed = data_length > 0;
@@ -691,14 +692,13 @@ static void picoquic_stream_data_chunk_callback(picoquic_cnx_t* cnx, picoquic_st
     }
 
     if (call_back_needed && !stream->stop_sending_requested && 
-        cnx->callback_fn(cnx, stream->stream_id, bytes, data_length, fin_now,
+        cnx->callback_fn(cnx, stream->stream_id, (uint8_t *)bytes, data_length, fin_now,
         cnx->callback_ctx, stream->app_stream_ctx) != 0) {
         picoquic_log_app_message(cnx, "Data callback (%d, l=%zu) on stream %" PRIu64 " returns error 0x%x",
             fin_now, data_length, stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
     }
 }
-#endif
 
 void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
 {
@@ -706,65 +706,44 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 
     while ((data = (picoquic_stream_data_node_t*)picosplay_first(&stream->stream_data_tree)) != NULL && data->offset <= stream->consumed_offset) {
         size_t start = (size_t)(stream->consumed_offset - data->offset);
-#if 1
         if (data->length >= start) {
             size_t data_length = data->length - start;
             picoquic_stream_data_chunk_callback(cnx, stream, data->bytes + start, data_length);
         }
-#else 
-        size_t data_length = data->length - start;
-        picoquic_call_back_event_t fin_now = picoquic_callback_stream_data;
-
-        stream->consumed_offset += data_length;
-        if (stream->consumed_offset >= stream->fin_offset && stream->fin_received && !stream->fin_signalled){
-            fin_now = picoquic_callback_stream_fin;
-            stream->fin_signalled = 1;
-        }
-
-        if (!stream->stop_sending_requested && cnx->callback_fn(cnx, stream->stream_id, data->bytes + start, data_length, fin_now,
-            cnx->callback_ctx, stream->app_stream_ctx) != 0) {
-            picoquic_log_app_message(cnx, "Data callback on stream %" PRIu64 " returns error 0x%x",
-                stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
-            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
-        }
-#endif
         picosplay_delete_hint(&stream->stream_data_tree, &data->stream_data_node);
     }
 
     /* handle the case where the fin frame does not carry any data */
-#if 1
     picoquic_stream_data_chunk_callback(cnx, stream, NULL, 0);
-#else
-    if (stream->consumed_offset >= stream->fin_offset && stream->fin_received && !stream->fin_signalled) {
-        stream->fin_signalled = 1;
-        if (!stream->stop_sending_requested && cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_fin,
-            cnx->callback_ctx, stream->app_stream_ctx) != 0) {
-            picoquic_log_app_message(cnx, "FIN callback on stream %" PRIu64 " returns error 0x%x", 
-                stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
-            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
-        }
-    }
-#endif
 }
 
-static int add_chunk_node(picosplay_tree_t* tree, uint64_t offset, size_t length, const uint8_t* bytes, int* chunk_added)
+static int add_chunk_node(picoquic_quic_t * quic, picosplay_tree_t* tree, uint64_t offset,
+    size_t length, const uint8_t* bytes, int* chunk_added, picoquic_stream_data_node_t * received_data)
 {
     int ret = 0;
 
-    picoquic_stream_data_node_t* node = (picoquic_stream_data_node_t*)malloc(sizeof(picoquic_stream_data_node_t));
-    uint8_t* chunk_bytes = (uint8_t*)malloc(length);
-
-    if (node == NULL || chunk_bytes == NULL) {
-        free(node);
-        free(chunk_bytes);
-        ret = PICOQUIC_ERROR_MEMORY;
-    } else {
-        memcpy(chunk_bytes, bytes, length);
-        memset(node, 0, sizeof(picoquic_stream_data_node_t));
+    picoquic_stream_data_node_t* node = received_data;
+    
+    if (received_data == NULL || received_data->bytes != NULL) {
+        node = picoquic_stream_data_node_alloc(quic);
+        if (node == NULL) {
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+        else {
+            node->bytes = node->data;
+            memcpy(node->data, bytes, length);
+            node->offset = offset;
+            node->length = length;
+        }
+    }
+    else {
+        /* The pointer "bytes" is inside the received data packet. */
+        node->bytes = bytes;
         node->offset = offset;
         node->length = length;
-        node->bytes = chunk_bytes;
+    }
 
+    if (node != NULL){
         picosplay_insert(tree, node);
         *chunk_added = 1;
     }
@@ -773,8 +752,8 @@ static int add_chunk_node(picosplay_tree_t* tree, uint64_t offset, size_t length
 }
 
 /* Common code to data stream and crypto hs stream */
-int picoquic_queue_network_input(picosplay_tree_t* tree, uint64_t consumed_offset,
-    uint64_t frame_data_offset, const uint8_t* bytes, size_t length, int* new_data_available)
+int picoquic_queue_network_input(picoquic_quic_t * quic, picosplay_tree_t* tree, uint64_t consumed_offset,
+    uint64_t frame_data_offset, const uint8_t* bytes, size_t length, picoquic_stream_data_node_t* received_data, int* new_data_available)
 {
     const uint64_t input_begin = frame_data_offset;
     const uint64_t input_end = frame_data_offset + length;
@@ -814,7 +793,7 @@ int picoquic_queue_network_input(picosplay_tree_t* tree, uint64_t consumed_offse
 
             if (chunk_len > 0) {
                 /* There is a gap between previous and next frame, and it will be at least partially filled */
-                ret = add_chunk_node(tree, chunk_ofs, (size_t)chunk_len, bytes + frame_data_offset - input_begin, new_data_available);
+                ret = add_chunk_node(quic, tree, chunk_ofs, (size_t)chunk_len, bytes + frame_data_offset - input_begin, new_data_available, received_data);
             }
 
             frame_data_offset = next->offset + next->length;
@@ -825,7 +804,7 @@ int picoquic_queue_network_input(picosplay_tree_t* tree, uint64_t consumed_offse
         if (ret == 0 && frame_data_offset < input_end) {
             const uint64_t chunk_ofs = frame_data_offset;
             const uint64_t chunk_len = input_end - frame_data_offset;
-            ret = add_chunk_node(tree, chunk_ofs, (size_t)chunk_len, bytes + frame_data_offset - input_begin, new_data_available);
+            ret = add_chunk_node(quic, tree, chunk_ofs, (size_t)chunk_len, bytes + frame_data_offset - input_begin, new_data_available, received_data);
         }
     }
 
@@ -833,7 +812,8 @@ int picoquic_queue_network_input(picosplay_tree_t* tree, uint64_t consumed_offse
 }
 
 static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
-    uint64_t offset, int fin, const uint8_t* bytes, size_t length, uint64_t current_time)
+    uint64_t offset, int fin, const uint8_t* bytes, size_t length,
+    picoquic_stream_data_node_t* received_data, uint64_t current_time)
 {
     int ret = 0;
     uint64_t should_notify = 0;
@@ -883,9 +863,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                 int err = (ret >= PICOQUIC_ERROR_CLASS) ? PICOQUIC_TRANSPORT_INTERNAL_ERROR : ret;
                 ret = picoquic_connection_error(cnx, (uint16_t)err, 0);
             }
-        }
-#if 1
-        else if (stream->consumed_offset >= offset && cnx->callback_fn != NULL){
+        } else if (stream->consumed_offset >= offset &&  cnx->callback_fn != NULL){
             if (new_fin_offset >= stream->consumed_offset) {
                 /* Arrival of in sequence bytes */
                 uint64_t delivered_index = stream->consumed_offset - offset;
@@ -899,13 +877,11 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
             else {
                 /* Nothing to do with these incoming data, they are duplicate */
             }
-        }
-#endif
-        else {
+        } else {
             int new_data_available = 0;
 
-            ret = picoquic_queue_network_input(&stream->stream_data_tree, stream->consumed_offset,
-                offset, bytes, length, &new_data_available);
+            ret = picoquic_queue_network_input(cnx->quic, &stream->stream_data_tree, stream->consumed_offset,
+                offset, bytes, length, received_data, &new_data_available);
             if (ret != 0) {
                 ret = picoquic_connection_error(cnx, (int16_t)ret, 0);
             }
@@ -946,7 +922,8 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
     return ret;
 }
 
-const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t current_time)
+const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
+    picoquic_stream_data_node_t* received_data, uint64_t current_time)
 {
     uint64_t stream_id;
     size_t   data_length;
@@ -959,7 +936,8 @@ const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* 
     }else if (offset + data_length >= (1ull<<62)){
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0);
         bytes = NULL;
-    } else if (picoquic_stream_network_input(cnx, stream_id, offset, fin, (bytes += consumed), data_length, current_time) != 0) {
+    } else if (picoquic_stream_network_input(cnx, stream_id, offset, 
+        fin, (bytes += consumed), data_length, received_data, current_time) != 0) {
         bytes = NULL;
     } else {
         bytes += data_length;
@@ -1364,7 +1342,7 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
 
                     stream->send_queue->offset += length;
                     if (stream->send_queue->offset >= stream->send_queue->length) {
-                        picoquic_stream_data_node_t* next = stream->send_queue->next_stream_data;
+                        picoquic_stream_queue_node_t* next = stream->send_queue->next_stream_data;
                         free(stream->send_queue->bytes);
                         free(stream->send_queue);
                         stream->send_queue = next;
@@ -1594,8 +1572,10 @@ int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx)
     return ret;
 }
 
-
-const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, int epoch)
+const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max,
+    picoquic_stream_data_node_t* received_data,
+    int epoch)
 {
     uint64_t offset;
     uint64_t data_length;
@@ -1613,8 +1593,8 @@ const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_
 
     } else {
         picoquic_stream_head_t* stream = &cnx->tls_stream[epoch];
-        int ret = picoquic_queue_network_input(&stream->stream_data_tree, stream->consumed_offset,
-            offset, bytes, (size_t)data_length, &new_data_available);
+        int ret = picoquic_queue_network_input(cnx->quic, &stream->stream_data_tree, stream->consumed_offset,
+            offset, bytes, (size_t)data_length, received_data, &new_data_available);
         if (ret != 0) {
             picoquic_connection_error(cnx, (int16_t)ret, picoquic_frame_type_crypto_hs);
             bytes = NULL;
@@ -1660,7 +1640,7 @@ uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t
 
                     stream->send_queue->offset += length;
                     if (stream->send_queue->offset >= stream->send_queue->length) {
-                        picoquic_stream_data_node_t* next = stream->send_queue->next_stream_data;
+                        picoquic_stream_queue_node_t* next = stream->send_queue->next_stream_data;
                         free(stream->send_queue->bytes);
                         free(stream->send_queue);
                         stream->send_queue = next;
@@ -4075,7 +4055,9 @@ uint8_t* picoquic_format_path_status_frame(picoquic_cnx_t* cnx, uint8_t* bytes, 
  */
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes,
-    size_t bytes_maxsize, int epoch,
+    size_t bytes_maxsize,
+    picoquic_stream_data_node_t* received_data,
+    int epoch,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     uint64_t pn64, int path_is_not_allocated,
@@ -4101,7 +4083,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 break;
             }
 
-            bytes = picoquic_decode_stream_frame(cnx, bytes, bytes_max, current_time);
+            bytes = picoquic_decode_stream_frame(cnx, bytes, bytes_max, received_data, current_time);
             ack_needed = 1;
 
         }
@@ -4215,7 +4197,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                     (path_is_not_allocated) ? NULL : path_x, current_time);
                 break;
             case picoquic_frame_type_crypto_hs:
-                bytes = picoquic_decode_crypto_hs_frame(cnx, bytes, bytes_max, epoch);
+                bytes = picoquic_decode_crypto_hs_frame(cnx, bytes, bytes_max, received_data, epoch);
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_new_token:

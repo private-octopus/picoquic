@@ -163,7 +163,7 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
 
             for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
                 if (NULL == picoquic_decode_stream_frame(cnx, test->list[i].packet,
-                    test->list[i].packet + test->list[i].packet_length, current_time)) {
+                    test->list[i].packet + test->list[i].packet_length, NULL, current_time)) {
                     FAIL(test, "packet %" PRIst, i);
                     ret = -1;
                 }
@@ -346,14 +346,25 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
 {
     int ret = 0;
     int test_epoch = 2; /* epoch = 2 for handshake */
-
+    uint64_t current_time = 0;
+    picoquic_quic_t* quic = NULL;
     picoquic_cnx_t cnx = { 0 };
-    picosplay_init_tree(&cnx.tls_stream[2].stream_data_tree, picoquic_stream_data_node_compare, picoquic_stream_data_node_create, picoquic_stream_data_node_delete, picoquic_stream_data_node_value);
 
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, current_time,
+        &current_time, NULL, NULL, 0);
+    cnx.quic = quic;
+    
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        picosplay_init_tree(&cnx.tls_stream[2].stream_data_tree, picoquic_stream_data_node_compare, picoquic_stream_data_node_create, picoquic_stream_data_node_delete, picoquic_stream_data_node_value);
+    }
 
     for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
         if (NULL == picoquic_decode_crypto_hs_frame(&cnx, test->list[i].packet,
-                test->list[i].packet + test->list[i].packet_length, test_epoch )) {
+                test->list[i].packet + test->list[i].packet_length, NULL, test_epoch )) {
             FAIL(test, "packet %" PRIst, i);
             ret = -1;
         }
@@ -388,6 +399,10 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
     }
 
     picosplay_empty_tree(&cnx.tls_stream[2].stream_data_tree);
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
 
     return ret;
 }
