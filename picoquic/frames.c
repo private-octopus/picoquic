@@ -870,7 +870,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                 uint64_t data_length = length - delivered_index;
 
                 /* Ugly cast, but the callback requires a non-const pointer */
-                picoquic_stream_data_chunk_callback(cnx, stream, (uint8_t *)bytes + delivered_index, data_length);
+                picoquic_stream_data_chunk_callback(cnx, stream, (uint8_t *)bytes + delivered_index, (size_t)data_length);
                 /* Adjust the tree if needed */
                 picoquic_stream_data_callback(cnx, stream);
             }
