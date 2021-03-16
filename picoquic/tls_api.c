@@ -2182,8 +2182,8 @@ static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, 
     picoquic_stream_head_t* stream = &cnx->tls_stream[epoch];
 
     if (length > 0) {
-        picoquic_stream_data_node_t* stream_data = (picoquic_stream_data_node_t*)malloc(sizeof(picoquic_stream_data_node_t));
-
+        picoquic_stream_queue_node_t* stream_data = (picoquic_stream_queue_node_t*)
+            malloc(sizeof(picoquic_stream_queue_node_t));
         if (stream_data == 0) {
             ret = -1;
         }
@@ -2196,8 +2196,8 @@ static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, 
                 ret = -1;
             }
             else {
-                picoquic_stream_data_node_t** pprevious = &stream->send_queue;
-                picoquic_stream_data_node_t* next = stream->send_queue;
+                picoquic_stream_queue_node_t** pprevious = &stream->send_queue;
+                picoquic_stream_queue_node_t* next = stream->send_queue;
 
                 memcpy(stream_data->bytes, data, length);
                 stream_data->length = length;

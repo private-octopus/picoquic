@@ -334,6 +334,25 @@ void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_p
 picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* quic);
 void picoquic_delete_stateless_packet(picoquic_stateless_packet_t* sp);
 
+/* Data structure used to hold chunk of stream data before in sequence delivery */
+typedef struct st_picoquic_stream_data_node_t {
+    picosplay_node_t stream_data_node;
+    picoquic_quic_t* quic;
+    struct st_picoquic_stream_data_node_t* next_stream_data;
+    uint64_t offset;  /* Stream offset of the first octet in "bytes" */
+    size_t length;    /* Number of octets in "bytes" */
+    const uint8_t* bytes;
+    uint8_t data[PICOQUIC_MAX_PACKET_SIZE];
+} picoquic_stream_data_node_t;
+
+/* Data structure used to hold chunk of stream data queued by application */
+typedef struct st_picoquic_stream_queue_node_t {
+    picoquic_quic_t* quic;
+    struct st_picoquic_stream_queue_node_t* next_stream_data;
+    uint64_t offset;  /* Stream offset of the first octet in "bytes" */
+    size_t length;    /* Number of octets in "bytes" */
+    uint8_t* bytes;
+} picoquic_stream_queue_node_t;
 
 /*
  * The simple packet structure is used to store packets that
@@ -564,6 +583,9 @@ typedef struct st_picoquic_quic_t {
     picoquic_packet_t * p_first_packet;
     int nb_packets_in_pool;
     int nb_packets_allocated;
+    picoquic_stream_data_node_t* p_first_data_node;
+    int nb_data_nodes_in_pool;
+    int nb_data_nodes_allocated;
 
     picoquic_connection_id_cb_fn cnx_id_callback_fn;
     void* cnx_id_callback_ctx;
@@ -639,14 +661,6 @@ typedef picoquic_sack_item_t picoquic_sack_list_t;
  * The stream structure holds a variety of parameters about the state of the stream.
  */
 
-typedef struct st_picoquic_stream_data_node_t {
-    picosplay_node_t stream_data_node;
-    struct st_picoquic_stream_data_node_t* next_stream_data;
-    uint64_t offset;  /* Stream offset of the first octet in "bytes" */
-    size_t length;    /* Number of octets in "bytes" */
-    uint8_t* bytes;
-} picoquic_stream_data_node_t;
-
 typedef struct st_picoquic_stream_head_t {
     picosplay_node_t stream_node; /* splay of streams in connection context */
     struct st_picoquic_stream_head_t * next_output_stream; /* link in the list of output streams */
@@ -662,7 +676,7 @@ typedef struct st_picoquic_stream_head_t {
     uint64_t remote_stop_error;
     picosplay_tree_t stream_data_tree; /* splay of received stream segments */
     uint64_t sent_offset; /* Amount of data sent in the stream */
-    picoquic_stream_data_node_t* send_queue; /* if the stream is not "active", list of data segments ready to send */
+    picoquic_stream_queue_node_t* send_queue; /* if the stream is not "active", list of data segments ready to send */
     void * app_stream_ctx;
     picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
     void* direct_receive_ctx; /* direct receive context */
@@ -1390,6 +1404,7 @@ int picoquic_parse_header_and_decrypt(
     size_t packet_length,
     const struct sockaddr* addr_from,
     uint64_t current_time,
+    picoquic_stream_data_node_t* decrypted_data,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
     size_t * consumed,
@@ -1477,7 +1492,7 @@ void picoquic_add_output_streams(picoquic_cnx_t * cnx, uint64_t old_limit, uint6
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
 const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    const uint8_t* bytes_max, uint64_t current_time);
+    const uint8_t* bytes_max, picoquic_stream_data_node_t* received_data, uint64_t current_time);
 
 uint8_t* picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, 
     uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, int* is_still_active, int* ret);
@@ -1526,7 +1541,7 @@ int picoquic_parse_ack_header(
     uint64_t* ack_delay, size_t* consumed,
     uint8_t ack_delay_exponent);
 const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    const uint8_t* bytes_max, int epoch);
+    const uint8_t* bytes_max, picoquic_stream_data_node_t* received_data, int epoch);
 uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_format_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time, picoquic_packet_context_enum pc, int is_opportunistic);
 uint8_t* picoquic_format_connection_close_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
@@ -1536,6 +1551,8 @@ uint8_t* picoquic_format_max_data_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uin
 uint8_t* picoquic_format_max_stream_data_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t new_max_data);
 uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_window); /* Trigger sending more data if window increases */
 uint8_t* picoquic_format_max_streams_frame_if_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+void picoquic_stream_data_node_recycle(picoquic_stream_data_node_t* stream_data);
+picoquic_stream_data_node_t* picoquic_stream_data_node_alloc(picoquic_quic_t* quic);
 void picoquic_clear_stream(picoquic_stream_head_t* stream);
 void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t * stream);
 picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* suggested_value, uint64_t current_time);
@@ -1565,6 +1582,7 @@ uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, u
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
+    picoquic_stream_data_node_t* received_data,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, int path_is_not_allocated, uint64_t current_time);
 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);

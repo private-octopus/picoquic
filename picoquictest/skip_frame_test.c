@@ -635,7 +635,8 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
             cnx->cnx_state = picoquic_state_ready;
         }
 
-        ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, epoch, NULL, NULL, 0, 0, simulated_time);
+        ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, NULL, epoch, 
+            NULL, NULL, 0, 0, simulated_time);
 
         *ack_needed = cnx->ack_ctx[pc].ack_needed;
 
@@ -2346,8 +2347,8 @@ int send_stream_blocked_test()
     return ret;
 }
 
-int picoquic_queue_network_input(picosplay_tree_t* tree, uint64_t consumed_offset,
-    uint64_t stream_ofs, const uint8_t* bytes, size_t length, int* new_data_available);
+int picoquic_queue_network_input(picoquic_quic_t * quic, picosplay_tree_t* tree, uint64_t consumed_offset,
+    uint64_t stream_ofs, const uint8_t* bytes, size_t length, picoquic_stream_data_node_t* received_data, int* new_data_available);
 
 int64_t picoquic_stream_data_node_compare(void* l, void* r);
 picosplay_node_t* picoquic_stream_data_node_create(void* value);
@@ -2357,6 +2358,11 @@ void* picoquic_stream_data_node_value(picosplay_node_t* node);
 int queue_network_input_test()
 {
     int ret = 0;
+
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
 
     const size_t expected_length[3] = { 4, 2, 4 };
     const uint8_t expected[3][4] = {
@@ -2374,19 +2380,27 @@ int queue_network_input_test()
         picoquic_stream_data_node_delete,
         picoquic_stream_data_node_value);
 
+    if (quic == NULL || tree == NULL) {
+        ret = -1;
+    }
+
     /* Fill 0..3 */
-    new_data_available = 0;
-    if ((ret = picoquic_queue_network_input(tree, 0, 0, data, 4, &new_data_available)) != 0) {
-        DBG_PRINTF("picoquic_queue_network_input(0, 0, 4) failed (%d)", ret);
-    } else if (new_data_available == 0) {
-        DBG_PRINTF("new_data_available doesn't signal new data (%d)", new_data_available);
-        ret = 1;
+    if (ret == 0) {
+        new_data_available = 0;
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 0, data, 4, NULL,
+            &new_data_available)) != 0) {
+            DBG_PRINTF("picoquic_queue_network_input(0, 0, 4) failed (%d)", ret);
+        }
+        else if (new_data_available == 0) {
+            DBG_PRINTF("new_data_available doesn't signal new data (%d)", new_data_available);
+            ret = 1;
+        }
     }
 
     /* Fill 6..9 */
     if (ret == 0) {
         new_data_available = 0;
-        if ((ret = picoquic_queue_network_input(tree, 0, 6, data + 6, 4, &new_data_available)) != 0) {
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 6, data + 6, 4, NULL, &new_data_available)) != 0) {
             DBG_PRINTF("picoquic_queue_network_input(0, 6, 4) failed (%d)", ret);
         } else if (new_data_available == 0) {
             DBG_PRINTF("new_data_available doesn't signal new data (%d)", new_data_available);
@@ -2397,7 +2411,7 @@ int queue_network_input_test()
     /* Fill the gap from 4..5 with a chunk from 2..7 */
     if (ret == 0) {
         new_data_available = 0;
-        if ((ret = picoquic_queue_network_input(tree, 0, 2, data + 2, 6, &new_data_available)) != 0) {
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 2, data + 2, 6, NULL, &new_data_available)) != 0) {
             DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed (%d)", ret);
         } else if (new_data_available == 0) {
             DBG_PRINTF("new_data_available signals new data (%d)", new_data_available);
@@ -2408,7 +2422,7 @@ int queue_network_input_test()
     /* No new data delivered by chunk 2..7 */
     if (ret == 0) {
         new_data_available = 0;
-        if ((ret = picoquic_queue_network_input(tree, 0, 2, data, 6, &new_data_available)) != 0) {
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 2, data, 6, NULL, &new_data_available)) != 0) {
             DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed (%d)", ret);
         }
 
@@ -2438,8 +2452,14 @@ int queue_network_input_test()
         }
     }
 
-    picosplay_empty_tree(tree);
-    free(tree);
+    if (tree != NULL) {
+        picosplay_empty_tree(tree);
+        free(tree);
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
 
     return ret;
 }

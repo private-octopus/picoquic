@@ -605,6 +605,15 @@ void picoquic_free(picoquic_quic_t* quic)
             quic->nb_packets_in_pool--;
         }
 
+        /* delete data nodes in pool */
+        while (quic->p_first_data_node != NULL) {
+            picoquic_stream_data_node_t* p = quic->p_first_data_node->next_stream_data;
+            free(quic->p_first_data_node);
+            quic->p_first_data_node = p;
+            quic->nb_data_nodes_allocated--;
+            quic->nb_data_nodes_in_pool--;
+        }
+
         /* delete all pending stateless packets */
         while (quic->pending_stateless_packet != NULL) {
             picoquic_stateless_packet_t* to_delete = quic->pending_stateless_packet;
@@ -2008,18 +2017,50 @@ void* picoquic_stream_data_node_value(picosplay_node_t* node)
     return (void*)((char*)node - offsetof(struct st_picoquic_stream_data_node_t, stream_data_node));
 }
 
+void picoquic_stream_data_node_recycle(picoquic_stream_data_node_t* stream_data)
+{
+    if (stream_data->quic->nb_data_nodes_in_pool < PICOQUIC_MAX_PACKETS_IN_POOL) {
+        stream_data->next_stream_data = stream_data->quic->p_first_data_node;
+        stream_data->quic->p_first_data_node = stream_data;
+        stream_data->quic->nb_data_nodes_in_pool++;
+    }
+    else {
+        stream_data->quic->nb_data_nodes_allocated--;
+        free(stream_data);
+    }
+}
 
 void picoquic_stream_data_node_delete(void* tree, picosplay_node_t* node)
 {
     picoquic_stream_data_node_t* stream_data = (picoquic_stream_data_node_t*)picoquic_stream_data_node_value(node);
 
-    if (stream_data->bytes != NULL) {
-        free(stream_data->bytes);
+    picoquic_stream_data_node_recycle(stream_data);
+}
+
+picoquic_stream_data_node_t* picoquic_stream_data_node_alloc(picoquic_quic_t* quic)
+{
+    picoquic_stream_data_node_t* stream_data = quic->p_first_data_node;
+    
+    if (stream_data == NULL) {
+        stream_data = (picoquic_stream_data_node_t*)
+            malloc(sizeof(picoquic_stream_data_node_t));
+
+        if (stream_data != NULL) {
+            memset(stream_data, 0, offsetof(struct st_picoquic_stream_data_node_t, data));
+            stream_data->quic = quic;
+            quic->nb_data_nodes_allocated++;
+        }
+    }
+    else {
+        quic->p_first_data_node = stream_data->next_stream_data;
+        stream_data->next_stream_data = NULL;
         stream_data->bytes = NULL;
+        quic->nb_data_nodes_in_pool--;
     }
 
-    free(stream_data);
+    return stream_data;
 }
+
 
 /* Stream splay management */
 
@@ -2042,12 +2083,11 @@ static void * picoquic_stream_node_value(picosplay_node_t * node)
 
 void picoquic_clear_stream(picoquic_stream_head_t* stream)
 {
-    picoquic_stream_data_node_t* ready = stream->send_queue;
-    picoquic_stream_data_node_t* next;
+    picoquic_stream_queue_node_t* ready = stream->send_queue;
+    picoquic_stream_queue_node_t* next;
 
     while ((next = ready) != NULL) {
         ready = next->next_stream_data;
-
         if (next->bytes != NULL) {
             free(next->bytes);
         }
@@ -2263,7 +2303,6 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
         while ((data = (picoquic_stream_data_node_t*)picosplay_first(&stream->stream_data_tree)) != NULL) {
             size_t length = data->length;
             uint64_t offset = data->offset;
-            uint8_t* bytes = data->bytes;
 
             if (offset < stream->consumed_offset) {
                 if (offset + length < stream->consumed_offset) {
@@ -2277,7 +2316,7 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
             }
 
             if (length > 0) {
-                ret = direct_receive_fn(cnx, stream_id, 0, bytes, offset, length, direct_receive_ctx);
+                ret = direct_receive_fn(cnx, stream_id, 0, data->bytes, offset, length, direct_receive_ctx);
             }
 
             if (ret == 0) {

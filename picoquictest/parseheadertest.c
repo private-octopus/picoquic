@@ -460,12 +460,29 @@ int test_packet_decrypt_one(
     picoquic_cnx_t* server_cnx = NULL;
     size_t consumed = 0;
     int new_context_created = 0;
+    uint64_t simulated_time = 0;
+    picoquic_stream_data_node_t* decrypted_data = NULL;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        decrypted_data = picoquic_stream_data_node_alloc(quic);
+        if (decrypted_data == NULL) {
+            ret = -1;
+        }
+    }
 
     /* Decrypt the packet */
     decoding_return = picoquic_parse_header_and_decrypt(q_server,
         send_buffer, send_length, packet_length,
         addr_from,
-        current_time, &received_ph, &server_cnx,
+        current_time,
+        decrypted_data,
+        &received_ph, &server_cnx,
         &consumed, &new_context_created);
 
     /* verify that decryption matches original value */
@@ -503,6 +520,13 @@ int test_packet_decrypt_one(
     else if (picoquic_compare_connection_id(&received_ph.srce_cnx_id, &expected_ph->srce_cnx_id) != 0) {
         DBG_PRINTF("%s", "Srce CNXID does not match.\n");
         ret = -1;
+    }
+
+    if (decrypted_data != NULL) {
+        picoquic_stream_data_node_recycle(decrypted_data);
+    }
+    if (quic != NULL) {
+        picoquic_free(quic);
     }
 
     return ret;
