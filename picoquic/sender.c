@@ -2711,7 +2711,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     bytes_max = bytes + send_buffer_max - checksum_overhead;
 
     if (ret == 0 && cnx->cnx_state == picoquic_state_closing_received) {
-        /* Send a closing frame, move to closing state */
+        /* Send a closing frame, move to draining state */
         uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
 
         length = picoquic_predict_packet_header_length(cnx, packet_type, pkt_ctx);

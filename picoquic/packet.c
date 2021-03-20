@@ -2239,12 +2239,6 @@ int picoquic_incoming_segment(
         if (cnx != NULL) {
             picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
         }
-    } else if (ret == PICOQUIC_ERROR_DUPLICATE) {
-        /* Bad packets are dropped silently, but duplicates should be acknowledged */
-        if (cnx != NULL) {
-            picoquic_set_ack_needed(cnx, current_time, ph.pc, ph.l_cid);
-        }
-        ret = -1;
     } else if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_INITIAL_TOO_SHORT ||
         ret == PICOQUIC_ERROR_INITIAL_CID_TOO_SHORT ||
         ret == PICOQUIC_ERROR_UNEXPECTED_PACKET || 
@@ -2254,6 +2248,7 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_CNXID_SEGMENT ||
         ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED ||
         ret == PICOQUIC_ERROR_PACKET_TOO_LONG ||
+        ret == PICOQUIC_ERROR_DUPLICATE ||
         ret == PICOQUIC_ERROR_AEAD_NOT_READY) {
         /* Bad packets are dropped silently */
         if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
