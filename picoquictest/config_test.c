@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:K:p:v:o:w:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:h";
+static char* ref_option_text = "c:k:K:p:v:o:w:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:h";
 
 int config_option_letters_test()
 {
@@ -54,6 +54,7 @@ static picoquic_quic_config_t param1 = {
     "/data/log.txt", /* char const* log_file; */
     "/data/log/", /* char const* bin_dir; */
     "/data/qlog/", /* char const* qlog_dir; */
+    "/data/performance_log.csv", /* char const* performance_log; */
     4433, /* int server_port; */
     1, /* int dest_if; */
     1536, /* int mtu_max; */
@@ -111,6 +112,7 @@ static char const* config_argv1[] = {
     "-r",
     "-s", "012345678abcdef", "0xfedcba9876543210",
     "-B", "655360",
+    "-F", "/data/performance_log.csv",
     NULL
 };
 
@@ -124,6 +126,7 @@ static picoquic_quic_config_t param2 = {
     NULL, /* char const* log_file; */
     NULL, /* char const* bin_dir; */
     NULL, /* char const* qlog_dir; */
+    NULL, /* char const* performance_log; */
     0, /* int server_port; */
     0, /* int dest_if; */
     0, /* int mtu_max; */
@@ -233,6 +236,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_string("log_file", expected->log_file, actual->log_file);
     ret |= config_test_compare_string("bin_dir", expected->bin_dir, actual->bin_dir);
     ret |= config_test_compare_string("qlog_dir", expected->qlog_dir, actual->qlog_dir);
+    ret |= config_test_compare_string("performance_log", expected->performance_log, actual->performance_log);
     ret |= config_test_compare_int("port", expected->server_port, actual->server_port);
     ret |= config_test_compare_int("dest_if", expected->dest_if, actual->dest_if);
     ret |= config_test_compare_int("mtu_max", expected->mtu_max, actual->mtu_max);
