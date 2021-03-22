@@ -70,6 +70,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/logwriter.c
     picoquic/newreno.c
     picoquic/packet.c
+    picoquic/performance_log.c
     picoquic/picohash.c
     picoquic/picosocks.c
     picoquic/picosplay.c

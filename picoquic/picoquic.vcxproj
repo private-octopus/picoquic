@@ -155,6 +155,7 @@
     <ClCompile Include="logger.c" />
     <ClCompile Include="logwriter.c" />
     <ClCompile Include="newreno.c" />
+    <ClCompile Include="performance_log.c" />
     <ClCompile Include="picosocks.c" />
     <ClCompile Include="picosplay.c" />
     <ClCompile Include="quicctx.c" />
@@ -184,6 +185,7 @@
     <ClInclude Include="cc_common.h" />
     <ClInclude Include="frames.h" />
     <ClInclude Include="logwriter.h" />
+    <ClInclude Include="performance_log.h" />
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picoquic_config.h" />
     <ClInclude Include="picoquic_internal.h" />

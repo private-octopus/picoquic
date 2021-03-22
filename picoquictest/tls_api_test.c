@@ -35,6 +35,7 @@
 #include "qlog.h"
 #include "autoqlog.h"
 #include "picoquic_logger.h"
+#include "performance_log.h"
 #include "picoquictest.h"
 
 static const uint8_t test_ticket_encrypt_key[32] = {
@@ -7552,6 +7553,101 @@ int qlog_trace_ecn_test()
 {
     return qlog_trace_test_one(0, 1, 0x02);
 }
+
+/*
+ * Test of the performance log production
+ */
+
+#ifdef _WINDOWS
+#define PERF_TRACE_CLIENT_TEST_REF "picoquictest\\perf_trace_client_ref.txt"
+#define PERF_TRACE_SERVER_TEST_REF "picoquictest\\perf_trace_server_ref.txt"
+#else
+#define PERF_TRACE_CLIENT_TEST_REF "picoquictest/perf_trace_client_ref.txt"
+#define PERF_TRACE_SERVER_TEST_REF "picoquictest/perf_trace_server_ref.txt"
+#endif
+#define PERF_TRACE_CLIENT "perf_trace_client.csv"
+#define PERF_TRACE_SERVER "perf_trace_server.csv"
+
+int perflog_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t target_time = 4000000;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x9e, 0x8f, 0x08, 0x8a, 0x8c, 0xe0, 0, 0}, 8 };
+    size_t send_buffer_size = 0xFFFF;
+    const uint64_t latency_target = 35000;
+    const uint64_t picosec_per_byte = (1000000ull * 8) / 100;
+    int ret;
+
+    (void)picoquic_file_delete(PERF_TRACE_CLIENT, NULL);
+    (void)picoquic_file_delete(PERF_TRACE_SERVER, NULL);
+
+    ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid, 8, 0, send_buffer_size);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Require a performance trace of thee server side */
+    if (ret == 0) {
+        picoquic_perflog_setup(test_ctx->qclient, PERF_TRACE_CLIENT);
+        picoquic_perflog_setup(test_ctx->qserver, PERF_TRACE_SERVER);
+        /* Set parameters to simulate random early drop */
+        test_ctx->c_to_s_link->microsec_latency = latency_target;
+        test_ctx->c_to_s_link->picosec_per_byte = picosec_per_byte;
+        test_ctx->s_to_c_link->microsec_latency = latency_target;
+        test_ctx->s_to_c_link->picosec_per_byte = picosec_per_byte;
+        /* Set the CC algorithm to selected value */
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, picoquic_bbr_algorithm);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, latency_target, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_sustained2, sizeof(test_scenario_sustained2));
+    }
+
+    /* Try to complete the data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, target_time);
+    }
+
+    /* Free the resource, which will force writing the performance log files. */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    /* Verify that the performance logs are as expected. */
+    for (int i = 0; ret == 0 && i < 2; i++) {
+        char perf_trace_test_ref[512];
+
+        ret = picoquic_get_input_path(perf_trace_test_ref, sizeof(perf_trace_test_ref), picoquic_solution_dir,
+            (i)?PERF_TRACE_CLIENT_TEST_REF: PERF_TRACE_SERVER_TEST_REF);
+
+        if (ret != 0) {
+            DBG_PRINTF("Cannot set the perf trace test ref file name for the %s.\n",
+                (i)?"client":"server");
+        }
+        else {
+            ret = picoquic_test_compare_text_files((i)?PERF_TRACE_CLIENT: PERF_TRACE_SERVER, perf_trace_test_ref);
+        }
+    }
+
+    return ret;
+}
+
 
 /*
  * Testing the flow controlled sending scenario 

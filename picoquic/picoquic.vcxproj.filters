@@ -102,6 +102,9 @@
     <ClCompile Include="unified_log.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="performance_log.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
@@ -144,6 +147,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picoquic_config.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="performance_log.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

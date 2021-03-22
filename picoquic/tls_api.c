@@ -1084,6 +1084,9 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
     }
 
     if (quic->cnx_in_progress != NULL) {
+        if (quic->cnx_in_progress->alpn == NULL && alpn_found_length > 0) {
+            quic->cnx_in_progress->alpn = picoquic_string_create((const char *)alpn_found, alpn_found_length);
+        }
         picoquic_log_negotiated_alpn(quic->cnx_in_progress,
             0, params->server_name.base, params->server_name.len, alpn_found, alpn_found_length,
             params->negotiated_protocols.list, params->negotiated_protocols.count);
