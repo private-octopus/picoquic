@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 #define PICOQUIC_PER_LOG_VERSION 1
-#define PICOQUIC_PERF_LOG_MAX_ITEMS 28
+#define PICOQUIC_PERF_LOG_MAX_ITEMS 32
 
 typedef enum {
     picoquic_perflog_is_client = 0,
@@ -56,7 +56,11 @@ typedef enum {
     picoquic_perflog_max_ack_gap_local = 24,
     picoquic_perflog_max_mtu_sent = 25,
     picoquic_perflog_max_mtu_received = 26,
-    picoquic_perflog_zero_rtt = 27
+    picoquic_perflog_zero_rtt = 27,
+    picoquic_perflog_srtt = 28,
+    picoquic_perflog_minrtt = 29,
+    picoquic_perflog_cwin = 30,
+    picoquic_perflog_ccalgo = 31
 } picoquic_perflog_column_enum;
 
 const char* picoquic_perflog_param_name(picoquic_perflog_column_enum rank);

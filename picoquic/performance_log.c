@@ -182,6 +182,14 @@ int picoquic_perflog_record(picoquic_cnx_t* cnx, picoquic_performance_log_ctx_t*
         perflog_item->v[picoquic_perflog_max_mtu_sent] = cnx->max_mtu_sent;
         perflog_item->v[picoquic_perflog_max_mtu_received] = cnx->max_mtu_received;
         perflog_item->v[picoquic_perflog_zero_rtt] = (cnx->nb_zero_rtt_received > 0) || (cnx->nb_zero_rtt_acked > 0);
+        if (cnx->path != NULL && cnx->path[0] != NULL) {
+            perflog_item->v[picoquic_perflog_srtt] = cnx->path[0]->smoothed_rtt;
+            perflog_item->v[picoquic_perflog_minrtt] = cnx->path[0]->rtt_min;
+            perflog_item->v[picoquic_perflog_cwin] = cnx->path[0]->cwin;
+        }
+        if (cnx->congestion_alg != NULL) {
+            perflog_item->v[picoquic_perflog_ccalgo] = cnx->congestion_alg->congestion_algorithm_number;
+        }
         
         if (perflog_ctx->first == NULL) {
             perflog_ctx->first = perflog_item;
@@ -264,6 +272,10 @@ const char* picoquic_perflog_param_name(picoquic_perflog_column_enum rank)
     case picoquic_perflog_max_mtu_sent: return("max_mtu_sent");
     case picoquic_perflog_max_mtu_received: return("max_mtu_received");
     case picoquic_perflog_zero_rtt: return("zero_rtt");
+    case picoquic_perflog_srtt: return("srtt");
+    case picoquic_perflog_minrtt: return("minrtt");
+    case picoquic_perflog_cwin: return("cwin");
+    case picoquic_perflog_ccalgo: return("ccalgo");
     default:
         break;
     }
