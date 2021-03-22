@@ -66,6 +66,14 @@ typedef struct st_picoquic_performance_log_ctx_t {
     char const* perflog_file_name;
 } picoquic_performance_log_ctx_t;
 
+void picoquic_perflog_item_free(picoquic_performance_log_item_t* perflog_item)
+{
+    if (perflog_item->alpn != NULL) {
+        free((char*)perflog_item->alpn);
+    }
+    free(perflog_item);
+}
+
 int picoquic_perflog_save(picoquic_performance_log_ctx_t* perflog_ctx)
 {
     int ret = 0;
@@ -96,7 +104,7 @@ int picoquic_perflog_save(picoquic_performance_log_ctx_t* perflog_ctx)
             if (picoquic_print_connection_id_hexa(cnxid_str, sizeof(cnxid_str), &perflog_item->cnxid) != 0) {
                 cnxid_str[0] = 0;
             }
-            fprintf(F, ", 0x%x, %s, %s, %" PRIu64,
+            fprintf(F, ", 0x%x, %s, 0x%s, %" PRIu64,
                 perflog_item->quic_version,
                 (perflog_item->alpn == NULL) ? "" : perflog_item->alpn,
                 cnxid_str, perflog_item->cnx_time_64);
@@ -106,7 +114,7 @@ int picoquic_perflog_save(picoquic_performance_log_ctx_t* perflog_ctx)
                 fprintf(F, ", %"PRIu64, perflog_item->v[i]);
             }
             fprintf(F, "\n");
-            free(perflog_item);
+            picoquic_perflog_item_free(perflog_item);
         }
         (void)picoquic_file_close(F);
     }
@@ -141,7 +149,7 @@ int picoquic_perflog_record(picoquic_cnx_t* cnx, picoquic_performance_log_ctx_t*
         }
         /* Store identification data */
         perflog_item->alpn = picoquic_string_duplicate(cnx->alpn);
-        perflog_item->quic_version = (cnx->version_index > 0) ?
+        perflog_item->quic_version = (cnx->version_index >= 0) ?
             picoquic_supported_versions[cnx->version_index].version : 0;
         perflog_item->cnxid = picoquic_get_logging_cnxid(cnx);
         perflog_item->cnx_time_64 = start_time;
@@ -173,7 +181,8 @@ int picoquic_perflog_record(picoquic_cnx_t* cnx, picoquic_performance_log_ctx_t*
         perflog_item->v[picoquic_perflog_max_ack_gap_local] = cnx->max_ack_gap_local;
         perflog_item->v[picoquic_perflog_max_mtu_sent] = cnx->max_mtu_sent;
         perflog_item->v[picoquic_perflog_max_mtu_received] = cnx->max_mtu_received;
-
+        perflog_item->v[picoquic_perflog_zero_rtt] = (cnx->nb_zero_rtt_received > 0) || (cnx->nb_zero_rtt_acked > 0);
+        
         if (perflog_ctx->first == NULL) {
             perflog_ctx->first = perflog_item;
         }
@@ -201,10 +210,7 @@ void picoquic_perflog_free(picoquic_performance_log_ctx_t* perflog_ctx)
     while (perflog_ctx->first != NULL) {
         picoquic_performance_log_item_t* perflog_item = perflog_ctx->first;
         perflog_ctx->first = perflog_item->next;
-        if (perflog_item->alpn != NULL) {
-            free((char*)perflog_item->alpn);
-        }
-        free(perflog_item);
+        picoquic_perflog_item_free(perflog_item);
     }
     free(perflog_ctx);
 }
@@ -257,6 +263,7 @@ const char* picoquic_perflog_param_name(picoquic_perflog_column_enum rank)
     case picoquic_perflog_max_ack_gap_local: return("max_ack_gap_local");
     case picoquic_perflog_max_mtu_sent: return("max_mtu_sent");
     case picoquic_perflog_max_mtu_received: return("max_mtu_received");
+    case picoquic_perflog_zero_rtt: return("zero_rtt");
     default:
         break;
     }
@@ -294,7 +301,7 @@ void picoquic_perflog_file_set_header(char const* perflog_file_name)
             char buf[16];
             char const* s = picoquic_perflog_param_name((picoquic_perflog_column_enum)i);
             if (s == NULL) {
-                (void)picoquic_sprintf(buf, sizeof(buf), NULL, "v%d", i);
+                (void)picoquic_sprintf(buf, sizeof(buf), NULL, "v%zu", i);
                 s = buf;
             }
             fprintf(F, ", %s", s);
