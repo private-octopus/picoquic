@@ -87,8 +87,11 @@ int picoquic_perflog_save(picoquic_performance_log_ctx_t* perflog_ctx)
             char cnxid_str[513];
             picoquic_performance_log_item_t* perflog_item = perflog_ctx->first;
             perflog_ctx->first = perflog_item->next;
+            if (perflog_ctx->first == NULL) {
+                perflog_ctx->last = NULL;
+            }
             /* Print version identifiers */
-            fprintf(F, "%d, %s,", PICOQUIC_PER_LOG_VERSION, PICOQUIC_VERSION);
+            fprintf(F, "%d, %s, ", PICOQUIC_PER_LOG_VERSION, PICOQUIC_VERSION);
             /* Print the key performance data */
             fprintf(F, "%f, %" PRIu64 ", %" PRIu64 ", %f, %f",
                 perflog_item->duration_sec,
