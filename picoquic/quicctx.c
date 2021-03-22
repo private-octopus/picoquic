@@ -664,6 +664,10 @@ void picoquic_free(picoquic_quic_t* quic)
         quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
         quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
 
+        if (quic->perflog_fn != NULL) {
+            (void)(quic->perflog_fn)(quic, NULL, 1);
+        }
+
         free(quic);
     }
 }
@@ -3484,6 +3488,10 @@ void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx)
 void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
     if (cnx != NULL) {
+        if (cnx->quic->perflog_fn != NULL) {
+            (void)(cnx->quic->perflog_fn)(cnx->quic, cnx, 0);
+        }
+
         picoquic_log_close_connection(cnx);
 
         if (cnx->is_half_open && cnx->quic->current_number_half_open > 0) {

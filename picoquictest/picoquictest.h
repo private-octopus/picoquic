@@ -174,6 +174,7 @@ int qlog_trace_test();
 int qlog_trace_auto_test();
 int qlog_trace_only_test();
 int qlog_trace_ecn_test();
+int perflog_test();
 int rebinding_stress_test();
 int many_short_loss_test();
 int random_padding_test();

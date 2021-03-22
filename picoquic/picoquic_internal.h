@@ -514,6 +514,10 @@ typedef uint64_t picoquic_tp_enum;
  */
 typedef int (*picoquic_autoqlog_fn)(picoquic_cnx_t * cnx);
 
+/* Callback used for the performance log
+ */
+typedef int (*picoquic_performance_log_fn)(picoquic_quic_t* quic, picoquic_cnx_t* cnx, int should_delete);
+
 /* QUIC context, defining the tables of connections,
  * open sockets, etc.
  */
@@ -614,6 +618,8 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_unified_logging_t* text_log_fns;
     struct st_picoquic_unified_logging_t* bin_log_fns;
     struct st_picoquic_unified_logging_t* qlog_fns;
+    picoquic_performance_log_fn perflog_fn;
+    void* v_perflog_ctx;
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);

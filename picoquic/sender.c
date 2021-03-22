@@ -4251,7 +4251,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
             }
             else if (packet_size != *send_msg_size) {
                 if (*send_length > 0) {
-                    if (packet_size == 0 && *send_length < 4*(*send_msg_size)) {
+                    if (packet_size == 0 && *send_length < 8*(*send_msg_size)) {
                         if (cnx->path[path_id]->cwin <= cnx->path[path_id]->bytes_in_transit) {
                             cnx->nb_trains_blocked_cwin++;
                         }

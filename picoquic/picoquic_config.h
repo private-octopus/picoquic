@@ -65,6 +65,7 @@ typedef enum {
     picoquic_option_Ticket_File_Name,
     picoquic_option_Token_File_Name,
     picoquic_option_Socket_buffer_size,
+    picoquic_option_Performance_Log,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -78,6 +79,7 @@ typedef struct st_picoquic_quic_config_t {
     char const* log_file;
     char const* bin_dir;
     char const* qlog_dir;
+    char const* performance_log;
     int server_port;
     int dest_if;
     int mtu_max;
