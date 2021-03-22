@@ -1230,15 +1230,15 @@ typedef struct {
 typedef struct {
     /* The pointer to the overlying `verify_ctx` */
     void *verify_ctx;
-    int (*verify_sign)(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t sign);
+    int (*verify_sign)(void *verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t sign);
 } picoquic_verify_ctx_t;
 
-static int verify_sign_callback(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t sign)
+static int verify_sign_callback(void *verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t sign)
 {
     picoquic_verify_ctx_t* ctx = (picoquic_verify_ctx_t*)verify_ctx;
     int ret = 0;
 
-    ret = ctx->verify_sign(ctx->verify_ctx, data, sign);
+    ret = ctx->verify_sign(ctx->verify_ctx, algo, data, sign);
 
     free(ctx);
 
@@ -1246,7 +1246,7 @@ static int verify_sign_callback(void *verify_ctx, ptls_iovec_t data, ptls_iovec_
 }
 
 static int verify_certificate_callback(ptls_verify_certificate_t* _self, ptls_t* tls,
-                                       int (**verify_sign)(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t sign),
+                                       int (**verify_sign)(void *verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t sign),
                                        void **verify_data,
                                        ptls_iovec_t *certs,
                                        size_t num_certs)

@@ -3979,7 +3979,7 @@ int bad_certificate_test()
 * Test setting the verify certificate callback.
 */
 
-static int verify_sign_test(void* verify_ctx, ptls_iovec_t data, ptls_iovec_t sign) {
+static int verify_sign_test(void* verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t sign) {
     int* ptr = (int*)verify_ctx;
     *ptr += 1;
 

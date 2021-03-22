@@ -421,7 +421,7 @@ void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint16_t* local_reason,
  * Expect `0` as return value, when the data matches the signature.
  */
 
-typedef int (*picoquic_verify_sign_cb_fn)(void* verify_ctx, ptls_iovec_t data, ptls_iovec_t sign);
+typedef int (*picoquic_verify_sign_cb_fn)(void* verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t sign);
 /* Will be called to verify a certificate of a connection.
  * The arguments `verify_sign` and `verify_sign_ctx` are expected to be set, when the function returns `0`.
  * See `verify_sign_cb_fn` for more information about these arguments.
