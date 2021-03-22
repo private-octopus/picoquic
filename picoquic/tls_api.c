@@ -262,14 +262,14 @@ ptls_hash_algorithm_t* picoquic_get_openssl_sha256()
    using definitions in openSSL */
 
 ptls_key_exchange_algorithm_t* picoquic_key_exchanges[] = { &ptls_openssl_secp256r1,
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+#ifdef PTLS_OPENSSL_HAVE_X25519
                                                            & ptls_openssl_x25519,
 #endif
                                                            NULL };
 
 ptls_key_exchange_algorithm_t* picoquic_key_secp256r1[] = { &ptls_openssl_secp256r1, NULL };
 
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+#ifdef PTLS_OPENSSL_HAVE_X25519
 ptls_key_exchange_algorithm_t* picoquic_key_x25519[] = { &ptls_openssl_x25519, NULL };
 #endif
 
@@ -287,7 +287,7 @@ static int picoquic_openssl_set_key_exchange_in_ctx(ptls_context_t* ctx, int key
             ctx->key_exchanges = picoquic_key_exchanges;
             break;
         case 20:
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+#ifdef PTLS_OPENSSL_HAVE_X25519
             ctx->key_exchanges = picoquic_key_x25519;
             break;
 #else
