@@ -755,8 +755,8 @@ picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af, int recv_coa
                 }
 #ifdef UDP_RECV_MAX_COALESCED_SIZE
                 if (ret == 0 && recv_coalesced) {
-                    int n_messages = (recv_coalesced) ? 1 : 10;
-                    DWORD coalesced_size = n_messages * PICOQUIC_MAX_PACKET_SIZE;
+                    DWORD coalesced_size = 0x10000;
+
                     ctx->recv_buffer_size = coalesced_size;
                     ctx->recv_buffer = (uint8_t*)malloc(ctx->recv_buffer_size);
                     ctx->supports_udp_recv_coalesced = recv_coalesced;

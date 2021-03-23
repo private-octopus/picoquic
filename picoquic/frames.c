@@ -1873,6 +1873,10 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
                 if (path_x->delivered > path_x->delivered_limited_index) {
                     path_x->delivered_limited_index = 0;
                 }
+                /* Statistics */
+                if (bw_estimate > path_x->bandwidth_estimate_max) {
+                    path_x->bandwidth_estimate_max = bw_estimate;
+                }
             }
         }
     }
@@ -3903,6 +3907,15 @@ uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes
             cnx->ack_gap_local = ack_gap;
             cnx->ack_frequency_delay_local = ack_delay_max;
             cnx->is_ack_frequency_updated = 0;
+            if (ack_gap > cnx->max_ack_gap_local) {
+                cnx->max_ack_gap_local = ack_gap;
+            }
+            if (ack_delay_max < cnx->min_ack_delay_local) {
+                cnx->min_ack_delay_local = ack_delay_max;
+            }
+            if (ack_delay_max > cnx->max_ack_delay_local) {
+                cnx->max_ack_delay_local = ack_delay_max;
+            }
         }
         else {
             bytes = bytes0;
