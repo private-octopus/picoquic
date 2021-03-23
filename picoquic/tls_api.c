@@ -1284,7 +1284,7 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
     } else {
         verifier->quic = quic;
         verifier->cb.cb = verify_certificate_callback;
-        ptls_openssl_set_default_algos(verifier->cb);
+        ptls_openssl_set_default_algos(&verifier->cb);
         ctx->verify_certificate = &verifier->cb;
         quic->is_cert_store_not_empty = 1;
 
