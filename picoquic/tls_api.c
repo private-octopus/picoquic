@@ -1282,15 +1282,10 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
     if (verifier == NULL) {
         return PICOQUIC_ERROR_MEMORY;
     } else {
-        
-        // this is a bit hacky... 
-        // so we can extract the default algo list from inside picotls
-        ptls_openssl_init_verify_certificate((ptls_openssl_verify_certificate_t *)verifier, NULL);
-
-        verifier->cb.cb = verify_certificate_callback;
         verifier->quic = quic;
+        verifier->cb.cb = verify_certificate_callback;
+        ptls_openssl_set_default_algos(verifier->cb);
         ctx->verify_certificate = &verifier->cb;
-
         quic->is_cert_store_not_empty = 1;
 
         return 0;
