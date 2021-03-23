@@ -1873,6 +1873,10 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
                 if (path_x->delivered > path_x->delivered_limited_index) {
                     path_x->delivered_limited_index = 0;
                 }
+                /* Statistics */
+                if (bw_estimate > path_x->bandwidth_estimate_max) {
+                    path_x->bandwidth_estimate_max = bw_estimate;
+                }
             }
         }
     }
