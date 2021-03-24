@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 #define PICOQUIC_PER_LOG_VERSION 1
-#define PICOQUIC_PERF_LOG_MAX_ITEMS 33
+#define PICOQUIC_PERF_LOG_MAX_ITEMS 27
 
 typedef enum {
     picoquic_perflog_is_client = 0,
@@ -39,29 +39,23 @@ typedef enum {
     picoquic_perflog_nb_packets_sent = 7,
     picoquic_perflog_nb_retransmission_total = 8,
     picoquic_perflog_nb_spurious = 9,
-    picoquic_perflog_init_maxdata_local = 10,
-    picoquic_perflog_maxdata_local = 11,
-    picoquic_perflog_init_max_stream_data_local = 12,
-    picoquic_perflog_max_max_stream_data_local = 13,
-    picoquic_perflog_init_maxdata_remote = 14,
-    picoquic_perflog_maxdata_remote = 15,
-    picoquic_perflog_init_max_stream_data_remote = 16,
-    picoquic_perflog_max_max_stream_data_remote = 17,
-    picoquic_perflog_delayed_ack_option = 18,
-    picoquic_perflog_min_ack_delay_remote = 19,
-    picoquic_perflog_max_ack_delay_remote = 20,
-    picoquic_perflog_max_ack_gap_remote = 21,
-    picoquic_perflog_min_ack_delay_local = 22,
-    picoquic_perflog_max_ack_delay_local = 23,
-    picoquic_perflog_max_ack_gap_local = 24,
-    picoquic_perflog_max_mtu_sent = 25,
-    picoquic_perflog_max_mtu_received = 26,
-    picoquic_perflog_zero_rtt = 27,
-    picoquic_perflog_srtt = 28,
-    picoquic_perflog_minrtt = 29,
-    picoquic_perflog_cwin = 30,
-    picoquic_perflog_ccalgo = 31,
-    picoquic_perflog_bwe_max = 32
+    picoquic_perflog_delayed_ack_option = 10,
+    picoquic_perflog_min_ack_delay_remote = 11,
+    picoquic_perflog_max_ack_delay_remote = 12,
+    picoquic_perflog_max_ack_gap_remote = 13,
+    picoquic_perflog_min_ack_delay_local = 14,
+    picoquic_perflog_max_ack_delay_local = 15,
+    picoquic_perflog_max_ack_gap_local = 16,
+    picoquic_perflog_max_mtu_sent = 17,
+    picoquic_perflog_max_mtu_received = 18,
+    picoquic_perflog_zero_rtt = 19,
+    picoquic_perflog_srtt = 20,
+    picoquic_perflog_minrtt = 21,
+    picoquic_perflog_cwin = 22,
+    picoquic_perflog_ccalgo = 23,
+    picoquic_perflog_bwe_max = 24,
+    picoquic_perflog_pacing_quantum_max = 25,
+    picoquic_perflog_pacing_rate = 26
 } picoquic_perflog_column_enum;
 
 const char* picoquic_perflog_param_name(picoquic_perflog_column_enum rank);

@@ -168,13 +168,6 @@ int picoquic_perflog_record(picoquic_cnx_t* cnx, picoquic_performance_log_ctx_t*
         perflog_item->v[picoquic_perflog_nb_packets_sent] = cnx->nb_packets_sent;
         perflog_item->v[picoquic_perflog_nb_retransmission_total] = cnx->nb_retransmission_total;
         perflog_item->v[picoquic_perflog_nb_spurious] = cnx->nb_spurious;
-        perflog_item->v[picoquic_perflog_init_maxdata_local] = cnx->local_parameters.initial_max_data;
-        perflog_item->v[picoquic_perflog_maxdata_local] = cnx->maxdata_local;
-        perflog_item->v[picoquic_perflog_init_max_stream_data_local] = cnx->local_parameters.initial_max_stream_data_bidi_local;
-        perflog_item->v[picoquic_perflog_max_max_stream_data_local] = cnx->max_max_stream_data_local;
-        perflog_item->v[picoquic_perflog_init_maxdata_remote] = cnx->remote_parameters.initial_max_data;
-        perflog_item->v[picoquic_perflog_maxdata_remote] = cnx->maxdata_remote;
-        perflog_item->v[picoquic_perflog_max_max_stream_data_remote] = cnx->max_max_stream_data_remote;
         perflog_item->v[picoquic_perflog_delayed_ack_option] = cnx->is_ack_frequency_negotiated;
         perflog_item->v[picoquic_perflog_min_ack_delay_remote] = cnx->min_ack_delay_remote;
         perflog_item->v[picoquic_perflog_max_ack_delay_remote] = cnx->max_ack_delay_remote;
@@ -190,6 +183,8 @@ int picoquic_perflog_record(picoquic_cnx_t* cnx, picoquic_performance_log_ctx_t*
             perflog_item->v[picoquic_perflog_minrtt] = cnx->path[0]->rtt_min;
             perflog_item->v[picoquic_perflog_cwin] = cnx->path[0]->cwin;
             perflog_item->v[picoquic_perflog_bwe_max] = cnx->path[0]->bandwidth_estimate_max;
+            perflog_item->v[picoquic_perflog_pacing_quantum_max] = cnx->path[0]->pacing_quantum_max;
+            perflog_item->v[picoquic_perflog_pacing_rate] = cnx->path[0]->pacing_rate_max;
         }
         if (cnx->congestion_alg != NULL) {
             perflog_item->v[picoquic_perflog_ccalgo] = cnx->congestion_alg->congestion_algorithm_number;
@@ -258,14 +253,6 @@ const char* picoquic_perflog_param_name(picoquic_perflog_column_enum rank)
     case picoquic_perflog_nb_packets_sent: return("pkt_sent");
     case picoquic_perflog_nb_retransmission_total: return("retrans.");
     case picoquic_perflog_nb_spurious: return("spurious");
-    case picoquic_perflog_init_maxdata_local: return("init_maxdata_local");
-    case picoquic_perflog_maxdata_local: return("maxdata_local");
-    case picoquic_perflog_init_max_stream_data_local: return("init_max_stream_data_local");
-    case picoquic_perflog_max_max_stream_data_local: return("max_max_stream_data_local");
-    case picoquic_perflog_init_maxdata_remote: return("init_maxdata_remote");
-    case picoquic_perflog_maxdata_remote: return("maxdata_remote");
-    case picoquic_perflog_init_max_stream_data_remote: return("init_max_stream_data_remote");
-    case picoquic_perflog_max_max_stream_data_remote: return("max_max_stream_data_remote");
     case picoquic_perflog_delayed_ack_option: return("delayed_ack_option");
     case picoquic_perflog_min_ack_delay_remote: return("min_ack_delay_remote");
     case picoquic_perflog_max_ack_delay_remote: return("max_ack_delay_remote");
@@ -281,6 +268,8 @@ const char* picoquic_perflog_param_name(picoquic_perflog_column_enum rank)
     case picoquic_perflog_cwin: return("cwin");
     case picoquic_perflog_ccalgo: return("ccalgo");
     case picoquic_perflog_bwe_max: return("bwe_max");
+    case picoquic_perflog_pacing_quantum_max: return("p_quantum");
+    case picoquic_perflog_pacing_rate: return("p_rate");
     default:
         break;
     }

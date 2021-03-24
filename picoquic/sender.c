@@ -754,6 +754,13 @@ void picoquic_update_pacing_rate(picoquic_cnx_t * cnx, picoquic_path_t* path_x, 
 
     path_x->pacing_rate = (uint64_t)pacing_rate;
 
+    if (quantum > path_x->pacing_quantum_max) {
+        path_x->pacing_quantum_max = quantum;
+    }
+    if (path_x->pacing_rate > path_x->pacing_rate_max) {
+        path_x->pacing_rate_max = path_x->pacing_rate;
+    }
+
     path_x->pacing_packet_time_nanosec = (uint64_t)(packet_time * 1000000000.0);
 
     if (path_x->pacing_packet_time_nanosec <= 0) {

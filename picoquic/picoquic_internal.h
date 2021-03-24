@@ -970,6 +970,8 @@ typedef struct st_picoquic_path_t {
     int64_t pacing_bucket_max;
     int64_t pacing_packet_time_nanosec;
     uint64_t pacing_packet_time_microsec;
+    uint64_t pacing_quantum_max;
+    uint64_t pacing_rate_max;
 
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;
