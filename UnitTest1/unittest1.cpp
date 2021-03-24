@@ -1385,6 +1385,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cert_verify_null) {
+            int ret = cert_verify_null_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_verify_rsa) {
+            int ret = cert_verify_rsa_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cid_quiescence) {
             int ret = cid_quiescence_test();
 

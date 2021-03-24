@@ -247,6 +247,8 @@ int app_limit_cc_test();
 int initial_race_test();
 int pacing_test();
 int chacha20_test();
+int cert_verify_null_test();
+int cert_verify_rsa_test();
 int cid_quiescence_test();
 int migration_controlled_test();
 int migration_mtu_drop_test();
