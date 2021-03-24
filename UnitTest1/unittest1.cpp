@@ -794,14 +794,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_certificate_callback)
+        TEST_METHOD(client_cert_callback)
         {
             int ret = set_verify_certificate_callback_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_request_client_authentication)
+        TEST_METHOD(client_auth)
         {
           int ret = request_client_authentication_test();
 

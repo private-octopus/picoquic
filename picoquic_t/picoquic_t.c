@@ -249,6 +249,8 @@ static const picoquic_test_def_t test_table[] = {
     { "cert_verify_null_sni", cert_verify_null_sni_test },
     { "cert_verify_rsa", cert_verify_rsa_test },
     { "cid_quiescence", cid_quiescence_test },
+    { "client_auth", request_client_authentication_test },
+    { "client_cert_callback", set_verify_certificate_callback_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
     { "monopath_basic", monopath_basic_test },
