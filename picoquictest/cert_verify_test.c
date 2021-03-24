@@ -62,7 +62,6 @@ int cert_verify_set_ctx(picoquic_test_tls_api_ctx_t** pctx, uint64_t * p_simulat
     char* full_key_file = NULL;
     char* full_cert_file = NULL;
     char* full_root_certs_file= NULL;
-    uint64_t simulated_time = 0;
 
     /* Rebase the file names according to the current location */
     if (ret == 0 && key_file != NULL) {
