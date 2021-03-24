@@ -194,16 +194,20 @@ int cert_verify_test_one(int expect_success,
 
 #ifdef _WINDOWS
 #define CERT_VERIFY_RSA_CERT "certs\\cert.pem"
+#define CERT_VERIFY_RSA_BAD_CERT "certs\\badcert.pem"
 #define CERT_VERIFY_RSA_KEY "certs\\key.pem"
 #define CERT_VERIFY_TEST_CA "certs\\test-ca.crt"
-#define CERT_VERIFY_TEST_SNI "test.example.com"
 #else
 #define CERT_VERIFY_RSA_CERT "certs/cert.pem"
+#define CERT_VERIFY_RSA_BAD_CERT "certs/badcert.pem"
 #define CERT_VERIFY_RSA_KEY "certs/key.pem"
 #define CERT_VERIFY_TEST_CA "certs/test-ca.crt"
-#define CERT_VERIFY_TEST_SNI "test.example.com"
 #endif
+#define CERT_VERIFY_TEST_SNI "test.example.com"
+#define CERT_VERIFY_TEST_BAD_SNI "bad.example.com"
 
+/* NULL test: do not specify a list of root CAs.
+ * Verfication defaults to just testing that the SNI maps the name in the certificate */
 int cert_verify_null_test()
 {
     int ret = cert_verify_test_one(1, CERT_VERIFY_RSA_CERT, CERT_VERIFY_RSA_KEY,
@@ -211,9 +215,40 @@ int cert_verify_null_test()
     return ret;
 }
 
+/* RSA test: the certificate specifies an RSA key, and the certificate authority is
+ * added to the trusted list. */
 int cert_verify_rsa_test()
 {
     int ret = cert_verify_test_one(1, CERT_VERIFY_RSA_CERT, CERT_VERIFY_RSA_KEY,
         CERT_VERIFY_TEST_CA, CERT_VERIFY_TEST_SNI);
+    return ret;
+}
+
+/* BAD CERT: the server uses the wrong certificate.
+ */
+int cert_verify_bad_cert_test()
+{
+    int ret = cert_verify_test_one(0, CERT_VERIFY_RSA_BAD_CERT, CERT_VERIFY_RSA_KEY,
+        CERT_VERIFY_TEST_CA, CERT_VERIFY_TEST_SNI);
+    return ret;
+}
+
+/* BAD SNI: the name certified in the server's certificate does not match the
+ * SNI set by the client. Verification should fail.
+ */
+int cert_verify_bad_sni_test()
+{
+    int ret = cert_verify_test_one(0, CERT_VERIFY_RSA_CERT, CERT_VERIFY_RSA_KEY,
+        CERT_VERIFY_TEST_CA, CERT_VERIFY_TEST_BAD_SNI);
+    return ret;
+}
+
+/* NULL SNI: the client does not provide an SNI.
+ * Treated as indicating that the client does not care for the SNI.
+ */
+int cert_verify_null_sni_test()
+{
+    int ret = cert_verify_test_one(1, CERT_VERIFY_RSA_CERT, CERT_VERIFY_RSA_KEY,
+        CERT_VERIFY_TEST_CA, NULL);
     return ret;
 }

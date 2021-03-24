@@ -1378,15 +1378,32 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
         TEST_METHOD(chacha20) {
             int ret = chacha20_test();
 
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cert_verify_bad_cert) {
+            int ret = cert_verify_bad_cert_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_verify_bad_sni) {
+            int ret = cert_verify_bad_sni_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cert_verify_null) {
             int ret = cert_verify_null_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_verify_null_sni) {
+            int ret = cert_verify_null_sni_test();
 
             Assert::AreEqual(ret, 0);
         }
