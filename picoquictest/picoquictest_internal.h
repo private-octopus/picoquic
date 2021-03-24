@@ -163,6 +163,10 @@ extern size_t nb_test_skip_list;
 #define TEST_CLIENT_READY (test_ctx->cnx_client->cnx_state == picoquic_state_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start)
 #define TEST_SERVER_READY (test_ctx->cnx_server != NULL &&(test_ctx->cnx_server->cnx_state == picoquic_state_ready || test_ctx->cnx_server->cnx_state == picoquic_state_server_false_start))
 
+int test_api_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
+
 int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time,
     char const* ticket_file_name, char const* token_file_name, 

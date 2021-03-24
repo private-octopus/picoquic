@@ -794,14 +794,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_certificate_callback)
+        TEST_METHOD(client_cert_callback)
         {
             int ret = set_verify_certificate_callback_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_request_client_authentication)
+        TEST_METHOD(client_auth)
         {
           int ret = request_client_authentication_test();
 
@@ -1378,9 +1378,38 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
         TEST_METHOD(chacha20) {
             int ret = chacha20_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_verify_bad_cert) {
+            int ret = cert_verify_bad_cert_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_verify_bad_sni) {
+            int ret = cert_verify_bad_sni_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_verify_null) {
+            int ret = cert_verify_null_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_verify_null_sni) {
+            int ret = cert_verify_null_sni_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_verify_rsa) {
+            int ret = cert_verify_rsa_test();
 
             Assert::AreEqual(ret, 0);
         }
