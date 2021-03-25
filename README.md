@@ -55,7 +55,7 @@ builds, the tests are run through a command line program.
 As explained in the Wiki, Picoquic is actively tested against other implementations
 during the QUIC Interop days. See https://github.com/private-octopus/picoquic/wiki/QUIC-milestones-and-interop-testing.
 
-The current version is aligned with draft 27. All big features are supported, including
+The current version is aligned with draft 34. All big features are supported, including
 the interface between QUIC and TLS, 0-RTT, migration and key rollover. The state of
 development is tracked in the list of issues in this repository.
 
@@ -65,7 +65,7 @@ as [Quicdoq](https://github.com/private-octopus/quicdoq). DNS over Quic is inter
 by itself, but it also provides an example for building an application different than
 HTTP on top of Picoquic.
 
-We are spending time bettering the implementation. Until now 
+We are spending time bettering the implementation. Initially
 the focus has been on correctness rather than performance. We will keep correctness,
 but we will improve performance, especially in light of practical experience with 
 applications. Suggestions are wellcome.
@@ -76,8 +76,8 @@ Picoquic is developed in C, and can be built under Windows or Linux. Building th
 project requires first managing the dependencies, [Picotls](https://github.com/h2o/picotls)
 and OpenSSL. Please note that you will need a recent version of Picotls --
 the Picotls API has eveolved recently to support the latest version of QUIC. The
-current code is tested against the Picotls version of Sat Sep 12 20:48:55 2020 +0900,
-after commit `2464adadf28c1b924416831d24ca62380936a209`. The code uses OpenSSL
+current code is tested against the Picotls version of Fri Mar 26 06:55:11 2021 +0900,
+after commit `86ccc558004c6808d6605d2c0e6f8dd13ebd1376`. The code uses OpenSSL
 version 1.1.1.
 
 ## Picoquic on Windows
@@ -142,8 +142,9 @@ more details.
 ## Testing previous versions
 
 The code is constantly updated to track the latest version of the specification. It currently
-conforms to draft-29, and will negotiate support for the corresponding version `0xFF00001d`.
-It will also accept negotiation of version `0xFF00001c`, draft-28, and `0xFF00001b`, draft-27. 
+conforms to draft-34, and will negotiate support for the corresponding version `0x00000001` --
+that is, QUIC Transport version 1. The version 1 RFC is not published yet, but it is not expected
+to be much different from draft-34. Picoquic will also accept negotiation of previous versions down to draft-27. 
 
 # Creating QLOG Log Files
 
