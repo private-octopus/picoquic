@@ -4017,9 +4017,10 @@ int set_verify_certificate_callback_test()
     char test_server_cert_store_file[512];
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
-    static const uint16_t default_algos[] = { PTLS_SIGNATURE_RSA_PSS_RSAE_SHA256, 
+    static const uint16_t default_algos[] = {
+        PTLS_SIGNATURE_ED25519, PTLS_SIGNATURE_RSA_PSS_RSAE_SHA256,
         PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, PTLS_SIGNATURE_RSA_PKCS1_SHA256, 
-        PTLS_SIGNATURE_RSA_PKCS1_SHA1, 0 };
+        PTLS_SIGNATURE_RSA_PKCS1_SHA1, UINT16_MAX };
 
     verify_certificate_test_cb_t verify_cb = { 0 };
 
