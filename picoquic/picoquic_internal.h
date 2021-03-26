@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "0.34e"
+#define PICOQUIC_VERSION "0.34f"
 
 #ifndef PICOQUIC_MAX_PACKET_SIZE
 #define PICOQUIC_MAX_PACKET_SIZE 1536
@@ -560,6 +560,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int client_zero_share : 1;
     unsigned int server_busy : 1;
     unsigned int is_cert_store_not_empty : 1;
+    unsigned int is_cert_verifier_custom : 1;
     unsigned int use_long_log : 1;
     unsigned int should_close_log : 1;
     unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
@@ -599,9 +600,14 @@ typedef struct st_picoquic_quic_t {
     void ** retry_integrity_sign_ctx;
     void ** retry_integrity_verify_ctx;
 
+#if 1
+    struct st_ptls_verify_certificate_t * verify_certificate_callback;
+    picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
+#else
     picoquic_verify_certificate_cb_fn verify_certificate_callback_fn;
     picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
     void* verify_certificate_ctx;
+#endif
 
     picoquic_tp_t * default_tp;
 

@@ -636,15 +636,15 @@ void picoquic_free(picoquic_quic_t* quic)
         if (quic->table_cnx_by_secret != NULL) {
             picohash_delete(quic->table_cnx_by_secret, 1);
         }
-
+#if 0
         if (quic->verify_certificate_ctx != NULL &&
             quic->free_verify_certificate_callback_fn != NULL) {
             (quic->free_verify_certificate_callback_fn)(quic->verify_certificate_ctx);
             quic->verify_certificate_ctx = NULL;
         }
-
-        if (quic->verify_certificate_callback_fn != NULL) {
-            picoquic_dispose_verify_certificate_callback(quic, 1);
+#endif
+        if (quic->verify_certificate_callback != NULL) {
+            picoquic_dispose_verify_certificate_callback(quic);
         }
 
         if (quic->default_tp != NULL) {
@@ -673,7 +673,7 @@ void picoquic_free(picoquic_quic_t* quic)
 }
 
 void picoquic_set_null_verifier(picoquic_quic_t* quic) {
-    picoquic_dispose_verify_certificate_callback(quic, quic->verify_certificate_callback_fn != NULL);
+    picoquic_dispose_verify_certificate_callback(quic);
 }
 
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
@@ -3804,13 +3804,12 @@ void picoquic_disable_keep_alive(picoquic_cnx_t* cnx)
     cnx->keep_alive_interval = 0;
 }
 
-int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, picoquic_verify_certificate_cb_fn cb, void* ctx,
-                                             picoquic_free_verify_certificate_ctx free_fn) {
-    picoquic_dispose_verify_certificate_callback(quic, quic->verify_certificate_callback_fn != NULL);
+int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, 
+    struct st_ptls_verify_certificate_t * cb, picoquic_free_verify_certificate_ctx free_fn) {
+    picoquic_dispose_verify_certificate_callback(quic);
 
-    quic->verify_certificate_callback_fn = cb;
+    quic->verify_certificate_callback = cb;
     quic->free_verify_certificate_callback_fn = free_fn;
-    quic->verify_certificate_ctx = ctx;
 
     return picoquic_enable_custom_verify_certificate_callback(quic);
 }

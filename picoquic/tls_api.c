@@ -1222,88 +1222,33 @@ uint64_t picoquic_get_simulated_time_cb(ptls_get_time_t* self)
 /*
  * Verify certificate
  */
-typedef struct {
-    ptls_verify_certificate_t cb;
-    picoquic_quic_t *quic;
-} picoquic_verify_certificate_t;
-
-typedef struct {
-    /* The pointer to the overlying `verify_ctx` */
-    void *verify_ctx;
-    int (*verify_sign)(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t sign);
-} picoquic_verify_ctx_t;
-
-static int verify_sign_callback(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t sign)
-{
-    picoquic_verify_ctx_t* ctx = (picoquic_verify_ctx_t*)verify_ctx;
-    int ret = 0;
-
-    ret = ctx->verify_sign(ctx->verify_ctx, data, sign);
-
-    free(ctx);
-
-    return ret;
-}
-
-static int verify_certificate_callback(ptls_verify_certificate_t* _self, ptls_t* tls,
-                                       int (**verify_sign)(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t sign),
-                                       void **verify_data,
-                                       ptls_iovec_t *certs,
-                                       size_t num_certs)
-{
-    picoquic_verify_certificate_t *self = container_of(_self, picoquic_verify_certificate_t, cb);
-    picoquic_cnx_t* cnx = (picoquic_cnx_t*)*ptls_get_data_ptr(tls);
-    int ret = 0;
-    void *verify_ctx = NULL;
-    picoquic_verify_sign_cb_fn verify_sign_fn = NULL;
-
-    ret = (self->quic->verify_certificate_callback_fn)(self->quic->verify_certificate_ctx, cnx,
-                                                       certs, num_certs, &verify_sign_fn, &verify_ctx);
-
-    if (ret == 0) {
-        *verify_sign = verify_sign_callback;
-        *verify_data = malloc(sizeof(picoquic_verify_ctx_t));
-        if (*verify_data != NULL) {
-            ((picoquic_verify_ctx_t*)*verify_data)->verify_ctx = verify_ctx;
-            ((picoquic_verify_ctx_t*)*verify_data)->verify_sign = verify_sign_fn;
-        }
-    }
-
-    return ret;
-}
 
 int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
-    picoquic_verify_certificate_t* verifier = NULL;
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
 
-    assert(quic->verify_certificate_callback_fn != NULL);
-
-    verifier = (picoquic_verify_certificate_t*)malloc(sizeof(picoquic_verify_certificate_t));
-    if (verifier == NULL) {
-        return PICOQUIC_ERROR_MEMORY;
-    } else {
-        verifier->quic = quic;
-        verifier->cb.cb = verify_certificate_callback;
-        ctx->verify_certificate = &verifier->cb;
-        quic->is_cert_store_not_empty = 1;
-
-        return 0;
-    }
+    ctx->verify_certificate = quic->verify_certificate_callback;
+    quic->is_cert_store_not_empty = 1;
+    quic->is_cert_verifier_custom = 1;
+    return 0;
 }
 
-
-void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic, int custom) {
+void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic) {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
 
-    if (ctx->verify_certificate == NULL) {
-        return;
+    if (ctx->verify_certificate != NULL){
+        if (quic->is_cert_verifier_custom) {
+            if (quic->free_verify_certificate_callback_fn != NULL) {
+                (quic->free_verify_certificate_callback_fn)(ctx->verify_certificate);
+                quic->free_verify_certificate_callback_fn = NULL;
+            }
+        } else {
+            picoquic_dispose_certificate_verifier(ctx->verify_certificate);
+            free(ctx->verify_certificate);
+        }
+        ctx->verify_certificate = NULL;
+        quic->is_cert_verifier_custom = 0;
     }
-
-    if (custom == 0) {
-        picoquic_dispose_certificate_verifier(ctx->verify_certificate);
-    }
-    free(ctx->verify_certificate);
-
+   
     ctx->verify_certificate = NULL;
 }
 
@@ -1864,7 +1809,7 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
             ctx->sign_certificate = NULL;
         }
 
-        picoquic_dispose_verify_certificate_callback(quic, 0);
+        picoquic_dispose_verify_certificate_callback(quic);
 
         if (ctx->on_client_hello != NULL) {
             free(ctx->on_client_hello);

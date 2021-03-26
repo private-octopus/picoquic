@@ -3979,22 +3979,32 @@ int bad_certificate_test()
 * Test setting the verify certificate callback.
 */
 
-static int verify_sign_test(void* verify_ctx, ptls_iovec_t data, ptls_iovec_t sign) {
+typedef struct st_verify_certificate_test_cb_t {
+    ptls_verify_certificate_t super;
+    int callcount;
+} verify_certificate_test_cb_t;
+
+static int verify_sign_test(void* verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t sign)
+{
     int* ptr = (int*)verify_ctx;
     *ptr += 1;
 
     return 0;
 }
 
-static int verify_certificate_test(void* ctx, picoquic_cnx_t* cnx, ptls_iovec_t* certs, size_t num_certs,
-                                   picoquic_verify_sign_cb_fn* verify_sign, void** verify_sign_ctx) {
-    int* data = (int*)ctx;
-    *data += 1;
+static int verify_certificate_test_cb(struct st_ptls_verify_certificate_t* self, ptls_t* tls,
+    int (**verify_sign)(void* verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t sign), void** verify_data,
+    ptls_iovec_t* certs, size_t num_certs)
+{
+
+    int ret = 0;
+    verify_certificate_test_cb_t* verify_cb_ctx = (verify_certificate_test_cb_t*)
+        ((char*)self - offsetof(verify_certificate_test_cb_t, super.cb));
 
     *verify_sign = verify_sign_test;
-    *verify_sign_ctx = ctx;
+    *verify_data = (void*)&verify_cb_ctx->callcount;
 
-    return 0;
+    return ret;
 }
 
 int set_verify_certificate_callback_test()
@@ -4002,12 +4012,20 @@ int set_verify_certificate_callback_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int call_count = 0;
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    static const uint16_t default_algos[] = {
+        PTLS_SIGNATURE_ED25519, PTLS_SIGNATURE_RSA_PSS_RSAE_SHA256,
+        PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, PTLS_SIGNATURE_RSA_PKCS1_SHA256, 
+        PTLS_SIGNATURE_RSA_PKCS1_SHA1, UINT16_MAX };
+
+    verify_certificate_test_cb_t verify_cb = { 0 };
+
+    verify_cb.super.cb = verify_certificate_test_cb;
+    verify_cb.super.algos = default_algos;
 
     if (ret == 0) {
         ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
@@ -4058,14 +4076,12 @@ int set_verify_certificate_callback_test()
 
     /* Set the verify callback for the client */
     if (ret == 0) {
-        ret = picoquic_set_verify_certificate_callback(test_ctx->qclient, verify_certificate_test,
-                                                       &call_count, NULL);
+        ret = picoquic_set_verify_certificate_callback(test_ctx->qclient, &verify_cb.super, NULL);
     }
 
     /* Set the verify callback for the server */
     if (ret == 0) {
-        ret = picoquic_set_verify_certificate_callback(test_ctx->qserver, verify_certificate_test,
-                                                       &call_count, NULL);
+        ret = picoquic_set_verify_certificate_callback(test_ctx->qserver, &verify_cb.super, NULL);
     }
 
     /* Activate client authentication */
@@ -4075,7 +4091,7 @@ int set_verify_certificate_callback_test()
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
-    if (ret == 0 && call_count != 4) {
+    if (ret == 0 && verify_cb.callcount != 2) {
         ret = -1;
     }
 
