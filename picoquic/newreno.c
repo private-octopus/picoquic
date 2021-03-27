@@ -211,6 +211,11 @@ static void picoquic_newreno_notify(
 #endif
     picoquic_newreno_state_t* nr_state = (picoquic_newreno_state_t*)path_x->congestion_alg_state;
 
+#if 1
+    if (cnx == NULL || cnx->path == NULL || cnx->path[0] == NULL) {
+        DBG_PRINTF("%s", "BUG");
+    }
+#endif
     path_x->is_cc_data_updated = 1;
 
     if (nr_state != NULL) {
@@ -259,6 +264,7 @@ static void picoquic_newreno_notify(
                     nr_state->nrss.ssthresh = nr_state->nrss.cwin;
                     nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
                     path_x->cwin = nr_state->nrss.cwin;
+                    path_x->is_ssthresh_initialized = 1;
                 }
             }
             break;

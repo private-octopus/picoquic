@@ -683,6 +683,7 @@ void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, u
 
 void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
 {
+    path_x->is_ssthresh_initialized = 1;
     bbr_state->state = picoquic_bbr_alg_drain;
     bbr_state->pacing_gain = 1.0 / BBR_HIGH_GAIN;  /* pace slowly */
     bbr_state->cwnd_gain = BBR_HIGH_GAIN;   /* maintain cwnd */

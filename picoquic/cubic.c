@@ -144,9 +144,14 @@ static void picoquic_cubic_enter_recovery(picoquic_cnx_t * cnx,
     cubic_state->ssthresh = (uint64_t)(cubic_state->W_max * cubic_state->beta*(double)path_x->send_mtu);
     if (cubic_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
         /* If things are that bad, fall back to slow start */
+#if 0
         cubic_state->ssthresh = PICOQUIC_CWIN_MINIMUM;
+#endif
         cubic_state->alg_state = picoquic_cubic_alg_slow_start;
+#if 1
         cubic_state->ssthresh = UINT64_MAX;
+        path_x->is_ssthresh_initialized = 0;
+#endif
         cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
         cubic_state->start_of_epoch = current_time;
         cubic_state->W_reno = PICOQUIC_CWIN_MINIMUM;
@@ -232,6 +237,7 @@ static void picoquic_cubic_notify(
                     /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                     if (path_x->cwin >= cubic_state->ssthresh) {
                         cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
+                        path_x->is_ssthresh_initialized = 1;
                         picoquic_cubic_enter_avoidance(cubic_state, current_time);
                     }
                 }
@@ -242,6 +248,7 @@ static void picoquic_cubic_notify(
                 /* enter recovery */
                 if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
                     cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
+                    path_x->is_ssthresh_initialized = 1;
                     picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
                 break;
@@ -271,6 +278,7 @@ static void picoquic_cubic_notify(
                     cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
                     cubic_state->W_last_max = cubic_state->W_max;
                     cubic_state->W_reno = ((double)path_x->cwin);
+                    path_x->is_ssthresh_initialized = 1;
                     picoquic_cubic_enter_avoidance(cubic_state, current_time);
                     /* apply a correction to enter the test phase immediately */
                     uint64_t K_micro = (uint64_t)(cubic_state->K * 1000000.0);
@@ -406,6 +414,7 @@ static void dcubic_exit_slow_start(
     uint64_t current_time)
 {
     if (cubic_state->ssthresh == UINT64_MAX) {
+        path_x->is_ssthresh_initialized = 1;
         cubic_state->ssthresh = path_x->cwin;
         cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
         cubic_state->W_last_max = cubic_state->W_max;
