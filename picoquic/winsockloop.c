@@ -407,6 +407,8 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     picoquic_sendmsg_ctx_t* send_ctx_first = NULL;
     picoquic_sendmsg_ctx_t* send_ctx_last = NULL;
     WSADATA wsaData = { 0 };
+    /* TODO: rewrite the code and avoid using the "loop_immediate" state variable */
+    int loop_immediate = 0;
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
     memset(sock_af, 0, sizeof(sock_af));
 
@@ -507,8 +509,14 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 
     while (ret == 0) {
         int socket_rank = -1;
-        int64_t delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
-        DWORD delta_t_ms = (delta_t < 0)?0:(DWORD)(delta_t / 1000);
+        int64_t delta_t;
+        DWORD delta_t_ms=0;
+        /* TODO: rewrite the code and avoid using the "loop_immediate" state variable */
+        if (!loop_immediate) {
+            delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
+            delta_t_ms = (delta_t < 0) ? 0 : (DWORD)(delta_t / 1000);
+        }
+        loop_immediate = 0;
         DWORD ret_event = WSAWaitForMultipleEvents(nb_sockets, events, FALSE, delta_t_ms, TRUE);
         current_time = picoquic_get_quic_time(quic);
 
@@ -583,15 +591,19 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                     if (ret == 0 && loop_callback != NULL) {
                         ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx);
                     }
+                    /* TODO: this use of a state variable is ugly. Consider rewriting the code 
+                     * and avoid it. */
+                    loop_immediate = 1;
+                    continue;
                 }
             }
             else {
                 /* Receive timer */
                 ret = 0;
             }
-
             /* Send packets that are now ready */
-            if (ret == 0 && (!send_ctx_first->is_started || send_ctx_first->is_complete)) {
+            if (ret == 0 && 
+                (!send_ctx_first->is_started || send_ctx_first->is_complete)) {
                 do {
                     picoquic_recvmsg_async_ctx_t* sock_ctx_send = NULL;
                     picoquic_sendmsg_ctx_t* send_ctx = send_ctx_first;
@@ -683,7 +695,6 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                 DBG_PRINTF("%s", "No completion routine called on time!");
                 Sleep(1);
             }
-
             if (ret == 0 && loop_callback != NULL) {
                 ret = loop_callback(quic, picoquic_packet_loop_after_send, loop_callback_ctx);
             }
