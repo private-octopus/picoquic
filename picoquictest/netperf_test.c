@@ -132,9 +132,14 @@ int netperf_next_departure(picoquic_quic_t* quic, picoquictest_sim_link_t* targe
         }
 
         if (ret == 0 && sent_so_far < send_length) {
-            *was_active = 1;
             packet->length = send_length - sent_so_far;
-            memcpy(packet->bytes, send_buffer + sent_so_far, send_msg_size);
+            *was_active = 1;
+#if 1
+            if (packet->length >= 1536) {
+                DBG_PRINTF("%s", "BUG");
+            }
+#endif
+            memcpy(packet->bytes, send_buffer + sent_so_far, packet->length);
             picoquictest_sim_link_submit(target_link, packet, simulated_time);
             packet = NULL;
         }
