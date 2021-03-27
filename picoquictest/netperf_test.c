@@ -111,7 +111,8 @@ int netperf_next_departure(picoquic_quic_t* quic, picoquictest_sim_link_t* targe
             send_buffer, send_buffer_size, &send_length,
             &packet->addr_to, &packet->addr_from, &if_index, &log_cid, &last_cnx, &send_msg_size);
 
-        if (send_msg_size > sizeof(packet->bytes)) {
+        if (send_msg_size > PICOQUIC_MAX_PACKET_SIZE ||
+            send_length > send_buffer_size) {
             ret = -1;
         }
 
@@ -134,11 +135,6 @@ int netperf_next_departure(picoquic_quic_t* quic, picoquictest_sim_link_t* targe
         if (ret == 0 && sent_so_far < send_length) {
             packet->length = send_length - sent_so_far;
             *was_active = 1;
-#if 1
-            if (packet->length >= 1536) {
-                DBG_PRINTF("%s", "BUG");
-            }
-#endif
             memcpy(packet->bytes, send_buffer + sent_so_far, packet->length);
             picoquictest_sim_link_submit(target_link, packet, simulated_time);
             packet = NULL;
@@ -620,7 +616,7 @@ int nat_attack_loop(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t * simulated_
         }
         nb_loops++;
         if (nb_loops > 100000) {
-            DBG_PRINTF("To many loops %d", nb_loops);
+            DBG_PRINTF("Too many loops %d", nb_loops);
             ret = -1;
             break;
         }

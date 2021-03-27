@@ -1939,12 +1939,6 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
     uint64_t ack_gap;
     uint64_t ack_gap_min = 2;
 
-#if 1
-    if (cnx == NULL || cnx->path == NULL || cnx->path[0] == NULL) {
-        DBG_PRINTF("%s", "BUG");
-    }
-#endif
-
     if (!cnx->is_ack_frequency_negotiated) {
         uint64_t packet_rate_times_1M = (data_rate * 1000000) / cnx->path[0]->send_mtu;
         nb_packets = packet_rate_times_1M / cnx->path[0]->smoothed_rtt;
@@ -2004,11 +1998,7 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
 uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t* cnx, uint64_t rtt, uint64_t remote_min_ack_delay)
 {
     uint64_t ack_delay_max = rtt / 4;
-#if 1
-    if (cnx == NULL || cnx->path == NULL || cnx->path[0] == NULL) {
-        DBG_PRINTF("%s", "BUG");
-    }
-#endif
+
     if (!cnx->is_ack_frequency_negotiated && !cnx->path[0]->is_ssthresh_initialized) {
         ack_delay_max /= 2;
     }

@@ -144,14 +144,10 @@ static void picoquic_cubic_enter_recovery(picoquic_cnx_t * cnx,
     cubic_state->ssthresh = (uint64_t)(cubic_state->W_max * cubic_state->beta*(double)path_x->send_mtu);
     if (cubic_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
         /* If things are that bad, fall back to slow start */
-#if 0
-        cubic_state->ssthresh = PICOQUIC_CWIN_MINIMUM;
-#endif
+
         cubic_state->alg_state = picoquic_cubic_alg_slow_start;
-#if 1
         cubic_state->ssthresh = UINT64_MAX;
         path_x->is_ssthresh_initialized = 0;
-#endif
         cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
         cubic_state->start_of_epoch = current_time;
         cubic_state->W_reno = PICOQUIC_CWIN_MINIMUM;

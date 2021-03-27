@@ -600,14 +600,8 @@ typedef struct st_picoquic_quic_t {
     void ** retry_integrity_sign_ctx;
     void ** retry_integrity_verify_ctx;
 
-#if 1
     struct st_ptls_verify_certificate_t * verify_certificate_callback;
     picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
-#else
-    picoquic_verify_certificate_cb_fn verify_certificate_callback_fn;
-    picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
-    void* verify_certificate_ctx;
-#endif
 
     picoquic_tp_t * default_tp;
 

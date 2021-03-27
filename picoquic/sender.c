@@ -4165,7 +4165,8 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
             /* Reset the wake time to the initial value after sending packets */
             next_wake_time = initial_next_time;
 
-            if (send_msg_size != NULL && *send_msg_size > 0 && *send_length > 0) {
+            if (send_msg_size != NULL && *send_msg_size > 0 && *send_length > 0 &&
+                packet_max > * send_msg_size) {
                 /* Consecutive packets should not be larger than first packet */
                 packet_max = *send_msg_size;
             }
