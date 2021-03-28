@@ -219,6 +219,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     int testing_migration = 0; /* Hook for the migration test */
     uint16_t next_port = 0; /* Data for the migration test */
     picoquic_cnx_t* last_cnx = NULL;
+    int loop_immediate = 0;
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
@@ -247,17 +248,22 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     /* TODO: add stopping condition, was && (!just_once || !connection_done) */
     while (ret == 0) {
         int socket_rank = -1;
-        int64_t delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
+        int64_t delta_t = 0;
         unsigned char received_ecn;
 
         if_index_to = 0;
+        /* TODO: rewrite the code and avoid using the "loop_immediate" state variable */
+        if (!loop_immediate) {
+            delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
+        }
+        loop_immediate = 0;
 
         bytes_recv = picoquic_select_ex(s_socket, nb_sockets,
             &addr_from,
             &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
             delta_t, &socket_rank, &current_time);
-
+#if 0
         nb_loops++;
         if (nb_loops >= 100) {
             uint64_t loop_delta = current_time - loop_count_time;
@@ -270,7 +276,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
 
             nb_loops = 0;
         }
-
+#endif
         if (bytes_recv < 0) {
             ret = -1;
         }
@@ -318,6 +324,10 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                 if (loop_callback != NULL) {
                     ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx);
                 }
+
+                /* Try to receive more packets if possible */
+                loop_immediate = 1;
+                continue;
             }
 
             while (ret == 0) {
