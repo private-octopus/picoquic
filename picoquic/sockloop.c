@@ -209,8 +209,6 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     size_t send_buffer_size = 1536;
     size_t* send_msg_ptr = NULL;
     int bytes_recv;
-    uint64_t loop_count_time = current_time;
-    int nb_loops = 0;
     picoquic_connection_id_t log_cid;
     SOCKET_TYPE s_socket[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
@@ -263,20 +261,6 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
             &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
             delta_t, &socket_rank, &current_time);
-#if 0
-        nb_loops++;
-        if (nb_loops >= 100) {
-            uint64_t loop_delta = current_time - loop_count_time;
-
-            loop_count_time = current_time;
-            DBG_PRINTF("Looped %d times in %llu microsec, file: %d, line: %d\n",
-                nb_loops, (unsigned long long) loop_delta, quic->wake_file, quic->wake_line);
-            picoquic_log_context_free_app_message(quic, &log_cid, "Looped %d times in %llu microsec, file: %d, line: %d",
-                nb_loops, (unsigned long long) loop_delta, quic->wake_file, quic->wake_line);
-
-            nb_loops = 0;
-        }
-#endif
         if (bytes_recv < 0) {
             ret = -1;
         }
@@ -344,8 +328,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
 
                 if (ret == 0 && send_length > 0) {
                     SOCKET_TYPE send_socket = INVALID_SOCKET;
-                    loop_count_time = current_time;
-                    nb_loops = 0;
+
                     for (int i = 0; i < nb_sockets; i++) {
                         if (sock_af[i] == peer_addr.ss_family) {
                             send_socket = s_socket[i];
