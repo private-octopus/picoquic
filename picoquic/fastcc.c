@@ -143,6 +143,8 @@ static void fastcc_notify_congestion(
     }
 
     picoquic_update_pacing_data(cnx, path_x, 0);
+
+    path_x->is_ssthresh_initialized = 1;
 }
 
 /*

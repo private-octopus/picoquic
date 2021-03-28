@@ -259,6 +259,7 @@ static void picoquic_newreno_notify(
                     nr_state->nrss.ssthresh = nr_state->nrss.cwin;
                     nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
                     path_x->cwin = nr_state->nrss.cwin;
+                    path_x->is_ssthresh_initialized = 1;
                 }
             }
             break;

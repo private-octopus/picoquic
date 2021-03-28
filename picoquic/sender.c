@@ -2996,7 +2996,7 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     }
     else {
         cnx->ack_gap_remote = picoquic_compute_ack_gap(cnx, cnx->path[0]->receive_rate_max);
-        cnx->ack_delay_remote = picoquic_compute_ack_delay_max(cnx->path[0]->rtt_min, PICOQUIC_ACK_DELAY_MIN);
+        cnx->ack_delay_remote = picoquic_compute_ack_delay_max(cnx, cnx->path[0]->rtt_min, PICOQUIC_ACK_DELAY_MIN);
 
         /* Keep track of statistics on ACK parameters */
         if (cnx->ack_gap_remote > cnx->max_ack_gap_remote) {
@@ -4165,7 +4165,8 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
             /* Reset the wake time to the initial value after sending packets */
             next_wake_time = initial_next_time;
 
-            if (send_msg_size != NULL && *send_msg_size > 0 && *send_length > 0) {
+            if (send_msg_size != NULL && *send_msg_size > 0 && *send_length > 0 &&
+                packet_max > * send_msg_size) {
                 /* Consecutive packets should not be larger than first packet */
                 packet_max = *send_msg_size;
             }

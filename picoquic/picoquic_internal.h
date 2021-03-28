@@ -600,14 +600,8 @@ typedef struct st_picoquic_quic_t {
     void ** retry_integrity_sign_ctx;
     void ** retry_integrity_verify_ctx;
 
-#if 1
     struct st_ptls_verify_certificate_t * verify_certificate_callback;
     picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
-#else
-    picoquic_verify_certificate_cb_fn verify_certificate_callback_fn;
-    picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
-    void* verify_certificate_ctx;
-#endif
 
     picoquic_tp_t * default_tp;
 
@@ -891,6 +885,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_cc_data_updated : 1;
     unsigned int is_multipath_probe_needed : 1;
     unsigned int was_local_cnxid_retired : 1;
+    unsigned int is_ssthresh_initialized : 1;
 
     /* Path priority, for multipath management */
     int path_priority;
@@ -1482,7 +1477,7 @@ int picoquic_process_ack_of_ack_frame(
 
 uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate);
 
-uint64_t picoquic_compute_ack_delay_max(uint64_t rtt, uint64_t remote_min_ack_delay);
+uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t * cnx, uint64_t rtt, uint64_t remote_min_ack_delay);
 
 /* Update the path RTT upon receiving an explict or implicit acknowledgement */
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, picoquic_path_t* path_x,
