@@ -52,6 +52,8 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
 
 void picoquic_tlscontext_free(void* ctx);
 
+void picoquic_tlscontext_trim_after_handshake(picoquic_cnx_t* cnx);
+
 void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx);
 
 int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int* data_consumed, uint64_t current_time);

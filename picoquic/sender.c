@@ -2971,6 +2971,9 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_0rtt]);
     picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_handshake]);
 
+    /* Trim the memory buffers allocated during handshake */
+    picoquic_tlscontext_trim_after_handshake(cnx);
+
     /* Set the confidentiality limit if not already set */
     if (cnx->crypto_epoch_length_max == 0) {
         cnx->crypto_epoch_length_max = 

@@ -87,14 +87,8 @@ typedef struct st_picoquic_tls_ctx_t {
     ptls_handshake_properties_t handshake_properties;
     ptls_iovec_t alpn_vec[PICOQUIC_ALPN_NUMBER_MAX];
     int alpn_count;
-    unsigned int has_sent_ext_data : 1; /* If transport parameters were formatted */
     uint8_t* ext_data;
     size_t ext_data_size;
-#if 0
-    uint8_t ext_received[PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE];
-    size_t ext_received_length;
-    int ext_received_return;
-#endif
     uint16_t esni_version;
     uint8_t esni_nonce[PICOQUIC_ESNI_NONCE_SIZE];
     uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
@@ -787,26 +781,6 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
     const uint8_t* secret, size_t secret_length);
 
-#if 0
-/*
- * Provide access to transport received transport extension for
- * logging purpose.
- */
-void picoquic_provide_received_transport_extensions(picoquic_cnx_t* cnx,
-    uint8_t** ext_received,
-    size_t* ext_received_length,
-    int* ext_received_return,
-    int* client_mode)
-{
-    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
-
-    *ext_received = ctx->ext_received;
-    *ext_received_length = ctx->ext_received_length;
-    *ext_received_return = ctx->ext_received_return;
-    *client_mode = ctx->client_mode;
-}
-#endif
-
 /* Crypto random number generator */
 
 void picoquic_crypto_random(picoquic_quic_t* quic, void* buf, size_t len)
@@ -990,7 +964,6 @@ void picoquic_tls_set_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ct
     }
 
     tls_ctx->handshake_properties.additional_extensions = tls_ctx->ext;
-    tls_ctx->has_sent_ext_data = 1;
 }
 
 /*
@@ -1011,21 +984,9 @@ int picoquic_tls_collected_extensions_cb(ptls_t* tls, ptls_handshake_properties_
 
     for (int i_slot = 0; slots[i_slot].type != 0xFFFF; i_slot++) {
         if (slots[i_slot].type == picoquic_tls_get_quic_extension_id(ctx->cnx)) {
-#if 0
-            size_t copied_length = sizeof(ctx->ext_received);
-#endif
-
             /* Retrieve the transport parameters */
             ret = picoquic_receive_transport_extensions(ctx->cnx, (ctx->client_mode) ? 1 : 0,
                 slots[i_slot].data.base, slots[i_slot].data.len, &consumed);
-#if 0
-            /* Copy the extensions in the local context for further debugging */
-            ctx->ext_received_length = slots[i_slot].data.len;
-            if (copied_length > ctx->ext_received_length)
-                copied_length = ctx->ext_received_length;
-            memcpy(ctx->ext_received, slots[i_slot].data.base, copied_length);
-            ctx->ext_received_return = ret;
-#endif
             /* For now, override the value in case of default */
             ret = 0;
 
@@ -2123,6 +2084,18 @@ void picoquic_tlscontext_free(void* vctx)
     free(ctx);
 }
 
+
+void picoquic_tlscontext_trim_after_handshake(picoquic_cnx_t * cnx)
+{
+    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+
+    if (ctx->ext_data != NULL) {
+        free(ctx->ext_data);
+        ctx->ext_data = NULL;
+        ctx->ext_data_size = 0;
+    }
+}
+
 char const* picoquic_tls_get_negotiated_alpn(picoquic_cnx_t* cnx)
 {
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
@@ -2316,12 +2289,6 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
             ret = -1;
         }
         ptls_buffer_dispose(&sendbuf);
-
-        if (ctx->has_sent_ext_data && ctx->ext_data != NULL) {
-            free(ctx->ext_data);
-            ctx->ext_data_size = 0;
-            ctx->ext_data = NULL;
-        }
     }
 
     return ret;
@@ -2745,13 +2712,6 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed, uint64
             }
         }
     }
-
-    if (ctx->has_sent_ext_data && ctx->ext_data != NULL) {
-        free(ctx->ext_data);
-        ctx->ext_data = NULL;
-        ctx->ext_data_size = 0;
-    }
-
 
     /* Reset indication of current connection */
     cnx->quic->cnx_in_progress = NULL;
