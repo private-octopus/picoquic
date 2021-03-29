@@ -87,10 +87,14 @@ typedef struct st_picoquic_tls_ctx_t {
     ptls_handshake_properties_t handshake_properties;
     ptls_iovec_t alpn_vec[PICOQUIC_ALPN_NUMBER_MAX];
     int alpn_count;
-    uint8_t ext_data[PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE];
+    unsigned int has_sent_ext_data : 1; /* If transport parameters were formatted */
+    uint8_t* ext_data;
+    size_t ext_data_size;
+#if 0
     uint8_t ext_received[PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE];
     size_t ext_received_length;
     int ext_received_return;
+#endif
     uint16_t esni_version;
     uint8_t esni_nonce[PICOQUIC_ESNI_NONCE_SIZE];
     uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
@@ -783,6 +787,7 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
     const uint8_t* secret, size_t secret_length);
 
+#if 0
 /*
  * Provide access to transport received transport extension for
  * logging purpose.
@@ -800,6 +805,7 @@ void picoquic_provide_received_transport_extensions(picoquic_cnx_t* cnx,
     *ext_received_return = ctx->ext_received_return;
     *client_mode = ctx->client_mode;
 }
+#endif
 
 /* Crypto random number generator */
 
@@ -962,9 +968,13 @@ int picoquic_tls_collect_extensions_cb(ptls_t* tls, struct st_ptls_handshake_pro
 
 void picoquic_tls_set_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ctx)
 {
-    size_t consumed;
-    int ret = picoquic_prepare_transport_extensions(cnx, (tls_ctx->client_mode) ? 0 : 1,
-        tls_ctx->ext_data, sizeof(tls_ctx->ext_data), &consumed);
+    size_t consumed = 0;
+    int ret = -1;
+    
+    if (tls_ctx->ext_data != NULL) {
+        ret = picoquic_prepare_transport_extensions(cnx, (tls_ctx->client_mode) ? 0 : 1,
+            tls_ctx->ext_data, tls_ctx->ext_data_size, &consumed);
+    }
 
     if (ret == 0) {
         tls_ctx->ext[0].type = picoquic_tls_get_quic_extension_id(cnx);
@@ -980,6 +990,7 @@ void picoquic_tls_set_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ct
     }
 
     tls_ctx->handshake_properties.additional_extensions = tls_ctx->ext;
+    tls_ctx->has_sent_ext_data = 1;
 }
 
 /*
@@ -1000,18 +1011,21 @@ int picoquic_tls_collected_extensions_cb(ptls_t* tls, ptls_handshake_properties_
 
     for (int i_slot = 0; slots[i_slot].type != 0xFFFF; i_slot++) {
         if (slots[i_slot].type == picoquic_tls_get_quic_extension_id(ctx->cnx)) {
+#if 0
             size_t copied_length = sizeof(ctx->ext_received);
+#endif
 
             /* Retrieve the transport parameters */
             ret = picoquic_receive_transport_extensions(ctx->cnx, (ctx->client_mode) ? 1 : 0,
                 slots[i_slot].data.base, slots[i_slot].data.len, &consumed);
-
+#if 0
             /* Copy the extensions in the local context for further debugging */
             ctx->ext_received_length = slots[i_slot].data.len;
             if (copied_length > ctx->ext_received_length)
                 copied_length = ctx->ext_received_length;
             memcpy(ctx->ext_received, slots[i_slot].data.base, copied_length);
             ctx->ext_received_return = ret;
+#endif
             /* For now, override the value in case of default */
             ret = 0;
 
@@ -1877,36 +1891,43 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
         ret = -1;
     } else {
         memset(ctx, 0, sizeof(picoquic_tls_ctx_t));
-
-        ctx->cnx = cnx;
-
-        ctx->handshake_properties.collect_extension = picoquic_tls_collect_extensions_cb;
-        ctx->handshake_properties.collected_extensions = picoquic_tls_collected_extensions_cb;
-        ctx->client_mode = cnx->client_mode;
-
-        ctx->tls = ptls_new((ptls_context_t*)quic->tls_master_ctx,
-            (ctx->client_mode) ? 0 : 1);
-        *ptls_get_data_ptr(ctx->tls) = cnx;
-
-        if (ctx->tls == NULL) {
-            free(ctx);
-            ctx = NULL;
+        ctx->ext_data = (uint8_t*)malloc(PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE);
+        if (ctx->ext_data == NULL) {
             ret = -1;
-        } else if (!ctx->client_mode) {
-            /* A server side connection, but no cert/key where given for the master context */
-            if (((ptls_context_t*)quic->tls_master_ctx)->encrypt_ticket == NULL) {
-                ret = PICOQUIC_ERROR_TLS_SERVER_CON_WITHOUT_CERT;
-                picoquic_tlscontext_free(ctx);
-                ctx = NULL;
-            }
+        }
+        else {
+            ctx->ext_data_size = PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE;
+            ctx->cnx = cnx;
 
-            if (ctx != NULL) {
-                /* The server should never attempt a stateless retry */
-                ctx->handshake_properties.server.enforce_retry = 0;
-                ctx->handshake_properties.server.retry_uses_cookie = 0;
-                ctx->handshake_properties.server.cookie.key = NULL;
-                ctx->handshake_properties.server.cookie.additional_data.base = NULL;
-                ctx->handshake_properties.server.cookie.additional_data.len = 0;
+            ctx->handshake_properties.collect_extension = picoquic_tls_collect_extensions_cb;
+            ctx->handshake_properties.collected_extensions = picoquic_tls_collected_extensions_cb;
+            ctx->client_mode = cnx->client_mode;
+
+            ctx->tls = ptls_new((ptls_context_t*)quic->tls_master_ctx,
+                (ctx->client_mode) ? 0 : 1);
+            *ptls_get_data_ptr(ctx->tls) = cnx;
+
+            if (ctx->tls == NULL) {
+                free(ctx);
+                ctx = NULL;
+                ret = -1;
+            }
+            else if (!ctx->client_mode) {
+                /* A server side connection, but no cert/key where given for the master context */
+                if (((ptls_context_t*)quic->tls_master_ctx)->encrypt_ticket == NULL) {
+                    ret = PICOQUIC_ERROR_TLS_SERVER_CON_WITHOUT_CERT;
+                    picoquic_tlscontext_free(ctx);
+                    ctx = NULL;
+                }
+
+                if (ctx != NULL) {
+                    /* The server should never attempt a stateless retry */
+                    ctx->handshake_properties.server.enforce_retry = 0;
+                    ctx->handshake_properties.server.retry_uses_cookie = 0;
+                    ctx->handshake_properties.server.cookie.key = NULL;
+                    ctx->handshake_properties.server.cookie.additional_data.base = NULL;
+                    ctx->handshake_properties.server.cookie.additional_data.len = 0;
+                }
             }
         }
     }
@@ -2089,6 +2110,10 @@ void picoquic_tlscontext_free(void* vctx)
             ctx->handshake_properties.client.esni_keys.base = NULL;
             ctx->handshake_properties.client.esni_keys.len = 0;
         }
+    }
+
+    if (ctx->ext_data != NULL) {
+        free(ctx->ext_data);
     }
 
     if (ctx->tls != NULL) {
@@ -2291,6 +2316,12 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
             ret = -1;
         }
         ptls_buffer_dispose(&sendbuf);
+
+        if (ctx->has_sent_ext_data && ctx->ext_data != NULL) {
+            free(ctx->ext_data);
+            ctx->ext_data_size = 0;
+            ctx->ext_data = NULL;
+        }
     }
 
     return ret;
@@ -2713,6 +2744,12 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed, uint64
                 ret = 0;
             }
         }
+    }
+
+    if (ctx->has_sent_ext_data && ctx->ext_data != NULL) {
+        free(ctx->ext_data);
+        ctx->ext_data = NULL;
+        ctx->ext_data_size = 0;
     }
 
 

@@ -126,11 +126,13 @@ int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_
 int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE]);
 
+#if 0
 void picoquic_provide_received_transport_extensions(picoquic_cnx_t* cnx,
     uint8_t** ext_received,
     size_t* ext_received_length,
     int* ext_received_return,
     int* client_mode);
+#endif
 
 char const* picoquic_tls_get_negotiated_alpn(picoquic_cnx_t* cnx);
 char const* picoquic_tls_get_sni(picoquic_cnx_t* cnx);
