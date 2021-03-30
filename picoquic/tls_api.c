@@ -87,7 +87,7 @@ typedef struct st_picoquic_tls_ctx_t {
     ptls_handshake_properties_t handshake_properties;
     ptls_iovec_t* alpn_vec;
     size_t alpn_vec_size;
-    int alpn_count;
+    size_t alpn_count;
     uint8_t* ext_data;
     size_t ext_data_size;
     uint16_t esni_version;
