@@ -85,7 +85,8 @@ typedef struct st_picoquic_tls_ctx_t {
     int client_mode;
     ptls_raw_extension_t ext[2];
     ptls_handshake_properties_t handshake_properties;
-    ptls_iovec_t alpn_vec[PICOQUIC_ALPN_NUMBER_MAX];
+    ptls_iovec_t* alpn_vec;
+    size_t alpn_vec_size;
     int alpn_count;
     uint8_t* ext_data;
     size_t ext_data_size;
@@ -1853,11 +1854,13 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
     } else {
         memset(ctx, 0, sizeof(picoquic_tls_ctx_t));
         ctx->ext_data = (uint8_t*)malloc(PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE);
-        if (ctx->ext_data == NULL) {
+        ctx->alpn_vec = (ptls_iovec_t*)malloc(sizeof(ptls_iovec_t) * PICOQUIC_ALPN_NUMBER_MAX);
+        if (ctx->ext_data == NULL || ctx->alpn_vec == NULL) {
             ret = -1;
         }
         else {
             ctx->ext_data_size = PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE;
+            ctx->alpn_vec_size = PICOQUIC_ALPN_NUMBER_MAX;
             ctx->cnx = cnx;
 
             ctx->handshake_properties.collect_extension = picoquic_tls_collect_extensions_cb;
@@ -2077,6 +2080,10 @@ void picoquic_tlscontext_free(void* vctx)
         free(ctx->ext_data);
     }
 
+    if (ctx->alpn_vec != NULL) {
+        free(ctx->alpn_vec);
+    }
+
     if (ctx->tls != NULL) {
         ptls_free((ptls_t*)ctx->tls);
         ctx->tls = NULL;
@@ -2093,6 +2100,12 @@ void picoquic_tlscontext_trim_after_handshake(picoquic_cnx_t * cnx)
         free(ctx->ext_data);
         ctx->ext_data = NULL;
         ctx->ext_data_size = 0;
+    }
+
+    if (ctx->alpn_vec != NULL) {
+        free(ctx->alpn_vec);
+        ctx->alpn_vec = NULL;
+        ctx->alpn_vec_size = 0;
     }
 }
 
@@ -2171,7 +2184,7 @@ int picoquic_add_proposed_alpn(void* tls_context, const char* alpn)
     if (ctx == NULL) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
-    else if (ctx->alpn_count >= PICOQUIC_ALPN_NUMBER_MAX) {
+    else if (ctx->alpn_count >= ctx->alpn_vec_size) {
         ret = PICOQUIC_ERROR_SEND_BUFFER_TOO_SMALL;
     } else {
         ctx->alpn_vec[ctx->alpn_count].base = (uint8_t*)alpn;
