@@ -449,6 +449,13 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
 
 void picoquic_free(picoquic_quic_t* quic);
 
+/* Preference for low memory options.
+ * setting this flag instructs picoquic to chose implementations of algorithms 
+ * that use less memory while maintaining reasonable performance. For example,
+ * choose the openssl implementation of AES instead of the fusion implementation,
+ * which is a bit faster but requires an additional 7KB of data per connection */
+int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int low_memory_mode);
+
 /* management of retry policy.
  * The cookie mode can be used to force the following behavior:
  * - if cookie_mode&1, check the token and force a retry for each incoming connection.

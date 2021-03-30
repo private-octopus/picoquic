@@ -569,7 +569,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int random_initial : 1; /* Randomize the initial PN number */
     unsigned int packet_train_mode : 1; /* Tune pacing for sending packet trains */
     unsigned int use_constant_challenges : 1; /* Use predictable challenges when producing constant logs. */
-
+    unsigned int use_low_memory : 1; /* if possible, use low memory alternatives, e.g. for AES */
     picoquic_stateless_packet_t* pending_stateless_packet;
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;

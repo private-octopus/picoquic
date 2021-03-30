@@ -328,7 +328,7 @@ int pn_ctr_test()
     uint8_t in_bytes[16];
     uint8_t out_bytes[16];
     uint8_t decoded[16];
-    ptls_aead_algorithm_t* aead = (ptls_aead_algorithm_t*)picoquic_get_aes128gcm_v();
+    ptls_aead_algorithm_t* aead = (ptls_aead_algorithm_t*)picoquic_get_aes128gcm_v(0);
     ptls_cipher_context_t *pn_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
 
     if (pn_enc == NULL) {
@@ -912,7 +912,7 @@ int draft17_vector_test()
     uint8_t master_secret[256];
     uint8_t client_secret[256];
     uint8_t server_secret[256];
-    ptls_cipher_suite_t* cipher = (ptls_cipher_suite_t*)picoquic_get_aes128gcm_sha256_v();
+    ptls_cipher_suite_t* cipher = (ptls_cipher_suite_t*)picoquic_get_aes128gcm_sha256_v(0);
 
     if (cipher == NULL) {
         DBG_PRINTF("%s", "Could not find the default cipher suite.");
@@ -1078,9 +1078,9 @@ int key_rotation_vector_test()
         NULL, NULL, NULL, NULL };
     uint8_t new_secret[PTLS_MAX_DIGEST_SIZE];
 
-    key_rotation_test_suites[0] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(256); /* AES256GCM_SHA384 */
-    key_rotation_test_suites[1] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(128); /* AES128GCM_SHA256 */
-    key_rotation_test_suites[2] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(20); /* CHACHA0 */
+    key_rotation_test_suites[0] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(256, 0); /* AES256GCM_SHA384 */
+    key_rotation_test_suites[1] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(128, 0); /* AES128GCM_SHA256 */
+    key_rotation_test_suites[2] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(20, 0); /* CHACHA0 */
     key_rotation_test_suites[3] = NULL;
 
     memcpy(new_secret, key_rotation_test_init, PTLS_MAX_DIGEST_SIZE);

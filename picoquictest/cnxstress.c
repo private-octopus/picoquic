@@ -866,7 +866,13 @@ cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients)
                             ret = -1;
                         }
                         else {
-                            ret = cnx_stress_set_default_tp(stress_ctx->qclient);
+                            ret = picoquic_set_low_memory_mode(stress_ctx->qclient, 1);
+                            if (ret == 0) {
+                                ret = picoquic_set_low_memory_mode(stress_ctx->qserver, 1);
+                            }
+                            if (ret == 0) {
+                                ret = cnx_stress_set_default_tp(stress_ctx->qclient);
+                            }
                             if (ret == 0) {
                                 ret = cnx_stress_set_default_tp(stress_ctx->qserver);
                             }
