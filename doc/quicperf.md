@@ -14,9 +14,9 @@ Where `-a perf` means _set ALPN to "perf", and use the quicperf protocol to reac
 and the quoted argument describes a test scenario, in which:
 
 *   *1 means repeat this once
-*    0 means use stream 0
-*    - means start immediately (a number would mean, start when stream N download is complete)
-*    397 means client will post 397 bytes
+*   0 means use stream 0
+*   The hyphen `-` means start immediately (a number would mean, start when stream N download is complete)
+*   397 means client will post 397 bytes
 *   5000000 means server will send 5M bytes
 
 The program can run multiple test scenarios in a single session, e.g.:

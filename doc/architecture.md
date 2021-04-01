@@ -4,15 +4,15 @@ Picoquic was first designed with three priorities: conformance to the QUIC speci
 portability, and ease
 of testing. As the QUIC specifications progressed from 2017 to 2020, those two priorities served
 us well, and ensure that picoquic could be used by other applications doing interoperability
-tests, see for example the results of [the early interop testing]
-(https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/) and
+tests, see for example the results of 
+[the early interop testing](https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/) and
 the current status of the [automated interop runner](https://interop.seemann.io/).
 As the standard progressed, once interoperability was achieved, the focus has moved to
 performance, while testing continues to guarantee interoperability.
 
 # Picoquic transport library
 
-![application API, library and network API](/architecture.png)
+![application API, library and network API](architecture.png)
 
 The main component of picoquic is the core library, which interfaces with applications through
 the application API and with the system through the network API.
