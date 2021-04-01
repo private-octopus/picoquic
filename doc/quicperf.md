@@ -49,7 +49,7 @@ option will produce a list of command line arguments.
 ## Performance logs
 
 When doing performance measurements, the natural instinct is to turn off all logging, because
-writing logs slows down the program exexcution. On the other hand, it is very useful to have
+writing logs slows down the program execution. On the other hand, it is very useful to have
 at least some logging, in order to understand what changes from run to run, and what might
 affected performance. The performance logs are designed to minimize the interference. The
 data is written to disk at the end of the connection. If the performance test involves
