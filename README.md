@@ -16,16 +16,17 @@ DNS over QUIC. Then there are plenty of other features we may dream off,
 such as support for multipath, or support for peer-to-peer applications.
 That's on the horizon, but not there now.
 
-The code in this repo is a work in progress, but it is getting stable, just
-like the specification itself. The working group just issued draft-29, which
-is meant as the stabilization draft, and the Working Group Last Call is out!
+The code in this repo is getting stable, just
+like the specification itself. The version 34 of the QUIC draft has passed all IETF
+reviews, and publication as an RFc is imminent.
 At this stage the
-changes in Picoquic will be mostly driven by performance issues, or API
-improvements. And bug fixing, too.
+changes in Picoquic are mostly driven by performance issues, or API
+improvements. And bug fixing, too. The goal is to have the "1.0" version of
+picoquic ready as soon as the RFC are published.
 
 There are many implementations of Quic, listed
 at https://github.com/quicwg/base-drafts/wiki/Implementations. The interop
-goals are defined at https://github.com/quicwg/base-drafts/wiki/17th-Implementation-Draft,
+goals are defined at https://github.com/quicwg/base-drafts/wiki/21st-Implementation-Draft,
 which points to the current interoperability matrix. Several implementations provide
 docker images to the "Quic Interop Runner" project, with results updated daily
 at https://interop.seemann.io/.
@@ -44,7 +45,7 @@ leaner version that only depends on the "minicrypto" library. For now,
 Picoquic uses the OpenSSL version, and has a dependency on OpenSSL.
 
 The project consists of a core library (picoquic), of a test library
-(picoquictest), and of a test program (picoquicfirst). All these are
+(picoquictest), and of a test program (picoquicdemo). All these are
 written in C. In the Visual Studio project, the
 test library is wrapped up in the Visual Studio unittest framework, which
 makes for convenient regression testing during development. In the Linux
@@ -65,10 +66,14 @@ as [Quicdoq](https://github.com/private-octopus/quicdoq). DNS over Quic is inter
 by itself, but it also provides an example for building an application different than
 HTTP on top of Picoquic.
 
-We are spending time bettering the implementation. Initially
+We are spending time bettering the implementation, and the documentation,
+including a first pass at [documenting architecture and API](doc/architecture.md). Initially
 the focus has been on correctness rather than performance. We will keep correctness,
 but we will improve performance, especially in light of practical experience with 
-applications. Suggestions are wellcome.
+applications. To facilitate performance tests, the demo program includes an
+implementation of the [quic performance test](doc/quicperf.md).
+Suggestions for documentation, API, performance and more are wellcome. Feel free to
+open an issue!
 
 # Building Picoquic
 
