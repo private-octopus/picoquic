@@ -3595,6 +3595,15 @@ int picoquic_is_handshake_error(uint64_t error_code)
         error_code == PICOQUIC_TLS_HANDSHAKE_FAILED);
 }
 
+void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason, 
+    uint64_t* remote_reason, uint64_t* local_application_reason, uint64_t* remote_application_reason)
+{
+    *local_reason = cnx->local_error;
+    *remote_reason = cnx->remote_error;
+    *local_application_reason = cnx->application_error;
+    *remote_application_reason = cnx->remote_application_error;
+}
+
 /* Context retrieval functions */
 picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id,
     struct st_picoquic_local_cnxid_t** l_cid)
