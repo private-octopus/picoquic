@@ -1,3 +1,5 @@
+# Performance testing with picoquicdemo
+
 The picoquicdemo program supports multiple applications, on of which is "quic perf" defined by
 Nick Banks in [this draft](https://datatracker.ietf.org/doc/draft-banks-quic-performance/). To
 quote from the draft, _The QUIC performance protocol provides a simple, general-purpose
@@ -12,9 +14,9 @@ Where `-a perf` means _set ALPN to "perf", and use the quicperf protocol to reac
 and the quoted argument describes a test scenario, in which:
 
 *   *1 means repeat this once
-*    0 means use stream 0
-*    - means start immediately (a number would mean, start when stream N download is complete)
-*    397 means client will post 397 bytes
+*   0 means use stream 0
+*   The hyphen `-` means start immediately (a number would mean, start when stream N download is complete)
+*   397 means client will post 397 bytes
 *   5000000 means server will send 5M bytes
 
 The program can run multiple test scenarios in a single session, e.g.:
@@ -47,7 +49,7 @@ option will produce a list of command line arguments.
 ## Performance logs
 
 When doing performance measurements, the natural instinct is to turn off all logging, because
-writing logs slows down the program exexcution. On the other hand, it is very useful to have
+writing logs slows down the program execution. On the other hand, it is very useful to have
 at least some logging, in order to understand what changes from run to run, and what might
 affected performance. The performance logs are designed to minimize the interference. The
 data is written to disk at the end of the connection. If the performance test involves
