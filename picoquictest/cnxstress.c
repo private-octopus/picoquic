@@ -994,7 +994,6 @@ int cnx_limit_test()
     }
 
     if (stress_ctx != NULL) {
-        uint64_t wall_time_start = picoquic_current_time();
         int is_done = 0;
 
         /* loop until time exhausted or all created */
