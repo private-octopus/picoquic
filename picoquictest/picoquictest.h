@@ -247,6 +247,7 @@ int app_limit_cc_test();
 int initial_race_test();
 int pacing_test();
 int chacha20_test();
+int cnx_limit_test();
 int cert_verify_bad_cert_test();
 int cert_verify_bad_sni_test();
 int cert_verify_null_test();

@@ -1172,7 +1172,8 @@ int picoquic_incoming_client_initial(
         }
 
         if ((*pcnx)->cnx_state == picoquic_state_server_init && 
-            (*pcnx)->quic->server_busy) {
+            ((*pcnx)->quic->server_busy || 
+            (*pcnx)->quic->current_number_connections > (*pcnx)->quic->max_number_connections)) {
             (*pcnx)->local_error = PICOQUIC_TRANSPORT_SERVER_BUSY;
             (*pcnx)->cnx_state = picoquic_state_handshake_failure;
         }

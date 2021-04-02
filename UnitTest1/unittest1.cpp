@@ -1384,6 +1384,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cnx_limit) {
+            int ret = cnx_limit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cert_verify_bad_cert) {
             int ret = cert_verify_bad_cert_test();
 
