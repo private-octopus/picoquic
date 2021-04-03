@@ -1043,6 +1043,25 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
     }
 }
 
+/* Queue a close message for an incoming connection attemt that was rejected.
+ * The connection context can then be immediately frees.
+ */
+void picoquic_queue_immediate_close(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(cnx->quic);
+
+    if (sp != NULL) {
+        int ret = picoquic_prepare_packet_ex(cnx, current_time, sp->bytes, PICOQUIC_MAX_PACKET_SIZE,
+            &sp->length, &sp->addr_to, &sp->addr_local, &sp->if_index_local, NULL);
+        if (ret == 0 && sp->length > 0) {
+            picoquic_queue_stateless_packet(cnx->quic, sp);
+        }
+        else {
+            picoquic_delete_stateless_packet(sp);
+        }
+    }
+}
+
 /*
  * Processing of initial or handshake messages when they are not expected
  * any more. These messages could be used in a DOS attack against the
@@ -1229,6 +1248,10 @@ int picoquic_incoming_client_initial(
 
     if (ret == PICOQUIC_ERROR_INVALID_TOKEN && (*pcnx)->cnx_state == picoquic_state_handshake_failure) {
         ret = 0;
+    }
+
+    if (ret == 0 && (*pcnx)->cnx_state == picoquic_state_handshake_failure && new_context_created) {
+        picoquic_queue_immediate_close(*pcnx, current_time);
     }
 
     if (ret != 0 || (*pcnx)->cnx_state == picoquic_state_disconnected) {
