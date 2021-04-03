@@ -79,6 +79,8 @@ typedef struct st_cnx_stress_ctx_t {
     struct sockaddr_in client_addr;
     picoquictest_sim_link_t* link_to_clients;
     picoquictest_sim_link_t* link_to_server;
+    int is_limit_test;
+    int limit_test_got_server_busy;
     int nb_clients;
     int nb_servers;
     int nb_client_target;
@@ -206,6 +208,13 @@ cnx_stress_callback_ctx_t* cnx_stress_callback_create_context(cnx_stress_ctx_t *
 
 void cnx_stress_callback_delete_context(cnx_stress_callback_ctx_t* cnx_ctx) {
     if (cnx_ctx->mode == 0) {
+        if (cnx_ctx->stress_ctx->is_limit_test &&
+            cnx_ctx->rank == cnx_ctx->stress_ctx->nb_client_target - 1 &&
+            cnx_ctx->cnx->cnx_state == picoquic_state_disconnected &&
+            cnx_ctx->cnx->remote_error == PICOQUIC_TRANSPORT_SERVER_BUSY) {
+            /* This test verifies that the limit test is successful */
+            cnx_ctx->stress_ctx->limit_test_got_server_busy = 1;
+        }
         cnx_ctx->stress_ctx->c_ctx[cnx_ctx->rank] = NULL;
     }
     else if (cnx_ctx->mode == 1) {
@@ -352,16 +361,24 @@ int cnx_stress_callback(picoquic_cnx_t* cnx,
         return -1;
     }
     else if (cnx_ctx->cnx == NULL) {
-        /* In the case of server connections, the connection is NULL for the
-         * default context. It should be initialized with a proper context */
-        cnx_ctx = cnx_stress_callback_create_context(cnx_ctx->stress_ctx, cnx, 1);
-        if (cnx_ctx == NULL) {
-            /* cannot handle the connection */
-            picoquic_close(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
-            return -1;
+        if (fin_or_event == picoquic_callback_stateless_reset ||
+            fin_or_event == picoquic_callback_close ||
+            fin_or_event == picoquic_callback_application_close) {
+            /* Nothing to do */
+            return 0;
         }
         else {
-            picoquic_set_callback(cnx, cnx_stress_callback, cnx_ctx);
+            /* In the case of server connections, the connection is NULL for the
+             * default context. It should be initialized with a proper context */
+            cnx_ctx = cnx_stress_callback_create_context(cnx_ctx->stress_ctx, cnx, 1);
+            if (cnx_ctx == NULL) {
+                /* cannot handle the connection */
+                picoquic_close(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                return -1;
+            }
+            else {
+                picoquic_set_callback(cnx, cnx_stress_callback, cnx_ctx);
+            }
         }
     }
     else if (cnx_ctx->cnx != cnx) {
@@ -450,10 +467,16 @@ cnx_stress_callback_ctx_t * cnx_stress_cnx_from_rank(
     int nb_trials = 0;
     int rank = msg_num % nb_ctx;
     cnx_stress_callback_ctx_t* cnx_ctx = v_ctx[rank];
-    while (cnx_ctx == NULL && nb_trials < nb_ctx) {
+    while ((cnx_ctx == NULL || cnx_ctx->cnx == NULL) && nb_trials < nb_ctx) {
         rank = (rank + 1) % nb_ctx;
         cnx_ctx = v_ctx[rank];
+        nb_trials++;
     }
+#if 1
+    if (rank == 4) {
+        DBG_PRINTF("%s", "BUG");
+    }
+#endif
     return cnx_ctx;
 }
 
@@ -784,7 +807,7 @@ void cnx_stress_delete_ctx(cnx_stress_ctx_t* stress_ctx)
     free(stress_ctx);
 }
 
-cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients) 
+cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients, int limit_test) 
 {
     cnx_stress_ctx_t* stress_ctx = (cnx_stress_ctx_t*)malloc(sizeof(cnx_stress_ctx_t));
 
@@ -826,14 +849,15 @@ cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients)
             }
             else {
                 stress_ctx->c_ctx = (cnx_stress_callback_ctx_t**)malloc(
-                    sizeof(cnx_stress_callback_ctx_t*) * nb_clients);
+                    sizeof(cnx_stress_callback_ctx_t*) * (nb_clients + limit_test));
                 if (stress_ctx->c_ctx != NULL) {
-                    memset(stress_ctx->c_ctx, 0, sizeof(cnx_stress_callback_ctx_t*) * nb_clients);
+                    memset(stress_ctx->c_ctx, 0, 
+                        sizeof(cnx_stress_callback_ctx_t*) * (nb_clients + limit_test));
                 }
                 stress_ctx->s_ctx = (cnx_stress_callback_ctx_t**)malloc(
-                    sizeof(cnx_stress_callback_ctx_t*) * nb_clients);
+                    sizeof(cnx_stress_callback_ctx_t*) * (nb_clients + limit_test));
                 if (stress_ctx->s_ctx != NULL) {
-                    memset(stress_ctx->s_ctx, 0, sizeof(cnx_stress_callback_ctx_t*) * nb_clients);
+                    memset(stress_ctx->s_ctx, 0, sizeof(cnx_stress_callback_ctx_t*) * (nb_clients + limit_test));
                 }
                 stress_ctx->default_ctx = cnx_stress_callback_create_context(stress_ctx, NULL, 2);
                 if (stress_ctx->s_ctx == NULL || stress_ctx->c_ctx == NULL || stress_ctx->default_ctx == NULL) {
@@ -849,7 +873,7 @@ cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients)
                         ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
                     }
                     if (ret == 0) {
-                        stress_ctx->qclient = picoquic_create(nb_clients, NULL, NULL,
+                        stress_ctx->qclient = picoquic_create((nb_clients + limit_test), NULL, NULL,
                             NULL, CNX_STRESS_ALPN, NULL, NULL, NULL, NULL,
                             NULL, stress_ctx->simulated_time, &stress_ctx->simulated_time,
                             NULL, NULL, 0);
@@ -893,7 +917,7 @@ cnx_stress_ctx_t* cnx_stress_create_ctx(uint64_t duration, int nb_clients)
 int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report)
 {
     int ret = 0;
-    cnx_stress_ctx_t* stress_ctx = cnx_stress_create_ctx(duration, nb_clients);
+    cnx_stress_ctx_t* stress_ctx = cnx_stress_create_ctx(duration, nb_clients, 0);
 
     if (stress_ctx != NULL) {
         uint64_t wall_time_start = picoquic_current_time();
@@ -950,4 +974,67 @@ int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report)
 int cnx_stress_unit_test()
 {
     return cnx_stress_do_test(120000000, 100, 0);
+}
+
+/*Connection limit
+ * Test that if one attempts to create more than the set limit of
+ * connections, it fails. This is complementary to the cnx_stress
+ * test, which verifies that if one creates exactly the "limit" number of connections, 
+ * they all succeed.
+ */
+int cnx_limit_test()
+{
+    int ret = 0;
+    int nb_clients = 4;
+    uint64_t duration = 120000000;
+    cnx_stress_ctx_t* stress_ctx = cnx_stress_create_ctx(duration, nb_clients, 1);
+
+    if (stress_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (stress_ctx != NULL) {
+        int is_done = 0;
+
+        /* loop until time exhausted or all created */
+        while (ret == 0 && stress_ctx->simulated_time < duration && !is_done) {
+            ret = cnx_stress_loop_step(stress_ctx);
+            if (stress_ctx->nb_clients == (uint32_t)nb_clients &&
+                stress_ctx->nb_servers == (uint32_t)nb_clients) {
+                is_done = 1;
+                for (int c = 0; c < nb_clients; c++) {
+                    if (stress_ctx->c_ctx[c] == NULL ||
+                        stress_ctx->c_ctx[c]->cnx == NULL ||
+                        stress_ctx->c_ctx[c]->cnx->cnx_state <
+                        picoquic_state_client_almost_ready) {
+                        is_done = 0;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!is_done) {
+            ret = -1;
+        }
+
+        if (ret == 0) {
+            /* Try creating one more client. Loop until time exhausted or
+             * verify new client refused because server busy */
+
+            stress_ctx->is_limit_test = 1;
+            stress_ctx->next_client_creation_time = stress_ctx->simulated_time;
+            stress_ctx->nb_client_target++;
+            while (ret == 0 && stress_ctx->simulated_time < duration &&
+                !stress_ctx->limit_test_got_server_busy) {
+                ret = cnx_stress_loop_step(stress_ctx);
+            }
+            if (!stress_ctx->limit_test_got_server_busy) {
+                ret = -1;
+            }
+        }
+
+        cnx_stress_delete_ctx(stress_ctx);
+    }
+
+    return ret;
 }

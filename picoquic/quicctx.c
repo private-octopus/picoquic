@@ -334,7 +334,7 @@ void picoquic_registered_token_clear(picoquic_quic_t* quic, uint64_t expiry_time
 static void picoquic_wake_list_init(picoquic_quic_t* quic);
 
 /* QUIC context create and dispose */
-picoquic_quic_t* picoquic_create(uint32_t nb_connections,
+picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
     char const* cert_file_name,
     char const* key_file_name, 
     char const * cert_root_file_name,
@@ -396,19 +396,22 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         }
 
         if (ret == 0) {
-            if (nb_connections == 0) {
-                nb_connections = 1;
+            if (max_nb_connections == 0) {
+                max_nb_connections = 1;
             }
-            quic->table_cnx_by_id = picohash_create((size_t)nb_connections * 4,
+
+            quic->max_number_connections = max_nb_connections;
+
+            quic->table_cnx_by_id = picohash_create((size_t)max_nb_connections * 4,
                 picoquic_cnx_id_hash, picoquic_cnx_id_compare);
 
-            quic->table_cnx_by_net = picohash_create((size_t)nb_connections * 4,
+            quic->table_cnx_by_net = picohash_create((size_t)max_nb_connections * 4,
                 picoquic_net_id_hash, picoquic_net_id_compare);
 
-            quic->table_cnx_by_icid = picohash_create((size_t)nb_connections,
+            quic->table_cnx_by_icid = picohash_create((size_t)max_nb_connections,
                 picoquic_net_icid_hash, picoquic_net_icid_compare);
 
-            quic->table_cnx_by_secret = picohash_create((size_t)nb_connections * 4,
+            quic->table_cnx_by_secret = picohash_create((size_t)max_nb_connections * 4,
                 picoquic_net_secret_hash, picoquic_net_secret_compare);
 
             picosplay_init_tree(&quic->token_reuse_tree, picoquic_registered_token_compare,
@@ -983,6 +986,7 @@ static void picoquic_insert_cnx_in_list(picoquic_quic_t* quic, picoquic_cnx_t* c
     }
     quic->cnx_list = cnx;
     cnx->previous_in_table = NULL;
+    quic->current_number_connections++;
 }
 
 static void picoquic_remove_cnx_from_list(picoquic_cnx_t* cnx)
@@ -1009,6 +1013,7 @@ static void picoquic_remove_cnx_from_list(picoquic_cnx_t* cnx)
         picohash_delete_key(cnx->quic->table_cnx_by_secret, cnx->reset_secret_key, 1);
         cnx->reset_secret_key = NULL;
     }
+    cnx->quic->current_number_connections--;
 }
 
 /* Management of the list of connections, sorted by wake time */
@@ -3593,6 +3598,15 @@ int picoquic_is_handshake_error(uint64_t error_code)
 {
     return ((error_code & 0xFF00) == PICOQUIC_TRANSPORT_CRYPTO_ERROR(0) ||
         error_code == PICOQUIC_TLS_HANDSHAKE_FAILED);
+}
+
+void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason, 
+    uint64_t* remote_reason, uint64_t* local_application_reason, uint64_t* remote_application_reason)
+{
+    *local_reason = cnx->local_error;
+    *remote_reason = cnx->remote_error;
+    *local_application_reason = cnx->application_error;
+    *remote_application_reason = cnx->remote_application_error;
 }
 
 /* Context retrieval functions */

@@ -243,6 +243,7 @@ static const picoquic_test_def_t test_table[] = {
     { "app_limit_cc", app_limit_cc_test },
     { "initial_race", initial_race_test },
     { "chacha20", chacha20_test },
+    { "cnx_limit", cnx_limit_test },
     { "cert_verify_bad_cert", cert_verify_bad_cert_test },
     { "cert_verify_bad_sni", cert_verify_bad_sni_test },
     { "cert_verify_null", cert_verify_null_test },

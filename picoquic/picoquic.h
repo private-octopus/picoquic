@@ -411,9 +411,9 @@ int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_na
 int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file_name);
 
 /* Obtain the reasons why a connection was closed */
-void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint16_t* local_reason,
-    uint16_t* remote_reason, uint16_t* local_application_reason,
-    uint16_t* remote_application_reason);
+void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason,
+    uint64_t* remote_reason, uint64_t* local_application_reason,
+    uint64_t* remote_application_reason);
 
 /* Will be called to verify that the given data corresponds to the given signature.
  * This callback and the `verify_ctx` will be set by the `verify_certificate_cb_fn`.
@@ -433,7 +433,7 @@ typedef int (*picoquic_verify_certificate_cb_fn)(void* ctx, picoquic_cnx_t* cnx,
 typedef void (*picoquic_free_verify_certificate_ctx)(void* ctx);
 
 /* QUIC context create and dispose */
-picoquic_quic_t* picoquic_create(uint32_t nb_connections,
+picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
     char const* cert_file_name, char const* key_file_name, char const * cert_root_file_name,
     char const* default_alpn,
     picoquic_stream_data_cb_fn default_callback_fn,
