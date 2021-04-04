@@ -330,6 +330,16 @@ void picoquic_registered_token_clear(picoquic_quic_t* quic, uint64_t expiry_time
     } while (!end_reached);
 }
 
+void picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_connections)
+{
+    quic->max_number_connections = max_nb_connections;
+}
+
+uint32_t picoquic_current_number_connections(picoquic_quic_t * quic)
+{
+    return quic->current_number_connections;
+}
+
 /* Forward reference */
 static void picoquic_wake_list_init(picoquic_quic_t* quic);
 
