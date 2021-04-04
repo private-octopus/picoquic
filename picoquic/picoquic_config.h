@@ -38,6 +38,7 @@ typedef enum {
     picoquic_option_PROPOSED_VERSION,
     picoquic_option_OUTDIR,
     picoquic_option_WWWDIR,
+    picoquic_option_MAX_CONNECTIONS,
     picoquic_option_DO_RETRY,
     picoquic_option_INITIAL_RANDOM,
     picoquic_option_RESET_SEED,
