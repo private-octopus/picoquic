@@ -551,6 +551,7 @@ typedef struct st_picoquic_quic_t {
     uint32_t max_half_open_before_retry;
     uint32_t current_number_half_open;
     uint32_t current_number_connections;
+    uint32_t tentative_max_number_connections;
     uint32_t max_number_connections;
     uint64_t stateless_reset_next_time; /* Next time Stateless Reset or VN packet can be sent */
     uint64_t stateless_reset_min_interval; /* Enforced interval between two stateless reset packets */

@@ -332,7 +332,10 @@ void picoquic_registered_token_clear(picoquic_quic_t* quic, uint64_t expiry_time
 
 void picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_connections)
 {
-    quic->max_number_connections = max_nb_connections;
+    if (max_nb_connections <= quic->max_number_connections)
+    {
+        quic->tentative_max_number_connections = max_nb_connections;
+    }
 }
 
 uint32_t picoquic_current_number_connections(picoquic_quic_t * quic)
@@ -410,6 +413,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
                 max_nb_connections = 1;
             }
 
+            quic->tentative_max_number_connections = max_nb_connections;
             quic->max_number_connections = max_nb_connections;
 
             quic->table_cnx_by_id = picohash_create((size_t)max_nb_connections * 4,
