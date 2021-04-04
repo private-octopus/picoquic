@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:K:p:v:o:w:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:h";
+static char* ref_option_text = "c:k:K:p:v:o:w:x:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:h";
 
 int config_option_letters_test()
 {
@@ -45,7 +45,7 @@ int config_option_letters_test()
 }
 
 static picoquic_quic_config_t param1 = {
-    0, /*uint32_t nb_connections; */
+    1024, /*uint32_t nb_connections; */
     "/data/github/picoquic", /* char const* solution_dir; */
     "/data/certs/cert.pem", /* char const* server_cert_file; */
     "/data/certs/key.pem", /* char const* server_key_file; */
@@ -96,6 +96,7 @@ static char const* config_argv1[] = {
     "-k", "/data/certs/key.pem",
     "-K", "/data/certs/esni_key.pem",
     "-E", "/data/certs/esni_rr.txt",
+    "-x", "1024",
     "-l", "/data/log.txt",
     "-b", "/data/log/",
     "-q", "/data/qlog/",
@@ -117,7 +118,7 @@ static char const* config_argv1[] = {
 };
 
 static picoquic_quic_config_t param2 = {
-    0, /*uint32_t nb_connections; */
+    256, /*uint32_t nb_connections; */
     NULL, /* char const* solution_dir; */
     NULL, /* char const* server_cert_file; */
     NULL, /* char const* server_key_file; */

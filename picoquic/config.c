@@ -56,6 +56,8 @@ static option_table_line_t option_table[] = {
     { picoquic_option_PROPOSED_VERSION, 'v', "proposed_version", 1, "", "Version proposed by client, e.g. -v ff000012" },
     { picoquic_option_OUTDIR, 'o', "outdir", 1, "folder", "Folder where client writes downloaded files, defaults to current directory." },
     { picoquic_option_WWWDIR, 'w', "wwwdir", 1, "folder", "Folder containing web pages served by server" },
+    { picoquic_option_MAX_CONNECTIONS, 'x', "max_connections", 1, "number",
+    "Maximum number of concurrent connections, default 256" },
     { picoquic_option_DO_RETRY, 'r', "do_retry", 0, "", "Do Retry Request" },
     { picoquic_option_INITIAL_RANDOM, 'R', "initial_random", 0, "", "randomize initial packet number" },
     { picoquic_option_RESET_SEED, 's', "reset_seed", 2, "<64b 64b>", "Reset seed" },
@@ -327,6 +329,17 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_WWWDIR:
         ret = config_set_string_param(&config->www_dir, params, nb_params, 0);
         break;
+    case picoquic_option_MAX_CONNECTIONS: {
+        int v = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || v <= 0 ) {
+            fprintf(stderr, "Invalid max connections: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = (ret == 0) ? -1 : ret;
+        }
+        else {
+            config->nb_connections = (uint32_t)v;
+        }
+        break;
+    }
     case picoquic_option_DO_RETRY:
         config->do_retry = 1;
         break;
@@ -680,8 +693,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
     uint64_t * p_simulated_time)
 {
     /* Create context */
-    /* TODO: sane default for NB connections 
-     * TODO: padding policy 
+    /* TODO: padding policy 
      * TODO: mtu max accessor 
      * TODO: set supported CC without linking every option
      * TODO: set logging option without linking every option
@@ -810,6 +822,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
 {
     memset(config, 0, sizeof(picoquic_quic_config_t));
     config->cnx_id_length = -1;
+    config->nb_connections = 256;
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)
