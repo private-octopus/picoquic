@@ -334,10 +334,10 @@ int picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_conn
 {
     if (max_nb_connections <= quic->max_number_connections) {
         quic->tentative_max_number_connections = max_nb_connections;
-        return 1;
+        return 0;
     }
 
-    return 0;
+    return -1;
 }
 
 uint32_t picoquic_current_number_connections(picoquic_quic_t * quic)
