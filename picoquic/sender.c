@@ -93,9 +93,11 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
             /* The call only fails if the stream was closed or reset */
             if (!stream->fin_requested && !stream->reset_requested &&
                 cnx->callback_fn != NULL) {
-                stream->is_active = 1;
                 stream->app_stream_ctx = app_stream_ctx;
-                picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+                if (!stream->is_active) {
+                    stream->is_active = 1;
+                    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+                }
             }
             else {
                 ret = PICOQUIC_ERROR_CANNOT_SET_ACTIVE_STREAM;
@@ -103,6 +105,7 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
         }
         else {
             stream->is_active = 0;
+            stream->app_stream_ctx = app_stream_ctx;
         }
     }
 
