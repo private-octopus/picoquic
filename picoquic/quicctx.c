@@ -330,12 +330,14 @@ void picoquic_registered_token_clear(picoquic_quic_t* quic, uint64_t expiry_time
     } while (!end_reached);
 }
 
-void picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_connections)
+int picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_connections)
 {
-    if (max_nb_connections <= quic->max_number_connections)
-    {
+    if (max_nb_connections <= quic->max_number_connections) {
         quic->tentative_max_number_connections = max_nb_connections;
+        return 1;
     }
+
+    return 0;
 }
 
 uint32_t picoquic_current_number_connections(picoquic_quic_t * quic)

@@ -410,8 +410,11 @@ int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_na
 /* Set the ESNI RR. Must be called after setting the ESNI key at least once. */
 int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file_name);
 
-/* Adjust maximum connections allowed */
-void picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_connections);
+/* Adjust maximum connections allowed to the specified value.
+ * The maximum number cannot be set to a value higher than the limit set when the context was
+ * created. Trying higher values has no effect.
+ */
+int picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_connections);
 
 /* Get number of open connections */
 uint32_t picoquic_current_number_connections(picoquic_quic_t * quic);
