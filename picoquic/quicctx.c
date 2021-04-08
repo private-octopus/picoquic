@@ -1030,10 +1030,6 @@ static void picoquic_remove_cnx_from_list(picoquic_cnx_t* cnx)
         cnx->reset_secret_key = NULL;
     }
     cnx->quic->current_number_connections--;
-
-    if (cnx->quic->current_number_connections == 0) {
-
-    }
 }
 
 /* Management of the list of connections, sorted by wake time */
