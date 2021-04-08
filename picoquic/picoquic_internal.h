@@ -624,7 +624,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_performance_log_fn perflog_fn;
     void* v_perflog_ctx;
 
-    bool is_draining_and_shutting_down;
+    uint8_t is_draining_and_shutting_down;
 
 } picoquic_quic_t;
 

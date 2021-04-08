@@ -3716,7 +3716,7 @@ picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* res
 void picoquic_drain_then_shutdown(picoquic_quic_t* quic)
 {
     // 1) stop accepting new connections and streams
-    quic->is_draining_and_shutting_down = true;
+    quic->is_draining_and_shutting_down = 1;
 
     // 2) fin each non-active stream in each connection
     picoquic_cnx_t *cnx = picoquic_get_first_cnx(quic);
@@ -3741,7 +3741,7 @@ void picoquic_drain_then_shutdown(picoquic_quic_t* quic)
 
 int picoquic_is_drained_and_shutdown(picoquic_quic_t* quic)
 {
-    if (quic->is_draining_and_shutting_down == false) {
+    if (!quic->is_draining_and_shutting_down) {
         return -1;
     }
     else if (quic->current_number_connections > 0) {
