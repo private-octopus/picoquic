@@ -3715,12 +3715,9 @@ picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* res
  */
 void picoquic_drain_then_shutdown(picoquic_quic_t* quic)
 {
-    // 1) stop accepting new connections and streams
     quic->is_draining_and_shutting_down = 1;
 
-    // 2) fin each non-active stream in each connection
     picoquic_cnx_t *cnx = picoquic_get_first_cnx(quic);
-
     picoquic_stream_head_t *stream;
 
     while (cnx != NULL)
@@ -3729,9 +3726,7 @@ void picoquic_drain_then_shutdown(picoquic_quic_t* quic)
 
         while (stream != NULL)
         {
-            // it's possible some of these streams could be active... waiting to write data..... if so wait until the callbacks naturally extract those writes, and when they go non-active, and is_draining_and_shutting_down is set, fin them if the implementor didn't already 
             if (stream->is_active == 0) picoquic_add_to_stream(cnx, stream->stream_id, NULL, 0, 1);
-
             stream = stream->next_output_stream;
         }
 
