@@ -106,6 +106,11 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
         else {
             stream->is_active = 0;
             stream->app_stream_ctx = app_stream_ctx;
+
+            if (!stream->fin_requested && cnx->quic->is_draining_and_shutting_down)
+            {
+                picoquic_add_to_stream(cnx, stream_id, NULL, 0, 1);
+            }
         }
     }
 

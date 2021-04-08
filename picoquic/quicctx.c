@@ -1030,6 +1030,10 @@ static void picoquic_remove_cnx_from_list(picoquic_cnx_t* cnx)
         cnx->reset_secret_key = NULL;
     }
     cnx->quic->current_number_connections--;
+
+    if (cnx->quic->current_number_connections == 0) {
+
+    }
 }
 
 /* Management of the list of connections, sorted by wake time */
@@ -3702,6 +3706,54 @@ picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* res
         ret = ((picoquic_net_secret_key_t*)item->key)->cnx;
     }
     return ret;
+}
+
+/* If server, will...
+ *    1) begin rejecting all new connection and stream attempts
+ *    2) fin all non-active streams
+ *    3) wait for all active streams to finish sending then fin them
+ *    4) then close each connection once all its streams are closed
+ *    5) then once every connection is closed, blah blah will return true
+ *
+ * If client, no-op
+ */
+void picoquic_drain_then_shutdown(picoquic_quic_t* quic)
+{
+    // 1) stop accepting new connections and streams
+    quic->is_draining_and_shutting_down = true;
+
+    // 2) fin each non-active stream in each connection
+    picoquic_cnx_t *cnx = picoquic_get_first_cnx(quic);
+
+    picoquic_stream_head_t *stream;
+
+    while (cnx != NULL)
+    {   
+        stream = picoquic_first_stream(cnx);
+
+        while (stream != NULL)
+        {
+            // it's possible some of these streams could be active... waiting to write data..... if so wait until the callbacks naturally extract those writes, and when they go non-active, and is_draining_and_shutting_down is set, fin them if the implementor didn't already 
+            if (stream->is_active == 0) picoquic_add_to_stream(cnx, stream->stream_id, NULL, 0, 1);
+
+            stream = stream->next_output_stream;
+        }
+
+        cnx = cnx->next_in_table;
+    }
+}
+
+int picoquic_is_drained_and_shutdown(picoquic_quic_t* quic)
+{
+    if (quic->is_draining_and_shutting_down == false) {
+        return -1;
+    }
+    else if (quic->current_number_connections > 0) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
 }
 
 /* Get congestion control algorithm by name
