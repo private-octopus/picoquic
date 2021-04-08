@@ -419,7 +419,7 @@ int picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_conn
 /* Get number of open connections */
 uint32_t picoquic_current_number_connections(picoquic_quic_t * quic);
 
-/* If server, will drain then close all streams and connections. Makes no allowance for adversarial clients who never stop sending, so use a timeout in application space to limit this process in time. If client, no-op. */
+/* Will drain then close all streams and connections. Makes no allowance for adversarial peer who never stop sending, so use a timeout in application space to limit this process in time. */
 void picoquic_drain_then_shutdown(picoquic_quic_t* quic);
 
 /* Returns -1 if no drain and shutdown is under progress, 1 if it is in progress, and 0 if it has completed */

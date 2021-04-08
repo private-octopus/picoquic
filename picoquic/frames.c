@@ -162,7 +162,7 @@ picoquic_stream_head_t* picoquic_find_or_create_stream(picoquic_cnx_t* cnx, uint
 {
     picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
 
-    if (stream == NULL) {
+    if (stream == NULL && !cnx->quic->is_draining_and_shutting_down) {
         stream = picoquic_create_missing_streams(cnx, stream_id, is_remote);
     }
 

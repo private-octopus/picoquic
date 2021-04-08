@@ -3704,14 +3704,12 @@ picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* res
     return ret;
 }
 
-/* If server, will...
+/* 
  *    1) begin rejecting all new connection and stream attempts
  *    2) fin all non-active streams
  *    3) wait for all active streams to finish sending then fin them
  *    4) then close each connection once all its streams are closed
  *    5) then once every connection is closed, blah blah will return true
- *
- * If client, no-op
  */
 void picoquic_drain_then_shutdown(picoquic_quic_t* quic)
 {
