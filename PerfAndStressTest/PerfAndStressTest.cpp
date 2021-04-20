@@ -62,6 +62,13 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(satellite_preemptive)
+        {
+            int ret = satellite_preemptive_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(satellite_small)
         {
             int ret = satellite_small_test();

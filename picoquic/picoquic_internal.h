@@ -381,6 +381,8 @@ typedef struct st_picoquic_packet_t {
     unsigned int is_multipath_probe : 1;
     unsigned int is_ack_trap : 1;
     unsigned int delivered_app_limited : 1;
+    unsigned int is_preemptive_repeat : 1;
+    unsigned int was_preemptively_repeated : 1;
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_packet_t;
@@ -572,6 +574,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int packet_train_mode : 1; /* Tune pacing for sending packet trains */
     unsigned int use_constant_challenges : 1; /* Use predictable challenges when producing constant logs. */
     unsigned int use_low_memory : 1; /* if possible, use low memory alternatives, e.g. for AES */
+    unsigned int is_preemptive_repeat_enabled : 1; /* enable premptive repeat on new connections */
     picoquic_stateless_packet_t* pending_stateless_packet;
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;
@@ -758,6 +761,7 @@ typedef struct st_picoquic_packet_context_t {
     picoquic_packet_t* retransmit_oldest;
     picoquic_packet_t* retransmitted_newest;
     picoquic_packet_t* retransmitted_oldest;
+    picoquic_packet_t* preemptive_repeat_ptr;
     /* ECN Counters */
     uint64_t ecn_ect0_total_remote;
     uint64_t ecn_ect1_total_remote;
@@ -1068,6 +1072,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_multipath_enabled : 1; /* Usage of multipath was negotiated */
     unsigned int is_simple_multipath_enabled : 1; /* Usage of simple multipath was negotiated */
     unsigned int is_sending_large_buffer : 1; /* Buffer provided by application is sufficient for PMTUD */
+    unsigned int is_preemptive_repeat_enabled : 1; /* Preemptive repat of packets to reduce transaction latency */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -1147,6 +1152,7 @@ typedef struct st_picoquic_cnx_t {
     uint64_t nb_packets_sent;
     uint64_t nb_packets_logged;
     uint64_t nb_retransmission_total;
+    uint64_t nb_preemptive_repeat;
     uint64_t nb_spurious;
     uint64_t nb_crypto_key_rotations;
     uint64_t nb_packet_holes_inserted;
