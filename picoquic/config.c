@@ -89,6 +89,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_Token_File_Name, 'N', "token_file", 1, "file", "File storing the new tokens" },
     { picoquic_option_Socket_buffer_size, 'B', "so_buf_size", 1, "number", "Set buffer size with SO_SNDBUF SO_RCVBUF" },
     { picoquic_option_Performance_Log, 'F', "log_file_name", 1, "file", "Append performance reports to performance log" },
+    { picoquic_option_Preemptive_Repeat, 'V', "preemptive_repeat", 0, "", "enable preemptive repeat" },
     { picoquic_option_HELP, 'h', "help", 0, "This help message" }
 };
 
@@ -469,6 +470,9 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_Performance_Log:
         ret = config_set_string_param(&config->performance_log, params, nb_params, 0);
         break;
+    case picoquic_option_Preemptive_Repeat:
+        config->do_preemptive_repeat = 1;
+        break;
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -780,6 +784,8 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_textlog(quic, config->log_file);
 
         picoquic_set_log_level(quic, config->use_long_log);
+
+        picoquic_set_preemptive_repeat_policy(quic, config->do_preemptive_repeat);
 
         if (config->initial_random) {
             picoquic_set_random_initial(quic, 1);

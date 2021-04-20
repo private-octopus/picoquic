@@ -2721,6 +2721,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->callback_fn = quic->default_callback_fn;
         cnx->callback_ctx = quic->default_callback_ctx;
         cnx->congestion_alg = quic->default_congestion_alg;
+        cnx->is_preemptive_repeat_enabled = quic->is_preemptive_repeat_enabled;
 
         /* Initialize key rotation interval to default value */
         cnx->crypto_epoch_length_max = quic->crypto_epoch_length_max;
@@ -3755,6 +3756,16 @@ void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, ch
 void picoquic_set_optimistic_ack_policy(picoquic_quic_t* quic, uint32_t sequence_hole_pseudo_period)
 {
     quic->sequence_hole_pseudo_period = sequence_hole_pseudo_period;
+}
+
+void picoquic_set_preemptive_repeat_policy(picoquic_quic_t* quic, int do_repeat)
+{
+    quic->is_preemptive_repeat_enabled = (do_repeat) ? 1 : 0;
+}
+
+void picoquic_set_preemptive_repeat_per_cnx(picoquic_cnx_t* cnx, int do_repeat)
+{
+    cnx->is_preemptive_repeat_enabled = (do_repeat) ? 1 : 0;
 }
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg)

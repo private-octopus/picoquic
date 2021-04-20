@@ -67,6 +67,7 @@ typedef enum {
     picoquic_option_Token_File_Name,
     picoquic_option_Socket_buffer_size,
     picoquic_option_Performance_Log,
+    picoquic_option_Preemptive_Repeat,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -96,6 +97,7 @@ typedef struct st_picoquic_quic_config_t {
     /* Common flags */
     unsigned int initial_random : 1;
     unsigned int use_long_log : 1;
+    unsigned int do_preemptive_repeat : 1;
     /* Server only */
     char const* www_dir;
     uint64_t reset_seed[2];
@@ -103,7 +105,6 @@ typedef struct st_picoquic_quic_config_t {
     size_t ticket_encryption_key_length;
     /* Server flags */
     unsigned int do_retry : 1;
-
     /* Client only */
     char const* ticket_file_name; /* TODO: allocate key */
     char const* token_file_name; /* TODO: allocate key */

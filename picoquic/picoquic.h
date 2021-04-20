@@ -869,8 +869,12 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
  * which in average will be separated by the pseudo period. By default,
  * the pseudo perio is 0, which means no hole insertion.
  */
-
 void picoquic_set_optimistic_ack_policy(picoquic_quic_t* quic, uint32_t sequence_hole_pseudo_period);
+
+/* Enable or disable the preemptive repeat function
+ */
+void picoquic_set_preemptive_repeat_policy(picoquic_quic_t* quic, int do_repeat);
+void picoquic_set_preemptive_repeat_per_cnx(picoquic_cnx_t* cnx, int do_repeat);
 
 /* Enables keep alive for a connection.
  * Keep alive interval is expressed in microseconds.

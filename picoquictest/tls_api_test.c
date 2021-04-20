@@ -1517,7 +1517,8 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         }
 
         if (test_ctx->test_finished) {
-            if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+            if (test_ctx->immediate_exit ||
+                (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server))) {
                 break;
             }
         }
@@ -7994,7 +7995,7 @@ int gbps_performance_test()
  * variants: 0% loss, and 1 %loss.
  */
 static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t data_size, uint64_t max_completion_time, 
-    uint64_t mbps_up, uint64_t mbps_down, uint64_t jitter, int has_loss)
+    uint64_t mbps_up, uint64_t mbps_down, uint64_t jitter, int has_loss, int do_preemptive)
 {
     uint64_t simulated_time = 0;
     uint64_t latency = 300000;
@@ -8011,6 +8012,9 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     initial_cid.id[5] = (latency > 2550000) ? 0xff : (uint8_t)(latency / 10000);
     initial_cid.id[6] = (jitter > 255000) ? 0xff : (uint8_t)(jitter / 1000);
     initial_cid.id[7] = (has_loss)?0xff:0x00;
+    if (do_preemptive) {
+        initial_cid.id[7] ^= 0x0f;
+    }
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
@@ -8027,6 +8031,8 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     if (ret == 0) {
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
+        picoquic_set_preemptive_repeat_policy(test_ctx->qserver, do_preemptive);
+        picoquic_set_preemptive_repeat_per_cnx(test_ctx->cnx_client, do_preemptive);
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
@@ -8035,6 +8041,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
         test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_down;
         test_ctx->s_to_c_link->jitter = jitter;
         test_ctx->stream0_flow_release = 1;
+        test_ctx->immediate_exit = 1;
 
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
 
@@ -8047,6 +8054,13 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
                 NULL, 0, data_size, (has_loss) ? 0x10000000:0, 0, 2 * latency, max_completion_time);
+        }
+
+        if (ret == 00 && do_preemptive) {
+            DBG_PRINTF("Preemptive repeats: %" PRIu64, test_ctx->cnx_client->nb_preemptive_repeat);
+            if (test_ctx->cnx_client->nb_preemptive_repeat == 0) {
+                ret = -1;
+            }
         }
     }
 
@@ -8064,37 +8078,44 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 int satellite_basic_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6300000, 250, 3, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6300000, 250, 3, 0, 0, 0);
 }
 
 int satellite_loss_test()
 {
     /* Should be less than 10 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 10000000, 250, 3, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 0, 1, 0);
+}
+
+int satellite_preemptive_test()
+{
+    /* Variation of the loss test, using preemptive repeat*/
+    /* Should be less than 10 sec per draft etosat.  */
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 7000000, 250, 3, 0, 1, 1);
 }
 
 int satellite_jitter_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6200000, 250, 3, 3000, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6200000, 250, 3, 3000, 0, 0);
 }
 
 int satellite_medium_test()
 {
     /* Should be less than 20 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18000000, 50, 10, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18000000, 50, 10, 0, 0, 0);
 }
 
 int satellite_small_test()
 {
     /* Should be less than 85 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81000000, 10, 2, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81000000, 10, 2, 0, 0, 0);
 }
 
 int satellite_small_up_test()
 {
     /* Should be less than 420 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0, 0);
 }
 
 /* Set the CID length to specified value */

@@ -133,6 +133,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     int test_finished;
     int streams_finished;
     int reset_received;
+    int immediate_exit;
 
     /* Blackhole period if needed */
     uint64_t blackhole_start;

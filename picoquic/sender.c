@@ -1378,6 +1378,10 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
         *packet_is_pure_ack = 0;
         *do_not_detect_spurious = 1;
     }
+    else if (old_p->was_preemptively_repeated) {
+        *packet_is_pure_ack = 1;
+        *do_not_detect_spurious = 1;
+    }
     else {
         /* Copy the relevant bytes from one packet to the next */
         byte_index = old_p->offset;
@@ -1758,6 +1762,189 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
     }
 
     return backlog_empty;
+}
+
+/* Management of preemptive repeats
+ */
+static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
+    picoquic_cnx_t* cnx,
+    uint8_t* new_bytes,
+    size_t send_buffer_max_minus_checksum,
+    size_t* length,
+    int * has_data)
+{
+    /* check if this is an ACK only packet */
+    int ret = 0;
+    int frame_is_pure_ack = 0;
+    size_t frame_length = 0;
+    size_t byte_index = 0; /* Used when parsing the old packet */
+    size_t write_index = 0;
+    int is_repeated = 1;
+    *has_data = 0;
+
+    if (!old_p->is_mtu_probe &&
+        !old_p->is_ack_trap &&
+        !old_p->is_multipath_probe) {
+        /* Copy the relevant bytes from one packet to the next */
+        byte_index = old_p->offset;
+
+        while (ret == 0 && byte_index < old_p->length) {
+            ret = picoquic_skip_frame(&old_p->bytes[byte_index],
+                old_p->length - byte_index, &frame_length, &frame_is_pure_ack);
+
+            /* Check whether the data was already acked, which may happen in
+             * case of spurious retransmissions */
+            if (ret == 0 && frame_is_pure_ack == 0) {
+                ret = picoquic_check_frame_needs_repeat(cnx, &old_p->bytes[byte_index],
+                    frame_length, &frame_is_pure_ack);
+            }
+
+            /* Prepare retransmission if needed */
+            if (ret == 0 && !frame_is_pure_ack) {
+                if (PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max) &&
+                    picoquic_is_stream_frame_unlimited(&old_p->bytes[byte_index])) {
+                    /* If length is not present, check whether needed */
+                    if (*length + frame_length < send_buffer_max_minus_checksum) {
+                        size_t pad_needed = send_buffer_max_minus_checksum - *length - frame_length;
+                        memset(&new_bytes[*length], picoquic_frame_type_padding, pad_needed);
+                        *length += pad_needed;
+                    }
+                }
+                /* copy the frame */
+                if (write_index + frame_length <= send_buffer_max_minus_checksum) {
+                    memcpy(&new_bytes[write_index], &old_p->bytes[byte_index], frame_length);
+                    write_index += frame_length;
+                    *length += frame_length;
+                    *has_data = 1;
+                }
+                else {
+                    is_repeated = 0;
+                }
+            }
+            byte_index += frame_length;
+        }
+    }
+
+    if (*has_data && is_repeated) {
+        old_p->was_preemptively_repeated = 1;
+    }
+
+    return ret;
+}
+
+int picoquic_preemptive_retransmit_in_context(
+    picoquic_cnx_t* cnx,
+    picoquic_packet_context_t* pkt_ctx,
+    uint64_t rtt,
+    uint64_t current_time,
+    uint64_t* next_wake_time,
+    uint8_t* new_bytes,
+    size_t send_buffer_max_minus_checksum,
+    size_t* length,
+    int *has_data,
+    int *more_data, 
+    int test_only)
+{
+    /* If there is a single packet context for application frames,
+     * the code just has to track the preemptive_repeat_ptr for
+     * that context. If there are multiple paths, we need to consider
+     * packets from every plausible path.
+     */
+    int ret = 0;
+
+    if (pkt_ctx->preemptive_repeat_ptr == NULL) {
+        pkt_ctx->preemptive_repeat_ptr = pkt_ctx->retransmit_oldest;
+    }
+    /* Skip all packets that are too old to be repeated */
+    while (pkt_ctx->preemptive_repeat_ptr != NULL) {
+        if (pkt_ctx->preemptive_repeat_ptr->send_time + rtt / 2 >= current_time) {
+            break;
+        }
+        pkt_ctx->preemptive_repeat_ptr = pkt_ctx->preemptive_repeat_ptr->previous_packet;
+    }
+    /* Try to format the repeated packet */
+    while (pkt_ctx->preemptive_repeat_ptr != NULL) {
+        uint64_t early_time = pkt_ctx->preemptive_repeat_ptr->send_time + rtt / 8;
+
+        if (!pkt_ctx->preemptive_repeat_ptr->was_preemptively_repeated) {
+            if (early_time > current_time) {
+                /* Wait until the next repeat */
+                if (*next_wake_time > early_time) {
+                    *next_wake_time = early_time;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                }
+                break;
+            }
+            if (test_only) {
+                *more_data = 1;
+                break;
+            }
+            ret = picoquic_preemptive_retransmit_packet(pkt_ctx->preemptive_repeat_ptr, cnx,
+                new_bytes, send_buffer_max_minus_checksum, length, has_data);
+            if (ret != 0) {
+                break;
+            }
+        }
+        pkt_ctx->preemptive_repeat_ptr = pkt_ctx->preemptive_repeat_ptr->previous_packet;
+        if (*has_data) {
+            cnx->nb_preemptive_repeat++;
+            if (pkt_ctx->preemptive_repeat_ptr != NULL) {
+                *more_data = 1;
+            }
+            break;
+        }
+    }
+    return ret;
+}
+
+int picoquic_preemptive_retransmit_as_needed(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    picoquic_packet_context_enum pc,
+    uint64_t current_time,
+    uint64_t* next_wake_time,
+    uint8_t* new_bytes,
+    size_t send_buffer_max_minus_checksum,
+    size_t* length,
+    int* more_data,
+    int test_only)
+{
+    /* If there is a single packet context for application frames,
+     * the code just has to track the preemptive_repeat_ptr for
+     * that context. If there are multiple paths, this gets a bit
+     * more complicated, because packets that need to be premptively
+     * repeated might be found in many context, and also because some
+     * paths may be only used for primary repeats. In that case, we
+     * want to try all available packet contexts.
+     */
+    int ret = 0;
+    int has_data = 0;
+    picoquic_packet_context_t* pkt_ctx;
+    uint64_t rtt = path_x->smoothed_rtt;
+
+    if (pc == picoquic_packet_context_application &&
+        cnx->is_multipath_enabled) {
+        picoquic_remote_cnxid_t* r_cid = cnx->cnxid_stash_first;
+
+        while (r_cid != NULL) {
+            pkt_ctx = &r_cid->pkt_ctx;
+            ret = picoquic_preemptive_retransmit_in_context(
+                cnx, pkt_ctx, rtt, current_time, next_wake_time,
+                new_bytes, send_buffer_max_minus_checksum, length, &has_data, more_data, test_only);
+            if (ret != 0 || has_data != 0) {
+                break;
+            }
+            r_cid = r_cid->next;
+        }
+    }
+    else {
+        pkt_ctx = &cnx->pkt_ctx[pc];
+        ret = picoquic_preemptive_retransmit_in_context(
+            cnx, pkt_ctx, rtt, current_time, next_wake_time,
+            new_bytes, send_buffer_max_minus_checksum, length, &has_data, more_data, test_only);
+    }
+
+    return ret;
 }
 
 /* Decide whether MAX data need to be sent or not */
@@ -3578,6 +3765,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                      */
                     int datagram_tried_and_failed = 0;
                     int stream_tried_and_failed = 0;
+                    int preemptive_repeat = 0;
                     picoquic_pmtu_discovery_status_enum pmtu_discovery_needed = picoquic_is_mtu_probe_needed(cnx, path_x);
 
                     /* if present, send tls data */
@@ -3631,18 +3819,33 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             length = bytes_next - bytes;
                         }
 
-                        if (stream_tried_and_failed && datagram_tried_and_failed) {
-                            path_x->last_sender_limited_time = current_time;
+                        if (cnx->is_preemptive_repeat_enabled) {
+                            if (length <= header_length) {
+                                /* Consider redundant retransmission:
+                                 * if the redundant retransmission index is null:
+                                 * - if the packet loss rate is large enough compared to BDP, set index to last sent packet.
+                                 * - if not, do not perform redundant retransmission.
+                                 * if the packet contains a stream frame, if that stream is finished, and if the
+                                 * data range has not been acked, and it fits: copy it to the data. Move the index to the previous packet.
+                                 */
+                                ret = picoquic_preemptive_retransmit_as_needed(cnx, path_x, pc, current_time, next_wake_time, bytes_next,
+                                    bytes_max - bytes_next, &length, &more_data, 0);
+                            }
+                            else if (!more_data){
+                                /* Check whether preemptive retrasmission is needed. Same code as above,
+                                 * but in "test_only" mode, will set "more_data" or wait time if repeat is ready 
+                                 */
+                                ret = picoquic_preemptive_retransmit_as_needed(cnx, path_x, pc, current_time, next_wake_time, bytes_next,
+                                    bytes_max - bytes_next, &length, &more_data, 1);
+                            }
+                            if (length > header_length) {
+                                preemptive_repeat = 1;
+                                packet->is_preemptive_repeat = 1;
+                            }
                         }
-                        else if (length <= header_length && stream_tried_and_failed && !cnx->stream_blocked && !cnx->flow_blocked) {
-                            /* Consider redundant retransmission:
-                             * if the redundant retransmission index is null:
-                             * - if the packet loss rate is large enough compared to BDP, set index to last sent packet.
-                             * - if not, do not perform redundant retransmission.
-                             * if the packet contains a stream frame, if that stream is finished, and if the
-                             * data range has not been acked, and it fits: copy it to the data. Move the index to the previous packet.
-                             */
-                            /* TODO: write that code! */
+
+                        if (stream_tried_and_failed && datagram_tried_and_failed && !preemptive_repeat) {
+                            path_x->last_sender_limited_time = current_time;
                         }
                     } /* end of PMTU not required */
 
