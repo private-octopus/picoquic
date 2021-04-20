@@ -3095,8 +3095,9 @@ int picoquic_is_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* a
     int ret = 0;
 
     if (ack_ctx->ack_needed) {
-        if (pc != picoquic_packet_context_application || ack_ctx->ack_after_fin) {
+        if (pc != picoquic_packet_context_application || ack_ctx->ack_after_fin ) {
             ret = 1;
+            ack_ctx->ack_after_fin = 0;
         }
         else if (ack_ctx->out_of_order_received && !cnx->ack_ignore_order_remote) {
             ret = 1;
