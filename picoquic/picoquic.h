@@ -119,6 +119,7 @@ extern "C" {
 #define PICOQUIC_TRANSPORT_CRYPTO_ERROR(Alert) (((uint16_t)0x100) | ((uint16_t)((Alert)&0xFF)))
 #define PICOQUIC_TLS_ALERT_WRONG_ALPN (0x178)
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
+#define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x53F8)
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
@@ -232,6 +233,15 @@ typedef struct st_picoquic_tp_prefered_address_t {
     uint8_t statelessResetToken[16];
 } picoquic_tp_prefered_address_t;
 
+typedef struct st_picoquic_tp_version_negotiation_t {
+    uint32_t current; /* Version found in TP, should match envelope */
+    uint32_t previous; /* Version that triggered a VN before */
+    size_t nb_received; /* Only present on client */
+    uint32_t* received;
+    size_t nb_supported; /* On client, list of compatible versions */
+    uint32_t* supported;
+} picoquic_tp_version_negotiation_t;
+
 typedef struct st_picoquic_tp_t {
     uint64_t initial_max_stream_data_bidi_local;
     uint64_t initial_max_stream_data_bidi_remote;
@@ -253,6 +263,7 @@ typedef struct st_picoquic_tp_t {
     int do_grease_quic_bit;
     int enable_multipath;
     int enable_simple_multipath;
+    picoquic_tp_version_negotiation_t version_negotiation;
 } picoquic_tp_t;
 
 /*

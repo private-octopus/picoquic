@@ -436,6 +436,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(vn_tp)
+        {
+            int ret = vn_tp_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stream_rank)
         {
             int ret = stream_rank_test();

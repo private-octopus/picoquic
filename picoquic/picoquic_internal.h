@@ -195,6 +195,7 @@ typedef enum {
 #define PICOQUIC_TWENTYFIRST_INTEROP_VERSION 0xFF000021
 #define PICOQUIC_POST_IESG_VERSION 0xFF000022
 #define PICOQUIC_V1_VERSION 0x00000001
+#define PICOQUIC_V2_VERSION 0x00000002
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 #define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
@@ -509,6 +510,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_grease_quic_bit 0x2ab2 
 #define picoquic_tp_enable_multipath 0xbaba 
 #define picoquic_tp_enable_simple_multipath 0xbab5 
+#define picoquic_tp_version_negotiation 0x73db
 
 /* Callback for converting binary log to quic log at the end of a connection. 
  * This is kept private for now; and will only be set through the "set quic log"
@@ -1616,6 +1618,9 @@ void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx);
 
 /* handling of transport extensions.
  */
+
+const uint8_t* picoquic_process_transport_param_version_negotiation(const uint8_t* bytes, const uint8_t* bytes_max,
+    int extension_mode, uint32_t envelop_vn, uint32_t* negotiated_vn, uint64_t* vn_error);
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
