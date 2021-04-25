@@ -68,6 +68,7 @@ typedef enum {
     picoquic_option_Socket_buffer_size,
     picoquic_option_Performance_Log,
     picoquic_option_Preemptive_Repeat,
+    picoquic_option_Version_Upgrade,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -114,6 +115,7 @@ typedef struct st_picoquic_quic_config_t {
     char const* root_trust_file;
     int cipher_suite_id;
     uint32_t proposed_version;
+    uint32_t desired_version;
     unsigned int force_zero_share : 1;
     unsigned int no_disk : 1;
     unsigned int large_client_hello : 1;

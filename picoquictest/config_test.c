@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:K:p:v:o:w:x:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:Vh";
+static char* ref_option_text = "c:k:K:p:v:o:w:x:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:VU:h";
 
 int config_option_letters_test()
 {
@@ -86,6 +86,7 @@ static picoquic_quic_config_t param1 = {
     NULL, /* char const* root_trust_file; */
     0, /* int cipher_suite_id; */
     0, /* uint32_t proposed_version; */
+    0, /* uint32_t desired_version; */
     0, /* unsigned int force_zero_share : 1; */
     0, /* unsigned int no_disk : 1; */
     0, /* unsigned int large_client_hello : 1; */
@@ -161,6 +162,7 @@ static picoquic_quic_config_t param2 = {
     "data/certs/root.pem", /* char const* root_trust_file; */
     20, /* int cipher_suite_id; */
     0xff000020, /* uint32_t proposed_version; */
+    0x00000002, /* uint32_t desired_version; */
     1,/* unsigned int force_zero_share : 1; */
     1, /* unsigned int no_disk : 1; */
     1 /* unsigned int large_client_hello : 1; */
@@ -179,6 +181,7 @@ static const char* config_argv2[] = {
     "-I", "5",
     "-T", "/data/tickets.bin",
     "-N", "/data/tokens.bin",
+    "-U", "00000002",
     NULL
 };
 
@@ -262,6 +265,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_string("root_trust_file", expected->root_trust_file, actual->root_trust_file);
     ret |= config_test_compare_int("cipher_suite_id", expected->cipher_suite_id, actual->cipher_suite_id);
     ret |= config_test_compare_uint32("proposed_version", expected->proposed_version, actual->proposed_version);
+    ret |= config_test_compare_uint32("desired_version", expected->desired_version, actual->desired_version);
     ret |= config_test_compare_int("force_zero_share", expected->force_zero_share, actual->force_zero_share);
     ret |= config_test_compare_int("no_disk", expected->no_disk, actual->no_disk);
     ret |= config_test_compare_int("large_client_hello", expected->large_client_hello, actual->large_client_hello);
