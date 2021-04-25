@@ -2131,7 +2131,6 @@ int tls_api_version_invariant_test()
     return ret;
 }
 
-#if 0
 /* Test the compatible VN setup.
  * This will start a connection with version 1, and verify that it gets established with version 2.
  * TODO: define the transport parameters that require the upgrade.
@@ -2140,13 +2139,14 @@ int vn_compat_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_V1_VERSION, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, `, 0);
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_V1_VERSION, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
 
 
     if (ret == 0) {
-        /* Set the client transport parameter to require version negotiation */
-
+        /* Set the desired version */
+        picoquic_set_desired_version(test_ctx->cnx_client, PICOQUIC_V2_VERSION);
         /* Start the client connection */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
 
     if (ret != 0)
@@ -2179,7 +2179,6 @@ int vn_compat_test()
 
     return ret;
 }
-#endif
 
 /* Test setting the SNI
  */

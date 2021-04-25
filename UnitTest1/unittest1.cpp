@@ -443,6 +443,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(vn_compat)
+        {
+            int ret = vn_compat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stream_rank)
         {
             int ret = stream_rank_test();

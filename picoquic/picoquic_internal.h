@@ -1028,8 +1028,13 @@ typedef struct st_picoquic_cnx_t {
     struct st_picoquic_cnx_t* next_in_table;
     struct st_picoquic_cnx_t* previous_in_table;
 
-    /* Proposed and negotiated version. Feature flags denote version dependent features */
+    /* Proposed version, may be zero if there is no reference.
+     * Rejected version that triggered reception of a Version negotiation packet, zero by default.
+     * Desired version, target of possible compatible negotiation.
+     */
     uint32_t proposed_version;
+    uint32_t rejected_version;
+    uint32_t desired_version;
     int version_index;
 
     /* Series of flags showing the state or choices of the connection */
@@ -1076,7 +1081,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_simple_multipath_enabled : 1; /* Usage of simple multipath was negotiated */
     unsigned int is_sending_large_buffer : 1; /* Buffer provided by application is sufficient for PMTUD */
     unsigned int is_preemptive_repeat_enabled : 1; /* Preemptive repat of packets to reduce transaction latency */
-
+    unsigned int do_version_negotiation : 1; /* Whether compatible version negotiation is activated */
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
     /* Idle timeout in microseconds */
@@ -1329,7 +1334,7 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc);
 
 /* Notify error on connection */
-int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_t frame_type);
+int picoquic_connection_error(picoquic_cnx_t* cnx, uint64_t local_error, uint64_t frame_type);
 
 void picoquic_connection_disconnect(picoquic_cnx_t* cnx);
 
@@ -1619,8 +1624,9 @@ void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx);
 /* handling of transport extensions.
  */
 
-const uint8_t* picoquic_process_transport_param_version_negotiation(const uint8_t* bytes, const uint8_t* bytes_max,
-    int extension_mode, uint32_t envelop_vn, uint32_t* negotiated_vn, uint64_t* vn_error);
+const uint8_t* picoquic_process_tp_version_negotiation(const uint8_t* bytes, const uint8_t* bytes_max,
+    int extension_mode, uint32_t envelop_vn, uint32_t* negotiated_vn, int* negotiated_index,
+    uint64_t* vn_error);
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);

@@ -3445,7 +3445,7 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     return ret;
 }
 
-int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_t frame_type)
+int picoquic_connection_error(picoquic_cnx_t* cnx, uint64_t local_error, uint64_t frame_type)
 {
     if (cnx->cnx_state == picoquic_state_ready || 
         cnx->cnx_state == picoquic_state_client_ready_start || cnx->cnx_state == picoquic_state_server_false_start) {
@@ -3630,6 +3630,19 @@ void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason,
     *remote_reason = cnx->remote_error;
     *local_application_reason = cnx->application_error;
     *remote_application_reason = cnx->remote_application_error;
+}
+
+/* Setting up version negotiation parameters */
+void picoquic_set_desired_version(picoquic_cnx_t* cnx, uint32_t desired_version)
+{
+    cnx->desired_version = desired_version;
+    cnx->do_version_negotiation = 1;
+}
+
+void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_version)
+{
+    cnx->desired_version = rejected_version;
+    cnx->do_version_negotiation = 1;
 }
 
 /* Context retrieval functions */

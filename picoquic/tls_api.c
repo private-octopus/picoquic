@@ -921,7 +921,7 @@ uint16_t picoquic_tls_get_quic_extension_id(picoquic_cnx_t* cnx)
     int v = picoquic_supported_versions[cnx->version_index].version;
     uint16_t quic_ext_id = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_DRAFT;
 
-    if (v == PICOQUIC_V1_VERSION || v == PICOQUIC_TWENTYFIRST_INTEROP_VERSION) {
+    if (v == PICOQUIC_V1_VERSION || v == PICOQUIC_TWENTYFIRST_INTEROP_VERSION || v == PICOQUIC_V2_VERSION ) {
         quic_ext_id = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_V1;
     }
 

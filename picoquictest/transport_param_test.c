@@ -1128,8 +1128,9 @@ int vn_tp_test_one(size_t len, const uint8_t* t, int mode, uint32_t envelop_vn, 
     int ret = -1;
     uint64_t error_found;
     uint32_t negotiated_vn;
-    const uint8_t* final = picoquic_process_transport_param_version_negotiation(t, t + len, mode, envelop_vn,
-        &negotiated_vn, &error_found);
+    int negotiated_index;
+    const uint8_t* final = picoquic_process_tp_version_negotiation(t, t + len, mode, envelop_vn,
+        &negotiated_vn, &negotiated_index, &error_found);
     if (final == NULL) {
         if (vn_error == 0) {
             DBG_PRINTF("%s", "unexpected parsing error");
@@ -1146,6 +1147,10 @@ int vn_tp_test_one(size_t len, const uint8_t* t, int mode, uint32_t envelop_vn, 
     }
     else if (expected_vn != negotiated_vn) {
         DBG_PRINTF("Expected version 0x%8x, got 0x%8x", expected_vn, negotiated_vn);
+    }
+    else if (negotiated_vn != 0 && picoquic_supported_versions[negotiated_index].version != negotiated_vn) {
+        DBG_PRINTF("Index %d point to 0x%8x instead of 0x%8x", negotiated_index, 
+            picoquic_supported_versions[negotiated_index].version, negotiated_vn);
     }
     else {
         ret = 0;

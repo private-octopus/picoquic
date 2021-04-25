@@ -618,10 +618,25 @@ int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
 
 void picoquic_delete_cnx(picoquic_cnx_t* cnx);
 
-int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_file_name);
-
 int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code);
 
+/* Support for version negotiation:
+ * Setting the "desired version" parameter will trigger compatible version
+ * negotiation from the current version to that desired version, if the
+ * server supports the desired version.
+ * If starting the connection with a new version after receiving a VN packet,
+ * setting the "rejected version" parameter will provide protection against
+ * downgrade attacks.
+ * These parameters must be set before starting the connection.
+ */
+
+void picoquic_set_desired_version(picoquic_cnx_t* cnx, uint32_t desired_version);
+void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_version);
+
+/* Support for encrypted SNI*/
+int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_file_name);
+
+/* Connection events */
 int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
     const struct sockaddr* addr_to, uint64_t current_time);
 

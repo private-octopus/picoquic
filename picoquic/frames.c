@@ -860,8 +860,8 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                 ret = 0;
             }
             else if (ret != 0) {
-                int err = (ret >= PICOQUIC_ERROR_CLASS) ? PICOQUIC_TRANSPORT_INTERNAL_ERROR : ret;
-                ret = picoquic_connection_error(cnx, (uint16_t)err, 0);
+                uint64_t err = (ret >= PICOQUIC_ERROR_CLASS) ? PICOQUIC_TRANSPORT_INTERNAL_ERROR : (uint64_t)ret;
+                ret = picoquic_connection_error(cnx, err, 0);
             }
         } else if (stream->consumed_offset >= offset &&  cnx->callback_fn != NULL){
             if (new_fin_offset >= stream->consumed_offset) {
@@ -883,7 +883,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
             ret = picoquic_queue_network_input(cnx->quic, &stream->stream_data_tree, stream->consumed_offset,
                 offset, bytes, length, received_data, &new_data_available);
             if (ret != 0) {
-                ret = picoquic_connection_error(cnx, (int16_t)ret, 0);
+                ret = picoquic_connection_error(cnx, (int64_t)ret, 0);
             }
             else if (new_data_available) {
                 should_notify = 1;
@@ -1596,7 +1596,7 @@ const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_
         int ret = picoquic_queue_network_input(cnx->quic, &stream->stream_data_tree, stream->consumed_offset,
             offset, bytes, (size_t)data_length, received_data, &new_data_available);
         if (ret != 0) {
-            picoquic_connection_error(cnx, (int16_t)ret, picoquic_frame_type_crypto_hs);
+            picoquic_connection_error(cnx, (int64_t)ret, picoquic_frame_type_crypto_hs);
             bytes = NULL;
         } else {
             bytes += data_length;
