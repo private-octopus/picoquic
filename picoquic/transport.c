@@ -337,7 +337,7 @@ const uint8_t * picoquic_process_tp_version_negotiation(const uint8_t* bytes, co
     uint32_t current;
     uint32_t previous = 0;
     uint64_t nb_received = 0;
-    size_t nb_compatible;
+    uint64_t nb_compatible;
     uint32_t compatible;
 
     *negotiated_vn = 0;
