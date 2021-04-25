@@ -2131,6 +2131,58 @@ int tls_api_version_invariant_test()
     return ret;
 }
 
+/* Test the compatible VN setup.
+ * This will start a connection with version 1, and verify that it gets established with version 2.
+ * TODO: define the transport parameters that require the upgrade.
+ */
+int vn_compat_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_V1_VERSION, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+
+    if (ret == 0) {
+        /* Set the desired version */
+        picoquic_set_desired_version(test_ctx->cnx_client, PICOQUIC_V2_VERSION);
+        /* Start the client connection */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret != 0)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_V1_VERSION);
+    }
+
+    if (ret == 0) {
+        (void)tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
+    }
+
+
+    if (ret == 0) {
+        if (picoquic_supported_versions[test_ctx->cnx_client->version_index].version != PICOQUIC_V2_VERSION) {
+            DBG_PRINTF("Client remained to version 0x%8x",
+                picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
+            ret = -1;
+        }
+        else if (picoquic_supported_versions[test_ctx->cnx_server->version_index].version != PICOQUIC_V2_VERSION) {
+            DBG_PRINTF("Server remained to version 0x%8x",
+                picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Test setting the SNI
+ */
+
 int tls_api_sni_test()
 {
     return tls_api_test_with_loss(NULL, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);

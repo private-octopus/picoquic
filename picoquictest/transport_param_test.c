@@ -1118,3 +1118,212 @@ int transport_param_stream_id_test()
 
     return ret;
 }
+
+/* Specific testing of the decoding and processing of the version negotiation
+ * transport parameter
+ */
+
+int vn_tp_test_one(size_t len, const uint8_t* t, int mode, uint32_t envelop_vn, uint32_t expected_vn, uint64_t vn_error)
+{
+    int ret = -1;
+    uint64_t error_found;
+    uint32_t negotiated_vn;
+    int negotiated_index;
+    const uint8_t* final = picoquic_process_tp_version_negotiation(t, t + len, mode, envelop_vn,
+        &negotiated_vn, &negotiated_index, &error_found);
+    if (final == NULL) {
+        if (vn_error == 0) {
+            DBG_PRINTF("%s", "unexpected parsing error");
+        }
+        else if (vn_error != error_found) {
+            DBG_PRINTF("unexpected parsing error, got 0x%" PRIx64 " instead of 0x%" PRIx64, error_found, vn_error);
+        }
+        else {
+            ret = 0;
+        }
+    }
+    else if (vn_error != 0) {
+        DBG_PRINTF("Expected error 0x%" PRIx64 ", got 0x0", error_found);
+    }
+    else if (expected_vn != negotiated_vn) {
+        DBG_PRINTF("Expected version 0x%8x, got 0x%8x", expected_vn, negotiated_vn);
+    }
+    else if (negotiated_vn != 0 && picoquic_supported_versions[negotiated_index].version != negotiated_vn) {
+        DBG_PRINTF("Index %d point to 0x%8x instead of 0x%8x", negotiated_index, 
+            picoquic_supported_versions[negotiated_index].version, negotiated_vn);
+    }
+    else {
+        ret = 0;
+    }
+    return ret;
+}
+
+uint8_t vn_tp_client_0[] = {
+    0x0, 0x0, 0x0, 0x1,
+    0x0, 0x0, 0x0, 0x0,
+    0,
+    1,
+    0x0, 0x0, 0x0, 0x2
+};
+
+uint8_t vn_tp_client_1[] = {
+    0x0, 0x0, 0x0, 0x1,
+    0x0a, 0x0a, 0x0a, 0x0a,
+    0,
+    1,
+    0x0, 0x0, 0x0, 0x2
+};
+
+uint8_t vn_tp_client_2[] = {
+    0x0, 0x0, 0x0, 0x1,
+    0x0a, 0x0a, 0x0a, 0x0a,
+    2,
+    0x0, 0x0, 0x0, 0x2,
+    0xfa, 0x0a, 0x0a, 0x0a,
+    2,
+    0xaa, 0x0a, 0x0a, 0x0a,
+    0x0, 0x0, 0x0, 0x2
+};
+
+uint8_t vn_tp_client_3[] = {
+    0x0, 0x0, 0x0, 0x1,
+    0x0a, 0x0a, 0x0a, 0x0a,
+    2,
+    0x0, 0x0, 0x0, 0x2,
+    0xfa, 0x0a, 0x0a, 0x0a,
+    0
+};
+
+uint8_t vn_tp_client_bad_evn[] = {
+    0x0, 0x0, 0x0, 0x1,
+    0x50, 0x43, 0x51, 0x30,
+    2,
+    0x0, 0x0, 0x0, 0x2,
+    0xfa, 0x0a, 0x0a, 0x0a,
+    2,
+    0xaa, 0x0a, 0x0a, 0x0a,
+    0x0, 0x0, 0x0, 0x2
+};
+
+uint8_t vn_tp_client_bad_1[] = {
+    0x0, 0x0, 0x0, 0x1,
+    0x0a, 0x0a, 0x0a, 0x0a,
+    0x3F,
+    0x0, 0x0, 0x0, 0x2,
+    0xfa, 0x0a, 0x0a, 0x0a,
+    2,
+    0xaa, 0x0a, 0x0a, 0x0a,
+    0x0, 0x0, 0x0, 0x2
+};
+
+uint8_t vn_tp_client_bad_2[] = {
+    0x0, 0x0, 0x0, 0x1,
+    0x0a, 0x0a, 0x0a, 0x0a,
+    2,
+    0x0, 0x0, 0x0, 0x2,
+    0xfa, 0x0a, 0x0a, 0x0a,
+    0x3f,
+    0xaa, 0x0a, 0x0a, 0x0a,
+    0x0, 0x0, 0x0, 0x2
+};
+
+uint8_t vn_tp_client_bad_3[] = {
+    0x0, 0x0, 0x0, 0x1,
+    0x0a, 0x0a, 0x0a, 0x0a,
+    2,
+    0x0, 0x0, 0x0, 0x2,
+    0xfa, 0x0a, 0x0a, 0x0a,
+    0x3f,
+    0xaa, 0x0a, 0x0a, 0x0a,
+    0x0, 0x0
+};
+
+uint8_t vn_tp_client_bad_4[] = {
+    0x0, 0x0, 0x0, 0x1,
+    0x50, 0x43
+};
+
+uint8_t vn_tp_server_0[] = {
+    0x0, 0x0, 0x0, 0x2,
+    0
+};
+
+uint8_t vn_tp_server_1[] = {
+    0x0, 0x0, 0x0, 0x2,
+    3,
+    0x0, 0x0, 0x0, 0x1,
+    0x0, 0x0, 0x0, 0x2,
+    0x50, 0x43, 0x51, 0x30
+};
+
+uint8_t vn_tp_server_bad_1[] = {
+    0x0, 0x0, 0x0, 0x2,
+    3,
+    0x0, 0x0, 0x0, 0x1,
+    0x0, 0x0, 0x0, 0x2,
+    0x50, 0x43
+};
+
+uint8_t vn_tp_server_bad_2[] = {
+    0x0, 0x0, 0x0, 0x2,
+    63,
+    0x0, 0x0, 0x0, 0x1,
+    0x0, 0x0, 0x0, 0x2,
+    0x50, 0x43, 0x51, 0x30
+};
+
+uint8_t vn_tp_server_bad_3[] = {
+    0x0, 0x0, 0x0, 0x2,
+};
+
+uint8_t vn_tp_server_bad_4[] = {
+    0x0, 0x0, 0x0
+};
+
+typedef struct st_vn_tp_test_t {
+    int mode;
+    uint32_t vn_envelop;
+    uint32_t vn_expected;
+    uint64_t error_expected;
+    const uint8_t* vn_tp;
+    size_t vn_tp_len;
+} vn_tp_test_t;
+
+#define VN_TP_TEST_CASE(mode, ve, vx, ex, vn_tp) { (mode), (ve), (vx), (ex), vn_tp, sizeof(vn_tp)}
+
+vn_tp_test_t vn_tp_test_case[] = {
+    VN_TP_TEST_CASE(0, 0x00000001, 0x00000002, 0, vn_tp_client_0),
+    VN_TP_TEST_CASE(0, 0x00000001, 0x00000002, 0, vn_tp_client_1),
+    VN_TP_TEST_CASE(0, 0x00000001, 0x00000002, 0, vn_tp_client_2),
+    VN_TP_TEST_CASE(0, 0x00000001, 0x00000000, 0, vn_tp_client_3),
+    VN_TP_TEST_CASE(0, 0x00000002, 0, PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR, vn_tp_client_3),
+    VN_TP_TEST_CASE(0, 0x00000001, 0, PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR, vn_tp_client_bad_evn),
+    VN_TP_TEST_CASE(0, 0x00000001, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_1),
+    VN_TP_TEST_CASE(0, 0x00000001, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_2),
+    VN_TP_TEST_CASE(0, 0x00000001, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_3),
+    VN_TP_TEST_CASE(0, 0x00000001, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_4),
+    VN_TP_TEST_CASE(1, 0x00000002, 0, 0, vn_tp_server_0),
+    VN_TP_TEST_CASE(1, 0x00000002, 0, 0, vn_tp_server_1),
+    VN_TP_TEST_CASE(1, 0x00000001, 0, PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR, vn_tp_server_0),
+    VN_TP_TEST_CASE(1, 0x00000002, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_server_bad_1),
+    VN_TP_TEST_CASE(1, 0x00000002, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_server_bad_2),
+    VN_TP_TEST_CASE(1, 0x00000002, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_server_bad_3),
+    VN_TP_TEST_CASE(1, 0x00000002, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_server_bad_4)
+};
+
+size_t nb_vn_tp_test_case = sizeof(vn_tp_test_case) / sizeof(vn_tp_test_t);
+
+int vn_tp_test()
+{
+    int ret = 0;
+
+    for (size_t i = 0; i < nb_vn_tp_test_case; i++) {
+        if (vn_tp_test_one(vn_tp_test_case[i].vn_tp_len, vn_tp_test_case[i].vn_tp, vn_tp_test_case[i].mode,
+            vn_tp_test_case[i].vn_envelop, vn_tp_test_case[i].vn_expected, vn_tp_test_case[i].error_expected) != 0) {
+            DBG_PRINTF("Vn test case[%zu] fails", i);
+            ret = -1;
+            break;
+        }
+    }
+    return ret;
+}

@@ -119,6 +119,7 @@ extern "C" {
 #define PICOQUIC_TRANSPORT_CRYPTO_ERROR(Alert) (((uint16_t)0x100) | ((uint16_t)((Alert)&0xFF)))
 #define PICOQUIC_TLS_ALERT_WRONG_ALPN (0x178)
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
+#define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x53F8)
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
@@ -232,6 +233,15 @@ typedef struct st_picoquic_tp_prefered_address_t {
     uint8_t statelessResetToken[16];
 } picoquic_tp_prefered_address_t;
 
+typedef struct st_picoquic_tp_version_negotiation_t {
+    uint32_t current; /* Version found in TP, should match envelope */
+    uint32_t previous; /* Version that triggered a VN before */
+    size_t nb_received; /* Only present on client */
+    uint32_t* received;
+    size_t nb_supported; /* On client, list of compatible versions */
+    uint32_t* supported;
+} picoquic_tp_version_negotiation_t;
+
 typedef struct st_picoquic_tp_t {
     uint64_t initial_max_stream_data_bidi_local;
     uint64_t initial_max_stream_data_bidi_remote;
@@ -253,6 +263,7 @@ typedef struct st_picoquic_tp_t {
     int do_grease_quic_bit;
     int enable_multipath;
     int enable_simple_multipath;
+    picoquic_tp_version_negotiation_t version_negotiation;
 } picoquic_tp_t;
 
 /*
@@ -607,10 +618,25 @@ int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
 
 void picoquic_delete_cnx(picoquic_cnx_t* cnx);
 
-int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_file_name);
-
 int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code);
 
+/* Support for version negotiation:
+ * Setting the "desired version" parameter will trigger compatible version
+ * negotiation from the current version to that desired version, if the
+ * server supports the desired version.
+ * If starting the connection with a new version after receiving a VN packet,
+ * setting the "rejected version" parameter will provide protection against
+ * downgrade attacks.
+ * These parameters must be set before starting the connection.
+ */
+
+void picoquic_set_desired_version(picoquic_cnx_t* cnx, uint32_t desired_version);
+void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_version);
+
+/* Support for encrypted SNI*/
+int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_file_name);
+
+/* Connection events */
 int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
     const struct sockaddr* addr_to, uint64_t current_time);
 

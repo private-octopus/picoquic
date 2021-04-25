@@ -595,6 +595,10 @@ int quic_client(const char* ip_address_text, int server_port,
                 ret = picoquic_esni_client_from_file(cnx_client, config->esni_rr_file);
             }
 
+            if (config->desired_version != 0) {
+                picoquic_set_desired_version(cnx_client, config->desired_version);
+            }
+
             fprintf(stdout, "Max stream id bidir remote before start = %d (%d)\n",
                 (int)cnx_client->max_stream_id_bidir_remote,
                 (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);

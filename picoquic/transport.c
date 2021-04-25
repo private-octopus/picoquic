@@ -255,6 +255,145 @@ size_t picoquic_decode_transport_param_prefered_address(uint8_t * bytes, size_t 
     return ret;
 }
 
+/* Version negotiation. This is an implementation of:
+ *     https://quicwg.org/version-negotiation/draft-ietf-quic-version-negotiation.html
+ * On the client side, we can have the following scenarios:
+ *   1- Proposal of a compatible versions. The parameter encodes the selected version,
+ *      and the compatible versions
+ *   2- Response to incoming VN. Same parameters, plus encoding of incoming VN. The incoming
+ *      VN proposal is passed as a parameter of the connection context.
+ * Client Handshake Version Information {
+ *   Currently Attempted Version (32),
+ *   Previously Attempted Version (32),
+ *   Received Negotiation Version Count (i),
+ *   Received Negotiation Version (32) ...,
+ *   Compatible Version Count (i),
+ *   Compatible Version (32) ...,
+ * }
+ * On the server side:
+ * Server Handshake Version Information {
+ *   Negotiated Version (32),
+ *   Supported Version Count (i),
+ *   Supported Version (32) ...,
+ * }
+ * Server processing of incoming client message:
+ * - If VN is present, verify that VN matches what sender would send???
+ * - If VN is present, verify that initial proposal is not 
+ *
+ */
+uint8_t* picoquic_encode_transport_param_version_negotiation(uint8_t* bytes, uint8_t* bytes_max,
+    int extension_mode, picoquic_cnx_t* cnx)
+{
+    uint8_t* bytes_len;
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_version_negotiation);
+    bytes_len = bytes;
+
+
+    if (bytes != NULL &&
+        (bytes = picoquic_frames_uint16_encode(bytes, bytes_max, 0)) != NULL &&
+        (bytes = picoquic_frames_uint32_encode(bytes, bytes_max,
+            picoquic_supported_versions[cnx->version_index].version)) != NULL) {
+        if (extension_mode == 0) {
+            if ((bytes = picoquic_frames_uint32_encode(bytes, bytes_max, cnx->rejected_version)) != NULL &&
+                (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0)) != NULL) {
+                if (cnx->desired_version == 0) {
+                    bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0);
+                }
+                else {
+                    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, 1)) != NULL) {
+                        bytes = picoquic_frames_uint32_encode(bytes, bytes_max, cnx->desired_version);
+                    }
+                }
+            }
+        }
+        else if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_nb_supported_versions)) != NULL) {
+            for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
+                if ((bytes = picoquic_frames_uint32_encode(bytes, bytes_max,
+                    picoquic_supported_versions[i].version)) == NULL) {
+                    break;
+                }
+            }
+        }
+    }
+
+    if (bytes != NULL) {
+        size_t len = bytes - (bytes_len + 2);
+
+        if (len > 0x3FFF) {
+            bytes = NULL;
+        }
+        else {
+            bytes_len[0] = (uint8_t)((len >> 8) & 0x3f) | 0x40;
+            bytes_len[1] = (uint8_t)(len & 0xff);
+        }
+    }
+
+    return bytes;
+}
+
+const uint8_t * picoquic_process_tp_version_negotiation(const uint8_t* bytes, const uint8_t* bytes_max,
+    int extension_mode, uint32_t envelop_vn, uint32_t *negotiated_vn, int * negotiated_index, uint64_t * vn_error)
+{
+    uint32_t current;
+    uint32_t previous = 0;
+    uint64_t nb_received = 0;
+    uint64_t nb_compatible;
+    uint32_t compatible;
+
+    *negotiated_vn = 0;
+    *negotiated_index = -1;
+    *vn_error = 0;
+
+    if ((bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &current)) != NULL) {
+        if (current != envelop_vn) {
+            /* Packet was tempered with */
+            *vn_error = PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR;
+            bytes = NULL;
+        } else if (extension_mode == 0) {
+            /* Processing the client extensions */
+            if ((bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &previous)) != NULL &&
+                (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &nb_received)) != NULL &&
+                (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, nb_received * 4)) != NULL &&
+                (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &nb_compatible)) != NULL) {
+                /* Check that previous is OK */
+                if (previous != 0 && picoquic_get_version_index(previous) != -1) {
+                    /* VN was not justified, was tempered with */
+                    *vn_error = PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR;
+                    bytes = NULL;
+                }
+                else {
+                    for (uint64_t i = 0; i < nb_compatible; i++) {
+                        if ((bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &compatible)) == NULL) {
+                            break;
+                        }
+                        else {
+                            int this_rank = picoquic_get_version_index(compatible);
+                            if (this_rank >= 0 && (*negotiated_index < 0 || *negotiated_index > this_rank)) {
+                                *negotiated_vn = compatible;
+                                *negotiated_index = this_rank;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &nb_compatible)) != NULL) {
+            /* Skipping the server extensions */
+            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, nb_compatible * 4);
+        }
+    }
+
+    if (bytes == NULL && *vn_error == 0) {
+        *vn_error = PICOQUIC_TRANSPORT_PARAMETER_ERROR;
+    }
+    else if (bytes != NULL && bytes != bytes_max) {
+        *vn_error = PICOQUIC_TRANSPORT_PARAMETER_ERROR;
+        bytes = NULL;
+    }
+
+    return bytes;
+}
+
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_length, size_t* consumed)
 {
@@ -409,6 +548,9 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             (uint64_t)cnx->local_parameters.enable_simple_multipath);
     }
 
+    if (cnx->do_version_negotiation && bytes != NULL) {
+        bytes = picoquic_encode_transport_param_version_negotiation(bytes, bytes_max, extension_mode, cnx);
+    }
 
     if (bytes == NULL) {
         *consumed = 0;
@@ -718,6 +860,25 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         }
                         else {
                             cnx->remote_parameters.enable_simple_multipath = (int)enable_simple_multipath;
+                        }
+                    }
+                    break;
+                }
+                case picoquic_tp_version_negotiation: {
+                    uint64_t error_found;
+                    uint32_t negotiated_vn;
+                    int negotiated_index;
+                    const uint8_t* final = picoquic_process_tp_version_negotiation(bytes + byte_index,
+                        bytes + byte_index + extension_length, extension_mode,
+                        picoquic_supported_versions[cnx->version_index].version,
+                        &negotiated_vn, &negotiated_index, &error_found);
+                    if (final == NULL) {
+                        ret = picoquic_connection_error(cnx, error_found, 0);
+                    }
+                    else {
+                        cnx->do_version_negotiation = 1;
+                        if (negotiated_vn != 0) {
+                            cnx->version_index = negotiated_index;
                         }
                     }
                     break;

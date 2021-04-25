@@ -77,10 +77,22 @@ uint8_t picoquic_retry_protection_v1[32] = {
     0x73, 0x03, 0x0f, 0x25, 0xc7, 0x9d, 0x71, 0xce, 0x87, 0x6e, 0xca, 0x87, 0x6e, 0x6f, 0xca, 0x8e
 };
 
+static uint8_t picoquic_cleartext_v2_salt[] = {
+    0xa7, 0x07, 0xc2, 0x03, 0xa5, 0x9b, 0x47, 0x18,
+    0x4a, 0x1d, 0x62, 0xca, 0x57, 0x04, 0x06, 0xea,
+    0x7a, 0xe3, 0xe5, 0xd3
+};
+
+
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_V1_VERSION,
         sizeof(picoquic_cleartext_v1_salt),
         picoquic_cleartext_v1_salt,
+        sizeof(picoquic_retry_protection_v1),
+        picoquic_retry_protection_v1 },
+    { PICOQUIC_V2_VERSION,
+        sizeof(picoquic_cleartext_v2_salt),
+        picoquic_cleartext_v2_salt,
         sizeof(picoquic_retry_protection_v1),
         picoquic_retry_protection_v1 },
     { PICOQUIC_POST_IESG_VERSION,
@@ -655,13 +667,7 @@ void picoquic_free(picoquic_quic_t* quic)
         if (quic->table_cnx_by_secret != NULL) {
             picohash_delete(quic->table_cnx_by_secret, 1);
         }
-#if 0
-        if (quic->verify_certificate_ctx != NULL &&
-            quic->free_verify_certificate_callback_fn != NULL) {
-            (quic->free_verify_certificate_callback_fn)(quic->verify_certificate_ctx);
-            quic->verify_certificate_ctx = NULL;
-        }
-#endif
+
         if (quic->verify_certificate_callback != NULL) {
             picoquic_dispose_verify_certificate_callback(quic);
         }
@@ -3439,7 +3445,7 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     return ret;
 }
 
-int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_t frame_type)
+int picoquic_connection_error(picoquic_cnx_t* cnx, uint64_t local_error, uint64_t frame_type)
 {
     if (cnx->cnx_state == picoquic_state_ready || 
         cnx->cnx_state == picoquic_state_client_ready_start || cnx->cnx_state == picoquic_state_server_false_start) {
@@ -3624,6 +3630,19 @@ void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason,
     *remote_reason = cnx->remote_error;
     *local_application_reason = cnx->application_error;
     *remote_application_reason = cnx->remote_application_error;
+}
+
+/* Setting up version negotiation parameters */
+void picoquic_set_desired_version(picoquic_cnx_t* cnx, uint32_t desired_version)
+{
+    cnx->desired_version = desired_version;
+    cnx->do_version_negotiation = 1;
+}
+
+void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_version)
+{
+    cnx->desired_version = rejected_version;
+    cnx->do_version_negotiation = 1;
 }
 
 /* Context retrieval functions */

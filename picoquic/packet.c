@@ -1435,6 +1435,17 @@ int picoquic_incoming_server_initial(
                         ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
                     }
                 }
+                if (ret == 0) {
+                    /* Test whether we need to do a version upgrade */
+                    if (ph->version_index != cnx->version_index) {
+                        if (ph->version_index >= 0 &&
+                            picoquic_supported_versions[ph->version_index].version == cnx->desired_version) {
+                            /* Version upgrade is succeeding! */
+                            /* TODO: consider version specific upgrade code */
+                            cnx->version_index = ph->version_index;
+                        }
+                    }
+                }
                 /* If no error, process the packet */
                 if (ret == 0) {
                     ret = picoquic_decode_frames(cnx, cnx->path[0],
@@ -2202,7 +2213,7 @@ int picoquic_incoming_segment(
                 {
                     ret = picoquic_incoming_server_handshake(cnx, bytes, decrypted_data, addr_to, if_index_to, &ph, current_time);
                 }
-                    else
+                else
                 {
                     ret = picoquic_incoming_client_handshake(cnx, bytes, decrypted_data, &ph, current_time);
                 }

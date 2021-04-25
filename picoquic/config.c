@@ -90,6 +90,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_Socket_buffer_size, 'B', "so_buf_size", 1, "number", "Set buffer size with SO_SNDBUF SO_RCVBUF" },
     { picoquic_option_Performance_Log, 'F', "log_file_name", 1, "file", "Append performance reports to performance log" },
     { picoquic_option_Preemptive_Repeat, 'V', "preemptive_repeat", 0, "", "enable preemptive repeat" },
+    { picoquic_option_Version_Upgrade, 'U', "version_upgrade", 1, "", "Version upgrade if server agrees, e.g. -U 00000002" },
     { picoquic_option_HELP, 'h', "help", 0, "This help message" }
 };
 
@@ -472,6 +473,12 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         break;
     case picoquic_option_Preemptive_Repeat:
         config->do_preemptive_repeat = 1;
+        break;
+    case picoquic_option_Version_Upgrade:
+        if ((config->desired_version = config_parse_target_version(config_optval_param_string(opval_buffer, 256, params, nb_params, 0))) <= 0) {
+            fprintf(stderr, "Invalid version: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = -1;
+        }
         break;
     case picoquic_option_HELP:
         ret = -1;
