@@ -90,7 +90,7 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_cleartext_v1_salt,
         sizeof(picoquic_retry_protection_v1),
         picoquic_retry_protection_v1 },
-    { PICOQUIC_V2_VERSION,
+    { PICOQUIC_V2_VERSION_DRAFT,
         sizeof(picoquic_cleartext_v2_salt),
         picoquic_cleartext_v2_salt,
         sizeof(picoquic_retry_protection_v1),
