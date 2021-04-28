@@ -3014,6 +3014,12 @@ void picoquic_cnx_set_spinbit_policy(picoquic_cnx_t * cnx, picoquic_spinbit_vers
     cnx->spin_policy = spinbit_policy;
 }
 
+void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_us, uint64_t bytes_per_second)
+{
+    cnx->seed_rtt_us = rtt_us;
+    cnx->seed_bytes_per_second = bytes_per_second;
+}
+
 void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required)
 {
     cnx->is_pmtud_required = is_pmtud_required;

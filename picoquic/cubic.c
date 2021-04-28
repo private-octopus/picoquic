@@ -302,6 +302,13 @@ static void picoquic_cubic_notify(
             case picoquic_congestion_notification_reset:
                 picoquic_cubic_reset(cubic_state, path_x, current_time);
                 break;
+            case picoquic_congestion_notification_seed_cwin:
+                if (cubic_state->ssthresh == UINT64_MAX) {
+                    if (path_x->cwin < nb_bytes_acknowledged) {
+                        path_x->cwin = nb_bytes_acknowledged;
+                    }
+                }
+                break;
             default:
                 break;
             }
@@ -337,6 +344,7 @@ static void picoquic_cubic_notify(
             case picoquic_congestion_notification_reset:
                 picoquic_cubic_reset(cubic_state, path_x, current_time);
                 break;
+            case picoquic_congestion_notification_seed_cwin:
             default:
                 /* ignore */
                 break;
@@ -387,6 +395,7 @@ static void picoquic_cubic_notify(
             case picoquic_congestion_notification_reset:
                 picoquic_cubic_reset(cubic_state, path_x, current_time);
                 break;
+            case picoquic_congestion_notification_seed_cwin:
             default:
                 /* ignore */
                 break;
@@ -513,6 +522,13 @@ static void picoquic_dcubic_notify(
             case picoquic_congestion_notification_reset:
                 picoquic_cubic_reset(cubic_state, path_x, current_time);
                 break;
+            case picoquic_congestion_notification_seed_cwin:
+                if (cubic_state->ssthresh == UINT64_MAX) {
+                    if (path_x->cwin < nb_bytes_acknowledged) {
+                        path_x->cwin = nb_bytes_acknowledged;
+                    }
+                }
+                break;
             default:
                 /* ignore */
                 break;
@@ -569,6 +585,7 @@ static void picoquic_dcubic_notify(
             case picoquic_congestion_notification_reset:
                 picoquic_cubic_reset(cubic_state, path_x, current_time);
                 break;
+            case picoquic_congestion_notification_seed_cwin:
             default:
                 /* ignore */
                 break;
@@ -631,6 +648,7 @@ static void picoquic_dcubic_notify(
             case picoquic_congestion_notification_reset:
                 picoquic_cubic_reset(cubic_state, path_x, current_time);
                 break;
+            case picoquic_congestion_notification_seed_cwin:
             default:
                 /* ignore */
                 break;

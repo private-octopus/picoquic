@@ -226,6 +226,7 @@ static const picoquic_test_def_t test_table[] = {
     { "bbr_gbps", gbps_performance_test },
     { "long_rtt", long_rtt_test },
     { "satellite_basic", satellite_basic_test },
+    { "satellite_seeded", satellite_seeded_test },
     { "satellite_loss", satellite_loss_test },
     { "satellite_jitter", satellite_jitter_test },
     { "satellite_medium", satellite_medium_test },

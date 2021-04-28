@@ -71,6 +71,20 @@ static void picoquic_newreno_sim_enter_recovery(
     nr_state->residual_ack = 0;
 }
 
+/* Update cwin per signaled bandwidth
+ */
+static void picoquic_newreno_sim_seed_cwin(picoquic_newreno_sim_state_t* nr_state,
+    picoquic_path_t* path_x, uint64_t bytes_in_flight)
+{
+    if (nr_state->alg_state == picoquic_newreno_alg_slow_start &&
+        nr_state->ssthresh == UINT64_MAX) {
+        if (bytes_in_flight > nr_state->cwin) {
+            nr_state->cwin = bytes_in_flight;
+        }
+    }
+}
+
+
 /* Notification API for new Reno simulations.
  */
 void picoquic_newreno_sim_notify(
@@ -151,6 +165,8 @@ void picoquic_newreno_sim_notify(
     case picoquic_congestion_notification_reset:
         picoquic_newreno_sim_reset(nr_state);
         break;
+    case picoquic_congestion_notification_seed_cwin:
+        picoquic_newreno_sim_seed_cwin(nr_state, path_x, nb_bytes_acknowledged);
     default:
         /* ignore */
         break;
@@ -221,6 +237,7 @@ static void picoquic_newreno_notify(
                 path_x->cwin = nr_state->nrss.cwin;
             }
             break;
+        case picoquic_congestion_notification_seed_cwin:
         case picoquic_congestion_notification_ecn_ec:
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:

@@ -2126,6 +2126,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         int64_t one_way_return_sample = 0;
         int is_old_path_valid = 1;
         int is_path_x_valid = 1;
+        int is_first = (old_path == cnx->path[0] && old_path == path_x && path_x->smoothed_rtt == PICOQUIC_INITIAL_RTT);
 
         if (time_stamp != 0) {
             /* If the phase is not yet known, it should be set. */
@@ -2213,6 +2214,21 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         }
         else {
             old_path->nb_delay_outliers++;
+        }
+
+        /* On first update, validate seeed data */
+        if (is_first && cnx->seed_bytes_per_second != 0 && cnx->seed_rtt_us <= path_x->smoothed_rtt &&
+            (path_x->smoothed_rtt - cnx->seed_rtt_us) < cnx->seed_rtt_us / 4) {
+            double d_transit = (double)cnx->seed_bytes_per_second;
+            d_transit *= path_x->smoothed_rtt;
+            d_transit /= 1000000.0;
+            d_transit /= 2;
+
+            cnx->congestion_alg->alg_notify(cnx, path_x,
+                picoquic_congestion_notification_seed_cwin,
+                0, 0,
+                (uint64_t)d_transit,
+                0, current_time);
         }
     }
 }

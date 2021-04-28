@@ -68,7 +68,13 @@ static int ticket_store_compare(picoquic_stored_ticket_t* s1, picoquic_stored_ti
         if (c2 == 0) {
             ret = -1;
         } else {
-            if (c1->time_valid_until != c2->time_valid_until || c1->sni_length != c2->sni_length || c1->alpn_length != c2->alpn_length || c1->ticket_length != c2->ticket_length || memcmp(c1->sni, c2->sni, c1->sni_length) != 0 || memcmp(c1->alpn, c2->alpn, c1->alpn_length) != 0 || memcmp(c1->ticket, c2->ticket, c1->ticket_length) != 0) {
+            if (c1->time_valid_until != c2->time_valid_until ||
+                c1->sni_length != c2->sni_length || c1->alpn_length != c2->alpn_length ||
+                c1->ip_addr_length != c2->ip_addr_length || c1->ticket_length != c2->ticket_length ||
+                memcmp(c1->sni, c2->sni, c1->sni_length) != 0 || 
+                memcmp(c1->alpn, c2->alpn, c1->alpn_length) != 0 ||
+                memcmp(c1->ip_addr, c2->ip_addr, c1->ip_addr_length) != 0 ||
+                memcmp(c1->ticket, c2->ticket, c1->ticket_length) != 0) {
                 ret = -1;
             } else {
                 for (int i = 0; i < PICOQUIC_NB_TP_0RTT; i++) {
@@ -99,6 +105,8 @@ int ticket_store_test()
     picoquic_stored_ticket_t* p_first_ticket_bis = NULL;
     picoquic_stored_ticket_t* p_first_ticket_ter = NULL;
     picoquic_stored_ticket_t* p_first_ticket_empty = NULL;
+    uint8_t ipv4_test[4] = { 10, 0, 0, 1 };
+    uint8_t ipv6_test[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
 
     uint64_t ticket_time = 40000000000ull;
     uint64_t current_time = 50000000000ull;
@@ -130,15 +138,31 @@ int ticket_store_test()
             uint64_t test_ticket_time = ticket_time / 1000;
             size_t delta_factor = (i * nb_test_alpn) + j;
             uint64_t delta_time = ((uint64_t)1000) * delta_factor;
+            uint8_t ip_addr_length = 0;
+            uint8_t* ip_addr = NULL;
+
             test_ticket_time += delta_time;
             ret = create_test_ticket(test_ticket_time, ttl, ticket, ticket_length);
 
             if (ret != 0) {
                 break;
             }
+
+            if ((i & 7) != 0) {
+                if ((i & 1) != 0) {
+                    ip_addr_length = 16;
+                    ip_addr = ipv6_test;
+                }
+                else {
+                    ip_addr_length = 4;
+                    ip_addr = ipv4_test;
+                }
+            }
+
             ret = picoquic_store_ticket(&p_first_ticket, current_time,
                 test_sni[i], (uint16_t)strlen(test_sni[i]),
                 test_alpn[j], (uint16_t)strlen(test_alpn[j]),
+                ip_addr, ip_addr_length,
                 ticket, ticket_length, &test_tp);
             if (ret != 0) {
                 break;

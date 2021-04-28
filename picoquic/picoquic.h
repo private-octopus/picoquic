@@ -943,6 +943,7 @@ typedef enum {
     picoquic_congestion_notification_bw_measurement,
     picoquic_congestion_notification_ecn_ec,
     picoquic_congestion_notification_cwin_blocked,
+    picoquic_congestion_notification_seed_cwin,
     picoquic_congestion_notification_reset
 } picoquic_congestion_notification_t;
 

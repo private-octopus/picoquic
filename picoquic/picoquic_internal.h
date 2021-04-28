@@ -415,26 +415,31 @@ typedef enum {
     picoquic_tp_0rtt_max_stream_data_bidi_remote = 2,
     picoquic_tp_0rtt_max_stream_data_uni = 3,
     picoquic_tp_0rtt_max_streams_id_bidir = 4,
-    picoquic_tp_0rtt_max_streams_id_unidir = 5
+    picoquic_tp_0rtt_max_streams_id_unidir = 5,
+    picoquic_tp_0rtt_rtt = 6,
+    picoquic_tp_0rtt_cwin = 7
 } picoquic_tp_0rtt_enum;
-#define PICOQUIC_NB_TP_0RTT 6
+#define PICOQUIC_NB_TP_0RTT 8
 
 typedef struct st_picoquic_stored_ticket_t {
     struct st_picoquic_stored_ticket_t* next_ticket;
     char* sni;
     char* alpn;
+    uint8_t* ip_addr;
     uint64_t tp_0rtt[PICOQUIC_NB_TP_0RTT];
     uint8_t* ticket;
     uint64_t time_valid_until;
     uint16_t sni_length;
     uint16_t alpn_length;
     uint16_t ticket_length;
+    uint8_t ip_addr_length;
     unsigned int was_used : 1;
 } picoquic_stored_ticket_t;
 
 int picoquic_store_ticket(picoquic_stored_ticket_t** p_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
+    const uint8_t* ip_addr, uint8_t ip_addr_length,
     uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const * tp);
 int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
     uint64_t current_time,
@@ -896,6 +901,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_multipath_probe_needed : 1;
     unsigned int was_local_cnxid_retired : 1;
     unsigned int is_ssthresh_initialized : 1;
+    unsigned int is_token_published : 1;
 
     /* Path priority, for multipath management */
     int path_priority;
@@ -1093,6 +1099,9 @@ typedef struct st_picoquic_cnx_t {
     /* Padding policy */
     uint32_t padding_multiple;
     uint32_t padding_minsize;
+    /* Value of RTT and bandwidth remembered from previous connections*/
+    uint64_t seed_rtt_us;
+    uint64_t seed_bytes_per_second;
 
     /* On clients, document the SNI and ALPN expected from the server */
     /* TODO: there may be a need to propose multiple ALPN */
@@ -1495,6 +1504,9 @@ int picoquic_process_ack_of_ack_frame(
 uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate);
 
 uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t * cnx, uint64_t rtt, uint64_t remote_min_ack_delay);
+
+/* seed the rtt and bandwidth discovery */
+void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_us, uint64_t bytes_per_second);
 
 /* Update the path RTT upon receiving an explict or implicit acknowledgement */
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, picoquic_path_t* path_x,

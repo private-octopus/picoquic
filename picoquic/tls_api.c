@@ -1183,7 +1183,8 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
 
     if (sni != NULL && alpn != NULL) {
         ret = picoquic_store_ticket(&quic->p_first_ticket, 0, sni, (uint16_t)strlen(sni),
-            alpn, (uint16_t)strlen(alpn), input.base, (uint16_t)input.len, &cnx->remote_parameters);
+            alpn, (uint16_t)strlen(alpn), NULL, 0,
+            input.base, (uint16_t)input.len, &cnx->remote_parameters);
     } else {
         DBG_PRINTF("Received incorrect session resume ticket, sni = %s, alpn = %s, length = %d\n",
             (sni == NULL) ? "NULL" : sni, (alpn == NULL) ? "NULL" : alpn, (int)input.len);
