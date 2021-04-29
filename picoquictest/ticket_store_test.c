@@ -20,6 +20,7 @@
 */
 
 #include "picoquic_internal.h"
+#include "picoquictest_internal.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -486,6 +487,186 @@ int token_reuse_api_test()
         }
 
         picoquic_free(quic);
+    }
+
+    return ret;
+}
+
+/* Ticket seed. Do a connection, and verify that server and client have properly
+ * documented the congestion parameters in the outgoing or incoming tickets
+ */
+static char const* ticket_seed_store = "ticket_seed_store.bin";
+static test_api_stream_desc_t test_scenario_ticket_seed[] = {
+    { 4, 0, 257, 1000000 }
+};
+
+int ticket_seed_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t max_completion_microsec = 1000000;
+    uint64_t server_ticket_id = 0;
+    uint64_t client_ticket_id = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+
+    /* Initialize an empty ticket store */
+    ret = picoquic_save_tickets(NULL, simulated_time, ticket_seed_store);
+
+    /* Prepare a first connection */
+    ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, ticket_seed_store, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_ticket_seed, sizeof(test_scenario_ticket_seed));
+    }
+
+    /* Perform a data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
+    }
+
+    if (ret == 0) {
+        /* Check the ticket store at the client. */
+        picoquic_stored_ticket_t* client_ticket;
+
+        client_ticket = picoquic_get_stored_ticket(test_ctx->qclient->p_first_ticket, simulated_time,
+            PICOQUIC_TEST_SNI, (uint16_t)strlen(PICOQUIC_TEST_SNI),
+            PICOQUIC_TEST_ALPN, (uint16_t)strlen(PICOQUIC_TEST_ALPN),
+            0, test_ctx->cnx_client->issued_ticket_id);
+
+        if (client_ticket == NULL) {
+            DBG_PRINTF("%s", "No ticket found for client.");
+            ret = -1;
+        }
+        else {
+            client_ticket_id = test_ctx->cnx_client->issued_ticket_id;
+
+            if (client_ticket->tp_0rtt[picoquic_tp_0rtt_rtt] == 0) {
+                DBG_PRINTF("%s", "RTT not set for client ticket.");
+                ret = -1;
+            }
+            if (client_ticket->tp_0rtt[picoquic_tp_0rtt_cwin] == 0) {
+                DBG_PRINTF("%s", "CWIN not set for client ticket.");
+                ret = -1;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* Check the issued tickets list at the server. */
+        picoquic_issued_ticket_t* server_ticket;
+
+        if (test_ctx->cnx_server == NULL) {
+            server_ticket = test_ctx->qserver->table_issued_tickets_first;
+        }
+        else {
+            server_ticket = picoquic_retrieve_issued_ticket(test_ctx->qserver,
+                test_ctx->cnx_server->issued_ticket_id);
+        }
+        if (server_ticket == NULL) {
+            DBG_PRINTF("%s", "No ticket found for server.");
+            ret = -1;
+        }
+        else {
+            server_ticket_id = server_ticket->ticket_id;
+
+            if (server_ticket->rtt == 0) {
+                DBG_PRINTF("%s", "RTT not set for server ticket.");
+                ret = -1;
+            }
+            if (server_ticket->cwin == 0) {
+                DBG_PRINTF("%s", "CWIN not set for server ticket.");
+                ret = -1;
+            }
+        }
+    }
+
+    /* Now we remove the client connection and create a new one. */
+    if (ret == 0) {
+        picoquic_delete_cnx(test_ctx->cnx_client);
+        if (test_ctx->cnx_server != NULL) {
+            picoquic_delete_cnx(test_ctx->cnx_server);
+            test_ctx->cnx_server = NULL;
+        }
+
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*) & test_ctx->server_addr, simulated_time,
+            0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send second batch of data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_ticket_seed, sizeof(test_scenario_ticket_seed));
+    }
+
+    /* Perform a data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
+    }
+
+    if (ret == 0) {
+        /* verify that the client resume ticket id is the same as the previous one */
+        if (test_ctx->cnx_client->resumed_ticket_id != client_ticket_id) {
+            DBG_PRINTF("Client ticket id = 0x%" PRIx64 ", expected 0x%" PRIx64, 
+                test_ctx->cnx_client->resumed_ticket_id, client_ticket_id);
+            ret = -1;
+        }
+        if (test_ctx->cnx_client->seed_rtt_min == 0) {
+            DBG_PRINTF("%s", "RTT not set for client ticket.");
+            ret = -1;
+        }
+        if (test_ctx->cnx_client->seed_cwin == 0) {
+            DBG_PRINTF("%s", "CWIN not set for client ticket.");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* verify that the server resume ticket id is the same as the previous one */
+        if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->resumed_ticket_id != server_ticket_id) {
+            DBG_PRINTF("Server ticket id = 0x%" PRIx64 ", expected 0x%" PRIx64,
+                test_ctx->cnx_server->resumed_ticket_id, server_ticket_id);
+            ret = -1;
+        }
+        if (test_ctx->cnx_client->seed_rtt_min == 0) {
+            DBG_PRINTF("%s", "RTT not set for server ticket.");
+            ret = -1;
+        }
+        if (test_ctx->cnx_client->seed_cwin == 0) {
+            DBG_PRINTF("%s", "CWIN not set for server ticket.");
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
     }
 
     return ret;

@@ -90,6 +90,7 @@ int app_message_overflow_test();
 int socket_test();
 int test_stateless_blowback();
 int ticket_store_test();
+int ticket_seed_test();
 int token_store_test();
 int session_resume_test();
 int zero_rtt_test();

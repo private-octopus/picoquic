@@ -2713,7 +2713,7 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
 
             test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
                 picoquic_null_connection_id, picoquic_null_connection_id,
-                (struct sockaddr*) & test_ctx->server_addr, 0,
+                (struct sockaddr*) & test_ctx->server_addr, simulated_time,
                 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
 
             if (test_ctx->cnx_client == NULL) {
@@ -8099,7 +8099,12 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
         test_ctx->immediate_exit = 1;
 
         if (seed_bw) {
-            picoquic_seed_bandwidth(test_ctx->cnx_client, 2 * latency, mbps_up * 125000);
+            uint8_t * ip_addr;
+            uint8_t ip_addr_length;
+            picoquic_get_ip_addr((struct sockaddr*) & test_ctx->server_addr, &ip_addr, &ip_addr_length);
+
+            picoquic_seed_bandwidth(test_ctx->cnx_client, 2 * latency, mbps_up * 125000,
+                ip_addr, ip_addr_length);
         }
 
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
@@ -8143,7 +8148,7 @@ int satellite_basic_test()
 int satellite_seeded_test()
 {
     /* Simulate remembering RTT and BW from previous connection */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 5200000, 250, 3, 0, 0, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4800000, 250, 3, 0, 0, 0, 1);
 }
 
 int satellite_loss_test()

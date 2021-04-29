@@ -267,6 +267,131 @@ picoquic_packet_context_enum picoquic_context_from_epoch(int epoch)
     return (epoch >= 0 && epoch < 4) ? pc[epoch] : 0;
 }
 
+/* Management of issued tickets.
+ * For each issued ticket, we create a ticket key:
+ * - ticket id
+ * - properties
+ * The tickets are accessible through a hash table, keyed by ticket ID.
+ * They are also organized as an LRU list, with a max number set by default
+ * to the number of connections.
+ */
+
+static uint64_t picoquic_issued_ticket_hash(const void* key)
+{
+    const picoquic_issued_ticket_t* ticket_key = (const picoquic_issued_ticket_t*)key;
+
+    return ticket_key->ticket_id;
+}
+
+static int picoquic_issued_ticket_compare(const void* key1, const void* key2)
+{
+    const picoquic_issued_ticket_t* ticket_key1 = (const picoquic_issued_ticket_t*)key1;
+    const picoquic_issued_ticket_t* ticket_key2 = (const picoquic_issued_ticket_t*)key2;
+    int ret = (ticket_key1->ticket_id == ticket_key2->ticket_id)?0:1;
+
+    return ret;
+}
+
+picoquic_issued_ticket_t* picoquic_retrieve_issued_ticket(picoquic_quic_t* quic,
+    uint64_t ticket_id)
+{
+    picoquic_issued_ticket_t* ret = NULL;
+    picohash_item* item;
+    picoquic_issued_ticket_t key;
+
+    memset(&key, 0, sizeof(key));
+    key.ticket_id = ticket_id;
+
+    item = picohash_retrieve(quic->table_issued_tickets, &key);
+
+    if (item != NULL) {
+        ret = (picoquic_issued_ticket_t*)item->key;
+    }
+    return ret;
+}
+
+static void picoquic_update_issued_ticket(
+    picoquic_issued_ticket_t* ticket,
+    uint64_t rtt,
+    uint64_t cwin,
+    const uint8_t* ip_addr,
+    uint8_t ip_addr_length)
+{
+    /* Update in place */
+    if (ip_addr_length > PICOQUIC_STORED_IP_MAX) {
+        ip_addr_length = PICOQUIC_STORED_IP_MAX;
+    }
+    ticket->ip_addr_length = ip_addr_length;
+    memcpy(ticket->ip_addr, ip_addr, ip_addr_length);
+    ticket->rtt = rtt;
+    ticket->cwin = cwin;
+}
+
+static void picoquic_delete_issued_ticket(picoquic_quic_t* quic, picoquic_issued_ticket_t* ticket)
+{
+    /* Update the linked list */
+    if (ticket->next_ticket == NULL) {
+        quic->table_issued_tickets_last = ticket->previous_ticket;
+    }
+    else {
+        ticket->next_ticket->previous_ticket = ticket->previous_ticket;
+    }
+
+    if (ticket->previous_ticket == NULL) {
+        quic->table_issued_tickets_first = ticket->next_ticket;
+    }
+    else {
+        ticket->previous_ticket->next_ticket = ticket->next_ticket;
+    }
+
+    picohash_delete_key(quic->table_issued_tickets, ticket, 1);
+
+    if (quic->table_issued_tickets_nb > 0) {
+        quic->table_issued_tickets_nb--;
+    }
+}
+
+int picoquic_remember_issued_ticket(picoquic_quic_t* quic,
+    uint64_t ticket_id,
+    uint64_t rtt,
+    uint64_t cwin,
+    const uint8_t* ip_addr,
+    uint8_t ip_addr_length)
+{
+    int ret = 0;
+
+    picoquic_issued_ticket_t* ticket = picoquic_retrieve_issued_ticket(quic,
+        ticket_id);
+    if (ticket != NULL) {
+        picoquic_update_issued_ticket(ticket, rtt, cwin, ip_addr, ip_addr_length);
+    }
+    else {
+        while (quic->table_issued_tickets_nb > quic->max_number_connections) {
+            picoquic_delete_issued_ticket(quic, quic->table_issued_tickets_last);
+        }
+        ticket = (picoquic_issued_ticket_t*)malloc(sizeof(picoquic_issued_ticket_t));
+        if (ticket != NULL) {
+            memset(ticket, 0, sizeof(picoquic_issued_ticket_t));
+            ticket->ticket_id = ticket_id;
+            picoquic_update_issued_ticket(ticket, rtt, cwin, ip_addr, ip_addr_length);
+            ticket->next_ticket = quic->table_issued_tickets_first;
+            quic->table_issued_tickets_first = ticket;
+            if (ticket->next_ticket == NULL) {
+                quic->table_issued_tickets_last = ticket;
+            }
+            else {
+                ticket->next_ticket->previous_ticket = ticket;
+            }
+            picohash_insert(quic->table_issued_tickets, ticket);
+        }
+        else {
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+    }
+
+    return ret;
+}
+
 /* Token reuse management */
 
 static int64_t picoquic_registered_token_compare(void* l, void* r)
@@ -442,11 +567,15 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
             quic->table_cnx_by_secret = picohash_create((size_t)max_nb_connections * 4,
                 picoquic_net_secret_hash, picoquic_net_secret_compare);
 
+            quic->table_issued_tickets = picohash_create((size_t)max_nb_connections,
+                picoquic_issued_ticket_hash, picoquic_issued_ticket_compare);
+
             picosplay_init_tree(&quic->token_reuse_tree, picoquic_registered_token_compare,
                 picoquic_registered_token_create, picoquic_registered_token_delete, picoquic_registered_token_value);
 
             if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL ||
-                quic->table_cnx_by_icid == NULL || quic->table_cnx_by_secret == NULL) {
+                quic->table_cnx_by_icid == NULL || quic->table_cnx_by_secret == NULL ||
+                quic->table_issued_tickets == NULL) {
                 ret = -1;
                 DBG_PRINTF("%s", "Cannot initialize hash tables\n");
             }
@@ -662,6 +791,10 @@ void picoquic_free(picoquic_quic_t* quic)
 
         if (quic->table_cnx_by_icid != NULL) {
             picohash_delete(quic->table_cnx_by_icid, 1);
+        }
+
+        if (quic->table_issued_tickets != NULL) {
+            picohash_delete(quic->table_issued_tickets, 1);
         }
 
         if (quic->table_cnx_by_secret != NULL) {
@@ -3014,10 +3147,16 @@ void picoquic_cnx_set_spinbit_policy(picoquic_cnx_t * cnx, picoquic_spinbit_vers
     cnx->spin_policy = spinbit_policy;
 }
 
-void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_us, uint64_t bytes_per_second)
+void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwin, 
+    uint8_t * ip_addr, uint8_t ip_addr_length)
 {
-    cnx->seed_rtt_us = rtt_us;
-    cnx->seed_bytes_per_second = bytes_per_second;
+    cnx->seed_rtt_min = rtt_min;
+    cnx->seed_cwin = cwin;
+    if (ip_addr_length > PICOQUIC_STORED_IP_MAX) {
+        ip_addr_length = PICOQUIC_STORED_IP_MAX;
+    }
+    memcpy(cnx->seed_ip_addr, ip_addr, ip_addr_length);
+    cnx->seed_ip_addr_length = ip_addr_length;
 }
 
 void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required)
