@@ -599,6 +599,9 @@ int ticket_seed_test()
             test_ctx->cnx_server = NULL;
         }
 
+        /* Clean the data allocated to test the streams */
+        test_api_delete_test_streams(test_ctx);
+
         test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
             picoquic_null_connection_id, picoquic_null_connection_id,
             (struct sockaddr*) & test_ctx->server_addr, simulated_time,

@@ -248,6 +248,14 @@ static void test_api_delete_test_stream(test_api_stream_t* test_stream)
     memset(test_stream, 0, sizeof(test_api_stream_t));
 }
 
+void test_api_delete_test_streams(picoquic_test_tls_api_ctx_t* test_ctx)
+{
+    for (size_t i = 0; i < test_ctx->nb_test_streams; i++) {
+        test_api_delete_test_stream(&test_ctx->test_stream[i]);
+    }
+    test_ctx->nb_test_streams = 0;
+}
+
 static void test_api_receive_stream_data(
     const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event,
     uint8_t* buffer, size_t max_len, const uint8_t* reference, size_t* nb_received,
