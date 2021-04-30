@@ -197,7 +197,7 @@ static uint32_t config_parse_target_version(char const* v_arg)
 static int config_set_string_param(char const** v, const option_param_t* params, int nb_param, int x)
 {
     int ret = 0;
-    char* p_dup;
+    char* p_dup = NULL;
 
     if (*v != NULL) {
         free((void*)*v);
@@ -206,7 +206,9 @@ static int config_set_string_param(char const** v, const option_param_t* params,
 
     if (params != NULL && x >= 0 && x < nb_param && params[x].param != NULL)
     {
-        p_dup = malloc(params[x].length + 1);
+        if (params[x].length >= 0) {
+            p_dup = malloc((size_t)params[x].length + 1);
+        }
         if (p_dup != NULL) {
             memcpy(p_dup, params[x].param, params[x].length);
             p_dup[params[x].length] = 0;
