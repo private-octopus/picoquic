@@ -41,6 +41,13 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(satellite_seeded)
+        {
+            int ret = satellite_seeded_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(satellite_loss)
         {
             int ret = satellite_loss_test();

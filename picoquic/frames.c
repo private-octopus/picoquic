@@ -2126,6 +2126,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         int64_t one_way_return_sample = 0;
         int is_old_path_valid = 1;
         int is_path_x_valid = 1;
+        int is_first = (old_path == cnx->path[0] && old_path == path_x && path_x->smoothed_rtt == PICOQUIC_INITIAL_RTT);
 
         if (time_stamp != 0) {
             /* If the phase is not yet known, it should be set. */
@@ -2214,6 +2215,25 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         else {
             old_path->nb_delay_outliers++;
         }
+
+        /* On first update, validate seeed data */
+        if (is_first && cnx->seed_cwin != 0){
+            if (cnx->seed_rtt_min <= path_x->smoothed_rtt &&
+                (path_x->smoothed_rtt - cnx->seed_rtt_min) < cnx->seed_rtt_min / 4) {
+                uint8_t* ip_addr;
+                uint8_t ip_addr_length;
+                picoquic_get_ip_addr((struct sockaddr*) & path_x->peer_addr, &ip_addr, &ip_addr_length);
+
+                if (ip_addr_length == cnx->seed_ip_addr_length &&
+                    memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
+                    cnx->congestion_alg->alg_notify(cnx, path_x,
+                        picoquic_congestion_notification_seed_cwin,
+                        0, 0,
+                        (uint64_t)cnx->seed_cwin,
+                        0, current_time);
+                }
+            }
+        }
     }
 }
 
@@ -2245,6 +2265,10 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                 packet_data->path_ack[i].acked_path->one_way_delay_sample,
                 0, 0, current_time);
         }
+    }
+
+    if (cnx->path[0]->is_ssthresh_initialized && !cnx->path[0]->is_ticket_seeded) {
+        picoquic_seed_ticket(cnx, cnx->path[0], current_time);
     }
 }
 

@@ -1128,6 +1128,8 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
             /* Run AEAD encryption */
             dst->off += ptls_aead_encrypt(aead_enc, dst->base + dst->off,
                 src.base, src.len, seq_num, NULL, 0);
+            /* Remember issued ticket ID in connection context */
+            quic->cnx_in_progress->issued_ticket_id = seq_num;
         }
     } else {
         ptls_aead_context_t* aead_dec = (ptls_aead_context_t*)quic->aead_decrypt_ticket_ctx;
@@ -1146,15 +1148,24 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
             if (decrypted > src.len - 8) {
                 /* decryption error */
                 ret = -1;
-                if (quic->F_log != NULL) {
-                    picoquic_log_app_message(quic->cnx_in_progress, "%s",
-                        "Session ticket could not be decrypted");
-                }
+                picoquic_log_app_message(quic->cnx_in_progress, "%s",
+                    "Session ticket could not be decrypted");
             } else {
+                picoquic_issued_ticket_t* server_ticket;
                 dst->off += decrypted;
-                if (quic->F_log != NULL) {
-                    picoquic_log_app_message(quic->cnx_in_progress, "%s",
-                        "Session ticket properly decrypted");
+                picoquic_log_app_message(quic->cnx_in_progress, "%s",
+                    "Session ticket properly decrypted");
+                /* Remember resumed ticket ID in connection context */
+                quic->cnx_in_progress->resumed_ticket_id = seq_num;
+                /* Remember rtt and cwin from ticket */
+                server_ticket = picoquic_retrieve_issued_ticket(quic, seq_num);
+                if (server_ticket != NULL && server_ticket->cwin > 0) {
+                    picoquic_seed_bandwidth(
+                        quic->cnx_in_progress,
+                        server_ticket->rtt,
+                        server_ticket->cwin,
+                        server_ticket->ip_addr,
+                        server_ticket->ip_addr_length);
                 }
             }
         }
@@ -1183,9 +1194,15 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
 
     if (sni != NULL && alpn != NULL) {
         ret = picoquic_store_ticket(&quic->p_first_ticket, 0, sni, (uint16_t)strlen(sni),
-            alpn, (uint16_t)strlen(alpn), input.base, (uint16_t)input.len, &cnx->remote_parameters);
+            alpn, (uint16_t)strlen(alpn), NULL, 0,
+            input.base, (uint16_t)input.len, &cnx->remote_parameters);
+        /* Set first 8 bytes of ticket as identifier */
+        if (input.len > 8) {
+            cnx->issued_ticket_id = PICOPARSE_64(input.base);
+        }
     } else {
-        DBG_PRINTF("Received incorrect session resume ticket, sni = %s, alpn = %s, length = %d\n",
+        picoquic_log_app_message(cnx, 
+            "Received incorrect session resume ticket, sni = %s, alpn = %s, length = %d\n",
             (sni == NULL) ? "NULL" : sni, (alpn == NULL) ? "NULL" : alpn, (int)input.len);
     }
 
@@ -2247,19 +2264,27 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
     /* No resumption if no alpn specified upfront, because it would make the negotiation and
      * the handling of 0-RTT way too messy */
     if (cnx->sni != NULL && cnx->alpn != NULL && !cnx->quic->client_zero_share) {
-        uint8_t* ticket = NULL;
-        uint16_t ticket_length = 0;
-
-        if (picoquic_get_ticket(cnx->quic->p_first_ticket, current_time,
-            cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
-            &ticket, &ticket_length, &cnx->remote_parameters, 1)
-            == 0) {
-            ctx->handshake_properties.client.session_ticket.base = ticket;
-            ctx->handshake_properties.client.session_ticket.len = ticket_length;
-
+        picoquic_stored_ticket_t* stored_ticket = picoquic_get_stored_ticket(cnx->quic->p_first_ticket, 
+            current_time, cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
+            1, 0);
+        if (stored_ticket != NULL) {
+            ctx->handshake_properties.client.session_ticket.base = stored_ticket->ticket;
+            ctx->handshake_properties.client.session_ticket.len = stored_ticket->ticket_length;
             ctx->handshake_properties.client.max_early_data_size = &cnx->max_early_data_size;
-
-            cnx->psk_cipher_suite_id = PICOPARSE_16(ticket + 8);
+            /* Remember first 8 bytes of ticket as ticket ID, and set psk suite from ticket */
+            cnx->resumed_ticket_id = PICOPARSE_64(stored_ticket->ticket);
+            cnx->psk_cipher_suite_id = PICOPARSE_16(stored_ticket->ticket + 8);
+            /* Set initial transport parameters from stored values */
+            cnx->remote_parameters.initial_max_data = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_data];
+            cnx->remote_parameters.initial_max_stream_data_bidi_local = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_local];
+            cnx->remote_parameters.initial_max_stream_data_bidi_remote = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_remote];
+            cnx->remote_parameters.initial_max_stream_data_uni = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_stream_data_uni];
+            cnx->remote_parameters.initial_max_stream_id_bidir = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir];
+            cnx->remote_parameters.initial_max_stream_id_unidir = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir];
+            /* Seed connection with remembered data */
+            picoquic_seed_bandwidth(cnx, stored_ticket->tp_0rtt[picoquic_tp_0rtt_rtt],
+                stored_ticket->tp_0rtt[picoquic_tp_0rtt_cwin],
+                stored_ticket->ip_addr, stored_ticket->ip_addr_length);
         }
     }
 

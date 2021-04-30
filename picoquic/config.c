@@ -36,7 +36,7 @@
 
 typedef struct st_option_param_t {
     char const * param;
-    int length;
+    size_t length;
 } option_param_t;
 
 typedef struct st_option_table_line_t {
@@ -197,7 +197,7 @@ static uint32_t config_parse_target_version(char const* v_arg)
 static int config_set_string_param(char const** v, const option_param_t* params, int nb_param, int x)
 {
     int ret = 0;
-    char* p_dup;
+    char* p_dup = NULL;
 
     if (*v != NULL) {
         free((void*)*v);
@@ -206,14 +206,18 @@ static int config_set_string_param(char const** v, const option_param_t* params,
 
     if (params != NULL && x >= 0 && x < nb_param && params[x].param != NULL)
     {
-        p_dup = malloc(params[x].length + 1);
+        size_t alloc_length = params[x].length + 1;
+
+        if (params[x].length > 0 && alloc_length > params[x].length) {
+            p_dup = (char *)malloc(alloc_length);
+        }
         if (p_dup != NULL) {
             memcpy(p_dup, params[x].param, params[x].length);
             p_dup[params[x].length] = 0;
             *v = (char const*)p_dup;
         }
         else {
-            fprintf(stderr, "Cannot allocate %d characters\n", params[x].length);
+            fprintf(stderr, "Cannot allocate %zu characters\n", params[x].length);
             ret = -1;
         }
     }
@@ -223,7 +227,7 @@ static int config_set_string_param(char const** v, const option_param_t* params,
     return ret;
 }
 
-static char* config_optval_string(char* buffer, int buffer_max, const char* p, int p_length)
+static char* config_optval_string(char* buffer, size_t buffer_max, const char* p, size_t p_length)
 {
     if (p_length + 1 > buffer_max) {
         p_length = buffer_max - 1;
@@ -233,7 +237,7 @@ static char* config_optval_string(char* buffer, int buffer_max, const char* p, i
     return buffer;
 }
 
-static char* config_optval_param_string(char* buffer, int buffer_max, const option_param_t* params, int nb_param, int x)
+static char* config_optval_param_string(char* buffer, size_t buffer_max, const option_param_t* params, int nb_param, int x)
 {
     if (params == NULL || x < 0 || x >= nb_param) {
         buffer[0] = 0;
@@ -252,7 +256,7 @@ int config_atoi(const option_param_t* params, int nb_param, int x, int* ret)
         *ret = -1;
     }
     else {
-        for (int i = 0; i < params[x].length; i++) {
+        for (size_t i = 0; i < params[x].length; i++) {
             int c = params[x].param[i] - '0';
             if (c < 0 || c > 9) {
                 v = -1;
@@ -275,7 +279,7 @@ uint64_t config_atoull(const option_param_t* params, int nb_param, int x, int * 
         *ret = -1;
     }
     else {
-        for (int i = 0; i < params[x].length; i++) {
+        for (size_t i = 0; i < params[x].length; i++) {
             int c = params[x].param[i];
             unsigned int d = 0;
             if (c >= '0' || c <= '9') {
@@ -547,7 +551,7 @@ int picoquic_config_set_option(picoquic_quic_config_t* config, picoquic_option_e
     else{
         if (opt_val != NULL) {
             params[0].param = opt_val;
-            params[0].length = (int)strlen(opt_val);
+            params[0].length = strlen(opt_val);
             nb_params = 1;
         }
         ret = config_set_option(option_desc, params, nb_params, config);
@@ -576,7 +580,7 @@ int picoquic_config_command_line(int opt, int * p_optind, int argc, char const *
     else {
         if (option_table[option_index].nb_params_required > 0) {
             params[0].param = optarg;
-            params[0].length = (int)strlen(optarg);
+            params[0].length = strlen(optarg);
             nb_params++;
             while (nb_params < option_table[option_index].nb_params_required) {
                 if (*p_optind + 1 > argc) {

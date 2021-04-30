@@ -668,6 +668,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ticket_seed)
+        {
+            int ret = ticket_seed_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(token_store)
         {
             int ret = token_store_test();

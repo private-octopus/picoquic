@@ -82,6 +82,15 @@ void picoquic_fastcc_reset(picoquic_fastcc_state_t* fastcc_state, picoquic_path_
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
 }
 
+void picoquic_fastcc_seed_cwin(picoquic_fastcc_state_t* fastcc_state, picoquic_path_t* path_x, uint64_t bytes_in_flight)
+{
+    if (fastcc_state->alg_state == picoquic_fastcc_initial) {
+        if (path_x->cwin < bytes_in_flight) {
+            path_x->cwin = bytes_in_flight;
+        }
+    }
+}
+
 void picoquic_fastcc_init(picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
@@ -288,6 +297,9 @@ void picoquic_fastcc_notify(
             break;
         case picoquic_congestion_notification_reset:
             picoquic_fastcc_reset(fastcc_state, path_x, current_time);
+            break;
+        case picoquic_congestion_notification_seed_cwin:
+            picoquic_fastcc_seed_cwin(fastcc_state, path_x, nb_bytes_acknowledged);
             break;
         default:
             /* ignore */

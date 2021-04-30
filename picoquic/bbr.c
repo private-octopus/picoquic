@@ -1091,6 +1091,32 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_reset:
             picoquic_bbr_reset(bbr_state, path_x, current_time);
             break;
+        case picoquic_congestion_notification_seed_cwin:
+            if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
+                /* If within HyStart, apply standard HyStart behavior. */
+                if (path_x->cwin < nb_bytes_acknowledged) {
+                    path_x->cwin = nb_bytes_acknowledged;
+                    picoquic_update_pacing_data(cnx, path_x, 1);
+                }
+            }
+            else if (bbr_state->state == picoquic_bbr_alg_startup){
+                /* If in initial startup phase, do something */
+                double seed_bw_estimate = (double)nb_bytes_acknowledged;
+                uint64_t bwe;
+                seed_bw_estimate /= (double)path_x->smoothed_rtt;
+                seed_bw_estimate *= 1000000;
+                bwe = (uint64_t)seed_bw_estimate*2; /* Hack -- account for div by two in BBRUpdateBtlBw */
+                if (path_x->bandwidth_estimate_max < bwe) {
+                    path_x->bandwidth_estimate_max = bwe;
+                    BBRUpdateBtlBw(bbr_state, path_x, current_time);
+                    BBRSetPacingRate(bbr_state);
+                    if (bbr_state->pacing_rate > 0) {
+                        /* Set the pacing rate in picoquic sender */
+                        picoquic_update_pacing_rate(cnx, path_x, bbr_state->pacing_rate, bbr_state->send_quantum);
+                    }
+                }
+            }
+            break;
         default:
             /* ignore */
             break;
