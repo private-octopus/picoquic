@@ -206,8 +206,11 @@ static int config_set_string_param(char const** v, const option_param_t* params,
 
     if (params != NULL && x >= 0 && x < nb_param && params[x].param != NULL)
     {
-        if (params[x].length >= 0) {
-            p_dup = malloc((size_t)params[x].length + 1);
+        size_t alloc_length = (size_t)params[x].length + 1;
+        int length_max = (int)alloc_length;
+
+        if (params[x].length > 0 && length_max > params[x].length) {
+            p_dup = malloc(alloc_length);
         }
         if (p_dup != NULL) {
             memcpy(p_dup, params[x].param, params[x].length);
