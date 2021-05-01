@@ -202,7 +202,7 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config,
             config->socket_buffer_size, server_loop_cb, &loop_cb_ctx);
 #else
         ret = picoquic_packet_loop(qserver, config->server_port, 0, config->dest_if,
-            config->socket_buffer_size, server_loop_cb, &loop_cb_ctx);
+            config->socket_buffer_size, config->do_not_use_gso, server_loop_cb, &loop_cb_ctx);
 #endif
     }
 
@@ -652,7 +652,7 @@ int quic_client(const char* ip_address_text, int server_port,
             config->socket_buffer_size, client_loop_cb, &loop_cb);
 #else
         ret = picoquic_packet_loop(qclient, 0, loop_cb.server_address.ss_family, 0,
-            config->socket_buffer_size, client_loop_cb, &loop_cb);
+            config->socket_buffer_size, config->do_not_use_gso, client_loop_cb, &loop_cb);
 #endif
     }
 

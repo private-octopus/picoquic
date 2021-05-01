@@ -69,6 +69,7 @@ typedef enum {
     picoquic_option_Performance_Log,
     picoquic_option_Preemptive_Repeat,
     picoquic_option_Version_Upgrade,
+    picoquic_option_No_GSO,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -99,6 +100,7 @@ typedef struct st_picoquic_quic_config_t {
     unsigned int initial_random : 1;
     unsigned int use_long_log : 1;
     unsigned int do_preemptive_repeat : 1;
+    unsigned int do_not_use_gso : 1;
     /* Server only */
     char const* www_dir;
     uint64_t reset_seed[2];

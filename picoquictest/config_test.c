@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:K:p:v:o:w:x:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:VU:h";
+static char* ref_option_text = "c:k:K:p:v:o:w:x:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:VU:0h";
 
 int config_option_letters_test()
 {
@@ -69,6 +69,7 @@ static picoquic_quic_config_t param1 = {
     1, /* unsigned int initial_random : 1; */
     1, /* unsigned int use_long_log : 1; */
     1, /* unsigned int do_preemptive_repeat : 1; */
+    1, /* unsigned int do_not_use_gso : 1 */
     /* Server only */
     "/data/www/", /* char const* www_dir; */
     { 0x012345678abcdef, 0xfedcba9876543210}, /* uint64_t reset_seed[2]; */
@@ -117,6 +118,7 @@ static char const* config_argv1[] = {
     "-B", "655360",
     "-F", "/data/performance_log.csv",
     "-V",
+    "-0",
     NULL
 };
 
@@ -145,6 +147,7 @@ static picoquic_quic_config_t param2 = {
     0, /* unsigned int initial_random : 1; */
     0, /* unsigned int use_long_log : 1; */
     0, /* unsigned int do_preemptive_repeat : 1; */
+    0, /* unsigned int do_not_use_gso : 1 */
     /* Server only */
     NULL, /* char const* www_dir; */
     {0, 0}, /* uint64_t reset_seed[2]; */
@@ -255,6 +258,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_int("initial_random", expected->initial_random, actual->initial_random);
     ret |= config_test_compare_int("use_long_log", expected->use_long_log, actual->use_long_log);
     ret |= config_test_compare_int("preemptive_repeat", expected->do_preemptive_repeat, actual->do_preemptive_repeat);
+    ret |= config_test_compare_int("no_gso", expected->do_not_use_gso, actual->do_not_use_gso);
     ret |= config_test_compare_string("www_dir", expected->www_dir, actual->www_dir);
     ret |= config_test_compare_int("do_retry", expected->do_retry, actual->do_retry);
     /* TODO: reset_seed */
