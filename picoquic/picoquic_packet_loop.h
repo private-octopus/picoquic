@@ -45,6 +45,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     int local_af,
     int dest_if,
     int socket_buffer_size,
+    int do_not_use_gso,
     picoquic_packet_loop_cb_fn loop_callback,
     void * loop_callback_ctx);
 

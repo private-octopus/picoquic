@@ -193,6 +193,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     int local_af,
     int dest_if,
     int socket_buffer_size,
+    int do_not_use_gso,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx)
 {
@@ -232,7 +233,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     }
 
     if (ret == 0) {
-        if (udp_gso_available) {
+        if (udp_gso_available && !do_not_use_gso) {
             send_buffer_size = 0xFFFF;
             send_msg_ptr = &send_msg_size;
         }
