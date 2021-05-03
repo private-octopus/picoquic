@@ -1804,14 +1804,19 @@ static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
                 if (PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max) &&
                     picoquic_is_stream_frame_unlimited(&old_p->bytes[byte_index])) {
                     /* If length is not present, check whether needed */
-                    if (*length + frame_length < send_buffer_max_minus_checksum) {
-                        size_t pad_needed = send_buffer_max_minus_checksum - *length - frame_length;
-                        memset(&new_bytes[*length], picoquic_frame_type_padding, pad_needed);
+                    if (write_index + frame_length < send_buffer_max_minus_checksum) {
+                        size_t pad_needed = send_buffer_max_minus_checksum - write_index - frame_length;
+                        memset(&new_bytes[write_index], picoquic_frame_type_padding, pad_needed);
                         *length += pad_needed;
+                        write_index += pad_needed;
                     }
                 }
                 /* copy the frame */
                 if (write_index + frame_length <= send_buffer_max_minus_checksum) {
+                    if (picoquic_is_stream_frame_unlimited(&old_p->bytes[byte_index]) &&
+                        write_index + frame_length != send_buffer_max_minus_checksum){ 
+                        DBG_PRINTF("%s", "BUG");
+                    }
                     memcpy(&new_bytes[write_index], &old_p->bytes[byte_index], frame_length);
                     write_index += frame_length;
                     *length += frame_length;
@@ -3828,8 +3833,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                                  * if the packet contains a stream frame, if that stream is finished, and if the
                                  * data range has not been acked, and it fits: copy it to the data. Move the index to the previous packet.
                                  */
-                                ret = picoquic_preemptive_retransmit_as_needed(cnx, path_x, pc, current_time, next_wake_time, bytes_next,
+                                 ret = picoquic_preemptive_retransmit_as_needed(cnx, path_x, pc, current_time, next_wake_time, bytes_next,
                                     bytes_max - bytes_next, &length, &more_data, 0);
+                                 if (length > header_length) {
+                                     preemptive_repeat = 1;
+                                     packet->is_preemptive_repeat = 1;
+                                 }
                             }
                             else if (!more_data){
                                 /* Check whether preemptive retrasmission is needed. Same code as above,
@@ -3837,10 +3846,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                                  */
                                 ret = picoquic_preemptive_retransmit_as_needed(cnx, path_x, pc, current_time, next_wake_time, bytes_next,
                                     bytes_max - bytes_next, &length, &more_data, 1);
-                            }
-                            if (length > header_length) {
-                                preemptive_repeat = 1;
-                                packet->is_preemptive_repeat = 1;
                             }
                         }
 
