@@ -229,6 +229,7 @@ int stream_output_test();
 int stream_rank_test();
 int not_before_cnxid_test();
 int send_stream_blocked_test();
+int stream_ack_test();
 int queue_network_input_test();
 int fastcc_test();
 int fastcc_jitter_test();

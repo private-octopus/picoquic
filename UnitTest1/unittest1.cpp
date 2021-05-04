@@ -1370,6 +1370,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_ack) {
+            int ret = stream_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(queue_network_input) {
             int ret = queue_network_input_test();
 

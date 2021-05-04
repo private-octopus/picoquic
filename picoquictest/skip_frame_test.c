@@ -2543,3 +2543,187 @@ int app_message_overflow_test()
 
     return ret;
 }
+
+/* Testing the ack of stream functions
+ *
+ * Initialize streams in the application context 
+ *
+ * For a set of received packets, initialize sack list by running 
+ * static int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+ *  size_t bytes_max, size_t* consumed)
+ * Then, for a series of frames, verify that expected frames are not set to be repeated,
+ * and that non expected frames are, using calls to:
+ * - int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+ *       size_t bytes_max, int* no_need_to_repeat)
+ * This is implemented by having two sets of packets:
+ * - packets that contain frames and are acknowledged.
+ * - packets that contain frames and are not yet acknowledged.
+ * Test cases shall include:
+ * - Single frame from start to FIN (stream 0)
+ * - FIN only frame with offset 0 (stream 4)
+ * - FIN only frame with large offset (stream 8)
+ * - Regular frame offset 0, no specified length (stream 8)
+ * - Regular frame offset 0, specified length (stream 12)
+ * - Regular frame offset N, specified length (stream 12)
+ * - Regular frame offset N, no specified length (stream 12)
+ * - Regular frame offset N, no specified length, FIN (stream 12)
+ * - Regular frame offset N, specified length, FIN (stream 16)
+ * - Regular frame offset N, no FIN (stream 20)
+ * - FIN only frame with large offset and unspecified length (stream 20)
+ * Non acked tests shall include:
+ * - Single frame from start to FIN (stream 20)
+ * - 
+ * 
+ */
+
+static uint64_t stream_ack_stream_list[] = { 0, 4, 8, 12, 16, 20 };
+
+static uint8_t stream_ack_packet_1[] = {
+    0x08 | 1 | 2, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8, /* stream 0, 0..FIN */
+    0x08 | 1 | 2, 4, 0, /* Stream 4, FIN */
+    0x08 | 1 | 2 | 4, 8, 64, 64, 0,  /* Stream 8, FIN */
+    0x08 | 4, 8, 32, 1, 2, 3, 4, 5, 6, 7, 8 /* Stream 8, 32..39, unspec */
+};
+
+static uint8_t stream_ack_packet_2[] = {
+    0x08 | 2, 12, 8, 0, 1, 2, 3, 4, 5, 6, 7, /* stream 12, 0..7 */
+    0x08 | 2 | 4, 12, 16, 8, 1, 2, 3, 4, 5, 6, 7, 8, /* Stream 12, 16..23, spec */
+    0x08 | 4, 12, 24, 1, 2, 3, 4, 5, 6, 7, 8 /* Stream 12, 24..31, unspec */
+};
+
+static uint8_t stream_ack_packet_3[] = {
+    0x08 | 1 | 2 | 4, 16, 32, 8, 1, 2, 3, 4, 5, 6, 7, 8, /* Stream 16, 32..39, FIN */
+    0x08 | 2 | 4, 20, 4, 8, 1, 2, 3, 4, 5, 6, 7, 8, /* Stream 20, 4..11, spec */
+    0x08 | 1 | 4, 20, 16, /* Stream 20, offset 16, unspec, FIN */
+};
+
+static uint8_t stream_ack_packet_4[] = {
+    0x08 | 1, 20, 4, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8,
+    9, 10, 11, 12, /* Stream 20, 0..FIN */
+    0x08 | 1 | 2 | 4, 8, 63, 1, 0,  /* Stream 8, 63..FIN */
+    0x08 | 4, 8, 32, 1, 2, 3, 4, 5, 6, 7, 8, 9 /* Stream 8, 32..40, unspec */
+};
+
+typedef struct st_stream_ack_case_t {
+    uint8_t* bytes;
+    size_t length;
+    int should_ack;
+} stream_ack_case_t;
+
+static stream_ack_case_t stream_ack_case[] = {
+    { stream_ack_packet_1, sizeof(stream_ack_packet_1), 1 },
+    { stream_ack_packet_2, sizeof(stream_ack_packet_2), 1 },
+    { stream_ack_packet_3, sizeof(stream_ack_packet_3), 1 },
+    { stream_ack_packet_4, sizeof(stream_ack_packet_4), 0 },
+};
+
+static size_t nb_stream_ack_case = sizeof(stream_ack_case) / sizeof(stream_ack_case_t);
+
+int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    size_t bytes_max, size_t* consumed);
+
+int stream_ack_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_cnx_t* cnx = NULL;
+    struct sockaddr_storage addr;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = picoquic_store_text_addr(&addr, "10.0.0.1", 1234);
+        if (ret == 0) {
+            cnx = picoquic_create_cnx(quic, picoquic_null_connection_id,
+                picoquic_null_connection_id, (struct sockaddr*) & addr,
+                simulated_time, 0, "test-sni", "test-alpn", 1);
+            if (cnx == NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* Create the required streams */
+        for (size_t i = 0; i < sizeof(stream_ack_stream_list) / sizeof(uint64_t); i++) {
+            if (picoquic_create_stream(cnx, stream_ack_stream_list[i]) == NULL) {
+                DBG_PRINTF("Cannot create stream %" PRIu64, stream_ack_stream_list[i]);
+                ret = -1;
+                break;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* Acknowledge the specified packets */
+        for (size_t i = 0; ret == 0 && i < nb_stream_ack_case; i++) {
+            uint8_t * bytes = stream_ack_case[i].bytes;
+            uint8_t * bytes_max = bytes + stream_ack_case[i].length;
+            while (bytes < bytes_max && stream_ack_case[i].should_ack) {
+                size_t consumed = 0;
+
+                ret = picoquic_process_ack_of_stream_frame(cnx,
+                    bytes, bytes_max - bytes, &consumed);
+                if (ret != 0) {
+                    DBG_PRINTF("Case %zu, cannot process frame index %zu",
+                        i, bytes - stream_ack_case[i].bytes);
+                    ret = -1;
+                    break;
+                }
+                else {
+                    bytes += consumed;
+                }
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* verify the expected acks */
+        for (size_t i = 0; i < nb_stream_ack_case; i++) {
+            uint8_t * bytes = stream_ack_case[i].bytes;
+            size_t byte_index = 0;
+            size_t bytes_max = stream_ack_case[i].length;
+            while (byte_index < stream_ack_case[i].length){
+                size_t consumed = 0;
+                int is_pure_ack = 0;
+
+                ret = picoquic_skip_frame(
+                    bytes + byte_index, bytes_max - byte_index, &consumed, &is_pure_ack);
+                if (ret != 0) {
+                    DBG_PRINTF("Case %zu, cannot process frame index %zu",
+                        i, byte_index);
+                    ret = -1;
+                    break;
+                }
+                else {
+                    int no_need_to_repeat;
+
+                    ret = picoquic_check_frame_needs_repeat(cnx,
+                        bytes + byte_index, consumed, &no_need_to_repeat);
+                    if (no_need_to_repeat && !stream_ack_case[i].should_ack) {
+                        DBG_PRINTF("Case %zu, failed to repeat frame index %zu",
+                            i, byte_index);
+                        ret = -1;
+                        break;
+                    } else if (!no_need_to_repeat && stream_ack_case[i].should_ack) {
+                        DBG_PRINTF("Case %zu, unneeded repeat frame index %zu",
+                            i, byte_index);
+                        ret = -1;
+                        break;
+                    }
+                    byte_index += consumed;
+                }
+            }
+        }
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
