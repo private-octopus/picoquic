@@ -2217,7 +2217,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         }
 
         /* On first update, validate seeed data */
-        if (is_first && cnx->seed_cwin != 0){
+        if (is_first && cnx->seed_cwin != 0 && (cnx->quic->default_bdp_option == 1 || (cnx->quic->default_bdp_option == 2 && cnx->remote_parameters.enable_bdp == 1))){
             if (cnx->seed_rtt_min <= path_x->smoothed_rtt &&
                 (path_x->smoothed_rtt - cnx->seed_rtt_min) < cnx->seed_rtt_min / 4) {
                 uint8_t* ip_addr;

@@ -718,6 +718,11 @@ uint32_t picoquic_get_max_simultaneous_logs(picoquic_quic_t* quic)
     return quic->max_simultaneous_logs;
 }
 
+void picoquic_set_default_bdp_option(picoquic_quic_t* quic, int bdp_option)
+{
+    quic->default_bdp_option = bdp_option;
+}
+
 void picoquic_free(picoquic_quic_t* quic)
 {
     if (quic != NULL) {
@@ -1110,6 +1115,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->enable_loss_bit = 2;
     tp->min_ack_delay = PICOQUIC_ACK_DELAY_MIN;
     tp->enable_time_stamp = 0;
+    tp->enable_bdp = 0;
 }
 
 
@@ -2825,13 +2831,22 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
         }
 
+        /* Initialize BDP transport parameter */
+        if (quic->default_bdp_option == 2) {
+           /* The BDP feature is activated and uses BDP extension frame. 
+            * TODO: set TP enable_bdp according to the local resources 
+            * such as buffer usage. For now, accept and send BDP Frames 
+            * for this connection */
+            cnx->local_parameters.enable_bdp = 3;
+        }
+ 
         /* Initialize local flow control variables to advertised values */
         cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
         cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
         cnx->max_stream_id_bidir_local_computed = STREAM_TYPE_FROM_ID(cnx->local_parameters.initial_max_stream_id_bidir);
         cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
         cnx->max_stream_id_unidir_local_computed = STREAM_TYPE_FROM_ID(cnx->local_parameters.initial_max_stream_id_unidir);
-
+       
         /* Initialize padding policy to default for context */
         cnx->padding_multiple = quic->padding_multiple_default;
         cnx->padding_minsize = quic->padding_minsize_default;

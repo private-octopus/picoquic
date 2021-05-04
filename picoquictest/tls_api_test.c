@@ -8113,6 +8113,9 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 
             picoquic_seed_bandwidth(test_ctx->cnx_client, 2 * latency, mbps_up * 125000,
                 ip_addr, ip_addr_length);
+           
+            picoquic_set_default_bdp_option(test_ctx->qclient, 1);
+            picoquic_set_default_bdp_option(test_ctx->qserver, 1);
         }
 
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);

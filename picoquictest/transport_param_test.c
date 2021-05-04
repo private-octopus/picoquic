@@ -141,7 +141,7 @@ uint8_t client_param1[] = {
     picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
     picoquic_tp_initial_max_streams_uni, 4, 0x80, 0, 0x40, 0x00,
     picoquic_tp_active_connection_id_limit, 1, PICOQUIC_NB_PATH_TARGET,
-    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
 };
 
 uint8_t client_param2[] = {
@@ -155,7 +155,7 @@ uint8_t client_param2[] = {
     0x50, 0x57, 0x01, 0x01,
     0x80, 0, 0x71, 0x58, 0x01, 0x03,
     0x80, (uint8_t)((picoquic_tp_enable_multipath >> 16) & 0xFF),
-    (uint8_t)((picoquic_tp_enable_multipath>>8) & 0xFF), (uint8_t)(picoquic_tp_enable_multipath&0xFF), 1, 0x01
+    (uint8_t)((picoquic_tp_enable_multipath>>8) & 0xFF), (uint8_t)(picoquic_tp_enable_multipath&0xFF), 1, 0x01,
 };
 
 uint8_t client_param3[] = {
@@ -168,7 +168,7 @@ uint8_t client_param3[] = {
     0x80, 0, 0x71, 0x58, 0x01, 0x03,
     0x80, (uint8_t)((picoquic_tp_enable_simple_multipath >> 16) & 0xFF),
     (uint8_t)((picoquic_tp_enable_simple_multipath >> 8) & 0xFF),
-    (uint8_t)(picoquic_tp_enable_simple_multipath & 0xFF), 1, 0x01
+    (uint8_t)(picoquic_tp_enable_simple_multipath & 0xFF), 1, 0x01,
 };
 
 uint8_t client_param4[] = {
@@ -505,6 +505,11 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
             param->do_grease_quic_bit, ref->do_grease_quic_bit);
         ret = -1;
     }
+    else if (param->enable_bdp != ref->enable_bdp) {
+        DBG_PRINTF("enable_bdp: got %d, expected %d\n",
+            param->enable_bdp, ref->enable_bdp);
+        ret = -1;
+    }  
 
     return ret;
 }

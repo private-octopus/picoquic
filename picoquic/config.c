@@ -92,6 +92,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_Preemptive_Repeat, 'V', "preemptive_repeat", 0, "", "enable preemptive repeat" },
     { picoquic_option_Version_Upgrade, 'U', "version_upgrade", 1, "", "Version upgrade if server agrees, e.g. -U 00000002" },
     { picoquic_option_No_GSO, '0', "no_gso", 0, "", "Do not use UDP GSO or equivalent" },
+    { picoquic_option_BDP, 'j', "bdp", 1, "number", "bdp_option: disable bdp extension(0), store bdp parameters locally(1), use bdp extension frame(2). Default=0" },
     { picoquic_option_HELP, 'h', "help", 0, "This help message" }
 };
 
@@ -488,6 +489,17 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_No_GSO:
         config->do_not_use_gso = 1;
         break;
+    case picoquic_option_BDP: { 
+        int v = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || v < 0 || v > 2) {
+            fprintf(stderr, "Invalid bdp option: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = (ret == 0) ? -1 : ret;
+        }
+        else {
+            config->bdp_option = v;
+        }
+        break;
+    }
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -827,6 +839,8 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
                 ret = picoquic_esni_server_setup(quic, config->esni_rr_file);
             }
         }
+
+        picoquic_set_default_bdp_option(quic, config->bdp_option);
 
         if (ret != 0) {
             /* Something went wrong */
