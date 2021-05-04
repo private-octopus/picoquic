@@ -229,6 +229,7 @@ int stream_output_test();
 int stream_rank_test();
 int not_before_cnxid_test();
 int send_stream_blocked_test();
+int stream_ack_test();
 int queue_network_input_test();
 int fastcc_test();
 int fastcc_jitter_test();
@@ -321,8 +322,10 @@ int http_esni_test();
 int h3_long_file_name_test();
 int h3_multi_file_test();
 int h3_multi_file_loss_test();
+int h3_multi_file_preemptive_test();
 int h09_multi_file_test();
 int h09_multi_file_loss_test();
+int h09_multi_file_preemptive_test();
 
 int cplusplustest();
 

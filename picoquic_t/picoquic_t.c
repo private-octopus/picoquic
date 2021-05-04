@@ -242,6 +242,7 @@ static const picoquic_test_def_t test_table[] = {
     { "document_addresses", document_addresses_test },
     { "large_client_hello", large_client_hello_test },
     { "send_stream_blocked", send_stream_blocked_test },
+    { "stream_ack", stream_ack_test },
     { "queue_network_input", queue_network_input_test },
     { "pacing_update", pacing_update_test },
     { "direct_receive", direct_receive_test },
