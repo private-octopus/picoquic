@@ -146,7 +146,7 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
     uint16_t alpn_length = 0;
     uint16_t ticket_length = 0;
     uint8_t ip_addr_length = 0;
-    uint64_t tp_0rtt[PICOQUIC_NB_TP_0RTT] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    uint64_t tp_0rtt[PICOQUIC_NB_TP_0RTT] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
     *consumed = 0;
     *ticket = NULL;
@@ -491,8 +491,10 @@ void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x
         if (next != NULL) {
             next->ip_addr_length = ip_addr_length;
             memcpy(next->ip_addr, ip_addr, ip_addr_length);
-            next->tp_0rtt[picoquic_tp_0rtt_rtt] = path_x->rtt_min;
-            next->tp_0rtt[picoquic_tp_0rtt_cwin] = path_x->cwin;
+            next->tp_0rtt[picoquic_tp_0rtt_rtt_local] = path_x->rtt_min;
+            next->tp_0rtt[picoquic_tp_0rtt_cwin_local] = path_x->cwin;
+            next->tp_0rtt[picoquic_tp_0rtt_rtt_remote] = path_x->rtt_min_remote;
+            next->tp_0rtt[picoquic_tp_0rtt_cwin_remote] = path_x->cwin_remote;
         }
     }
 }

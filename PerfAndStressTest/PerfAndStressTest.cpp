@@ -48,6 +48,13 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(satellite_seeded_from_bdp_frame)
+        {
+            int ret = satellite_seeded_from_bdp_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(satellite_loss)
         {
             int ret = satellite_loss_test();

@@ -34,7 +34,7 @@ static picoquic_tp_t test_tp = {
     123, 456, 78, 91011, 1234, 567, 0, 0, 0, 0, 0, 0,
     { 0, {0,0,0,0}, 0, {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0,
         {{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}}
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}}, 0
 };
 
 static int create_test_ticket(uint64_t current_time, uint32_t ttl, uint8_t* buf, uint16_t len)
@@ -500,7 +500,7 @@ static test_api_stream_desc_t test_scenario_ticket_seed[] = {
     { 4, 0, 257, 1000000 }
 };
 
-int ticket_seed_test()
+int ticket_seed_test_one(int bdp_option)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
@@ -516,6 +516,9 @@ int ticket_seed_test()
     /* Prepare a first connection */
     ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, ticket_seed_store, NULL, 0, 0, 0);
+
+    picoquic_set_default_bdp_option(test_ctx->qclient, bdp_option);
+    picoquic_set_default_bdp_option(test_ctx->qserver, bdp_option);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -551,11 +554,11 @@ int ticket_seed_test()
         else {
             client_ticket_id = test_ctx->cnx_client->issued_ticket_id;
 
-            if (client_ticket->tp_0rtt[picoquic_tp_0rtt_rtt] == 0) {
+            if (client_ticket->tp_0rtt[picoquic_tp_0rtt_rtt_local] == 0) {
                 DBG_PRINTF("%s", "RTT not set for client ticket.");
                 ret = -1;
             }
-            if (client_ticket->tp_0rtt[picoquic_tp_0rtt_cwin] == 0) {
+            if (client_ticket->tp_0rtt[picoquic_tp_0rtt_cwin_local] == 0) {
                 DBG_PRINTF("%s", "CWIN not set for client ticket.");
                 ret = -1;
             }
@@ -673,4 +676,15 @@ int ticket_seed_test()
     }
 
     return ret;
+}
+
+int ticket_seed_test() {
+    
+   return ticket_seed_test_one(1);
+}
+
+
+int ticket_seed_from_bdp_frame_test() {
+    
+   return ticket_seed_test_one(2);
 }

@@ -143,7 +143,8 @@ typedef enum {
     picoquic_frame_type_ack_mp = 0xbaba0,
     picoquic_frame_type_ack_mp_ecn = 0xbaba1,
     picoquic_frame_type_qoe = 0xbaba2,
-    picoquic_frame_type_path_status = 0xbaba3
+    picoquic_frame_type_path_status = 0xbaba3,
+    picoquic_frame_type_bdp = 0xbaba4
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -417,10 +418,12 @@ typedef enum {
     picoquic_tp_0rtt_max_stream_data_uni = 3,
     picoquic_tp_0rtt_max_streams_id_bidir = 4,
     picoquic_tp_0rtt_max_streams_id_unidir = 5,
-    picoquic_tp_0rtt_rtt = 6,
-    picoquic_tp_0rtt_cwin = 7
+    picoquic_tp_0rtt_rtt_local = 6,
+    picoquic_tp_0rtt_cwin_local = 7,
+    picoquic_tp_0rtt_rtt_remote = 8,
+    picoquic_tp_0rtt_cwin_remote = 9
 } picoquic_tp_0rtt_enum;
-#define PICOQUIC_NB_TP_0RTT 8
+#define PICOQUIC_NB_TP_0RTT 10
 
 typedef struct st_picoquic_stored_ticket_t {
     struct st_picoquic_stored_ticket_t* next_ticket;
@@ -942,6 +945,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_ssthresh_initialized : 1;
     unsigned int is_token_published : 1;
     unsigned int is_ticket_seeded : 1; /* Whether the current ticket has been updated with RTT and CWIN */
+    unsigned int is_bdp_sent : 1;
 
 
     /* Path priority, for multipath management */
@@ -1050,6 +1054,11 @@ typedef struct st_picoquic_path_t {
     int selected;
     int lost;
     int nb_delay_outliers;
+
+    /* BDP parameters sent by the server to be stored at client */
+    uint64_t rtt_min_remote;
+    uint64_t cwin_remote;
+    
 } picoquic_path_t;
 
 /* Crypto context. There are four such contexts:
@@ -1671,6 +1680,7 @@ const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const ui
 uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data);
 uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time);
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);
+uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, picoquic_path_t* path_x, int* more_data, int * is_pure_ack);
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
     picoquic_stream_data_node_t* received_data,
