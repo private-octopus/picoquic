@@ -26,6 +26,7 @@
 #include "tls_api.h"
 #include "picoquic_utils.h"
 #include "picotls.h"
+#include "picoquic_lb.h"
 #include <string.h>
 #include "picoquictest_internal.h"
 
