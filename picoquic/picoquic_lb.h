@@ -40,7 +40,6 @@ extern "C" {
 
 typedef enum {
     picoquic_load_balancer_cid_clear,
-    picoquic_load_balancer_cid_obfuscated,
     picoquic_load_balancer_cid_stream_cipher,
     picoquic_load_balancer_cid_block_cipher
 } picoquic_load_balancer_cid_method_enum;
@@ -49,14 +48,12 @@ typedef enum {
 typedef struct st_picoquic_load_balancer_config_t {
     picoquic_load_balancer_cid_method_enum method;
     uint8_t server_id_length;
-    uint8_t routing_bits_length; /* Used in divider mode */
     uint8_t nonce_length; /* used in stream cipher mode */
     uint8_t zero_pad_length; /* used in block cipher mode */
     uint8_t connection_id_length;
     uint8_t first_byte;
     uint64_t server_id64;
     uint8_t cid_encryption_key[16];
-    uint64_t divider; /* used in obfuscation methods */
 } picoquic_load_balancer_config_t;
 
 int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_config_t* lb_config);
@@ -65,13 +62,11 @@ void picoquic_lb_compat_cid_config_free(picoquic_quic_t* quic);
 typedef struct st_picoquic_load_balancer_cid_context_t {
     picoquic_load_balancer_cid_method_enum method;
     uint8_t server_id_length;
-    uint8_t routing_bits_length;
     uint8_t nonce_length; /* used in stream cipher mode */
     uint8_t zero_pad_length; /* used in block cipher mode */
     uint8_t connection_id_length;
     uint8_t first_byte;
     uint64_t server_id64;
-    uint64_t divider; /* used in obfuscation methods */
     uint8_t server_id[16];
     void* cid_encryption_context; /* used in stream and cipher mode */
     void* cid_decryption_context; /* used in block cipher mode */

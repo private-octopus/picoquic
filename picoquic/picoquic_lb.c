@@ -43,29 +43,6 @@ static void picoquic_lb_compat_cid_generate_clear(picoquic_quic_t* quic,
     memcpy(cnx_id_returned->id + 1, lb_ctx->server_id, lb_ctx->server_id_length);
 }
 
-static void picoquic_lb_compat_cid_generate_obfuscated(picoquic_quic_t* quic,
-    picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t* cnx_id_returned)
-{
-    uint64_t obfuscation_max = (UINT64_MAX - lb_ctx->server_id64) / lb_ctx->divider;
-    uint64_t obfuscator = 0;
-    uint64_t obfuscated;
-
-    cnx_id_returned->id[0] = lb_ctx->first_byte;
-    for (size_t i = 0; i < lb_ctx->routing_bits_length; i++) {
-        obfuscator <<= 8;
-        obfuscator += cnx_id_returned->id[i + 1];
-        obfuscator %= obfuscation_max;
-    }
-    obfuscated = obfuscator* lb_ctx->divider;
-    obfuscated += lb_ctx->server_id64;
-
-    for (size_t i = 0; i < lb_ctx->routing_bits_length; i++) {
-        size_t j = lb_ctx->routing_bits_length - i; /* varies from lb_ctx->routing_bits_length to 1 */
-        cnx_id_returned->id[j] = (uint8_t)obfuscated;
-        obfuscated >>= 8;
-    }
-}
-
 static void picoquic_lb_compat_cid_one_pass_stream(void * enc_ctx, uint8_t * nonce, size_t nonce_length, uint8_t * target, size_t target_length)
 {
     uint8_t mask[16];
@@ -124,9 +101,6 @@ void picoquic_lb_compat_cid_generate(picoquic_quic_t* quic, picoquic_connection_
     case picoquic_load_balancer_cid_clear:
         picoquic_lb_compat_cid_generate_clear(quic, lb_ctx, cnx_id_returned);
         break;
-    case picoquic_load_balancer_cid_obfuscated:
-        picoquic_lb_compat_cid_generate_obfuscated(quic, lb_ctx, cnx_id_returned);
-        break;
     case picoquic_load_balancer_cid_stream_cipher:
         picoquic_lb_compat_cid_generate_stream_cipher(quic, lb_ctx, cnx_id_returned);
         break;
@@ -147,20 +121,6 @@ static uint64_t picoquic_lb_compat_cid_verify_clear(picoquic_quic_t* quic,
     for (size_t i = 0; i < lb_ctx->server_id_length; i++) {
         s_id64 <<= 8;
         s_id64 += cnx_id->id[i + 1];
-    }
-
-    return s_id64;
-}
-
-static uint64_t picoquic_lb_compat_cid_verify_obfuscated(picoquic_quic_t* quic,
-    picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t const* cnx_id)
-{
-    uint64_t s_id64 = 0;
-
-    for (size_t i = 0; i < lb_ctx->routing_bits_length; i++) {
-        s_id64 <<= 8;
-        s_id64 += cnx_id->id[i + 1];
-        s_id64 %= lb_ctx->divider;
     }
 
     return s_id64;
@@ -231,9 +191,6 @@ uint64_t picoquic_lb_compat_cid_verify(picoquic_quic_t* quic, void* cnx_id_cb_da
         case picoquic_load_balancer_cid_clear:
             server_id64 = picoquic_lb_compat_cid_verify_clear(quic, lb_ctx, cnx_id);
             break;
-        case picoquic_load_balancer_cid_obfuscated:
-            server_id64 = picoquic_lb_compat_cid_verify_obfuscated(quic, lb_ctx, cnx_id);
-            break;
         case picoquic_load_balancer_cid_stream_cipher:
             server_id64 = picoquic_lb_compat_cid_verify_stream_cipher(quic, lb_ctx, cnx_id);
             break;
@@ -276,16 +233,6 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
                     ret = -1;
                 }
                 break;
-            case picoquic_load_balancer_cid_obfuscated:
-                /* Require at least 2 bytes to obfuscate the server CID,
-                 * cannot handle undivided values larger than 8 bytes */
-                if (lb_config->routing_bits_length + 1 > lb_config->connection_id_length ||
-                    lb_config->server_id_length + 2 > lb_config->routing_bits_length ||
-                    lb_config->routing_bits_length > 8 ||
-                    lb_config->divider == 0) {
-                    ret = -1;
-                }
-                break;
             case picoquic_load_balancer_cid_stream_cipher:
                 /* Nonce length must be 8 to 16 bytes, CID should be long enough */
                 if (lb_config->nonce_length < 8 || lb_config->nonce_length > 16 ||
@@ -322,13 +269,11 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
                 memset(lb_ctx, 0, sizeof(picoquic_load_balancer_cid_context_t));
                 lb_ctx->method = lb_config->method;
                 lb_ctx->server_id_length = lb_config->server_id_length;
-                lb_ctx->routing_bits_length = lb_config->routing_bits_length;
                 lb_ctx->nonce_length = lb_config->nonce_length;
                 lb_ctx->zero_pad_length = lb_config->zero_pad_length;
                 lb_ctx->connection_id_length = lb_config->connection_id_length;
                 lb_ctx->first_byte = lb_config->first_byte;
                 lb_ctx->server_id64 = lb_config->server_id64;
-                lb_ctx->divider = lb_config->divider;
                 lb_ctx->cid_encryption_context = NULL;
                 lb_ctx->cid_decryption_context = NULL;
                 /* Compute the server ID bytes and set encryption contexts */

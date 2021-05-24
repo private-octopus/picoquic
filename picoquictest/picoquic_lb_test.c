@@ -34,60 +34,43 @@
  */
 #define CID_ENCRYPTION_KEY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
 
-picoquic_load_balancer_config_t cid_for_lb_test_config[4] = {
+#define NB_LB_CONFIG_TEST 3
+
+picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         picoquic_load_balancer_cid_clear,
-        3,
         3,
         0,
         0,
         8,
         0x08,
         0x0123,
-        { 0 },
-        0
-    },
-    {
-        picoquic_load_balancer_cid_obfuscated,
-        2,
-        8,
-        0,
-        0,
-        9,
-        0x09,
-        0x1234,
-        { 0 },
-        8047
+        { 0 }
     },
     {
         picoquic_load_balancer_cid_stream_cipher,
         4,
-        0,
         8,
         0,
         13,
         0x8B,
         0x2345,
-        { CID_ENCRYPTION_KEY },
-        0
+        { CID_ENCRYPTION_KEY }
     },
     {
         picoquic_load_balancer_cid_block_cipher,
         2,
         0,
-        0,
         4,
         17,
         0x97,
         0x3456,
-        { CID_ENCRYPTION_KEY },
-        0
+        { CID_ENCRYPTION_KEY }
     }
 };
 
-picoquic_connection_id_t cid_for_lb_test_ref[4] = {
+picoquic_connection_id_t cid_for_lb_test_ref[NB_LB_CONFIG_TEST] = {
     { { 0x08, 0x00, 0x01, 0x23, 0x84, 0x85, 0x86, 0x87 }, 8 },
-    { { 0x09, 0xf5, 0x84, 0x12, 0xa1, 0x31, 0xb7, 0xe3, 0x5a }, 9 },
     { { 0x8b, 0x7b, 0x37, 0xbe, 0x1c, 0x7c, 0xe2, 0x62, 0x28, 0x66, 0xd9, 0xf1, 0x7a }, 13},
     { { 0x97, 0x42, 0xa4, 0x35, 0x97, 0x2b, 0xfc, 0x60, 0x51, 0x69, 0x1d, 0x28, 0x1a, 0x65, 0x13, 0xcf, 0x4a }, 17 }
 };
@@ -151,7 +134,7 @@ int cid_for_lb_test()
         DBG_PRINTF("%s", "Could not create the quic context.");
     }
     else {
-        for (int i = 0; i < 4 && ret == 0; i++) {
+        for (int i = 0; i < NB_LB_CONFIG_TEST && ret == 0; i++) {
             ret = cid_for_lb_test_one(quic, i, &cid_for_lb_test_config[i], &cid_for_lb_test_ref[i]);
         }
 
