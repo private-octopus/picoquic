@@ -44,12 +44,10 @@ typedef enum {
     picoquic_load_balancer_cid_block_cipher
 } picoquic_load_balancer_cid_method_enum;
 
-
 typedef struct st_picoquic_load_balancer_config_t {
     picoquic_load_balancer_cid_method_enum method;
     uint8_t server_id_length;
     uint8_t nonce_length; /* used in stream cipher mode */
-    uint8_t zero_pad_length; /* used in block cipher mode */
     uint8_t connection_id_length;
     uint8_t first_byte;
     uint64_t server_id64;
@@ -63,7 +61,6 @@ typedef struct st_picoquic_load_balancer_cid_context_t {
     picoquic_load_balancer_cid_method_enum method;
     uint8_t server_id_length;
     uint8_t nonce_length; /* used in stream cipher mode */
-    uint8_t zero_pad_length; /* used in block cipher mode */
     uint8_t connection_id_length;
     uint8_t first_byte;
     uint64_t server_id64;

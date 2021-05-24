@@ -41,7 +41,9 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
         picoquic_load_balancer_cid_clear,
         3,
         0,
+#if 0
         0,
+#endif
         8,
         0x08,
         0x0123,
@@ -51,7 +53,9 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
         picoquic_load_balancer_cid_stream_cipher,
         4,
         8,
+#if 0
         0,
+#endif
         13,
         0x8B,
         0x2345,
@@ -61,12 +65,20 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
         picoquic_load_balancer_cid_block_cipher,
         2,
         0,
+#if 0
         4,
+#endif
         17,
         0x97,
         0x3456,
         { CID_ENCRYPTION_KEY }
     }
+};
+
+picoquic_connection_id_t cid_for_lb_test_init[NB_LB_CONFIG_TEST] = {
+    { { 0x08, 0x00, 0x00, 0x00, 0x84, 0x85, 0x86, 0x87 }, 8 },
+    { { 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c }, 13},
+    { { 0x80, 0x81, 0x82, 0x00, 0x00, 0x00, 0x00, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f, 0x90 }, 17 }
 };
 
 picoquic_connection_id_t cid_for_lb_test_ref[NB_LB_CONFIG_TEST] = {
@@ -76,7 +88,7 @@ picoquic_connection_id_t cid_for_lb_test_ref[NB_LB_CONFIG_TEST] = {
 };
 
 int cid_for_lb_test_one(picoquic_quic_t* quic, int test_id, picoquic_load_balancer_config_t* config,
-    picoquic_connection_id_t* target_cid)
+    picoquic_connection_id_t* init_cid, picoquic_connection_id_t* target_cid)
 {
     int ret = 0;
     picoquic_connection_id_t result;
@@ -89,11 +101,15 @@ int cid_for_lb_test_one(picoquic_quic_t* quic, int test_id, picoquic_load_balanc
     }
     else {
         /* Create a CID. */
+#if 0
         memset(&result, 0, sizeof(picoquic_connection_id_t));
         for (size_t i = 0; i < quic->local_cnxid_length; i++) {
             result.id[i] = (uint8_t)(0x80 + i);
         }
         result.id_len = quic->local_cnxid_length;
+#else
+        result = *init_cid;
+#endif
 
         if (quic->cnx_id_callback_fn) {
             quic->cnx_id_callback_fn(quic, picoquic_null_connection_id, picoquic_null_connection_id,
@@ -135,7 +151,7 @@ int cid_for_lb_test()
     }
     else {
         for (int i = 0; i < NB_LB_CONFIG_TEST && ret == 0; i++) {
-            ret = cid_for_lb_test_one(quic, i, &cid_for_lb_test_config[i], &cid_for_lb_test_ref[i]);
+            ret = cid_for_lb_test_one(quic, i, &cid_for_lb_test_config[i], &cid_for_lb_test_init[i], &cid_for_lb_test_ref[i]);
         }
 
         if (quic != NULL) {

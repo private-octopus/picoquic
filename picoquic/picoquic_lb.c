@@ -57,6 +57,15 @@ static void picoquic_lb_compat_cid_one_pass_stream(void * enc_ctx, uint8_t * non
     }
 }
 
+/* Per specification:
+ * Stream Cipher CID {
+ *    First Octet (8),
+ *    Nonce (64..120),
+ *    Encrypted Server ID (8..128-len(Nonce)),
+ *    For Server Use (0..152-len(Nonce)-len(Encrypted Server ID)),
+ * }
+ */
+
 static void picoquic_lb_compat_cid_generate_stream_cipher(picoquic_quic_t* quic,
     picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t* cnx_id_returned)
 {
@@ -76,19 +85,30 @@ static void picoquic_lb_compat_cid_generate_stream_cipher(picoquic_quic_t* quic,
         cnx_id_returned->id + id_offset, lb_ctx->server_id_length);
 }
 
+/* Per specification:
+ * Block Cipher CID {
+ *    First Octet (8),
+ *    Encrypted Server ID (8..128),
+ *    Encrypted Bits for Server Use (128-len(Encrypted Server ID)),
+ *    Unencrypted Bits for Server Use (0..24),
+ * }
+ * In theory, the "server use" bits should just be set to a random value.
+ * For tests, the server use bits have to be set to a specific value.
+ */
 static void picoquic_lb_compat_cid_generate_block_cipher(picoquic_quic_t* quic,
     picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t* cnx_id_returned)
 {
     cnx_id_returned->id[0] = lb_ctx->first_byte;
     /* Copy the server ID */
     memcpy(cnx_id_returned->id + 1, lb_ctx->server_id, lb_ctx->server_id_length);
-    /* Set the zeropad value */
-    memset(cnx_id_returned->id + 1 + lb_ctx->server_id_length, 0, lb_ctx->zero_pad_length);
     /* encrypt 16 bytes */
     picoquic_aes128_ecb_encrypt(lb_ctx->cid_encryption_context, cnx_id_returned->id + 1, cnx_id_returned->id + 1, 16);
     cnx_id_returned->id[0] = lb_ctx->first_byte;
 }
 
+/* This code assumes that the cnx_id_returned value is pre-filled with
+ * the expected values of nonces or local-use content.
+ */
 void picoquic_lb_compat_cid_generate(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local,
     picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned)
 {
@@ -159,14 +179,6 @@ static uint64_t picoquic_lb_compat_cid_verify_block_cipher(picoquic_quic_t* quic
 
     /* decrypt 16 bytes */
     picoquic_aes128_ecb_encrypt(lb_ctx->cid_decryption_context, decoded, cnx_id->id + 1, 16);
-
-    /* Check that the nonce is all zeros */
-    for (size_t i = 0; i < lb_ctx->zero_pad_length; i++) {
-        if (decoded[i + lb_ctx->server_id_length] != 0) {
-            s_id64 = UINT64_MAX;
-            break;
-        }
-    }
     /* Decode the server ID */
     if (s_id64 == 0) {
         for (size_t i = 0; i < lb_ctx->server_id_length; i++) {
@@ -245,8 +257,7 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
                  * there should be at least 2 bytes available for uniqueness,
                  * zero padding length should be 4 bytes for security */
                 if (lb_config->connection_id_length < 17 ||
-                    lb_config->server_id_length + lb_config->zero_pad_length + 1 + 2 > lb_config->connection_id_length ||
-                    lb_config->zero_pad_length < 4 ) {
+                    lb_config->server_id_length > 15) {
                     ret = -1;
                 }
                 break;
@@ -270,7 +281,6 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
                 lb_ctx->method = lb_config->method;
                 lb_ctx->server_id_length = lb_config->server_id_length;
                 lb_ctx->nonce_length = lb_config->nonce_length;
-                lb_ctx->zero_pad_length = lb_config->zero_pad_length;
                 lb_ctx->connection_id_length = lb_config->connection_id_length;
                 lb_ctx->first_byte = lb_config->first_byte;
                 lb_ctx->server_id64 = lb_config->server_id64;
