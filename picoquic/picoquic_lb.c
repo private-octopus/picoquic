@@ -240,8 +240,7 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
         else {
             switch (lb_config->method) {
             case picoquic_load_balancer_cid_clear:
-                /* Require at least 2 bytes to make the CID unique */
-                if (lb_config->server_id_length + 1 + 2 > lb_config->connection_id_length) {
+                if (lb_config->server_id_length + 1 > lb_config->connection_id_length) {
                     ret = -1;
                 }
                 break;
