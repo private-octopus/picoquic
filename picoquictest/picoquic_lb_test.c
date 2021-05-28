@@ -34,7 +34,7 @@
  */
 #define CID_ENCRYPTION_KEY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
 
-#define NB_LB_CONFIG_TEST 53
+#define NB_LB_CONFIG_TEST 58
 
 picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
@@ -319,6 +319,96 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
         0xe7737c495b,
         { 0 }
     },
+    /* Test vectors, stream cipher */
+    /* LB configuration : cr_bits 0x0 length_self_encoding : y nonce_len 12 sid_len 1
+       key 4d9d0fd25a25e7f321ef464e13f9fa3d */
+    {
+        /* cid 0d69fe8ab8293680395ae256e89c sid c5 su */
+        picoquic_load_balancer_cid_stream_cipher,
+        1,
+        12,
+        14,
+        0x0d,
+        0xc5,
+        { 0x4d, 0x9d, 0x0f, 0xd2, 0x5a, 0x25, 0xe7, 0xf3, 0x21, 0xef, 0x46, 0x4e, 0x13, 0xf9, 0xfa, 0x3d }
+    },
+    {
+        /* cid 0e420d74ed99b985e10f5073f43027 sid d5 su 27 */
+        picoquic_load_balancer_cid_stream_cipher,
+        1,
+        12,
+        15,
+        0x0e,
+        0xd5,
+        { 0x4d, 0x9d, 0x0f, 0xd2, 0x5a, 0x25, 0xe7, 0xf3, 0x21, 0xef, 0x46, 0x4e, 0x13, 0xf9, 0xfa, 0x3d }
+    },
+    {
+        /* cid 0f380f440c6eefd3142ee776f6c16027 sid 10 su 6027 */
+        picoquic_load_balancer_cid_stream_cipher,
+        1,
+        12,
+        16,
+        0x0f,
+        0x10,
+        { 0x4d, 0x9d, 0x0f, 0xd2, 0x5a, 0x25, 0xe7, 0xf3, 0x21, 0xef, 0x46, 0x4e, 0x13, 0xf9, 0xfa, 0x3d }
+    },
+    {
+        /* cid 1020607efbe82049ddbf3a7c3d9d32604d sid 3c su 32604d */
+        picoquic_load_balancer_cid_stream_cipher,
+        1,
+        12,
+        17,
+        0x10,
+        0x3c,
+        { 0x4d, 0x9d, 0x0f, 0xd2, 0x5a, 0x25, 0xe7, 0xf3, 0x21, 0xef, 0x46, 0x4e, 0x13, 0xf9, 0xfa, 0x3d }
+    },
+    {
+        /* cid 11e132d12606a1bb0fa17e1caef00ec54c10 sid e3 su 0ec54c10 */
+        picoquic_load_balancer_cid_stream_cipher,
+        1,
+        12,
+        18,
+        0x11,
+        0xe3,
+        { 0x4d, 0x9d, 0x0f, 0xd2, 0x5a, 0x25, 0xe7, 0xf3, 0x21, 0xef, 0x46, 0x4e, 0x13, 0xf9, 0xfa, 0x3d }
+    },
+    
+    /* LB configuration : cr_bits 0x0 length_self_encoding : n nonce_len 12 sid_len 2
+    key 49e1cec7fd264b1f4af37413baf8ada9 */
+
+    /* cid 3d3a5e1126414271cc8dc2ec7c8c15 sid f7fe su */
+    /* cid 007042539e7c5f139ac2adfbf54ba748 sid eaf4 su 48 */
+    /* cid 2bc125dd2aed2aafacf59855d99e029217 sid e880 su 9217 */
+    /* cid 3be6728dc082802d9862c6c8e4dda3d984d8 sid 62c6 su d984d8 */
+    /* cid 1afe9c6259ad350fc7bad28e0aeb2e8d4d4742 sid 8502 su 8d4d4742 */
+
+    /* LB configuration : cr_bits 0x0 length_self_encoding : y nonce_len 14 sid_len 3
+    key 2c70df0b399bd33a7335523dcdb884ad */
+
+    /* cid 11d62e8670565cd30b552edff6782ff5a740 sid d794bb su */
+    /* cid 12c70e481f49363cabd9370d1fd5012c12bca5 sid 2cbd5d su a5 */
+    /* cid 133b95dfd8ad93566782f8424df82458069fc9e9 sid d126cd su c9e9 */
+    /* cid 13ac6ffcd635532ab60370306c7ee572d6b6e795 sid 539e42 su e795 */
+    /* cid 1383ed07a9700777ff450bb39bb9c1981266805c sid 9094dd su 805c */
+
+    /* LB configuration : cr_bits 0x0 length_self_encoding : n nonce_len 12 sid_len 4
+    key 2297b8a95c776cf9c048b76d9dc27019 */
+
+    /* cid 32873890c3059ca62628089439c44c1f84 sid 7398d8ca su */
+    /* cid 1ff7c7d7b9823954b178636c99a7dc93ac83 sid 9655f091 su 83 */
+    /* cid 31044000a5ebb3bf2fa7629a17f2c78b077c17 sid 8b035fc6 su 7c17 */
+    /* cid 1791bd28c66721e8fea0c6f34fd2d8e663a6ef70 sid 6672e0e2 su a6ef70 */
+    /* cid 3df1d90ad5ccd5f8f475f040e90aeca09ec9839d sid b98b1fff su c9839d */
+
+    /* LB configuration : cr_bits 0x0 length_self_encoding : y nonce_len 8 sid_len 5
+    key 484b2ed942d9f4765e45035da3340423 */
+
+    /* cid 0da995b7537db605bfd3a38881ae sid 391a7840dc su */
+    /* cid 0ed8d02d55b91d06443540d1bf6e98 sid 10f7f7b284 su 98 */
+    /* cid 0f3f74be6d46a84ccb1fd1ee92cdeaf2 sid 0606918fc0 su eaf2 */
+    /* cid 1045626dbf20e03050837633cc5650f97c sid e505eea637 su 50f97c */
+    /* cid 11bb9a17f691ab446a938427febbeb593eaa sid 99343a2a96 su eb593eaa */
+
     /* Test vectors, block cipher */
     /* LB configuration: cr_bits 0x0 length_self_encoding: y sid_len 1
     key 411592e4160268398386af84ea7505d4 */
@@ -425,7 +515,7 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
         { 0x92, 0xce, 0x44, 0xae, 0xcd, 0x63, 0x6a, 0xee, 0xff, 0x78, 0xda, 0x69, 0x1e, 0xf4, 0x8f, 0x77 }
     },
     /* LB configuration: cr_bits 0x0 length_self_encoding: y sid_len 3
-    key 5c49cb9265efe8ae7b1d3886948b0a34 */
+       key 5c49cb9265efe8ae7b1d3886948b0a34 */
     {
         /* cid 10efcffc161d232d113998a49b1dbc4aa0 sid 0690b3 su 958fc9f38fe61b83881b2c5780 */
         picoquic_load_balancer_cid_block_cipher,
@@ -612,6 +702,18 @@ picoquic_connection_id_t cid_for_lb_test_init[NB_LB_CONFIG_TEST] = {
     { { 0, 0, 0, 0, 0, 0, 0x37, 0xf4}, 8 }, /* cid 07bbf338ddbf37f4 sid bbf338ddbf su 37f4 */
     { { 0, 0, 0, 0, 0, 0, 0x75, 0x68, 0x40}, 9 }, /* cid 08fbbca64c26756840 sid fbbca64c26 su 756840 */
     { { 0, 0, 0, 0, 0, 0, 0x93, 0x89, 0x4e, 0x34}, 10 }, /* cid 09e7737c495b93894e34 sid e7737c495b su 93894e34 */
+    /* Test vectors, stream cipher */
+    /* cid 0d69fe8ab8293680395ae256e89c sid c5 su */
+    { { 0x0d, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 14 },
+    /* cid 0e420d74ed99b985e10f5073f43027 sid d5 su 27 */
+    { { 0x0e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x27}, 15 },
+    /* cid 0f380f440c6eefd3142ee776f6c16027 sid 10 su 6027 */
+    { { 0x0f, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x60, 0x27}, 16 },
+    /* cid 1020607efbe82049ddbf3a7c3d9d32604d sid 3c su 32604d */
+    { { 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x32, 0x60, 0x4d}, 17 },
+    /* cid 11e132d12606a1bb0fa17e1caef00ec54c10 sid e3 su 0ec54c10 */
+    { { 0x11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x0e, 0xc5, 0x4c, 0x10}, 18 },
+    
     /* Test vectors, block cipher */
     /* cid 10564f7c0df399f6d93bdddb1a03886f25 sid 23 su 05231748a80884ed58007847eb9fd0 */
     { { 0, 0, 0x05, 0x23, 0x17, 0x48, 0xa8, 0x08, 0x84, 0xed, 0x58, 0x00, 0x78, 0x47, 0xeb, 0x9f, 0xd0}, 17 },
@@ -695,6 +797,18 @@ picoquic_connection_id_t cid_for_lb_test_ref[NB_LB_CONFIG_TEST] = {
     { { 0x07, 0xbb, 0xf3, 0x38, 0xdd, 0xbf, 0x37, 0xf4}, 8 }, /* cid 07bbf338ddbf37f4 sid bbf338ddbf su 37f4 */
     { { 0x08, 0xfb, 0xbc, 0xa6, 0x4c, 0x26, 0x75, 0x68, 0x40}, 9 }, /* cid 08fbbca64c26756840 sid fbbca64c26 su 756840 */
     { { 0x09, 0xe7, 0x73, 0x7c, 0x49, 0x5b, 0x93, 0x89, 0x4e, 0x34}, 10 }, /* cid 09e7737c495b93894e34 sid e7737c495b su 93894e34 */
+    /* Test vectors, stream cipher */
+    /* cid 0d69fe8ab8293680395ae256e89c sid c5 su */
+    { { 0x0d, 0x69, 0xfe, 0x8a, 0xb8, 0x29, 0x36, 0x80, 0x39, 0x5a, 0xe2, 0x56, 0xe8, 0x9c}, 14 },
+    /* cid 0e420d74ed99b985e10f5073f43027 sid d5 su 27 */
+    { { 0x0e, 0x42, 0x0d, 0x74, 0xed, 0x99, 0xb9, 0x85, 0xe1, 0x0f, 0x50, 0x73, 0xf4, 0x30, 0x27}, 15 },
+    /* cid 0f380f440c6eefd3142ee776f6c16027 sid 10 su 6027 */
+    { { 0x0f, 0x38, 0x0f, 0x44, 0x0c, 0x6e, 0xef, 0xd3, 0x14, 0x2e, 0xe7, 0x76, 0xf6, 0xc1, 0x60, 0x27}, 16 },
+    /* cid 1020607efbe82049ddbf3a7c3d9d32604d sid 3c su 32604d */
+    { { 0x10, 0x20, 0x60, 0x7e, 0xfb, 0xe8, 0x20, 0x49, 0xdd, 0xbf, 0x3a, 0x7c, 0x3d, 0x9d, 0x32, 0x60, 0x4d}, 17 },
+    /* cid 11e132d12606a1bb0fa17e1caef00ec54c10 sid e3 su 0ec54c10 */
+    { { 0x11, 0xe1, 0x32, 0xd1, 0x26, 0x06, 0xa1, 0xbb, 0x0f, 0xa1, 0x7e, 0x1c, 0xae, 0xf0, 0x0e, 0xc5, 0x4c, 0x10}, 18 },
+
     /* Test vectors, block cipher */
     /* cid 10564f7c0df399f6d93bdddb1a03886f25 sid 23 su 05231748a80884ed58007847eb9fd0 */
     { { 0x10, 0x56, 0x4f, 0x7c, 0x0d, 0xf3, 0x99, 0xf6, 0xd9, 0x3b, 0xdd, 0xdb, 0x1a, 0x03, 0x88, 0x6f, 0x25}, 17 },
