@@ -39,19 +39,21 @@
 picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         picoquic_load_balancer_cid_clear,
+        0,
+        0,
         3,
         0,
         8,
-        0x08,
         0x0123,
         { 0 }
     },
     {
         picoquic_load_balancer_cid_stream_cipher,
+        2,
+        0,
         4,
         8,
         13,
-        0x8B,
         0x2345,
         { CID_ENCRYPTION_KEY }
     },
@@ -59,8 +61,9 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
         picoquic_load_balancer_cid_block_cipher,
         2,
         0,
+        2,
+        0,
         17,
-        0x97,
         0x3456,
         { CID_ENCRYPTION_KEY }
     },
@@ -68,50 +71,55 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         /* cid 01be sid be su */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         1,
         0,
         2,
-        0x01,
         0xbe,
         { 0 }
     },
     {
         /* cid 0221b7 sid 21 su b7 */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         1,
         0,
         3,
-        0x02,
         0x21,
         { 0 }
     },
     {
         /* cid 03cadfd8 sid ca su dfd8 */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         1,
         0,
         4,
-        0x03,
         0xca,
         { 0 }
     },
     {
         /* cid 041e0c9328 sid 1e su 0c9328 */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         1,
         0,
         5,
-        0x04,
         0x1e,
         { 0 }
     },
     {
         /* cid 050c8f6d9129 sid 0c su 8f6d9129 */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         1,
         0,
         6,
-        0x05,
         0x0c,
         { 0 }
     },
@@ -119,50 +127,55 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         /* cid 02aab0 sid aab0 su */
         picoquic_load_balancer_cid_clear,
+        0,
+        0,
         2,
         0,
         3,
-        0x02,
         0xaab0,
         { 0 }
     },
     {
         /* cid 3ac4b106 sid c4b1 su 06 */
         picoquic_load_balancer_cid_clear,
+        0,
+        0,
         2,
         0,
         4,
-        0x3a,
         0xc4b1,
         { 0 }
     },
     {
         /* cid 08bd3cf4a0 sid bd3c su f4a0 */
         picoquic_load_balancer_cid_clear,
+        0,
+        0,
         2,
         0,
         5,
-        0x08,
         0xbd3c,
         { 0 }
     },
     {
         /* cid 3771d59502d6 sid 71d5 su 9502d6 */
         picoquic_load_balancer_cid_clear,
+        0,
+        0,
         2,
         0,
         6,
-        0x37,
         0x71d5,
         { 0 }
     },
     {
         /* cid 1d57dee8b888f3 sid 57de su e8b888f3 */
         picoquic_load_balancer_cid_clear,
+        0,
+        0,
         2,
         0,
         7,
-        0x1d,
         0x57de,
         { 0 }
     },
@@ -170,50 +183,55 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         /* cid 0336c976 sid 36c976 su */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         3,
         0,
         4,
-        0x03,
         0x36c976,
         { 0 }
     },
     {
         /* cid 04aa291806 sid aa2918 su 06 */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         3,
         0,
         5,
-        0x04,
         0xaa2918,
         { 0 }
     },
     {
         /* cid 0586897bd8b6 sid 86897b su d8b6 */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         3,
         0,
         6,
-        0x05,
         0x86897b,
         { 0 }
     },
     {
         /* cid 063625bcae4de0 sid 3625bc su ae4de0 */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         3,
         0,
         7,
-        0x06,
         0x3625bc,
         { 0 }
     },
     {
         /* cid 07966fb1f3cb535f sid 966fb1 su f3cb535f */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         3,
         0,
         8,
-        0x07,
         0x966fb1,
         { 0 }
     },
@@ -221,50 +239,55 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         /* cid 185172fab8 sid 5172fab8 su */
         picoquic_load_balancer_cid_clear,
+        0,
+        0,
         4,
         0,
         5,
-        0x18,
         0x5172fab8,
         { 0 }
     },
     {
         /* cid 2eb7ff2c9297 sid b7ff2c92 su 97 */
         picoquic_load_balancer_cid_clear,
+        0,
+        0,
         4,
         0,
         6,
-        0x2e,
         0xb7ff2c92,
         { 0 }
     },
     {
         /* cid 14f3eb3dd3edbe sid f3eb3dd3 su edbe */
         picoquic_load_balancer_cid_clear,
+        0,
+        0,
         4,
         0,
         7,
-        0x14,
         0xf3eb3dd3,
         { 0 }
     },
     {
         /* cid 3feb31cece744b74 sid eb31cece su 744b74 */
         picoquic_load_balancer_cid_clear,
+        0,
+        0,
         4,
         0,
         8,
-        0x3f,
         0xeb31cece,
         { 0 }
     },
     {
         /* cid 06b9f34c353ce23bb5 sid b9f34c35 su 3ce23bb5 */
         picoquic_load_balancer_cid_clear,
+        0,
+        0,
         4,
         0,
         9,
-        0x06,
         0xb9f34c35,
         { 0 }
     },
@@ -272,50 +295,55 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         /* cid 05bdcd8d0b1d sid bdcd8d0b1d su */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         5,
         0,
         6,
-        0x05,
         0xbdcd8d0b1d,
         { 0 }
     },
     {
         /* cid 06aee673725a63 sid aee673725a su 63 */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         5,
         0,
         7,
-        0x06,
         0xaee673725a,
         { 0 }
     },
     {
         /* cid 07bbf338ddbf37f4 sid bbf338ddbf su 37f4 */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         5,
         0,
         8,
-        0x07,
         0xbbf338ddbf,
         { 0 }
     },
     {
         /* cid 08fbbca64c26756840 sid fbbca64c26 su 756840 */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         5,
         0,
         9,
-        0x08,
         0xfbbca64c26,
         { 0 }
     },
     {
         /* cid 09e7737c495b93894e34 sid e7737c495b su 93894e34 */
         picoquic_load_balancer_cid_clear,
+        0,
+        1,
         5,
         0,
         10,
-        0x09,
         0xe7737c495b,
         { 0 }
     },
@@ -325,50 +353,55 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         /* cid 0d69fe8ab8293680395ae256e89c sid c5 su */
         picoquic_load_balancer_cid_stream_cipher,
+        0,
+        1,
         1,
         12,
         14,
-        0x0d,
         0xc5,
         { 0x4d, 0x9d, 0x0f, 0xd2, 0x5a, 0x25, 0xe7, 0xf3, 0x21, 0xef, 0x46, 0x4e, 0x13, 0xf9, 0xfa, 0x3d }
     },
     {
         /* cid 0e420d74ed99b985e10f5073f43027 sid d5 su 27 */
         picoquic_load_balancer_cid_stream_cipher,
+        0,
+        1,
         1,
         12,
         15,
-        0x0e,
         0xd5,
         { 0x4d, 0x9d, 0x0f, 0xd2, 0x5a, 0x25, 0xe7, 0xf3, 0x21, 0xef, 0x46, 0x4e, 0x13, 0xf9, 0xfa, 0x3d }
     },
     {
         /* cid 0f380f440c6eefd3142ee776f6c16027 sid 10 su 6027 */
         picoquic_load_balancer_cid_stream_cipher,
+        0,
+        1,
         1,
         12,
         16,
-        0x0f,
         0x10,
         { 0x4d, 0x9d, 0x0f, 0xd2, 0x5a, 0x25, 0xe7, 0xf3, 0x21, 0xef, 0x46, 0x4e, 0x13, 0xf9, 0xfa, 0x3d }
     },
     {
         /* cid 1020607efbe82049ddbf3a7c3d9d32604d sid 3c su 32604d */
         picoquic_load_balancer_cid_stream_cipher,
+        0,
+        1,
         1,
         12,
         17,
-        0x10,
         0x3c,
         { 0x4d, 0x9d, 0x0f, 0xd2, 0x5a, 0x25, 0xe7, 0xf3, 0x21, 0xef, 0x46, 0x4e, 0x13, 0xf9, 0xfa, 0x3d }
     },
     {
         /* cid 11e132d12606a1bb0fa17e1caef00ec54c10 sid e3 su 0ec54c10 */
         picoquic_load_balancer_cid_stream_cipher,
+        0,
+        1,
         1,
         12,
         18,
-        0x11,
         0xe3,
         { 0x4d, 0x9d, 0x0f, 0xd2, 0x5a, 0x25, 0xe7, 0xf3, 0x21, 0xef, 0x46, 0x4e, 0x13, 0xf9, 0xfa, 0x3d }
     },
@@ -415,50 +448,55 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         /* cid 10564f7c0df399f6d93bdddb1a03886f25 sid 23 su 05231748a80884ed58007847eb9fd0 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         1,
         0,
         17,
-        0x10,
         0x23,
         { 0x41, 0x15, 0x92, 0xe4, 0x16, 0x02, 0x68, 0x39, 0x83, 0x86, 0xaf, 0x84, 0xea, 0x75, 0x05, 0xd4 }
     },
     {
         /* cid 10d5c03f9dd765d73b3d8610b244f74d02 sid 15 su 76cd6b6f0d3f0b20fc8e633e3a05f3 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         1,
         0,
         17,
-        0x10,
         0x15,
         { 0x41, 0x15, 0x92, 0xe4, 0x16, 0x02, 0x68, 0x39, 0x83, 0x86, 0xaf, 0x84, 0xea, 0x75, 0x05, 0xd4 }
     },
     {
         /* cid 108ca55228ab23b92845341344a2f956f2 sid 64 su 65c0ce170a9548717498b537cb8790 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         1,
         0,
         17,
-        0x10,
         0x64,
         { 0x41, 0x15, 0x92, 0xe4, 0x16, 0x02, 0x68, 0x39, 0x83, 0x86, 0xaf, 0x84, 0xea, 0x75, 0x05, 0xd4 }
     },
     {
         /* cid 10e73f3d034aef2f6f501e3a7693d6270a sid 07 su f9ad10c84cc1e89a2492221d74e707 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         1,
         0,
         17,
-        0x10,
         0x07,
         { 0x41, 0x15, 0x92, 0xe4, 0x16, 0x02, 0x68, 0x39, 0x83, 0x86, 0xaf, 0x84, 0xea, 0x75, 0x05, 0xd4 }
     },
     {
         /* cid 101a6ce13d48b14a77ecfd365595ad2582 sid 6c su 76ce4689b0745b956ef71c2608045d */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         1,
         0,
         17,
-        0x10,
         0x6c,
         { 0x41, 0x15, 0x92, 0xe4, 0x16, 0x02, 0x68, 0x39, 0x83, 0x86, 0xaf, 0x84, 0xea, 0x75, 0x05, 0xd4 }
     },
@@ -467,50 +505,55 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         /* cid 20aa09bc65ed52b1ccd29feb7ef995d318 sid a52f su 99278b92a86694ff0ecd64bc2f73 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        0,
         2,
         0,
         17,
-        0x20,
         0xa52f,
         { 0x92, 0xce, 0x44, 0xae, 0xcd, 0x63, 0x6a, 0xee, 0xff, 0x78, 0xda, 0x69, 0x1e, 0xf4, 0x8f, 0x77 }
     },
     {
         /* cid 30b8dbef657bd78a2f870e93f9485d5211 sid 6c49 su 7381c8657a388b4e9594297afe96 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        0,
         2,
         0,
         17,
-        0x30,
         0x6c49,
         { 0x92, 0xce, 0x44, 0xae, 0xcd, 0x63, 0x6a, 0xee, 0xff, 0x78, 0xda, 0x69, 0x1e, 0xf4, 0x8f, 0x77 }
     },
     {
         /* cid 043a8137331eacd2e78383279b202b9a6d sid 4188 su 5ac4b0e0b95f4e7473b49ee2d0dd */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        0,
         2,
         0,
         17,
-        0x04,
         0x4188,
         { 0x92, 0xce, 0x44, 0xae, 0xcd, 0x63, 0x6a, 0xee, 0xff, 0x78, 0xda, 0x69, 0x1e, 0xf4, 0x8f, 0x77 }
     },
     {
         /* cid 3ba71ea2bcf0ab95719ab59d3d7fde770d sid 8ccc su 08728807605db25f2ca88be08e0f */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        0,
         2,
         0,
         17,
-        0x3b,
         0x8ccc,
         { 0x92, 0xce, 0x44, 0xae, 0xcd, 0x63, 0x6a, 0xee, 0xff, 0x78, 0xda, 0x69, 0x1e, 0xf4, 0x8f, 0x77 }
     },
     {
         /* cid 37ef1956b4ec354f40dc68336a23d42b31 sid c89d su 5a3ccd1471caa0de221ad6c185c0 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        0,
         2,
         0,
         17,
-        0x37,
         0xc89d,
         { 0x92, 0xce, 0x44, 0xae, 0xcd, 0x63, 0x6a, 0xee, 0xff, 0x78, 0xda, 0x69, 0x1e, 0xf4, 0x8f, 0x77 }
     },
@@ -519,50 +562,55 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         /* cid 10efcffc161d232d113998a49b1dbc4aa0 sid 0690b3 su 958fc9f38fe61b83881b2c5780 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         3,
         0,
         17,
-        0x10,
         0x0690b3,
         { 0x5c, 0x49, 0xcb, 0x92, 0x65, 0xef, 0xe8, 0xae, 0x7b, 0x1d, 0x38, 0x86, 0x94, 0x8b, 0x0a, 0x34 }
     },
     {
         /* cid 10fc13bdbcb414ba90e391833400c19505 sid 031ac3 su 9a55e1e1904e780346fcc32c3c */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         3,
         0,
         17,
-        0x10,
         0x031ac3,
         { 0x5c, 0x49, 0xcb, 0x92, 0x65, 0xef, 0xe8, 0xae, 0x7b, 0x1d, 0x38, 0x86, 0x94, 0x8b, 0x0a, 0x34 }
     },
     {
         /* cid 10d3cc1efaf5dc52c7a0f6da2746a8c714 sid 572d3a su ff2ec9712664e7174dc03ca3f8 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         3,
         0,
         17,
-        0x10,
         0x572d3a,
         { 0x5c, 0x49, 0xcb, 0x92, 0x65, 0xef, 0xe8, 0xae, 0x7b, 0x1d, 0x38, 0x86, 0x94, 0x8b, 0x0a, 0x34 }
     },
     {
         /* cid 107edf37f6788e33c0ec7758a485215f2b sid 562c25 su 02c5a5dcbea629c3840da5f567 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         3,
         0,
         17,
-        0x10,
         0x562c25,
         { 0x5c, 0x49, 0xcb, 0x92, 0x65, 0xef, 0xe8, 0xae, 0x7b, 0x1d, 0x38, 0x86, 0x94, 0x8b, 0x0a, 0x34 }
     },
     {
         /* cid 10bc28da122582b7312e65aa096e9724fc sid 2fa4f0 su 8ae8c666bfc0fc364ebfd06b9a */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         3,
         0,
         17,
-        0x10,
         0x2fa4f0,
         { 0x5c, 0x49, 0xcb, 0x92, 0x65, 0xef, 0xe8, 0xae, 0x7b, 0x1d, 0x38, 0x86, 0x94, 0x8b, 0x0a, 0x34 }
     },
@@ -571,50 +619,55 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         /* cid 26125351da12435615e3be6b16fad35560 sid 0cb227d3 su 65b40b1ab54e05bff55db046 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        0,
         4,
         0,
         17,
-        0x26,
         0x0cb227d3,
         { 0xe7, 0x87, 0xa3, 0xa4, 0x91, 0x55, 0x1f, 0xb2, 0xb4, 0x90, 0x1a, 0x3f, 0xa1, 0x59, 0x74, 0xf3 }
     },
     {
         /* cid 14de05fc84e41b611dfbe99ed5b1c9d563 sid 6a0f23ad su d73bee2f3a7e72b3ffea52d9 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        0,
         4,
         0,
         17,
-        0x14,
         0x6a0f23ad,
         { 0xe7, 0x87, 0xa3, 0xa4, 0x91, 0x55, 0x1f, 0xb2, 0xb4, 0x90, 0x1a, 0x3f, 0xa1, 0x59, 0x74, 0xf3 }
     },
     {
         /* cid 1306052c3f973db87de6d7904914840ff1 sid ca21402d su 5829465f7418b56ee6ada431 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        0,
         4,
         0,
         17,
-        0x13,
         0xca21402d,
         { 0xe7, 0x87, 0xa3, 0xa4, 0x91, 0x55, 0x1f, 0xb2, 0xb4, 0x90, 0x1a, 0x3f, 0xa1, 0x59, 0x74, 0xf3 }
     },
     {
         /* cid 1d202b5811af3e1dba9ea2950d27879a92 sid b14e1307 su 4902aba8b23a5f24616df3cf */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        0,
         4,
         0,
         17,
-        0x1d,
         0xb14e1307,
         { 0xe7, 0x87, 0xa3, 0xa4, 0x91, 0x55, 0x1f, 0xb2, 0xb4, 0x90, 0x1a, 0x3f, 0xa1, 0x59, 0x74, 0xf3 }
     },
     {
         /* cid 26538b78efc2d418539ad1de13ab73e477 sid a75e0148 su 0040323f1854e75aeb449b9f */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        0,
         4,
         0,
         17,
-        0x26,
         0xa75e0148,
         { 0xe7, 0x87, 0xa3, 0xa4, 0x91, 0x55, 0x1f, 0xb2, 0xb4, 0x90, 0x1a, 0x3f, 0xa1, 0x59, 0x74, 0xf3 }
     },
@@ -623,81 +676,86 @@ picoquic_load_balancer_config_t cid_for_lb_test_config[NB_LB_CONFIG_TEST] = {
     {
         /* cid 10a2794871aadb20ddf274a95249e57fde sid 82d3b0b1a1 su 0935471478c2edb8120e60 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         5,
         0,
         17,
-        0x10,
         0x82d3b0b1a1,
         { 0xd5, 0xa6, 0xd7, 0x82, 0x43, 0x36, 0xfb, 0xe0, 0xf2, 0x5d, 0x28, 0x48, 0x7c, 0xdd, 0xa5, 0x7c }
     },
     {
         /* cid 108122fe80a6e546a285c475a3b8613ec9 sid fbcc902c9d su 59c47946882a9a93981c15 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         5,
         0,
         17,
-        0x10,
         0xfbcc902c9d,
         { 0xd5, 0xa6, 0xd7, 0x82, 0x43, 0x36, 0xfb, 0xe0, 0xf2, 0x5d, 0x28, 0x48, 0x7c, 0xdd, 0xa5, 0x7c }
     },
     {
         /* cid 104d227ad9dd0fef4c8cb6eb75887b6ccc sid 2808e22642 su 2a7ef40e2c7e17ae40b3fb */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         5,
         0,
         17,
-        0x10,
         0x2808e22642,
         { 0xd5, 0xa6, 0xd7, 0x82, 0x43, 0x36, 0xfb, 0xe0, 0xf2, 0x5d, 0x28, 0x48, 0x7c, 0xdd, 0xa5, 0x7c }
     },
     {
         /* cid 10b3f367d8627b36990a28d67f50b97846 sid 5e018f0197 su 2289cae06a566e5cb6cfa4 */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         5,
         0,
         17,
-        0x10,
         0x5e018f0197,
         { 0xd5, 0xa6, 0xd7, 0x82, 0x43, 0x36, 0xfb, 0xe0, 0xf2, 0x5d, 0x28, 0x48, 0x7c, 0xdd, 0xa5, 0x7c }
     },
     {
         /* cid 1024412bfe25f4547510204bdda6143814 sid 8a8dd3d036 su 4b12933a135e5eaaebc6fd */
         picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
         5,
         0,
         17,
-        0x10,
         0x8a8dd3d036,
         { 0xd5, 0xa6, 0xd7, 0x82, 0x43, 0x36, 0xfb, 0xe0, 0xf2, 0x5d, 0x28, 0x48, 0x7c, 0xdd, 0xa5, 0x7c }
     },
 };
 
 picoquic_connection_id_t cid_for_lb_test_init[NB_LB_CONFIG_TEST] = {
-    { { 0x08, 0x00, 0x00, 0x00, 0x84, 0x85, 0x86, 0x87 }, 8 },
-    { { 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c }, 13},
-    { { 0x80, 0x81, 0x82, 0x00, 0x00, 0x00, 0x00, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f, 0x90 }, 17 },
+    { { 0xC8, 0x00, 0x00, 0x00, 0x84, 0x85, 0x86, 0x87 }, 8 },
+    { { 0x8b, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c }, 13},
+    { { 0x57, 0x81, 0x82, 0x00, 0x00, 0x00, 0x00, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f, 0x90 }, 17 },
     /* Test vectors, clear text */
     { { 0 }, 2 }, /* cid 01be sid be su */
     { { 0 , 0, 0xb7}, 3 }, /* cid 0221b7 sid 21 su b7 */
     { { 0, 0, 0xdf, 0xd8}, 4 }, /* cid 03cadfd8 sid ca su dfd8 */
     { { 0, 0, 0x0c, 0x93, 0x28 }, 5 }, /* cid 041e0c9328 sid 1e su 0c9328 */
     { { 0, 0, 0x8f, 0x6d, 0x91, 0x29  }, 6 }, /* cid 050c8f6d9129 sid 0c su 8f6d9129 */
-    { { 0, 0, 0}, 3 }, /* cid 02aab0 sid aab0 su */
-    { { 0, 0, 0, 0x06}, 4 }, /* cid 3ac4b106 sid c4b1 su 06 */
-    { { 0, 0, 0, 0xf4, 0xa0}, 5 }, /* cid 08bd3cf4a0 sid bd3c su f4a0 */
-    { { 0, 0, 0, 0x95, 0x02, 0xd6}, 6 }, /* cid 3771d59502d6 sid 71d5 su 9502d6  */
-    { { 0, 0, 0, 0xe8, 0xb8, 0x88, 0xf3}, 7 }, /* cid 1d57dee8b888f3 sid 57de su e8b888f3 */
+    { { 0x02, 0, 0}, 3 }, /* cid 02aab0 sid aab0 su */
+    { { 0x3a, 0, 0, 0x06}, 4 }, /* cid 3ac4b106 sid c4b1 su 06 */
+    { { 0x08, 0, 0, 0xf4, 0xa0}, 5 }, /* cid 08bd3cf4a0 sid bd3c su f4a0 */
+    { { 0x37, 0, 0, 0x95, 0x02, 0xd6}, 6 }, /* cid 3771d59502d6 sid 71d5 su 9502d6  */
+    { { 0x1d, 0, 0, 0xe8, 0xb8, 0x88, 0xf3}, 7 }, /* cid 1d57dee8b888f3 sid 57de su e8b888f3 */
     { { 0, 0, 0, 0}, 4 }, /* cid 0336c976 sid 36c976 su */
     { { 0, 0, 0, 0, 0x06}, 5 }, /* cid 04aa291806 sid aa2918 su 06 */
     { { 0, 0, 0, 0, 0xd8, 0xb6}, 6 }, /* cid 0586897bd8b6 sid 86897b su d8b6 */
     { { 0, 0, 0, 0, 0xae, 0x4d, 0xe0}, 7 }, /* cid 063625bcae4de0 sid 3625bc su ae4de0 */
     { { 0, 0, 0, 0, 0xf3, 0xcb, 0x53, 0x5f}, 8 }, /* cid 07966fb1f3cb535f sid 966fb1 su f3cb535f */
-    { { 0, 0, 0, 0, 0}, 5 }, /* cid 185172fab8 sid 5172fab8 su */
-    { { 0, 0, 0, 0, 0, 0x97}, 6 }, /* cid 2eb7ff2c9297 sid b7ff2c92 su 97 */
-    { { 0, 0, 0, 0, 0, 0xed, 0xbe}, 7 }, /* cid 14f3eb3dd3edbe sid f3eb3dd3 su edbe */
-    { { 0, 0, 0, 0, 0, 0x74, 0x4b, 0x74}, 8 }, /* cid 3feb31cece744b74 sid eb31cece su 744b74 */
-    { { 0, 0, 0, 0, 0, 0x3c, 0xe2, 0x3b, 0xb5}, 9 }, /* cid 06b9f34c353ce23bb5 sid b9f34c35 su 3ce23bb5 */
-    { { 0, 0, 0, 0, 0, 0}, 6 }, /* cid 05bdcd8d0b1d sid bdcd8d0b1d su */
+    { { 0x18, 0, 0, 0, 0}, 5 }, /* cid 185172fab8 sid 5172fab8 su */
+    { { 0x2e, 0, 0, 0, 0, 0x97}, 6 }, /* cid 2eb7ff2c9297 sid b7ff2c92 su 97 */
+    { { 0x14, 0, 0, 0, 0, 0xed, 0xbe}, 7 }, /* cid 14f3eb3dd3edbe sid f3eb3dd3 su edbe */
+    { { 0x3f, 0, 0, 0, 0, 0x74, 0x4b, 0x74}, 8 }, /* cid 3feb31cece744b74 sid eb31cece su 744b74 */
+    { { 0x06, 0, 0, 0, 0, 0x3c, 0xe2, 0x3b, 0xb5}, 9 }, /* cid 06b9f34c353ce23bb5 sid b9f34c35 su 3ce23bb5 */
+    { { 0x3f, 0, 0, 0, 0, 0}, 6 }, /* cid 05bdcd8d0b1d sid bdcd8d0b1d su */
     { { 0, 0, 0, 0, 0, 0, 0x63}, 7 }, /* cid 06aee673725a63 sid aee673725a su 63 */
     { { 0, 0, 0, 0, 0, 0, 0x37, 0xf4}, 8 }, /* cid 07bbf338ddbf37f4 sid bbf338ddbf su 37f4 */
     { { 0, 0, 0, 0, 0, 0, 0x75, 0x68, 0x40}, 9 }, /* cid 08fbbca64c26756840 sid fbbca64c26 su 756840 */
@@ -726,15 +784,15 @@ picoquic_connection_id_t cid_for_lb_test_init[NB_LB_CONFIG_TEST] = {
     /* cid 101a6ce13d48b14a77ecfd365595ad2582 sid 6c su 76ce4689b0745b956ef71c2608045d */
     { { 0, 0, 0x76, 0xce, 0x46, 0x89, 0xb0, 0x74, 0x5b, 0x95, 0x6e, 0xf7, 0x1c, 0x26, 0x08, 0x04, 0x5d}, 17 },
     /* cid 20aa09bc65ed52b1ccd29feb7ef995d318 sid a52f su 99278b92a86694ff0ecd64bc2f73 */
-    { { 0, 0, 0, 0x99, 0x27, 0x8b, 0x92, 0xa8, 0x66, 0x94, 0xff, 0x0e, 0xcd, 0x64, 0xbc, 0x2f, 0x73}, 17 },
+    { { 0x20, 0, 0, 0x99, 0x27, 0x8b, 0x92, 0xa8, 0x66, 0x94, 0xff, 0x0e, 0xcd, 0x64, 0xbc, 0x2f, 0x73}, 17 },
     /* cid 30b8dbef657bd78a2f870e93f9485d5211 sid 6c49 su 7381c8657a388b4e9594297afe96 */
-    { { 0, 0, 0, 0x73, 0x81, 0xc8, 0x65, 0x7a, 0x38, 0x8b, 0x4e, 0x95, 0x94, 0x29, 0x7a, 0xfe, 0x96}, 17 },
+    { { 0x30, 0, 0, 0x73, 0x81, 0xc8, 0x65, 0x7a, 0x38, 0x8b, 0x4e, 0x95, 0x94, 0x29, 0x7a, 0xfe, 0x96}, 17 },
     /* cid 043a8137331eacd2e78383279b202b9a6d sid 4188 su 5ac4b0e0b95f4e7473b49ee2d0dd */
-    { { 0, 0, 0, 0x5a, 0xc4, 0xb0, 0xe0, 0xb9, 0x5f, 0x4e, 0x74, 0x73, 0xb4, 0x9e, 0xe2, 0xd0, 0xdd}, 17 },
+    { { 0x04, 0, 0, 0x5a, 0xc4, 0xb0, 0xe0, 0xb9, 0x5f, 0x4e, 0x74, 0x73, 0xb4, 0x9e, 0xe2, 0xd0, 0xdd}, 17 },
     /* cid 3ba71ea2bcf0ab95719ab59d3d7fde770d sid 8ccc su 08728807605db25f2ca88be08e0f */
-    { { 0, 0, 0, 0x08, 0x72, 0x88, 0x07, 0x60, 0x5d, 0xb2, 0x5f, 0x2c, 0xa8, 0x8b, 0xe0, 0x8e, 0x0f}, 17 },
+    { { 0x3b, 0, 0, 0x08, 0x72, 0x88, 0x07, 0x60, 0x5d, 0xb2, 0x5f, 0x2c, 0xa8, 0x8b, 0xe0, 0x8e, 0x0f}, 17 },
     /* cid 37ef1956b4ec354f40dc68336a23d42b31 sid c89d su 5a3ccd1471caa0de221ad6c185c0 */
-    { { 0, 0, 0, 0x5a, 0x3c, 0xcd, 0x14, 0x71, 0xca, 0xa0, 0xde, 0x22, 0x1a, 0xd6, 0xc1, 0x85, 0xc0}, 17 },
+    { { 0x37, 0, 0, 0x5a, 0x3c, 0xcd, 0x14, 0x71, 0xca, 0xa0, 0xde, 0x22, 0x1a, 0xd6, 0xc1, 0x85, 0xc0}, 17 },
     /* cid 10efcffc161d232d113998a49b1dbc4aa0 sid 0690b3 su 958fc9f38fe61b83881b2c5780 */
     { { 0, 0, 0, 0, 0x95, 0x8f, 0xc9, 0xf3, 0x8f, 0xe6, 0x1b, 0x83, 0x88, 0x1b, 0x2c, 0x57, 0x80}, 17 },
     /* cid 10fc13bdbcb414ba90e391833400c19505 sid 031ac3 su 9a55e1e1904e780346fcc32c3c */
@@ -746,15 +804,15 @@ picoquic_connection_id_t cid_for_lb_test_init[NB_LB_CONFIG_TEST] = {
     /* cid 10bc28da122582b7312e65aa096e9724fc sid 2fa4f0 su 8ae8c666bfc0fc364ebfd06b9a */
     { { 0, 0, 0, 0, 0x8a, 0xe8, 0xc6, 0x66, 0xbf, 0xc0, 0xfc, 0x36, 0x4e, 0xbf, 0xd0, 0x6b, 0x9a}, 17 },
     /* cid 26125351da12435615e3be6b16fad35560 sid 0cb227d3 su 65b40b1ab54e05bff55db046 */
-    { { 0, 0, 0, 0, 0, 0x65, 0xb4, 0x0b, 0x1a, 0xb5, 0x4e, 0x05, 0xbf, 0xf5, 0x5d, 0xb0, 0x46}, 17 },
+    { { 0x26, 0, 0, 0, 0, 0x65, 0xb4, 0x0b, 0x1a, 0xb5, 0x4e, 0x05, 0xbf, 0xf5, 0x5d, 0xb0, 0x46}, 17 },
     /* cid 14de05fc84e41b611dfbe99ed5b1c9d563 sid 6a0f23ad su d73bee2f3a7e72b3ffea52d9 */
-    { { 0, 0, 0, 0, 0, 0xd7, 0x3b, 0xee, 0x2f, 0x3a, 0x7e, 0x72, 0xb3, 0xff, 0xea, 0x52, 0xd9}, 17 },
+    { { 0x14, 0, 0, 0, 0, 0xd7, 0x3b, 0xee, 0x2f, 0x3a, 0x7e, 0x72, 0xb3, 0xff, 0xea, 0x52, 0xd9}, 17 },
     /* cid 1306052c3f973db87de6d7904914840ff1 sid ca21402d su 5829465f7418b56ee6ada431 */
-    { { 0, 0, 0, 0, 0, 0x58, 0x29, 0x46, 0x5f, 0x74, 0x18, 0xb5, 0x6e, 0xe6, 0xad, 0xa4, 0x31}, 17 },
+    { { 0x13, 0, 0, 0, 0, 0x58, 0x29, 0x46, 0x5f, 0x74, 0x18, 0xb5, 0x6e, 0xe6, 0xad, 0xa4, 0x31}, 17 },
     /* cid 1d202b5811af3e1dba9ea2950d27879a92 sid b14e1307 su 4902aba8b23a5f24616df3cf */
-    { { 0, 0, 0, 0, 0, 0x49, 0x02, 0xab, 0xa8, 0xb2, 0x3a, 0x5f, 0x24, 0x61, 0x6d, 0xf3, 0xcf}, 17 },
+    { { 0x1d, 0, 0, 0, 0, 0x49, 0x02, 0xab, 0xa8, 0xb2, 0x3a, 0x5f, 0x24, 0x61, 0x6d, 0xf3, 0xcf}, 17 },
     /* cid 26538b78efc2d418539ad1de13ab73e477 sid a75e0148 su 0040323f1854e75aeb449b9f */
-    { { 0, 0, 0, 0, 0, 0x00, 0x40, 0x32, 0x3f, 0x18, 0x54, 0xe7, 0x5a, 0xeb, 0x44, 0x9b, 0x9f}, 17 },
+    { { 0x26, 0, 0, 0, 0, 0x00, 0x40, 0x32, 0x3f, 0x18, 0x54, 0xe7, 0x5a, 0xeb, 0x44, 0x9b, 0x9f}, 17 },
     /* cid 10a2794871aadb20ddf274a95249e57fde sid 82d3b0b1a1 su 0935471478c2edb8120e60 */
     { { 0, 0, 0, 0, 0, 0, 0x09, 0x35, 0x47, 0x14, 0x78, 0xc2, 0xed, 0xb8, 0x12, 0x0e, 0x60}, 17 },
     /* cid 108122fe80a6e546a285c475a3b8613ec9 sid fbcc902c9d su 59c47946882a9a93981c15 */
@@ -933,5 +991,232 @@ int cid_for_lb_test()
             picoquic_free(quic);
         }
     }
+    return ret;
+}
+
+/* CID for LG Tests.
+ * The CLI parameter takes as input a text string that can be parsed as a LB "config" struct.
+ * The test starts with a set of "Good" configurations and the corresponding value,
+ * then a set of erroneous configuration, then a fuzz test to check that parsing works even in
+ * presence of unsuspected errors.
+ */
+
+static picoquic_load_balancer_config_t cid_for_lb_cli_test_config[] = {
+    {
+        picoquic_load_balancer_cid_clear,
+        0,
+        0,
+        3,
+        0,
+        8,
+        0x0123,
+        { 0 }
+    },
+    {
+        picoquic_load_balancer_cid_stream_cipher,
+        2,
+        0,
+        4,
+        8,
+        13,
+        0x2345,
+        { CID_ENCRYPTION_KEY }
+    },
+    {
+        picoquic_load_balancer_cid_block_cipher,
+        2,
+        0,
+        2,
+        0,
+        17,
+        0x3456,
+        { CID_ENCRYPTION_KEY }
+    },
+    // LB configuration : cr_bits 0x0 length_self_encoding : y sid_len 1
+    {
+        /* cid 01be sid be su */
+        picoquic_load_balancer_cid_clear,
+        0,
+        1,
+        1,
+        0,
+        2,
+        0xbe,
+        { 0 }
+    },
+    /* LB configuration : cr_bits 0x0 length_self_encoding : n sid_len 4 */
+    {
+        /* cid 09e7737c495b93894e34 sid e7737c495b su 93894e34 */
+        picoquic_load_balancer_cid_clear,
+        0,
+        1,
+        5,
+        0,
+        10,
+        0xe7737c495b,
+        { 0 }
+    },
+    /* Test vectors, stream cipher */
+    /* LB configuration : cr_bits 0x0 length_self_encoding : y nonce_len 12 sid_len 1
+       key 4d9d0fd25a25e7f321ef464e13f9fa3d */
+    {
+        /* cid 11e132d12606a1bb0fa17e1caef00ec54c10 sid e3 su 0ec54c10 */
+        picoquic_load_balancer_cid_stream_cipher,
+        0,
+        1,
+        1,
+        12,
+        18,
+        0xe3,
+        { 0x4d, 0x9d, 0x0f, 0xd2, 0x5a, 0x25, 0xe7, 0xf3, 0x21, 0xef, 0x46, 0x4e, 0x13, 0xf9, 0xfa, 0x3d }
+    },
+    {
+        /* cid 10564f7c0df399f6d93bdddb1a03886f25 sid 23 su 05231748a80884ed58007847eb9fd0 */
+        picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
+        1,
+        0,
+        17,
+        0x23,
+        { 0x41, 0x15, 0x92, 0xe4, 0x16, 0x02, 0x68, 0x39, 0x83, 0x86, 0xaf, 0x84, 0xea, 0x75, 0x05, 0xd4 }
+    },
+    /* LB configuration: cr_bits 0x0 length_self_encoding: y sid_len 3
+       key 5c49cb9265efe8ae7b1d3886948b0a34 */
+    {
+        /* cid 10d3cc1efaf5dc52c7a0f6da2746a8c714 sid 572d3a su ff2ec9712664e7174dc03ca3f8 */
+        picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
+        3,
+        0,
+        17,
+        0x572d3a,
+        { 0x5c, 0x49, 0xcb, 0x92, 0x65, 0xef, 0xe8, 0xae, 0x7b, 0x1d, 0x38, 0x86, 0x94, 0x8b, 0x0a, 0x34 }
+    },
+    /* LB configuration: cr_bits 0x0 length_self_encoding: y sid_len 5
+        key d5a6d7824336fbe0f25d28487cdda57c */
+    {
+        /* cid 1024412bfe25f4547510204bdda6143814 sid 8a8dd3d036 su 4b12933a135e5eaaebc6fd */
+        picoquic_load_balancer_cid_block_cipher,
+        0,
+        1,
+        5,
+        0,
+        17,
+        0x8a8dd3d036,
+        { 0xd5, 0xa6, 0xd7, 0x82, 0x43, 0x36, 0xfb, 0xe0, 0xf2, 0x5d, 0x28, 0x48, 0x7c, 0xdd, 0xa5, 0x7c }
+    },
+};
+
+static size_t nb_cid_for_lb_cli_test_config = sizeof(cid_for_lb_cli_test_config) / sizeof(picoquic_load_balancer_config_t);
+
+static char const * cid_for_lb_test_txt[] = {
+    "0N8C-000123",
+    "2N13S8-00002345-0102030405060708090A0B0C0D0E0F10",
+    "2n17B-3456-0102030405060708090A0B0C0D0E0F10",
+    "0y2c-be",
+    "0y10c-e7737c495b",
+    "0Y18s12-e3-4d9d0fd25a25e7f321ef464e13f9fa3d",
+    "0y17b-23-411592e4160268398386af84ea7505d4",
+    "0Y17B-572d3a-5c49cb9265efe8ae7b1d3886948b0a34",
+    "0Y17B-8a8dd3d036-d5a6d7824336fbe0f25d28487cdda57c"
+};
+
+static size_t nb_cid_for_lb_test_txt = sizeof(cid_for_lb_test_txt) / sizeof(char const*);
+
+static char const* cid_for_lb_bad_txt[] = {
+    "5N8C-000123",
+    "2M13S8-00002345-0102030405060708090A0B0C0D0E0F10",
+    "2n257b-3456-0102030405060708090A0B0C0D0E0F10",
+    "0y2d-be1",
+    "0y10c*e7737c495b",
+    "0Y18s257-e3-4d9d0fd25a25e7f321ef464e13f9fa3d",
+    "0y17b-23-411592e4160268398386af84ea7505",
+    "0Y17B-572d3a-5c49cb9265efe8ae7b1d3886948b0a3",
+    "0Y17B-8a8dd3d036-d5a6d7824336fbe0f25d28487cdda57cab"
+};
+
+static size_t nb_cid_for_lb_bad_txt = sizeof(cid_for_lb_bad_txt) / sizeof(char const*);
+
+static char fuzz_c[] = { 0, 0xff, '0', '9', 'a', 'z', '-' };
+static size_t nb_fuzz_c = sizeof(fuzz_c) / sizeof(char);
+
+int cid_for_lb_cli_test()
+{
+    int ret = 0;
+    picoquic_load_balancer_config_t config;
+    char buf[256];
+    size_t fuzz_res[3] = { 0, 0, 0 };
+
+    /* Parse each of the test strings and compare to corresponding config */
+    if (nb_cid_for_lb_cli_test_config != nb_cid_for_lb_test_txt) {
+        ret = -1;
+    }
+    for (size_t i = 0; ret == 0 &&  i < nb_cid_for_lb_cli_test_config; i++) {
+        size_t txt_length = strlen(cid_for_lb_test_txt[i]);
+        if (picoquic_lb_compat_cid_config_parse(&config, cid_for_lb_test_txt[i], txt_length) != 0) {
+            ret = -1;
+        }
+        else if (config.method != cid_for_lb_cli_test_config[i].method) {
+            ret = -1;
+        }
+        else if (config.rotation_bits != cid_for_lb_cli_test_config[i].rotation_bits) {
+            ret = -1;
+        }
+        else if (config.first_byte_encodes_length != cid_for_lb_cli_test_config[i].first_byte_encodes_length) {
+            ret = -1;
+        }
+        else if (config.server_id_length != cid_for_lb_cli_test_config[i].server_id_length) {
+            ret = -1;
+        }
+        else if (config.nonce_length != cid_for_lb_cli_test_config[i].nonce_length) {
+            ret = -1;
+        }
+        else if (config.connection_id_length != cid_for_lb_cli_test_config[i].connection_id_length) {
+            ret = -1;
+        }
+        else if (config.server_id64 != cid_for_lb_cli_test_config[i].server_id64) {
+            ret = -1;
+        }
+        else if (memcmp(config.cid_encryption_key, cid_for_lb_cli_test_config[i].cid_encryption_key, 16) != 0){
+            ret = -1;
+        }
+    }
+    /* Parse each of the bad strings and verify an error is returned */
+    for (size_t i = 0; ret == 0 && i < nb_cid_for_lb_bad_txt; i++) {
+        size_t txt_length = strlen(cid_for_lb_bad_txt[i]);
+        if (picoquic_lb_compat_cid_config_parse(&config, cid_for_lb_bad_txt[i], txt_length) == 0) {
+            ret = -1;
+        }
+    }
+    /* Fuzz test */
+    for (size_t i = 0; ret == 0 && i < nb_cid_for_lb_cli_test_config; i++) {
+        size_t txt_length = strlen(cid_for_lb_test_txt[i]);
+        if (txt_length < 255) {
+            fuzz_res[0] += txt_length * nb_fuzz_c;
+            for (size_t f = 0; f < txt_length; f++) {
+                for (size_t fu = 0; fu < nb_fuzz_c; fu++) {
+                    memcpy(buf, cid_for_lb_test_txt[i], txt_length);
+                    buf[txt_length] = 0;
+                    buf[f] = fuzz_c[fu];
+
+                    if (picoquic_lb_compat_cid_config_parse(&config, buf, strlen(buf)) == 0) {
+                        fuzz_res[1] += 1;
+                    }
+                    else {
+                        fuzz_res[2] += 1;
+                    }
+                }
+            }
+        }
+    }
+    if (ret == 0 && fuzz_res[2] == 0) {
+        ret = -1;
+    }
+    if (ret == 0 && fuzz_res[0] != fuzz_res[1] + fuzz_res[2]) {
+        ret = -1;
+    }
+    /* Done */
     return ret;
 }

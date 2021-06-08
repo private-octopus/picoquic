@@ -46,23 +46,27 @@ typedef enum {
 
 typedef struct st_picoquic_load_balancer_config_t {
     picoquic_load_balancer_cid_method_enum method;
+    unsigned int rotation_bits : 2;
+    unsigned int first_byte_encodes_length : 1;
     uint8_t server_id_length;
     uint8_t nonce_length; /* used in stream cipher mode */
     uint8_t connection_id_length;
-    uint8_t first_byte;
     uint64_t server_id64;
     uint8_t cid_encryption_key[16];
 } picoquic_load_balancer_config_t;
 
+
+int picoquic_lb_compat_cid_config_parse(picoquic_load_balancer_config_t* lb_config, char const* txt, size_t txt_length);
 int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_config_t* lb_config);
 void picoquic_lb_compat_cid_config_free(picoquic_quic_t* quic);
 
 typedef struct st_picoquic_load_balancer_cid_context_t {
-    picoquic_load_balancer_cid_method_enum method;
+    picoquic_load_balancer_cid_method_enum method; 
+    unsigned int rotation_bits : 2;
+    unsigned int first_byte_encodes_length : 1;
     uint8_t server_id_length;
     uint8_t nonce_length; /* used in stream cipher mode */
     uint8_t connection_id_length;
-    uint8_t first_byte;
     uint64_t server_id64;
     uint8_t server_id[16];
     void* cid_encryption_context; /* used in stream and cipher mode */

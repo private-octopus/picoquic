@@ -24,6 +24,7 @@
 
 #include "picoquic.h"
 #include "picoquic_internal.h"
+#include "picoquic_utils.h"
 #include "tls_api.h"
 #include "picoquic_lb.h"
 
@@ -36,10 +37,22 @@
  * servers retrieve information from the tokens.
  */
 
+static void picoquic_lb_compat_cid_generate_first_byte(picoquic_quic_t* quic,
+    picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t* cnx_id_returned)
+{
+    if (lb_ctx->first_byte_encodes_length){
+        cnx_id_returned->id[0] = ((uint8_t)lb_ctx->rotation_bits << 6) | ((uint8_t)quic->local_cnxid_length - 1);
+    }
+    else {
+        cnx_id_returned->id[0] &= 0x3F;
+        cnx_id_returned->id[0] |= ((uint8_t)lb_ctx->rotation_bits << 6);
+    }
+}
+
 static void picoquic_lb_compat_cid_generate_clear(picoquic_quic_t* quic,
     picoquic_load_balancer_cid_context_t * lb_ctx, picoquic_connection_id_t* cnx_id_returned)
 {
-    cnx_id_returned->id[0] = lb_ctx->first_byte;
+    picoquic_lb_compat_cid_generate_first_byte(quic, lb_ctx, cnx_id_returned);
     memcpy(cnx_id_returned->id + 1, lb_ctx->server_id, lb_ctx->server_id_length);
 }
 
@@ -71,7 +84,7 @@ static void picoquic_lb_compat_cid_generate_stream_cipher(picoquic_quic_t* quic,
 {
     size_t id_offset = ((size_t)1) + lb_ctx->nonce_length;
     /* Prepare a clear text server ID */
-    cnx_id_returned->id[0] = lb_ctx->first_byte;
+    picoquic_lb_compat_cid_generate_first_byte(quic, lb_ctx, cnx_id_returned);
     memcpy(cnx_id_returned->id + id_offset, lb_ctx->server_id, lb_ctx->server_id_length);
     /* First pass -- obtain intermediate server ID */
     picoquic_lb_compat_cid_one_pass_stream(lb_ctx->cid_encryption_context, cnx_id_returned->id + 1, lb_ctx->nonce_length,
@@ -98,12 +111,11 @@ static void picoquic_lb_compat_cid_generate_stream_cipher(picoquic_quic_t* quic,
 static void picoquic_lb_compat_cid_generate_block_cipher(picoquic_quic_t* quic,
     picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t* cnx_id_returned)
 {
-    cnx_id_returned->id[0] = lb_ctx->first_byte;
+    picoquic_lb_compat_cid_generate_first_byte(quic, lb_ctx, cnx_id_returned);
     /* Copy the server ID */
     memcpy(cnx_id_returned->id + 1, lb_ctx->server_id, lb_ctx->server_id_length);
     /* encrypt 16 bytes */
     picoquic_aes128_ecb_encrypt(lb_ctx->cid_encryption_context, cnx_id_returned->id + 1, cnx_id_returned->id + 1, 16);
-    cnx_id_returned->id[0] = lb_ctx->first_byte;
 }
 
 /* This code assumes that the cnx_id_returned value is pre-filled with
@@ -219,6 +231,159 @@ uint64_t picoquic_lb_compat_cid_verify(picoquic_quic_t* quic, void* cnx_id_cb_da
     return server_id64;
 }
 
+int picoquic_lb_compat_cid_config_parse(picoquic_load_balancer_config_t* lb_config, char const* txt, size_t txt_length)
+{
+    int ret = 0;
+    size_t parsed = 0;
+    size_t s_id_len;
+    size_t cid_len = 0;
+    size_t nonce_len = 0;
+    /**/
+    /* separator "-" */
+    /* server_id -- string of 2xserver_id_length hex, max 16 */
+    /* separator "-" */
+    /* cid_encryption_key -- 32 hex digits*/
+    memset(lb_config, 0, sizeof(*lb_config));
+    if (txt_length < 4) {
+        ret = -1;
+    }
+    else {
+        /* rotation_bits: 0, 1 or 2 -- 3 is indefinite */
+        if (txt[0] >= '0' && txt[0] <= '3') {
+            lb_config->rotation_bits = (unsigned int)(txt[0] - '0');
+        }
+        else {
+            ret = -1;
+        }
+        /* first_byte_encodes_length: Y or N */
+        if (txt[1] == 'Y' || txt[1] == 'y') {
+            lb_config->first_byte_encodes_length = 1;
+        }
+        else if (txt[1] != 'N' && txt[1] != 'n') {
+            ret = -1;
+        }
+        parsed = 2;
+        /* CID length as number, default to zero, in which case will be filled from QUIC context.
+         * need to be careful because value is stored as uint8_t.
+         */
+        while (parsed < txt_length && txt[parsed] >= '0' && txt[parsed] <= '9') {
+            cid_len *= 10;
+            cid_len += txt[parsed] - '0';
+            parsed++;
+            if (cid_len < 256) {
+                lb_config->connection_id_length = (uint8_t)cid_len;
+            }
+            else {
+                ret = -1;
+                break;
+            }
+        }
+        /* method: C, S or B -- clear, stream-encrypted or block encrypted */
+        if (parsed >= txt_length) {
+            ret = -1;
+        }
+        else if (ret == 0) {
+            char c = txt[parsed];
+            parsed++;
+            switch (c) {
+            case 'c':
+            case 'C':
+                lb_config->method = picoquic_load_balancer_cid_clear;
+                break;
+            case 's':
+            case 'S':
+                lb_config->method = picoquic_load_balancer_cid_stream_cipher;
+                while (parsed < txt_length && txt[parsed] >= '0' && txt[parsed] <= '9') {
+                    nonce_len *= 10;
+                    nonce_len += txt[parsed] - '0';
+                    parsed++;
+                    if (nonce_len < 256) {
+                        lb_config->nonce_length = (uint8_t)nonce_len;
+                    }
+                    else {
+                        ret = -1;
+                        break;
+                    }
+                }
+                break;
+            case 'b':
+            case 'B':
+                lb_config->method = picoquic_load_balancer_cid_block_cipher;
+                break;
+            default:
+                ret = -1;
+                break;
+            }
+        }
+        /* Skip hyphen */
+        if (txt[parsed] == '-') {
+            parsed++;
+        }
+        else {
+            ret = -1;
+        }
+    }
+    if (txt_length <= parsed) {
+        ret = -1;
+    }
+    else if (ret == 0) {
+        /* Parsing S_ID as hex string. */
+        uint8_t s_id_bin[8];
+        size_t hex_length = 0;
+        while (parsed + hex_length < txt_length && txt[parsed + hex_length] != '-') {
+            hex_length++;
+        }
+        s_id_len = picoquic_parse_hexa(txt + parsed, hex_length, s_id_bin, 8);
+        if (s_id_len == 0 || s_id_len > 255) {
+            ret = 1;
+        }
+        else {
+            lb_config->server_id_length = (uint8_t)s_id_len;
+            for (size_t i = 0; i < s_id_len; i++) {
+                lb_config->server_id64 <<= 8;
+                lb_config->server_id64 |= s_id_bin[i];
+            }
+        }
+        parsed += 2 * s_id_len;
+    }
+    if (ret == 0 &&
+        (lb_config->method == picoquic_load_balancer_cid_stream_cipher ||
+            lb_config->method == picoquic_load_balancer_cid_block_cipher)) {
+        /* Skip hyphen */
+        if (txt[parsed] == '-') {
+            parsed++;
+        }
+        else {
+            ret = -1;
+        }
+        if (ret == 0) {
+            if (txt_length < parsed + 32) {
+                ret = -1;
+            }
+            else {
+                /* Parse key as 32 bytes string */
+                size_t key_length = picoquic_parse_hexa(txt + parsed, txt_length - parsed, lb_config->cid_encryption_key, 16);
+                if (key_length != 16) {
+                    ret = -1;
+                }
+                parsed += 2 * key_length;
+            }
+        }
+    }
+    if (ret == 0 && parsed != txt_length) {
+        ret = -1;
+    }
+
+    if (ret == 0 && lb_config->connection_id_length != 0) {
+        size_t min_length = 1 + lb_config->server_id_length + lb_config->nonce_length;
+        if (lb_config->connection_id_length < min_length ||
+            lb_config->method == picoquic_load_balancer_cid_block_cipher && lb_config->connection_id_length < 17) {
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
 int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_config_t * lb_config)
 {
     int ret = 0;
@@ -278,10 +443,11 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
                 uint64_t s_id64 = lb_config->server_id64;
                 memset(lb_ctx, 0, sizeof(picoquic_load_balancer_cid_context_t));
                 lb_ctx->method = lb_config->method;
+                lb_ctx->rotation_bits = lb_config->rotation_bits;
+                lb_ctx->first_byte_encodes_length = lb_config->first_byte_encodes_length;
                 lb_ctx->server_id_length = lb_config->server_id_length;
                 lb_ctx->nonce_length = lb_config->nonce_length;
                 lb_ctx->connection_id_length = lb_config->connection_id_length;
-                lb_ctx->first_byte = lb_config->first_byte;
                 lb_ctx->server_id64 = lb_config->server_id64;
                 lb_ctx->cid_encryption_context = NULL;
                 lb_ctx->cid_decryption_context = NULL;

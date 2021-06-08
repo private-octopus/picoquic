@@ -75,6 +75,7 @@ static const picoquic_test_def_t test_table[] = {
     { "pn_ctr", pn_ctr_test },
     { "cleartext_pn_enc", cleartext_pn_enc_test },
     { "cid_for_lb", cid_for_lb_test },
+    { "cid_for_lb_cli", cid_for_lb_cli_test },
     { "retry_protection_vector", retry_protection_vector_test },
     { "draft17_vector", draft17_vector_test },
     { "esni", esni_test },

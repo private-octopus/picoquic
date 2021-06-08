@@ -219,6 +219,7 @@ int preferred_address_test();
 int preferred_address_dis_mig_test();
 int preferred_address_zero_test();
 int cid_for_lb_test();
+int cid_for_lb_cli_test();
 int retry_protection_vector_test();
 int test_copy_for_retransmit();
 int test_format_for_retransmit();
