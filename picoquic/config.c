@@ -70,7 +70,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_DEST_IF, 'e', "dest_if", 1, "if", "Send on interface (default: -1)" },
     { picoquic_option_CIPHER_SUITE, 'C', "cipher_suite", 1, "cipher_suite_id", "specify cipher suite (e.g. -C 20 = chacha20)" },
     { picoquic_option_ESNI_RR_FILE, 'E', "esni_rr_file", 1, "file", "ESNI RR file (default: don't use ESNI)" },
-    { picoquic_option_INIT_CNXID, 'i', "cnxid_params", 3, "<src mask value>", "TBD" },
+    { picoquic_option_INIT_CNXID, 'i', "cnxid_params", 1, "per-text-lb-spec", "See documentation for LB compatible CID configuration" },
     { picoquic_option_LOG_FILE, 'l', "text_log", 1, "file", "Log file, Log to stdout if file = \"-\". No text logging if absent." },
     { picoquic_option_LONG_LOG, 'L', "long_log", 0, "", "Log all packets. If absent, log stops after 100 packets." },
     { picoquic_option_BINLOG_DIR, 'b', "binlog_dir", 1, "folder", "Binary logging to this directory. No binary logging if absent." },
@@ -405,17 +405,9 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_ESNI_RR_FILE:
         ret = config_set_string_param(&config->esni_rr_file, params, nb_params, 0);
         break;
-#if 0
-        /* TODO: should be rewired to use the standard function */
     case picoquic_option_INIT_CNXID:
-        config->cnx_id_cbdata = picoquic_connection_id_callback_create_ctx(config_optval_string(opval_buffer, 256, params, nb_params, 0), argv[*p_optind], argv[p_optind[1]]);
-        if (config->cnx_id_cbdata == NULL) {
-            fprintf(stderr, "could not create callback context (%s, %s, %s)\n", config_optval_string(opval_buffer, 256, params, nb_params, 0), argv[*p_optind], argv[p_optind[1]]);
-            ret = -1;
-        }
-        *p_optind += 2;
+        ret = config_set_string_param(&config->cnx_id_cbdata, params, nb_params, 0);
         break;
-#endif
     case picoquic_option_LOG_FILE:
         ret = config_set_string_param(&config->log_file, params, nb_params, 0);
         break;
@@ -726,8 +718,8 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         config->alpn,
         default_callback_fn,
         default_callback_ctx,
-        (config->cnx_id_cbdata == NULL) ? NULL : picoquic_connection_id_callback,
-        config->cnx_id_cbdata,
+        NULL,
+        NULL,
         (uint8_t *)config->reset_seed,
         current_time,
         p_simulated_time,
@@ -784,6 +776,9 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
                 fprintf(stderr, "Could not set CNX-ID length #%d.\n", config->cnx_id_length);
             }
         }
+
+        /* Cannot set the cnx_id callback here, because it requires libraries
+         * that are not linked by default */
 
         /* TODO: parameters to define padding policy */
         picoquic_set_padding_policy(quic, 39, 128);
@@ -888,7 +883,10 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     {
         free((void*)config->cc_algo_id);
     }
-    /* TODO: picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
+    if (config->cnx_id_cbdata != NULL)
+    {
+        free((void*)config->cnx_id_cbdata);
+    }
     if (config->www_dir != NULL)
     {
         free((void*)config->www_dir);
