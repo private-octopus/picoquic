@@ -22,6 +22,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stdlib.h>
 #include <string.h>
 #include "picoquic.h"
 #include "picoquic_internal.h"
@@ -378,7 +379,7 @@ int picoquic_lb_compat_cid_config_parse(picoquic_load_balancer_config_t* lb_conf
     if (ret == 0 && lb_config->connection_id_length != 0) {
         size_t min_length = 1 + lb_config->server_id_length + lb_config->nonce_length;
         if (lb_config->connection_id_length < min_length ||
-            lb_config->method == picoquic_load_balancer_cid_block_cipher && lb_config->connection_id_length < 17) {
+            (lb_config->method == picoquic_load_balancer_cid_block_cipher && lb_config->connection_id_length < 17)) {
             ret = -1;
         }
     }
