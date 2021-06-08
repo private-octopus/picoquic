@@ -22,6 +22,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <string.h>
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
