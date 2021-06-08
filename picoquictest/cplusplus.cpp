@@ -26,6 +26,7 @@
 #include "wincompat.h"
 #endif
 #include "picoquic.h"
+#include "picoquic_lb.h"
 #include "picohash.h"
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"

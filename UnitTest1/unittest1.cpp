@@ -276,6 +276,14 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(cid_for_lb_cli)
+        {
+            int ret = cid_for_lb_cli_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(retry_protection_vector)
         {
             int ret = retry_protection_vector_test();

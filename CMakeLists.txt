@@ -72,6 +72,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/packet.c
     picoquic/performance_log.c
     picoquic/picohash.c
+    picoquic/picoquic_lb.c
     picoquic/picosocks.c
     picoquic/picosplay.c
     picoquic/quicctx.c
@@ -97,6 +98,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_logger.h
      picoquic/picoquic_binlog.h
      picoquic/picoquic_config.h
+     picoquic/picoquic_lb.h
      )
 
 set(LOGLIB_LIBRARY_FILES
@@ -127,6 +129,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
     picoquictest/parseheadertest.c
+    picoquictest/picoquic_lb_test.c
     picoquictest/pn2pn64test.c
     picoquictest/sacktest.c
     picoquictest/skip_frame_test.c

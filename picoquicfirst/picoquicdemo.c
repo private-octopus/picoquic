@@ -77,6 +77,7 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "picoquic_binlog.h"
 #include "performance_log.h"
 #include "picoquic_config.h"
+#include "picoquic_lb.h"
 
 /*
  * SIDUCK datagram demo call back.
@@ -146,8 +147,7 @@ static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb
     return ret;
 }
 
-int quic_server(const char* server_name, picoquic_quic_config_t * config,
-    int just_once, picoquic_connection_id_cb_fn cnx_id_callback, void* cnx_id_callback_ctx)
+int quic_server(const char* server_name, picoquic_quic_config_t * config, int just_once)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -191,6 +191,19 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config,
                 {
                     ret = picoquic_perflog_setup(qserver, config->performance_log);
                 }
+                if (ret == 0 && config->cnx_id_cbdata != NULL) {
+                    picoquic_load_balancer_config_t lb_config;
+                    ret = picoquic_lb_compat_cid_config_parse(&lb_config, config->cnx_id_cbdata, strlen(config->cnx_id_cbdata));
+                    if (ret != 0) {
+                        fprintf(stdout, "Cannot parse the CNX_ID config policy: %s.\n", config->cnx_id_cbdata);
+                    }
+                    else {
+                        ret = picoquic_lb_compat_cid_config(qserver, &lb_config);
+                        if (ret != 0) {
+                            fprintf(stdout, "Cannot set the CNX_ID config policy: %s.\n", config->cnx_id_cbdata);
+                        }
+                    }
+                }
             }
         }
     }
@@ -210,6 +223,9 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config,
     printf("Server exit, ret = 0x%x\n", ret);
 
     /* Clean up */
+    if (config->cnx_id_cbdata != NULL) {
+        picoquic_lb_compat_cid_config_free(qserver);
+    }
     if (qserver != NULL) {
         picoquic_free(qserver);
     }
@@ -974,9 +990,7 @@ int main(int argc, char** argv)
         /* Run as server */
         printf("Starting Picoquic server (v%s) on port %d, server name = %s, just_once = %d, do_retry = %d\n",
             PICOQUIC_VERSION, config.server_port, server_name, just_once, config.do_retry);
-        ret = quic_server(server_name, &config, just_once, 
-            (config.cnx_id_cbdata == NULL) ? NULL : picoquic_connection_id_callback,
-            (config.cnx_id_cbdata == NULL) ? NULL : (void*)config.cnx_id_cbdata);
+        ret = quic_server(server_name, &config, just_once);
         printf("Server exit with code = %d\n", ret);
     }
     else {
@@ -986,11 +1000,6 @@ int main(int argc, char** argv)
             force_migration, nb_packets_before_update, client_scenario);
 
         printf("Client exit with code = %d\n", ret);
-    }
-
-    if (config.cnx_id_cbdata != NULL) {
-        picoquic_connection_id_callback_free_ctx(config.cnx_id_cbdata);
-        config.cnx_id_cbdata = NULL;
     }
 
     picoquic_config_clear(&config);
