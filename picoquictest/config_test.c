@@ -61,7 +61,7 @@ static picoquic_quic_config_t param1 = {
     -1, /* int cnx_id_length; */
     655360, /* Socket buffer size */
     "cubic", /* const picoquic_congestion_algorithm_t* cc_algorithm; */
-    NULL, /* picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
+    "0N8C-000123", /* char const* cnx_id_cbdata; */
     3,
     2,
     3,
@@ -119,6 +119,7 @@ static char const* config_argv1[] = {
     "-F", "/data/performance_log.csv",
     "-V",
     "-0",
+    "-i", "0N8C-000123",
     NULL
 };
 
@@ -139,7 +140,7 @@ static picoquic_quic_config_t param2 = {
     5, /* int cnx_id_length; */
     0, /* socket_buffer_size */
     NULL, /* const picoquic_congestion_algorithm_t* cc_algorithm; */
-    NULL, /* picoquic_connection_id_callback_ctx_t* cnx_id_cbdata; */
+    NULL, /* char const* cnx_id_cbdata; */
     0,
     0,
     0,
@@ -252,6 +253,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_int("mtu_max", expected->mtu_max, actual->mtu_max);
     ret |= config_test_compare_int("socket_buffer_size", expected->socket_buffer_size, actual->socket_buffer_size);
     ret |= config_test_compare_string("cc_algo_id", expected->cc_algo_id, actual->cc_algo_id);
+    ret |= config_test_compare_string("cnx_id_cbdata", expected->cnx_id_cbdata, actual->cnx_id_cbdata);
     ret |= config_test_compare_int("spinbit", expected->spinbit_policy, actual->spinbit_policy);
     ret |= config_test_compare_int("lossbit", expected->lossbit_policy, actual->lossbit_policy);
     ret |= config_test_compare_int("multipath", expected->multipath_option, actual->multipath_option);
