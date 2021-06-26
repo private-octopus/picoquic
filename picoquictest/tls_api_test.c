@@ -7924,16 +7924,19 @@ int bbr_long_test()
  * Check a variety of challenging scenarios
  */
 
-int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t latency, uint64_t jitter, uint64_t buffer_size)
+int performance_test_one(uint64_t max_completion_time, uint64_t mbps, uint64_t rkbps, uint64_t latency, uint64_t jitter, uint64_t buffer_size)
 {
     uint64_t simulated_time = 0x0005a138fbde8743; /* Init to non zero time to test handling of time in cc algorithm */
     uint64_t picoseq_per_byte_100 = (1000000ull * 8) / mbps;
+    uint64_t picoseq_per_byte_return = (rkbps == 0)? picoseq_per_byte_100:(1000000000ull * 8) / rkbps;
     picoquic_connection_id_t initial_cid = { {0xbb, 0xcc, 0, 0, 0, 0, 0, 0}, 8 };
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
     uint64_t buffer_id = (buffer_size*16) / (latency + jitter);
     int ret = 0;
 
+
+    initial_cid.id[3] = (rkbps > 0xff) ? 0xff : (uint8_t)rkbps;
     initial_cid.id[4] = (mbps > 0xff) ? 0xff : (uint8_t)mbps;
     initial_cid.id[5] = (latency > 2550000) ? 0xff : (uint8_t)(latency / 10000);
     initial_cid.id[6] = (jitter >255000) ? 0xff : (uint8_t)(jitter / 1000);
@@ -7954,7 +7957,7 @@ int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t laten
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
-        test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_100;
+        test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_return;
         test_ctx->s_to_c_link->microsec_latency = latency;
         test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_100;
         test_ctx->s_to_c_link->jitter = jitter;
@@ -7973,6 +7976,11 @@ int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t laten
     }
 
     return ret;
+}
+
+int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t latency, uint64_t jitter, uint64_t buffer_size)
+{
+    return performance_test_one(max_completion_time, mbps, 0, latency, jitter, buffer_size);
 }
 
 /* BBR Performance test.
@@ -8038,6 +8046,27 @@ int gbps_performance_test()
     uint64_t mbps = 1000;
 
     int ret = performance_test(max_completion_time, mbps, latency, jitter, buffer);
+
+    return ret;
+}
+
+/* Asymmetric test.
+ * Verify that 10MB can be downloaded reasonably fast on a low latency 10Mbps link with 100kbps return path
+ * The buffer size is set to a high value, which allows queues to grow and delays to build up. In theory,
+ * BBR should minimize these queues, but the test verifies that it actually does.
+ *
+ * TODO: fix the ACK path to avoid building large queues.
+ */
+int bbr_asym100_test()
+{
+    uint64_t max_completion_time = 24000000; /* TODO: reduce to value lower than 9 sec. */
+    uint64_t latency = 1000;
+    uint64_t jitter = 750;
+    uint64_t buffer = 50000;
+    uint64_t mbps = 10;
+    uint64_t kbps = 100;
+
+    int ret = performance_test_one(max_completion_time, mbps, kbps, latency, jitter, buffer);
 
     return ret;
 }
