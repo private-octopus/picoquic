@@ -1317,6 +1317,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(bbr_asym100)
+        {
+            int ret = bbr_asym100_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(long_rtt)
         {
             int ret = long_rtt_test();
