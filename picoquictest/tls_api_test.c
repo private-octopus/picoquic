@@ -8055,12 +8055,10 @@ int gbps_performance_test()
  * Verify that 10MB can be downloaded reasonably fast on a low latency 10Mbps link with 100kbps return path
  * The buffer size is set to a high value, which allows queues to grow and delays to build up. In theory,
  * BBR should minimize these queues, but the test verifies that it actually does.
- *
- * TODO: fix the ACK path to avoid building large queues.
  */
 int bbr_asym100_test()
 {
-    uint64_t max_completion_time = 24000000; /* TODO: reduce to value lower than 9 sec. */
+    uint64_t max_completion_time = 8500000;
     uint64_t latency = 1000;
     uint64_t jitter = 750;
     uint64_t buffer = 50000;
