@@ -7954,6 +7954,7 @@ int performance_test_one(uint64_t max_completion_time, uint64_t mbps, uint64_t r
         test_ctx->qserver->use_long_log = 1;
 
         picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_binlog(test_ctx->qclient, ".");
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;

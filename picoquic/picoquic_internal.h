@@ -1554,6 +1554,8 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate);
 
 uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t * cnx, uint64_t rtt, uint64_t remote_min_ack_delay);
 
+void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint64_t remote_min_ack_delay, uint64_t data_rate, uint64_t* ack_gap, uint64_t* ack_delay_max);
+
 /* seed the rtt and bandwidth discovery */
 void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwin,
     uint8_t* ip_addr, uint8_t ip_addr_length);

@@ -2013,6 +2013,13 @@ uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t* cnx, uint64_t rtt, uint6
     return ack_delay_max;
 }
 
+void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint64_t remote_min_ack_delay,
+    uint64_t data_rate, uint64_t * ack_gap, uint64_t * ack_delay_max)
+{
+    *ack_delay_max = picoquic_compute_ack_delay_max(cnx, rtt, remote_min_ack_delay);
+    *ack_gap = picoquic_compute_ack_gap(cnx, data_rate);
+}
+
 /* In a multipath environment, a packet can accry acknowledgements for multiple paths.
  * The packet_data context collects information about updates received for each of
  * these paths. */
@@ -3919,8 +3926,8 @@ uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes
     uint64_t ack_delay_max;
 
     /* Compute the desired value of the ack frequency*/
-    ack_delay_max = picoquic_compute_ack_delay_max(cnx, cnx->path[0]->rtt_min, cnx->remote_parameters.min_ack_delay);
-    ack_gap = picoquic_compute_ack_gap(cnx, cnx->path[0]->bandwidth_estimate);
+    picoquic_compute_ack_gap_and_delay(cnx, cnx->path[0]->rtt_min, cnx->remote_parameters.min_ack_delay,
+        cnx->path[0]->bandwidth_estimate, &ack_gap, &ack_delay_max);
     
     if (ack_gap <= cnx->ack_gap_local &&
         ack_delay_max == cnx->ack_frequency_delay_local) {
