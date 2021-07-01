@@ -2022,10 +2022,13 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
 
     if (cnx->congestion_alg != NULL &&
         cnx->congestion_alg->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_BBR &&
+        cnx->is_ack_frequency_negotiated &&
         (2*cnx->path[0]->smoothed_rtt > 3*cnx->path[0]->rtt_min)) {
-        /* Verify that the ACK rate can be sustained on the return path */
-        return_data_rate = (cnx->is_ack_frequency_negotiated) ?
-            cnx->path[0]->receive_rate_max : cnx->path[0]->bandwidth_estimate_max;
+        /* Verify that the ACK rate can be sustained on the return path.
+         * This only works well if the "delayed ack" option allows the server
+         * to control the ACK rate.
+         */
+        return_data_rate = cnx->path[0]->receive_rate_max;
         if (return_data_rate > 0) {
             /* Estimate of ACK size = L2 + IPv6 + UDP + padded ACK */
             const uint64_t ack_size = 12 + 40 + 8 + 55;
@@ -2041,12 +2044,8 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
             /* if ack gap smaller than ack time fraction of CWIN, perform correction */
             uint64_t nb_packets = (cnx->path[0]->cwin / cnx->path[0]->send_mtu);
             uint64_t rtt_target = (cnx->path[0]->smoothed_rtt + cnx->path[0]->rtt_min) / 2;
-
-            if (!cnx->is_ack_frequency_negotiated) {
-                uint64_t packet_rate_times_1M = (data_rate * 1000000) / cnx->path[0]->send_mtu;
-                nb_packets = packet_rate_times_1M / rtt_target;
-            }
-            else if (!cnx->path[0]->is_ssthresh_initialized) {
+            
+            if (!cnx->path[0]->is_ssthresh_initialized) {
                 nb_packets /= 2;
             }
             if (nb_packets * (*ack_delay_max) > rtt_target) {
