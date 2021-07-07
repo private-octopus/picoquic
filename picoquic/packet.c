@@ -1848,7 +1848,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
 void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
     unsigned char received_ecn, picoquic_packet_context_enum pc, picoquic_local_cnxid_t * l_cid)
 {
-    picoquic_ack_context_t* ack_ctx = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) ?
+    picoquic_ack_context_t* ack_ctx = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled && l_cid != NULL) ?
         &l_cid->ack_ctx : &cnx->ack_ctx[pc];
 
     switch (received_ecn & 0x03) {
@@ -2264,8 +2264,7 @@ int picoquic_incoming_segment(
 
     if (ret == 0) {
         if (cnx != NULL && cnx->cnx_state != picoquic_state_disconnected &&
-            ph.ptype != picoquic_packet_version_negotiation && ph.l_cid) {
-
+            ph.ptype != picoquic_packet_version_negotiation) {
             cnx->nb_packets_received++;
             /* Mark the sequence number as received */
             ret = picoquic_record_pn_received(cnx, ph.pc, ph.l_cid, ph.pn64, receive_time);
