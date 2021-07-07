@@ -2265,7 +2265,7 @@ int picoquic_incoming_segment(
     if (ret == 0) {
         if (cnx != NULL && cnx->cnx_state != picoquic_state_disconnected &&
             ph.ptype != picoquic_packet_version_negotiation &&
-            (!cnx->is_multicast_enabled || ph.l_cid != NULL)) {
+            (!cnx->is_multipath_enabled || ph.l_cid != NULL)) {
             cnx->nb_packets_received++;
             /* Mark the sequence number as received */
             ret = picoquic_record_pn_received(cnx, ph.pc, ph.l_cid, ph.pn64, receive_time);
