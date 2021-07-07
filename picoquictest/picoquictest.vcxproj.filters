@@ -93,6 +93,9 @@
     <ClCompile Include="cert_verify_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="picoquic_lb_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

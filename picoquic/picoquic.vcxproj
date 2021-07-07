@@ -156,6 +156,7 @@
     <ClCompile Include="logwriter.c" />
     <ClCompile Include="newreno.c" />
     <ClCompile Include="performance_log.c" />
+    <ClCompile Include="picoquic_lb.c" />
     <ClCompile Include="picosocks.c" />
     <ClCompile Include="picosplay.c" />
     <ClCompile Include="quicctx.c" />

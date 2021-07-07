@@ -90,7 +90,7 @@ typedef struct st_picoquic_quic_config_t {
     int cnx_id_length;
     int socket_buffer_size;
     char const* cc_algo_id;
-    picoquic_connection_id_callback_ctx_t* cnx_id_cbdata;
+    char const * cnx_id_cbdata;
     /* TODO: control key logging */
     picoquic_spinbit_version_enum spinbit_policy; /* control spin bit */
     picoquic_lossbit_version_enum lossbit_policy; /* control loss bit */

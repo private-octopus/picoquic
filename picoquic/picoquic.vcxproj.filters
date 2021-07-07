@@ -105,6 +105,9 @@
     <ClCompile Include="performance_log.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="picoquic_lb.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
