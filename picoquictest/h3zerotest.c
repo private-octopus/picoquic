@@ -1219,6 +1219,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
     ret = picoquic_demo_client_initialize_context(&callback_ctx, demo_scenario, nb_scenario, alpn, 0, delay_fin);
     callback_ctx.out_dir = out_dir;
+    callback_ctx.no_print = 1;
 
     if (ret == 0) {
         ret = tls_api_init_ctx_ex(&test_ctx,
