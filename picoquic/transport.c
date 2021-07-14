@@ -811,7 +811,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
                     }
                     else {
-                        if (cnx->local_parameters.max_ack_delay > 0) {
+                        if (cnx->local_parameters.min_ack_delay > 0) {
                             cnx->is_ack_frequency_negotiated = 1;
                         }
                     }

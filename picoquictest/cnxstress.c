@@ -472,11 +472,6 @@ cnx_stress_callback_ctx_t * cnx_stress_cnx_from_rank(
         cnx_ctx = v_ctx[rank];
         nb_trials++;
     }
-#if 1
-    if (rank == 4) {
-        DBG_PRINTF("%s", "BUG");
-    }
-#endif
     return cnx_ctx;
 }
 

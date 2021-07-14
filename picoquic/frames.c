@@ -2013,6 +2013,67 @@ uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t* cnx, uint64_t rtt, uint6
     return ack_delay_max;
 }
 
+void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint64_t remote_min_ack_delay,
+    uint64_t data_rate, uint64_t* ack_gap, uint64_t* ack_delay_max)
+{
+    uint64_t return_data_rate = 0;
+    uint64_t nb_packets = 0;
+    *ack_delay_max = picoquic_compute_ack_delay_max(cnx, rtt, remote_min_ack_delay);
+    *ack_gap = picoquic_compute_ack_gap(cnx, data_rate);
+
+    if (2 * cnx->path[0]->smoothed_rtt > 3 * cnx->path[0]->rtt_min) {
+        if (cnx->is_ack_frequency_negotiated) {
+            if (cnx->congestion_alg != NULL &&
+                cnx->congestion_alg->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_BBR) {
+                /* Verify that the ACK rate can be sustained on the return path.
+                 * This only works well if the "delayed ack" option allows the server
+                 * to control the ACK rate.
+                 */
+                return_data_rate = cnx->path[0]->receive_rate_max;
+                nb_packets = (cnx->path[0]->cwin / cnx->path[0]->send_mtu);
+            }
+        }
+        else {
+            uint64_t packet_rate_times_1M = (data_rate * 1000000) / cnx->path[0]->send_mtu;
+            nb_packets = packet_rate_times_1M / cnx->path[0]->smoothed_rtt;
+            return_data_rate = cnx->path[0]->bandwidth_estimate;
+        }
+        if (return_data_rate > 0) {
+            /* Estimate of ACK size = L2 + IPv6 + UDP + padded ACK */
+            const uint64_t ack_size = 12 + 40 + 8 + 55;
+            /* Estimate of ACK transmission time *in microseconds */
+            uint64_t ack_transmission_time = (ack_size * 1000000) / return_data_rate;
+            /* if ACK transmission time > ack delay, perform correction */
+            if (ack_transmission_time > * ack_delay_max) {
+                *ack_delay_max = ack_transmission_time;
+                if (*ack_delay_max > PICOQUIC_ACK_DELAY_MAX) {
+                    *ack_delay_max = PICOQUIC_ACK_DELAY_MAX;
+                }
+            }
+            /* if ack gap smaller than ack time fraction of CWIN, perform correction */
+            uint64_t rtt_target = (cnx->path[0]->smoothed_rtt + cnx->path[0]->rtt_min) / 2;
+
+            if (!cnx->path[0]->is_ssthresh_initialized) {
+                nb_packets /= 2;
+            }
+
+            uint64_t nb_ack_per_rtt = (*ack_gap > 0) ? (nb_packets + *ack_gap - 1) / (*ack_gap):nb_packets;
+            if (nb_ack_per_rtt * (*ack_delay_max) > rtt_target) {
+                uint64_t nb_acks_max = cnx->path[0]->smoothed_rtt / (*ack_delay_max);
+                if (nb_acks_max <= 1) {
+                    *ack_gap = nb_packets;
+                }
+                else {
+                    uint64_t ack_gap_min = (nb_packets + nb_acks_max - 1) / nb_acks_max;
+                    if (*ack_gap < ack_gap_min) {
+                        *ack_gap = ack_gap_min;
+                    }
+                }
+            }
+        }
+    }
+}
+
 /* In a multipath environment, a packet can accry acknowledgements for multiple paths.
  * The packet_data context collects information about updates received for each of
  * these paths. */
@@ -3919,8 +3980,8 @@ uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes
     uint64_t ack_delay_max;
 
     /* Compute the desired value of the ack frequency*/
-    ack_delay_max = picoquic_compute_ack_delay_max(cnx, cnx->path[0]->rtt_min, cnx->remote_parameters.min_ack_delay);
-    ack_gap = picoquic_compute_ack_gap(cnx, cnx->path[0]->bandwidth_estimate);
+    picoquic_compute_ack_gap_and_delay(cnx, cnx->path[0]->rtt_min, cnx->remote_parameters.min_ack_delay,
+        cnx->path[0]->bandwidth_estimate, &ack_gap, &ack_delay_max);
     
     if (ack_gap <= cnx->ack_gap_local &&
         ack_delay_max == cnx->ack_frequency_delay_local) {
