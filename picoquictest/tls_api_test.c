@@ -7924,7 +7924,8 @@ int bbr_long_test()
  * Check a variety of challenging scenarios
  */
 
-int performance_test_one(uint64_t max_completion_time, uint64_t mbps, uint64_t rkbps, uint64_t latency, uint64_t jitter, uint64_t buffer_size)
+int performance_test_one(uint64_t max_completion_time, uint64_t mbps, uint64_t rkbps, uint64_t latency,
+    uint64_t jitter, uint64_t buffer_size, picoquic_tp_t* server_parameters)
 {
     uint64_t simulated_time = 0x0005a138fbde8743; /* Init to non zero time to test handling of time in cc algorithm */
     uint64_t picoseq_per_byte_100 = (1000000ull * 8) / mbps;
@@ -7942,7 +7943,7 @@ int performance_test_one(uint64_t max_completion_time, uint64_t mbps, uint64_t r
     initial_cid.id[6] = (jitter >255000) ? 0xff : (uint8_t)(jitter / 1000);
     initial_cid.id[7] = (buffer_id > 255) ? 0xff : (uint8_t)buffer_id;
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, server_parameters, &initial_cid, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -7954,6 +7955,7 @@ int performance_test_one(uint64_t max_completion_time, uint64_t mbps, uint64_t r
         test_ctx->qserver->use_long_log = 1;
 
         picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_binlog(test_ctx->qclient, ".");
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
@@ -7980,7 +7982,7 @@ int performance_test_one(uint64_t max_completion_time, uint64_t mbps, uint64_t r
 
 int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t latency, uint64_t jitter, uint64_t buffer_size)
 {
-    return performance_test_one(max_completion_time, mbps, 0, latency, jitter, buffer_size);
+    return performance_test_one(max_completion_time, mbps, 0, latency, jitter, buffer_size, NULL);
 }
 
 /* BBR Performance test.
@@ -8054,23 +8056,62 @@ int gbps_performance_test()
  * Verify that 10MB can be downloaded reasonably fast on a low latency 10Mbps link with 100kbps return path
  * The buffer size is set to a high value, which allows queues to grow and delays to build up. In theory,
  * BBR should minimize these queues, but the test verifies that it actually does.
- *
- * TODO: fix the ACK path to avoid building large queues.
  */
 int bbr_asym100_test()
 {
-    uint64_t max_completion_time = 24000000; /* TODO: reduce to value lower than 9 sec. */
+    uint64_t max_completion_time = 8500000;
     uint64_t latency = 1000;
     uint64_t jitter = 750;
     uint64_t buffer = 50000;
     uint64_t mbps = 10;
     uint64_t kbps = 100;
 
-    int ret = performance_test_one(max_completion_time, mbps, kbps, latency, jitter, buffer);
+    int ret = performance_test_one(max_completion_time, mbps, kbps, latency, jitter, buffer, NULL);
 
     return ret;
 }
 
+/* Asymmetric test, nodelay
+ * Variant in which the negotiation of delayed ACK is disabled.
+ * 
+ * TODO: fix bugs and get the target time under 9 seconds.
+ */
+int bbr_asym100_nodelay_test()
+{
+    uint64_t max_completion_time = 29000000;
+    uint64_t latency = 1000;
+    uint64_t jitter = 750;
+    uint64_t buffer = 50000;
+    uint64_t mbps = 10;
+    uint64_t kbps = 100;
+    picoquic_tp_t server_parameters;
+
+    memset(&server_parameters, 0, sizeof(picoquic_tp_t));
+    picoquic_init_transport_parameters(&server_parameters, 1);
+    server_parameters.min_ack_delay = 0;
+
+    int ret = performance_test_one(max_completion_time, mbps, kbps, latency, jitter, buffer,
+        &server_parameters);
+
+    return ret;
+}
+
+/* Asymmetric test.
+ * Variant using 400 kbps return path and a 40 Mbps link
+ */
+int bbr_asym400_test()
+{
+    uint64_t max_completion_time = 2200000;
+    uint64_t latency = 1000;
+    uint64_t jitter = 750;
+    uint64_t buffer = 50000;
+    uint64_t mbps = 40;
+    uint64_t kbps = 400;
+
+    int ret = performance_test_one(max_completion_time, mbps, kbps, latency, jitter, buffer, NULL);
+
+    return ret;
+}
 
 /* This is similar to the long rtt test, but operating at a higher speed.
  * We allow for loss simulation and jitter simulation to simulate wi-fi + satellite.

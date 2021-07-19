@@ -242,6 +242,8 @@ int bbr_slow_long_test();
 int bbr_one_second_test();
 int gbps_performance_test();
 int bbr_asym100_test();
+int bbr_asym100_nodelay_test();
+int bbr_asym400_test();
 int large_client_hello_test();
 int fast_nat_rebinding_test();
 int ddos_amplification_test();
