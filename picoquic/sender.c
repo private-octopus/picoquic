@@ -2114,7 +2114,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
         }
 
         /* Encode the bdp frame */
-        if (cnx->quic->default_bdp_option == 2 && (cnx->local_parameters.enable_bdp == 1 || cnx->local_parameters.enable_bdp == 3)) {
+        if (cnx->quic->default_bdp_option == 2 && (cnx->local_parameters.enable_bdp_frame == 1 || cnx->local_parameters.enable_bdp_frame == 3)) {
             bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
         }
 
@@ -3423,7 +3423,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
  
                         /* Send bdp frames if there are no stream frames to send 
                          * and if client wishes to receive bdp frames */
-                        if(!cnx->client_mode && cnx->quic->default_bdp_option == 2 && (cnx->remote_parameters.enable_bdp == 2 || cnx->remote_parameters.enable_bdp == 3)) {
+                        if(!cnx->client_mode && cnx->quic->default_bdp_option == 2 && (cnx->remote_parameters.enable_bdp_frame == 2 || cnx->remote_parameters.enable_bdp_frame == 3)) {
                            bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
                         }
            
@@ -3822,7 +3822,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
                         /* Send bdp frames if there are no stream frames to send 
                          * and if peer wishes to receive bdp frames */
-                        if(!cnx->client_mode && cnx->quic->default_bdp_option == 2 && (cnx->remote_parameters.enable_bdp == 2 || cnx->remote_parameters.enable_bdp == 3)) {
+                        if(!cnx->client_mode && cnx->quic->default_bdp_option == 2 && (cnx->remote_parameters.enable_bdp_frame == 2 || cnx->remote_parameters.enable_bdp_frame == 3)) {
                            bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
                         }
 

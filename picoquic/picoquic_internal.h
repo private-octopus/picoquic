@@ -144,7 +144,7 @@ typedef enum {
     picoquic_frame_type_ack_mp_ecn = 0xbaba1,
     picoquic_frame_type_qoe = 0xbaba2,
     picoquic_frame_type_path_status = 0xbaba3,
-    picoquic_frame_type_bdp = 0xbaba4
+    picoquic_frame_type_bdp = 0xebd9
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -552,7 +552,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_enable_multipath 0xbaba 
 #define picoquic_tp_enable_simple_multipath 0xbab5 
 #define picoquic_tp_version_negotiation 0x73db
-#define picoquic_tp_enable_bdp 0xbaba4 /* per draft-kuhn-quic-0rtt-bdp-09 */
+#define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
  * This is kept private for now; and will only be set through the "set quic log"

@@ -552,9 +552,9 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         bytes = picoquic_encode_transport_param_version_negotiation(bytes, bytes_max, extension_mode, cnx);
     }
 
-    if (cnx->local_parameters.enable_bdp > 0 && bytes != NULL) {
-        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_bdp,
-            (uint64_t)cnx->local_parameters.enable_bdp);
+    if (cnx->local_parameters.enable_bdp_frame > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_bdp_frame,
+            (uint64_t)cnx->local_parameters.enable_bdp_frame);
     }
 
     if (bytes == NULL) {
@@ -594,7 +594,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->remote_parameters.enable_time_stamp = 0;
     cnx->remote_parameters.min_ack_delay = 0;
     cnx->remote_parameters.do_grease_quic_bit = 0;
-    cnx->remote_parameters.enable_bdp = 0;
+    cnx->remote_parameters.enable_bdp_frame = 0;
 }
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
@@ -889,7 +889,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     break;
                 }
-                case picoquic_tp_enable_bdp: {
+                case picoquic_tp_enable_bdp_frame: {
                     uint64_t enable_bdp =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     if (ret == 0) {
@@ -897,7 +897,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
                         }
                         else {
-                            cnx->remote_parameters.enable_bdp = (int)enable_bdp;
+                            cnx->remote_parameters.enable_bdp_frame = (int)enable_bdp;
                         }
                     }
                     break;

@@ -643,7 +643,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         cnx->remote_parameters.min_ack_delay = 1000;
         
         /* Set enable_bdp so there is no issue with bdp frame */
-        cnx->local_parameters.enable_bdp = 3;
+        cnx->local_parameters.enable_bdp_frame = 3;
        
         /* if testing handshake done, set state to ready so frame is ignored. */
         if (epoch == 3) {

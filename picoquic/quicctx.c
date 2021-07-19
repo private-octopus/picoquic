@@ -1115,7 +1115,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->enable_loss_bit = 2;
     tp->min_ack_delay = PICOQUIC_ACK_DELAY_MIN;
     tp->enable_time_stamp = 0;
-    tp->enable_bdp = 0;
+    tp->enable_bdp_frame = 0;
 }
 
 
@@ -2833,11 +2833,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
         /* Initialize BDP transport parameter */
         if (quic->default_bdp_option == 2) {
-           /* The BDP feature is activated and uses BDP extension frame. 
-            * TODO: set TP enable_bdp according to the local resources 
-            * such as buffer usage. For now, accept and send BDP Frames 
-            * for this connection */
-            cnx->local_parameters.enable_bdp = 3;
+           /* Accept and send BDP extension frame */
+            cnx->local_parameters.enable_bdp_frame = 3;
         }
  
         /* Initialize local flow control variables to advertised values */

@@ -4466,8 +4466,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             bytes = NULL;
                             break;
                         }
-                        if (cnx->client_mode && (cnx->local_parameters.enable_bdp == 0 || 
-                            cnx->local_parameters.enable_bdp == 1)) {
+                        if (cnx->client_mode && (cnx->local_parameters.enable_bdp_frame == 0 || 
+                            cnx->local_parameters.enable_bdp_frame == 1)) {
                             DBG_PRINTF("BDP frame (0x%x) not expected", first_byte);
                             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
                             bytes = NULL;
