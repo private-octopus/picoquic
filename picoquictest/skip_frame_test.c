@@ -460,7 +460,10 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM("stream_hang", test_frame_stream_hang, 1, 0, 3),
     TEST_SKIP_ITEM("bad_qoe", test_frame_type_qoe_bad, 1, 0, 3),
     TEST_SKIP_ITEM("bad_path_status", test_frame_type_path_status_bad, 0, 1, 3),
-    TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3)
+    TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3),
+    TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad_addr, 1, 0, 3),
+    TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad_length, 1, 0, 3)
+
 };
 
 size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_skip_frames_t);
