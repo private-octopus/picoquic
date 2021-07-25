@@ -4139,7 +4139,8 @@ const uint8_t* picoquic_skip_bdp_frame(const uint8_t* bytes, const uint8_t* byte
 }
 
 const uint8_t* picoquic_parse_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
-    uint64_t* lifetime, uint64_t* recon_bytes_in_flight, uint64_t* recon_min_rtt, uint64_t* saved_ip_length, const uint8_t** saved_ip)
+    uint64_t* lifetime, uint64_t* recon_bytes_in_flight, uint64_t* recon_min_rtt, 
+    uint64_t* saved_ip_length, const uint8_t** saved_ip)
 {
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, lifetime)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, recon_bytes_in_flight)) != NULL &&
@@ -4163,7 +4164,7 @@ const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     uint64_t recon_bytes_in_flight;
     uint64_t recon_min_rtt;
     uint64_t saved_ip_length;
-    uint8_t* saved_ip;
+    const uint8_t* saved_ip;
 
     /* This code assumes that the frame type is already skipped */
     if ((bytes = picoquic_parse_bdp_frame(cnx, bytes, bytes_max, &lifetime, &recon_bytes_in_flight, &recon_min_rtt, 
@@ -4215,7 +4216,8 @@ const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     return bytes;
 }
 
-uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, picoquic_path_t* path_x, int* more_data, int * is_pure_ack)
+uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
+    picoquic_path_t* path_x, int* more_data, int * is_pure_ack)
 {
     /* TODO: need to add a client IP parameter in the frames */
     uint8_t* bytes0 = bytes;
@@ -4248,7 +4250,9 @@ uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t*
         if (stored_ticket != NULL) {
             recon_bytes_in_flight = stored_ticket->tp_0rtt[picoquic_tp_0rtt_cwin_remote];
             recon_min_rtt = stored_ticket->tp_0rtt[picoquic_tp_0rtt_rtt_remote];
-            /* TODO: add IP address */
+            /* IP address */
+            ip_addr = stored_ticket->ip_addr_client;
+            ip_addr_length = stored_ticket->ip_addr_client_length;
         }
     }
 
@@ -4256,7 +4260,8 @@ uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t*
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_bdp)) == NULL || 
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, lifetime)) == NULL || 
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, recon_bytes_in_flight)) == NULL || 
-        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, recon_min_rtt)) == NULL) {
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, recon_min_rtt)) == NULL ||
+        (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, ip_addr_length, ip_addr)) == NULL) {
         bytes = bytes0;
     }
     else {
@@ -4266,8 +4271,6 @@ uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t*
 
     return bytes;
 }
-
-
 
 /*
  * Decoding of the received frames.
