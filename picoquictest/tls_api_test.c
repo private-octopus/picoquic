@@ -8072,9 +8072,12 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     initial_cid.id[4] = (mbps_down > 0xff) ? 0xff : (uint8_t)mbps_down;
     initial_cid.id[5] = (latency > 2550000) ? 0xff : (uint8_t)(latency / 10000);
     initial_cid.id[6] = (jitter > 255000) ? 0xff : (uint8_t)(jitter / 1000);
-    initial_cid.id[7] = (has_loss)?0x70:0x00;
+    initial_cid.id[7] = (has_loss)?0x30:0x00;
     if (seed_bw) {
         initial_cid.id[7] |= 0x80;
+    }
+    if (bdp_option) {
+        initial_cid.id[7] |= 0x40;
     }
     if (do_preemptive) {
         initial_cid.id[7] ^= 0x0f;
@@ -8118,8 +8121,8 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
             picoquic_seed_bandwidth(test_ctx->cnx_client, 2 * latency, mbps_up * 125000,
                   ip_addr, ip_addr_length);
 
-            picoquic_set_default_bdp_option(test_ctx->qclient, bdp_option);
-            picoquic_set_default_bdp_option(test_ctx->qserver, bdp_option);
+            picoquic_set_default_bdp_frame_option(test_ctx->qclient, bdp_option);
+            picoquic_set_default_bdp_frame_option(test_ctx->qserver, bdp_option);
            
         }
 
@@ -8170,7 +8173,7 @@ int satellite_seeded_test()
 int satellite_seeded_from_bdp_frame_test()
 {
     /* Simulate remembering RTT and BW from previous connection when seeded from BDP Frame */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4800000, 250, 3, 0, 0, 0, 1, 2);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4800000, 250, 3, 0, 0, 0, 1, 1);
 }
 
 int satellite_loss_test()

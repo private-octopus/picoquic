@@ -29,10 +29,11 @@
 picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     const uint8_t * ip_addr, uint8_t ip_addr_length,
+    const uint8_t * ip_addr_client, uint8_t ip_addr_client_length,
     uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const * tp)
 {
     size_t ticket_size = sizeof(picoquic_stored_ticket_t) + sni_length + 1 + alpn_length + 1 + ticket_length
-        + 1 + PICOQUIC_STORED_IP_MAX;
+        + 1 + 2*PICOQUIC_STORED_IP_MAX;
     picoquic_stored_ticket_t* stored = (picoquic_stored_ticket_t*)malloc(ticket_size);
     
     if (stored != NULL) {
@@ -65,6 +66,19 @@ picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
         }
         next_p += PICOQUIC_STORED_IP_MAX;
 
+        stored->ip_addr_client = (uint8_t*)next_p;
+        if (ip_addr_client == NULL || ip_addr_client_length == 0) {
+            stored->ip_addr_length = 0;
+        }
+        else {
+            if (ip_addr_client_length > PICOQUIC_STORED_IP_MAX) {
+                ip_addr_client_length = PICOQUIC_STORED_IP_MAX;
+            }
+            stored->ip_addr_client_length = ip_addr_client_length;
+            memcpy(next_p, ip_addr, ip_addr_length);
+        }
+        next_p += PICOQUIC_STORED_IP_MAX;
+
         if (tp != NULL) {
             stored->tp_0rtt[picoquic_tp_0rtt_max_data] = tp->initial_max_data;
             stored->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_local] = tp->initial_max_stream_data_bidi_local;
@@ -89,8 +103,9 @@ int picoquic_serialize_ticket(const picoquic_stored_ticket_t * ticket, uint8_t *
     size_t required_length;
 
     /* Compute serialized length */
-    required_length = (size_t)(8 + 2 + 2 + 2 + 1) +
-        ticket->sni_length + ticket->alpn_length + ticket->ticket_length + ticket->ip_addr_length
+    required_length = (size_t)(8 + 2 + 2 + 2 + 1 + 1) +
+        ticket->sni_length + ticket->alpn_length + ticket->ticket_length + 
+        ticket->ip_addr_length + ticket->ip_addr_client_length +
         + 8* PICOQUIC_NB_TP_0RTT;
     /* Serialize */
     if (required_length > bytes_max) {
@@ -111,9 +126,14 @@ int picoquic_serialize_ticket(const picoquic_stored_ticket_t * ticket, uint8_t *
         byte_index += ticket->alpn_length;
 
         bytes[byte_index++] = ticket->ip_addr_length;
-        if (ticket->ip_addr != NULL) {
+        if (ticket->ip_addr_length > 0) {
             memcpy(bytes + byte_index, ticket->ip_addr, ticket->ip_addr_length);
             byte_index += ticket->ip_addr_length;
+        }
+        bytes[byte_index++] = ticket->ip_addr_client_length;
+        if (ticket->ip_addr_client_length > 0) {
+            memcpy(bytes + byte_index, ticket->ip_addr_client, ticket->ip_addr_client_length);
+            byte_index += ticket->ip_addr_client_length;
         }
 
         for (int i = 0; i < PICOQUIC_NB_TP_0RTT; i++) {
@@ -136,16 +156,18 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
 {
     int ret = 0;
     uint64_t time_valid_until = 0;
-    size_t required_length = 8 + 2 + 2 + 1 + PICOQUIC_NB_TP_0RTT * 8 + 2;
+    size_t required_length = 8 + 2 + 2 + 1 + 1 + PICOQUIC_NB_TP_0RTT * 8 + 2;
     size_t byte_index = 0;
     size_t sni_index = 0;
     size_t alpn_index = 0;
     size_t ip_addr_index = 0;
+    size_t ip_addr_client_index = 0;
     size_t ticket_index = 0;
     uint16_t sni_length = 0;
     uint16_t alpn_length = 0;
     uint16_t ticket_length = 0;
     uint8_t ip_addr_length = 0;
+    uint8_t ip_addr_client_length = 0;
     uint64_t tp_0rtt[PICOQUIC_NB_TP_0RTT] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
     *consumed = 0;
@@ -177,6 +199,13 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
     }
 
     if (required_length < bytes_max) {
+        ip_addr_client_length = bytes[byte_index++];
+        ip_addr_client_index = byte_index;
+        required_length += ip_addr_client_length;
+        byte_index += ip_addr_client_length;
+    }
+
+    if (required_length < bytes_max) {
         for (int i = 0; i < PICOQUIC_NB_TP_0RTT; i++) {
             tp_0rtt[i] = PICOPARSE_64(bytes + byte_index);
             byte_index += 8;
@@ -198,6 +227,7 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
             (const char *)(bytes + sni_index), sni_length,
             (const char *)(bytes + alpn_index), alpn_length,
             (const uint8_t*)(bytes + ip_addr_index), ip_addr_length,
+            (const uint8_t*)(bytes + ip_addr_client_index), ip_addr_client_length,
             bytes + ticket_index, ticket_length,
             NULL);
         if (*ticket == NULL) {
@@ -218,6 +248,7 @@ int picoquic_store_ticket(picoquic_stored_ticket_t** pp_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     const uint8_t* ip_addr, uint8_t ip_addr_length,
+    const uint8_t* ip_addr_client, uint8_t ip_addr_client_length,
     uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const * tp)
 {
     int ret = 0;
@@ -242,7 +273,9 @@ int picoquic_store_ticket(picoquic_stored_ticket_t** pp_first_ticket,
             ret = PICOQUIC_ERROR_INVALID_TICKET;
         } else {
             picoquic_stored_ticket_t* stored = picoquic_format_ticket(time_valid_until, sni, sni_length,
-                    alpn, alpn_length, ip_addr, ip_addr_length, ticket, ticket_length, tp);
+                alpn, alpn_length, ip_addr, ip_addr_length,
+                ip_addr_client, ip_addr_client_length,
+                ticket, ticket_length, tp);
             if (stored == NULL) {
                 ret = PICOQUIC_ERROR_MEMORY;
             }

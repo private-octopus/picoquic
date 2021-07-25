@@ -277,7 +277,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_int("no_disk", expected->no_disk, actual->no_disk);
     ret |= config_test_compare_int("large_client_hello", expected->large_client_hello, actual->large_client_hello);
     ret |= config_test_compare_int("cnx_id_length", expected->cnx_id_length, actual->cnx_id_length);
-    ret |= config_test_compare_int("bdp", expected->bdp_option, actual->bdp_option);
+    ret |= config_test_compare_int("bdp", expected->bdp_frame_option, actual->bdp_frame_option);
 
     return ret;
 }

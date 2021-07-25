@@ -75,6 +75,7 @@ static int ticket_store_compare(picoquic_stored_ticket_t* s1, picoquic_stored_ti
                 memcmp(c1->sni, c2->sni, c1->sni_length) != 0 || 
                 memcmp(c1->alpn, c2->alpn, c1->alpn_length) != 0 ||
                 memcmp(c1->ip_addr, c2->ip_addr, c1->ip_addr_length) != 0 ||
+                memcmp(c1->ip_addr_client, c2->ip_addr_client, c1->ip_addr_client_length) != 0 ||
                 memcmp(c1->ticket, c2->ticket, c1->ticket_length) != 0) {
                 ret = -1;
             } else {
@@ -141,6 +142,8 @@ int ticket_store_test()
             uint64_t delta_time = ((uint64_t)1000) * delta_factor;
             uint8_t ip_addr_length = 0;
             uint8_t* ip_addr = NULL;
+            uint8_t ip_addr_client_length = 0;
+            uint8_t* ip_addr_client = NULL;
 
             test_ticket_time += delta_time;
             ret = create_test_ticket(test_ticket_time, ttl, ticket, ticket_length);
@@ -158,12 +161,21 @@ int ticket_store_test()
                     ip_addr_length = 4;
                     ip_addr = ipv4_test;
                 }
+                if ((i & 2) != 0) {
+                    ip_addr_client_length = 16;
+                    ip_addr_client = ipv6_test;
+                }
+                else {
+                    ip_addr_client_length = 4;
+                    ip_addr_client = ipv4_test;
+                }
             }
 
             ret = picoquic_store_ticket(&p_first_ticket, current_time,
                 test_sni[i], (uint16_t)strlen(test_sni[i]),
                 test_alpn[j], (uint16_t)strlen(test_alpn[j]),
                 ip_addr, ip_addr_length,
+                ip_addr_client, ip_addr_client_length,
                 ticket, ticket_length, &test_tp);
             if (ret != 0) {
                 break;
@@ -517,8 +529,8 @@ int ticket_seed_test_one(int bdp_option)
     ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, ticket_seed_store, NULL, 0, 0, 0);
 
-    picoquic_set_default_bdp_option(test_ctx->qclient, bdp_option);
-    picoquic_set_default_bdp_option(test_ctx->qserver, bdp_option);
+    picoquic_set_default_bdp_frame_option(test_ctx->qclient, bdp_option);
+    picoquic_set_default_bdp_frame_option(test_ctx->qserver, bdp_option);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);

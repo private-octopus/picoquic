@@ -437,6 +437,8 @@ typedef struct st_picoquic_stored_ticket_t {
     uint16_t alpn_length;
     uint16_t ticket_length;
     uint8_t ip_addr_length;
+    uint8_t ip_addr_client_length;
+    uint8_t* ip_addr_client;
     unsigned int was_used : 1;
 } picoquic_stored_ticket_t;
 
@@ -444,6 +446,7 @@ int picoquic_store_ticket(picoquic_stored_ticket_t** p_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     const uint8_t* ip_addr, uint8_t ip_addr_length,
+    const uint8_t* ip_addr_client, uint8_t ip_addr_client_length,
     uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const * tp);
 picoquic_stored_ticket_t* picoquic_get_stored_ticket(picoquic_stored_ticket_t* p_first_ticket,
     uint64_t current_time, char const* sni, uint16_t sni_length, 
@@ -601,7 +604,6 @@ typedef struct st_picoquic_quic_t {
     uint32_t max_number_connections;
     uint64_t stateless_reset_next_time; /* Next time Stateless Reset or VN packet can be sent */
     uint64_t stateless_reset_min_interval; /* Enforced interval between two stateless reset packets */
-    uint32_t default_bdp_option;
     /* Flags */
     unsigned int check_token : 1;
     unsigned int force_check_token : 1;
@@ -621,6 +623,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int use_constant_challenges : 1; /* Use predictable challenges when producing constant logs. */
     unsigned int use_low_memory : 1; /* if possible, use low memory alternatives, e.g. for AES */
     unsigned int is_preemptive_repeat_enabled : 1; /* enable premptive repeat on new connections */
+    unsigned int default_send_receive_bdp_frame : 1; /* enable sending and receiving BDP frame */
     picoquic_stateless_packet_t* pending_stateless_packet;
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;
@@ -1139,6 +1142,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_sending_large_buffer : 1; /* Buffer provided by application is sufficient for PMTUD */
     unsigned int is_preemptive_repeat_enabled : 1; /* Preemptive repat of packets to reduce transaction latency */
     unsigned int do_version_negotiation : 1; /* Whether compatible version negotiation is activated */
+    unsigned int send_receive_bdp_frame : 1; /* enable sending and receiving BDP frame */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;

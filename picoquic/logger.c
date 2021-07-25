@@ -1426,6 +1426,7 @@ size_t picoquic_log_bdp_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
     uint64_t lifetime;
     uint64_t recon_bytes_in_flight;
     uint64_t recon_min_rtt;
+    uint64_t ip_length;
 
     size_t byte_index = 0;
 
@@ -1433,7 +1434,10 @@ size_t picoquic_log_bdp_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
     if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &lifetime)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &recon_bytes_in_flight)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &recon_min_rtt)) == NULL) {
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &recon_min_rtt)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &ip_length)) == NULL ||
+        (ip_length != 4 && ip_length != 16) ||
+        (bytes = picoquic_frames_fixed_skip(bytes, bytes_end, ip_length)) == NULL){
         fprintf(F, "    Malformed BDP frame: ");
         /* log format error */
         for (size_t i = 0; i < bytes_max && i < 8; i++) {
@@ -1446,9 +1450,12 @@ size_t picoquic_log_bdp_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
         byte_index = bytes_max;
     }
     else {
-        fprintf(F, "    BDP sample, lifetime: %" PRIu64 ",recon_bytes_in_flight: %" PRIu64 ", recon_min_rtt: %" PRIu64 "\n",
+        fprintf(F, "    BDP sample, lifetime: %" PRIu64 ", bytes_in_flight: %" PRIu64 ", min_rtt: %" PRIu64 ", ip: ",
             lifetime, recon_bytes_in_flight, recon_min_rtt);
-
+        for (uint64_t i = 0; i < ip_length; i++) {
+            fprintf(F, "%02x", *(bytes - ip_length + i));
+        }
+        fprintf(F, "\n");
         byte_index = (bytes - bytes0);
     }
 

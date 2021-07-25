@@ -1193,8 +1193,9 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
     }
 
     if (sni != NULL && alpn != NULL) {
+        /* TODO: SHOULD STORE IP ADDRESSES? */
         ret = picoquic_store_ticket(&quic->p_first_ticket, 0, sni, (uint16_t)strlen(sni),
-            alpn, (uint16_t)strlen(alpn), NULL, 0,
+            alpn, (uint16_t)strlen(alpn), NULL, 0, NULL, 0,
             input.base, (uint16_t)input.len, &cnx->remote_parameters);
         /* Set first 8 bytes of ticket as identifier */
         if (input.len > 8) {

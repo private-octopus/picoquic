@@ -455,11 +455,14 @@ static const uint8_t* picoquic_log_padding(FILE* f, const uint8_t* bytes, const 
 static const uint8_t* picoquic_log_bdp_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
+    size_t ip_len = 0;
 
     bytes = picoquic_log_varint_skip(bytes, bytes_max); 
     bytes = picoquic_log_varint_skip(bytes, bytes_max); 
     bytes = picoquic_log_varint_skip(bytes, bytes_max); 
-    bytes = picoquic_log_varint_skip(bytes, bytes_max); 
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_length(bytes, bytes_max, &ip_len);
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, ip_len);
 
     picoquic_binlog_frame(f, bytes_begin, bytes);
 

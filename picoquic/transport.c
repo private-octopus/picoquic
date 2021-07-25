@@ -893,7 +893,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     uint64_t enable_bdp =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     if (ret == 0) {
-                        if (enable_bdp > 3) {
+                        if (enable_bdp > 1) {
                             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
                         }
                         else {
@@ -1009,6 +1009,9 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     /* Loss bit is only enabled if negotiated by both parties */
     cnx->is_loss_bit_enabled_outgoing = (cnx->local_parameters.enable_loss_bit > 1) && (cnx->remote_parameters.enable_loss_bit > 0);
     cnx->is_loss_bit_enabled_incoming = (cnx->local_parameters.enable_loss_bit > 0) && (cnx->remote_parameters.enable_loss_bit > 1);
+
+    /* Send-receive BDP frame is only enabled if negotiated by both parties */
+    cnx->send_receive_bdp_frame = (cnx->local_parameters.enable_bdp_frame > 0) && (cnx->remote_parameters.enable_bdp_frame > 0);
 
     /* One way delay, Quic_bit_grease and Multipath only enabled if asked by client and accepted by server */
     /* If both multipath options proposed by server, retain "complete" multipath. */

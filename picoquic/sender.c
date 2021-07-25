@@ -2113,10 +2113,14 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
             }
         }
 
+#if 0
+        /* TODO: get agreement that sending BDP in 0-RTT is way too soon ? */
+        /* Or, remember parameter negotiation with ticket? */
         /* Encode the bdp frame */
-        if (cnx->quic->default_bdp_option == 2 && (cnx->local_parameters.enable_bdp_frame == 1 || cnx->local_parameters.enable_bdp_frame == 3)) {
+        if (cnx->send_receive_bdp_frame) {
             bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
         }
+#endif
 
         /* Encode the stream frame, or frames */
         bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
@@ -3421,9 +3425,10 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
                         bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
  
+                        /* TODO: replace this by posting of frame when CWIN estimated */
                         /* Send bdp frames if there are no stream frames to send 
                          * and if client wishes to receive bdp frames */
-                        if(!cnx->client_mode && cnx->quic->default_bdp_option == 2 && (cnx->remote_parameters.enable_bdp_frame == 2 || cnx->remote_parameters.enable_bdp_frame == 3)) {
+                        if(!cnx->client_mode && cnx->send_receive_bdp_frame) {
                            bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
                         }
            
@@ -3820,9 +3825,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
                         }
 
+                        /* TODO: replace this by scheduling of BDP frame when window has been estimated */
                         /* Send bdp frames if there are no stream frames to send 
                          * and if peer wishes to receive bdp frames */
-                        if(!cnx->client_mode && cnx->quic->default_bdp_option == 2 && (cnx->remote_parameters.enable_bdp_frame == 2 || cnx->remote_parameters.enable_bdp_frame == 3)) {
+                        if(!cnx->client_mode && cnx->send_receive_bdp_frame) {
                            bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
                         }
 

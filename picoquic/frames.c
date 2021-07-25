@@ -2217,7 +2217,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         }
 
         /* On first update, validate seeed data */
-        if (is_first && cnx->seed_cwin != 0 && cnx->quic->default_bdp_option > 0){
+        if (is_first && cnx->seed_cwin != 0 && cnx->quic->default_send_receive_bdp_frame){
             if (cnx->seed_rtt_min <= path_x->smoothed_rtt &&
                 (path_x->smoothed_rtt - cnx->seed_rtt_min) < cnx->seed_rtt_min / 4) {
                 uint8_t* ip_addr;
@@ -4131,18 +4131,27 @@ const uint8_t* picoquic_skip_bdp_frame(const uint8_t* bytes, const uint8_t* byte
 {
     /* This code assumes that the frame type is already skipped */
     if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL && 
-        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL) {
-        bytes = picoquic_frames_varint_skip(bytes, bytes_max);
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL){
+        bytes = picoquic_frames_length_data_skip(bytes, bytes_max);
     }
     return bytes;
 }
 
-const uint8_t* picoquic_parse_bdp_frame(picoquic_cnx_t * cnx, const uint8_t* bytes, const uint8_t* bytes_max,
-    uint64_t* lifetime, uint64_t* recon_bytes_in_flight, uint64_t* recon_min_rtt)
+const uint8_t* picoquic_parse_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t* lifetime, uint64_t* recon_bytes_in_flight, uint64_t* recon_min_rtt, uint64_t* saved_ip_length, const uint8_t** saved_ip)
 {
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, lifetime)) != NULL &&
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, recon_bytes_in_flight)) != NULL) {
-        bytes = picoquic_frames_varint_decode(bytes, bytes_max, recon_min_rtt);
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, recon_bytes_in_flight)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, recon_min_rtt)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, saved_ip_length)) != NULL) {
+        if (*saved_ip_length != 4 && *saved_ip_length != 16){
+            bytes = NULL;
+        }
+        else {
+            *saved_ip = bytes;
+            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *saved_ip_length);
+        }
     }
     return bytes;
 }
@@ -4153,37 +4162,49 @@ const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     uint64_t lifetime;
     uint64_t recon_bytes_in_flight;
     uint64_t recon_min_rtt;
+    uint64_t saved_ip_length;
+    uint8_t* saved_ip;
 
     /* This code assumes that the frame type is already skipped */
-    if ((bytes = picoquic_parse_bdp_frame(cnx, bytes, bytes_max, &lifetime, &recon_bytes_in_flight, &recon_min_rtt))  != NULL) {
-        /* Store received BDP */
-        if (cnx->quic->default_bdp_option == 2) {
+    if ((bytes = picoquic_parse_bdp_frame(cnx, bytes, bytes_max, &lifetime, &recon_bytes_in_flight, &recon_min_rtt, 
+        &saved_ip_length, &saved_ip))  != NULL) {
+        if (cnx->send_receive_bdp_frame) {
             if (cnx->client_mode) {
+                /* TODO: cannot reuse the seed ticket value, because these are locally measured values.
+                 * Should instead add value field for "bdp values received from the server" */
                 path_x->cwin_remote = recon_bytes_in_flight;
                 path_x->rtt_min_remote = recon_min_rtt;
                 /* Seed ticket from remote BDP values by preserving the flag is_ticket_seed to allow 
                  * to reseed ticket from local BDP values if it is not done yet */
+                /* TODO: this has the side effect of storing the local CWIN in the ticket,
+                 * even if it is not yet updated. Need to consider side effects. */
                 int is_ticket_seed = path_x->is_ticket_seeded;
                 picoquic_seed_ticket(cnx, path_x, current_time);
                 path_x->is_ticket_seeded = is_ticket_seed; 
             }
-            else  {
-                /* TODO create a function to seed ticket from received BDP. Here is a bypass */
-                uint64_t tmp_min_rtt = path_x->rtt_min;
-                uint64_t tmp_cwin = path_x->cwin; 
-                path_x->rtt_min = recon_min_rtt;
-                path_x->cwin = recon_bytes_in_flight;
+            else {
+                uint8_t* client_ip;
+                uint8_t client_ip_length;
+                picoquic_get_ip_addr((struct sockaddr*) & path_x->peer_addr, &client_ip, &client_ip_length);
+                /* Store received BDP, but only if the IP address of the client matches the
+                 * value found in the ticket */
+                if (saved_ip_length > 0 && client_ip_length == saved_ip_length &&
+                    memcmp(client_ip, saved_ip, client_ip_length) == 0) {
+                    uint64_t tmp_min_rtt = path_x->rtt_min;
+                    uint64_t tmp_cwin = path_x->cwin;
+                    path_x->rtt_min = recon_min_rtt;
+                    path_x->cwin = recon_bytes_in_flight;
 
-                /* Seed ticket from remote BDP values by preserving the flag is_ticket_seed to allow 
-                 * to reseed ticket from local BDP values if it is not done yet */
-                int is_ticket_seed = path_x->is_ticket_seeded;
-                picoquic_seed_ticket(cnx, path_x, current_time);
-                path_x->is_ticket_seeded = is_ticket_seed; 
+                    /* Seed ticket from remote BDP values by preserving the flag is_ticket_seed to allow
+                     * to reseed ticket from local BDP values if it is not done yet */
+                    int is_ticket_seed = path_x->is_ticket_seeded;
+                    picoquic_seed_ticket(cnx, path_x, current_time);
+                    path_x->is_ticket_seeded = is_ticket_seed;
 
-                path_x->rtt_min = tmp_min_rtt;
-                path_x->cwin = tmp_cwin;
+                    path_x->rtt_min = tmp_min_rtt;
+                    path_x->cwin = tmp_cwin;
+                }
             }
-
         } 
  
     }
@@ -4196,12 +4217,15 @@ const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* byt
 
 uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, picoquic_path_t* path_x, int* more_data, int * is_pure_ack)
 {
+    /* TODO: need to add a client IP parameter in the frames */
     uint8_t* bytes0 = bytes;
     uint64_t current_time = picoquic_get_quic_time(cnx->quic);
     /* There is no explicit TTL for bdps. We assume they are OK for 24 hours */
     uint64_t lifetime = (uint64_t)(24 * 3600) * ((uint64_t)1000000); 
     uint64_t recon_bytes_in_flight = 0;
     uint64_t recon_min_rtt = 0;
+    uint8_t* ip_addr = NULL;
+    uint8_t ip_addr_length = 0;
 
     /* Server sends bdp reflecting current path caracteristics */
     if (!cnx->client_mode) {
@@ -4211,6 +4235,8 @@ uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t*
             if (server_ticket != NULL && server_ticket->cwin > 0) {
                 recon_bytes_in_flight =  server_ticket->cwin;
                 recon_min_rtt = server_ticket->rtt;
+                ip_addr = server_ticket->ip_addr;
+                ip_addr_length = server_ticket->ip_addr_length;
             }
         }
     }
@@ -4222,6 +4248,7 @@ uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t*
         if (stored_ticket != NULL) {
             recon_bytes_in_flight = stored_ticket->tp_0rtt[picoquic_tp_0rtt_cwin_remote];
             recon_min_rtt = stored_ticket->tp_0rtt[picoquic_tp_0rtt_rtt_remote];
+            /* TODO: add IP address */
         }
     }
 

@@ -718,9 +718,9 @@ uint32_t picoquic_get_max_simultaneous_logs(picoquic_quic_t* quic)
     return quic->max_simultaneous_logs;
 }
 
-void picoquic_set_default_bdp_option(picoquic_quic_t* quic, int bdp_option)
+void picoquic_set_default_bdp_frame_option(picoquic_quic_t* quic, int bdp_option)
 {
-    quic->default_bdp_option = bdp_option;
+    quic->default_send_receive_bdp_frame = bdp_option;
 }
 
 void picoquic_free(picoquic_quic_t* quic)
@@ -2832,9 +2832,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         }
 
         /* Initialize BDP transport parameter */
-        if (quic->default_bdp_option == 2) {
+        if (quic->default_send_receive_bdp_frame) {
            /* Accept and send BDP extension frame */
-            cnx->local_parameters.enable_bdp_frame = 3;
+            cnx->local_parameters.enable_bdp_frame = 1;
         }
  
         /* Initialize local flow control variables to advertised values */

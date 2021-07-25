@@ -1044,11 +1044,14 @@ void qlog_bdp_frame(FILE* f, bytestream* s)
     uint64_t lifetime = 0;
     uint64_t recon_bytes_in_flight = 0;
     uint64_t recon_min_rtt = 0;
+    uint64_t ip_len = 0;
 
     byteread_vint(s, &lifetime);
     byteread_vint(s, &recon_bytes_in_flight);
     byteread_vint(s, &recon_min_rtt);
-    fprintf(f, ", \"lifetime\": %"PRIu64", \"recon_bytes_in_flight\": %"PRIu64", \"recon_min_rtt\": %"PRIu64"", lifetime, recon_bytes_in_flight, recon_min_rtt);
+    byteread_vint(s, &ip_len);
+    fprintf(f, ", \"lifetime\": %"PRIu64", \"bytes_in_flight\": %"PRIu64", \"min_rtt\": %"PRIu64", \"ip\": ", lifetime, recon_bytes_in_flight, recon_min_rtt);
+    qlog_string(f, s, ip_len);
 }
 
 int qlog_packet_frame(bytestream * s, void * ptr)
