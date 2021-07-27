@@ -4479,7 +4479,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             bytes = NULL;
                             break;
                         }
-                        if (!cnx->client_mode && epoch != picoquic_epoch_0rtt) {
+                        if (!cnx->client_mode && epoch != picoquic_epoch_0rtt && epoch != picoquic_epoch_1rtt) {
                             DBG_PRINTF("BDP frame (0x%x) is expected in 0-RTT packet", first_byte);
                             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
                             bytes = NULL;

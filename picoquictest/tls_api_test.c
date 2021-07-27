@@ -11193,7 +11193,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
     char const* sni = PICOQUIC_TEST_SNI;
     char const* alpn = PICOQUIC_TEST_ALPN;
     uint32_t proposed_version = 0;
-    uint64_t max_completion_time = 7000000;
+    uint64_t max_completion_time = 7100000;
     uint64_t latency = 300000ull;
     uint64_t buffer_size = 2 * latency;
     picoquic_connection_id_t initial_cid = { {0xbd, 0x80, 0, 0, 0, 0, 0, 0}, 8 };
@@ -11231,6 +11231,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 6400000;
                     break;
                 case bdp_test_option_rtt:
+                    max_completion_time = 4400000;
                     test_ctx->c_to_s_link->microsec_latency = 50000ull;
                     test_ctx->s_to_c_link->microsec_latency = 50000ull;
                     buffer_size = 2 * test_ctx->c_to_s_link->microsec_latency;
@@ -11265,7 +11266,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
 
             /* Verify that the BDP option was set and processed */
             if (ret == 0) {
-                if (i == 1 && test_ctx->cnx_client->nb_zero_rtt_acked == 0) {
+                if (i == 1 && test_ctx->cnx_client->nb_zero_rtt_acked == 0 && bdp_test_option != bdp_test_option_delay) {
                     DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, no zero RTT data acked.\n",
                         bdp_test_option, i);
                     ret = -1;
@@ -11286,12 +11287,18 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                         DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, bdp frame not sent by client.\n",
                             bdp_test_option, i);
                         ret = -1;
-                    } else if (bdp_test_option == bdp_test_option_basic) {
+                    }
+                    else if (bdp_test_option == bdp_test_option_basic) {
                         if (!test_ctx->cnx_server->cwin_notified_from_seed) {
                             DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, cwin not seed on server.\n",
                                 bdp_test_option, i);
                             ret = -1;
                         }
+                    }
+                    else if (test_ctx->cnx_server->cwin_notified_from_seed) {
+                        DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, unexpected cwin seed on server.\n",
+                            bdp_test_option, i);
+                        ret = -1;
                     }
                 }
             }
@@ -11326,4 +11333,19 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
 int bdp_basic_test()
 {
     return bdp_option_test_one(bdp_test_option_basic);
+}
+
+int bdp_rtt_test()
+{
+    return bdp_option_test_one(bdp_test_option_rtt);
+}
+
+int bdp_ip_test()
+{
+    return bdp_option_test_one(bdp_test_option_ip);
+}
+
+int bdp_delay_test()
+{
+    return bdp_option_test_one(bdp_test_option_delay);
 }
