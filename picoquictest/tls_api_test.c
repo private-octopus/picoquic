@@ -11192,7 +11192,6 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     char const* sni = PICOQUIC_TEST_SNI;
     char const* alpn = PICOQUIC_TEST_ALPN;
-    uint64_t loss_mask = 0;
     uint32_t proposed_version = 0;
     uint64_t max_completion_time = 7000000;
     uint64_t latency = 300000ull;
