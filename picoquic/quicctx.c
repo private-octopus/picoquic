@@ -1095,6 +1095,7 @@ int picoquic_register_net_secret(picoquic_cnx_t* cnx)
 
 void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
 {
+    memset(tp, 0, sizeof(picoquic_tp_t));
     tp->initial_max_stream_data_bidi_local = 0x200000;
     tp->initial_max_stream_data_bidi_remote = 65635;
     tp->initial_max_stream_data_uni = 65535;
@@ -3160,7 +3161,7 @@ void picoquic_cnx_set_spinbit_policy(picoquic_cnx_t * cnx, picoquic_spinbit_vers
 }
 
 void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwin, 
-    uint8_t * ip_addr, uint8_t ip_addr_length)
+    const uint8_t * ip_addr, uint8_t ip_addr_length)
 {
     cnx->seed_rtt_min = rtt_min;
     cnx->seed_cwin = cwin;

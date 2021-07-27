@@ -75,7 +75,7 @@ picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
                 ip_addr_client_length = PICOQUIC_STORED_IP_MAX;
             }
             stored->ip_addr_client_length = ip_addr_client_length;
-            memcpy(next_p, ip_addr, ip_addr_length);
+            memcpy(next_p, ip_addr_client, ip_addr_client_length);
         }
         next_p += PICOQUIC_STORED_IP_MAX;
 
@@ -528,6 +528,8 @@ void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x
             next->tp_0rtt[picoquic_tp_0rtt_cwin_local] = path_x->cwin;
             next->tp_0rtt[picoquic_tp_0rtt_rtt_remote] = path_x->rtt_min_remote;
             next->tp_0rtt[picoquic_tp_0rtt_cwin_remote] = path_x->cwin_remote;
+            next->ip_addr_client_length = path_x->ip_client_remote_length;
+            memcpy(next->ip_addr_client, path_x->ip_client_remote, path_x->ip_client_remote_length);
         }
     }
 }

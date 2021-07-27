@@ -2113,14 +2113,11 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
             }
         }
 
-#if 0
-        /* TODO: get agreement that sending BDP in 0-RTT is way too soon ? */
-        /* Or, remember parameter negotiation with ticket? */
+        /* We assume that if BDP data is associated with the zero RTT ticket, it can be sent */
         /* Encode the bdp frame */
-        if (cnx->send_receive_bdp_frame) {
+        if (cnx->local_parameters.enable_bdp_frame) {
             bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
         }
-#endif
 
         /* Encode the stream frame, or frames */
         bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);

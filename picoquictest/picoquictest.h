@@ -194,6 +194,7 @@ int satellite_medium_test();
 int satellite_preemptive_test();
 int satellite_small_test();
 int satellite_small_up_test();
+int bdp_basic_test();
 int long_rtt_test();
 int cid_length_test();
 int initial_server_close_test();

@@ -646,7 +646,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                 }
 
-                switch ((picoquic_tp_enum)extension_type) {
+                switch (extension_type) {
                 case picoquic_tp_initial_max_stream_data_bidi_local:
                     cnx->remote_parameters.initial_max_stream_data_bidi_local =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);

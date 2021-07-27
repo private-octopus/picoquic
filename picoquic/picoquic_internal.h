@@ -1061,6 +1061,8 @@ typedef struct st_picoquic_path_t {
     /* BDP parameters sent by the server to be stored at client */
     uint64_t rtt_min_remote;
     uint64_t cwin_remote;
+    uint8_t ip_client_remote[16];
+    uint8_t ip_client_remote_length;
     
 } picoquic_path_t;
 
@@ -1143,6 +1145,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_preemptive_repeat_enabled : 1; /* Preemptive repat of packets to reduce transaction latency */
     unsigned int do_version_negotiation : 1; /* Whether compatible version negotiation is activated */
     unsigned int send_receive_bdp_frame : 1; /* enable sending and receiving BDP frame */
+    unsigned int cwin_notified_from_seed : 1; /* cwin was reset from a seeded value */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -1571,7 +1574,7 @@ uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t * cnx, uint64_t rtt, uint
 
 /* seed the rtt and bandwidth discovery */
 void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwin,
-    uint8_t* ip_addr, uint8_t ip_addr_length);
+    const uint8_t* ip_addr, uint8_t ip_addr_length);
 
 /* Update the path RTT upon receiving an explict or implicit acknowledgement */
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, picoquic_path_t* path_x,

@@ -2226,6 +2226,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
 
                 if (ip_addr_length == cnx->seed_ip_addr_length &&
                     memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
+                    cnx->cwin_notified_from_seed = 1;
                     cnx->congestion_alg->alg_notify(cnx, path_x,
                         picoquic_congestion_notification_seed_cwin,
                         0, 0,
@@ -4171,10 +4172,10 @@ const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* byt
         &saved_ip_length, &saved_ip))  != NULL) {
         if (cnx->send_receive_bdp_frame) {
             if (cnx->client_mode) {
-                /* TODO: cannot reuse the seed ticket value, because these are locally measured values.
-                 * Should instead add value field for "bdp values received from the server" */
                 path_x->cwin_remote = recon_bytes_in_flight;
                 path_x->rtt_min_remote = recon_min_rtt;
+                path_x->ip_client_remote_length = (uint8_t)saved_ip_length;
+                memcpy(path_x->ip_client_remote, saved_ip, path_x->ip_client_remote_length);
                 /* Seed ticket from remote BDP values by preserving the flag is_ticket_seed to allow 
                  * to reseed ticket from local BDP values if it is not done yet */
                 /* TODO: this has the side effect of storing the local CWIN in the ticket,
@@ -4191,19 +4192,8 @@ const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                  * value found in the ticket */
                 if (saved_ip_length > 0 && client_ip_length == saved_ip_length &&
                     memcmp(client_ip, saved_ip, client_ip_length) == 0) {
-                    uint64_t tmp_min_rtt = path_x->rtt_min;
-                    uint64_t tmp_cwin = path_x->cwin;
-                    path_x->rtt_min = recon_min_rtt;
-                    path_x->cwin = recon_bytes_in_flight;
-
-                    /* Seed ticket from remote BDP values by preserving the flag is_ticket_seed to allow
-                     * to reseed ticket from local BDP values if it is not done yet */
-                    int is_ticket_seed = path_x->is_ticket_seeded;
-                    picoquic_seed_ticket(cnx, path_x, current_time);
-                    path_x->is_ticket_seeded = is_ticket_seed;
-
-                    path_x->rtt_min = tmp_min_rtt;
-                    path_x->cwin = tmp_cwin;
+                    picoquic_seed_bandwidth(
+                        cnx, recon_min_rtt, recon_bytes_in_flight, saved_ip, (uint8_t) saved_ip_length);
                 }
             }
         } 
@@ -4219,7 +4209,6 @@ const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* byt
 uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
     picoquic_path_t* path_x, int* more_data, int * is_pure_ack)
 {
-    /* TODO: need to add a client IP parameter in the frames */
     uint8_t* bytes0 = bytes;
     uint64_t current_time = picoquic_get_quic_time(cnx->quic);
     /* There is no explicit TTL for bdps. We assume they are OK for 24 hours */
@@ -4496,8 +4485,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             bytes = NULL;
                             break;
                         }
-                        if (cnx->client_mode && (cnx->local_parameters.enable_bdp_frame == 0 || 
-                            cnx->local_parameters.enable_bdp_frame == 1)) {
+                        if (cnx->client_mode && cnx->local_parameters.enable_bdp_frame == 0) {
                             DBG_PRINTF("BDP frame (0x%x) not expected", first_byte);
                             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
                             bytes = NULL;

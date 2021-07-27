@@ -11170,3 +11170,161 @@ int random_padding_test()
 
     return ret;
 }
+
+/* Tests of BDP option.
+ * = Verify that a download works faster with BDP option enabled
+ * = Verify that the BDP option is not validated if the min rtt changes
+ * - Verify that the BDP option is not validated if the IP address changes
+ * - Verify that the BDP option is not validated if the delay is too long
+ */
+
+typedef enum {
+    bdp_test_option_none = 0,
+    bdp_test_option_basic,
+    bdp_test_option_rtt,
+    bdp_test_option_ip,
+    bdp_test_option_delay,
+} bdp_test_option_enum;
+
+int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    char const* sni = PICOQUIC_TEST_SNI;
+    char const* alpn = PICOQUIC_TEST_ALPN;
+    uint64_t loss_mask = 0;
+    uint32_t proposed_version = 0;
+    uint64_t max_completion_time = 7000000;
+    uint64_t latency = 300000ull;
+    uint64_t buffer_size = 2 * latency;
+    picoquic_connection_id_t initial_cid = { {0xbd, 0x80, 0, 0, 0, 0, 0, 0}, 8 };
+    picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
+    picoquic_tp_t server_parameters;
+    picoquic_tp_t client_parameters;
+
+    int ret = 0;
+
+    /* Initialize an empty ticket store */
+    ret = picoquic_save_tickets(NULL, simulated_time, ticket_file_name);
+
+    for (int i = 0; i < 2; i++) {
+        /* If testing delay, insert a delay before the second connection attempt */
+        if (i == 1 && bdp_test_option == bdp_test_option_delay) {
+            simulated_time += 48ull * 3600ull * 1000000ull;
+        }
+        initial_cid.id[2] = i;
+        initial_cid.id[3] = (uint8_t)bdp_test_option;
+        /* Set up the context, while setting the ticket store parameter for the client */
+        ret = tls_api_init_ctx_ex(&test_ctx,
+            (i == 0) ? 0 : proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 1, 0, &initial_cid);
+        /* Set the various parameters */
+        if (ret == 0) {
+            test_ctx->c_to_s_link->microsec_latency = latency;
+            test_ctx->s_to_c_link->microsec_latency = latency;
+            test_ctx->c_to_s_link->picosec_per_byte = (1000000ull * 8) / 20;
+            test_ctx->s_to_c_link->picosec_per_byte = (1000000ull * 8) / 20;
+
+            if (i > 0) {
+                switch (bdp_test_option) {
+                case bdp_test_option_none:
+                    break;
+                case bdp_test_option_basic:
+                    max_completion_time = 6400000;
+                    break;
+                case bdp_test_option_rtt:
+                    test_ctx->c_to_s_link->microsec_latency = 50000ull;
+                    test_ctx->s_to_c_link->microsec_latency = 50000ull;
+                    buffer_size = 2 * test_ctx->c_to_s_link->microsec_latency;
+                    break;
+                case bdp_test_option_ip:
+                    picoquic_set_test_address(&test_ctx->client_addr, 0x08080808, 2345);
+                    break;
+                case bdp_test_option_delay:
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
+            picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
+            picoquic_set_default_bdp_frame_option(test_ctx->qclient, 1);
+            picoquic_set_default_bdp_frame_option(test_ctx->qserver, 1);
+            test_ctx->qserver->use_long_log = 1;
+            picoquic_set_binlog(test_ctx->qserver, ".");
+            /* Set parameters */
+            picoquic_init_transport_parameters(&server_parameters, 0);
+            picoquic_init_transport_parameters(&client_parameters, 1);
+            server_parameters.enable_bdp_frame = 1;
+            client_parameters.enable_bdp_frame = 1;
+            picoquic_set_transport_parameters(test_ctx->cnx_client, &client_parameters);
+            ret = picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+
+            if (ret == 0) {
+                ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, buffer_size, max_completion_time);
+            }
+
+            /* Verify that the BDP option was set and processed */
+            if (ret == 0) {
+                if (i == 1 && test_ctx->cnx_client->nb_zero_rtt_acked == 0) {
+                    DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, no zero RTT data acked.\n",
+                        bdp_test_option, i);
+                    ret = -1;
+                }
+                if (!test_ctx->cnx_client->send_receive_bdp_frame) {
+                    DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, bdp option not negotiated on client.\n",
+                        bdp_test_option, i);
+                    ret = -1;
+                }
+                if (!test_ctx->cnx_server->send_receive_bdp_frame) {
+                    DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, bdp option not negotiated on server.\n",
+                        bdp_test_option, i);
+                    ret = -1;
+                }
+                if (ret == 0 && i == 1) {
+                    /* Todo: verify bdp test option was executed */
+                    if (!test_ctx->cnx_client->path[0]->is_bdp_sent) {
+                        DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, bdp frame not sent by client.\n",
+                            bdp_test_option, i);
+                        ret = -1;
+                    } else if (bdp_test_option == bdp_test_option_basic) {
+                        if (!test_ctx->cnx_server->cwin_notified_from_seed) {
+                            DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, cwin not seed on server.\n",
+                                bdp_test_option, i);
+                            ret = -1;
+                        }
+                    }
+                }
+            }
+
+            /* Save the session tickets */
+            if (ret == 0) {
+                if (test_ctx->qclient->p_first_ticket == NULL) {
+                    DBG_PRINTF("BDP RTT test (bdp option: %d), cnx %d, no ticket received.\n",
+                        bdp_test_option, i);
+                    ret = -1;
+                }
+                else {
+                    ret = picoquic_save_tickets(test_ctx->qclient->p_first_ticket, simulated_time, ticket_file_name);
+                    if (ret != 0) {
+                        DBG_PRINTF("Zero RTT test (bdp test option: %d), cnx %d, ticket save error (0x%x).\n",
+                            bdp_test_option, i, ret);
+                    }
+                }
+            }
+
+            /* Free the resource, which will close the log file. */
+            if (test_ctx != NULL) {
+                tls_api_delete_ctx(test_ctx);
+                test_ctx = NULL;
+            }
+        }
+    }
+
+    return ret;
+}
+
+int bdp_basic_test()
+{
+    return bdp_option_test_one(bdp_test_option_basic);
+}

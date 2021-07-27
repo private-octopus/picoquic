@@ -236,6 +236,7 @@ static const picoquic_test_def_t test_table[] = {
     { "satellite_preemptive", satellite_preemptive_test },
     { "satellite_small", satellite_small_test },
     { "satellite_small_up", satellite_small_up_test },
+    { "bdp_basic", bdp_basic_test },
     { "cid_length", cid_length_test },
     { "optimistic_ack", optimistic_ack_test },
     { "optimistic_hole", optimistic_hole_test },
