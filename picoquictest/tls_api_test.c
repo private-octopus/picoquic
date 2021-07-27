@@ -11193,7 +11193,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
     char const* sni = PICOQUIC_TEST_SNI;
     char const* alpn = PICOQUIC_TEST_ALPN;
     uint32_t proposed_version = 0;
-    uint64_t max_completion_time = 7100000;
+    uint64_t max_completion_time = 6800000;
     uint64_t latency = 300000ull;
     uint64_t buffer_size = 2 * latency;
     picoquic_connection_id_t initial_cid = { {0xbd, 0x80, 0, 0, 0, 0, 0, 0}, 8 };
@@ -11228,10 +11228,10 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                 case bdp_test_option_none:
                     break;
                 case bdp_test_option_basic:
-                    max_completion_time = 6400000;
+                    max_completion_time = 5800000;
                     break;
                 case bdp_test_option_rtt:
-                    max_completion_time = 4400000;
+                    max_completion_time = 4500000;
                     test_ctx->c_to_s_link->microsec_latency = 50000ull;
                     test_ctx->s_to_c_link->microsec_latency = 50000ull;
                     buffer_size = 2 * test_ctx->c_to_s_link->microsec_latency;
@@ -11257,6 +11257,8 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
             picoquic_init_transport_parameters(&client_parameters, 1);
             server_parameters.enable_bdp_frame = 1;
             client_parameters.enable_bdp_frame = 1;
+            client_parameters.initial_max_stream_data_bidi_remote = 1000000;
+            client_parameters.initial_max_data = 10000000;
             picoquic_set_transport_parameters(test_ctx->cnx_client, &client_parameters);
             ret = picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
 
