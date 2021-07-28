@@ -48,13 +48,6 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(satellite_seeded_from_bdp_frame)
-        {
-            int ret = satellite_seeded_from_bdp_frame_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(satellite_loss)
         {
             int ret = satellite_loss_test();
@@ -121,6 +114,20 @@ namespace PerfAndStressTest
         TEST_METHOD(bdp_rtt)
         {
             int ret = bdp_rtt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_reno)
+        {
+            int ret = bdp_reno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_cubic)
+        {
+            int ret = bdp_cubic_test();
 
             Assert::AreEqual(ret, 0);
         }

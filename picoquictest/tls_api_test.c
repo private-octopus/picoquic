@@ -8055,7 +8055,7 @@ int gbps_performance_test()
  * variants: 0% loss, and 1 %loss.
  */
 static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t data_size, uint64_t max_completion_time, 
-    uint64_t mbps_up, uint64_t mbps_down, uint64_t jitter, int has_loss, int do_preemptive, int seed_bw, int bdp_option)
+    uint64_t mbps_up, uint64_t mbps_down, uint64_t jitter, int has_loss, int do_preemptive, int seed_bw)
 {
     uint64_t simulated_time = 0;
     uint64_t latency = 300000;
@@ -8075,9 +8075,6 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     initial_cid.id[7] = (has_loss)?0x30:0x00;
     if (seed_bw) {
         initial_cid.id[7] |= 0x80;
-    }
-    if (bdp_option) {
-        initial_cid.id[7] |= 0x40;
     }
     if (do_preemptive) {
         initial_cid.id[7] ^= 0x0f;
@@ -8116,14 +8113,12 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
         if (seed_bw) {
             uint8_t * ip_addr;
             uint8_t ip_addr_length;
+            uint64_t estimated_rtt = 2 * latency;
+            uint64_t estimated_bdp = (125000ull* mbps_up) * estimated_rtt / 1000000ull;
             picoquic_get_ip_addr((struct sockaddr*) & test_ctx->server_addr, &ip_addr, &ip_addr_length);
 
-            picoquic_seed_bandwidth(test_ctx->cnx_client, 2 * latency, mbps_up * 125000,
+            picoquic_seed_bandwidth(test_ctx->cnx_client, estimated_rtt, estimated_bdp,
                   ip_addr, ip_addr_length);
-
-            picoquic_set_default_bdp_frame_option(test_ctx->qclient, bdp_option);
-            picoquic_set_default_bdp_frame_option(test_ctx->qserver, bdp_option);
-           
         }
 
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
@@ -8161,56 +8156,50 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 int satellite_basic_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6300000, 250, 3, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6300000, 250, 3, 0, 0, 0, 0);
 }
 
 int satellite_seeded_test()
 {
     /* Simulate remembering RTT and BW from previous connection */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4800000, 250, 3, 0, 0, 0, 1, 1);
-}
-
-int satellite_seeded_from_bdp_frame_test()
-{
-    /* Simulate remembering RTT and BW from previous connection when seeded from BDP Frame */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4800000, 250, 3, 0, 0, 0, 1, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4800000, 250, 3, 0, 0, 0, 1);
 }
 
 int satellite_loss_test()
 {
     /* Should be less than 10 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 0, 1, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 0, 1, 0, 0);
 }
 
 int satellite_preemptive_test()
 {
     /* Variation of the loss test, using preemptive repeat*/
     /* Should be less than 10 sec per draft etosat.  */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 7000000, 250, 3, 0, 1, 1, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 7000000, 250, 3, 0, 1, 1, 0);
 }
 
 int satellite_jitter_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6200000, 250, 3, 3000, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6200000, 250, 3, 3000, 0, 0, 0);
 }
 
 int satellite_medium_test()
 {
     /* Should be less than 20 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18000000, 50, 10, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18000000, 50, 10, 0, 0, 0, 0);
 }
 
 int satellite_small_test()
 {
     /* Should be less than 85 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81000000, 10, 2, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81000000, 10, 2, 0, 0, 0, 0);
 }
 
 int satellite_small_up_test()
 {
     /* Should be less than 420 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0, 0, 0);
 }
 
 /* Set the CID length to specified value */
@@ -10272,9 +10261,9 @@ int multi_segment_test()
     uint64_t algo_time[5] = {
         1060000,
         1130000,
-        1290000,
+        1350000,
         1370000,
-        1000000
+        1010000
     };
     int ret = 0;
 
@@ -11184,6 +11173,8 @@ typedef enum {
     bdp_test_option_rtt,
     bdp_test_option_ip,
     bdp_test_option_delay,
+    bdp_test_option_reno,
+    bdp_test_option_cubic
 } bdp_test_option_enum;
 
 int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
@@ -11206,7 +11197,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
     /* Initialize an empty ticket store */
     ret = picoquic_save_tickets(NULL, simulated_time, ticket_file_name);
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; ret == 0 && i < 2; i++) {
         /* If testing delay, insert a delay before the second connection attempt */
         if (i == 1 && bdp_test_option == bdp_test_option_delay) {
             simulated_time += 48ull * 3600ull * 1000000ull;
@@ -11238,14 +11229,25 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     break;
                 case bdp_test_option_ip:
                     picoquic_set_test_address(&test_ctx->client_addr, 0x08080808, 2345);
+                    max_completion_time = 9000000;
                     break;
                 case bdp_test_option_delay:
+                    max_completion_time = 8000000;
+                    break;
+                case bdp_test_option_reno:
+                    max_completion_time = 5800000;
                     break;
                 default:
                     break;
                 }
             }
-
+            if (bdp_test_option == bdp_test_option_reno) {
+                ccalgo = picoquic_newreno_algorithm;
+            }
+            else if (bdp_test_option == bdp_test_option_cubic) {
+                ccalgo = picoquic_cubic_algorithm;
+                max_completion_time = 10000000;
+            }
             picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
             picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
             picoquic_set_default_bdp_frame_option(test_ctx->qclient, 1);
@@ -11284,13 +11286,26 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     ret = -1;
                 }
                 if (ret == 0 && i == 1) {
-                    /* Todo: verify bdp test option was executed */
+                    if (test_ctx->cnx_server->nb_retransmission_total * 10 >
+                        test_ctx->cnx_server->nb_packets_sent &&
+                        bdp_test_option != bdp_test_option_cubic &&
+                        bdp_test_option != bdp_test_option_delay &&
+                        bdp_test_option != bdp_test_option_ip) {
+                        DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, too many losses, %"PRIu64"/%"PRIu64".\n",
+                            bdp_test_option, i, test_ctx->cnx_server->nb_retransmission_total,
+                            test_ctx->cnx_server->nb_packets_sent);
+                        ret = -1;
+
+                    }
+                    /* Verify bdp test option was executed */
                     if (!test_ctx->cnx_client->path[0]->is_bdp_sent) {
                         DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, bdp frame not sent by client.\n",
                             bdp_test_option, i);
                         ret = -1;
                     }
-                    else if (bdp_test_option == bdp_test_option_basic) {
+                    else if (bdp_test_option == bdp_test_option_basic ||
+                        bdp_test_option == bdp_test_option_reno ||
+                        bdp_test_option == bdp_test_option_cubic) {
                         if (!test_ctx->cnx_server->cwin_notified_from_seed) {
                             DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, cwin not seed on server.\n",
                                 bdp_test_option, i);
@@ -11350,4 +11365,14 @@ int bdp_ip_test()
 int bdp_delay_test()
 {
     return bdp_option_test_one(bdp_test_option_delay);
+}
+
+int bdp_reno_test()
+{
+    return bdp_option_test_one(bdp_test_option_reno);
+}
+
+int bdp_cubic_test()
+{
+    return bdp_option_test_one(bdp_test_option_cubic);
 }

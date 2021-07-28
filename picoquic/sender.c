@@ -832,7 +832,7 @@ void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
                 }
                 else {
                     uint64_t quantum2 = (uint64_t)((pacing_rate * PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX) / 1000000.0);
-                    if (quantum2 > quantum_min) {
+                    if (quantum2 > quantum) {
                         quantum = quantum2;
                     }
                 }
