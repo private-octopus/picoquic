@@ -143,7 +143,8 @@ typedef enum {
     picoquic_frame_type_ack_mp = 0xbaba0,
     picoquic_frame_type_ack_mp_ecn = 0xbaba1,
     picoquic_frame_type_qoe = 0xbaba2,
-    picoquic_frame_type_path_status = 0xbaba3
+    picoquic_frame_type_path_status = 0xbaba3,
+    picoquic_frame_type_bdp = 0xebd9
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -417,10 +418,12 @@ typedef enum {
     picoquic_tp_0rtt_max_stream_data_uni = 3,
     picoquic_tp_0rtt_max_streams_id_bidir = 4,
     picoquic_tp_0rtt_max_streams_id_unidir = 5,
-    picoquic_tp_0rtt_rtt = 6,
-    picoquic_tp_0rtt_cwin = 7
+    picoquic_tp_0rtt_rtt_local = 6,
+    picoquic_tp_0rtt_cwin_local = 7,
+    picoquic_tp_0rtt_rtt_remote = 8,
+    picoquic_tp_0rtt_cwin_remote = 9
 } picoquic_tp_0rtt_enum;
-#define PICOQUIC_NB_TP_0RTT 8
+#define PICOQUIC_NB_TP_0RTT 10
 
 typedef struct st_picoquic_stored_ticket_t {
     struct st_picoquic_stored_ticket_t* next_ticket;
@@ -434,6 +437,8 @@ typedef struct st_picoquic_stored_ticket_t {
     uint16_t alpn_length;
     uint16_t ticket_length;
     uint8_t ip_addr_length;
+    uint8_t ip_addr_client_length;
+    uint8_t* ip_addr_client;
     unsigned int was_used : 1;
 } picoquic_stored_ticket_t;
 
@@ -441,6 +446,7 @@ int picoquic_store_ticket(picoquic_stored_ticket_t** p_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     const uint8_t* ip_addr, uint8_t ip_addr_length,
+    const uint8_t* ip_addr_client, uint8_t ip_addr_client_length,
     uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const * tp);
 picoquic_stored_ticket_t* picoquic_get_stored_ticket(picoquic_stored_ticket_t* p_first_ticket,
     uint64_t current_time, char const* sni, uint16_t sni_length, 
@@ -549,6 +555,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_enable_multipath 0xbaba 
 #define picoquic_tp_enable_simple_multipath 0xbab5 
 #define picoquic_tp_version_negotiation 0x73db
+#define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
  * This is kept private for now; and will only be set through the "set quic log"
@@ -616,6 +623,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int use_constant_challenges : 1; /* Use predictable challenges when producing constant logs. */
     unsigned int use_low_memory : 1; /* if possible, use low memory alternatives, e.g. for AES */
     unsigned int is_preemptive_repeat_enabled : 1; /* enable premptive repeat on new connections */
+    unsigned int default_send_receive_bdp_frame : 1; /* enable sending and receiving BDP frame */
     picoquic_stateless_packet_t* pending_stateless_packet;
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;
@@ -940,6 +948,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_ssthresh_initialized : 1;
     unsigned int is_token_published : 1;
     unsigned int is_ticket_seeded : 1; /* Whether the current ticket has been updated with RTT and CWIN */
+    unsigned int is_bdp_sent : 1;
 
 
     /* Path priority, for multipath management */
@@ -1048,6 +1057,13 @@ typedef struct st_picoquic_path_t {
     int selected;
     int lost;
     int nb_delay_outliers;
+
+    /* BDP parameters sent by the server to be stored at client */
+    uint64_t rtt_min_remote;
+    uint64_t cwin_remote;
+    uint8_t ip_client_remote[16];
+    uint8_t ip_client_remote_length;
+    
 } picoquic_path_t;
 
 /* Crypto context. There are four such contexts:
@@ -1128,6 +1144,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_sending_large_buffer : 1; /* Buffer provided by application is sufficient for PMTUD */
     unsigned int is_preemptive_repeat_enabled : 1; /* Preemptive repat of packets to reduce transaction latency */
     unsigned int do_version_negotiation : 1; /* Whether compatible version negotiation is activated */
+    unsigned int send_receive_bdp_frame : 1; /* enable sending and receiving BDP frame */
+    unsigned int cwin_notified_from_seed : 1; /* cwin was reset from a seeded value */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -1558,7 +1576,7 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
 
 /* seed the rtt and bandwidth discovery */
 void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwin,
-    uint8_t* ip_addr, uint8_t ip_addr_length);
+    const uint8_t* ip_addr, uint8_t ip_addr_length);
 
 /* Update the path RTT upon receiving an explict or implicit acknowledgement */
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, picoquic_path_t* path_x,
@@ -1671,6 +1689,7 @@ const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const ui
 uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data);
 uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time);
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);
+uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, picoquic_path_t* path_x, int* more_data, int * is_pure_ack);
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
     picoquic_stream_data_node_t* received_data,

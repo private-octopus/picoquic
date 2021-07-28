@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:K:p:v:o:w:x:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:VU:0h";
+static char* ref_option_text = "c:k:K:p:v:o:w:x:rRs:S:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:VU:0j:h";
 
 int config_option_letters_test()
 {
@@ -65,6 +65,7 @@ static picoquic_quic_config_t param1 = {
     3,
     2,
     3,
+    1,
     /* Common flags */
     1, /* unsigned int initial_random : 1; */
     1, /* unsigned int use_long_log : 1; */
@@ -118,6 +119,7 @@ static char const* config_argv1[] = {
     "-B", "655360",
     "-F", "/data/performance_log.csv",
     "-V",
+    "-j", "1",
     "-0",
     "-i", "0N8C-000123",
     NULL
@@ -141,6 +143,7 @@ static picoquic_quic_config_t param2 = {
     0, /* socket_buffer_size */
     NULL, /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     NULL, /* char const* cnx_id_cbdata; */
+    0,
     0,
     0,
     0,
@@ -276,6 +279,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_int("no_disk", expected->no_disk, actual->no_disk);
     ret |= config_test_compare_int("large_client_hello", expected->large_client_hello, actual->large_client_hello);
     ret |= config_test_compare_int("cnx_id_length", expected->cnx_id_length, actual->cnx_id_length);
+    ret |= config_test_compare_int("bdp", expected->bdp_frame_option, actual->bdp_frame_option);
 
     return ret;
 }

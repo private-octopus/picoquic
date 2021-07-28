@@ -464,6 +464,9 @@ char const* picoquic_log_tp_name(picoquic_tp_enum tp_number)
     case picoquic_tp_enable_simple_multipath:
         tp_name = "enable_simple_multipath";
         break;
+    case picoquic_tp_enable_bdp_frame:
+        tp_name = "enable_bdp_frame";
+        break;
     default:
         break;
     }
@@ -1416,6 +1419,49 @@ size_t picoquic_log_path_status_frame(FILE* F, const uint8_t* bytes, size_t byte
     return byte_index;
 }
 
+size_t picoquic_log_bdp_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+{
+    const uint8_t* bytes_end = bytes + bytes_max;
+    const uint8_t* bytes0 = bytes;
+    uint64_t lifetime;
+    uint64_t recon_bytes_in_flight;
+    uint64_t recon_min_rtt;
+    uint64_t ip_length;
+
+    size_t byte_index = 0;
+
+
+    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &lifetime)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &recon_bytes_in_flight)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &recon_min_rtt)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &ip_length)) == NULL ||
+        (ip_length != 4 && ip_length != 16) ||
+        (bytes = picoquic_frames_fixed_skip(bytes, bytes_end, ip_length)) == NULL){
+        fprintf(F, "    Malformed BDP frame: ");
+        /* log format error */
+        for (size_t i = 0; i < bytes_max && i < 8; i++) {
+            fprintf(F, "%02x", bytes0[i]);
+        }
+        if (bytes_max > 8) {
+            fprintf(F, "...");
+        }
+        fprintf(F, "\n");
+        byte_index = bytes_max;
+    }
+    else {
+        fprintf(F, "    BDP sample, lifetime: %" PRIu64 ", bytes_in_flight: %" PRIu64 ", min_rtt: %" PRIu64 ", ip: ",
+            lifetime, recon_bytes_in_flight, recon_min_rtt);
+        for (uint64_t i = 0; i < ip_length; i++) {
+            fprintf(F, "%02x", *(bytes - ip_length + i));
+        }
+        fprintf(F, "\n");
+        byte_index = (bytes - bytes0);
+    }
+
+    return byte_index;
+}
+
 void picoquic_log_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_t length)
 {
     size_t byte_index = 0;
@@ -1555,6 +1601,9 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_
             break;
         case picoquic_frame_type_path_status:
             byte_index += picoquic_log_path_status_frame(F, bytes + byte_index, length - byte_index);
+            break;
+        case picoquic_frame_type_bdp:
+            byte_index += picoquic_log_bdp_frame(F, bytes + byte_index, length - byte_index);
             break;
 
         default: {

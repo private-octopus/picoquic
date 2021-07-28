@@ -67,4 +67,6 @@
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 14, "packet_number": 30, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "qoe", "path_id": 17, "length": 8}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 7, "packet_number": 31, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "path_status", "path_id": 17, "status": 1, "priority": 1}]}]]}]}
+    "frame_type": "path_status", "path_id": 17, "status": 1, "priority": 1}]}],
+[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 12, "packet_number": 32, "dcid": "01020304" }, "frames": [{ 
+    "frame_type": "bdp", "lifetime": 1, "bytes_in_flight": 2, "min_rtt": 3, "ip": "0a000001"}]}]]}]}

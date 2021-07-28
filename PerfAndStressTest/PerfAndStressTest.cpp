@@ -90,6 +90,48 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(bdp_basic)
+        {
+            int ret = bdp_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_delay)
+        {
+            int ret = bdp_delay_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_ip)
+        {
+            int ret = bdp_ip_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_rtt)
+        {
+            int ret = bdp_rtt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_reno)
+        {
+            int ret = bdp_reno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_cubic)
+        {
+            int ret = bdp_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stress)
         {
             int ret = stress_test();

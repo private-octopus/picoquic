@@ -135,6 +135,7 @@ static const picoquic_test_def_t test_table[] = {
     { "socket_ecn", socket_ecn_test },
     { "ticket_store", ticket_store_test },
     { "ticket_seed", ticket_seed_test },
+    { "ticket_seed_from_bdp_frame", ticket_seed_from_bdp_frame_test },
     { "token_store", token_store_test },
     { "token_reuse_api", token_reuse_api_test },
     { "session_resume", session_resume_test },
@@ -238,6 +239,14 @@ static const picoquic_test_def_t test_table[] = {
     { "satellite_preemptive", satellite_preemptive_test },
     { "satellite_small", satellite_small_test },
     { "satellite_small_up", satellite_small_up_test },
+    { "bdp_basic", bdp_basic_test },
+    { "bdp_delay", bdp_delay_test },
+    { "bdp_ip", bdp_ip_test },
+    { "bdp_rtt", bdp_rtt_test },
+    { "bdp_reno", bdp_reno_test },
+#if 0
+    { "bdp_cubic", bdp_cubic_test },
+#endif
     { "cid_length", cid_length_test },
     { "optimistic_ack", optimistic_ack_test },
     { "optimistic_hole", optimistic_hole_test },
