@@ -240,7 +240,9 @@ static const picoquic_test_def_t test_table[] = {
     { "bdp_ip", bdp_ip_test },
     { "bdp_rtt", bdp_rtt_test },
     { "bdp_reno", bdp_reno_test },
+#if 0
     { "bdp_cubic", bdp_cubic_test },
+#endif
     { "cid_length", cid_length_test },
     { "optimistic_ack", optimistic_ack_test },
     { "optimistic_hole", optimistic_hole_test },
