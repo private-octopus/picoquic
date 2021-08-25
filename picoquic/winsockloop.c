@@ -161,7 +161,7 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
             if (picoquic_socket_set_ecn_options(sock_ctx[i]->fd, sock_af[i], &recv_set, &send_set) != 0 ||
                 picoquic_socket_set_pkt_info(sock_ctx[i]->fd, sock_af[i]) != 0 ||
                 picoquic_bind_to_port(sock_ctx[i]->fd, sock_af[i], local_port) != 0 ||
-                picoquic_get_local_address(sock_ctx[0]->fd, &local_address) != 0){
+                picoquic_get_local_address(sock_ctx[i]->fd, &local_address) != 0){
                 DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", sock_af[i], local_port);
                 for (int j = 0; j < i; j++) {
                     if (sock_ctx[i] != NULL) {
@@ -724,6 +724,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                             ((struct sockaddr_in*) & local_address)->sin_port = next_port;
                         }
                         sock_ctx[nb_sockets] = sock_ctx_mig;
+                        sock_ports[nb_sockets] = next_port;
                         events[nb_sockets] = mig_sock_event;
                         nb_sockets++;
                         testing_migration = 1;
