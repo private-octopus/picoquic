@@ -119,8 +119,8 @@ void picoquic_socks_win_coalescing_test(int * recv_coalesced, int * send_coalesc
 
 /* Open a set of sockets in asynch mode. */
 int picoquic_packet_loop_open_sockets_win(int local_port, int local_af, 
-    picoquic_recvmsg_async_ctx_t** sock_ctx, int * sock_af, int socket_buffer_size, HANDLE * events,
-    int nb_sockets_max)
+    picoquic_recvmsg_async_ctx_t** sock_ctx, int * sock_af, uint16_t * sock_ports,
+    int socket_buffer_size, HANDLE * events, int nb_sockets_max)
 {
     int ret = 0;
     int nb_sockets = (local_af == AF_UNSPEC) ? 2 : 1;
@@ -156,9 +156,12 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
             events[i] = NULL;
         }
         else {
+            struct sockaddr_storage local_address;
+
             if (picoquic_socket_set_ecn_options(sock_ctx[i]->fd, sock_af[i], &recv_set, &send_set) != 0 ||
                 picoquic_socket_set_pkt_info(sock_ctx[i]->fd, sock_af[i]) != 0 ||
-                (local_port != 0 && picoquic_bind_to_port(sock_ctx[i]->fd, sock_af[i], local_port) != 0)){
+                picoquic_bind_to_port(sock_ctx[i]->fd, sock_af[i], local_port) != 0 ||
+                picoquic_get_local_address(sock_ctx[0]->fd, &local_address) != 0){
                 DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", sock_af[i], local_port);
                 for (int j = 0; j < i; j++) {
                     if (sock_ctx[i] != NULL) {
@@ -173,6 +176,14 @@ int picoquic_packet_loop_open_sockets_win(int local_port, int local_af,
             else {
                 int opt_len;
                 int opt_ret;
+
+                if (local_address.ss_family == AF_INET6) {
+                    sock_ports[i] = ntohs(((struct sockaddr_in6*)&local_address)->sin6_port);
+                }
+                else if (local_address.ss_family == AF_INET) {
+                    sock_ports[i] = ntohs(((struct sockaddr_in*)&local_address)->sin_port);
+                }
+
                 events[i] = sock_ctx[i]->overlap.hEvent;
                 if (socket_buffer_size > 0) {
                     opt_len = sizeof(int);
@@ -398,9 +409,9 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     picoquic_connection_id_t log_cid;
     picoquic_recvmsg_async_ctx_t* sock_ctx[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
+    uint16_t sock_ports[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     HANDLE events[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int nb_sockets = 0;
-    uint16_t socket_port = (uint16_t)local_port;
     int testing_migration = 0; /* Hook for the migration test */
     uint16_t next_port = 0; /* Data for the migration test */
     picoquic_cnx_t* last_cnx = NULL;
@@ -411,11 +422,11 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     int loop_immediate = 0;
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
     memset(sock_af, 0, sizeof(sock_af));
-
+    memset(sock_ports, 0, sizeof(sock_ports));
 
     /* Open the sockets */
     if ((nb_sockets = picoquic_packet_loop_open_sockets_win(
-        local_port, local_af, sock_ctx, sock_af, socket_buffer_size, events, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
+        local_port, local_af, sock_ctx, sock_af, sock_ports, socket_buffer_size, events, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (loop_callback != NULL) {
@@ -431,67 +442,6 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
         }
         ret = picoquic_socks_create_send_ctx_list(PICOQUIC_PACKET_LOOP_SEND_MAX, send_buffer_size,
             &send_ctx_first, &send_ctx_last);
-    }
-
-
-    /* If the socket is not already bound, need to send a first packet to commit the port number */
-    if (ret == 0 && local_port == 0) {
-        uint8_t send_buffer[1536];
-        size_t send_length = 0;
-        struct sockaddr_storage peer_addr;
-        struct sockaddr_storage local_addr;
-        int if_index = dest_if;
-        int sock_ret = 0;
-        int sock_err = 0;
-
-        ret = picoquic_prepare_next_packet(quic, current_time,
-            send_buffer, sizeof(send_buffer), &send_length,
-            &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx);
-
-        if (ret == 0 && send_length > 0) {
-            SOCKET_TYPE send_socket = sock_ctx[0]->fd;
-
-            sock_ret = picoquic_send_through_socket(send_socket,
-                (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                (const char*)send_buffer, (int)send_length, &sock_err);
-
-            if (sock_ret <= 0) {
-                if (last_cnx == NULL) {
-                    picoquic_log_context_free_app_message(quic, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
-                        peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
-                }
-                else {
-                    picoquic_log_app_message(last_cnx, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
-                        peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
-                    if (picoquic_socket_error_implies_unreachable(sock_err)) {
-                        picoquic_notify_destination_unreachable(last_cnx, current_time,
-                            (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                            sock_err);
-                    }
-                }
-            }
-            else {
-                struct sockaddr_storage local_address;
-                if (picoquic_get_local_address(sock_ctx[0]->fd, &local_address) != 0) {
-                    memset(&local_address, 0, sizeof(struct sockaddr_storage));
-                    fprintf(stderr, "Could not read local address.\n");
-                }
-                else if (local_address.ss_family == AF_INET6) {
-                    socket_port = ((struct sockaddr_in6*) & local_address)->sin6_port;
-                }
-                else if (local_address.ss_family == AF_INET) {
-                    socket_port = ((struct sockaddr_in*) & local_address)->sin_port;
-                }
-                else {
-                    DBG_PRINTF("Invalid local socket family: %d ", local_address.ss_family);
-                    ret = -1;
-                }
-            }
-        }
-        else {
-            DBG_PRINTF("%s", "No first packet prepared, cannot run the loop.");
-            ret = -1;
-        }
     }
 
     /* If the socket is already bound, start asynch receive */
@@ -541,16 +491,14 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                          * But we also have special code for supporting migration tests, which requires
                          * a second socket with a different port number.
                          */
-                        uint16_t current_recv_port = socket_port;
+                        uint16_t current_recv_port;
                         int recv_bytes = 0;
 
-                        if (testing_migration) {
-                            if (socket_rank == 0) {
-                                current_recv_port = socket_port;
-                            }
-                            else {
-                                current_recv_port = next_port;
-                            }
+                        if (testing_migration && socket_rank != 0) {
+                            current_recv_port = next_port;
+                        }
+                        else {
+                            current_recv_port = sock_ports[socket_rank];
                         }
 
                         if (sock_ctx[socket_rank]->addr_dest.ss_family == AF_INET6) {
@@ -569,10 +517,10 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                             }
 
                             /* Submit the packet to the client */
-                            ret = picoquic_incoming_packet(quic, sock_ctx[socket_rank]->recv_buffer + recv_bytes,
+                            ret = picoquic_incoming_packet_ex(quic, sock_ctx[socket_rank]->recv_buffer + recv_bytes,
                                 recv_length, (struct sockaddr*) & sock_ctx[socket_rank]->addr_from,
                                 (struct sockaddr*) & sock_ctx[socket_rank]->addr_dest, sock_ctx[socket_rank]->dest_if,
-                                sock_ctx[socket_rank]->received_ecn, current_time);
+                                sock_ctx[socket_rank]->received_ecn, &last_cnx, current_time);
                             recv_bytes += (int)recv_length;
                         }
                     }
@@ -591,10 +539,13 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                     if (ret == 0 && loop_callback != NULL) {
                         ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx);
                     }
-                    /* TODO: this use of a state variable is ugly. Consider rewriting the code 
-                     * and avoid it. */
-                    loop_immediate = 1;
-                    continue;
+
+                    if (ret == 0) {
+                        /* TODO: this use of a state variable is ugly. Consider rewriting the code
+                         * and avoid it. */
+                        loop_immediate = 1;
+                        continue;
+                    }
                 }
             }
             else {
@@ -602,101 +553,103 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                 ret = 0;
             }
             /* Send packets that are now ready */
-            if (ret == 0 && 
-                (!send_ctx_first->is_started || send_ctx_first->is_complete)) {
-                do {
-                    picoquic_recvmsg_async_ctx_t* sock_ctx_send = NULL;
-                    picoquic_sendmsg_ctx_t* send_ctx = send_ctx_first;
+            if (ret != PICOQUIC_NO_ERROR_SIMULATE_NAT && ret != PICOQUIC_NO_ERROR_SIMULATE_MIGRATION) {
+                if (ret == 0 &&
+                    (!send_ctx_first->is_started || send_ctx_first->is_complete)) {
+                    do {
+                        picoquic_recvmsg_async_ctx_t* sock_ctx_send = NULL;
+                        picoquic_sendmsg_ctx_t* send_ctx = send_ctx_first;
 
-                    if (send_ctx_first->is_started && send_ctx_first->is_complete) {
-                        /* TODO: the error codes should be processed faster! */
-                        if (send_ctx->ret != 0 && picoquic_socket_error_implies_unreachable(send_ctx->last_err)) {
-                            picoquic_notify_destination_unreachable_by_cnxid(quic, &send_ctx->local_cnxid, current_time,
-                                (struct sockaddr*) & send_ctx->addr_dest, (struct sockaddr*) & send_ctx->addr_from,
-                                send_ctx->dest_if, send_ctx->last_err);
-                        }
-                    }
-
-                    memset(&send_ctx->overlap, 0, sizeof(send_ctx->overlap));
-                    send_ctx->is_started = 0;
-                    send_ctx->is_complete = 0;
-                    send_ctx->last_err = 0;
-                    send_ctx->ret = 0;
-                    send_ctx->send_msg_size = 0;
-
-                    ret = picoquic_prepare_next_packet_ex(quic, current_time,
-                        send_ctx->send_buffer, send_ctx->send_buffer_size, &send_ctx->send_length,
-                        &send_ctx->addr_dest, &send_ctx->addr_from, &send_ctx->dest_if, &log_cid, &last_cnx,
-                        (sock_ctx[0]->supports_udp_send_coalesced) ? &send_ctx->send_msg_size : NULL);
-
-                    if (ret == 0 && send_ctx->send_length > 0) {
-                        for (int i = 0; i < nb_sockets; i++) {
-                            if (sock_af[i] == send_ctx->addr_dest.ss_family) {
-                                sock_ctx_send = sock_ctx[i];
-                                break;
-                            }
-                        }
-
-                        if (testing_migration) {
-                            /* This code path is only used in the migration tests */
-                            uint16_t send_port = (send_ctx->addr_dest.ss_family == AF_INET) ?
-                                ((struct sockaddr_in*) & send_ctx->addr_from)->sin_port :
-                                ((struct sockaddr_in6*) & send_ctx->addr_from)->sin6_port;
-
-                            if (send_port == next_port) {
-                                sock_ctx_send = sock_ctx[nb_sockets - 1];
-                            }
-                        }
-                        if (sock_ctx_send == NULL) {
-                            picoquic_log_app_message(last_cnx,
-                                "Could not find socket for AF_to=%d, AF_from=%d",
-                                send_ctx->addr_dest.ss_family, send_ctx->addr_from.ss_family);
-                            ret = -1;
-                            send_ctx->last_err = -1;
-                        }
-                        else {
-                            if (last_cnx != NULL && last_cnx->path[0]->p_local_cnxid != NULL) {
-                                /* Store the connection ID, in case there is an error */
-                                send_ctx->local_cnxid = last_cnx->path[0]->p_local_cnxid->cnx_id;
-                            }
-                            else {
-                                send_ctx->local_cnxid.id_len = 0;
-                            }
-                            ret = picoquic_sendmsg_start(sock_ctx_send, send_ctx);
-                        }
-
-                        if (ret == 0) {
-                            /* Queue the send context at the end of the buffer chain,
-                             * but only if there is more than 1 such context */
-                            send_ctx->is_started = 1;
-                            if (send_ctx != send_ctx_last) {
-                                send_ctx_last->next = send_ctx;
-                                send_ctx_first = send_ctx->next;
-                                send_ctx->next = NULL;
-                                send_ctx_last = send_ctx;
-                            }
-                        }
-                        else {
-                            DBG_PRINTF("Cannot start sendsmg, error: %d", send_ctx->last_err);
-                            if (last_cnx != NULL && picoquic_socket_error_implies_unreachable(send_ctx->last_err)) {
-                                picoquic_notify_destination_unreachable(last_cnx, current_time,
-                                    (struct sockaddr*)& send_ctx->addr_dest, (struct sockaddr*)& send_ctx->addr_from,
+                        if (send_ctx_first->is_started && send_ctx_first->is_complete) {
+                            /* TODO: the error codes should be processed faster! */
+                            if (send_ctx->ret != 0 && picoquic_socket_error_implies_unreachable(send_ctx->last_err)) {
+                                picoquic_notify_destination_unreachable_by_cnxid(quic, &send_ctx->local_cnxid, current_time,
+                                    (struct sockaddr*)&send_ctx->addr_dest, (struct sockaddr*)&send_ctx->addr_from,
                                     send_ctx->dest_if, send_ctx->last_err);
                             }
-                            ret = 0;
                         }
-                    }
-                    else {
-                        break;
-                    }
-                } while (ret == 0 && (!send_ctx_first->is_started || send_ctx_first->is_complete));
-            }
-            else {
-                DBG_PRINTF("%s", "No completion routine called on time!");
-                Sleep(1);
-            }
-            if (ret == 0 && loop_callback != NULL) {
-                ret = loop_callback(quic, picoquic_packet_loop_after_send, loop_callback_ctx);
+
+                        memset(&send_ctx->overlap, 0, sizeof(send_ctx->overlap));
+                        send_ctx->is_started = 0;
+                        send_ctx->is_complete = 0;
+                        send_ctx->last_err = 0;
+                        send_ctx->ret = 0;
+                        send_ctx->send_msg_size = 0;
+
+                        ret = picoquic_prepare_next_packet_ex(quic, current_time,
+                            send_ctx->send_buffer, send_ctx->send_buffer_size, &send_ctx->send_length,
+                            &send_ctx->addr_dest, &send_ctx->addr_from, &send_ctx->dest_if, &log_cid, &last_cnx,
+                            (sock_ctx[0]->supports_udp_send_coalesced) ? &send_ctx->send_msg_size : NULL);
+
+                        if (ret == 0 && send_ctx->send_length > 0) {
+                            for (int i = 0; i < nb_sockets; i++) {
+                                if (sock_af[i] == send_ctx->addr_dest.ss_family) {
+                                    sock_ctx_send = sock_ctx[i];
+                                    break;
+                                }
+                            }
+
+                            if (testing_migration) {
+                                /* This code path is only used in the migration tests */
+                                uint16_t send_port = (send_ctx->addr_dest.ss_family == AF_INET) ?
+                                    ((struct sockaddr_in*)&send_ctx->addr_from)->sin_port :
+                                    ((struct sockaddr_in6*)&send_ctx->addr_from)->sin6_port;
+
+                                if (send_port == next_port) {
+                                    sock_ctx_send = sock_ctx[nb_sockets - 1];
+                                }
+                            }
+                            if (sock_ctx_send == NULL) {
+                                picoquic_log_app_message(last_cnx,
+                                    "Could not find socket for AF_to=%d, AF_from=%d",
+                                    send_ctx->addr_dest.ss_family, send_ctx->addr_from.ss_family);
+                                ret = -1;
+                                send_ctx->last_err = -1;
+                            }
+                            else {
+                                if (last_cnx != NULL && last_cnx->path[0]->p_local_cnxid != NULL) {
+                                    /* Store the connection ID, in case there is an error */
+                                    send_ctx->local_cnxid = last_cnx->path[0]->p_local_cnxid->cnx_id;
+                                }
+                                else {
+                                    send_ctx->local_cnxid.id_len = 0;
+                                }
+                                ret = picoquic_sendmsg_start(sock_ctx_send, send_ctx);
+                            }
+
+                            if (ret == 0) {
+                                /* Queue the send context at the end of the buffer chain,
+                                 * but only if there is more than 1 such context */
+                                send_ctx->is_started = 1;
+                                if (send_ctx != send_ctx_last) {
+                                    send_ctx_last->next = send_ctx;
+                                    send_ctx_first = send_ctx->next;
+                                    send_ctx->next = NULL;
+                                    send_ctx_last = send_ctx;
+                                }
+                            }
+                            else {
+                                DBG_PRINTF("Cannot start sendsmg, error: %d", send_ctx->last_err);
+                                if (last_cnx != NULL && picoquic_socket_error_implies_unreachable(send_ctx->last_err)) {
+                                    picoquic_notify_destination_unreachable(last_cnx, current_time,
+                                        (struct sockaddr*)&send_ctx->addr_dest, (struct sockaddr*)&send_ctx->addr_from,
+                                        send_ctx->dest_if, send_ctx->last_err);
+                                }
+                                ret = 0;
+                            }
+                        }
+                        else {
+                            break;
+                        }
+                    } while (ret == 0 && (!send_ctx_first->is_started || send_ctx_first->is_complete));
+                }
+                else {
+                    DBG_PRINTF("%s", "No completion routine called on time!");
+                    Sleep(1);
+                }
+                if (ret == 0 && loop_callback != NULL) {
+                    ret = loop_callback(quic, picoquic_packet_loop_after_send, loop_callback_ctx);
+                }
             }
         }
 
@@ -710,16 +663,20 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
             picoquic_recvmsg_async_ctx_t* sock_ctx_mig = NULL;
             int testing_nat = (ret == PICOQUIC_NO_ERROR_SIMULATE_NAT);
             HANDLE mig_sock_event = NULL;
-            
-            next_port = socket_port + 1;
-            if (picoquic_packet_loop_open_sockets_win(next_port, sock_af[0], &sock_ctx_mig, &s_mig_af,
-                socket_buffer_size, &mig_sock_event, 1) != 1){
+
+            if (picoquic_packet_loop_open_sockets_win(0, sock_af[0], &sock_ctx_mig, &s_mig_af,
+                &next_port, socket_buffer_size, &mig_sock_event, 1) != 1){
                 if (last_cnx != NULL) {
                     picoquic_log_app_message(last_cnx, "Could not create socket for migration test, port=%d, af=%d",
                         next_port, sock_af[0]);
                 }
             } else{
                 sock_ctx_mig->is_started = 1;
+                if (last_cnx != NULL) {
+                    picoquic_log_app_message(last_cnx,
+                        "Bound migration socket, AF = %d, port = %d", sock_af[0], next_port);
+                }
+
                 if (picoquic_recvmsg_async_start(sock_ctx_mig) != 0) {
                     if (last_cnx != NULL) {
                         picoquic_log_app_message(last_cnx, "Could not start migration socket, port=%d, af=%d",
@@ -743,6 +700,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                         picoquic_delete_async_socket(sock_ctx[0]);
                     }
                     sock_ctx[0] = sock_ctx_mig;
+                    sock_ports[0] = next_port;
                     events[0] = mig_sock_event;
                     ret = 0;
                     if (last_cnx != NULL) {
