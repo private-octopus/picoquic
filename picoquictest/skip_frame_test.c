@@ -231,6 +231,12 @@ static uint8_t test_frame_type_path_status[] = {
     0x11, 0x01, 0x01
 };
 
+static uint8_t test_frame_type_bdp[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_bdp >> 24)), (uint8_t)(picoquic_frame_type_bdp >> 16),
+    (uint8_t)(picoquic_frame_type_bdp >> 8), (uint8_t)(picoquic_frame_type_bdp & 0xFF),
+    0x01, 0x02, 0x03, 
+    0x04, 0x0A, 0x0, 0x0, 0x01
+};
 
 #define TEST_SKIP_ITEM(n, x, a, l, e) \
     {                              \
@@ -269,7 +275,8 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3),
     TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3),
     TEST_SKIP_ITEM("qoe", test_frame_type_qoe, 1, 0, 3),
-    TEST_SKIP_ITEM("path_status", test_frame_type_path_status, 0, 0, 3)
+    TEST_SKIP_ITEM("path_status", test_frame_type_path_status, 0, 0, 3),
+    TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3)
 };
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
@@ -415,7 +422,23 @@ static uint8_t test_frame_type_path_status_bad[] = {
     0x11, 0x01, 0x80
 };
 
+static uint8_t test_frame_type_bdp_bad[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_bdp >> 24)), (uint8_t)(picoquic_frame_type_bdp >> 16),
+    (uint8_t)(picoquic_frame_type_bdp >> 8), (uint8_t)(picoquic_frame_type_bdp & 0xFF),
+    0x01, 0x02, 0x04
+};
 
+static uint8_t test_frame_type_bdp_bad_addr[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_bdp >> 24)), (uint8_t)(picoquic_frame_type_bdp >> 16),
+    (uint8_t)(picoquic_frame_type_bdp >> 8), (uint8_t)(picoquic_frame_type_bdp & 0xFF),
+    0x01, 0x02, 0x04, 0x05, 1, 2, 3, 4, 5
+};
+
+static uint8_t test_frame_type_bdp_bad_length[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_bdp >> 24)), (uint8_t)(picoquic_frame_type_bdp >> 16),
+    (uint8_t)(picoquic_frame_type_bdp >> 8), (uint8_t)(picoquic_frame_type_bdp & 0xFF),
+    0x08, 0x02, 0x04, 0x8F, 0xFF, 0xFF, 0xFF, 1, 2, 3, 4
+};
 
 test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM("bad_reset_stream_offset", test_frame_type_bad_reset_stream_offset, 0, 0, 3),
@@ -436,7 +459,11 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM("bad_datagram", test_frame_type_bad_datagram, 1, 0, 3),
     TEST_SKIP_ITEM("stream_hang", test_frame_stream_hang, 1, 0, 3),
     TEST_SKIP_ITEM("bad_qoe", test_frame_type_qoe_bad, 1, 0, 3),
-    TEST_SKIP_ITEM("bad_path_status", test_frame_type_path_status_bad, 0, 1, 3)
+    TEST_SKIP_ITEM("bad_path_status", test_frame_type_path_status_bad, 0, 1, 3),
+    TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3),
+    TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad_addr, 1, 0, 3),
+    TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad_length, 1, 0, 3)
+
 };
 
 size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_skip_frames_t);
@@ -629,7 +656,10 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         /* Set min ack delay so there is no issue with ack frequency frame */
         cnx->is_ack_frequency_negotiated = 1;
         cnx->remote_parameters.min_ack_delay = 1000;
-
+        
+        /* Set enable_bdp so there is no issue with bdp frame */
+        cnx->local_parameters.enable_bdp_frame = 3;
+       
         /* if testing handshake done, set state to ready so frame is ignored. */
         if (epoch == 3) {
             cnx->cnx_state = picoquic_state_ready;

@@ -552,6 +552,11 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         bytes = picoquic_encode_transport_param_version_negotiation(bytes, bytes_max, extension_mode, cnx);
     }
 
+    if (cnx->local_parameters.enable_bdp_frame > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_bdp_frame,
+            (uint64_t)cnx->local_parameters.enable_bdp_frame);
+    }
+
     if (bytes == NULL) {
         *consumed = 0;
         ret = PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL;
@@ -589,6 +594,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->remote_parameters.enable_time_stamp = 0;
     cnx->remote_parameters.min_ack_delay = 0;
     cnx->remote_parameters.do_grease_quic_bit = 0;
+    cnx->remote_parameters.enable_bdp_frame = 0;
 }
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
@@ -640,7 +646,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                 }
 
-                switch ((picoquic_tp_enum)extension_type) {
+                switch (extension_type) {
                 case picoquic_tp_initial_max_stream_data_bidi_local:
                     cnx->remote_parameters.initial_max_stream_data_bidi_local =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
@@ -811,7 +817,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
                     }
                     else {
-                        if (cnx->local_parameters.max_ack_delay > 0) {
+                        if (cnx->local_parameters.min_ack_delay > 0) {
                             cnx->is_ack_frequency_negotiated = 1;
                         }
                     }
@@ -879,6 +885,19 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         cnx->do_version_negotiation = 1;
                         if (negotiated_vn != 0) {
                             cnx->version_index = negotiated_index;
+                        }
+                    }
+                    break;
+                }
+                case picoquic_tp_enable_bdp_frame: {
+                    uint64_t enable_bdp =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    if (ret == 0) {
+                        if (enable_bdp > 1) {
+                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        }
+                        else {
+                            cnx->remote_parameters.enable_bdp_frame = (int)enable_bdp;
                         }
                     }
                     break;
@@ -990,6 +1009,9 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     /* Loss bit is only enabled if negotiated by both parties */
     cnx->is_loss_bit_enabled_outgoing = (cnx->local_parameters.enable_loss_bit > 1) && (cnx->remote_parameters.enable_loss_bit > 0);
     cnx->is_loss_bit_enabled_incoming = (cnx->local_parameters.enable_loss_bit > 0) && (cnx->remote_parameters.enable_loss_bit > 1);
+
+    /* Send-receive BDP frame is only enabled if negotiated by both parties */
+    cnx->send_receive_bdp_frame = (cnx->local_parameters.enable_bdp_frame > 0) && (cnx->remote_parameters.enable_bdp_frame > 0);
 
     /* One way delay, Quic_bit_grease and Multipath only enabled if asked by client and accepted by server */
     /* If both multipath options proposed by server, retain "complete" multipath. */

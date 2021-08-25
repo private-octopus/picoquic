@@ -80,6 +80,8 @@ static void picoquic_newreno_sim_seed_cwin(picoquic_newreno_sim_state_t* nr_stat
         nr_state->ssthresh == UINT64_MAX) {
         if (bytes_in_flight > nr_state->cwin) {
             nr_state->cwin = bytes_in_flight;
+            nr_state->ssthresh = bytes_in_flight;
+            nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
         }
     }
 }
@@ -167,6 +169,7 @@ void picoquic_newreno_sim_notify(
         break;
     case picoquic_congestion_notification_seed_cwin:
         picoquic_newreno_sim_seed_cwin(nr_state, path_x, nb_bytes_acknowledged);
+        break;
     default:
         /* ignore */
         break;

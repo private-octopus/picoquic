@@ -2013,6 +2013,67 @@ uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t* cnx, uint64_t rtt, uint6
     return ack_delay_max;
 }
 
+void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint64_t remote_min_ack_delay,
+    uint64_t data_rate, uint64_t* ack_gap, uint64_t* ack_delay_max)
+{
+    uint64_t return_data_rate = 0;
+    uint64_t nb_packets = 0;
+    *ack_delay_max = picoquic_compute_ack_delay_max(cnx, rtt, remote_min_ack_delay);
+    *ack_gap = picoquic_compute_ack_gap(cnx, data_rate);
+
+    if (2 * cnx->path[0]->smoothed_rtt > 3 * cnx->path[0]->rtt_min) {
+        if (cnx->is_ack_frequency_negotiated) {
+            if (cnx->congestion_alg != NULL &&
+                cnx->congestion_alg->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_BBR) {
+                /* Verify that the ACK rate can be sustained on the return path.
+                 * This only works well if the "delayed ack" option allows the server
+                 * to control the ACK rate.
+                 */
+                return_data_rate = cnx->path[0]->receive_rate_max;
+                nb_packets = (cnx->path[0]->cwin / cnx->path[0]->send_mtu);
+            }
+        }
+        else {
+            uint64_t packet_rate_times_1M = (data_rate * 1000000) / cnx->path[0]->send_mtu;
+            nb_packets = packet_rate_times_1M / cnx->path[0]->smoothed_rtt;
+            return_data_rate = cnx->path[0]->bandwidth_estimate;
+        }
+        if (return_data_rate > 0) {
+            /* Estimate of ACK size = L2 + IPv6 + UDP + padded ACK */
+            const uint64_t ack_size = 12 + 40 + 8 + 55;
+            /* Estimate of ACK transmission time *in microseconds */
+            uint64_t ack_transmission_time = (ack_size * 1000000) / return_data_rate;
+            /* if ACK transmission time > ack delay, perform correction */
+            if (ack_transmission_time > * ack_delay_max) {
+                *ack_delay_max = ack_transmission_time;
+                if (*ack_delay_max > PICOQUIC_ACK_DELAY_MAX) {
+                    *ack_delay_max = PICOQUIC_ACK_DELAY_MAX;
+                }
+            }
+            /* if ack gap smaller than ack time fraction of CWIN, perform correction */
+            uint64_t rtt_target = (cnx->path[0]->smoothed_rtt + cnx->path[0]->rtt_min) / 2;
+
+            if (!cnx->path[0]->is_ssthresh_initialized) {
+                nb_packets /= 2;
+            }
+
+            uint64_t nb_ack_per_rtt = (*ack_gap > 0) ? (nb_packets + *ack_gap - 1) / (*ack_gap):nb_packets;
+            if (nb_ack_per_rtt * (*ack_delay_max) > rtt_target) {
+                uint64_t nb_acks_max = cnx->path[0]->smoothed_rtt / (*ack_delay_max);
+                if (nb_acks_max <= 1) {
+                    *ack_gap = nb_packets;
+                }
+                else {
+                    uint64_t ack_gap_min = (nb_packets + nb_acks_max - 1) / nb_acks_max;
+                    if (*ack_gap < ack_gap_min) {
+                        *ack_gap = ack_gap_min;
+                    }
+                }
+            }
+        }
+    }
+}
+
 /* In a multipath environment, a packet can accry acknowledgements for multiple paths.
  * The packet_data context collects information about updates received for each of
  * these paths. */
@@ -2217,7 +2278,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         }
 
         /* On first update, validate seeed data */
-        if (is_first && cnx->seed_cwin != 0){
+        if (is_first && cnx->seed_cwin != 0 /* && cnx->quic->default_send_receive_bdp_frame */){
             if (cnx->seed_rtt_min <= path_x->smoothed_rtt &&
                 (path_x->smoothed_rtt - cnx->seed_rtt_min) < cnx->seed_rtt_min / 4) {
                 uint8_t* ip_addr;
@@ -2226,6 +2287,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
 
                 if (ip_addr_length == cnx->seed_ip_addr_length &&
                     memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
+                    cnx->cwin_notified_from_seed = 1;
                     cnx->congestion_alg->alg_notify(cnx, path_x,
                         picoquic_congestion_notification_seed_cwin,
                         0, 0,
@@ -3919,8 +3981,8 @@ uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes
     uint64_t ack_delay_max;
 
     /* Compute the desired value of the ack frequency*/
-    ack_delay_max = picoquic_compute_ack_delay_max(cnx, cnx->path[0]->rtt_min, cnx->remote_parameters.min_ack_delay);
-    ack_gap = picoquic_compute_ack_gap(cnx, cnx->path[0]->bandwidth_estimate);
+    picoquic_compute_ack_gap_and_delay(cnx, cnx->path[0]->rtt_min, cnx->remote_parameters.min_ack_delay,
+        cnx->path[0]->bandwidth_estimate, &ack_gap, &ack_delay_max);
     
     if (ack_gap <= cnx->ack_gap_local &&
         ack_delay_max == cnx->ack_frequency_delay_local) {
@@ -4123,6 +4185,143 @@ uint8_t* picoquic_format_path_status_frame(picoquic_cnx_t* cnx, uint8_t* bytes, 
 
     return bytes;
 }
+
+/* BDP frames as defined in https://tools.ietf.org/html/draft-kuhn-quic-0rtt-bdp-09
+*/
+
+const uint8_t* picoquic_skip_bdp_frame(const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    /* This code assumes that the frame type is already skipped */
+    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL && 
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL){
+        bytes = picoquic_frames_length_data_skip(bytes, bytes_max);
+    }
+    return bytes;
+}
+
+const uint8_t* picoquic_parse_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t* lifetime, uint64_t* recon_bytes_in_flight, uint64_t* recon_min_rtt, 
+    uint64_t* saved_ip_length, const uint8_t** saved_ip)
+{
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, lifetime)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, recon_bytes_in_flight)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, recon_min_rtt)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, saved_ip_length)) != NULL) {
+        if (*saved_ip_length != 4 && *saved_ip_length != 16){
+            bytes = NULL;
+        }
+        else {
+            *saved_ip = bytes;
+            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *saved_ip_length);
+        }
+    }
+    return bytes;
+}
+
+const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t current_time, struct sockaddr* addr_from, picoquic_path_t* path_x)
+{
+    uint64_t lifetime;
+    uint64_t recon_bytes_in_flight;
+    uint64_t recon_min_rtt;
+    uint64_t saved_ip_length;
+    const uint8_t* saved_ip;
+
+    /* This code assumes that the frame type is already skipped */
+    if ((bytes = picoquic_parse_bdp_frame(cnx, bytes, bytes_max, &lifetime, &recon_bytes_in_flight, &recon_min_rtt, 
+        &saved_ip_length, &saved_ip))  != NULL) {
+        if (cnx->send_receive_bdp_frame) {
+            if (cnx->client_mode) {
+                path_x->cwin_remote = recon_bytes_in_flight;
+                path_x->rtt_min_remote = recon_min_rtt;
+                path_x->ip_client_remote_length = (uint8_t)saved_ip_length;
+                memcpy(path_x->ip_client_remote, saved_ip, path_x->ip_client_remote_length);
+                /* Seed ticket from remote BDP values by preserving the flag is_ticket_seed to allow 
+                 * to reseed ticket from local BDP values if it is not done yet */
+                /* TODO: this has the side effect of storing the local CWIN in the ticket,
+                 * even if it is not yet updated. Need to consider side effects. */
+                int is_ticket_seed = path_x->is_ticket_seeded;
+                picoquic_seed_ticket(cnx, path_x, current_time);
+                path_x->is_ticket_seeded = is_ticket_seed; 
+            }
+            else {
+                uint8_t* client_ip;
+                uint8_t client_ip_length;
+                picoquic_get_ip_addr((struct sockaddr*) & path_x->peer_addr, &client_ip, &client_ip_length);
+                /* Store received BDP, but only if the IP address of the client matches the
+                 * value found in the ticket */
+                if (saved_ip_length > 0 && client_ip_length == saved_ip_length &&
+                    memcmp(client_ip, saved_ip, client_ip_length) == 0) {
+                    picoquic_seed_bandwidth(
+                        cnx, recon_min_rtt, recon_bytes_in_flight, saved_ip, (uint8_t) saved_ip_length);
+                }
+            }
+        } 
+ 
+    }
+    else {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_frame_type_bdp);
+    }
+    return bytes;
+}
+
+uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
+    picoquic_path_t* path_x, int* more_data, int * is_pure_ack)
+{
+    uint8_t* bytes0 = bytes;
+    uint64_t current_time = picoquic_get_quic_time(cnx->quic);
+    /* There is no explicit TTL for bdps. We assume they are OK for 24 hours */
+    uint64_t lifetime = (uint64_t)(24 * 3600) * ((uint64_t)1000000); 
+    uint64_t recon_bytes_in_flight = 0;
+    uint64_t recon_min_rtt = 0;
+    uint8_t* ip_addr = NULL;
+    uint8_t ip_addr_length = 0;
+
+    /* Server sends bdp reflecting current path caracteristics */
+    if (!cnx->client_mode) {
+        if (path_x->is_ticket_seeded && !path_x->is_bdp_sent) {
+            picoquic_issued_ticket_t* server_ticket;
+            server_ticket = picoquic_retrieve_issued_ticket(cnx->quic, cnx->issued_ticket_id);
+            if (server_ticket != NULL && server_ticket->cwin > 0) {
+                recon_bytes_in_flight =  server_ticket->cwin;
+                recon_min_rtt = server_ticket->rtt;
+                ip_addr = server_ticket->ip_addr;
+                ip_addr_length = server_ticket->ip_addr_length;
+            }
+        }
+    }
+    else {
+        /* Client sends bdp back to the server */
+        picoquic_stored_ticket_t* stored_ticket = picoquic_get_stored_ticket(cnx->quic->p_first_ticket, 
+        current_time, cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
+          1, 0);
+        if (stored_ticket != NULL) {
+            recon_bytes_in_flight = stored_ticket->tp_0rtt[picoquic_tp_0rtt_cwin_remote];
+            recon_min_rtt = stored_ticket->tp_0rtt[picoquic_tp_0rtt_rtt_remote];
+            /* IP address */
+            ip_addr = stored_ticket->ip_addr_client;
+            ip_addr_length = stored_ticket->ip_addr_client_length;
+        }
+    }
+
+    if (recon_bytes_in_flight == 0 ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_bdp)) == NULL || 
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, lifetime)) == NULL || 
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, recon_bytes_in_flight)) == NULL || 
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, recon_min_rtt)) == NULL ||
+        (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, ip_addr_length, ip_addr)) == NULL) {
+        bytes = bytes0;
+    }
+    else {
+        *is_pure_ack = 0;
+        path_x->is_bdp_sent = 1;
+    }
+
+    return bytes;
+}
+
 /*
  * Decoding of the received frames.
  *
@@ -4332,6 +4531,29 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                         break;
                     case picoquic_frame_type_path_status:
                         bytes = picoquic_decode_path_status_frame(bytes, bytes_max, cnx);
+                        ack_needed = 1;
+                        break;
+                    case picoquic_frame_type_bdp:
+                        if (cnx->client_mode && epoch != picoquic_epoch_1rtt) {
+                            DBG_PRINTF("BDP frame (0x%x) is expected in 1-RTT packet", first_byte);
+                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+                            bytes = NULL;
+                            break;
+                        }
+                        if (!cnx->client_mode && epoch != picoquic_epoch_0rtt && epoch != picoquic_epoch_1rtt) {
+                            DBG_PRINTF("BDP frame (0x%x) is expected in 0-RTT packet", first_byte);
+                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+                            bytes = NULL;
+                            break;
+                        }
+                        if (cnx->client_mode && cnx->local_parameters.enable_bdp_frame == 0) {
+                            DBG_PRINTF("BDP frame (0x%x) not expected", first_byte);
+                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+                            bytes = NULL;
+                            break;
+                        }
+
+                        bytes = picoquic_decode_bdp_frame(cnx, bytes, bytes_max, current_time, addr_from, path_x);
                         ack_needed = 1;
                         break;
                     default:
@@ -4623,6 +4845,10 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
                     break;
                 case picoquic_frame_type_path_status:
                     bytes = picoquic_skip_path_status_frame(bytes, bytes_max);
+                    *pure_ack = 0;
+                    break;
+                case picoquic_frame_type_bdp:
+                    bytes = picoquic_skip_bdp_frame(bytes, bytes_max);
                     *pure_ack = 0;
                     break;
                 default:

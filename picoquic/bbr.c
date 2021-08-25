@@ -727,6 +727,31 @@ void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pat
     }
 }
 
+void BBRExitStartupSeedBDP(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t bdp, 
+    uint64_t current_time)
+{
+    /* Set the BW to the value deduced from the BDP */
+    uint64_t bandwidth_estimate = bdp * 1000000 / path_x->rtt_min;
+    path_x->cwin = bdp;
+    /* Set the parameters */
+    if (bandwidth_estimate > bbr_state->btl_bw_filter[0]) {
+        bbr_state->btl_bw_filter[0] = bandwidth_estimate;
+        if (bandwidth_estimate > bbr_state->btl_bw) {
+            bbr_state->btl_bw = bandwidth_estimate;
+            bbr_state->btl_bw_increased = 1;
+        }
+    }
+
+
+    BBRUpdateRTprop(bbr_state, path_x->rtt_min, current_time);
+    /* Enter drain */
+    BBREnterDrain(bbr_state, path_x, current_time);
+    /* If there were just few bytes in transit, enter probe */
+    if (path_x->bytes_in_transit <= BBRInflight(bbr_state, 1.0)) {
+        BBREnterProbeBW(bbr_state, path_x, current_time);
+    }
+}
+
 void BBREnterProbeRTT(picoquic_bbr_state_t* bbr_state)
 {
     bbr_state->state = picoquic_bbr_alg_probe_rtt;
@@ -816,6 +841,9 @@ void BBRCheckProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
 void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x,
     uint64_t rtt_sample, uint64_t bytes_in_transit, uint64_t packets_lost, uint64_t current_time)
 {
+    if (current_time > 2000000) {
+        DBG_PRINTF("%s", "Stop?");
+    }
     BBRUpdateBtlBw(bbr_state, path_x, current_time);
     BBRCheckCyclePhase(bbr_state, packets_lost, current_time);
     BBRCheckFullPipe(bbr_state, path_x->last_bw_estimate_path_limited);
@@ -1093,11 +1121,8 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_seed_cwin:
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
-                /* If within HyStart, apply standard HyStart behavior. */
-                if (path_x->cwin < nb_bytes_acknowledged) {
-                    path_x->cwin = nb_bytes_acknowledged;
-                    picoquic_update_pacing_data(cnx, path_x, 1);
-                }
+                BBRExitStartupSeedBDP(bbr_state, path_x, nb_bytes_acknowledged, current_time);
+                picoquic_update_pacing_data(cnx, path_x, 1);
             }
             else if (bbr_state->state == picoquic_bbr_alg_startup){
                 /* If in initial startup phase, do something */

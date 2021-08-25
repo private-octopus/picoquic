@@ -307,6 +307,9 @@ static void picoquic_cubic_notify(
                     if (path_x->cwin < nb_bytes_acknowledged) {
                         path_x->cwin = nb_bytes_acknowledged;
                     }
+                    cubic_state->ssthresh = nb_bytes_acknowledged;
+                    path_x->is_ssthresh_initialized = 1;
+                    picoquic_cubic_enter_avoidance(cubic_state, current_time);
                 }
                 break;
             default:

@@ -109,6 +109,8 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "qoe";
     case picoquic_frame_type_path_status:
         return "path_status";
+    case picoquic_frame_type_bdp:
+        return "bdp";
     default:
         return "unknown";
     }

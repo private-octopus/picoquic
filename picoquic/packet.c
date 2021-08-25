@@ -1959,7 +1959,8 @@ int picoquic_incoming_1rtt(
                         if (path_x->receive_rate_estimate > cnx->path[path_id]->receive_rate_max) {
                             path_x->receive_rate_max = cnx->path[path_id]->receive_rate_estimate;
                             if (path_id == 0 && !cnx->is_ack_frequency_negotiated) {
-                                cnx->ack_gap_remote = picoquic_compute_ack_gap(cnx, cnx->path[0]->receive_rate_max);
+                                picoquic_compute_ack_gap_and_delay(cnx, cnx->path[0]->rtt_min, PICOQUIC_ACK_DELAY_MIN,
+                                    cnx->path[0]->receive_rate_max, &cnx->ack_gap_remote, &cnx->ack_delay_remote);
                             }
                         }
                     }

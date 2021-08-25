@@ -320,6 +320,9 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_enable_simple_multipath:
                     qlog_boolean_transport_extension(f, "enable_simple_multipath", s, extension_length);
                     break;
+                case picoquic_tp_enable_bdp_frame:
+                    qlog_vint_transport_extension(f, "enable_bdp_frame", s, extension_length);
+                    break;
                 default:
                     /* dump unknown extensions */
                     fprintf(f, "\"%" PRIx64 "\": ", extension_type);
@@ -1036,7 +1039,20 @@ int qlog_retry_token(FILE* f, bytestream* s)
     return 0;
 }
 
+void qlog_bdp_frame(FILE* f, bytestream* s)
+{
+    uint64_t lifetime = 0;
+    uint64_t recon_bytes_in_flight = 0;
+    uint64_t recon_min_rtt = 0;
+    uint64_t ip_len = 0;
 
+    byteread_vint(s, &lifetime);
+    byteread_vint(s, &recon_bytes_in_flight);
+    byteread_vint(s, &recon_min_rtt);
+    byteread_vint(s, &ip_len);
+    fprintf(f, ", \"lifetime\": %"PRIu64", \"bytes_in_flight\": %"PRIu64", \"min_rtt\": %"PRIu64", \"ip\": ", lifetime, recon_bytes_in_flight, recon_min_rtt);
+    qlog_string(f, s, ip_len);
+}
 
 int qlog_packet_frame(bytestream * s, void * ptr)
 {
@@ -1157,6 +1173,9 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_path_status:
         qlog_path_status_frame(f, s);
+        break;
+    case picoquic_frame_type_bdp:
+        qlog_bdp_frame(f, s);
         break;
     default:
         s->ptr = ptr_before_type;

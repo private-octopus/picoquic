@@ -683,6 +683,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ticket_seed_from_bdp_frame)
+        {
+            int ret = ticket_seed_from_bdp_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(token_store)
         {
             int ret = token_store_test();
@@ -1320,6 +1327,20 @@ namespace UnitTest1
         TEST_METHOD(bbr_asym100)
         {
             int ret = bbr_asym100_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bbr_asym100_nodelay)
+        {
+            int ret = bbr_asym100_nodelay_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bbr_asym400)
+        {
+            int ret = bbr_asym400_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -832,7 +832,7 @@ void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
                 }
                 else {
                     uint64_t quantum2 = (uint64_t)((pacing_rate * PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX) / 1000000.0);
-                    if (quantum2 > quantum_min) {
+                    if (quantum2 > quantum) {
                         quantum = quantum2;
                     }
                 }
@@ -2118,6 +2118,12 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
             }
         }
 
+        /* We assume that if BDP data is associated with the zero RTT ticket, it can be sent */
+        /* Encode the bdp frame */
+        if (cnx->local_parameters.enable_bdp_frame) {
+            bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
+        }
+
         /* Encode the stream frame, or frames */
         bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
 
@@ -3193,8 +3199,8 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
         cnx->is_ack_frequency_updated = 1;
     }
     else {
-        cnx->ack_gap_remote = picoquic_compute_ack_gap(cnx, cnx->path[0]->receive_rate_max);
-        cnx->ack_delay_remote = picoquic_compute_ack_delay_max(cnx, cnx->path[0]->rtt_min, PICOQUIC_ACK_DELAY_MIN);
+        picoquic_compute_ack_gap_and_delay(cnx, cnx->path[0]->rtt_min, PICOQUIC_ACK_DELAY_MIN,
+            cnx->path[0]->receive_rate_max, &cnx->ack_gap_remote, &cnx->ack_delay_remote);
 
         /* Keep track of statistics on ACK parameters */
         if (cnx->ack_gap_remote > cnx->max_ack_gap_remote) {
@@ -3420,7 +3426,14 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         }
 
                         bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
-
+ 
+                        /* TODO: replace this by posting of frame when CWIN estimated */
+                        /* Send bdp frames if there are no stream frames to send 
+                         * and if client wishes to receive bdp frames */
+                        if(!cnx->client_mode && cnx->send_receive_bdp_frame) {
+                           bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
+                        }
+           
                         length = bytes_next - bytes;
 
                         if (length <= header_length) {
@@ -3812,6 +3825,13 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         /* Encode the stream frame, or frames */
                         if (ret == 0 && !split_repeat_queued && bytes_next + 8 < bytes_max) {
                             bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
+                        }
+
+                        /* TODO: replace this by scheduling of BDP frame when window has been estimated */
+                        /* Send bdp frames if there are no stream frames to send 
+                         * and if peer wishes to receive bdp frames */
+                        if(!cnx->client_mode && cnx->send_receive_bdp_frame) {
+                           bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
                         }
 
                         length = bytes_next - bytes;

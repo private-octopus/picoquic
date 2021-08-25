@@ -718,6 +718,11 @@ uint32_t picoquic_get_max_simultaneous_logs(picoquic_quic_t* quic)
     return quic->max_simultaneous_logs;
 }
 
+void picoquic_set_default_bdp_frame_option(picoquic_quic_t* quic, int bdp_option)
+{
+    quic->default_send_receive_bdp_frame = bdp_option;
+}
+
 void picoquic_free(picoquic_quic_t* quic)
 {
     if (quic != NULL) {
@@ -1090,6 +1095,7 @@ int picoquic_register_net_secret(picoquic_cnx_t* cnx)
 
 void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
 {
+    memset(tp, 0, sizeof(picoquic_tp_t));
     tp->initial_max_stream_data_bidi_local = 0x200000;
     tp->initial_max_stream_data_bidi_remote = 65635;
     tp->initial_max_stream_data_uni = 65535;
@@ -1110,6 +1116,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->enable_loss_bit = 2;
     tp->min_ack_delay = PICOQUIC_ACK_DELAY_MIN;
     tp->enable_time_stamp = 0;
+    tp->enable_bdp_frame = 0;
 }
 
 
@@ -2825,13 +2832,19 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
         }
 
+        /* Initialize BDP transport parameter */
+        if (quic->default_send_receive_bdp_frame) {
+           /* Accept and send BDP extension frame */
+            cnx->local_parameters.enable_bdp_frame = 1;
+        }
+ 
         /* Initialize local flow control variables to advertised values */
         cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
         cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
         cnx->max_stream_id_bidir_local_computed = STREAM_TYPE_FROM_ID(cnx->local_parameters.initial_max_stream_id_bidir);
         cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
         cnx->max_stream_id_unidir_local_computed = STREAM_TYPE_FROM_ID(cnx->local_parameters.initial_max_stream_id_unidir);
-
+       
         /* Initialize padding policy to default for context */
         cnx->padding_multiple = quic->padding_multiple_default;
         cnx->padding_minsize = quic->padding_minsize_default;
@@ -3148,7 +3161,7 @@ void picoquic_cnx_set_spinbit_policy(picoquic_cnx_t * cnx, picoquic_spinbit_vers
 }
 
 void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwin, 
-    uint8_t * ip_addr, uint8_t ip_addr_length)
+    const uint8_t * ip_addr, uint8_t ip_addr_length)
 {
     cnx->seed_rtt_min = rtt_min;
     cnx->seed_cwin = cwin;
