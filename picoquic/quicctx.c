@@ -3520,16 +3520,13 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
 int picoquic_connection_error_ex(picoquic_cnx_t* cnx, uint64_t local_error, uint64_t frame_type, char const * local_reason)
 {
     if (local_error > PICOQUIC_ERROR_CLASS) {
-        cnx->local_error = PICOQUIC_TRANSPORT_INTERNAL_ERROR;
+        local_error = PICOQUIC_TRANSPORT_INTERNAL_ERROR;
     }
-    else {
-        cnx->local_error = local_error;
-    }
-    cnx->local_error_reason = local_reason;
 
     if (cnx->cnx_state == picoquic_state_ready || 
         cnx->cnx_state == picoquic_state_client_ready_start || cnx->cnx_state == picoquic_state_server_false_start) {
-        
+        cnx->local_error = local_error;
+        cnx->local_error_reason = local_reason;
         cnx->cnx_state = picoquic_state_disconnecting;
 
         picoquic_log_app_message(cnx, "Protocol error 0x%x", local_error);
@@ -3538,8 +3535,10 @@ int picoquic_connection_error_ex(picoquic_cnx_t* cnx, uint64_t local_error, uint
         if (cnx->cnx_state != picoquic_state_handshake_failure &&
             cnx->cnx_state != picoquic_state_handshake_failure_resend) {
             cnx->local_error = local_error;
+            cnx->local_error_reason = local_reason;
             cnx->cnx_state = picoquic_state_handshake_failure;
 
+            picoquic_log_app_message(cnx, "Protocol error 0x%x", local_error);
             DBG_PRINTF("Protocol error %x", local_error);
         }
     }

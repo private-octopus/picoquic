@@ -624,7 +624,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         uint64_t extension_length = 0;
 
         if (byte_index + 2 > bytes_max) {
-            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "TP length");
         }
         else {
             ll_type = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &extension_type);
@@ -639,7 +639,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 if (extension_type < 64) {
                     if ((present_flag & (1ull << extension_type)) != 0) {
                         /* Malformed, already present */
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Malformed TP");
                     }
                     else {
                         present_flag |= (1ull << extension_type);
@@ -700,7 +700,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     uint64_t max_packet_size = picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     if (ret == 0){
                         if (max_packet_size < 1200 || max_packet_size > 65527) {
-                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Max packet size TP");
                         }
                         else {
                             cnx->remote_parameters.max_packet_size = (uint32_t)max_packet_size;
@@ -710,10 +710,10 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 }
                 case picoquic_tp_stateless_reset_token:
                     if (extension_mode != 1) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Reset token from client");
                     }
                     else if (extension_length != PICOQUIC_RESET_SECRET_SIZE) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Reset token TP");
                     }
                     else {
                         memcpy(cnx->path[0]->p_remote_cnxid->reset_secret, bytes + byte_index, PICOQUIC_RESET_SECRET_SIZE);
@@ -741,13 +741,13 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         bytes + byte_index, (size_t)extension_length, &cnx->remote_parameters.prefered_address);
 
                     if (coded_length != extension_length) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Preferred address TP");
                     }
                     break;
                 }
                 case picoquic_tp_disable_migration:
                     if (extension_length != 0) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Disable migration TP");
                     }
                     else {
                         cnx->remote_parameters.migration_disabled = 1;
@@ -757,7 +757,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     cnx->remote_parameters.max_ack_delay = (uint32_t)
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret) * 1000;
                     if (cnx->remote_parameters.max_ack_delay > PICOQUIC_MAX_ACK_DELAY_MAX_MS * 1000) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Max ack delay TP");
                     }
                     break;
                 case picoquic_tp_original_connection_id:
@@ -770,7 +770,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     ret = picoquic_transport_param_cid_decode(cnx, bytes + byte_index, extension_length, &handshake_connection_id);
                     if (ret == 0) {
                         if (picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id, &handshake_connection_id) != 0) {
-                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "HCID check");
                         }
                         else {
                             cnx->is_hcid_verified = 1;
@@ -802,7 +802,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         }
                         else {
                             /* Only values 0 and 1 are expected */
-                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Loss bit TP");
                         }
                     }
                     break;
@@ -814,7 +814,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     if (ret == 0 &&
                         (cnx->remote_parameters.min_ack_delay == 0 ||
                             cnx->remote_parameters.min_ack_delay > PICOQUIC_ACK_DELAY_MIN_MAX_VALUE)) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0, "Min ack delay TP");
                     }
                     else {
                         if (cnx->local_parameters.min_ack_delay > 0) {
@@ -838,7 +838,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 }
                 case picoquic_tp_grease_quic_bit:
                     if (extension_length != 0) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Grease TP");
                     }
                     else {
                         cnx->remote_parameters.do_grease_quic_bit = 1;
@@ -849,7 +849,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     if (ret == 0) {
                         if (enable_multipath > 1) {
-                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Multipath TP");
                         }
                         else {
                             cnx->remote_parameters.enable_multipath = (int)enable_multipath;
@@ -862,7 +862,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     if (ret == 0) {
                         if (enable_simple_multipath > 1) {
-                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Simple multipath TP");
                         }
                         else {
                             cnx->remote_parameters.enable_simple_multipath = (int)enable_simple_multipath;
@@ -879,7 +879,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         picoquic_supported_versions[cnx->version_index].version,
                         &negotiated_vn, &negotiated_index, &error_found);
                     if (final == NULL) {
-                        ret = picoquic_connection_error(cnx, error_found, 0);
+                        ret = picoquic_connection_error_ex(cnx, error_found, 0, "V. Negotiation TP");
                     }
                     else {
                         cnx->do_version_negotiation = 1;
@@ -894,7 +894,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     if (ret == 0) {
                         if (enable_bdp > 1) {
-                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "BDP parameter");
                         }
                         else {
                             cnx->remote_parameters.enable_bdp_frame = (int)enable_bdp;
@@ -954,7 +954,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         (present_flag & (1ull << picoquic_tp_server_preferred_address)) != 0 ||
             (present_flag & (1ull << picoquic_tp_original_connection_id)) != 0 ||
             (present_flag & (1ull << picoquic_tp_retry_connection_id)) != 0)) {
-        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "T. Param. unexpected on client");
     }
 
     /* In the old versions, there was only one parameter: original CID. In the new versions,
@@ -969,7 +969,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (ret == 0 && picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTEENTH_INTEROP_VERSION &&
         (present_flag & (1ull << picoquic_tp_handshake_connection_id)) == 0) {
         /* HCID extension becomes mandatory after draft 27 */
-        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "HCID missing");
     }
 
     if (ret == 0 && extension_mode == 1) {
@@ -984,7 +984,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     (present_flag & (1ull << picoquic_tp_original_connection_id)) == 0 ||
                     picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0 ||
                     picoquic_compare_connection_id(&cnx->initial_cnxid, &retry_connection_id) != 0) {
-                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                    ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "OCID verification");
                 }
             }
             else {
@@ -992,7 +992,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 if ((present_flag & (1ull << picoquic_tp_retry_connection_id)) != 0 ||
                     (present_flag & (1ull << picoquic_tp_original_connection_id)) == 0 ||
                     picoquic_compare_connection_id(&cnx->initial_cnxid, &original_connection_id) != 0) {
-                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                    ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "HCID or no OCID");
                 }
             }
         }
@@ -1001,7 +1001,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             if (cnx->original_cnxid.id_len != 0 &&
                 ((present_flag & (1ull << picoquic_tp_original_connection_id)) == 0 ||
                     picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0)) {
-                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "old draft version");
             }
         }
     }
