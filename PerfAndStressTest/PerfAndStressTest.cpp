@@ -90,6 +90,20 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(satellite_cubic)
+        {
+            int ret = satellite_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(satellite_cubic_loss)
+        {
+            int ret = satellite_cubic_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bdp_basic)
         {
             int ret = bdp_basic_test();

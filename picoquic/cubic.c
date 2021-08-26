@@ -218,7 +218,6 @@ static void picoquic_cubic_notify(
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(rtt_measurement);
-    UNREFERENCED_PARAMETER(lost_packet_number);
 #endif
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
@@ -238,12 +237,16 @@ static void picoquic_cubic_notify(
                     }
                 }
                 break;
-            case picoquic_congestion_notification_ecn_ec:
             case picoquic_congestion_notification_repeat:
+            case picoquic_congestion_notification_ecn_ec:
             case picoquic_congestion_notification_timeout:
-                /* enter recovery */
-                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
-                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
+                /* For compatibility with Linux-TCP deployments, we implement a filter so
+                 * Cubic will only back off after repeated losses, not just after a single loss.
+                 */
+                if ((notification == picoquic_congestion_notification_ecn_ec ||
+                    picoquic_hystart_loss_test(&cubic_state->rtt_filter, notification, lost_packet_number)) &&
+                    (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x))) {
                     path_x->is_ssthresh_initialized = 1;
                     picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
@@ -332,12 +335,16 @@ static void picoquic_cubic_notify(
             case picoquic_congestion_notification_spurious_repeat:
                 picoquic_cubic_correct_spurious(path_x, cubic_state, current_time);
                 break;
-            case picoquic_congestion_notification_ecn_ec:
             case picoquic_congestion_notification_repeat:
+            case picoquic_congestion_notification_ecn_ec:
             case picoquic_congestion_notification_timeout:
-                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
-                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
-                    /* re-enter recovery if this is a new loss */
+                /* For compatibility with Linux-TCP deployments, we implement a filter so
+                 * Cubic will only back off after repeated losses, not just after a single loss.
+                 */
+                if ((notification == picoquic_congestion_notification_ecn_ec ||
+                    picoquic_hystart_loss_test(&cubic_state->rtt_filter, notification, lost_packet_number)) &&
+                    (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x))) {
                     picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
                 break;
@@ -379,12 +386,17 @@ static void picoquic_cubic_notify(
                     }
                 }
                 break;
-            case picoquic_congestion_notification_ecn_ec:
             case picoquic_congestion_notification_repeat:
+            case picoquic_congestion_notification_ecn_ec:
             case picoquic_congestion_notification_timeout:
-                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
-                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
-                    /* re-enter recovery */
+                /* For compatibility with Linux-TCP deployments, we implement a filter so
+                 * Cubic will only back off after repeated losses, not just after a single loss.
+                 */
+                if ((notification == picoquic_congestion_notification_ecn_ec ||
+                    picoquic_hystart_loss_test(&cubic_state->rtt_filter, notification, lost_packet_number)) &&
+                    (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x))) {
+                    /* Re-enter recovery */
                     picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
                 break;
