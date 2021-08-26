@@ -1190,6 +1190,7 @@ typedef struct st_picoquic_cnx_t {
     int64_t phase_delay;
     uint64_t application_error;
     uint64_t local_error;
+    char const * local_error_reason;
     uint64_t remote_application_error;
     uint64_t remote_error;
     uint64_t offending_frame_type;
@@ -1411,7 +1412,9 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc);
 
 /* Notify error on connection */
-int picoquic_connection_error(picoquic_cnx_t* cnx, uint64_t local_error, uint64_t frame_type);
+int picoquic_connection_error(picoquic_cnx_t* cnx, uint64_t local_error, uint64_t frame_type); 
+int picoquic_connection_error_ex(picoquic_cnx_t* cnx, uint64_t local_error, uint64_t frame_type, char const* local_reason);
+
 
 void picoquic_connection_disconnect(picoquic_cnx_t* cnx);
 

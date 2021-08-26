@@ -173,7 +173,7 @@ uint8_t* picoquic_frames_uint32_encode(uint8_t* bytes, const uint8_t* bytes_max,
 uint8_t* picoquic_frames_uint64_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n);
 uint8_t* picoquic_frames_length_data_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t l, const uint8_t* v);
 uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, const picoquic_connection_id_t* cid);
-
+uint8_t* picoquic_frames_charz_encode(uint8_t * bytes, const uint8_t * bytes_max, char const* s);
 
 /* Constant time memory comparison may be required on some platforms for testing reset secrets */
 int picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l);

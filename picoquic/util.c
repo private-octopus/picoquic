@@ -874,6 +874,19 @@ uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, co
     return picoquic_frames_length_data_encode(bytes, bytes_max, cid->id_len, cid->id);
 }
 
+uint8_t* picoquic_frames_charz_encode(uint8_t* bytes, const uint8_t* bytes_max, char const * s)
+{
+    if (s == NULL) {
+        bytes = picoquic_frames_varlen_encode(bytes, bytes_max, 0);
+    }
+    else {
+        size_t l = strlen(s);
+        bytes = picoquic_frames_length_data_encode(bytes, bytes_max, l, (const uint8_t*)s);
+    }
+    return bytes;
+}
+
+
 /* Constant time memory comparison. This is only required now for
  * the comparison of 16 bytes long stateless reset secrets, so we have
  * only minimal requriements for performance, and privilege portability.

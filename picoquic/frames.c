@@ -3274,7 +3274,7 @@ uint8_t * picoquic_format_connection_close_frame(picoquic_cnx_t* cnx,
     if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_connection_close)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->local_error)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->offending_frame_type)) != NULL &&
-        (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, 0)) != NULL) {
+        (bytes = picoquic_frames_charz_encode(bytes, bytes_max, cnx->local_error_reason)) != NULL) {
         *is_pure_ack = 0;
     }
     else {

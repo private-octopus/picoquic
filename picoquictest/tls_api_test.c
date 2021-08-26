@@ -10694,8 +10694,6 @@ int excess_repeat_test()
     return ret;
 }
 
-
-
 /* Connection DDOS
 * Simulate attack on server by sending tons of connection requests. See
 * what happens.
@@ -11445,4 +11443,93 @@ int bdp_reno_test()
 int bdp_cubic_test()
 {
     return bdp_option_test_one(bdp_test_option_cubic);
+}
+
+/* Test closing a connection with a specific error message.
+ */
+
+char const* error_reason_text_log = "error_reason_log.txt";
+
+int error_reason_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0xe8, 0x80, 0x88, 0xea, 0x50, 0, 0, 0}, 8 };
+    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
+        &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        /* Request the logs on the server side, so manual inspection can verify that
+         * the error reason is properly displayed. */
+        picoquic_set_textlog(test_ctx->qserver, error_reason_text_log);
+        test_ctx->qserver->use_long_log = 1;
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        /* Now, start the client connection */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        /* Perform a connection loop to verify it goes OK */
+        ret = tls_api_connection_loop(test_ctx, &loss_mask,
+            2 * test_ctx->c_to_s_link->microsec_latency, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection loop returns %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        /* force closure of the client connection with an internal error */
+        int local_error_ret = picoquic_connection_error_ex(test_ctx->cnx_client, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
+            0, "error reason test");
+        if (local_error_ret != PICOQUIC_ERROR_DETECTED) {
+            DBG_PRINTF("picoquic_connection_error_ex returns %d\n", ret);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* verify that the connection will be closed */
+        int nb_trials = 0;
+        int nb_inactive = 0;
+        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 ) {
+            int was_active = 0;
+            nb_trials++;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+            if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected &&
+                (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state == picoquic_state_disconnected)) {
+                break;
+            }
+
+            if (nb_trials == 512) {
+                DBG_PRINTF("After %d trials, client state = %d, server state = %d",
+                    nb_trials, (int)test_ctx->cnx_client->cnx_state,
+                    (test_ctx->cnx_server == NULL) ? -1 : test_ctx->cnx_server->cnx_state);
+            }
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+        }
+    }
+    /* Close the contexts, which will close the logs.
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }

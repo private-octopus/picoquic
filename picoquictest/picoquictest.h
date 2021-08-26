@@ -182,6 +182,7 @@ int perflog_test();
 int rebinding_stress_test();
 int many_short_loss_test();
 int random_padding_test();
+int error_reason_test();
 int ready_to_send_test();
 int cubic_test();
 int cubic_jitter_test();
