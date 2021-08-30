@@ -11256,6 +11256,12 @@ int min_timeout_test()
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, loss_mask, 0, 20000, 2300000);
     }
 
+    /* Free the resource, which will close the log file. */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
     return ret;
 }
 
