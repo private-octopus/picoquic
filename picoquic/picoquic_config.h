@@ -71,6 +71,7 @@ typedef enum {
     picoquic_option_Version_Upgrade,
     picoquic_option_No_GSO,
     picoquic_option_BDP_frame,
+    picoquic_option_MIN_TIMEOUT,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -97,6 +98,7 @@ typedef struct st_picoquic_quic_config_t {
     picoquic_lossbit_version_enum lossbit_policy; /* control loss bit */
     int multipath_option;
     int bdp_frame_option;
+    int min_timeout_option;
     /* TODO: control other extensions, e.g. time stamp, ack delay */
     /* Common flags */
     unsigned int initial_random : 1;

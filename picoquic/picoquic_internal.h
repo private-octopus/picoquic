@@ -604,6 +604,7 @@ typedef struct st_picoquic_quic_t {
     uint32_t max_number_connections;
     uint64_t stateless_reset_next_time; /* Next time Stateless Reset or VN packet can be sent */
     uint64_t stateless_reset_min_interval; /* Enforced interval between two stateless reset packets */
+    uint64_t min_timeout; /* Min timeout, for tests or special configurations */
     /* Flags */
     unsigned int check_token : 1;
     unsigned int force_check_token : 1;
@@ -624,6 +625,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int use_low_memory : 1; /* if possible, use low memory alternatives, e.g. for AES */
     unsigned int is_preemptive_repeat_enabled : 1; /* enable premptive repeat on new connections */
     unsigned int default_send_receive_bdp_frame : 1; /* enable sending and receiving BDP frame */
+
     picoquic_stateless_packet_t* pending_stateless_packet;
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;

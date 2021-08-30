@@ -544,6 +544,12 @@ int picoquic_save_retry_tokens(picoquic_quic_t* quic, char const* token_store_fi
 /* Manage bdps */
 void picoquic_set_default_bdp_frame_option(picoquic_quic_t* quic, int enable_bdp_frame);
 
+/* Set a min value of the retransmission timer
+ * This should only be used in special configurations, such as during tests if the
+ * test infrastructure introduces unexpected delays.
+ */
+void picoquic_set_default_min_timeout_option(picoquic_quic_t* quic, uint64_t min_timeout);
+
 /* Set default connection ID length for the context.
  * All valid values are supported on the client.
  * Using a null value on the server is not tested, may not work.

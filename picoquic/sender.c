@@ -266,7 +266,8 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
 
 uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir)
 {
-    int stream_type_id = (cnx->client_mode ^ 1) | ((is_unidir) ? 2 : 0);
+    int stream_type_id = (cnx->client_mode ^ 1);
+    stream_type_id |= ((is_unidir) ? 2 : 0);
 
     return cnx->next_stream_id[stream_type_id];     
 }
@@ -1144,6 +1145,10 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx,
         if (alt_rto < rto) {
             rto = alt_rto;
         }
+    }
+
+    if (rto < cnx->quic->min_timeout > 0) {
+        rto = cnx->quic->min_timeout;
     }
 
     return rto;

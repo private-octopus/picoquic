@@ -199,6 +199,7 @@ int bdp_cubic_test();
 int bdp_rtt_test();
 int bdp_ip_test();
 int bdp_delay_test();
+int min_timeout_test();
 int long_rtt_test();
 int cid_length_test();
 int initial_server_close_test();

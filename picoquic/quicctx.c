@@ -723,6 +723,12 @@ void picoquic_set_default_bdp_frame_option(picoquic_quic_t* quic, int bdp_option
     quic->default_send_receive_bdp_frame = bdp_option;
 }
 
+
+void picoquic_set_default_min_timeout_option(picoquic_quic_t* quic, uint64_t min_timeout)
+{
+    quic->min_timeout = min_timeout;
+}
+
 void picoquic_free(picoquic_quic_t* quic)
 {
     if (quic != NULL) {

@@ -1186,6 +1186,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(min_timeout)
+        {
+            int ret = min_timeout_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(packet_trace)
         {
             int ret = packet_trace_test();
