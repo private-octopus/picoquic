@@ -11230,6 +11230,36 @@ int random_padding_test()
     return ret;
 }
 
+/* Test of the min timeout option.
+ * Set the min timeout to 100ms, and verify that the connection is still functional despite losses.
+ */
+int min_timeout_test()
+{
+
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0xF00;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x71, 0x9e, 0x09, 1, 2, 3, 4, 5}, 8 };
+    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the logging policy on the server side, to store data in the
+     * current working directory, and run a basic test scenario */
+    if (ret == 0) {
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_default_min_timeout_option(test_ctx->qserver, 100000);
+        test_ctx->qserver->use_long_log = 1;
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_very_long, sizeof(test_scenario_very_long), 0, loss_mask, 0, 20000, 2300000);
+    }
+
+    return ret;
+}
+
+
 /* Tests of BDP option.
  * = Verify that a download works faster with BDP option enabled
  * = Verify that the BDP option is not validated if the min rtt changes
@@ -11445,33 +11475,4 @@ int bdp_reno_test()
 int bdp_cubic_test()
 {
     return bdp_option_test_one(bdp_test_option_cubic);
-}
-
-/* Test of the min timeout option.
- * Set the min timeout to 100ms, and verify that the connection is still functional despite losses.
- */
-int min_timeout_test()
-{
-
-    uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0xF00;
-    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    picoquic_connection_id_t initial_cid = { {0x71, 0x9e, 0x09, 1, 2, 3, 4, 5}, 8 };
-    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
-
-    if (ret == 0 && test_ctx == NULL) {
-        ret = -1;
-    }
-
-    /* Set the logging policy on the server side, to store data in the
-     * current working directory, and run a basic test scenario */
-    if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, ".");
-        picoquic_set_default_min_timeout_option(test_ctx->qserver, 100000);
-        test_ctx->qserver->use_long_log = 1;
-        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_very_long, sizeof(test_scenario_very_long), 0, loss_mask, 0, 20000, 2300000);
-    }
-
-    return ret;
 }
