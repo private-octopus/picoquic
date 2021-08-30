@@ -754,23 +754,37 @@ picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af, int recv_coa
                     }
                 }
 #ifdef UDP_RECV_MAX_COALESCED_SIZE
-                if (ret == 0 && recv_coalesced) {
+                if (ret == 0) {
                     DWORD coalesced_size = 0x10000;
-
-                    ctx->recv_buffer_size = coalesced_size;
+                    ctx->recv_buffer_size = (recv_coalesced)?coalesced_size:PICOQUIC_MAX_PACKET_SIZE;
                     ctx->recv_buffer = (uint8_t*)malloc(ctx->recv_buffer_size);
                     ctx->supports_udp_recv_coalesced = recv_coalesced;
                     ctx->supports_udp_send_coalesced = send_coalesced;
                     if (ctx->recv_buffer == NULL) {
-                        DBG_PRINTF("Could allocate buffer size %zu for socket %d!\n",
+                        DBG_PRINTF("Could not allocate buffer size %zu for socket %d!\n",
                             ctx->recv_buffer_size, (int)ctx->fd);
                         ret = -1;
                     }
-                    else if ((ret = setsockopt(ctx->fd, IPPROTO_UDP, UDP_RECV_MAX_COALESCED_SIZE, (char*)&coalesced_size,
-                        (int)sizeof(coalesced_size))) != 0) {
-                        last_error = GetLastError();
-                        DBG_PRINTF("Cannot set UDP_RECV_MAX_COALESCED_SIZE %d, returns %d (%d)",
-                            coalesced_size, ret, last_error);
+                    else if (recv_coalesced)
+                    {
+                        if ((ret = setsockopt(ctx->fd, IPPROTO_UDP, UDP_RECV_MAX_COALESCED_SIZE, (char*)&coalesced_size,
+                            (int)sizeof(coalesced_size))) != 0) {
+                            last_error = GetLastError();
+                            DBG_PRINTF("Cannot set UDP_RECV_MAX_COALESCED_SIZE %d, returns %d (%d)",
+                                coalesced_size, ret, last_error);
+                            ret = -1;
+                        }
+                    }
+                }
+#else
+                if (ret == 0) {
+                    ctx->recv_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
+                    ctx->recv_buffer = (uint8_t*)malloc(ctx->recv_buffer_size);
+                    ctx->supports_udp_recv_coalesced = 0;
+                    ctx->supports_udp_send_coalesced = 0;
+                    if (ctx->recv_buffer == NULL) {
+                        DBG_PRINTF("Could allocate buffer size %zu for socket %d!\n",
+                            ctx->recv_buffer_size, (int)ctx->fd);
                         ret = -1;
                     }
                 }
