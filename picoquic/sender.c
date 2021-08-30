@@ -267,7 +267,7 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
 uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir)
 {
     /* This code could be written as:
-     * int stream_type_id = ((cnx->client_mode ^ 1) | ((is_unidir) ? 2 : 0));
+     * int stream_type_id = ((cnx->client_mode ^ 1) | ((is_unidir) ? 2 : 0)); 
      * but Visual Studio produces an obnoxious error message about
      * mixing bitwise or and logical or. */
     int stream_type_id = cnx->client_mode ^ 1;
