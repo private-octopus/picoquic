@@ -511,8 +511,8 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                             ((struct sockaddr_in*) & sock_ctx[socket_rank]->addr_dest)->sin_port = current_recv_port;
                         }
 
-                        while (recv_bytes < sock_ctx[socket_rank]->bytes_recv) {
-                            size_t recv_length = (sock_ctx[socket_rank]->bytes_recv - recv_bytes);
+                        while (recv_bytes < (size_t)sock_ctx[socket_rank]->bytes_recv) {
+                            size_t recv_length = (size_t)(sock_ctx[socket_rank]->bytes_recv - recv_bytes);
 
                             if (sock_ctx[socket_rank]->udp_coalesced_size > 0 &&
                                 recv_length > sock_ctx[socket_rank]->udp_coalesced_size){
