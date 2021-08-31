@@ -430,9 +430,12 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (loop_callback != NULL) {
-        ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx);
+        struct sockaddr_storage l_addr;
+        ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx, NULL);
+        if (picoquic_store_loopback_addr(&l_addr, sock_af[0], sock_ports[0]) == 0) {
+            ret = loop_callback(quic, picoquic_packet_loop_port_update, loop_callback_ctx, &l_addr);
+        }
     }
-
 
     /* Create a list of contexts for sending packets */
     if (ret == 0) {
@@ -486,13 +489,13 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                 }
                 else
                 {
+                    size_t recv_bytes = 0;
                     if (sock_ctx[socket_rank]->bytes_recv > 0) {
                         /* Document incoming port. By default, there is just one port in use.
                          * But we also have special code for supporting migration tests, which requires
                          * a second socket with a different port number.
                          */
                         uint16_t current_recv_port;
-                        int recv_bytes = 0;
 
                         if (testing_migration && socket_rank != 0) {
                             current_recv_port = next_port;
@@ -516,12 +519,17 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                                 recv_length = sock_ctx[socket_rank]->udp_coalesced_size;
                             }
 
-                            /* Submit the packet to the client */
-                            ret = picoquic_incoming_packet_ex(quic, sock_ctx[socket_rank]->recv_buffer + recv_bytes,
-                                recv_length, (struct sockaddr*) & sock_ctx[socket_rank]->addr_from,
-                                (struct sockaddr*) & sock_ctx[socket_rank]->addr_dest, sock_ctx[socket_rank]->dest_if,
-                                sock_ctx[socket_rank]->received_ecn, &last_cnx, current_time);
-                            recv_bytes += (int)recv_length;
+                            if (recv_length == 4) {
+                                DBG_PRINTF("Local!");
+                            }
+                            else {
+                                /* Submit the packet to the client */
+                                ret = picoquic_incoming_packet_ex(quic, sock_ctx[socket_rank]->recv_buffer + recv_bytes,
+                                    recv_length, (struct sockaddr*)&sock_ctx[socket_rank]->addr_from,
+                                    (struct sockaddr*)&sock_ctx[socket_rank]->addr_dest, sock_ctx[socket_rank]->dest_if,
+                                    sock_ctx[socket_rank]->received_ecn, &last_cnx, current_time);
+                                recv_bytes += recv_length;
+                            }
                         }
                     }
 
@@ -537,7 +545,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                     }
 
                     if (ret == 0 && loop_callback != NULL) {
-                        ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx);
+                        ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx, &recv_bytes);
                     }
 
                     if (ret == 0) {
@@ -554,6 +562,8 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
             }
             /* Send packets that are now ready */
             if (ret != PICOQUIC_NO_ERROR_SIMULATE_NAT && ret != PICOQUIC_NO_ERROR_SIMULATE_MIGRATION) {
+                size_t bytes_sent = 0;
+
                 if (ret == 0 &&
                     (!send_ctx_first->is_started || send_ctx_first->is_complete)) {
                     do {
@@ -580,6 +590,8 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                             send_ctx->send_buffer, send_ctx->send_buffer_size, &send_ctx->send_length,
                             &send_ctx->addr_dest, &send_ctx->addr_from, &send_ctx->dest_if, &log_cid, &last_cnx,
                             (sock_ctx[0]->supports_udp_send_coalesced) ? &send_ctx->send_msg_size : NULL);
+
+                        bytes_sent += send_ctx->send_length;
 
                         if (ret == 0 && send_ctx->send_length > 0) {
                             for (int i = 0; i < nb_sockets; i++) {
@@ -648,7 +660,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                     Sleep(1);
                 }
                 if (ret == 0 && loop_callback != NULL) {
-                    ret = loop_callback(quic, picoquic_packet_loop_after_send, loop_callback_ctx);
+                    ret = loop_callback(quic, picoquic_packet_loop_after_send, loop_callback_ctx, &bytes_sent);
                 }
             }
         }
@@ -706,6 +718,12 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                     if (last_cnx != NULL) {
                         picoquic_log_app_message(last_cnx, "Testing NAT rebinding, port=%d, af=%d",
                             next_port, sock_af[0]);
+                    }
+                    if (loop_callback != NULL) {
+                        struct sockaddr_storage l_addr;
+                        if (picoquic_store_loopback_addr(&l_addr, sock_af[0], sock_ports[0]) == 0) {
+                            ret = loop_callback(quic, picoquic_packet_loop_port_update, loop_callback_ctx, &l_addr);
+                        }
                     }
                 }
                 else {

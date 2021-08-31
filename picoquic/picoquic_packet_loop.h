@@ -33,12 +33,13 @@ extern "C" {
 #define PICOQUIC_PACKET_LOOP_SEND_MAX 10
 
 typedef enum {
-    picoquic_packet_loop_ready = 0,
-    picoquic_packet_loop_after_receive,
-    picoquic_packet_loop_after_send
+    picoquic_packet_loop_ready = 0, /* No argument */
+    picoquic_packet_loop_after_receive, /* Argument type size_t*: nb packets received */
+    picoquic_packet_loop_after_send, /* Argument type size_t*: nb packets sent */
+    picoquic_packet_loop_port_update /* argument type struct_sockaddr*: new address for wakeup */
 } picoquic_packet_loop_cb_enum;
 
-typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packet_loop_cb_enum cb_mode, void * callback_ctx);
+typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packet_loop_cb_enum cb_mode, void * callback_ctx, void * callback_argv);
 
 int picoquic_packet_loop(picoquic_quic_t* quic,
     int local_port,

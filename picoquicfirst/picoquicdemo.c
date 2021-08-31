@@ -111,7 +111,8 @@ typedef struct st_server_loop_cb_t {
     int connection_done;
 } server_loop_cb_t;
 
-static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, void* callback_ctx)
+static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
+    void* callback_ctx, void * callback_arg)
 {
     int ret = 0;
     server_loop_cb_t* cb_ctx = (server_loop_cb_t*)callback_ctx;
@@ -127,6 +128,8 @@ static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb
         case picoquic_packet_loop_after_receive:
             break;
         case picoquic_packet_loop_after_send:
+            break;
+        case picoquic_packet_loop_port_update:
             break;
         default:
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
@@ -272,7 +275,8 @@ typedef struct st_client_loop_cb_t {
     picoquic_connection_id_t client_cid_before_migration;
 } client_loop_cb_t;
 
-int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, void* callback_ctx)
+int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
+    void* callback_ctx, void * callback_arg)
 {
     int ret = 0;
     client_loop_cb_t* cb_ctx = (client_loop_cb_t*)callback_ctx;
@@ -451,6 +455,8 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
                     picoquic_demo_client_start_streams(cb_ctx->cnx_client, cb_ctx->demo_callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
                 }
             }
+            break;
+        case picoquic_packet_loop_port_update:
             break;
         default:
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;

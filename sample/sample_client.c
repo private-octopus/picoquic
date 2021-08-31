@@ -399,7 +399,8 @@ int sample_client_callback(picoquic_cnx_t* cnx,
  * when the connection is complete.
  */
 
-static int sample_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, void* callback_ctx)
+static int sample_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
+    void* callback_ctx, void * callback_arg)
 {
     int ret = 0;
     sample_client_ctx_t* cb_ctx = (sample_client_ctx_t*)callback_ctx;
@@ -418,6 +419,8 @@ static int sample_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_
             if (cb_ctx->is_disconnected) {
                 ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
             }
+            break;
+        case picoquic_packet_loop_port_update:
             break;
         default:
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;

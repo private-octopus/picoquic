@@ -32,13 +32,16 @@
 #include "picoquic_utils.h"
 #include "h3zero.c"
 #include "democlient.h"
+#include "picoquic_packet_loop.h"
 
 static const char* ticket_store_filename = "demo_ticket_store.bin";
 static const char* token_store_filename = "demo_token_store.bin";
+#if 0
 static int quicwind_is_closing = 0;
 static quicwind_work_item_t * work_item_first = NULL;
 HANDLE work_item_mutex = NULL;
 HANDLE net_wake_up = NULL;
+#endif
 
 /* Callback function 
  * TODO: remove the "queue of docs" logic, replace with UI requests.
@@ -53,6 +56,7 @@ typedef struct st_quicwind_stream_desc_t {
     char const* f_name;
     int is_binary;
 } quicwind_stream_desc_t;
+
 
 #define PICOQUIC_DEMO_STREAM_LIST_MAX 16
 
@@ -74,6 +78,26 @@ typedef struct st_quicwind_callback_ctx_t {
     picoquic_alpn_enum alpn;
     int progress_observed;
 } quicwind_callback_ctx_t;
+
+#if 1
+/* Loop callback context.
+ */
+typedef struct st_quicwind_loop_ctx_t {
+    picoquic_quic_t * qclient;
+    /* Address for wakeup calls */
+    struct sockaddr_storage loopback_address;
+    /* socket for wakeup calls */
+    SOCKET_TYPE wakeup_socket;
+    int wakeup_socket_af;
+    /* event queue and state */
+    int quicwind_is_closing;
+    quicwind_work_item_t* work_item_first;
+    HANDLE work_item_mutex;
+
+} quicwind_loop_ctx_t;
+
+quicwind_loop_ctx_t q_loop_ctx;
+#endif
 
 static quicwind_stream_ctx_t* quicwind_find_stream(
     quicwind_callback_ctx_t* ctx, uint64_t stream_id)
@@ -281,9 +305,10 @@ picoquic_quic_t* quicwind_create_context(const char * alpn, int mtu_max, const c
         qclient = picoquic_create(8, NULL, NULL, root_crt, alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename, NULL, 0);
 
         picoquic_set_default_congestion_algorithm(qclient, picoquic_cubic_algorithm);
-
+#if 1
         /* DEBUG code: capture a log */
-        picoquic_set_qlog(qclient, ".");
+        picoquic_set_qlog(qclient, "qwlog");
+#endif
 
         if (picoquic_load_tokens(&qclient->p_first_token, current_time, token_store_filename) != 0) {
             AppendText(_T("Could not load tokens.\r\n"));
@@ -310,6 +335,27 @@ picoquic_quic_t* quicwind_create_context(const char * alpn, int mtu_max, const c
     return qclient;
 }
 
+#if 1
+/* Wake up the network */
+void quicwind_wake_up_network()
+{
+    if (q_loop_ctx.loopback_address.ss_family == AF_UNSPEC) {
+        AppendText(_T("Background thread is not ready.\r\n"));
+    }
+    else {
+        uint8_t wakeup[4] = { 0xc0, 0xff, 0xee, 0x11 };
+
+        /* Send the wakeup message to the loopback. */
+        int sent = sendto(q_loop_ctx.wakeup_socket, wakeup, sizeof(wakeup), 0,
+            (struct sockaddr*)&q_loop_ctx.loopback_address,
+            (q_loop_ctx.loopback_address.ss_family == AF_INET) ?
+            sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+        if (sent != sizeof(wakeup)) {
+            AppendText(_T("Cannot send wakeup message"));
+        }
+    }
+}
+#else
 /* Wake up the network */
 void quicwind_wake_up_network()
 {
@@ -317,6 +363,7 @@ void quicwind_wake_up_network()
         SetEvent(net_wake_up);
     }
 }
+#endif
 
 /* Start download of a document
  */
@@ -435,6 +482,7 @@ int quicwind_start_connection(picoquic_quic_t * qclient,
     } else if (port_number != NULL) {
         port = atoi(port_number);
         if (port <= 0) {
+            AppendText(_T("Bad port number"));
             ret = -1;
         }
     }
@@ -453,12 +501,14 @@ int quicwind_start_connection(picoquic_quic_t * qclient,
             0xFF000012, sni, alpn, 1);
 
         if (cnx_client == NULL) {
+            AppendText(_T("Create connection failed."));
             ret = -1;
         }
         else {
             /* create callback context! */
             quicwind_callback_ctx_t * ctx = (quicwind_callback_ctx_t *)malloc(sizeof(quicwind_callback_ctx_t));
             if (ctx == NULL) {
+                AppendText(_T("Create callback context failed."));
                 ret = -1;
             }
             else {
@@ -478,6 +528,9 @@ int quicwind_start_connection(picoquic_quic_t * qclient,
                     default:
                         break;
                     }
+                }
+                else {
+                    AppendText(_T("Start connection failed."));
                 }
 
                 if (ret == 0 && doc_name != 0) {
@@ -576,6 +629,7 @@ int quicwind_disconnect(picoquic_quic_t * qclient, int sel_cid)
     picoquic_cnx_t * cnx = quicwind_find_cid(qclient, sel_cid);
 
     if (cnx == NULL) {
+        AppendText(_T("No connection context available.\r\n"));
         ret = -1;
     }
     else {
@@ -586,6 +640,28 @@ int quicwind_disconnect(picoquic_quic_t * qclient, int sel_cid)
 
 }
 
+#if 1
+void quicwind_orderly_exit(picoquic_quic_t* qclient, HANDLE qclient_thread, DWORD dw_qclient_thread_id)
+{
+    /* Need to orderly stop the client thread. */
+    if (qclient_thread != NULL) {
+        /* Set the close thread flag */
+        q_loop_ctx.quicwind_is_closing = 1;
+
+        quicwind_wake_up_network();
+
+        /* Wait until background thread has terminated, or 3 seconds. */
+        if (WaitForMultipleObjects(1, &qclient_thread, TRUE, 3000) == WAIT_TIMEOUT) {
+            TerminateThread(qclient_thread, 0);
+        }
+        /* Close the thread handle */
+        CloseHandle(qclient_thread);
+    }
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+}
+#else
 /* Close the process */
 void quicwind_orderly_exit(picoquic_quic_t * qclient, HANDLE qclient_thread, DWORD dw_qclient_thread_id)
 {
@@ -607,9 +683,105 @@ void quicwind_orderly_exit(picoquic_quic_t * qclient, HANDLE qclient_thread, DWO
         picoquic_free(qclient);
     }
 }
+#endif
 
 /* Add a message to the work queue 
  */
+#if 1
+int quicwind_add_work_item(quicwind_work_item_enum item_type,
+    int sel_cid, char const* name, char const* port_number, char const* doc_name, char const* alpn, char const* sni)
+{
+    int ret = 0;
+    DWORD w_ret = 0;
+    quicwind_work_item_t* w = NULL;
+
+    if (q_loop_ctx.work_item_mutex == NULL) {
+        AppendText(_T("Background thread is not ready.\r\n"));
+        ret = -1;
+    }
+    else {
+        w = (quicwind_work_item_t*)malloc(sizeof(quicwind_work_item_t));
+
+        if (w == NULL) {
+            AppendText(_T("Out of memory.\r\n"));
+            ret = -1;
+        }
+        else {
+            w->next = NULL;
+            w->item_type = item_type;
+            w->sel_cid = sel_cid;
+
+            w->name[0] = 0;
+            w->port[0] = 0;
+            w->doc[0] = 0;
+            w->alpn[0] = 0;
+            w->sni[0] = 0;
+
+            if (ret == 0 && name != NULL) {
+                ret = memcpy_s(w->name, sizeof(w->name), name, sizeof(w->name));
+            }
+
+            if (ret == 0 && port_number != NULL) {
+                ret = memcpy_s(w->port, sizeof(w->port), port_number, sizeof(w->port));
+            }
+
+            if (ret == 0 && doc_name != NULL) {
+                ret = memcpy_s(w->doc, sizeof(w->doc), doc_name, sizeof(w->doc));
+            }
+
+            if (ret == 0 && alpn != NULL) {
+                ret = memcpy_s(w->alpn, sizeof(w->alpn), alpn, sizeof(w->alpn));
+            }
+
+            if (ret == 0 && sni != NULL) {
+                ret = memcpy_s(w->sni, sizeof(w->sni), sni, sizeof(w->sni));
+            }
+
+            if (ret != 0) {
+                AppendText(_T("Cannot copy the work item.\r\n"));
+            }
+            else {
+                w_ret = WaitForSingleObject(q_loop_ctx.work_item_mutex, 1000);
+                switch (w_ret) {
+                case WAIT_OBJECT_0: {
+                    quicwind_work_item_t* next = q_loop_ctx.work_item_first;
+                    quicwind_work_item_t* last = NULL;
+
+                    while (next) {
+                        last = next;
+                        next = next->next;
+                    }
+
+                    if (last) {
+                        last->next = w;
+                    }
+                    else {
+                        q_loop_ctx.work_item_first = w;
+                    }
+                    if (!ReleaseMutex(q_loop_ctx.work_item_mutex)) {
+                        AppendText(_T("Cannot release the work item mutex.\r\n"));
+                    }
+
+                    quicwind_wake_up_network();
+
+                    break;
+                }
+                default:
+                    AppendText(_T("Cannot obtain the work item mutex.\r\n"));
+                    ret = -1;
+                    break;
+                }
+            }
+
+            if (ret != 0) {
+                free(w);
+            }
+        }
+    }
+
+    return ret;
+}
+#else
 int quicwind_add_work_item(quicwind_work_item_enum item_type,
     int sel_cid, char const * name, char const *port_number, char const * doc_name, char const * alpn, char const *sni)
 {
@@ -702,13 +874,79 @@ int quicwind_add_work_item(quicwind_work_item_enum item_type,
 
     return ret;
 }
-
+#endif
 /* Consume the first work item in the queue */
+#if 1
 int quicwind_execute_work_item(picoquic_quic_t * qclient)
 {
     int ret = 0;
     DWORD w_ret;
     quicwind_work_item_t * w = NULL;
+
+    if (q_loop_ctx.work_item_mutex == NULL) {
+        AppendText(_T("Background thread is not ready.\r\n"));
+        ret = -1;
+    }
+    else {
+        w_ret = WaitForSingleObject(q_loop_ctx.work_item_mutex, 1000);
+        switch (w_ret) {
+        case WAIT_OBJECT_0: {
+            if (q_loop_ctx.work_item_first != NULL) {
+                w = q_loop_ctx.work_item_first;
+                q_loop_ctx.work_item_first = w->next;
+            }
+
+            if (!ReleaseMutex(q_loop_ctx.work_item_mutex)) {
+                AppendText(_T("Thread cannot release the work item mutex.\r\n"));
+            }
+            break;
+        }
+        default:
+            AppendText(_T("Cannot obtain the work item mutex.\r\n"));
+            ret = -1;
+            break;
+        }
+    }
+
+    if (w != NULL) {
+        switch (w->item_type) {
+        case quicwind_work_item_connection:
+            if (quicwind_start_connection(qclient,
+                (w->name[0] != 0) ? w->name : NULL, (w->port[0] != 0) ? w->port : NULL,
+                (w->doc[0] != 0 > 0) ? w->doc : NULL, (w->alpn[0] != 0) ? w->alpn : NULL,
+                (w->sni[0] != 0) ? w->sni : NULL) != 0) {
+                AppendText(_T("Could not create the connection.\r\n"));
+            }
+            else {
+                AppendText(_T("Created a connection\r\n"));
+            }
+            break;
+        case quicwind_work_item_load_file:
+            if (quicwind_load_file(qclient, w->sel_cid, w->doc) != 0) {
+                AppendText(_T("Something happened, could not request the document.\r\n"));
+            }
+            break;
+        case quicwind_work_item_disconnect:
+            if (quicwind_disconnect(qclient, w->sel_cid) != 0) {
+                AppendText(_T("Something happened, could not close the connection.\r\n"));
+            }
+            break;
+        default:
+            AppendText(_T("Thread found unknown item type.\r\n"));
+            break;
+        }
+        free(w);
+    }
+
+    return ret;
+}
+#else
+/* Consume the first work item in the queue */
+int quicwind_execute_work_item(picoquic_quic_t* qclient)
+{
+    int ret = 0;
+    DWORD w_ret;
+    quicwind_work_item_t* w = NULL;
 
     if (work_item_mutex == NULL) {
         AppendText(_T("Background thread is not ready.\r\n"));
@@ -767,11 +1005,38 @@ int quicwind_execute_work_item(picoquic_quic_t * qclient)
 
     return ret;
 }
+#endif
 
+#if 1
 void quicwind_clear_work_items()
 {
     DWORD w_ret;
     quicwind_work_item_t * w = NULL;
+
+    if (q_loop_ctx.work_item_mutex != NULL) {
+        w_ret = WaitForSingleObject(q_loop_ctx.work_item_mutex, 1000);
+        switch (w_ret) {
+        case WAIT_OBJECT_0: {
+            while (q_loop_ctx.work_item_first != NULL) {
+                w = q_loop_ctx.work_item_first;
+                q_loop_ctx.work_item_first = w->next;
+                free(w);
+            }
+            CloseHandle(q_loop_ctx.work_item_mutex);
+            q_loop_ctx.work_item_mutex = NULL;
+            break;
+        }
+        default:
+            AppendText(_T("Cannot obtain the work item mutex.\r\n"));
+            break;
+        }
+    }
+}
+#else
+void quicwind_clear_work_items()
+{
+    DWORD w_ret;
+    quicwind_work_item_t* w = NULL;
 
     if (work_item_mutex != NULL) {
         w_ret = WaitForSingleObject(work_item_mutex, 1000);
@@ -792,6 +1057,97 @@ void quicwind_clear_work_items()
         }
     }
 }
+#endif
+
+#if 1
+/* Start the protocol thread upon launching the application.
+ * This is done by calling the default loop for windows,
+ * and defining a specific loop callback.
+ */
+
+static int quicwind_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
+    void* callback_ctx, void * callback_arg)
+{
+    int ret = 0;
+    quicwind_loop_ctx_t* cb_ctx = (quicwind_loop_ctx_t*)callback_ctx;
+
+    if (cb_ctx == NULL || cb_ctx != (void*)&q_loop_ctx) {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    else {
+        switch (cb_mode) {
+        case picoquic_packet_loop_ready:
+            /* fprintf(stdout, "Waiting for packets.\n"); */
+            break;
+        case picoquic_packet_loop_after_receive:
+            /* Consider loop on local event processing */
+            if (*((size_t*)callback_arg) > 0) {
+                AppendText(_T("Packet received\r\n"));
+            }
+            break;
+        case picoquic_packet_loop_after_send:
+            /* if disconnected, return PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP */
+            if (*((size_t*)callback_arg) > 0) {
+                AppendText(_T("Packet sent\r\n"));
+            }
+            break;
+        case picoquic_packet_loop_port_update:
+            picoquic_store_addr(&q_loop_ctx.loopback_address, (struct sockaddr*)callback_arg);
+            if (q_loop_ctx.loopback_address.ss_family != q_loop_ctx.wakeup_socket_af) {
+                if (q_loop_ctx.wakeup_socket_af != AF_UNSPEC) {
+                    SOCKET_CLOSE(q_loop_ctx.wakeup_socket);
+                    q_loop_ctx.wakeup_socket = INVALID_SOCKET;
+                    q_loop_ctx.wakeup_socket_af = AF_UNSPEC;
+                }
+                q_loop_ctx.wakeup_socket = picoquic_open_client_socket(q_loop_ctx.loopback_address.ss_family);
+                if (q_loop_ctx.wakeup_socket == INVALID_SOCKET) {
+                    AppendText(_T("Could not create wakeup socket\r\n"));
+                    ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+                }
+                else {
+                    q_loop_ctx.wakeup_socket_af = q_loop_ctx.loopback_address.ss_family;
+                }
+            }
+            if (ret == 0) {
+                AppendText(_T("Wakeup port updated\r\n"));
+            }
+            break;
+        default:
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            break;
+        }
+
+        while (ret == 0 && q_loop_ctx.work_item_first != NULL) {
+            ret = quicwind_execute_work_item(q_loop_ctx.qclient);
+        }
+    }
+    return ret;
+}
+
+DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
+{
+
+    /* Wait for packets */
+    picoquic_quic_t* qclient = (picoquic_quic_t*)lpParam;
+    int ret = 0;
+
+    memset(&q_loop_ctx, 0, sizeof(quicwind_loop_ctx_t));
+    q_loop_ctx.work_item_mutex = CreateMutex(NULL, FALSE, NULL);
+    q_loop_ctx.qclient = qclient;
+
+    ret = picoquic_packet_loop_win(qclient, 0, 0, 0, 0, quicwind_loop_cb, &q_loop_ctx);
+
+    /* Exit from the loop */
+    quicwind_clear_work_items();
+
+    if (!q_loop_ctx.quicwind_is_closing) {
+        AppendText(_T("Error: Network thread exit.\r\n"));
+    }
+
+    return ret;
+}
+
+#else
 
 /* Start the protocol thread upon launching the application.
  * The background thread creates sockets, creates a client context,
@@ -1001,3 +1357,4 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
 
     return ret;
 }
+#endif

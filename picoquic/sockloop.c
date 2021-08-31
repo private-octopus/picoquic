@@ -241,7 +241,11 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (loop_callback != NULL) {
-        ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx);
+        struct sockaddr_storage l_addr;
+        ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx, NULL);
+        if (picoquic_store_loopback_addr(&l_addr, sock_af[0], sock_ports[0]) == 0) {
+            ret = loop_callback(quic, picoquic_packet_loop_port_update, loop_callback_ctx, &l_addr);
+        }
     }
 
     if (ret == 0) {
@@ -302,7 +306,8 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                     &last_cnx, current_time);
 
                 if (loop_callback != NULL) {
-                    ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx);
+                    size_t b_recvd = (size_t)bytes_recv;
+                    ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx, &b_recvd);
                 }
                 if (ret == 0) {
                     /* Try to receive more packets if possible */
@@ -311,6 +316,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                 }
             }
             if (ret != PICOQUIC_NO_ERROR_SIMULATE_NAT && ret != PICOQUIC_NO_ERROR_SIMULATE_MIGRATION) {
+                size_t bytes_sent = 0;
                 while (ret == 0) {
                     struct sockaddr_storage peer_addr;
                     struct sockaddr_storage local_addr;
@@ -325,6 +331,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
 
                     if (ret == 0 && send_length > 0) {
                         SOCKET_TYPE send_socket = INVALID_SOCKET;
+                        bytes_sent += send_length;
 
                         for (int i = 0; i < nb_sockets; i++) {
                             if (sock_af[i] == peer_addr.ss_family) {
@@ -402,7 +409,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                 }
 
                 if (ret == 0 && loop_callback != NULL) {
-                    ret = loop_callback(quic, picoquic_packet_loop_after_send, loop_callback_ctx);
+                    ret = loop_callback(quic, picoquic_packet_loop_after_send, loop_callback_ctx, &bytes_sent);
                 }
             }
         }
@@ -432,6 +439,13 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                 s_socket[0] = s_mig;
                 sock_ports[0] = next_port;
                 ret = 0;
+
+                if (loop_callback != NULL) {
+                    struct sockaddr_storage l_addr;
+                    if (picoquic_store_loopback_addr(&l_addr, sock_af[0], sock_ports[0]) == 0) {
+                        ret = loop_callback(quic, picoquic_packet_loop_port_update, loop_callback_ctx, &l_addr);
+                    }
+                }
             } else {
                 /* Testing organized migration */
                 if (nb_sockets < PICOQUIC_PACKET_LOOP_SOCKETS_MAX && last_cnx != NULL) {
