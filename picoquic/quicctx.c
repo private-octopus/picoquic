@@ -2806,6 +2806,11 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
             cnx->local_parameters.enable_multipath = quic->default_multipath_option & 1;
             cnx->local_parameters.enable_simple_multipath = (quic->default_multipath_option >> 1) & 1;
+            /* Apply the defined MTU MAX instead of default, if specified */
+            if (cnx->quic->mtu_max > 0)
+            {
+                cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
+            }
         } else {
             memcpy(&cnx->local_parameters, quic->default_tp, sizeof(picoquic_tp_t));
             /* If the default parameters include preferred address, document it */
@@ -2820,6 +2825,12 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                         cnx->local_parameters.prefered_address.statelessResetToken);
                 }
             }
+
+            /* Apply the defined MTU MAX if specified and not set in defaults. */
+            if (cnx->local_parameters.max_packet_size == 0 && cnx->quic->mtu_max > 0)
+            {
+                cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
+            }
         }
 
         /* If local connection ID size is null, don't allow migration */
@@ -2827,10 +2838,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->local_parameters.migration_disabled = 1;
         }
 
-        if (cnx->quic->mtu_max > 0)
-        {
-            cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
-        }
 
         /* Initialize BDP transport parameter */
         if (quic->default_send_receive_bdp_frame) {
