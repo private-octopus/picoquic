@@ -753,6 +753,34 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(mtu_blocked)
+        {
+            int ret = mtu_blocked_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_delayed)
+        {
+            int ret = mtu_delayed_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_required)
+        {
+            int ret = mtu_required_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_max)
+        {
+            int ret = mtu_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(mtu_drop)
         {
             int ret = mtu_drop_test();

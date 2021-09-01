@@ -2767,6 +2767,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         }
         cnx->initial_cnxid = initial_cnx_id;
         cnx->quic = quic;
+        cnx->pmtud_policy = quic->default_pmtud_policy;
         /* Create the connection ID number 0 */
         cnxid0 = picoquic_create_local_cnxid(cnx, NULL, start_time);
         cnx->local_cnxid_oldest_created = start_time;
@@ -3179,9 +3180,19 @@ void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwi
     cnx->seed_ip_addr_length = ip_addr_length;
 }
 
+void picoquic_set_default_pmtud_policy(picoquic_quic_t* quic, picoquic_pmtud_policy_enum pmtud_policy)
+{
+    quic->default_pmtud_policy = pmtud_policy;
+}
+
+void picoquic_cnx_set_pmtud_policy(picoquic_cnx_t* cnx, picoquic_pmtud_policy_enum pmtud_policy)
+{
+    cnx->pmtud_policy = pmtud_policy;
+}
+
 void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required)
 {
-    cnx->is_pmtud_required = is_pmtud_required;
+    cnx->pmtud_policy = (is_pmtud_required) ? picoquic_pmtud_required : picoquic_pmtud_basic;
 }
 
 /*
