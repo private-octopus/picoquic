@@ -2810,7 +2810,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             /* Apply the defined MTU MAX instead of default, if specified */
             if (cnx->quic->mtu_max > 0)
             {
-                cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
+                cnx->local_parameters.max_packet_size = cnx->quic->mtu_max -
+                    PICOQUIC_MTU_OVERHEAD(addr_to);
             }
         } else {
             memcpy(&cnx->local_parameters, quic->default_tp, sizeof(picoquic_tp_t));
@@ -2830,7 +2831,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             /* Apply the defined MTU MAX if specified and not set in defaults. */
             if (cnx->local_parameters.max_packet_size == 0 && cnx->quic->mtu_max > 0)
             {
-                cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
+                cnx->local_parameters.max_packet_size = cnx->quic->mtu_max -
+                    PICOQUIC_MTU_OVERHEAD(addr_to);
             }
         }
 
@@ -3074,9 +3076,10 @@ void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const
 {
     cnx->local_parameters = *tp;
 
-    if (cnx->quic->mtu_max > 0)
+    if (cnx->quic->mtu_max > 0 && cnx->local_parameters.max_packet_size == 0)
     {
-        cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
+        cnx->local_parameters.max_packet_size = cnx->quic->mtu_max - 
+            PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&(cnx->path[0])->peer_addr);
     }
 
     /* Initialize local flow control variables to advertised values */

@@ -563,8 +563,19 @@ void picoquic_set_default_connection_id_ttl(picoquic_quic_t* quic, uint64_t ttl_
 
 uint64_t picoquic_get_default_connection_id_ttl(picoquic_quic_t* quic);
 
-/* Setting the max mtu that can be found or tried using path MTU discovery.*/
+/* Setting the max mtu that can be found or tried using path MTU discovery.
+ * The API uses the traditional definition of the path MTU. The size of 
+ * packet sent is the sum of the lengths of IPv4 or IPv6 header (20 or 40 bytes),
+ * UDP header (8 bytes) and UDP payload. The QUIC stack can only control the
+ * size of the udp payload, which is negotiated through transport parameters
+ * during the handshake. The negotiated value will be set by subtracting
+ * from the "mtu_max" parameter the estimated IP and UDP over, which depends
+ * on the IP address used for the connection and is computed using the
+ * macro "PICOQUIC_MTU_OVERHEAD".
+ */
+#define PICOQUIC_MTU_OVERHEAD(p_s_addr) (((p_s_addr)->sa_family==AF_INET6)?48:28)
 void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max);
+
 
 /* Set the ALPN function used to verify incoming ALPN */
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn);

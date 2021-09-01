@@ -1979,8 +1979,9 @@ static size_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_
         if (cnx->remote_parameters.max_packet_size > 0) {
             probe_length = cnx->remote_parameters.max_packet_size;
 
-            if (cnx->quic->mtu_max > 0 && (int)probe_length > cnx->quic->mtu_max) {
-                probe_length = cnx->quic->mtu_max;
+            if (cnx->quic->mtu_max > 0 && (int)probe_length >
+                cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->peer_addr)) {
+                probe_length = cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->peer_addr);
             }
             else if (probe_length > PICOQUIC_MAX_PACKET_SIZE) {
                 probe_length = PICOQUIC_MAX_PACKET_SIZE;
@@ -1990,7 +1991,7 @@ static size_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_
             }
         }
         else if (cnx->quic->mtu_max > 0) {
-            probe_length = cnx->quic->mtu_max;
+            probe_length = cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->peer_addr);
         }
         else {
             probe_length = PICOQUIC_PRACTICAL_MAX_MTU;
