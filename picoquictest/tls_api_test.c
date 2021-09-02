@@ -3708,11 +3708,15 @@ int stop_sending_test()
 }
 
 /*
-* MTU discovery test. Perform a moderate transmission.
-* Verify that MTU was properly set to expected value
+* MTU discovery tests. Perform a moderate transmission.
+* Verify that MTU was properly set to expected value,
+* according to the specified option.
 */
 
-int mtu_discovery_test()
+int mtu_discovery_test_one(picoquic_pmtud_policy_enum pmtud_policy, 
+    size_t mtu_expected_client, size_t mtu_expected_server,
+    test_api_stream_desc_t * scenario, size_t scenario_size,
+    uint32_t mtu_max)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -3721,12 +3725,20 @@ int mtu_discovery_test()
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
+        picoquic_set_default_pmtud_policy(test_ctx->qserver, pmtud_policy);
+        picoquic_cnx_set_pmtud_policy(test_ctx->cnx_client, pmtud_policy);
+        if (mtu_max > 0) {
+            picoquic_set_mtu_max(test_ctx->qserver, mtu_max);
+        }
+    }
+
+    if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
     /* Prepare to send data */
     if (ret == 0) {
-        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_mtu_discovery, sizeof(test_scenario_mtu_discovery));
+        ret = test_api_init_send_recv_scenario(test_ctx, scenario, scenario_size);
     }
 
     /* Perform a data sending loop */
@@ -3735,9 +3747,9 @@ int mtu_discovery_test()
     }
 
     if (ret == 0) {
-        if (test_ctx->cnx_client->path[0]->send_mtu != test_ctx->cnx_server->local_parameters.max_packet_size) {
+        if (test_ctx->cnx_client->path[0]->send_mtu != mtu_expected_client) {
             ret = -1;
-        } else if (test_ctx->cnx_server->path[0]->send_mtu != test_ctx->cnx_client->local_parameters.max_packet_size) {
+        } else if (test_ctx->cnx_server->path[0]->send_mtu != mtu_expected_server) {
             ret = -1;
         }
     }
@@ -3750,8 +3762,43 @@ int mtu_discovery_test()
     return ret;
 }
 
+int mtu_discovery_test()
+{
+    int ret = mtu_discovery_test_one(picoquic_pmtud_basic, 1440, 1440, 
+        test_scenario_mtu_discovery, sizeof(test_scenario_mtu_discovery), 0);
+    return ret;
+}
+
+int mtu_blocked_test()
+{
+    int ret = mtu_discovery_test_one(picoquic_pmtud_blocked, 1252, 1252, 
+        test_scenario_mtu_discovery, sizeof(test_scenario_mtu_discovery), 0);
+    return ret;
+}
+
+int mtu_delayed_test()
+{
+    int ret = mtu_discovery_test_one(picoquic_pmtud_delayed, 1252, 1440, 
+        test_scenario_very_long, sizeof(test_scenario_very_long), 0);
+    return ret;
+}
+
+int mtu_required_test()
+{
+    int ret = mtu_discovery_test_one(picoquic_pmtud_required, 1440, 1440, 
+        test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0);
+    return ret;
+}
+
+int mtu_max_test()
+{
+    int ret = mtu_discovery_test_one(picoquic_pmtud_basic, 1392, 1392,
+        test_scenario_mtu_discovery, sizeof(test_scenario_mtu_discovery), 1420);
+    return ret;
+}
+
 /*
-* MTU discovery test. Perform a long duration transmission.
+* MTU drop test. Perform a long duration transmission.
 * Verify that MTU was properly set to expected value, then
 * simulate a routing event that causes the MTU to drop.
 * Check that the MTU gets reduced, and the transmission
@@ -3858,8 +3905,6 @@ int mtu_drop_test()
 
     return ret;
 }
-
-
 
 /*
  * Trying to reproduce the scenario that resulted in

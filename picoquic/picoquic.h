@@ -158,7 +158,15 @@ typedef enum {
     picoquic_state_disconnected
 } picoquic_state_enum;
 
+/* PMTUD 
+ */
 
+typedef enum {
+    picoquic_pmtud_basic = 0, /* default pmtud behavior, opportunistic */
+    picoquic_pmtud_required = 1, /* force pmtud asap */
+    picoquic_pmtud_delayed = 2, /* only do pmtud if lots of data has to be sent */
+    picoquic_pmtud_blocked = 3 /* never do pmtud */
+} picoquic_pmtud_policy_enum;
 /*
 * Quic spin bit variants
 */
@@ -555,8 +563,19 @@ void picoquic_set_default_connection_id_ttl(picoquic_quic_t* quic, uint64_t ttl_
 
 uint64_t picoquic_get_default_connection_id_ttl(picoquic_quic_t* quic);
 
-/* Setting the max mtu that can be found or tried using path MTU discovery.*/
+/* Setting the max mtu that can be found or tried using path MTU discovery.
+ * The API uses the traditional definition of the path MTU. The size of 
+ * packet sent is the sum of the lengths of IPv4 or IPv6 header (20 or 40 bytes),
+ * UDP header (8 bytes) and UDP payload. The QUIC stack can only control the
+ * size of the udp payload, which is negotiated through transport parameters
+ * during the handshake. The negotiated value will be set by subtracting
+ * from the "mtu_max" parameter the estimated IP and UDP over, which depends
+ * on the IP address used for the connection and is computed using the
+ * macro "PICOQUIC_MTU_OVERHEAD".
+ */
+#define PICOQUIC_MTU_OVERHEAD(p_s_addr) (((p_s_addr)->sa_family==AF_INET6)?48:28)
 void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max);
+
 
 /* Set the ALPN function used to verify incoming ALPN */
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn);
@@ -645,17 +664,26 @@ void picoquic_cnx_set_spinbit_policy(picoquic_cnx_t * cnx, picoquic_spinbit_vers
 void picoquic_set_crypto_epoch_length(picoquic_cnx_t* cnx, uint64_t crypto_epoch_length_max);
 uint64_t picoquic_get_crypto_epoch_length(picoquic_cnx_t* cnx);
 
+/* Set the PMTU discovery policy
+ * The API picoquic_cnx_set_pmtud_required is obsolete, should use instead:
+ * for is_pmtud_required = 0: picoquic_cnx_set_pmtud_policy(cnx, picoquic_pmtud_basic)
+ * for is_pmtud_required = 1: picoquic_cnx_set_pmtud_policy(cnx, picoquic_pmtud_required)
+ */
+void picoquic_set_default_pmtud_policy(picoquic_quic_t* quic, picoquic_pmtud_policy_enum pmtud_policy);
+void picoquic_cnx_set_pmtud_policy(picoquic_cnx_t* cnx, picoquic_pmtud_policy_enum pmtud_policy);
 void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required);
 
+/* Check whether the handshake is of type PSK*/
 int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx);
 
+/* Manage addresses */
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
 
 int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr);
 
-
+/* Manage connection IDs*/
 picoquic_connection_id_t picoquic_get_local_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_remote_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_initial_cnxid(picoquic_cnx_t* cnx);
@@ -663,6 +691,7 @@ picoquic_connection_id_t picoquic_get_client_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_server_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_logging_cnxid(picoquic_cnx_t* cnx);
 
+/* Manage connections */
 uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t* cnx);
 uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx);
 

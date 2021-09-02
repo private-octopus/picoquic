@@ -2767,6 +2767,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         }
         cnx->initial_cnxid = initial_cnx_id;
         cnx->quic = quic;
+        cnx->pmtud_policy = quic->default_pmtud_policy;
         /* Create the connection ID number 0 */
         cnxid0 = picoquic_create_local_cnxid(cnx, NULL, start_time);
         cnx->local_cnxid_oldest_created = start_time;
@@ -2806,6 +2807,12 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
             cnx->local_parameters.enable_multipath = quic->default_multipath_option & 1;
             cnx->local_parameters.enable_simple_multipath = (quic->default_multipath_option >> 1) & 1;
+            /* Apply the defined MTU MAX instead of default, if specified */
+            if (cnx->quic->mtu_max > 0)
+            {
+                cnx->local_parameters.max_packet_size = cnx->quic->mtu_max -
+                    PICOQUIC_MTU_OVERHEAD(addr_to);
+            }
         } else {
             memcpy(&cnx->local_parameters, quic->default_tp, sizeof(picoquic_tp_t));
             /* If the default parameters include preferred address, document it */
@@ -2820,6 +2827,13 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                         cnx->local_parameters.prefered_address.statelessResetToken);
                 }
             }
+
+            /* Apply the defined MTU MAX if specified and not set in defaults. */
+            if (cnx->local_parameters.max_packet_size == 0 && cnx->quic->mtu_max > 0)
+            {
+                cnx->local_parameters.max_packet_size = cnx->quic->mtu_max -
+                    PICOQUIC_MTU_OVERHEAD(addr_to);
+            }
         }
 
         /* If local connection ID size is null, don't allow migration */
@@ -2827,10 +2841,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->local_parameters.migration_disabled = 1;
         }
 
-        if (cnx->quic->mtu_max > 0)
-        {
-            cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
-        }
 
         /* Initialize BDP transport parameter */
         if (quic->default_send_receive_bdp_frame) {
@@ -3066,9 +3076,10 @@ void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const
 {
     cnx->local_parameters = *tp;
 
-    if (cnx->quic->mtu_max > 0)
+    if (cnx->quic->mtu_max > 0 && cnx->local_parameters.max_packet_size == 0)
     {
-        cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
+        cnx->local_parameters.max_packet_size = cnx->quic->mtu_max - 
+            PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&(cnx->path[0])->peer_addr);
     }
 
     /* Initialize local flow control variables to advertised values */
@@ -3172,9 +3183,19 @@ void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwi
     cnx->seed_ip_addr_length = ip_addr_length;
 }
 
+void picoquic_set_default_pmtud_policy(picoquic_quic_t* quic, picoquic_pmtud_policy_enum pmtud_policy)
+{
+    quic->default_pmtud_policy = pmtud_policy;
+}
+
+void picoquic_cnx_set_pmtud_policy(picoquic_cnx_t* cnx, picoquic_pmtud_policy_enum pmtud_policy)
+{
+    cnx->pmtud_policy = pmtud_policy;
+}
+
 void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required)
 {
-    cnx->is_pmtud_required = is_pmtud_required;
+    cnx->pmtud_policy = (is_pmtud_required) ? picoquic_pmtud_required : picoquic_pmtud_basic;
 }
 
 /*

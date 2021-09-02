@@ -185,7 +185,7 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
 
                 picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
 
-                qserver->mtu_max = config->mtu_max;
+                picoquic_set_mtu_max(qserver, config->mtu_max);
                 if (config->qlog_dir != NULL)
                 {
                     picoquic_set_qlog(qserver, config->qlog_dir);

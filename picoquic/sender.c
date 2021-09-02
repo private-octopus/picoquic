@@ -1979,8 +1979,9 @@ static size_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_
         if (cnx->remote_parameters.max_packet_size > 0) {
             probe_length = cnx->remote_parameters.max_packet_size;
 
-            if (cnx->quic->mtu_max > 0 && (int)probe_length > cnx->quic->mtu_max) {
-                probe_length = cnx->quic->mtu_max;
+            if (cnx->quic->mtu_max > 0 && (int)probe_length >
+                cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->peer_addr)) {
+                probe_length = cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->peer_addr);
             }
             else if (probe_length > PICOQUIC_MAX_PACKET_SIZE) {
                 probe_length = PICOQUIC_MAX_PACKET_SIZE;
@@ -1990,7 +1991,7 @@ static size_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_
             }
         }
         else if (cnx->quic->mtu_max > 0) {
-            probe_length = cnx->quic->mtu_max;
+            probe_length = cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->peer_addr);
         }
         else {
             probe_length = PICOQUIC_PRACTICAL_MAX_MTU;
@@ -2017,7 +2018,7 @@ picoquic_pmtu_discovery_status_enum picoquic_is_mtu_probe_needed(picoquic_cnx_t*
     int ret = picoquic_pmtu_discovery_not_needed;
 
     if ((cnx->cnx_state == picoquic_state_ready || cnx->cnx_state == picoquic_state_client_ready_start || cnx->cnx_state == picoquic_state_server_false_start)
-        && path_x->mtu_probe_sent == 0) {
+        && path_x->mtu_probe_sent == 0 && cnx->pmtud_policy != picoquic_pmtud_blocked) {
         if (path_x->send_mtu_max_tried == 0 || path_x->send_mtu_max_tried > 1400) {
             /* MTU discovery is required if the chances of success are large enough
              * and there are enough packets to send to amortize the discovery cost.
@@ -2026,7 +2027,7 @@ picoquic_pmtu_discovery_status_enum picoquic_is_mtu_probe_needed(picoquic_cnx_t*
              * for that. */
             uint64_t next_probe = picoquic_next_mtu_probe_length(cnx, path_x);
             if (next_probe > path_x->send_mtu) {
-                if (cnx->is_pmtud_required) {
+                if (cnx->pmtud_policy == picoquic_pmtud_required) {
                     ret = picoquic_pmtu_discovery_required;
                 }
                 else {
@@ -2037,7 +2038,12 @@ picoquic_pmtu_discovery_status_enum picoquic_is_mtu_probe_needed(picoquic_cnx_t*
                         ret = picoquic_pmtu_discovery_required;
                     }
                     else {
-                        ret = picoquic_pmtu_discovery_optional;
+                        if (cnx->pmtud_policy == picoquic_pmtud_basic) {
+                            ret = picoquic_pmtu_discovery_optional;
+                        }
+                        else {
+                            ret = picoquic_pmtu_discovery_not_needed;
+                        }
                     }
                 }
             }

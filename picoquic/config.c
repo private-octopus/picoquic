@@ -780,7 +780,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         }
 
         if (config->mtu_max > 0) {
-            quic->mtu_max = config->mtu_max;
+            picoquic_set_mtu_max(quic, config->mtu_max);
         }
 
         if (config->cnx_id_length != -1) {
