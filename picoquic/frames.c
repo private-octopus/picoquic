@@ -1857,9 +1857,15 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
                 if (!rs_is_path_limited || bw_estimate > path_x->bandwidth_estimate) {
                     path_x->bandwidth_estimate = bw_estimate;
                     if (path_x == cnx->path[0]){
-                        if (cnx->is_ack_frequency_negotiated &&
-                            cnx->ack_gap_local != picoquic_compute_ack_gap(cnx, bw_estimate)){
-                            cnx->is_ack_frequency_updated = 1;
+                        if (cnx->is_ack_frequency_negotiated) {
+                            /* Compute the desired value of the ack frequency*/
+                            uint64_t ack_gap;
+                            uint64_t ack_delay_max;
+                            picoquic_compute_ack_gap_and_delay(cnx, cnx->path[0]->rtt_min, cnx->remote_parameters.min_ack_delay,
+                                bw_estimate, &ack_gap, &ack_delay_max);
+                            if (ack_gap != cnx->ack_gap_local) {
+                                cnx->is_ack_frequency_updated = 1;
+                            }
                         }
                     }
                 }
@@ -1933,7 +1939,7 @@ void picoquic_estimate_max_path_bandwidth(picoquic_cnx_t* cnx, picoquic_path_t* 
  * - If packets are received out of order and the peer is sensitive, the gap is 1.
  */
 
-uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
+static uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
 {
     uint64_t nb_packets = (cnx->path[0]->cwin / cnx->path[0]->send_mtu);
     uint64_t ack_gap;
@@ -1969,11 +1975,6 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
     if (ack_gap < ack_gap_min) {
         ack_gap = ack_gap_min;
     }
-#if 0
-    else if (ack_gap > 32) {
-        ack_gap = 32;
-    }
-#else
     else if (ack_gap > 32) {
         if (cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled ||
             cnx->congestion_alg == NULL ||
@@ -1990,7 +1991,6 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
             }
         }
     }
-#endif
 
     return ack_gap;
 }
@@ -2010,6 +2010,7 @@ uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t* cnx, uint64_t rtt, uint6
     if (ack_delay_max < remote_min_ack_delay) {
         ack_delay_max = remote_min_ack_delay;
     }
+
     return ack_delay_max;
 }
 
@@ -2022,6 +2023,12 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
     *ack_gap = picoquic_compute_ack_gap(cnx, data_rate);
 
     if (2 * cnx->path[0]->smoothed_rtt > 3 * cnx->path[0]->rtt_min) {
+        /* This code kicks in when the smoothed RTT is larger than 1.5 times the RTT Min.
+         * If that is the case, the default computation of ACK gap and ACK delay may
+         * be wrong, and a more conservative computation is required.
+         * This code assume that ACK gap and ACK delay are already computed using
+         * the default algorithms.
+         */
         if (cnx->is_ack_frequency_negotiated) {
             if (cnx->congestion_alg != NULL &&
                 cnx->congestion_alg->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_BBR) {
@@ -2030,7 +2037,7 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
                  * to control the ACK rate.
                  */
                 return_data_rate = cnx->path[0]->receive_rate_max;
-                nb_packets = (cnx->path[0]->cwin / cnx->path[0]->send_mtu);
+                nb_packets = ((cnx->path[0]->cwin + cnx->path[0]->send_mtu -1)/ cnx->path[0]->send_mtu);
             }
         }
         else {
@@ -2038,15 +2045,10 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
             uint64_t rtt_bytes_times_1000000 = data_rate * cnx->path[0]->smoothed_rtt;
             uint64_t rtt_packets_times_1000000 = rtt_bytes_times_1000000 / cnx->path[0]->send_mtu;
             nb_packets = (rtt_packets_times_1000000 + 999999) / 1000000;
-            if (nb_packets < 2) {
-                nb_packets = 2;
-            }
             return_data_rate = cnx->path[0]->bandwidth_estimate;
-#if 1
-            if (cnx->client_mode) {
-                DBG_PRINTF("Watch");
-            }
-#endif
+        }
+        if (nb_packets < 2) {
+            nb_packets = 2;
         }
         if (return_data_rate > 0) {
             /* Estimate of ACK size = L2 + IPv6 + UDP + padded ACK */
@@ -2279,7 +2281,8 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
             if (old_path == cnx->path[0]) {
                 cnx->is_ack_frequency_updated = cnx->is_ack_frequency_negotiated;
                 if (!cnx->is_ack_frequency_negotiated || cnx->cnx_state != picoquic_state_ready) {
-                    cnx->ack_delay_remote = picoquic_compute_ack_delay_max(cnx, old_path->rtt_min, PICOQUIC_ACK_DELAY_MIN);
+                    picoquic_compute_ack_gap_and_delay(cnx, cnx->path[0]->rtt_min, PICOQUIC_ACK_DELAY_MIN,
+                        cnx->path[0]->receive_rate_max, &cnx->ack_gap_remote, &cnx->ack_delay_remote);
                 }
             }
         }

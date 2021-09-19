@@ -8116,14 +8116,12 @@ int bbr_asym100_test()
     return ret;
 }
 
-/* Asymmetric test, nodelay
+/* Asymmetric test, no delay.
  * Variant in which the negotiation of delayed ACK is disabled.
- * 
- * TODO: fix bugs and get the target time under 9 seconds.
  */
 int bbr_asym100_nodelay_test()
 {
-    uint64_t max_completion_time = 29000000;
+    uint64_t max_completion_time = 8500000;
     uint64_t latency = 1000;
     uint64_t jitter = 750;
     uint64_t buffer = 50000;
