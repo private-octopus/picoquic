@@ -1928,7 +1928,7 @@ void picoquic_estimate_max_path_bandwidth(picoquic_cnx_t* cnx, picoquic_path_t* 
     }
 }
 
-/* Compute the desired number of packets coalesce in a single ACK.
+/* Compute the desired number of packets coalesce in a single ACK, and the ACK delay.
  * This will be used to compute the value sent to the peer in the ACK FREQUENCY frame,
  * using the bandwidth estimate computed from received ACKs.
  * When the ACK FREQUENCY is not negotiated, this will be computed locally,
@@ -1939,17 +1939,35 @@ void picoquic_estimate_max_path_bandwidth(picoquic_cnx_t* cnx, picoquic_path_t* 
  * - If packets are received out of order and the peer is sensitive, the gap is 1.
  */
 
-static uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
+static uint64_t picoquic_compute_packets_in_window(picoquic_cnx_t* cnx, uint64_t data_rate)
 {
-    uint64_t nb_packets = (cnx->path[0]->cwin / cnx->path[0]->send_mtu);
+    uint64_t nb_packets = 0;
+
+    if (cnx->is_ack_frequency_negotiated) {
+        nb_packets = ((cnx->path[0]->cwin) / cnx->path[0]->send_mtu);
+        /* TODO: in the case of BBR, the number of packets in transit is not
+         * a function of CWIN, but rather rtt estimate * bottleneck bandwidth.
+         * The current formulation works, but we could be more precise.
+         */
+    }
+    else {
+        /* Estimate the number of packets in flight from datarate and RTT */
+        uint64_t rtt_bytes_times_1000000 = data_rate * cnx->path[0]->smoothed_rtt;
+        uint64_t rtt_packets_times_1000000 = rtt_bytes_times_1000000 / cnx->path[0]->send_mtu;
+        nb_packets = (rtt_packets_times_1000000 + 999999) / 1000000;
+    }
+    if (nb_packets < 2) {
+        nb_packets = 2;
+    }
+    return nb_packets;
+}
+
+static uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate, uint64_t nb_packets)
+{
     uint64_t ack_gap;
     uint64_t ack_gap_min = 2;
 
-    if (!cnx->is_ack_frequency_negotiated) {
-        uint64_t packet_rate_times_1M = (data_rate * 1000000) / cnx->path[0]->send_mtu;
-        nb_packets = packet_rate_times_1M / cnx->path[0]->smoothed_rtt;
-    }
-    else if (!cnx->path[0]->is_ssthresh_initialized) {
+    if (cnx->is_ack_frequency_negotiated && !cnx->path[0]->is_ssthresh_initialized) {
         nb_packets /= 2;
     }
 
@@ -2018,9 +2036,10 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
     uint64_t data_rate, uint64_t* ack_gap, uint64_t* ack_delay_max)
 {
     uint64_t return_data_rate = 0;
-    uint64_t nb_packets = 0;
+    uint64_t nb_packets = picoquic_compute_packets_in_window(cnx, data_rate);
+
     *ack_delay_max = picoquic_compute_ack_delay_max(cnx, rtt, remote_min_ack_delay);
-    *ack_gap = picoquic_compute_ack_gap(cnx, data_rate);
+    *ack_gap = picoquic_compute_ack_gap(cnx, data_rate, nb_packets);
 
     if (2 * cnx->path[0]->smoothed_rtt > 3 * cnx->path[0]->rtt_min) {
         /* This code kicks in when the smoothed RTT is larger than 1.5 times the RTT Min.
@@ -2030,23 +2049,12 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
          * the default algorithms.
          */
         if (cnx->is_ack_frequency_negotiated) {
-            if (cnx->congestion_alg != NULL &&
-                cnx->congestion_alg->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_BBR) {
-                /* Verify that the ACK rate can be sustained on the return path.
-                 * This only works well if the "delayed ack" option allows the server
-                 * to control the ACK rate.
-                 */
-                return_data_rate = cnx->path[0]->receive_rate_max;
-                nb_packets = ((cnx->path[0]->cwin + cnx->path[0]->send_mtu -1)/ cnx->path[0]->send_mtu);
-            }
+            return_data_rate = cnx->path[0]->receive_rate_max;
         }
         else {
-            /* Estimate the number of packets in flight from datarate and RTT */
-            uint64_t rtt_bytes_times_1000000 = data_rate * cnx->path[0]->smoothed_rtt;
-            uint64_t rtt_packets_times_1000000 = rtt_bytes_times_1000000 / cnx->path[0]->send_mtu;
-            nb_packets = (rtt_packets_times_1000000 + 999999) / 1000000;
             return_data_rate = cnx->path[0]->bandwidth_estimate;
         }
+
         if (nb_packets < 2) {
             nb_packets = 2;
         }
