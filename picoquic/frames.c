@@ -2041,11 +2041,6 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
             if (nb_packets < 2) {
                 nb_packets = 2;
             }
-#if 1
-            if (cnx->client_mode) {
-                DBG_PRINTF("Watch");
-            }
-#endif
         }
         if (return_data_rate > 0) {
             /* Estimate of ACK size = L2 + IPv6 + UDP + padded ACK */
@@ -2079,11 +2074,6 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
                     }
                 }
             }
-#if 1
-            if (cnx->client_mode) {
-                DBG_PRINTF("Watch");
-            }
-#endif
         }
     }
 }
@@ -3288,7 +3278,7 @@ uint8_t * picoquic_format_connection_close_frame(picoquic_cnx_t* cnx,
     if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_connection_close)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->local_error)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->offending_frame_type)) != NULL &&
-        (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, 0)) != NULL) {
+        (bytes = picoquic_frames_charz_encode(bytes, bytes_max, cnx->local_error_reason)) != NULL) {
         *is_pure_ack = 0;
     }
     else {
