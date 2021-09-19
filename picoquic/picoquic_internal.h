@@ -1569,14 +1569,9 @@ int picoquic_process_ack_of_ack_frame(
     picoquic_sack_list_t* first_sack, uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn);
 
 /* Computation of ack delay max and ack gap, based on RTT and Data Rate.
- * If ACK Frequency extension is used, these functions will compute the values
+ * If ACK Frequency extension is used, this function will compute the values
  * that will be sent to the peer. Otherwise, they computes the values used locally.
  */
-
-uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate);
-
-uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t * cnx, uint64_t rtt, uint64_t remote_min_ack_delay);
-
 void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint64_t remote_min_ack_delay, uint64_t data_rate, uint64_t* ack_gap, uint64_t* ack_delay_max);
 
 /* seed the rtt and bandwidth discovery */
