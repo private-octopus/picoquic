@@ -2034,9 +2034,13 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
             }
         }
         else {
-            uint64_t packet_rate_times_1M = (data_rate * 1000000) / cnx->path[0]->send_mtu;
-            nb_packets = packet_rate_times_1M / cnx->path[0]->smoothed_rtt;
-            return_data_rate = cnx->path[0]->bandwidth_estimate;
+            /* Estimate the number of packets in flight from datarate and RTT */
+            uint64_t rtt_bytes_times_1000000 = data_rate * cnx->path[0]->smoothed_rtt;
+            uint64_t rtt_packets_times_1000000 = rtt_bytes_times_1000000 / cnx->path[0]->send_mtu;
+            nb_packets = (rtt_packets_times_1000000 + 999999) / 1000000;
+            if (nb_packets < 2) {
+                nb_packets = 2;
+            }
         }
         if (return_data_rate > 0) {
             /* Estimate of ACK size = L2 + IPv6 + UDP + padded ACK */
@@ -2070,6 +2074,11 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
                     }
                 }
             }
+#if 1
+            if (cnx->client_mode) {
+                DBG_PRINTF("Watch");
+            }
+#endif
         }
     }
 }

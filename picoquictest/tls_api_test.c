@@ -7956,6 +7956,8 @@ int performance_test_one(uint64_t max_completion_time, uint64_t mbps, uint64_t r
 
         picoquic_set_binlog(test_ctx->qserver, ".");
         picoquic_set_binlog(test_ctx->qclient, ".");
+        /* Since the client connection was created before the binlog was set, force log of connection header */
+        binlog_new_connection(test_ctx->cnx_client);
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
