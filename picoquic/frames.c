@@ -2041,6 +2041,12 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
             if (nb_packets < 2) {
                 nb_packets = 2;
             }
+            return_data_rate = cnx->path[0]->bandwidth_estimate;
+#if 1
+            if (cnx->client_mode) {
+                DBG_PRINTF("Watch");
+            }
+#endif
         }
         if (return_data_rate > 0) {
             /* Estimate of ACK size = L2 + IPv6 + UDP + padded ACK */
