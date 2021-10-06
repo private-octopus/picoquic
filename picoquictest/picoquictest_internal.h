@@ -40,6 +40,14 @@ extern "C" {
 
 #define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
 
+
+ /* Callback function for sending and receiving datagrams.
+  */
+typedef int (*picoquic_datagram_send_fn)(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length, void* datagram_send_ctx);
+typedef int (*picoquic_datagram_recv_fn)(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length, void* datagram_recv_ctx);
+
 /* Test context
  */
 
@@ -145,6 +153,12 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
 
     /* File used to test bandwidth notification */
     FILE* bw_update;
+
+    /* Datagram test functions */
+    picoquic_datagram_send_fn datagram_send_fn;
+    void* datagram_send_ctx;
+    picoquic_datagram_recv_fn datagram_recv_fn;
+    void* datagram_recv_ctx;
 } picoquic_test_tls_api_ctx_t;
 
 typedef struct st_test_skip_frames_t {

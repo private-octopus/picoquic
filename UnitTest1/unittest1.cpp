@@ -388,6 +388,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(datagram)
+        {
+            int ret = datagram_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ddos_amplification)
         {
             int ret = ddos_amplification_test();

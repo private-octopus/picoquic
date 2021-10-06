@@ -668,6 +668,24 @@ int test_api_callback(picoquic_cnx_t* cnx,
         return 0;
     }
 
+    if (fin_or_event == picoquic_callback_prepare_datagram)
+    {
+        int ret = -1;
+        if (ctx->datagram_send_fn != NULL) {
+            ret = ctx->datagram_send_fn(cnx, bytes, length, ctx->datagram_send_ctx);
+        }
+        return ret;
+    }
+
+    if (fin_or_event == picoquic_callback_datagram)
+    {
+        int ret = -1;
+        if (ctx->datagram_recv_fn != NULL) {
+            ret = ctx->datagram_recv_fn(cnx, bytes, length, ctx->datagram_recv_ctx);
+        }
+        return ret;
+    }
+
     if (bytes != NULL) {
         if (cb_ctx->client_mode) {
             ctx->sum_data_received_at_client += (int) length;

@@ -82,6 +82,13 @@ int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
     return ret;
 }
 
+int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready)
+{
+    cnx->is_datagram_ready = is_ready;
+    return 0;
+}
+
+
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void * app_stream_ctx)
 {
@@ -3428,6 +3435,11 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
                         }
 
+                        if (ret == 0 && length <= header_length && cnx->is_datagram_ready) {
+                            bytes_next = picoquic_format_ready_datagram_frame(cnx, bytes_next, bytes_max,
+                                &more_data, &is_pure_ack, &ret);
+                        }
+
                         /* If present, send stream frames queued for retransmission */
                         if (ret == 0) {
                             bytes_next = picoquic_format_stream_frames_queued_for_retransmit(cnx, bytes_next, bytes_max,
@@ -3815,14 +3827,16 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         /* Start of CC controlled frames */
-
                         if (ret == 0 && length <= header_length) {
-                            if (cnx->first_datagram != NULL) {
+                            uint8_t* bytes0 = bytes_next;
+                            if (cnx->is_datagram_ready) {
+                                bytes_next = picoquic_format_ready_datagram_frame(cnx, bytes_next, bytes_max,
+                                    &more_data, &is_pure_ack, &ret);
+                            }
+                            else if (cnx->first_datagram != NULL) {
                                 bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
                             }
-                            else {
-                                datagram_tried_and_failed = 1;
-                            }
+                            datagram_tried_and_failed = (bytes_next == bytes0);
                         }
 
                         /* If present, send stream frames queued for retransmission */

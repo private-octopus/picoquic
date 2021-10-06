@@ -1710,7 +1710,6 @@ int picoquic_parse_ack_header(uint8_t const* bytes, size_t bytes_max,
     return ret;
 }
 
-
 picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc, picoquic_packet_context_t * pkt_ctx,
     uint64_t start_of_range, uint64_t end_of_range, uint64_t current_time, uint64_t time_stamp,
@@ -3925,6 +3924,103 @@ uint8_t * picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byt
     else {
         bytes = picoquic_format_first_misc_or_dg_frame(bytes, bytes_max, more_data, is_pure_ack, 
             &cnx->first_datagram, &cnx->last_datagram);
+    }
+
+    return bytes;
+}
+
+/* Provide a datagram buffer for the length specified by the application.
+ * The stack called with a pointer to the available space, which may extend
+ * to the end of the packet. There are several interesting cases:
+ * - if type + coded length + required space exceeds available:
+ *     MUST use "undetermined length" encoding.
+ *     if length < available space: 
+ *         add bits of padding in front of the type field,
+ *     return the buffer after type.
+ * - else:
+ *     set the low level type bit to 1 to show presence of length
+ *     encode the length after the type
+ *     return the buffer after length   
+ */
+
+typedef struct st_picoquic_datagram_buffer_argument_t {
+    uint8_t* bytes0; /* Points to the beginning of the encoding of the datagram frame */
+    uint8_t* bytes; /* Position after encoding the datagram frame type */
+    uint8_t* bytes_max; /* Pointer to the end of the packet */
+    uint8_t* after_data; /* Pointer to end of data written by app */
+    size_t allowed_space; /* Data size from bytes to end of packet */
+} picoquic_datagram_buffer_argument_t;
+
+uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length)
+{
+    picoquic_datagram_buffer_argument_t* data_ctx = (picoquic_datagram_buffer_argument_t*)context;
+    uint8_t* buffer = NULL;
+
+    if (length <= data_ctx->allowed_space) {
+        /* Compute the length of header and length field */
+        uint8_t* after_length = picoquic_frames_varint_encode(
+            data_ctx->bytes, data_ctx->bytes_max, length);
+        if (after_length == NULL || after_length + length > data_ctx->bytes_max) {
+            /* Too long! */
+            uint8_t* bytes = picoquic_frames_varint_encode(data_ctx->bytes0,
+                data_ctx->bytes_max, picoquic_frame_type_datagram);
+            uint8_t* tail = bytes + length;
+            if (tail < data_ctx->bytes_max) {
+                size_t delta = data_ctx->bytes_max - tail;
+                memset(data_ctx->bytes0, picoquic_frame_type_padding, delta);
+                bytes = picoquic_frames_varint_encode(data_ctx->bytes0 + delta,
+                    data_ctx->bytes_max, picoquic_frame_type_datagram);
+            }
+            data_ctx->after_data = bytes + length;
+            buffer = bytes;
+        }
+        else {
+            buffer = after_length;
+            data_ctx->after_data = after_length + length;
+        }
+    }
+
+    return buffer;
+}
+
+/* Ready for datagram callback.
+ * Called if the application has declared such readiness.
+ * Provides context in "buffer" space
+ * Application will then call picoquic_provide_datagram_buffer if
+ * datagram is actually available, and then fill the number of specified.
+ * The picoquic_provide_datagram_buffer will set the "still listening" bit
+ */
+
+uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    uint8_t* bytes_max, int* more_data, int* is_pure_ack, int * ret)
+{
+    uint8_t* bytes0 = bytes;
+
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_datagram_l)) == NULL){
+        bytes = bytes0;
+        *more_data = 1;
+    }
+    else {
+        /* Compute the length */
+        size_t allowed_space = bytes_max - bytes;
+        picoquic_datagram_buffer_argument_t datagram_data_context;
+
+        datagram_data_context.bytes0 = bytes0;
+        datagram_data_context.bytes = bytes;
+        datagram_data_context.bytes_max = bytes_max;
+        datagram_data_context.allowed_space = allowed_space;
+        datagram_data_context.after_data = bytes0;
+
+        if ((cnx->callback_fn)(cnx, 0, (uint8_t*)&datagram_data_context, allowed_space,
+            picoquic_callback_prepare_datagram, cnx->callback_ctx, NULL) != 0) {
+            /* something went wrong */
+            picoquic_log_app_message(cnx, "Prepare datagram returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+            *ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+            bytes = bytes0; /* CHECK: SHOULD THIS BE NULL ? */
+        }
+        else {
+            bytes = datagram_data_context.after_data;
+        }
     }
 
     return bytes;

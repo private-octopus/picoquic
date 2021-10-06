@@ -124,6 +124,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cnx_creation_test.c
     picoquictest/cnxstress.c
     picoquictest/cplusplus.cpp
+    picoquictest/datagram_tests.c
     picoquictest/hashtest.c
     picoquictest/intformattest.c
     picoquictest/multipath_test.c

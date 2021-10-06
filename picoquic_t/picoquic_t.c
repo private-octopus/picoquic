@@ -95,6 +95,7 @@ static const picoquic_test_def_t test_table[] = {
     { "client_losses", tls_api_client_losses_test },
     { "server_losses", tls_api_server_losses_test },
     { "many_losses", tls_api_many_losses },
+    { "datagram", datagram_test },
     { "ddos_amplification", ddos_amplification_test},
     { "ddos_amplification_0rtt", ddos_amplification_0rtt_test},
     { "blackhole", blackhole_test },
