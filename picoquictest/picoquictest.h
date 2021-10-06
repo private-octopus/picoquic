@@ -261,6 +261,7 @@ int bbr_asym400_test();
 int large_client_hello_test();
 int fast_nat_rebinding_test();
 int datagram_test();
+int datagram_rt_test();
 int ddos_amplification_test();
 int ddos_amplification_0rtt_test();
 int blackhole_test();

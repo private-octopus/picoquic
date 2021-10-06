@@ -395,6 +395,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(datagram_rt)
+        {
+            int ret = datagram_rt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ddos_amplification)
         {
             int ret = ddos_amplification_test();

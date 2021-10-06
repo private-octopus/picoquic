@@ -50,28 +50,41 @@ typedef struct st_test_datagram_send_recv_ctx_t {
     int dg_target[2];
     int dg_sent[2];
     int dg_recv[2];
+    uint64_t send_delay;
+    uint64_t next_gen_time;
+    int is_ready[2];
 } test_datagram_send_recv_ctx_t;
+
+int test_datagram_check_ready(test_datagram_send_recv_ctx_t* dg_ctx, int client_mode, uint64_t current_time)
+{
+    dg_ctx->is_ready[client_mode] = (dg_ctx->dg_sent[client_mode] < dg_ctx->dg_target[client_mode] &&
+        current_time >= dg_ctx->next_gen_time);
+    return dg_ctx->is_ready[client_mode];
+}
 
 int test_datagram_send(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length, void* datagram_send_ctx)
 {
     int ret = 0;
     test_datagram_send_recv_ctx_t* dg_ctx = datagram_send_ctx;
+    uint64_t current_time = picoquic_get_quic_time(picoquic_get_quic_ctx(cnx));
 
-    if (dg_ctx->dg_sent[cnx->client_mode] < dg_ctx->dg_target[cnx->client_mode]){
-        size_t available = length - (size_t)dg_ctx->dg_sent[cnx->client_mode];
+    if (dg_ctx->dg_sent[cnx->client_mode] < dg_ctx->dg_target[cnx->client_mode] &&
+        current_time >= dg_ctx->next_gen_time){
+        size_t available = length - (size_t)(dg_ctx->dg_sent[cnx->client_mode]%6);
         uint8_t* buffer = picoquic_provide_datagram_buffer(bytes, available);
         if (buffer != NULL) {
             memset(buffer, 'd', available);
             dg_ctx->dg_sent[cnx->client_mode]++;
-            picoquic_mark_datagram_ready(cnx, dg_ctx->dg_sent[cnx->client_mode] < dg_ctx->dg_target[cnx->client_mode]);
+            dg_ctx->next_gen_time += dg_ctx->send_delay;
+            picoquic_mark_datagram_ready(cnx, test_datagram_check_ready(dg_ctx, cnx->client_mode, current_time));
         }
         else {
             ret = -1;
         }
     }
     else {
-        ret = -1;
+        picoquic_mark_datagram_ready(cnx, test_datagram_check_ready(dg_ctx, cnx->client_mode, current_time));
     }
     return ret;
 }
@@ -85,7 +98,7 @@ int test_datagram_recv(picoquic_cnx_t* cnx,
     return 0;
 }
 
-int datagram_test()
+int datagram_test_one(test_datagram_send_recv_ctx_t *dg_ctx)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -94,7 +107,6 @@ int datagram_test()
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
     /* picoquic_tp_t server_parameters; */
     picoquic_tp_t client_parameters;
-    test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     int nb_trials = 0;
     int nb_inactive = 0;
     int ret;
@@ -104,12 +116,10 @@ int datagram_test()
         &initial_cid);
     
     /* Set the test contexts for sending and receiving datagrams */
-    dg_ctx.dg_target[0] = 5;
-    dg_ctx.dg_target[1] = 5;
     test_ctx->datagram_recv_fn = test_datagram_recv;
-    test_ctx->datagram_recv_ctx = &dg_ctx;
+    test_ctx->datagram_recv_ctx = dg_ctx;
     test_ctx->datagram_send_fn = test_datagram_send;
-    test_ctx->datagram_send_ctx = &dg_ctx;
+    test_ctx->datagram_send_ctx = dg_ctx;
     /* Set the congestion control  */
     picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
     picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
@@ -154,7 +164,7 @@ int datagram_test()
     }
 
     /* Send datagrams for specified time */
-    while (ret == 0 && nb_trials < 1024 && nb_inactive < 16) {
+    while (ret == 0 && nb_trials < 2048 && nb_inactive < 16) {
         int was_active = 0;
         nb_trials++;
 
@@ -166,20 +176,27 @@ int datagram_test()
         else {
             nb_inactive++;
         }
-        if (dg_ctx.dg_recv[0] == dg_ctx.dg_target[1] &&
-            dg_ctx.dg_recv[1] == dg_ctx.dg_target[0]) {
+        if (dg_ctx->dg_recv[0] == dg_ctx->dg_target[1] &&
+            dg_ctx->dg_recv[1] == dg_ctx->dg_target[0]) {
             break;
+        }
+        /* Simulate wake up when data is ready for real time operation */
+        if (!dg_ctx->is_ready[0] && test_datagram_check_ready(dg_ctx, 0, simulated_time)) {
+            picoquic_mark_datagram_ready(test_ctx->cnx_server, 1);
+        }
+        if (!dg_ctx->is_ready[1] && test_datagram_check_ready(dg_ctx, 1, simulated_time)) {
+            picoquic_mark_datagram_ready(test_ctx->cnx_client, 1);
         }
     }
     if (ret == 0) {
         /* Verify datagrams have been received */
-        if (dg_ctx.dg_recv[0] != dg_ctx.dg_target[1] ||
-            dg_ctx.dg_recv[1] != dg_ctx.dg_target[0]) {
+        if (dg_ctx->dg_recv[0] != dg_ctx->dg_target[1] ||
+            dg_ctx->dg_recv[1] != dg_ctx->dg_target[0]) {
             DBG_PRINTF("Did not receive expected datagrams after %d trials, %d inactive",
                 nb_trials, nb_inactive);
             for (int i = 0; i < 2; i++) {
                 DBG_PRINTF("dg_target[%d]=%d, dg_sent[%d]=%d, dg_recv[%d]=%d",
-                    i, dg_ctx.dg_target[i], i, dg_ctx.dg_sent[i], 1 - i, dg_ctx.dg_recv[1 - i]);
+                    i, dg_ctx->dg_target[i], i, dg_ctx->dg_sent[i], 1 - i, dg_ctx->dg_recv[1 - i]);
             }
             ret = -1;
         }
@@ -193,4 +210,27 @@ int datagram_test()
     }
 
     return ret;
+}
+
+int datagram_test()
+{
+    test_datagram_send_recv_ctx_t dg_ctx = { 0 };
+
+    dg_ctx.dg_target[0] = 5;
+    dg_ctx.dg_target[1] = 5;
+
+    return datagram_test_one(&dg_ctx);
+}
+
+int datagram_rt_test()
+{
+    test_datagram_send_recv_ctx_t dg_ctx = { 0 };
+
+    dg_ctx.dg_target[0] = 100;
+    dg_ctx.dg_target[1] = 100;
+    dg_ctx.send_delay = 20000;
+    dg_ctx.next_gen_time = 100000;
+
+
+    return datagram_test_one(&dg_ctx);
 }

@@ -84,7 +84,11 @@ int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
 
 int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready)
 {
+    int was_ready = cnx->is_datagram_ready;
     cnx->is_datagram_ready = is_ready;
+    if (!was_ready && is_ready) {
+        picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+    }
     return 0;
 }
 
