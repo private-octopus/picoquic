@@ -3055,6 +3055,13 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
 {
     int ret = 0;
 
+    if (cnx->cnx_state != picoquic_state_client_init ||
+        cnx->tls_stream[0].sent_offset > 0 ||
+        cnx->tls_stream[0].send_queue != NULL) {
+        DBG_PRINTF("%s", "picoquic_start_client_cnx called twice.");
+        return -1;
+    }
+
     picoquic_log_new_connection(cnx);
         
     ret = picoquic_initialize_tls_stream(cnx, picoquic_get_quic_time(cnx->quic));
