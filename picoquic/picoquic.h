@@ -228,7 +228,8 @@ typedef enum {
     picoquic_callback_version_negotiation, /* version negotiation requested */
     picoquic_callback_request_alpn_list, /* Provide the list of supported ALPN */
     picoquic_callback_set_alpn, /* Set ALPN to negotiated value */
-    picoquic_callback_pacing_changed /* Pacing rate for the connection changed */
+    picoquic_callback_pacing_changed, /* Pacing rate for the connection changed */
+    picoquic_callback_prepare_datagram /* Prepare the next datagram */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -906,6 +907,23 @@ uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error);
 
+/* The function picoquic_set_datagram_ready indicates to the stack
+ * whether the application is ready to send datagrams. */
+int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready);
+
+/* If a datagram is marked active, the application will receive a callback with
+ * event type "picoquic_callback_prepare_datagram" when the transport is ready to
+ * send data on a stream. The "length" argument in the call back indicates the
+ * largest amount of data that can be sent, and the "bytes" argument points
+ * to an opaque context structure. In order to prepare data, the application
+ * needs to call "picoquic_provide_datagram_buffer" with that context
+ * pointer, and with the number of bytes that it wants to write. The function
+ * returns the pointer to a memory address where to write the bytes -- or
+ * a NULL pointer in case of error. The application then copies the specified
+ * number of bytes at the provided address, and provide a return code 0 from
+ * the callback in case of success, or non zero in case of error.
+ */
+uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length);
 
 /* 
  * Set the optimistic ack policy. The holes will be inserted at random locations,
