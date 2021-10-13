@@ -370,6 +370,7 @@ typedef struct st_picoquic_packet_t {
     struct st_picoquic_packet_t* next_packet;
     struct st_picoquic_path_t* send_path;
     uint64_t sequence_number;
+    uint64_t path_packet_number;
     uint64_t send_time;
     uint64_t delivered_prior;
     uint64_t delivered_time_prior;
@@ -806,8 +807,6 @@ typedef struct st_picoquic_misc_frame_header_t {
 typedef struct st_picoquic_packet_context_t {
     uint64_t send_sequence; /* picoquic_decode_ack_frame */
     uint64_t next_sequence_hole;
-
-    uint64_t nb_retransmit;
     uint64_t retransmit_sequence;
     uint64_t highest_acknowledged;
     uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
@@ -927,7 +926,8 @@ typedef struct st_picoquic_path_t {
     uint64_t last_non_validating_pn;
     /* Last time a packet was sent on this path. */
     uint64_t last_sent_time;
-
+    /* Number of packets sent on this path*/
+    uint64_t path_packet_number;
     /* flags */
     unsigned int mtu_probe_sent : 1;
     unsigned int path_is_published : 1;
@@ -956,19 +956,19 @@ typedef struct st_picoquic_path_t {
     int path_priority;
 
     /* Management of retransmissions in a path.
-     * The "last_1rtt_acknowledged" is used for the RACK algorithm, per path, to avoid
+     * The "path_packet" variables are used for the RACK algorithm, per path, to avoid
      * declaring packets lost just because another path is delivering them faster.
      * The "number of retransmit" counts the number of unsuccessful retransmissions; it
      * is reset to zero if a new packet is acknowledged.
      */
-    uint64_t last_1rtt_acknowledged;
-    uint64_t last_1rtt_acknowledged_sent_at;
-    uint64_t last_1rtt_acknowledged_at;
     uint64_t last_packet_received_at;
     uint64_t last_loss_event_detected;
     uint64_t nb_retransmit; /* Number of timeout retransmissions since last ACK */
     uint64_t retrans_count; /* Number of packet losses for the path */
     uint64_t nb_spurious; /* Number of spurious retransmissiosn for the path */
+    uint64_t path_packet_acked_number; /* path packet number of highest ack */
+    uint64_t path_packet_acked_time_sent; /* path packet number of highest ack */
+    uint64_t path_packet_acked_received; /* time at which the highest ack was received */
     /* Time measurement */
     uint64_t max_ack_delay;
     uint64_t rtt_sample;

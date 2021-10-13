@@ -2256,7 +2256,7 @@ int picoquic_incoming_segment(
     {
         /* Indicates that the server probably sent initial and handshake but initial was lost */
         if (cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_oldest != NULL &&
-            cnx->pkt_ctx[picoquic_packet_context_initial].nb_retransmit == 0) {
+            cnx->path[0]->nb_retransmit == 0) {
             /* Reset the retransmit timer to start retransmission immediately */
             cnx->path[0]->retransmit_timer = current_time -
                 cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_oldest->send_time;

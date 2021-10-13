@@ -1360,8 +1360,6 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
             /* Register the sequence number */
             path_x->path_sequence = cnx->path_sequence_next;
             cnx->path_sequence_next++;
-            /* Set the first ack to -1 */
-            path_x->last_1rtt_acknowledged = UINT64_MAX;
 
             /* Set the addresses */
             picoquic_store_addr(&path_x->peer_addr, peer_addr);
@@ -1841,7 +1839,6 @@ void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pk
     else {
         pkt_ctx->send_sequence = 0;
     }
-    pkt_ctx->nb_retransmit = 0;
     pkt_ctx->retransmit_newest = NULL;
     pkt_ctx->retransmit_oldest = NULL;
     pkt_ctx->highest_acknowledged = pkt_ctx->send_sequence - 1;

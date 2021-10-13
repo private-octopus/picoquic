@@ -24,49 +24,23 @@
 #include <string.h>
 #include "cc_common.h"
 
-uint64_t picoquic_cc_get_sequence_space_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
-{
-    uint64_t ret = 0;
-
-    if (cnx->is_multipath_enabled) {
-        if (path_x->p_remote_cnxid != NULL) {
-            ret = path_x->p_remote_cnxid->sequence;
-        }
-    }
-    return ret;
-}
-
-
 uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-    uint64_t ret = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
-    if (cnx->is_multipath_enabled) {
-        if (path_x->p_remote_cnxid != NULL) {
-#if 0
-            ret = path_x->p_remote_cnxid->pkt_ctx.send_sequence;
-#endif
-        }
-    }
+    uint64_t ret = path_x->path_packet_number;
+
     return ret;
 }
 
 uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-    uint64_t ret = cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged;
-    if (cnx->is_multipath_enabled){
-        if (path_x->p_remote_cnxid != NULL) {
-            ret = path_x->p_remote_cnxid->pkt_ctx.highest_acknowledged;
-        }
-    }
-    else if (cnx->is_simple_multipath_enabled) {
-        ret = path_x->last_1rtt_acknowledged;
-    }
+    uint64_t ret = path_x->path_packet_acked_number;
+
     return ret;
 }
 
 uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-    uint64_t ret = path_x->last_1rtt_acknowledged_sent_at;
+    uint64_t ret = path_x->path_packet_acked_time_sent;
     return ret;
 }
 

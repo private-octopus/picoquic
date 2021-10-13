@@ -3907,7 +3907,7 @@ int mtu_drop_test()
     };
     uint64_t algo_time[5] = {
         13000000,
-        10500000,
+        11500000,
         10500000,
         11000000,
         10300000
@@ -4682,6 +4682,11 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid)
     else {
         picoquic_set_log_level(test_ctx->qserver, 1);
         ret = picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_log_level(test_ctx->qclient, 1);
+        if (ret == 0) {
+            ret = picoquic_set_binlog(test_ctx->qclient, ".");
+            binlog_new_connection(test_ctx->cnx_client);
+        }
     }
 
     if (ret == 0) {
@@ -4772,7 +4777,7 @@ int nat_rebinding_test()
 
 int nat_rebinding_loss_test()
 {
-    uint64_t loss_mask = 0x2412;
+    uint64_t loss_mask = 0x2012;
 
     return nat_rebinding_test_one(loss_mask, 0);
 }
@@ -10134,17 +10139,17 @@ int red_cc_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        620000,
         500000,
         500000,
         500000,
-        500000
+        650000,
+        550000
     };
     uint64_t algo_loss[5] = {
         150,
-        150,
+        200,
+        270,
         250,
-        110,
         170
     };
 
@@ -10231,7 +10236,7 @@ int multi_segment_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        1060000,
+        1100000,
         1130000,
         1350000,
         1370000,
@@ -10346,7 +10351,7 @@ int pacing_cc_test()
         900000
     };
     uint64_t algo_loss[5] = {
-        70,
+        80,
         140,
         230,
         200,

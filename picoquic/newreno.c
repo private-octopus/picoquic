@@ -67,7 +67,6 @@ static void picoquic_newreno_sim_enter_recovery(
 
     nr_state->recovery_start = current_time;
     nr_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
-    nr_state->recovery_number_space = picoquic_cc_get_sequence_space_id(cnx, path_x);
     nr_state->residual_ack = 0;
 }
 
