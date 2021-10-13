@@ -2784,8 +2784,10 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
         else if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             ret = picoquic_process_ack_of_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
-            if (p->send_path != NULL && p->send_time > p->send_path->last_time_acked_data_frame_sent) {
-                p->send_path->last_time_acked_data_frame_sent = p->send_time;
+            if (p->send_path != NULL){
+                if (p->send_time > p->send_path->last_time_acked_data_frame_sent) {
+                    p->send_path->last_time_acked_data_frame_sent = p->send_time;
+                }
             }
         } else {
             if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_datagram, picoquic_frame_type_datagram_l) &&
@@ -2824,6 +2826,14 @@ static int picoquic_process_ack_range(
 
                 if (old_path != NULL) {
                     old_path->delivered += p->length;
+                    /* Track timer for the packet */
+                    if (p->path_packet_number > p->send_path->path_packet_acked_number) {
+                        p->send_path->path_packet_acked_number = p->path_packet_number;
+                        p->send_path->path_packet_acked_time_sent = p->send_time;
+                        p->send_path->path_packet_acked_received = current_time;
+                    }
+
+                    /* TODO: simplify multipath handling */
                     if (!cnx->is_multipath_enabled) {
                         if (pc == picoquic_packet_context_application &&
                             (p->sequence_number > old_path->last_1rtt_acknowledged ||

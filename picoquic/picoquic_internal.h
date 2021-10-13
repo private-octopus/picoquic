@@ -370,6 +370,7 @@ typedef struct st_picoquic_packet_t {
     struct st_picoquic_packet_t* next_packet;
     struct st_picoquic_path_t* send_path;
     uint64_t sequence_number;
+    uint64_t path_packet_number;
     uint64_t send_time;
     uint64_t delivered_prior;
     uint64_t delivered_time_prior;
@@ -927,7 +928,8 @@ typedef struct st_picoquic_path_t {
     uint64_t last_non_validating_pn;
     /* Last time a packet was sent on this path. */
     uint64_t last_sent_time;
-
+    /* Number of packets sent on this path*/
+    uint64_t path_packet_number;
     /* flags */
     unsigned int mtu_probe_sent : 1;
     unsigned int path_is_published : 1;
@@ -969,6 +971,9 @@ typedef struct st_picoquic_path_t {
     uint64_t nb_retransmit; /* Number of timeout retransmissions since last ACK */
     uint64_t retrans_count; /* Number of packet losses for the path */
     uint64_t nb_spurious; /* Number of spurious retransmissiosn for the path */
+    uint64_t path_packet_acked_number; /* path packet number of highest ack */
+    uint64_t path_packet_acked_time_sent; /* path packet number of highest ack */
+    uint64_t path_packet_acked_received; /* time at which the highest ack was received */
     /* Time measurement */
     uint64_t max_ack_delay;
     uint64_t rtt_sample;
