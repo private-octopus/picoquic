@@ -1839,7 +1839,6 @@ void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pk
     else {
         pkt_ctx->send_sequence = 0;
     }
-    pkt_ctx->nb_retransmit = 0;
     pkt_ctx->retransmit_newest = NULL;
     pkt_ctx->retransmit_oldest = NULL;
     pkt_ctx->highest_acknowledged = pkt_ctx->send_sequence - 1;

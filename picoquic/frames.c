@@ -2853,12 +2853,6 @@ static int picoquic_process_ack_range(
                      * The handshake is complete, all the handshake packets are implicitly acknowledged */
                     picoquic_ready_state_transition(cnx, current_time);
                 }
-
-                if (pkt_ctx->nb_retransmit > 0 && p->sequence_number >= pkt_ctx->retransmit_sequence) {
-                    /* Acknowledgement larger than retransmit number show progress */
-                    pkt_ctx->nb_retransmit = 0;
-                }
-
                 (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, p, 1);
                 p = next;
             }

@@ -4682,6 +4682,11 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid)
     else {
         picoquic_set_log_level(test_ctx->qserver, 1);
         ret = picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_log_level(test_ctx->qclient, 1);
+        if (ret == 0) {
+            ret = picoquic_set_binlog(test_ctx->qclient, ".");
+            binlog_new_connection(test_ctx->cnx_client);
+        }
     }
 
     if (ret == 0) {
@@ -4772,7 +4777,7 @@ int nat_rebinding_test()
 
 int nat_rebinding_loss_test()
 {
-    uint64_t loss_mask = 0x2412;
+    uint64_t loss_mask = 0x2012;
 
     return nat_rebinding_test_one(loss_mask, 0);
 }

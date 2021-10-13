@@ -1143,12 +1143,7 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx,
 {
     uint64_t rto = path_x->retransmit_timer;
 
-    if (!(cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) || cnx->nb_paths == 1 || pkt_ctx->nb_retransmit < 3) {
-        rto <<= pkt_ctx->nb_retransmit;
-    }
-    else {
-        rto <<= (pkt_ctx->nb_retransmit < 3) ? pkt_ctx->nb_retransmit : 2;
-    }
+    rto <<= (path_x->nb_retransmit < 3) ? path_x->nb_retransmit : 2;
 
     if (cnx->cnx_state < picoquic_state_ready) {
         if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
@@ -1524,7 +1519,7 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
                             picoquic_reset_path_mtu(old_p->send_path);
                             picoquic_log_app_message(cnx,
                                 "Reset path MTU after %d retransmissions, %d MTU losses",
-                                pkt_ctx->nb_retransmit,
+                                old_p->send_path->nb_retransmit,
                                 old_p->send_path->nb_mtu_losses);
                         }
                     }
@@ -1547,7 +1542,7 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
                         }
 
                         /* Then, manage the total number of retransmissions across all paths. */
-                        if (pkt_ctx->nb_retransmit > 7 && cnx->cnx_state >= picoquic_state_ready) {
+                        if (old_p->send_path->nb_retransmit > 7 && cnx->cnx_state >= picoquic_state_ready) {
                             /* TODO: only disconnect if there is no other available path */
                             int all_paths_bad = 1;
                             if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
@@ -1567,12 +1562,6 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
                                 picoquic_connection_disconnect(cnx);
                                 length = 0;
                                 break;
-                            }
-                        } else {
-                            if (pkt_ctx->nb_retransmit == 0 ||
-                                old_p->sequence_number >= pkt_ctx->retransmit_sequence) {
-                                pkt_ctx->nb_retransmit++;
-                                pkt_ctx->retransmit_sequence = packet->sequence_number;
                             }
                         }
                     }
@@ -2400,7 +2389,8 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
                     if (repeat_time <= current_time) {
                         force_handshake_padding = 1;
-                        cnx->pkt_ctx[pc].nb_retransmit++;
+                        cnx->path[0]->nb_retransmit++;
+                        cnx->path[0]->last_loss_event_detected = current_time;
                     }
                     else if (repeat_time < *next_wake_time) {
                         *next_wake_time = repeat_time;
@@ -2538,8 +2528,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                                 cnx->tls_stream[1].send_queue == NULL &&
                                 cnx->tls_stream[2].send_queue == NULL) {
                                 cnx->cnx_state = picoquic_state_client_ready_start;
-                                /* Reset the HS retransmission count, since end of flight counts as acknowledgement */
-                                cnx->pkt_ctx[picoquic_packet_context_handshake].nb_retransmit = 0;
                                 /* Signal the application, because data can now be sent. */
                                 if (cnx->callback_fn != NULL) {
                                     if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {

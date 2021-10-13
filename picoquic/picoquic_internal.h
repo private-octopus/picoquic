@@ -807,8 +807,6 @@ typedef struct st_picoquic_misc_frame_header_t {
 typedef struct st_picoquic_packet_context_t {
     uint64_t send_sequence; /* picoquic_decode_ack_frame */
     uint64_t next_sequence_hole;
-
-    uint64_t nb_retransmit;
     uint64_t retransmit_sequence;
     uint64_t highest_acknowledged;
     uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
