@@ -1138,8 +1138,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
  * a different path, with different MTU.
  */
 
-static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, 
-    picoquic_packet_context_t * pkt_ctx, picoquic_path_t * path_x)
+static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     uint64_t rto = path_x->retransmit_timer;
 
@@ -1188,7 +1187,6 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
 
     int should_retransmit = 0;
     int is_timer_based = 0;
-    picoquic_packet_context_t* pkt_ctx = NULL;
 
     if (p->send_path == NULL) {
         /* This is a bug. Can only happen if the sending path has been
@@ -1201,13 +1199,6 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
         /* RACK logic based on path packet number */
         delta_seq = p->send_path->path_packet_acked_number - p->path_packet_number;
         delta_sent = p->send_path->path_packet_acked_time_sent - p->send_time;
-
-        if (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) {
-            pkt_ctx = &p->send_path->p_remote_cnxid->pkt_ctx;
-        }
-        else {
-            pkt_ctx = &cnx->pkt_ctx[pc];
-        }
 
         if (delta_seq > 0) {
             /* TODO: By default, we use an RTO -- should this be per send path? Or should we
@@ -1245,7 +1236,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
             /* TODO: use delay statistics across all paths? */
             uint64_t alt_pto = p->send_path->path_packet_acked_received + (p->send_path->smoothed_rtt >> 2)
                 - delta_sent;
-            retransmit_time = p->send_time + picoquic_current_retransmit_timer(cnx, pkt_ctx, p->send_path);
+            retransmit_time = p->send_time + picoquic_current_retransmit_timer(cnx, p->send_path);
             if (alt_pto > retransmit_time) {
                 retransmit_time = alt_pto;
             }
@@ -2383,8 +2374,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     /* There is a risk of deadlock if the server is doing DDOS mitigation
                      * and does not receive the Handshake sent by the client. If more than RTT has elapsed since
                      * the last handshake packet was sent, force another one to be sent. */
-                    uint64_t rto = picoquic_current_retransmit_timer(cnx,
-                        &cnx->pkt_ctx[picoquic_packet_context_handshake], cnx->path[0]);
+                    uint64_t rto = picoquic_current_retransmit_timer(cnx, cnx->path[0]);
                     uint64_t repeat_time = cnx->pkt_ctx[pc].retransmit_newest->send_time + rto;
 
                     if (repeat_time <= current_time) {
@@ -2408,7 +2398,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             /* There is a risk of deadlock if the server is doing DDOS mitigation
              * and does not repeat an initial or handshake packet that was lost. If more than RTT has elapsed since
              * the last initial packet was sent, force another one to be sent. */
-            uint64_t rto = picoquic_current_retransmit_timer(cnx, &cnx->pkt_ctx[picoquic_packet_context_initial], cnx->path[0]);
+            uint64_t rto = picoquic_current_retransmit_timer(cnx, cnx->path[0]);
             uint64_t repeat_time = cnx->path[0]->latest_sent_time + rto;
             force_handshake_padding = (repeat_time <= current_time);
         }
@@ -3954,9 +3944,7 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
     uint64_t idle_timer = 0;
 
     if (cnx->cnx_state >= picoquic_state_ready) {
-        picoquic_packet_context_t * pkt_ctx = (cnx->is_multipath_enabled) ? &cnx->path[0]->p_remote_cnxid->pkt_ctx :
-            &cnx->pkt_ctx[picoquic_packet_context_application];
-        uint64_t rto = picoquic_current_retransmit_timer(cnx, pkt_ctx, cnx->path[0]);
+        uint64_t rto = picoquic_current_retransmit_timer(cnx, cnx->path[0]);
         idle_timer = cnx->idle_timeout;
         if (idle_timer < 3 * rto) {
             idle_timer = 3 * rto;
