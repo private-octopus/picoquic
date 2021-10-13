@@ -958,14 +958,11 @@ typedef struct st_picoquic_path_t {
     int path_priority;
 
     /* Management of retransmissions in a path.
-     * The "last_1rtt_acknowledged" is used for the RACK algorithm, per path, to avoid
+     * The "path_packet" variables are used for the RACK algorithm, per path, to avoid
      * declaring packets lost just because another path is delivering them faster.
      * The "number of retransmit" counts the number of unsuccessful retransmissions; it
      * is reset to zero if a new packet is acknowledged.
      */
-    uint64_t last_1rtt_acknowledged;
-    uint64_t last_1rtt_acknowledged_sent_at;
-    uint64_t last_1rtt_acknowledged_at;
     uint64_t last_packet_received_at;
     uint64_t last_loss_event_detected;
     uint64_t nb_retransmit; /* Number of timeout retransmissions since last ACK */

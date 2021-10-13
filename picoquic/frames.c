@@ -1727,25 +1727,12 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
 
             if (old_path != NULL) {
                 old_path->nb_spurious++;
-                if (!cnx->is_multipath_enabled) {
-                    if (pc == picoquic_packet_context_application &&
-                        (p->sequence_number > old_path->last_1rtt_acknowledged ||
-                            old_path->last_1rtt_acknowledged == UINT64_MAX)) {
-                        old_path->last_1rtt_acknowledged = p->sequence_number;
-                        old_path->nb_retransmit = 0;
-                    }
-                }
-                else {
-                    if (pc == picoquic_packet_context_application &&
-                        (p->send_time > old_path->last_1rtt_acknowledged_sent_at ||
-                            old_path->last_1rtt_acknowledged == UINT64_MAX)) {
-                        if (p->sequence_number > old_path->last_1rtt_acknowledged ||
-                            old_path->last_1rtt_acknowledged == UINT64_MAX) {
-                            old_path->last_1rtt_acknowledged = p->sequence_number;
-                        }
-                        old_path->last_1rtt_acknowledged_sent_at = p->send_time;
-                        old_path->nb_retransmit = 0;
-                    }
+
+                if (p->path_packet_number > old_path->path_packet_acked_number) {
+                    old_path->path_packet_acked_number = p->path_packet_number;
+                    old_path->path_packet_acked_time_sent = p->send_time;
+                    old_path->path_packet_acked_received = current_time;
+                    old_path->nb_retransmit = 0;
                 }
 
                 /* Record the updated delay and CC data in packet context
@@ -2827,34 +2814,11 @@ static int picoquic_process_ack_range(
                 if (old_path != NULL) {
                     old_path->delivered += p->length;
                     /* Track timer for the packet */
-                    if (p->path_packet_number > p->send_path->path_packet_acked_number) {
-                        p->send_path->path_packet_acked_number = p->path_packet_number;
-                        p->send_path->path_packet_acked_time_sent = p->send_time;
-                        p->send_path->path_packet_acked_received = current_time;
-                    }
-
-                    /* TODO: simplify multipath handling */
-                    if (!cnx->is_multipath_enabled) {
-                        if (pc == picoquic_packet_context_application &&
-                            (p->sequence_number > old_path->last_1rtt_acknowledged ||
-                                old_path->last_1rtt_acknowledged == UINT64_MAX)) {
-                            old_path->last_1rtt_acknowledged = p->sequence_number;
-                            old_path->last_1rtt_acknowledged_at = current_time;
-                            old_path->nb_retransmit = 0;
-                        }
-                    }
-                    else {
-                        if (pc == picoquic_packet_context_application &&
-                            (p->send_time > old_path->last_1rtt_acknowledged_sent_at ||
-                                old_path->last_1rtt_acknowledged == UINT64_MAX)) {
-                            if (p->sequence_number > old_path->last_1rtt_acknowledged ||
-                                old_path->last_1rtt_acknowledged == UINT64_MAX) {
-                                old_path->last_1rtt_acknowledged = p->sequence_number;
-                            }
-                            old_path->last_1rtt_acknowledged_sent_at = p->send_time;
-                            old_path->last_1rtt_acknowledged_at = current_time;
-                            old_path->nb_retransmit = 0;
-                        }
+                    if (p->path_packet_number > old_path->path_packet_acked_number) {
+                        old_path->path_packet_acked_number = p->path_packet_number;
+                        old_path->path_packet_acked_time_sent = p->send_time;
+                        old_path->path_packet_acked_received = current_time;
+                        old_path->nb_retransmit = 0;
                     }
 
                     picoquic_record_ack_packet_data(packet_data, p);

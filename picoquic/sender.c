@@ -1404,7 +1404,7 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
         int should_retransmit = 0;
         int timer_based_retransmit = 0;
         uint64_t next_retransmit_time = *next_wake_time;
-        uint64_t lost_packet_number = old_p->sequence_number;
+        uint64_t lost_packet_number = old_p->path_packet_number;
         picoquic_packet_t* p_next = old_p->previous_packet;
         uint8_t * new_bytes = packet->bytes;
         int ret = 0;
@@ -1532,10 +1532,9 @@ static int picoquic_retransmit_needed_body(picoquic_cnx_t* cnx, picoquic_packet_
                     if (timer_based_retransmit != 0) {
                         /* First, keep track of retransmissions per path, in order to
                          * manage scheduling in multipath setup */
-                        if (old_p->send_path != NULL && pc == picoquic_packet_context_application &&
-                            (!cnx->is_multipath_enabled ||
-                                old_p->sequence_number > old_p->send_path->last_1rtt_acknowledged) &&
-                            old_p->send_time > old_p->send_path->last_loss_event_detected) {
+                        if (old_p->send_path != NULL  &&
+                            old_p->path_packet_number > old_p->send_path->path_packet_acked_number &&
+                            old_p->send_time > old_p->send_path->last_loss_event_detected){
                             old_p->send_path->nb_retransmit++;
                             old_p->send_path->last_loss_event_detected = current_time;
                             if (old_p->send_path->nb_retransmit > 7) {

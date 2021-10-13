@@ -473,10 +473,6 @@ static void picoquic_dcubic_notify(
     uint64_t lost_packet_number,
     uint64_t current_time)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(rtt_measurement);
-    UNREFERENCED_PARAMETER(lost_packet_number);
-#endif
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
     if (cubic_state != NULL) {
@@ -569,6 +565,7 @@ static void picoquic_dcubic_notify(
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
                 /* do nothing */
+                break;
             case picoquic_congestion_notification_rtt_measurement:
                 /* if in slow start, increase the window for long delay RTT */
                 if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT && cubic_state->ssthresh == UINT64_MAX) {
