@@ -3826,16 +3826,15 @@ const uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, const uint8_t
         length = bytes_max - bytes;
     }
 
-    if (bytes != NULL) {
-        if (cnx->callback_fn != NULL) {
-            /* submit the data to the app */
-            if (cnx->callback_fn(cnx, 0, (uint8_t *)bytes, (size_t)length, picoquic_callback_datagram,
-                cnx->callback_ctx, NULL) != 0) {
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_datagram);
-                bytes = NULL;
-            }
+    if (bytes != NULL && cnx->callback_fn != NULL) {
+        /* submit the data to the app */
+        if (cnx->callback_fn(cnx, 0, (uint8_t*)bytes, (size_t)length, picoquic_callback_datagram,
+            cnx->callback_ctx, NULL) != 0) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_datagram);
+            bytes = NULL;
         }
-
+    }
+    if (bytes != NULL){
         bytes += length;
     }
 
