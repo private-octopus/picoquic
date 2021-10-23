@@ -229,7 +229,10 @@ typedef enum {
     picoquic_callback_request_alpn_list, /* Provide the list of supported ALPN */
     picoquic_callback_set_alpn, /* Set ALPN to negotiated value */
     picoquic_callback_pacing_changed, /* Pacing rate for the connection changed */
-    picoquic_callback_prepare_datagram /* Prepare the next datagram */
+    picoquic_callback_prepare_datagram, /* Prepare the next datagram */
+    picoquic_callback_datagram_acked, /* Ack for packet carrying datagram-frame received from peer */
+    picoquic_callback_datagram_lost, /* Packet carrying datagram-frame probably lost */
+    picoquic_callback_datagram_spurious /* Packet carrying datagram-frame was not really lost */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {

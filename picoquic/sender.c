@@ -1348,7 +1348,17 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
              * case of spurious retransmissions */
             if (ret == 0 && frame_is_pure_ack == 0) {
                 ret = picoquic_check_frame_needs_repeat(cnx, &old_p->bytes[byte_index],
-                    frame_length, &frame_is_pure_ack);
+                    frame_length, &frame_is_pure_ack, do_not_detect_spurious);
+            }
+
+            /* Keep track of datagram frames that are possibly lost */
+            if (ret == 0 &&
+                PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_datagram, picoquic_frame_type_datagram_l) &&
+                cnx->callback_fn != NULL) {
+                ret = (cnx->callback_fn)(cnx, 0, &old_p->bytes[byte_index], frame_length,
+                    picoquic_callback_datagram_lost, cnx->callback_ctx, NULL);
+                picoquic_log_app_message(cnx, "Datagram lost, PN=%" PRIu64 ", Sent: %" PRIu64,
+                    old_p->sequence_number, old_p->send_time);
             }
 
             /* Prepare retransmission if needed */
@@ -1727,6 +1737,7 @@ static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
     size_t byte_index = 0; /* Used when parsing the old packet */
     size_t write_index = 0;
     int is_repeated = 1;
+    int do_not_detect_spurious = 0;
     *has_data = 0;
 
     if (!old_p->is_mtu_probe &&
@@ -1743,7 +1754,7 @@ static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
              * case of spurious retransmissions */
             if (ret == 0 && frame_is_pure_ack == 0) {
                 ret = picoquic_check_frame_needs_repeat(cnx, &old_p->bytes[byte_index],
-                    frame_length, &frame_is_pure_ack);
+                    frame_length, &frame_is_pure_ack, &do_not_detect_spurious);
             }
 
             /* Prepare retransmission if needed */

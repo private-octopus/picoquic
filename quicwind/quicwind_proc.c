@@ -293,10 +293,6 @@ picoquic_quic_t* quicwind_create_context(const char * alpn, int mtu_max, const c
         qclient = picoquic_create(8, NULL, NULL, root_crt, alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename, NULL, 0);
 
         picoquic_set_default_congestion_algorithm(qclient, picoquic_cubic_algorithm);
-#if 1
-        /* DEBUG code: capture a log */
-        picoquic_set_qlog(qclient, ".");
-#endif
 
         if (picoquic_load_tokens(&qclient->p_first_token, current_time, token_store_filename) != 0) {
             AppendText(_T("Could not load tokens.\r\n"));
