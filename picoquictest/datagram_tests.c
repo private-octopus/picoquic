@@ -47,6 +47,7 @@
  * Test whether datagrams are sent and received properly
  */
 typedef struct st_test_datagram_send_recv_ctx_t {
+    uint32_t dg_max_size;
     int dg_target[2];
     int dg_sent[2];
     int dg_recv[2];
@@ -72,10 +73,13 @@ int test_datagram_send(picoquic_cnx_t* cnx,
     test_datagram_send_recv_ctx_t* dg_ctx = datagram_ctx;
     uint64_t current_time = picoquic_get_quic_time(picoquic_get_quic_ctx(cnx));
 
-    if (dg_ctx->dg_sent[cnx->client_mode] < dg_ctx->dg_target[cnx->client_mode] &&
+    if (!cnx->client_mode && length > dg_ctx->dg_max_size) {
+        ret = -1;
+    } else if (dg_ctx->dg_sent[cnx->client_mode] < dg_ctx->dg_target[cnx->client_mode] &&
         current_time >= dg_ctx->next_gen_time){
         size_t available = length - (size_t)(dg_ctx->dg_sent[cnx->client_mode]%6);
         uint8_t* buffer = picoquic_provide_datagram_buffer(bytes, available);
+
         if (buffer != NULL) {
             memset(buffer, 'd', available);
             dg_ctx->dg_sent[cnx->client_mode]++;
@@ -156,7 +160,7 @@ int datagram_test_one(test_datagram_send_recv_ctx_t *dg_ctx, uint64_t loss_mask_
         binlog_new_connection(test_ctx->cnx_client);
         /* Set parameters */
         picoquic_init_transport_parameters(&client_parameters, 1);
-        client_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+        client_parameters.max_datagram_frame_size = dg_ctx->dg_max_size;
         picoquic_set_transport_parameters(test_ctx->cnx_client, &client_parameters);
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
@@ -173,7 +177,7 @@ int datagram_test_one(test_datagram_send_recv_ctx_t *dg_ctx, uint64_t loss_mask_
         else {
             /* Verify datagrams are negotiated */
             if (test_ctx->cnx_client->remote_parameters.max_datagram_frame_size != PICOQUIC_MAX_PACKET_SIZE ||
-                test_ctx->cnx_server->remote_parameters.max_datagram_frame_size != PICOQUIC_MAX_PACKET_SIZE) {
+                test_ctx->cnx_server->remote_parameters.max_datagram_frame_size != dg_ctx->dg_max_size) {
                 DBG_PRINTF("Datagram size badly negotiated: %zu, %zu",
                     test_ctx->cnx_client->remote_parameters.max_datagram_frame_size,
                     test_ctx->cnx_server->remote_parameters.max_datagram_frame_size);
@@ -290,7 +294,7 @@ int datagram_test_one(test_datagram_send_recv_ctx_t *dg_ctx, uint64_t loss_mask_
 int datagram_test()
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
-
+    dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
     dg_ctx.dg_target[0] = 5;
     dg_ctx.dg_target[1] = 5;
 
@@ -300,7 +304,7 @@ int datagram_test()
 int datagram_rt_test()
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
-
+    dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
     dg_ctx.dg_target[0] = 100;
     dg_ctx.dg_target[1] = 100;
     dg_ctx.send_delay = 20000;
@@ -314,7 +318,7 @@ int datagram_rt_test()
 int datagram_loss_test()
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
-
+    dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
     dg_ctx.dg_target[0] = 100;
     dg_ctx.dg_target[1] = 100;
     dg_ctx.send_delay = 20000;
@@ -322,4 +326,15 @@ int datagram_loss_test()
 
 
     return datagram_test_one(&dg_ctx, 0x040080100200400ull);
+}
+
+int datagram_size_test()
+{
+    test_datagram_send_recv_ctx_t dg_ctx = { 0 };
+    dg_ctx.dg_max_size = 512;
+    dg_ctx.dg_target[0] = 100;
+    dg_ctx.dg_target[1] = 100;
+    dg_ctx.send_delay = 5000;
+
+    return datagram_test_one(&dg_ctx, 0);
 }

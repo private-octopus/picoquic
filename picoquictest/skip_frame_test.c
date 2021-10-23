@@ -653,6 +653,9 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         /* enable time stamp so it can be used in test */
         cnx->is_time_stamp_enabled = 1;
 
+        /* Set datagram max size to pass verification */
+        cnx->local_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+
         /* Set min ack delay so there is no issue with ack frequency frame */
         cnx->is_ack_frequency_negotiated = 1;
         cnx->remote_parameters.min_ack_delay = 1000;
