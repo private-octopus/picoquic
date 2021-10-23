@@ -3802,7 +3802,7 @@ int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx)
 
 /* Handling of datagram frames.
  * We follow the spec in
- * https://datatracker.ietf.org/doc/draft-pauly-quic-datagram/?include_text=1
+ * https://datatracker.ietf.org/doc/html/draft-ietf-quic-datagram
  */
 
 const uint8_t* picoquic_skip_datagram_frame(const uint8_t* bytes, const uint8_t* bytes_max)
@@ -3836,19 +3836,24 @@ const uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, const uint8_t
     unsigned int has_length = frame_id & 1;
     uint64_t length = 0;
 
-    if (has_length) {
-        if (bytes != NULL && (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) == NULL) {
-            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-                frame_id);
+    if (bytes != NULL) {
+        if (has_length) {
+            if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) == NULL ||
+                bytes + length > bytes_max ||
+                length > cnx->local_parameters.max_datagram_frame_size) {
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+                    frame_id);
+                bytes = NULL;
+            }
         }
-        if (bytes != NULL && bytes + length > bytes_max) {
-            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-                frame_id);
-            bytes = NULL;
+        else {
+            length = bytes_max - bytes;
+            if (length > cnx->local_parameters.max_datagram_frame_size) {
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+                    frame_id);
+                bytes = NULL;
+            }
         }
-    }
-    else {
-        length = bytes_max - bytes;
     }
 
     if (bytes != NULL && cnx->callback_fn != NULL) {
@@ -3996,6 +4001,10 @@ uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byte
         /* Compute the length */
         size_t allowed_space = bytes_max - bytes;
         picoquic_datagram_buffer_argument_t datagram_data_context;
+
+        if (allowed_space > cnx->remote_parameters.max_datagram_frame_size) {
+            allowed_space = cnx->remote_parameters.max_datagram_frame_size;
+        }
 
         datagram_data_context.bytes0 = bytes0;
         datagram_data_context.bytes = bytes;
