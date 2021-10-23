@@ -672,16 +672,25 @@ int test_api_callback(picoquic_cnx_t* cnx,
     {
         int ret = -1;
         if (ctx->datagram_send_fn != NULL) {
-            ret = ctx->datagram_send_fn(cnx, bytes, length, ctx->datagram_send_ctx);
+            ret = ctx->datagram_send_fn(cnx, bytes, length, ctx->datagram_ctx);
         }
         return ret;
-    }
-
-    if (fin_or_event == picoquic_callback_datagram)
+    } else if (fin_or_event == picoquic_callback_datagram)
     {
         int ret = -1;
         if (ctx->datagram_recv_fn != NULL) {
-            ret = ctx->datagram_recv_fn(cnx, bytes, length, ctx->datagram_recv_ctx);
+            ret = ctx->datagram_recv_fn(cnx, bytes, length, ctx->datagram_ctx);
+        }
+        return ret;
+    }
+    else if (fin_or_event == picoquic_callback_datagram_acked ||
+        fin_or_event == picoquic_callback_datagram_lost ||
+        fin_or_event == picoquic_callback_datagram_spurious)
+    {
+        int ret = -1;
+        if (ctx->datagram_ack_fn != NULL) {
+            ret = ctx->datagram_ack_fn(cnx, fin_or_event,
+                bytes, length, ctx->datagram_ctx);
         }
         return ret;
     }

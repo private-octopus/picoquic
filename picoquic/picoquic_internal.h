@@ -1617,7 +1617,7 @@ void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_he
  *
  * May have to split a retransmitted stream frame if it does not fit in the new packet size */
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_max, int* no_need_to_repeat);
+    size_t bytes_max, int* no_need_to_repeat, int* do_not_detect_spurious);
 
 uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);
@@ -1635,6 +1635,12 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
 
 void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc,
     picoquic_local_cnxid_t* l_cid);
+
+/* If the packet contained an ACK frame, perform the ACK of ACK pruning logic.
+ * Record stream data as acknowledged, signal datagram frames as acknowledged.
+ */
+void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_packet_t* p,
+    int is_spurious, uint64_t current_time);
 
 /* Coding and decoding of frames */
 

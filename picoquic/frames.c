@@ -1725,6 +1725,13 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
             uint64_t max_reorder_gap = pkt_ctx->highest_acknowledged - p->sequence_number;
             picoquic_path_t * old_path = p->send_path;
 
+            /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic.
+             * Record stream data as acknowledged, signal datagram frames as acknowledged.
+             */
+            picoquic_process_possible_ack_of_ack_frame(cnx, p, 1, current_time);
+
+
+            /* Update congestion control and statistics */
             if (old_path != NULL) {
                 old_path->nb_spurious++;
 
@@ -2516,7 +2523,7 @@ int picoquic_process_ack_of_ack_mp_frame(
 }
 
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_max, int* no_need_to_repeat)
+    size_t bytes_max, int* no_need_to_repeat, int* do_not_detect_spurious)
 {
     int ret = 0;
     int fin;
@@ -2664,6 +2671,12 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
             /* Path challenge repeat follows its own logic. */
             *no_need_to_repeat = 1;
             break;
+        case picoquic_frame_type_datagram:
+        case picoquic_frame_type_datagram_l:
+            /* Path challenge repeat follows its own logic. */
+            *no_need_to_repeat = 1;
+            *do_not_detect_spurious = 0;
+            break;
         default: {
             uint64_t frame_id64;
             *no_need_to_repeat = 0;
@@ -2732,7 +2745,11 @@ int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     return ret;
 }
 
-void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_packet_t* p, uint64_t current_time)
+/* If the packet contained an ACK frame, perform the ACK of ACK pruning logic.
+ * Record stream data as acknowledged, signal datagram frames as acknowledged.
+ */
+void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_packet_t* p, 
+    int is_spurious, uint64_t current_time)
 {
     int ret = 0;
     size_t byte_index;
@@ -2777,9 +2794,15 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
                 }
             }
         } else {
-            if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_datagram, picoquic_frame_type_datagram_l) &&
-                p->send_path != NULL && p->send_time > p->send_path->last_time_acked_data_frame_sent) {
-                p->send_path->last_time_acked_data_frame_sent = p->send_time;
+            if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_datagram, picoquic_frame_type_datagram_l)) {
+                if (p->send_path != NULL && p->send_time > p->send_path->last_time_acked_data_frame_sent) {
+                    p->send_path->last_time_acked_data_frame_sent = p->send_time;
+                }
+                if (cnx->callback_fn != NULL) {
+                    ret = (cnx->callback_fn)(cnx, 0, &p->bytes[byte_index], frame_length,
+                        (is_spurious)? picoquic_callback_datagram_spurious:picoquic_callback_datagram_acked,
+                        cnx->callback_ctx, NULL);
+                }
             }
 
             ret = picoquic_skip_frame(&p->bytes[byte_index],
@@ -2842,8 +2865,10 @@ static int picoquic_process_ack_range(
                     }
                 }
 
-                /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic */
-                picoquic_process_possible_ack_of_ack_frame(cnx, p, current_time);
+                /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic.
+                 * Record stream data as acknowledged, signal datagram frames as acknowledged.
+                 */
+                picoquic_process_possible_ack_of_ack_frame(cnx, p, 0, current_time);
 
                 /* Keep track of reception of ACK of 1RTT data */
                 if (p->ptype == picoquic_packet_1rtt_protected &&
@@ -4573,6 +4598,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 break;
             case picoquic_frame_type_datagram:
             case picoquic_frame_type_datagram_l:
+                /* Datagram carrying packets are acked, but not repeated */
+                ack_needed = 1;
                 bytes = picoquic_decode_datagram_frame(cnx, bytes, bytes_max);
                 break;
             default: {
@@ -4587,7 +4614,6 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                         break;
                     case picoquic_frame_type_time_stamp:
                         bytes = picoquic_decode_time_stamp_frame(bytes, bytes_max, cnx, &packet_data);
-                        ack_needed = 0;
                         break;
                     case picoquic_frame_type_ack_mp: {
                         if (epoch == picoquic_epoch_0rtt) {
@@ -4611,7 +4637,6 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                     }
                     case picoquic_frame_type_qoe:
                         bytes = picoquic_decode_qoe_frame(bytes, bytes_max, cnx);
-                        ack_needed = 0;
                         break;
                     case picoquic_frame_type_path_status:
                         bytes = picoquic_decode_path_status_frame(bytes, bytes_max, cnx);
@@ -4657,7 +4682,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
     if (bytes != NULL) {
         process_decoded_packet_data(cnx, path_x, current_time, &packet_data);
 
-        if (ack_needed != 0) {
+        if (ack_needed) {
             cnx->latest_progress_time = current_time;
             picoquic_set_ack_needed(cnx, current_time, pc, path_x->p_local_cnxid);
         }
@@ -4905,6 +4930,7 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
         case picoquic_frame_type_datagram:
         case picoquic_frame_type_datagram_l:
             bytes = picoquic_skip_datagram_frame(bytes, bytes_max);
+            *pure_ack = 0;
             break;
         default: {
             uint64_t frame_id64;

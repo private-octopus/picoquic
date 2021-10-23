@@ -269,8 +269,8 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("stream_max", test_frame_type_stream_range_max, 0, 0, 3),
     TEST_SKIP_ITEM("crypto_hs", test_frame_type_crypto_hs, 0, 0, 2),
     TEST_SKIP_ITEM("retire_connection_id", test_frame_type_retire_connection_id, 0, 0, 3),
-    TEST_SKIP_ITEM("datagram", test_frame_type_datagram, 1, 1, 3),
-    TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 1, 0, 3),
+    TEST_SKIP_ITEM("datagram", test_frame_type_datagram, 0, 1, 3),
+    TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 0, 0, 3),
     TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3),
     TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3),
     TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3),
@@ -2720,6 +2720,7 @@ int stream_ack_test()
             while (byte_index < stream_ack_case[i].length){
                 size_t consumed = 0;
                 int is_pure_ack = 0;
+                int do_not_detect_spurious = 0;
 
                 ret = picoquic_skip_frame(
                     bytes + byte_index, bytes_max - byte_index, &consumed, &is_pure_ack);
@@ -2733,7 +2734,7 @@ int stream_ack_test()
                     int no_need_to_repeat;
 
                     ret = picoquic_check_frame_needs_repeat(cnx,
-                        bytes + byte_index, consumed, &no_need_to_repeat);
+                        bytes + byte_index, consumed, &no_need_to_repeat, &do_not_detect_spurious);
                     if (no_need_to_repeat && !stream_ack_case[i].should_ack) {
                         DBG_PRINTF("Case %zu, failed to repeat frame index %zu",
                             i, byte_index);

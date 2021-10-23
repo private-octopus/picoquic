@@ -44,10 +44,11 @@ extern "C" {
  /* Callback function for sending and receiving datagrams.
   */
 typedef int (*picoquic_datagram_send_fn)(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length, void* datagram_send_ctx);
+    uint8_t* bytes, size_t length, void* datagram_ctx);
 typedef int (*picoquic_datagram_recv_fn)(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length, void* datagram_recv_ctx);
-
+    uint8_t* bytes, size_t length, void* datagram_ctx);
+typedef int (*picoquic_datagram_ack_fn)(picoquic_cnx_t* cnx,
+    picoquic_call_back_event_t d_event, uint8_t* bytes, size_t length, void* datagram_ctx);
 /* Test context
  */
 
@@ -155,10 +156,10 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     FILE* bw_update;
 
     /* Datagram test functions */
+    void* datagram_ctx;
     picoquic_datagram_send_fn datagram_send_fn;
-    void* datagram_send_ctx;
     picoquic_datagram_recv_fn datagram_recv_fn;
-    void* datagram_recv_ctx;
+    picoquic_datagram_ack_fn datagram_ack_fn;
 } picoquic_test_tls_api_ctx_t;
 
 typedef struct st_test_skip_frames_t {
