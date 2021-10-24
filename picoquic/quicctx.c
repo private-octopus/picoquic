@@ -1461,7 +1461,6 @@ void picoquic_enqueue_packet_with_path(picoquic_packet_t* p)
 
 void picoquic_dequeue_packet_from_path(picoquic_packet_t* p)
 {
-
     if (p->send_path != NULL) {
         if (p->path_packet_previous == NULL && p->path_packet_next == NULL) {
             /* verify that the packet was not already dequeued before making any correction. */
