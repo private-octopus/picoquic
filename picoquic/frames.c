@@ -3103,20 +3103,13 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
                     else {
                         picoquic_sack_item_record_sent(next_sack);
                         lowest_acknowledged = picoquic_sack_item_first(next_sack);
-                        next_sack = picoquic_sack_item_next(next_sack);
                         num_block++;
                     }
                 }
                 else {
                     range_skipped = 1;
-#if 1
-#else
-                    if (picoquic_sack_item_nb_times_sent(next_sack) < lowest_skipped_range) {
-                        lowest_skipped_range = picoquic_sack_item_nb_times_sent(next_sack);
-                    }
-#endif
-                    next_sack = picoquic_sack_item_next(next_sack);
                 }
+                next_sack = picoquic_sack_item_next(next_sack);
             }
             while (next_sack != NULL) {
                 range_skipped = 1;
@@ -3125,7 +3118,7 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
                 }
                 next_sack = picoquic_sack_item_next(next_sack);
             }
-#if 1
+
             if (range_skipped &&
                 ack_ctx->max_repeat_per_range > PICOQUIC_MIN_ACK_RANGE_REPEAT &&
                 lowest_skipped_range + 1 < ack_ctx->max_repeat_per_range) {
@@ -3134,17 +3127,7 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
             else if (ack_ctx->max_repeat_per_range < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
                 ack_ctx->max_repeat_per_range++;
             }
-#else
-            if (range_skipped) {
-                if (ack_ctx->max_repeat_per_range > PICOQUIC_MIN_ACK_RANGE_REPEAT &&
-                    lowest_skipped_range + 1 < ack_ctx->max_repeat_per_range) {
-                    ack_ctx->max_repeat_per_range--;
-                }
-                else if (ack_ctx->max_repeat_per_range < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-                    ack_ctx->max_repeat_per_range++;
-                }
-            }
-#endif
+
             /* When numbers are lower than 64, varint encoding fits on one byte */
             *num_block_byte = (uint8_t)num_block;
 
