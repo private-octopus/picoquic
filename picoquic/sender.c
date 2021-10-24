@@ -1683,14 +1683,52 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
             r_cid = r_cid->next;
         }
     }
-    else {
 #if 1
+    else if (cnx->is_simple_multipath_enabled && cnx->cnx_state == picoquic_state_ready) {
+        /* walk through a per path loop */
+        for (int i_path = 0; i_path < cnx->nb_paths; i_path++) {
+#if 0
+            length = picoquic_retransmit_needed_path_loop(cnx, &cnx->pkt_ctx[pc], pc, path_x, current_time, next_wake_time,
+                packet, send_buffer_max, header_length);
+#endif
+            picoquic_packet_t* old_p = cnx->path[i_path]->path_packet_first;
+            if (length == 0) {
+                int continue_next = 1;
+
+                /* Call the per packet routine in a loop */
+                while (old_p != 0 && continue_next) {
+                    picoquic_packet_t* p_next = old_p->path_packet_next;
+                    if (old_p->pc == pc) {
+                        length = picoquic_retransmit_needed_packet(cnx, &cnx->pkt_ctx[pc], old_p, pc, path_x, current_time,
+                            next_wake_time, packet, send_buffer_max, header_length, &continue_next);
+                    }
+                    old_p = p_next;
+                }
+            }
+            else {
+                /* If more retransmission are queued, set the timer appropriately */
+                int timer_based_retransmit = 0;
+                uint64_t next_retransmit_time = *next_wake_time;
+
+                if (old_p != NULL){
+                    if (picoquic_retransmit_needed_by_packet(cnx, old_p,
+                        current_time, &next_retransmit_time, &timer_based_retransmit)) {
+                        *next_wake_time = current_time;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                        break;
+                    }
+                    else if (next_retransmit_time < *next_wake_time) {
+                        *next_wake_time = next_retransmit_time;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                    }
+                }
+            }
+        }
+    }
+#endif
+    else {
         length = picoquic_retransmit_needed_loop(cnx, &cnx->pkt_ctx[pc], pc, path_x, current_time, next_wake_time,
             packet, send_buffer_max, header_length);
-#else
-        length = picoquic_retransmit_needed_body(cnx, &cnx->pkt_ctx[pc], pc, path_x, current_time, next_wake_time,
-            packet, send_buffer_max, header_length);
-#endif
     }
 
     return length;
