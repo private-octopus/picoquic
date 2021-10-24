@@ -904,6 +904,12 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
         packet->next_packet->previous_packet = packet;
     }
     pkt_ctx->retransmit_newest = packet;
+
+    /* Add at last position of packet per path list
+     */
+    picoquic_enqueue_packet_with_path(packet);
+
+    /* Manage the double linked packet list for retransmissions */
     if (!packet->is_ack_trap) {
         /* Account for bytes in transit, for congestion control */
         path_x->bytes_in_transit += length;
@@ -918,6 +924,7 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
 {
     size_t dequeued_length = p->length + p->checksum_overhead;
 
+    /* Remove from list */
     if (p->previous_packet == NULL) {
         pkt_ctx->retransmit_newest = p->next_packet;
     }
@@ -929,18 +936,11 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
         pkt_ctx->retransmit_oldest = p->previous_packet;
     }
     else {
-#ifdef _DEBUG
-        picoquic_packet_context_enum pc = p->pc;
-        if (p->next_packet->pc != pc) {
-            DBG_PRINTF("Inconsistent PC in queue, %d vs %d\n", p->next_packet->pc, pc);
-        }
-
-        if (p->next_packet->previous_packet != p) {
-            DBG_PRINTF("Inconsistent chain of packets, pc = %d\n", pc);
-        }
-#endif
         p->next_packet->previous_packet = p->previous_packet;
     }
+
+    /* Remove from per path list */
+    picoquic_dequeue_packet_from_path(p);
 
     /* Account for bytes in transit, for congestion control */
 

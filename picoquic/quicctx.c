@@ -1442,6 +1442,67 @@ static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path
     free(path_x);
 }
 
+void picoquic_enqueue_packet_with_path(picoquic_packet_t* p)
+{
+    /* Add at last position of packet per path list
+     */
+    if (p->send_path != NULL) {
+        p->path_packet_previous = p->send_path->path_packet_last;
+        p->path_packet_next = NULL;
+        if (p->send_path->path_packet_last == NULL) {
+            p->send_path->path_packet_first = p;
+        }
+        else {
+            p->send_path->path_packet_last->path_packet_next = p;
+        }
+        p->send_path->path_packet_last = p;
+    }
+}
+
+void picoquic_dequeue_packet_from_path(picoquic_packet_t* p)
+{
+
+    if (p->send_path != NULL) {
+        if (p->path_packet_previous == NULL && p->path_packet_next == NULL) {
+            /* verify that the packet was not already dequeued before making any correction. */
+            if (p->send_path->path_packet_first == p) {
+                p->send_path->path_packet_first = NULL;
+            }
+            if (p->send_path->path_packet_last == p) {
+                p->send_path->path_packet_last = NULL;
+            }
+            return;
+        }
+
+        if (p->path_packet_previous == NULL) {
+            p->send_path->path_packet_first = p->path_packet_next;
+        }
+        else {
+            p->path_packet_previous->path_packet_next = p->path_packet_next;
+        }
+
+        if (p->path_packet_next == NULL) {
+            p->send_path->path_packet_last = p->path_packet_previous;
+        }
+        else {
+            p->path_packet_next->path_packet_previous = p->path_packet_previous;
+        }
+        p->path_packet_previous = NULL;
+        p->path_packet_next = NULL;
+    }
+}
+
+void picoquic_empty_path_packet_queue(picoquic_path_t* path_x)
+{
+    picoquic_packet_t* p = path_x->path_packet_first;
+
+    while (p != NULL) {
+        picoquic_packet_t* p_next = p->path_packet_next;
+        picoquic_dequeue_packet_from_path(p);
+        p = p_next;
+    }
+}
+
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 {
     picoquic_path_t * path_x = cnx->path[path_index];
@@ -1450,20 +1511,13 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     if (cnx->quic->F_log != NULL) {
         fflush(cnx->quic->F_log);
     }
-        
+
     /* Remove old path data from retransmit queue */
+    picoquic_empty_path_packet_queue(path_x);
+    /* Remove old path data from retransmitted queue */
+    /* TODO: what if using multiple number spaces? */
     for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++)
     {
-        p = cnx->pkt_ctx[pc].retransmit_newest;
-
-        while (p != NULL) {
-            if (p->send_path == path_x) {
-                DBG_PRINTF("Erase path for packet pc: %d, seq:%" PRIu64 "\n", pc, p->sequence_number);
-                p->send_path = NULL;
-            }
-            p = p->next_packet;
-        }
-
         p = cnx->pkt_ctx[pc].retransmitted_newest;
         while (p != NULL) {
             if (p->send_path == path_x) {
@@ -1473,6 +1527,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
             p = p->previous_packet;
         }
     }
+
     /* Free the data */
     picoquic_clear_path_data(cnx, path_x);
 
