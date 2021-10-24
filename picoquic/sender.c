@@ -1219,7 +1219,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
                  * monopath versions. Without that distinction, some tests would not pass -- but this
                  * is not exactly a good reason. It may be hiding something else, e.g. the need to
                  * adjust the out-of-order packet threshold as a function of paths. */
-                if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
+                if (cnx->is_multipath_enabled) {
                     /* When enough ulterior packets are acknowledged, we know that the packet need to be retransmitted */
                     retransmit_time = current_time;
                 }
@@ -1683,15 +1683,11 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
             r_cid = r_cid->next;
         }
     }
-#if 1
     else if (cnx->is_simple_multipath_enabled && cnx->cnx_state == picoquic_state_ready) {
-        /* walk through a per path loop */
+        /* Find the path with the lowest repeat wait? */
         for (int i_path = 0; i_path < cnx->nb_paths; i_path++) {
-#if 0
-            length = picoquic_retransmit_needed_path_loop(cnx, &cnx->pkt_ctx[pc], pc, path_x, current_time, next_wake_time,
-                packet, send_buffer_max, header_length);
-#endif
             picoquic_packet_t* old_p = cnx->path[i_path]->path_packet_first;
+
             if (length == 0) {
                 int continue_next = 1;
 
@@ -1725,7 +1721,6 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
             }
         }
     }
-#endif
     else {
         length = picoquic_retransmit_needed_loop(cnx, &cnx->pkt_ctx[pc], pc, path_x, current_time, next_wake_time,
             packet, send_buffer_max, header_length);

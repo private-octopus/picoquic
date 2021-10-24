@@ -833,6 +833,8 @@ typedef struct st_picoquic_packet_context_t {
 * 2: Initial
 * The context holds all the data required to manage acknowledgments
 */
+#define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
+#define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
 
 typedef struct st_picoquic_ack_context_t {
     picoquic_sack_list_t first_sack_item; /* picoquic_format_ack_frame */
@@ -843,6 +845,8 @@ typedef struct st_picoquic_ack_context_t {
     uint64_t time_oldest_unack_packet_received; /* picoquic_is_ack_needed: first packet that has not been acked yet */
 
     uint64_t crypto_rotation_sequence; /* Lowest sequence seen with current key */
+
+    int max_repeat_per_range; /* Max repeat counter used to fill ack ranges */
 
     /* ECN Counters */
     uint64_t ecn_ect0_total_local; /* picoquic_format_ack_frame */

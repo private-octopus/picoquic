@@ -1882,6 +1882,7 @@ void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx)
     ack_ctx->highest_ack_sent_time = cnx->start_time;
     ack_ctx->time_stamp_largest_received = UINT64_MAX;
     ack_ctx->ack_needed = 0;
+    ack_ctx->max_repeat_per_range = PICOQUIC_MAX_ACK_RANGE_REPEAT;
 }
 
 void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx)

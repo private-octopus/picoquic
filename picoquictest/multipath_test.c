@@ -1178,7 +1178,7 @@ int simple_multipath_basic_test()
 int simple_multipath_drop_first_test()
 {
     /* This is about same as the full multipath test */
-    uint64_t max_completion_microsec = 1500000;
+    uint64_t max_completion_microsec = 1420000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_first, 1);
 }
@@ -1186,7 +1186,7 @@ int simple_multipath_drop_first_test()
 int simple_multipath_drop_second_test()
 {
     /* This is about same as the full multipath test */
-    uint64_t max_completion_microsec = 1350000;
+    uint64_t max_completion_microsec = 1510000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second, 1);
 }
@@ -1194,7 +1194,7 @@ int simple_multipath_drop_second_test()
 int simple_multipath_sat_plus_test()
 {
     /* Not to far from theoretical 10-12 sec! */
-    uint64_t max_completion_microsec = 10900000;
+    uint64_t max_completion_microsec = 11000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 1);
 }
@@ -1237,7 +1237,7 @@ int simple_multipath_back1_test()
 
 int simple_multipath_perf_test()
 {
-    uint64_t max_completion_microsec = 1800000;
+    uint64_t max_completion_microsec = 1450000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
 }
