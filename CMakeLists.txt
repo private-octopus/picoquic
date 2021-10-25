@@ -8,12 +8,11 @@ option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan) for debugging" OF
 
 set(CMAKE_C_STANDARD 11)
 
-set(CMAKE_C_FLAGS "-std=c99 -Wall -O3 -fno-exceptions -fno-signed-zeros -fno-trapping-math ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    # using Clang, do not use the rename-registers optimization
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(CMAKE_C_FLAGS "-std=c99 -Wall -O3 -fno-exceptions -fno-signed-zeros -fno-trapping-math ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}"
 else
-    set(CMAKE_C_FLAGS "-frename-registers ${CMAKE_C_FLAGS}")
+    set(CMAKE_C_FLAGS "-std=c99 -Wall -O3 -fno-exceptions -fno-signed-zeros -frename-registers -fno-trapping-math ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 endif()
 
 if(DISABLE_DEBUG_PRINTF)
