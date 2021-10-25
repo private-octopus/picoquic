@@ -940,7 +940,7 @@ void qlog_datagram_frame(uint64_t ftype, FILE* f, bytestream* s)
 
     if (has_length) {
         byteread_vint(s, &length);
-        fprintf(f, ", length: %"PRIu64"", length);
+        fprintf(f, ", \"length\": %"PRIu64"", length);
     }
 }
 
