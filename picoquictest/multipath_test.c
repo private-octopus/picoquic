@@ -1169,8 +1169,8 @@ int multipath_qlog_test()
  */
 int simple_multipath_basic_test()
 {
-    /* Same duration as the full multipath test */
-    uint64_t max_completion_microsec = 1080000;
+    /* Slightly faster than the full multipath test */
+    uint64_t max_completion_microsec = 1030000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_basic, 1);
 }
@@ -1178,7 +1178,7 @@ int simple_multipath_basic_test()
 int simple_multipath_drop_first_test()
 {
     /* This is about same as the full multipath test */
-    uint64_t max_completion_microsec = 1450000;
+    uint64_t max_completion_microsec = 1420000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_first, 1);
 }
@@ -1186,7 +1186,7 @@ int simple_multipath_drop_first_test()
 int simple_multipath_drop_second_test()
 {
     /* This is about same as the full multipath test */
-    uint64_t max_completion_microsec = 1400000;
+    uint64_t max_completion_microsec = 1510000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second, 1);
 }
@@ -1194,50 +1194,50 @@ int simple_multipath_drop_second_test()
 int simple_multipath_sat_plus_test()
 {
     /* Not to far from theoretical 10-12 sec! */
-    uint64_t max_completion_microsec = 12300000;
+    uint64_t max_completion_microsec = 11000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 1);
 }
 
 int simple_multipath_renew_test()
 {
-    uint64_t max_completion_microsec = 3000000;
+    uint64_t max_completion_microsec = 1100000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_renew, 1);
 }
 
 int simple_multipath_rotation_test()
 {
-    uint64_t max_completion_microsec = 3000000;
+    uint64_t max_completion_microsec = 1100000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_rotation, 1);
 }
 
 int simple_multipath_nat_test()
 {
-    uint64_t max_completion_microsec = 3000000;
+    uint64_t max_completion_microsec = 1200000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_nat, 1);
 }
 
 int simple_multipath_break1_test()
 {
-    uint64_t max_completion_microsec = 13000000;
+    uint64_t max_completion_microsec = 12000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break1, 1);
 }
 
 int simple_multipath_back1_test()
 {
-    /* TODO: understand why 5.5 sec instead of 3.7 sec in full multipath test */
-    uint64_t max_completion_microsec = 5500000;
+    /* Slightly better than 3.7 sec in full multipath test */
+    uint64_t max_completion_microsec = 3100000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_back1, 1);
 }
 
 int simple_multipath_perf_test()
 {
-    uint64_t max_completion_microsec = 1480000;
+    uint64_t max_completion_microsec = 1450000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
 }
@@ -1245,4 +1245,119 @@ int simple_multipath_perf_test()
 int simple_multipath_qlog_test()
 {
     return multipath_qlog_test_one(1);
+}
+
+/* Test that queuing of packets in paths wroks correctly */
+#define NB_QUEUE_TEST_PACKETS 5
+
+int path_packet_queue_verify(picoquic_path_t* path_x, picoquic_packet_t** pverif, int nb_verif)
+{
+    int ret = 0;
+    int nb_found = 0;
+    picoquic_packet_t* p = path_x->path_packet_first;
+    picoquic_packet_t* p_previous = NULL;
+
+    while (ret == 0 && p != NULL && nb_found < nb_verif) {
+        if (p != pverif[nb_found]) {
+            ret = -1;
+        } else if (p->path_packet_previous != p_previous){
+            ret = -1;
+        }
+        else {
+            nb_found++;
+            p_previous = p;
+            p = p->path_packet_next;
+        }
+    }
+
+    if (p != NULL) {
+        ret = -1;
+    }
+    else if (nb_found != nb_verif) {
+        ret = -1;
+    }
+    else if (path_x->path_packet_last != p_previous) {
+        ret = -1;
+    }
+    return ret;
+}
+
+int path_packet_queue_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr = { 0 };
+    picoquic_quic_t* qclient = NULL;
+    picoquic_packet_t* plist[NB_QUEUE_TEST_PACKETS];
+    picoquic_packet_t* pverif[NB_QUEUE_TEST_PACKETS];
+    picoquic_cnx_t* cnx = NULL;
+    int remain_in_list = 0;
+
+
+    for (int i = 0; i < NB_QUEUE_TEST_PACKETS; i++) {
+        plist[i] = (picoquic_packet_t*)malloc(sizeof(picoquic_packet_t));
+        if (plist[i] == NULL) {
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        for (int i = 0; i < NB_QUEUE_TEST_PACKETS; i++) {
+            memset(plist[i], 0, sizeof(picoquic_packet_t));
+            plist[i]->path_packet_number = i;
+        }
+        qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+            NULL, NULL, NULL, NULL, simulated_time,
+            &simulated_time, NULL, NULL, 0);
+        if (qclient == NULL) {
+            ret = -1;
+        }
+        else
+        {
+            cnx = picoquic_create_cnx(qclient,
+                picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr*)&saddr,
+                simulated_time, 0, "test-sni", "test-alpn", 1);
+            if (cnx == NULL) {
+                ret = -1;
+            }
+        }
+    }
+    /* First test, add in order */
+    for (int i = 0; ret == 0 && i < NB_QUEUE_TEST_PACKETS; i++) {
+        memset(plist[i], 0, sizeof(picoquic_packet_t));
+        plist[i]->path_packet_number = i;
+        plist[i]->send_path = cnx->path[0];
+        picoquic_enqueue_packet_with_path(plist[i]);
+        pverif[i] = plist[i];
+        ret = path_packet_queue_verify(cnx->path[0], pverif, i + 1);
+    }
+    /* Remove half the packets */
+    remain_in_list = NB_QUEUE_TEST_PACKETS;
+    for (int i = NB_QUEUE_TEST_PACKETS - 1; ret == 0 && i >= 0; i -= 2) {
+        picoquic_dequeue_packet_from_path(plist[i]);
+        for (int j = i + 1; j < NB_QUEUE_TEST_PACKETS; j++) {
+            pverif[j - 1] = pverif[j];
+        }
+        remain_in_list--;
+        pverif[remain_in_list] = NULL;
+        ret = path_packet_queue_verify(cnx->path[0], pverif, remain_in_list);
+    }
+
+    /* Empty the packet list completely */
+    if (ret == 0) {
+        picoquic_empty_path_packet_queue(cnx->path[0]);
+        ret = path_packet_queue_verify(cnx->path[0], pverif, 0);
+    }
+
+    /* delete everything */
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+    for (int i = 0; i < NB_QUEUE_TEST_PACKETS; i++) {
+        if (plist[i] != NULL) {
+            free(plist[i]);
+            plist[i] = NULL;
+        }
+    }
+    /* And that's it */
+    return ret;
 }

@@ -369,6 +369,8 @@ typedef struct st_picoquic_packet_t {
     struct st_picoquic_packet_t* previous_packet;
     struct st_picoquic_packet_t* next_packet;
     struct st_picoquic_path_t* send_path;
+    struct st_picoquic_packet_t* path_packet_next;
+    struct st_picoquic_packet_t* path_packet_previous;
     uint64_t sequence_number;
     uint64_t path_packet_number;
     uint64_t send_time;
@@ -831,6 +833,8 @@ typedef struct st_picoquic_packet_context_t {
 * 2: Initial
 * The context holds all the data required to manage acknowledgments
 */
+#define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
+#define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
 
 typedef struct st_picoquic_ack_context_t {
     picoquic_sack_list_t first_sack_item; /* picoquic_format_ack_frame */
@@ -841,6 +845,8 @@ typedef struct st_picoquic_ack_context_t {
     uint64_t time_oldest_unack_packet_received; /* picoquic_is_ack_needed: first packet that has not been acked yet */
 
     uint64_t crypto_rotation_sequence; /* Lowest sequence seen with current key */
+
+    int max_repeat_per_range; /* Max repeat counter used to fill ack ranges */
 
     /* ECN Counters */
     uint64_t ecn_ect0_total_local; /* picoquic_format_ack_frame */
@@ -928,6 +934,9 @@ typedef struct st_picoquic_path_t {
     uint64_t last_sent_time;
     /* Number of packets sent on this path*/
     uint64_t path_packet_number;
+    /* The packet list holds unkacknowledged packets sent on this path.*/
+    picoquic_packet_t* path_packet_first;
+    picoquic_packet_t* path_packet_last;
     /* flags */
     unsigned int mtu_probe_sent : 1;
     unsigned int path_is_published : 1;
@@ -1368,6 +1377,9 @@ int picoquic_register_net_secret(picoquic_cnx_t* cnx);
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     const struct sockaddr* local_addr, const struct sockaddr* peer_addr);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
+void picoquic_enqueue_packet_with_path(picoquic_packet_t* p);
+void picoquic_dequeue_packet_from_path(picoquic_packet_t* p);
+void picoquic_empty_path_packet_queue(picoquic_path_t* path_x);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
