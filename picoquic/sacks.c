@@ -39,8 +39,8 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx,
 {
     int is_received = 0;
     picoquic_sack_item_t* sack = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) ?
-        ((l_cid==NULL)?&cnx->path[0]->p_local_cnxid->ack_ctx.first_sack_item :
-        &l_cid->ack_ctx.first_sack_item) : &cnx->ack_ctx[pc].first_sack_item;
+        ((l_cid==NULL)?&cnx->path[0]->p_local_cnxid->ack_ctx.sack_list.first :
+        &l_cid->ack_ctx.sack_list.first) : &cnx->ack_ctx[pc].sack_list.first;
 
     if (sack->start_of_sack_range != UINT64_MAX) {
         do {
@@ -64,11 +64,12 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx,
  * Record it in the chain.
  */
 
-int picoquic_update_sack_list(picoquic_sack_list_t* sack,
+int picoquic_update_sack_list(picoquic_sack_list_t* sack_list,
     uint64_t pn64_min, uint64_t pn64_max)
 {
     int ret = 1; /* duplicate by default, reset to 0 if update found */
     picoquic_sack_item_t* previous = NULL;
+    picoquic_sack_item_t* sack = &sack_list->first;
 
     if (sack->start_of_sack_range == (uint64_t)((int64_t)-1)) {
         /* This is the first packet ever received.. */
@@ -189,9 +190,10 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
     uint64_t pn64, uint64_t current_microsec)
 {
     int ret = 0;
-    picoquic_sack_list_t* sack = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled)?
-        ((l_cid == NULL)?&cnx->path[0]->p_local_cnxid->ack_ctx.first_sack_item:
-        &l_cid->ack_ctx.first_sack_item): &cnx->ack_ctx[pc].first_sack_item;
+    picoquic_sack_list_t* sack_list = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled)?
+        ((l_cid == NULL)?&cnx->path[0]->p_local_cnxid->ack_ctx.sack_list :
+        &l_cid->ack_ctx.sack_list): &cnx->ack_ctx[pc].sack_list;
+    picoquic_sack_item_t* sack = &sack_list->first;
 
     if (sack->start_of_sack_range == UINT64_MAX) {
         /* This is the first packet ever received.. */
@@ -210,7 +212,7 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
             cnx->ack_ctx[pc].out_of_order_received = 1;
         }
 
-        ret = picoquic_update_sack_list(sack, pn64, pn64);
+        ret = picoquic_update_sack_list(sack_list, pn64, pn64);
     }
 
     return ret;
@@ -219,10 +221,11 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
 /*
  * Check whether the data fills a hole. returns 0 if it does, -1 otherwise.
  */
-int picoquic_check_sack_list(picoquic_sack_list_t* sack,
+int picoquic_check_sack_list(picoquic_sack_list_t* sack_list,
     uint64_t pn64_min, uint64_t pn64_max)
 {
     int ret = -1; /* duplicate by default, reset to 0 if update found */
+    picoquic_sack_item_t* sack = &sack_list->first;
 
     if (sack->start_of_sack_range == (uint64_t)((int64_t)-1)) {
         ret = 0;
@@ -255,9 +258,10 @@ int picoquic_check_sack_list(picoquic_sack_list_t* sack,
  * ranges as "already acknowledged" so they do not need to be resent.
  */
 
-picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_list_t* first_sack, picoquic_sack_item_t* previous,
+picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* previous,
     uint64_t start_of_range, uint64_t end_of_range)
 {
+    picoquic_sack_item_t* first_sack = &sack_list->first;
     picoquic_sack_item_t* next = (previous == NULL) ? first_sack : previous->next_sack;
 
     while (next != NULL) {
@@ -290,48 +294,50 @@ picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_list_t* fi
 }
 
 /* Return the first element of a sack list */
-uint64_t picoquic_sack_list_first(picoquic_sack_list_t* first_sack)
+uint64_t picoquic_sack_list_first(picoquic_sack_list_t* sack_list)
 {
-    return first_sack->start_of_sack_range;
+    return sack_list->first.start_of_sack_range;
 }
 
 /* Return the last element in a sack list, or UINT64_MAX if the list is empty.
  */
-uint64_t picoquic_sack_list_last(picoquic_sack_list_t* first_sack)
+uint64_t picoquic_sack_list_last(picoquic_sack_list_t* sack_list)
 {
-    return first_sack->end_of_sack_range;
+    return sack_list->first.end_of_sack_range;
 }
 
 /* Return the first range in the sack list
  */
-picoquic_sack_item_t * picoquic_sack_list_first_range(picoquic_sack_list_t* first_sack)
+picoquic_sack_item_t * picoquic_sack_list_first_range(picoquic_sack_list_t* sack_list)
 {
-    return first_sack->next_sack;
+    return sack_list->first.next_sack;
 }
 
 /* Initialize a sack list
  */
-void picoquic_sack_list_init(picoquic_sack_list_t* first_sack)
+void picoquic_sack_list_init(picoquic_sack_list_t* sack_list)
 {
-    first_sack->start_of_sack_range = UINT64_MAX;
-    first_sack->end_of_sack_range = 0;
-    first_sack->next_sack = NULL;
-    first_sack->nb_times_sent = 0;
+    sack_list->first.start_of_sack_range = UINT64_MAX;
+    sack_list->first.end_of_sack_range = 0;
+    sack_list->first.next_sack = NULL;
+    sack_list->first.nb_times_sent = 0;
 }
 
 /* Reset a SACK list to single range
  */
-void picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, uint64_t range_min, uint64_t range_max)
+void picoquic_sack_list_reset(picoquic_sack_list_t* sack_list, uint64_t range_min, uint64_t range_max)
 {
-    first_sack->start_of_sack_range = range_min;
-    first_sack->end_of_sack_range = range_max;
-    first_sack->nb_times_sent = 0;
+    sack_list->first.start_of_sack_range = range_min;
+    sack_list->first.end_of_sack_range = range_max;
+    sack_list->first.nb_times_sent = 0;
 }
 
 /* Free the elements of a sack list 
  */
-void picoquic_sack_list_free(picoquic_sack_list_t* first_sack)
+void picoquic_sack_list_free(picoquic_sack_list_t* sack_list)
 {
+    picoquic_sack_item_t* first_sack = &sack_list->first;
+
     while (first_sack->next_sack != NULL) {
         picoquic_sack_item_t* next = first_sack->next_sack;
         first_sack->next_sack = next->next_sack;
@@ -369,7 +375,7 @@ void picoquic_sack_item_record_sent(picoquic_sack_item_t* sack_item)
 size_t picoquic_sack_list_size(picoquic_sack_list_t* first_sack)
 {
     size_t sack_list_size = 1;
-    picoquic_sack_item_t* next = first_sack->next_sack;
+    picoquic_sack_item_t* next = first_sack->first.next_sack;
     while (next != NULL) {
         next = next->next_sack;
         sack_list_size++;

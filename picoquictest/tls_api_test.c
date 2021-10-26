@@ -6553,9 +6553,9 @@ static int key_rotation_test_one(int inject_bad_packet)
         }
 
         if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > rotation_sequence &&
-            picoquic_sack_list_last(&test_ctx->cnx_server->ack_ctx[picoquic_packet_context_application].first_sack_item) >
+            picoquic_sack_list_last(&test_ctx->cnx_server->ack_ctx[picoquic_packet_context_application].sack_list) >
             test_ctx->cnx_server->crypto_epoch_sequence &&
-            picoquic_sack_list_last(&test_ctx->cnx_client->ack_ctx[picoquic_packet_context_application].first_sack_item) >
+            picoquic_sack_list_last(&test_ctx->cnx_client->ack_ctx[picoquic_packet_context_application].sack_list) >
             test_ctx->cnx_client->crypto_epoch_sequence &&
             test_ctx->cnx_server->key_phase_enc == test_ctx->cnx_server->key_phase_dec &&
             test_ctx->cnx_client->key_phase_enc == test_ctx->cnx_client->key_phase_dec) {

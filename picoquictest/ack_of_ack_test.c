@@ -115,10 +115,11 @@ static const test_ack_of_ack_t test_ack_of_ack_list[] = {
  * Fill a structured SACK list from a test range 
  */
 
-static void fill_test_sack_list(picoquic_sack_item_t* sack_head,
+static void fill_test_sack_list(picoquic_sack_list_t* sack_list,
     test_ack_range_t const* ranges, size_t nb_ranges)
 {
     picoquic_sack_item_t** previous;
+    picoquic_sack_item_t* sack_head = &sack_list->first;
 
     sack_head->start_of_sack_range = ranges[0].start_of_sack_range;
     sack_head->end_of_sack_range = ranges[0].end_of_sack_range;
@@ -141,25 +142,14 @@ static void fill_test_sack_list(picoquic_sack_item_t* sack_head,
 }
 
 /*
- * Release the memory still allocated in a sack list
- */
-static void free_test_sack_list(picoquic_sack_item_t* sack_head)
-{
-    picoquic_sack_item_t* next;
-    while ((next = sack_head->next_sack) != NULL) {
-        sack_head->next_sack = next->next_sack;
-        free(next);
-    }
-}
-
-/*
  * Compare a structured list to a test range
  */
 
-static int cmp_test_sack_list(picoquic_sack_item_t* sack_head,
+static int cmp_test_sack_list(picoquic_sack_list_t* sack_list,
     test_ack_range_t const* ranges, size_t nb_ranges)
 {
     size_t nb_compared = 0;
+    picoquic_sack_item_t* sack_head = &sack_list->first;
     picoquic_sack_item_t* next = sack_head;
 
     for (size_t i = 0; i < nb_ranges; i++) {
@@ -212,22 +202,22 @@ static size_t build_test_ack(test_ack_range_t const* ranges, size_t nb_ranges,
 static int ack_of_ack_do_one_test(test_ack_of_ack_t const* sample)
 {
     int ret = 0;
-    picoquic_sack_item_t sack_head;
+    picoquic_sack_list_t sack_list;
     uint8_t ack[1024];
     size_t ack_length;
     size_t consumed;
 
-    fill_test_sack_list(&sack_head, sample->initial, sample->nb_initial);
+    fill_test_sack_list(&sack_list, sample->initial, sample->nb_initial);
     ack_length = build_test_ack(sample->ack, sample->nb_ack, ack, sizeof(ack),
         sample->version_flags);
 
-    ret = picoquic_process_ack_of_ack_frame(&sack_head, ack, ack_length, &consumed, 0);
+    ret = picoquic_process_ack_of_ack_frame(&sack_list, ack, ack_length, &consumed, 0);
 
     if (ret == 0) {
-        ret = cmp_test_sack_list(&sack_head, sample->result, sample->nb_result);
+        ret = cmp_test_sack_list(&sack_list, sample->result, sample->nb_result);
     }
 
-    free_test_sack_list(&sack_head);
+    picoquic_sack_list_free(&sack_list);
 
     return ret;
 }

@@ -705,7 +705,9 @@ typedef struct st_picoquic_sack_item_t {
     int nb_times_sent;
 } picoquic_sack_item_t;
 
-typedef picoquic_sack_item_t picoquic_sack_list_t;
+typedef struct st_picoquic_sack_list_t {
+    picoquic_sack_item_t first;
+} picoquic_sack_list_t;
 
 /*
  * Stream head.
@@ -749,7 +751,7 @@ typedef struct st_picoquic_stream_head_t {
     void * app_stream_ctx;
     picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
     void* direct_receive_ctx; /* direct receive context */
-    picoquic_sack_list_t first_sack_item; /* Track which parts of the stream were acknowledged by the peer */
+    picoquic_sack_list_t sack_list; /* Track which parts of the stream were acknowledged by the peer */
     /* Flags describing the state of the stream */
     unsigned int is_active : 1; /* The application is actively managing data sending through callbacks */
     unsigned int fin_requested : 1; /* Application has requested Fin of sending stream */
@@ -837,7 +839,7 @@ typedef struct st_picoquic_packet_context_t {
 #define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
 
 typedef struct st_picoquic_ack_context_t {
-    picoquic_sack_list_t first_sack_item; /* picoquic_format_ack_frame */
+    picoquic_sack_list_t sack_list; /* picoquic_format_ack_frame */
     uint64_t time_stamp_largest_received; /* picoquic_format_ack_frame */
     uint64_t highest_ack_sent; /* picoquic_format_ack_frame */
     uint64_t highest_ack_sent_time; /* picoquic_format_ack_frame */
