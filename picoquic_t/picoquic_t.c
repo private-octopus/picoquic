@@ -69,6 +69,7 @@ static const picoquic_test_def_t test_table[] = {
     { "stateless_blowback", test_stateless_blowback },
     { "sendack", sendacktest },
     { "ackrange", ackrange_test },
+    { "ack_disorder", ack_disorder_test },
     { "ack_of_ack", ack_of_ack_test },
     { "sim_link", sim_link_test },
     { "clear_text_aead", cleartext_aead_test },

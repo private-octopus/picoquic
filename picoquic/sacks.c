@@ -366,3 +366,13 @@ void picoquic_sack_item_record_sent(picoquic_sack_item_t* sack_item)
     sack_item->nb_times_sent++;
 }
 
+size_t picoquic_sack_list_size(picoquic_sack_list_t* first_sack)
+{
+    size_t sack_list_size = 1;
+    picoquic_sack_item_t* next = first_sack->next_sack;
+    while (next != NULL) {
+        next = next->next_sack;
+        sack_list_size++;
+    }
+    return sack_list_size;
+}

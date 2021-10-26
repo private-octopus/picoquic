@@ -373,5 +373,138 @@ int ackrange_test()
         ret = -1;
     }
 
+    picoquic_sack_list_free(&sack0);
+
+    return ret;
+}
+
+
+/* Examine what happens when the packets are received in disorder. In this test, even packets (0, 2..)
+ * are received through a high latency path, odd packets (1..3) through a low latency path, and the
+ * ack-of-ack is sent after 32 packets are received. The goal is to verify that ack ranges are
+ * retained long enough to allow for coalescing. We measure the maximum nimber of ack ranges in the mix.
+ */
+
+#define ACK_DISORDER_LOG "ack_disorder_test.csv"
+
+typedef struct st_ack_disorder_ackk_t {
+    uint64_t pn;
+    uint64_t arrive_time;
+    uint64_t ackk_time;
+    size_t nb_ranges_arrive;
+    size_t nb_ranges_ack;
+} ack_disorder_ackk_t;
+
+int ack_disorder_receive_pn(picoquic_sack_list_t * sack0,
+    uint64_t pn, uint64_t next_time, uint64_t ack_interval,
+    size_t * nb_ackk, size_t nb_ranges, ack_disorder_ackk_t* ackk_list)
+{
+    int ret = 0;
+
+    if (picoquic_update_sack_list(sack0, pn, pn) != 0) {
+        ret = -1;
+    }
+    else if (*nb_ackk >= nb_ranges){
+        ret = -1;
+    }
+    else {
+        ackk_list[*nb_ackk].pn = pn;
+        ackk_list[*nb_ackk].arrive_time = next_time;
+        ackk_list[*nb_ackk].ackk_time = next_time + ack_interval;
+        ackk_list[*nb_ackk].nb_ranges_arrive = picoquic_sack_list_size(sack0);
+        ackk_list[*nb_ackk].nb_ranges_ack = 0;
+        *nb_ackk += 1;
+    }
+    return ret;
+}
+
+int ack_disorder_test()
+{
+    size_t const nb_ranges = 1000;
+    size_t const nb_even_ranges = nb_ranges / 2;
+    size_t const nb_odd_ranges = nb_ranges - nb_even_ranges;
+    uint64_t const low_latency = 11111;
+    uint64_t const high_latency = 300000;
+    uint64_t const ack_interval = 100000;
+    uint64_t const packet_interval = 1000;
+    ack_disorder_ackk_t* ackk_list = (ack_disorder_ackk_t*)malloc(nb_ranges * sizeof(ack_disorder_ackk_t));
+    size_t nb_ackk = 0;
+    size_t i_ackk = 0;
+    size_t i_even_arrive = 0;
+    size_t i_odd_arrive = 0;
+    uint64_t t_even_arrive = low_latency;
+    uint64_t t_odd_arrive = packet_interval + high_latency;
+    uint64_t pn;
+    int ret = 0;
+    picoquic_sack_list_t sack0;
+
+    /* Initialize the test sack list */
+    picoquic_sack_list_init(&sack0);
+
+    /* Run a loop to simulate arrival of packets and ack of ack */
+    while (ret == 0 && (i_even_arrive < nb_even_ranges || i_odd_arrive < nb_odd_ranges || i_ackk < nb_ackk)) {
+        uint64_t next_time = UINT64_MAX;
+        int i_action = -1; /* by default do odd arrival */
+
+        if (i_odd_arrive < nb_odd_ranges) {
+            i_action = 0;
+            next_time = t_odd_arrive;
+        }
+
+        if (i_even_arrive < nb_even_ranges && t_even_arrive < next_time) {
+            i_action = 1;
+            next_time = t_even_arrive;
+        }
+
+        if (i_ackk < nb_ackk && ackk_list[i_ackk].ackk_time < next_time) {
+            i_action = 2;
+            next_time = ackk_list[i_ackk].ackk_time;
+        }
+
+        switch (i_action) {
+        case 0: /* arrival on odd path */
+            pn = 2 * i_odd_arrive + 1;
+            i_odd_arrive++;
+            t_odd_arrive += packet_interval;
+            ret = ack_disorder_receive_pn(&sack0, pn, next_time, ack_interval, &nb_ackk, nb_ranges, ackk_list);
+            break;
+        case 1: /* arrival on even path */
+            pn = 2 * i_even_arrive;
+            i_even_arrive++;
+            t_even_arrive += packet_interval;
+            ret = ack_disorder_receive_pn(&sack0, pn, next_time, ack_interval, &nb_ackk, nb_ranges, ackk_list);
+            break;
+        case 2: /* ack of ack */
+            (void)picoquic_process_ack_of_ack_range(&sack0, NULL, ackk_list[i_ackk].pn, ackk_list[i_ackk].pn);
+            ackk_list[i_ackk].nb_ranges_ack = picoquic_sack_list_size(&sack0);
+            i_ackk++;
+            break;
+        }
+    }
+
+
+    if (ret == 0) {
+        FILE* F = picoquic_file_open(ACK_DISORDER_LOG, "w");
+
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            fprintf(F, "pn,arrive_time,ackk_time,nb_ranges_arrive,nb_ranges_ack\n");
+            for (size_t i = 0; i < nb_ackk; i++) {
+                (void)fprintf(F, "%"PRIu64 ", %"PRIu64 ", %"PRIu64 ", %zu, %zu\n",
+                    ackk_list[i].pn, ackk_list[i].arrive_time, ackk_list[i].ackk_time,
+                    ackk_list[i].nb_ranges_arrive, ackk_list[i].nb_ranges_ack);
+            }
+            (void) picoquic_file_close(F);
+        }
+    }
+
+    if (ackk_list != NULL) {
+        free(ackk_list);
+    }
+
+    picoquic_sack_list_free(&sack0);
+
     return ret;
 }

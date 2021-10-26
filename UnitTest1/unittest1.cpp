@@ -249,6 +249,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ack_disorder)
+        {
+            int ret = ack_disorder_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_ack_of_ack)
         {
             int ret = ack_of_ack_test();

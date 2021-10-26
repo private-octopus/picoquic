@@ -1570,6 +1570,8 @@ int picoquic_sack_item_nb_times_sent(picoquic_sack_item_t* sack_item);
 
 void picoquic_sack_item_record_sent(picoquic_sack_item_t* sack_item);
 
+size_t picoquic_sack_list_size(picoquic_sack_list_t* first_sack);
+
 void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet);
 
 void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx);
