@@ -2801,10 +2801,10 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
                 if (cnx->callback_fn != NULL) {
                     uint8_t frame_id;
                     uint64_t content_length;
-                    uint8_t* content_bytes = &p->bytes[byte_index];
+                    uint8_t* content_bytes;
 
                     /* Parse and skip type and length */
-                    content_bytes = picoquic_decode_datagram_frame_header(content_bytes, content_bytes + frame_length,
+                    content_bytes = picoquic_decode_datagram_frame_header(&p->bytes[byte_index], &p->bytes[p->length],
                         &frame_id, &content_length);
 
                     ret = (cnx->callback_fn)(cnx, 0, content_bytes, (size_t)content_length,
