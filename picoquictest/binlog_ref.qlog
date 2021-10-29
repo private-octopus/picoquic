@@ -57,7 +57,7 @@
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 17, "packet_number": 25, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "datagram"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 18, "packet_number": 26, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "datagram", length: 16}]}],
+    "frame_type": "datagram", "length": 16}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 1, "packet_number": 27, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "handshake_done"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 7, "packet_number": 28, "dcid": "01020304" }, "frames": [{ 
