@@ -2799,7 +2799,15 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
                     p->send_path->last_time_acked_data_frame_sent = p->send_time;
                 }
                 if (cnx->callback_fn != NULL) {
-                    ret = (cnx->callback_fn)(cnx, 0, &p->bytes[byte_index], frame_length,
+                    uint8_t frame_id;
+                    uint64_t content_length;
+                    uint8_t* content_bytes = &p->bytes[byte_index];
+
+                    /* Parse and skip type and length */
+                    content_bytes = picoquic_decode_datagram_frame_header(content_bytes, content_bytes + frame_length,
+                        &frame_id, &content_length);
+
+                    ret = (cnx->callback_fn)(cnx, 0, content_bytes, content_length,
                         (is_spurious)? picoquic_callback_datagram_spurious:picoquic_callback_datagram_acked,
                         cnx->callback_ctx, NULL);
                 }
@@ -3847,6 +3855,24 @@ const uint8_t* picoquic_skip_datagram_frame(const uint8_t* bytes, const uint8_t*
         }
     }
 
+    return bytes;
+}
+
+uint8_t* picoquic_decode_datagram_frame_header(uint8_t* bytes, const uint8_t* bytes_max,
+    uint8_t* frame_id, uint64_t* length)
+{
+    if (bytes != NULL) {
+        *frame_id = *bytes++;
+        if ((*frame_id) & 1) {
+            if ((bytes = (uint8_t *)picoquic_frames_varint_decode(bytes, bytes_max, length)) != NULL &&
+                (bytes + *length) > bytes_max) {
+                bytes = NULL;
+            }
+        }
+        else {
+            *length = bytes_max - bytes;
+        }
+    }
     return bytes;
 }
 

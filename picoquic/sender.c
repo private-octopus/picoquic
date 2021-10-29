@@ -1355,8 +1355,17 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
             if (ret == 0 &&
                 PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_datagram, picoquic_frame_type_datagram_l) &&
                 cnx->callback_fn != NULL) {
-                ret = (cnx->callback_fn)(cnx, 0, &old_p->bytes[byte_index], frame_length,
-                    picoquic_callback_datagram_lost, cnx->callback_ctx, NULL);
+                uint8_t frame_id;
+                uint64_t content_length;
+                uint8_t* content_bytes = &old_p->bytes[byte_index];
+
+                /* Parse and skip type and length */
+                content_bytes = picoquic_decode_datagram_frame_header(content_bytes, content_bytes + frame_length,
+                    &frame_id, &content_length);
+                if (content_bytes != NULL) {
+                    ret = (cnx->callback_fn)(cnx, 0, content_bytes, content_length,
+                        picoquic_callback_datagram_lost, cnx->callback_ctx, NULL);
+                }
                 picoquic_log_app_message(cnx, "Datagram lost, PN=%" PRIu64 ", Sent: %" PRIu64,
                     old_p->sequence_number, old_p->send_time);
             }
