@@ -31,23 +31,42 @@
 * Maintain the list of ACK
 */
 
-/*
- * Check whether the packet was already received.
+/* Check whether the sack list is empty
  */
-int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, 
-    picoquic_packet_context_enum pc, picoquic_local_cnxid_t * l_cid, uint64_t pn64)
+int picoquic_sack_list_is_empty(picoquic_sack_list_t* sack_list)
 {
-    int is_received = 0;
-    picoquic_sack_item_t* sack = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) ?
-        ((l_cid==NULL)?&cnx->path[0]->p_local_cnxid->ack_ctx.sack_list.first :
-        &l_cid->ack_ctx.sack_list.first) : &cnx->ack_ctx[pc].sack_list.first;
+    return (sack_list->first.start_of_sack_range == UINT64_MAX);
+}
+
+/* Remove a range from the sack list 
+ */
+int picoquic_sack_item_remove(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* sack)
+{
+    return (sack_list->first.start_of_sack_range == UINT64_MAX);
+}
+
+/* Find the sack list for the context
+ */
+picoquic_sack_list_t* picoquic_sack_list_from_cnx_context(picoquic_cnx_t* cnx,
+    picoquic_packet_context_enum pc, picoquic_local_cnxid_t* l_cid) {
+    picoquic_sack_list_t* sack_list = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) ?
+        ((l_cid == NULL) ? &cnx->path[0]->p_local_cnxid->ack_ctx.sack_list :
+            &l_cid->ack_ctx.sack_list) : &cnx->ack_ctx[pc].sack_list;
+    return sack_list;
+}
+
+/* Find the closest range below an optional specified sack item
+ */
+picoquic_sack_item_t* picoquic_sack_find_range_below_number(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* previous,
+    uint64_t pn64)
+{
+    picoquic_sack_item_t* sack_found = NULL;
+    picoquic_sack_item_t* sack = (previous == NULL) ? &sack_list->first : previous;
 
     if (sack->start_of_sack_range != UINT64_MAX) {
         do {
-            if (pn64 > sack->end_of_sack_range)
-                break;
-            else if (pn64 >= sack->start_of_sack_range) {
-                is_received = 1;
+            if (pn64 >= sack->start_of_sack_range) {
+                sack_found = sack;
                 break;
             }
             else {
@@ -56,6 +75,18 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx,
         } while (sack != NULL);
     }
 
+    return sack_found;
+}
+
+/*
+ * Check whether the packet was already received.
+ */
+int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, 
+    picoquic_packet_context_enum pc, picoquic_local_cnxid_t * l_cid, uint64_t pn64)
+{
+    picoquic_sack_list_t* sack_list = picoquic_sack_list_from_cnx_context(cnx, pc, l_cid);
+    picoquic_sack_item_t* sack_found = picoquic_sack_find_range_below_number(sack_list, NULL, pn64);
+    int is_received = (sack_found != NULL && pn64 <= sack_found->end_of_sack_range);
     return is_received;
 }
 
@@ -71,7 +102,7 @@ int picoquic_update_sack_list(picoquic_sack_list_t* sack_list,
     picoquic_sack_item_t* previous = NULL;
     picoquic_sack_item_t* sack = &sack_list->first;
 
-    if (sack->start_of_sack_range == (uint64_t)((int64_t)-1)) {
+    if (picoquic_sack_list_is_empty(sack_list)) {
         /* This is the first packet ever received.. */
         sack->start_of_sack_range = pn64_min;
         sack->end_of_sack_range = pn64_max;
@@ -190,20 +221,16 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
     uint64_t pn64, uint64_t current_microsec)
 {
     int ret = 0;
-    picoquic_sack_list_t* sack_list = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled)?
-        ((l_cid == NULL)?&cnx->path[0]->p_local_cnxid->ack_ctx.sack_list :
-        &l_cid->ack_ctx.sack_list): &cnx->ack_ctx[pc].sack_list;
-    picoquic_sack_item_t* sack = &sack_list->first;
+    picoquic_sack_list_t* sack_list = picoquic_sack_list_from_cnx_context(cnx, pc, l_cid);
 
-    if (sack->start_of_sack_range == UINT64_MAX) {
+    if (picoquic_sack_list_is_empty(sack_list)) {
         /* This is the first packet ever received.. */
-        sack->start_of_sack_range = pn64;
-        sack->end_of_sack_range = pn64;
         cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
-    } 
+    }
     else {
-        if (pn64 > sack->end_of_sack_range) {
-            if (pn64 > sack->end_of_sack_range + 1) {
+        uint64_t pn_last = picoquic_sack_list_last(sack_list);
+        if (pn64 > pn_last) {
+            if (pn64 > pn_last + 1) {
                 cnx->ack_ctx[pc].out_of_order_received = 1;
             }
             cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
@@ -211,10 +238,9 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
         else if (cnx->ack_ctx[pc].ack_needed && pn64 < cnx->ack_ctx[pc].highest_ack_sent) {
             cnx->ack_ctx[pc].out_of_order_received = 1;
         }
-
-        ret = picoquic_update_sack_list(sack_list, pn64, pn64);
     }
 
+    ret = picoquic_update_sack_list(sack_list, pn64, pn64);
     return ret;
 }
 
@@ -224,38 +250,20 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
 int picoquic_check_sack_list(picoquic_sack_list_t* sack_list,
     uint64_t pn64_min, uint64_t pn64_max)
 {
-    int ret = -1; /* duplicate by default, reset to 0 if update found */
-    picoquic_sack_item_t* sack = &sack_list->first;
+    int ret = 0;
+    picoquic_sack_item_t* sack = picoquic_sack_find_range_below_number(sack_list, NULL, pn64_min);
 
-    if (sack->start_of_sack_range == (uint64_t)((int64_t)-1)) {
-        ret = 0;
-    } else {
-        for(;;) {
-            if (pn64_max > sack->end_of_sack_range) {
-                ret = 0;
-                break;
-            } else if (pn64_max >= sack->start_of_sack_range) {
-                if (pn64_min < sack->start_of_sack_range) {
-                    ret = 0;
-                } else {
-                    /*complete overlap */
-                    ret = -1;
-                }
-                break;
-            } else if (sack->next_sack == NULL) {
-                ret = 0;
-                break;
-            } else {
-                sack = sack->next_sack;
-            }
-        };
+    if (sack != NULL) {
+        if (pn64_max <= sack->end_of_sack_range) {
+            ret = -1;
+        }
     }
-
     return ret;
 }
 
 /* Process acknowledgement of an acknowledgement. Mark the corresponding
  * ranges as "already acknowledged" so they do not need to be resent.
+ * We request complete overlap to register a match.
  */
 
 picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* previous,

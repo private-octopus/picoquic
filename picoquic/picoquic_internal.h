@@ -107,6 +107,9 @@ extern "C" {
 #define PICOQUIC_CC_ALGO_NUMBER_FAST 4
 #define PICOQUIC_CC_ALGO_NUMBER_BBR 5
 
+#define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
+#define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
+
 /*
  * Types of frames.
  */
@@ -707,6 +710,7 @@ typedef struct st_picoquic_sack_item_t {
 
 typedef struct st_picoquic_sack_list_t {
     picoquic_sack_item_t first;
+    picoquic_sack_item_t range_counts[PICOQUIC_MAX_ACK_RANGE_REPEAT];
 } picoquic_sack_list_t;
 
 /*
@@ -835,8 +839,6 @@ typedef struct st_picoquic_packet_context_t {
 * 2: Initial
 * The context holds all the data required to manage acknowledgments
 */
-#define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
-#define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
 
 typedef struct st_picoquic_ack_context_t {
     picoquic_sack_list_t sack_list; /* picoquic_format_ack_frame */
