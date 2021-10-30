@@ -289,12 +289,19 @@ static int test_api_stream0_prepare(picoquic_cnx_t* cnx, picoquic_test_tls_api_c
 {
     int ret = -1;
 
-    if (ctx->stream0_sent < ctx->stream0_target) {
+    if (ctx->stream0_test_option == 3 && ctx->stream0_sent > 5000) {
+        ret = 0;
+        ctx->stream0_test_option = 1;
+    }
+    else if (ctx->stream0_sent < ctx->stream0_target) {
         uint8_t * buffer;
         size_t available = ctx->stream0_target - ctx->stream0_sent;
         int is_fin = 1;
 
-        if (available > space) {
+        if (ctx->stream0_test_option == 4 && ctx->stream0_sent > 5000) {
+            available = 0;
+            ctx->stream0_test_option = 1;
+        } else if (available > space) {
             available = space;
             
             if (ctx->stream0_test_option == 1 && space > 1) {
@@ -7804,10 +7811,14 @@ int perflog_test()
 
 
 /*
- * Testing the flow controlled sending scenario 
+ * Testing the flow controlled sending scenario, or "direct sending".
+ * Data is sent through the "prepare to send" callback.
+ * The "ready to send" test checks the normal operation.
+ * The "ready to skip" test checks what happens if at some point the application
+ * does not provide any data.
  */
 
-int ready_to_send_test()
+int ready_to_send_test_one(int test_option)
 {
     int ret = 0;
 
@@ -7838,6 +7849,29 @@ int ready_to_send_test()
     return ret;
 }
 
+int ready_to_send_test()
+{
+    int ret = ready_to_send_test_one(1);
+    return ret;
+}
+
+int ready_to_skip_test()
+{
+    int ret = ready_to_send_test_one(3);
+    return ret;
+}
+
+int ready_to_zero_test()
+{
+    int ret = ready_to_send_test_one(4);
+    return ret;
+}
+
+int ready_to_zfin_test()
+{
+    int ret = ready_to_send_test_one(2);
+    return ret;
+}
 
 static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uint64_t max_completion_time, uint64_t jitter, uint8_t jitter_id)
 {

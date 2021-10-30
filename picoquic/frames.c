@@ -1282,7 +1282,12 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                     *ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                     bytes = bytes0; /* CHECK: SHOULD THIS BE NULL ? */
                 }
-                else {
+                else if (stream_data_context.length == 0 && stream_data_context.is_fin == 0) {
+                    /* The application did not send any data */
+                    bytes = bytes0;
+                }
+                else
+                {
                     bytes = bytes0 + stream_data_context.byte_index + stream_data_context.length;
                     stream->sent_offset += stream_data_context.length;
                     cnx->data_sent += stream_data_context.length;
@@ -2801,10 +2806,10 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
                 if (cnx->callback_fn != NULL) {
                     uint8_t frame_id;
                     uint64_t content_length;
-                    uint8_t* content_bytes = &p->bytes[byte_index];
+                    uint8_t* content_bytes;
 
                     /* Parse and skip type and length */
-                    content_bytes = picoquic_decode_datagram_frame_header(content_bytes, content_bytes + frame_length,
+                    content_bytes = picoquic_decode_datagram_frame_header(&p->bytes[byte_index], &p->bytes[p->length],
                         &frame_id, &content_length);
 
                     ret = (cnx->callback_fn)(cnx, 0, content_bytes, (size_t)content_length,
