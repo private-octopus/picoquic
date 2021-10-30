@@ -1318,6 +1318,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
         
+        TEST_METHOD(ready_to_skip)
+        {
+            int ret = ready_to_skip_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ready_to_zero)
+        {
+            int ret = ready_to_zero_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ready_to_zfin)
+        {
+            int ret= ready_to_zfin_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cubic)
         {
             int ret = cubic_test();

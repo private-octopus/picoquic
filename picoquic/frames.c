@@ -1282,7 +1282,12 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                     *ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                     bytes = bytes0; /* CHECK: SHOULD THIS BE NULL ? */
                 }
-                else {
+                else if (stream_data_context.length == 0 && stream_data_context.is_fin == 0) {
+                    /* The application did not send any data */
+                    bytes = bytes0;
+                }
+                else
+                {
                     bytes = bytes0 + stream_data_context.byte_index + stream_data_context.length;
                     stream->sent_offset += stream_data_context.length;
                     cnx->data_sent += stream_data_context.length;
