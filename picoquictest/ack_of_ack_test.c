@@ -188,7 +188,6 @@ static int ack_of_ack_do_one_test(test_ack_of_ack_t const* sample)
     int ret;
     picoquic_sack_list_t sack_list;
     uint8_t ack[1024];
-    size_t ack_length;
     size_t consumed;
 
     ret = picoquic_sack_list_init(&sack_list);
@@ -198,11 +197,10 @@ static int ack_of_ack_do_one_test(test_ack_of_ack_t const* sample)
     }
 
     if (ret == 0) {
-        ack_length = build_test_ack(sample->ack, sample->nb_ack, ack, sizeof(ack),
+        size_t ack_length = build_test_ack(sample->ack, sample->nb_ack, ack, sizeof(ack),
             sample->version_flags);
+        ret = picoquic_process_ack_of_ack_frame(&sack_list, ack, ack_length, &consumed, 0);
     }
-
-    ret = picoquic_process_ack_of_ack_frame(&sack_list, ack, ack_length, &consumed, 0);
 
     if (ret == 0) {
         ret = cmp_test_sack_list(&sack_list, sample->result, sample->nb_result);

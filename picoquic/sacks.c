@@ -21,6 +21,7 @@
 
 #include "picoquic_internal.h"
 #include <stdlib.h>
+#include <string.h>
 
 /*
 * Packet sequence recording prepares the next ACK:

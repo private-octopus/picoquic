@@ -307,6 +307,8 @@ int sendacktest()
         }
     }
 
+    picoquic_sack_list_free(&cnx.ack_ctx[pc].sack_list);
+
     return ret;
 }
 
