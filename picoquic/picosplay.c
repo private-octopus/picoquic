@@ -234,6 +234,14 @@ picosplay_node_t* picosplay_first(picosplay_tree_t *tree) {
     return leftmost(tree->root);
 }
 
+picosplay_node_t* picosplay_previous(picosplay_node_t* node) {
+    if (node->left != NULL)
+        return rightmost(node->left);
+    while (node->parent != NULL && node == node->parent->left)
+        node = node->parent;
+    return node->parent;
+}
+
 /* Return the minimal node that is bigger than the given.
  * This is either:
  *  - leftmost child in the right subtree

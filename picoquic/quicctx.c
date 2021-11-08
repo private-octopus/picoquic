@@ -2324,16 +2324,7 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
     }
 
     picosplay_empty_tree(&stream->stream_data_tree);
-
-#if 1
     picoquic_sack_list_free(&stream->sack_list);
-#else 
-    while (stream->sack_list.first.next_sack != NULL) {
-        picoquic_sack_item_t * sack = stream->sack_list.first.next_sack;
-        stream->sack_list.first.next_sack = sack->next_sack;
-        free(sack);
-    }
-#endif
 }
 
 
@@ -2459,8 +2450,15 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
 {
     picoquic_stream_head_t* stream = (picoquic_stream_head_t*)malloc(sizeof(picoquic_stream_head_t));
     if (stream != NULL) {
-        int is_output_stream = 0;
         memset(stream, 0, sizeof(picoquic_stream_head_t));
+        if (picoquic_sack_list_init(&stream->sack_list) != 0) {
+            free(stream);
+            stream = NULL;
+        }
+    }
+
+    if (stream != NULL){
+        int is_output_stream = 0;
         stream->stream_id = stream_id;
 
         if (IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
@@ -3500,15 +3498,7 @@ void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_m
 
 void picoquic_clear_ack_ctx(picoquic_ack_context_t* ack_ctx)
 {
-#if 1
     picoquic_sack_list_free(&ack_ctx->sack_list);
-#else
-    while (ack_ctx->first_sack_item.next_sack != NULL) {
-        picoquic_sack_item_t* next = ack_ctx->first_sack_item.next_sack;
-        ack_ctx->first_sack_item.next_sack = next->next_sack;
-        free(next);
-    }
-#endif
 }
 
 void picoquic_reset_packet_context(picoquic_cnx_t* cnx,

@@ -146,7 +146,7 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_sack)
+        TEST_METHOD(ack_sack)
         {
             int ret = sacktest();
 
@@ -235,14 +235,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-		TEST_METHOD(test_sendack)
+		TEST_METHOD(ack_send)
 		{
 			int ret = sendacktest();
 
 			Assert::AreEqual(ret, 0);
 		}
 
-        TEST_METHOD(test_ackrange)
+        TEST_METHOD(ack_range)
         {
             int ret = ackrange_test();
 
@@ -256,7 +256,7 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_ack_of_ack)
+        TEST_METHOD(ack_of_ack)
         {
             int ret = ack_of_ack_test();
 

@@ -74,32 +74,30 @@ int sacktest()
     picoquic_packet_context_enum pc = 0;
 
     memset(&cnx, 0, sizeof(cnx));
-    picoquic_sack_list_init(&cnx.ack_ctx[pc].sack_list);
+
+    ret = picoquic_sack_list_init(&cnx.ack_ctx[pc].sack_list);
 
     /* Do a basic test with packet zero */
-
     if (picoquic_is_pn_already_received(&cnx, pc,
         cnx.local_cnxid_first, 0) != 0) {
         ret = -1;
     }
-
-    if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first,
+    else if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first,
         0, current_time) != 0) {
         ret = -1;
     }
-
-    if (picoquic_is_pn_already_received(&cnx, pc,
+    else  if (picoquic_is_pn_already_received(&cnx, pc,
         cnx.local_cnxid_first, 0) == 0) {
         ret = -1;
     }
-
-    if (picoquic_sack_list_first(&cnx.ack_ctx[pc].sack_list) != 0 ||
+    else if (picoquic_sack_list_first(&cnx.ack_ctx[pc].sack_list) != 0 ||
         picoquic_sack_list_last(&cnx.ack_ctx[pc].sack_list) != 0 ||
         picoquic_sack_list_first_range(&cnx.ack_ctx[pc].sack_list) != NULL) {
         ret = -1;
     }
     else {
         /* reset for the next test */
+        picoquic_sack_list_free(&cnx.ack_ctx[pc].sack_list);
         memset(&cnx, 0, sizeof(cnx));
         picoquic_sack_list_init(&cnx.ack_ctx[pc].sack_list);
     }
@@ -336,9 +334,9 @@ int ackrange_test()
     int ret = 0;
     picoquic_sack_list_t sack0;
 
-    picoquic_sack_list_init(&sack0);
+    ret = picoquic_sack_list_init(&sack0);
 
-    for (size_t i = 0; i < nb_ack_range; i++) {
+    for (size_t i = 0; ret == 0 && i < nb_ack_range; i++) {
         ret = picoquic_check_sack_list(&sack0,
             ack_range[i].range_min, ack_range[i].range_max);
 
@@ -383,9 +381,13 @@ int ackrange_test()
  * are received through a high latency path, odd packets (1..3) through a low latency path, and the
  * ack-of-ack is sent after 32 packets are received. The goal is to verify that ack ranges are
  * retained long enough to allow for coalescing. We measure the maximum nimber of ack ranges in the mix.
+ * 
+ * The "horizon" variant studies what happens when setting an "horizon" under which ack ranges shall
+ * be kept, in order to allow merging of ranges.
  */
 
 #define ACK_DISORDER_LOG "ack_disorder_test.csv"
+#define ACK_HORIZON_LOG "ack_horizon_test.csv"
 
 typedef struct st_ack_disorder_ackk_t {
     uint64_t pn;
@@ -418,7 +420,7 @@ int ack_disorder_receive_pn(picoquic_sack_list_t * sack0,
     return ret;
 }
 
-int ack_disorder_test()
+int ack_disorder_test_one(char const * log_name, int use_horizon)
 {
     size_t const nb_ranges = 1000;
     size_t const nb_even_ranges = nb_ranges / 2;
@@ -439,7 +441,12 @@ int ack_disorder_test()
     picoquic_sack_list_t sack0;
 
     /* Initialize the test sack list */
-    picoquic_sack_list_init(&sack0);
+    if (ackk_list == NULL) {
+        ret = -1;
+    } 
+    else {
+        ret = picoquic_sack_list_init(&sack0);
+    }
 
     /* Run a loop to simulate arrival of packets and ack of ack */
     while (ret == 0 && (i_even_arrive < nb_even_ranges || i_odd_arrive < nb_odd_ranges || i_ackk < nb_ackk)) {
@@ -510,5 +517,17 @@ int ack_disorder_test()
 
     picoquic_sack_list_free(&sack0);
 
+    return ret;
+}
+
+int ack_disorder_test()
+{
+    int ret = ack_disorder_test_one(ACK_DISORDER_LOG, 0);
+    return ret;
+}
+
+int ack_horizon_test()
+{
+    int ret = ack_disorder_test_one(ACK_HORIZON_LOG, 0);
     return ret;
 }

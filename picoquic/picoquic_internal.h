@@ -702,15 +702,23 @@ void picoquic_registered_token_clear(picoquic_quic_t* quic, uint64_t expiry_time
  */
 
 typedef struct st_picoquic_sack_item_t {
+    picosplay_node_t node;
+#if 0
     struct st_picoquic_sack_item_t* next_sack;
+#endif
     uint64_t start_of_sack_range;
     uint64_t end_of_sack_range;
     int nb_times_sent;
 } picoquic_sack_item_t;
 
 typedef struct st_picoquic_sack_list_t {
-    picoquic_sack_item_t first;
+    picosplay_tree_t ack_tree;
+    uint64_t ack_horizon;
+#if 0
+    picoquic_sack_item_t * first;
+#endif
     picoquic_sack_item_t range_counts[PICOQUIC_MAX_ACK_RANGE_REPEAT];
+    int use_horizon : 1;
 } picoquic_sack_list_t;
 
 /*
@@ -1552,23 +1560,30 @@ int picoquic_check_sack_list(picoquic_sack_list_t* sack,
 
 picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_list_t* first_sack, picoquic_sack_item_t* previous, uint64_t start_of_range, uint64_t end_of_range);
 
+/* Return the first ACK item in the list */
+picoquic_sack_item_t* picoquic_sack_first_item(picoquic_sack_list_t* sack_list);
+picoquic_sack_item_t* picoquic_sack_last_item(picoquic_sack_list_t* sack_list);
+picoquic_sack_item_t* picoquic_sack_next_item(picoquic_sack_item_t * sack);
+picoquic_sack_item_t* picoquic_sack_previous_item(picoquic_sack_item_t* sack);
+int picoquic_sack_insert_item(picoquic_sack_list_t* sack_list, uint64_t range_min, uint64_t range_max);
+
+int picoquic_sack_list_is_empty(picoquic_sack_list_t* sack_list);
+
 uint64_t picoquic_sack_list_first(picoquic_sack_list_t* first_sack);
 
 uint64_t picoquic_sack_list_last(picoquic_sack_list_t* first_sack);
 
 picoquic_sack_item_t* picoquic_sack_list_first_range(picoquic_sack_list_t* first_sack);
 
-void picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
+int picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
 
-void picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, uint64_t range_min, uint64_t range_max);
+int picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, uint64_t range_min, uint64_t range_max);
 
 void picoquic_sack_list_free(picoquic_sack_list_t* first_sack);
 
-uint64_t picoquic_sack_item_first(picoquic_sack_item_t* sack_item);
+uint64_t picoquic_sack_item_range_start(picoquic_sack_item_t* sack_item);
 
 uint64_t picoquic_sack_item_last(picoquic_sack_item_t* sack_item);
-
-picoquic_sack_item_t* picoquic_sack_item_next(picoquic_sack_item_t* sack_item);
 
 int picoquic_sack_item_nb_times_sent(picoquic_sack_item_t* sack_item);
 

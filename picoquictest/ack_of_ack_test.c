@@ -115,30 +115,14 @@ static const test_ack_of_ack_t test_ack_of_ack_list[] = {
  * Fill a structured SACK list from a test range 
  */
 
-static void fill_test_sack_list(picoquic_sack_list_t* sack_list,
+static int fill_test_sack_list(picoquic_sack_list_t* sack_list,
     test_ack_range_t const* ranges, size_t nb_ranges)
 {
-    picoquic_sack_item_t** previous;
-    picoquic_sack_item_t* sack_head = &sack_list->first;
-
-    sack_head->start_of_sack_range = ranges[0].start_of_sack_range;
-    sack_head->end_of_sack_range = ranges[0].end_of_sack_range;
-    sack_head->next_sack = NULL;
-    previous = &sack_head->next_sack;
-
-    for (size_t i = 1; i < nb_ranges; i++) {
-        picoquic_sack_item_t* range = (picoquic_sack_item_t*)malloc(sizeof(picoquic_sack_item_t));
-
-        if (range == NULL) {
-            break;
-        } else {
-            *previous = range;
-            range->start_of_sack_range = ranges[i].start_of_sack_range;
-            range->end_of_sack_range = ranges[i].end_of_sack_range;
-            range->next_sack = NULL;
-            previous = &range->next_sack;
-        }
+    int ret = 0;
+    for (size_t i = 0; ret == 0 &&  i < nb_ranges; i++) {
+        ret = picoquic_sack_insert_item(sack_list, ranges[i].start_of_sack_range, ranges[i].end_of_sack_range);
     }
+    return ret;
 }
 
 /*
@@ -149,7 +133,7 @@ static int cmp_test_sack_list(picoquic_sack_list_t* sack_list,
     test_ack_range_t const* ranges, size_t nb_ranges)
 {
     size_t nb_compared = 0;
-    picoquic_sack_item_t* sack_head = &sack_list->first;
+    picoquic_sack_item_t* sack_head = picoquic_sack_last_item(sack_list);
     picoquic_sack_item_t* next = sack_head;
 
     for (size_t i = 0; i < nb_ranges; i++) {
@@ -159,7 +143,7 @@ static int cmp_test_sack_list(picoquic_sack_list_t* sack_list,
 
         nb_compared++;
 
-        next = next->next_sack;
+        next = picoquic_sack_previous_item(next);
 
         if (next == NULL) {
             break;
@@ -201,20 +185,30 @@ static size_t build_test_ack(test_ack_range_t const* ranges, size_t nb_ranges,
  */
 static int ack_of_ack_do_one_test(test_ack_of_ack_t const* sample)
 {
-    int ret = 0;
+    int ret;
     picoquic_sack_list_t sack_list;
     uint8_t ack[1024];
     size_t ack_length;
     size_t consumed;
 
-    fill_test_sack_list(&sack_list, sample->initial, sample->nb_initial);
-    ack_length = build_test_ack(sample->ack, sample->nb_ack, ack, sizeof(ack),
-        sample->version_flags);
+    ret = picoquic_sack_list_init(&sack_list);
+
+    if (ret == 0) {
+        ret = fill_test_sack_list(&sack_list, sample->initial, sample->nb_initial);
+    }
+
+    if (ret == 0) {
+        ack_length = build_test_ack(sample->ack, sample->nb_ack, ack, sizeof(ack),
+            sample->version_flags);
+    }
 
     ret = picoquic_process_ack_of_ack_frame(&sack_list, ack, ack_length, &consumed, 0);
 
     if (ret == 0) {
         ret = cmp_test_sack_list(&sack_list, sample->result, sample->nb_result);
+    }
+    else {
+        DBG_PRINTF("ack of ack, ret=%d", ret);
     }
 
     picoquic_sack_list_free(&sack_list);
