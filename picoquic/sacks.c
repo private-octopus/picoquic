@@ -344,7 +344,7 @@ uint64_t picoquic_sack_item_range_start(picoquic_sack_item_t* sack_item)
     return sack_item->start_of_sack_range;
 }
 
-uint64_t picoquic_sack_item_last(picoquic_sack_item_t* sack_item)
+uint64_t picoquic_sack_item_range_end(picoquic_sack_item_t* sack_item)
 {
     return sack_item->end_of_sack_range;
 }

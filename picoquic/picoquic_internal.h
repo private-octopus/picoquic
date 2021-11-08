@@ -1583,7 +1583,7 @@ void picoquic_sack_list_free(picoquic_sack_list_t* first_sack);
 
 uint64_t picoquic_sack_item_range_start(picoquic_sack_item_t* sack_item);
 
-uint64_t picoquic_sack_item_last(picoquic_sack_item_t* sack_item);
+uint64_t picoquic_sack_item_range_end(picoquic_sack_item_t* sack_item);
 
 int picoquic_sack_item_nb_times_sent(picoquic_sack_item_t* sack_item);
 

@@ -3084,12 +3084,12 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
         if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_type_byte)) != NULL &&
             (multipath_sequence == UINT64_MAX ||
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, multipath_sequence)) != NULL) &&
-            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_sack_item_last(last_sack))) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_sack_item_range_end(last_sack))) != NULL &&
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_delay)) != NULL) {
             /* Reserve one byte for the number of blocks */
             num_block_byte = bytes++;
             /* Encode the size of the first ack range */
-            ack_range = picoquic_sack_item_last(last_sack) - picoquic_sack_item_range_start(last_sack);
+            ack_range = picoquic_sack_item_range_end(last_sack) - picoquic_sack_item_range_start(last_sack);
             bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range);
         }
         if (bytes == NULL || num_block_byte == NULL) {
@@ -3107,8 +3107,8 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
             while (num_block < 32 && next_sack != NULL) {
                 if (num_block < 4 || picoquic_sack_item_nb_times_sent(next_sack) < ack_ctx->max_repeat_per_range) {
                     uint8_t* bytes_start_range = bytes;
-                    ack_gap = lowest_acknowledged - picoquic_sack_item_last(next_sack) - 2; /* per spec */
-                    ack_range = picoquic_sack_item_last(next_sack) - picoquic_sack_item_range_start(next_sack);
+                    ack_gap = lowest_acknowledged - picoquic_sack_item_range_end(next_sack) - 2; /* per spec */
+                    ack_range = picoquic_sack_item_range_end(next_sack) - picoquic_sack_item_range_start(next_sack);
 
                     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) == NULL ||
                         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range)) == NULL) {
