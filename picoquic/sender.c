@@ -3195,7 +3195,6 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
         (void)picoquic_queue_handshake_done_frame(cnx);
     }
 
-
     if (cnx->is_half_open){
         if (cnx->quic->current_number_half_open > 0) {
             cnx->quic->current_number_half_open--;
@@ -3218,6 +3217,11 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     if (cnx->crypto_epoch_length_max == 0) {
         cnx->crypto_epoch_length_max = 
             picoquic_aead_confidentiality_limit(cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+    }
+
+    /* Use ACK list optimization if simple multipath */
+    if (cnx->is_simple_multipath_enabled) {
+        cnx->ack_ctx[0].sack_list.horizon_delay = 1000000;
     }
 
     /* Start migration to server preferred address if present */

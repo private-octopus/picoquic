@@ -44,6 +44,7 @@
 typedef struct st_test_ack_range_t {
     uint64_t start_of_sack_range;
     uint64_t end_of_sack_range;
+    uint64_t ack_time;
 } test_ack_range_t;
 
 static const test_ack_range_t test_range_in_1[] = {
@@ -120,7 +121,7 @@ static int fill_test_sack_list(picoquic_sack_list_t* sack_list,
 {
     int ret = 0;
     for (size_t i = 0; ret == 0 &&  i < nb_ranges; i++) {
-        ret = picoquic_sack_insert_item(sack_list, ranges[i].start_of_sack_range, ranges[i].end_of_sack_range);
+        ret = picoquic_sack_insert_item(sack_list, ranges[i].start_of_sack_range, ranges[i].end_of_sack_range, 0);
     }
     return ret;
 }

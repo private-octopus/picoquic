@@ -703,22 +703,20 @@ void picoquic_registered_token_clear(picoquic_quic_t* quic, uint64_t expiry_time
 
 typedef struct st_picoquic_sack_item_t {
     picosplay_node_t node;
-#if 0
-    struct st_picoquic_sack_item_t* next_sack;
-#endif
     uint64_t start_of_sack_range;
     uint64_t end_of_sack_range;
+    uint64_t time_created;
     int nb_times_sent;
 } picoquic_sack_item_t;
 
 typedef struct st_picoquic_sack_list_t {
     picosplay_tree_t ack_tree;
     uint64_t ack_horizon;
+    int64_t horizon_delay;
+    int range_counts[PICOQUIC_MAX_ACK_RANGE_REPEAT];
 #if 0
-    picoquic_sack_item_t * first;
-#endif
-    picoquic_sack_item_t range_counts[PICOQUIC_MAX_ACK_RANGE_REPEAT];
     int use_horizon : 1;
+#endif
 } picoquic_sack_list_t;
 
 /*
@@ -1553,19 +1551,21 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx, picoquic_packet_context_enu
     picoquic_local_cnxid_t* l_cid, uint64_t pn64, uint64_t current_microsec);
 
 int picoquic_update_sack_list(picoquic_sack_list_t* sack,
-    uint64_t pn64_min, uint64_t pn64_max);
+    uint64_t pn64_min, uint64_t pn64_max, uint64_t current_time);
 /* Check whether the data fills a hole. returns 0 if it does, -1 otherwise. */
 int picoquic_check_sack_list(picoquic_sack_list_t* sack,
     uint64_t pn64_min, uint64_t pn64_max);
 
 picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_list_t* first_sack, picoquic_sack_item_t* previous, uint64_t start_of_range, uint64_t end_of_range);
+void picoquic_update_ack_horizon(picoquic_sack_list_t* sack_list, uint64_t current_time);
 
 /* Return the first ACK item in the list */
 picoquic_sack_item_t* picoquic_sack_first_item(picoquic_sack_list_t* sack_list);
 picoquic_sack_item_t* picoquic_sack_last_item(picoquic_sack_list_t* sack_list);
 picoquic_sack_item_t* picoquic_sack_next_item(picoquic_sack_item_t * sack);
 picoquic_sack_item_t* picoquic_sack_previous_item(picoquic_sack_item_t* sack);
-int picoquic_sack_insert_item(picoquic_sack_list_t* sack_list, uint64_t range_min, uint64_t range_max);
+int picoquic_sack_insert_item(picoquic_sack_list_t* sack_list, uint64_t range_min, 
+    uint64_t range_max, uint64_t current_time);
 
 int picoquic_sack_list_is_empty(picoquic_sack_list_t* sack_list);
 
@@ -1577,7 +1577,8 @@ picoquic_sack_item_t* picoquic_sack_list_first_range(picoquic_sack_list_t* first
 
 int picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
 
-int picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, uint64_t range_min, uint64_t range_max);
+int picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, 
+    uint64_t range_min, uint64_t range_max, uint64_t current_time);
 
 void picoquic_sack_list_free(picoquic_sack_list_t* first_sack);
 
@@ -1587,7 +1588,8 @@ uint64_t picoquic_sack_item_range_end(picoquic_sack_item_t* sack_item);
 
 int picoquic_sack_item_nb_times_sent(picoquic_sack_item_t* sack_item);
 
-void picoquic_sack_item_record_sent(picoquic_sack_item_t* sack_item);
+void picoquic_sack_item_record_sent(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* sack_item);
+void picoquic_sack_item_record_reset(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* sack_item);
 
 size_t picoquic_sack_list_size(picoquic_sack_list_t* first_sack);
 

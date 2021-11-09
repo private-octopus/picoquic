@@ -344,7 +344,7 @@ int ackrange_test()
 
         if (ret == 0) {
             ret = picoquic_update_sack_list(&sack0,
-                ack_range[i].range_min, ack_range[i].range_max);
+                ack_range[i].range_min, ack_range[i].range_max, 0);
         }
 
         for (size_t j = 0; j < i; j++) {
@@ -397,6 +397,7 @@ typedef struct st_ack_disorder_ackk_t {
     uint64_t ackk_time;
     size_t nb_ranges_arrive;
     size_t nb_ranges_ack;
+    size_t nb_acked;
 } ack_disorder_ackk_t;
 
 int ack_disorder_receive_pn(picoquic_sack_list_t * sack0,
@@ -405,7 +406,7 @@ int ack_disorder_receive_pn(picoquic_sack_list_t * sack0,
 {
     int ret = 0;
 
-    if (picoquic_update_sack_list(sack0, pn, pn) != 0) {
+    if (picoquic_update_sack_list(sack0, pn, pn, next_time) != 0) {
         ret = -1;
     }
     else if (*nb_ackk >= nb_ranges){
@@ -422,7 +423,7 @@ int ack_disorder_receive_pn(picoquic_sack_list_t * sack0,
     return ret;
 }
 
-int ack_disorder_test_one(char const * log_name, int use_horizon)
+int ack_disorder_test_one(char const * log_name, int64_t horizon_delay, double range_average_max)
 {
     size_t const nb_ranges = 1000;
     size_t const nb_even_ranges = nb_ranges / 2;
@@ -449,6 +450,8 @@ int ack_disorder_test_one(char const * log_name, int use_horizon)
     else {
         ret = picoquic_sack_list_init(&sack0);
     }
+
+    sack0.horizon_delay = horizon_delay;
 
     /* Run a loop to simulate arrival of packets and ack of ack */
     while (ret == 0 && (i_even_arrive < nb_even_ranges || i_odd_arrive < nb_odd_ranges || i_ackk < nb_ackk)) {
@@ -497,7 +500,7 @@ int ack_disorder_test_one(char const * log_name, int use_horizon)
 
 
     if (ret == 0) {
-        FILE* F = picoquic_file_open(ACK_DISORDER_LOG, "w");
+        FILE* F = picoquic_file_open(log_name, "w");
 
         if (F == NULL) {
             ret = -1;
@@ -513,6 +516,20 @@ int ack_disorder_test_one(char const * log_name, int use_horizon)
         }
     }
 
+    if (ret == 0) {
+        /* Compute average number of ACK frames at ACK time */
+        uint64_t sum_ranges_ack = 0;
+        double range_average;
+        for (size_t i = 0; i < nb_ackk; i++) {
+            sum_ranges_ack += ackk_list[i].nb_ranges_ack;
+        }
+        range_average = (double)sum_ranges_ack / (double)nb_ackk;
+        if (range_average > range_average_max) {
+            DBG_PRINTF("Got %f ranges, larger than expected %f", range_average, range_average_max);
+            ret = -1;
+        }
+    }
+
     if (ackk_list != NULL) {
         free(ackk_list);
     }
@@ -524,12 +541,12 @@ int ack_disorder_test_one(char const * log_name, int use_horizon)
 
 int ack_disorder_test()
 {
-    int ret = ack_disorder_test_one(ACK_DISORDER_LOG, 0);
+    int ret = ack_disorder_test_one(ACK_DISORDER_LOG, 0, 133.0);
     return ret;
 }
 
 int ack_horizon_test()
 {
-    int ret = ack_disorder_test_one(ACK_HORIZON_LOG, 0);
+    int ret = ack_disorder_test_one(ACK_HORIZON_LOG, 1000000, 196.0);
     return ret;
 }

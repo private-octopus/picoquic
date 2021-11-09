@@ -2741,7 +2741,7 @@ int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         stream = picoquic_find_stream(cnx, stream_id);
         if (stream != NULL) {
             (void)picoquic_update_sack_list(&stream->sack_list,
-                offset, offset + data_length - ((fin) ? 0 : 1));
+                offset, offset + data_length - ((fin) ? 0 : 1), 0);
 
             picoquic_delete_stream_if_closed(cnx, stream);
         }
@@ -3117,7 +3117,7 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
                         break;
                     }
                     else {
-                        picoquic_sack_item_record_sent(next_sack);
+                        picoquic_sack_item_record_sent(&ack_ctx->sack_list, next_sack);
                         lowest_acknowledged = picoquic_sack_item_range_start(next_sack);
                         num_block++;
                     }

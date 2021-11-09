@@ -70,6 +70,7 @@ static const picoquic_test_def_t test_table[] = {
     { "ack_send", sendacktest },
     { "ack_range", ackrange_test },
     { "ack_disorder", ack_disorder_test },
+    { "ack_horizon", ack_horizon_test },
     { "ack_of_ack", ack_of_ack_test },
     { "sim_link", sim_link_test },
     { "clear_text_aead", cleartext_aead_test },
