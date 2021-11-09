@@ -3098,11 +3098,52 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
         }
         else {
             /* Implement adaptive tuning of lowest repeat range */
+#if 0
             int range_skipped = 0;
             int lowest_skipped_range = PICOQUIC_MAX_ACK_RANGE_REPEAT;
+#endif
+            int nb_sent_max_acked = 0;
+            int nb_sent_max_skip = 0;
             picoquic_sack_item_t* next_sack = picoquic_sack_previous_item(last_sack);
+
+            /* Update send count for the top range */
+            picoquic_sack_item_record_sent(&ack_ctx->sack_list, last_sack);
+
+            /* Find the parameters of range selection: max number of repeats, 
+             * highest range splits required.
+             */
+            picoquic_sack_select_ack_ranges(&ack_ctx->sack_list, last_sack, 32, &nb_sent_max_acked, &nb_sent_max_skip);
+
             /* Set the lowest acknowledged */
             lowest_acknowledged = picoquic_sack_item_range_start(last_sack);
+#if 1
+            while (num_block < 32 && next_sack != NULL) {
+                if (picoquic_sack_item_nb_times_sent(next_sack) <= nb_sent_max_acked) {
+                    if (picoquic_sack_item_nb_times_sent(next_sack) == nb_sent_max_acked &&
+                        nb_sent_max_skip > 0) {
+                        nb_sent_max_skip--;
+                    }
+                    else {
+                        uint8_t* bytes_start_range = bytes;
+                        ack_gap = lowest_acknowledged - picoquic_sack_item_range_end(next_sack) - 2; /* per spec */
+                        ack_range = picoquic_sack_item_range_end(next_sack) - picoquic_sack_item_range_start(next_sack);
+
+                        if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) == NULL ||
+                            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range)) == NULL) {
+                            bytes = bytes_start_range;
+                            *more_data = 1;
+                            break;
+                        }
+                        else {
+                            picoquic_sack_item_record_sent(&ack_ctx->sack_list, next_sack);
+                            lowest_acknowledged = picoquic_sack_item_range_start(next_sack);
+                            num_block++;
+                        }
+                    }
+                }
+                next_sack = picoquic_sack_previous_item(next_sack);
+            }
+#else
             /* Encode the ack blocks that fit in the allocated space */
             while (num_block < 32 && next_sack != NULL) {
                 if (num_block < 4 || picoquic_sack_item_nb_times_sent(next_sack) < ack_ctx->max_repeat_per_range) {
@@ -3143,7 +3184,7 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
             else if (ack_ctx->max_repeat_per_range < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
                 ack_ctx->max_repeat_per_range++;
             }
-
+#endif
             /* When numbers are lower than 64, varint encoding fits on one byte */
             *num_block_byte = (uint8_t)num_block;
 

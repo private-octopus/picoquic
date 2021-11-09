@@ -1550,6 +1550,9 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, picoquic_packet_context
 int picoquic_record_pn_received(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
     picoquic_local_cnxid_t* l_cid, uint64_t pn64, uint64_t current_microsec);
 
+void picoquic_sack_select_ack_ranges(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* first_sack,
+    int max_ranges, int* nb_sent_max, int* nb_sent_max_skip);
+
 int picoquic_update_sack_list(picoquic_sack_list_t* sack,
     uint64_t pn64_min, uint64_t pn64_max, uint64_t current_time);
 /* Check whether the data fills a hole. returns 0 if it does, -1 otherwise. */

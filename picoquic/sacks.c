@@ -96,6 +96,7 @@ int picoquic_sack_insert_item(picoquic_sack_list_t* sack_list, uint64_t range_mi
         sack_new->start_of_sack_range = range_min;
         sack_new->end_of_sack_range = range_max;
         sack_new->time_created = current_time;
+        sack_list->range_counts[0] += 1;
         (void)picosplay_insert(&sack_list->ack_tree, sack_new);
     }
 
@@ -104,7 +105,9 @@ int picoquic_sack_insert_item(picoquic_sack_list_t* sack_list, uint64_t range_mi
 void picoquic_sack_delete_item(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* sack)
 {
     /* Accounting of deleted values */
-    picoquic_sack_item_record_reset(sack_list, sack);
+    if (sack->nb_times_sent < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+        sack_list->range_counts[sack->nb_times_sent] -= 1;
+    }
     /* Delete the item in the splay */
     picosplay_delete_hint(&sack_list->ack_tree, &sack->node);
 }
@@ -255,6 +258,33 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
 
     ret = picoquic_update_sack_list(sack_list, pn64, pn64, current_microsec);
     return ret;
+}
+
+/* Compute the parameters of the ACK transmission.
+ * We assume that there is space for up to N ranges, in addition to
+ * the topmost one. We want to select the "most urgent" ones.
+ */
+
+void picoquic_sack_select_ack_ranges(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* first_sack,
+    int max_ranges, int* nb_sent_max, int* nb_sent_max_skip)
+{
+    int cumul_sent = 0;
+    int first_sack_count = (first_sack == NULL) ? PICOQUIC_MAX_ACK_RANGE_REPEAT : first_sack->nb_times_sent;
+
+    *nb_sent_max = PICOQUIC_MAX_ACK_RANGE_REPEAT;
+    *nb_sent_max_skip = 0;
+
+    for (int i = 0; i < PICOQUIC_MAX_ACK_RANGE_REPEAT; i++) {
+        cumul_sent += sack_list->range_counts[i];
+        if (i == first_sack_count) {
+            cumul_sent -= 1;
+        }
+        if (cumul_sent >= max_ranges) {
+            *nb_sent_max = i;
+            *nb_sent_max_skip = cumul_sent - max_ranges;
+            break;
+        }
+    }
 }
 
 /*
@@ -427,6 +457,7 @@ void picoquic_sack_item_record_reset(picoquic_sack_list_t* sack_list, picoquic_s
         sack_list->range_counts[sack_item->nb_times_sent] -= 1;
     }
     sack_item->nb_times_sent = 0;
+    sack_list->range_counts[sack_item->nb_times_sent] += 1;
 }
 
 size_t picoquic_sack_list_size(picoquic_sack_list_t* sack_list)
