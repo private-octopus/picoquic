@@ -96,8 +96,8 @@ int picoquic_sack_insert_item(picoquic_sack_list_t* sack_list, uint64_t range_mi
         sack_new->start_of_sack_range = range_min;
         sack_new->end_of_sack_range = range_max;
         sack_new->time_created = current_time;
-        sack_list->range_counts[0] += 1;
-        sack_list->range_counts_opp[0] += 1;
+        sack_list->rc[0].range_counts[0] += 1;
+        sack_list->rc[1].range_counts[0] += 1;
         (void)picosplay_insert(&sack_list->ack_tree, sack_new);
     }
 
@@ -106,11 +106,11 @@ int picoquic_sack_insert_item(picoquic_sack_list_t* sack_list, uint64_t range_mi
 void picoquic_sack_delete_item(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* sack)
 {
     /* Accounting of deleted values */
-    if (sack->nb_times_sent < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-        sack_list->range_counts[sack->nb_times_sent] -= 1;
+    if (sack->nb_times_sent[0] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+        sack_list->rc[0].range_counts[sack->nb_times_sent[0]] -= 1;
     }
-    if (sack->nb_times_sent_opp < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-        sack_list->range_counts_opp[sack->nb_times_sent_opp] -= 1;
+    if (sack->nb_times_sent[1] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+        sack_list->rc[1].range_counts[sack->nb_times_sent[1]] -= 1;
     }
     /* Delete the item in the splay */
     picosplay_delete_hint(&sack_list->ack_tree, &sack->node);
@@ -275,14 +275,13 @@ void picoquic_sack_select_ack_ranges(picoquic_sack_list_t* sack_list, picoquic_s
     int max_ranges, int is_opportunistic, int* nb_sent_max, int* nb_sent_max_skip)
 {
     int cumul_sent = 0;
-    int first_sack_count = (first_sack == NULL) ? PICOQUIC_MAX_ACK_RANGE_REPEAT : 
-        (is_opportunistic)?first_sack->nb_times_sent_opp: first_sack->nb_times_sent;
-
+    int first_sack_count = (first_sack == NULL) ? PICOQUIC_MAX_ACK_RANGE_REPEAT :
+        first_sack->nb_times_sent[is_opportunistic];
     *nb_sent_max = PICOQUIC_MAX_ACK_RANGE_REPEAT;
     *nb_sent_max_skip = 0;
 
     for (int i = 0; i < PICOQUIC_MAX_ACK_RANGE_REPEAT; i++) {
-        cumul_sent += (is_opportunistic)?sack_list->range_counts_opp[i]: sack_list->range_counts[i];
+        cumul_sent += (is_opportunistic)?sack_list->rc[1].range_counts[i]: sack_list->rc[0].range_counts[i];
         if (i == first_sack_count) {
             cumul_sent -= 1;
         }
@@ -338,13 +337,13 @@ picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_list_t* sa
         else if (previous->end_of_sack_range == end_of_range) {
             /* Matching ACK */
             if (sack_list->horizon_delay > 0) {
-                if (previous->nb_times_sent < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-                    sack_list->range_counts[previous->nb_times_sent] -= 1;
-                    previous->nb_times_sent = PICOQUIC_MAX_ACK_RANGE_REPEAT;
+                if (previous->nb_times_sent[0] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+                    sack_list->rc[0].range_counts[previous->nb_times_sent[0]] -= 1;
+                    previous->nb_times_sent[0] = PICOQUIC_MAX_ACK_RANGE_REPEAT;
                 }
-                if (previous->nb_times_sent_opp < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-                    sack_list->range_counts_opp[previous->nb_times_sent_opp] -= 1;
-                    previous->nb_times_sent_opp = PICOQUIC_MAX_ACK_RANGE_REPEAT;
+                if (previous->nb_times_sent[1] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+                    sack_list->rc[1].range_counts[previous->nb_times_sent[1]] -= 1;
+                    previous->nb_times_sent[1] = PICOQUIC_MAX_ACK_RANGE_REPEAT;
                 }
             } else {
                 picoquic_sack_delete_item(sack_list, previous);
@@ -361,7 +360,7 @@ void picoquic_update_ack_horizon(picoquic_sack_list_t* sack_list, uint64_t curre
 {
     picoquic_sack_item_t* first_sack = picoquic_sack_first_item(sack_list);
 
-    while (first_sack != NULL && first_sack->nb_times_sent >= PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+    while (first_sack != NULL && first_sack->nb_times_sent[0] >= PICOQUIC_MAX_ACK_RANGE_REPEAT) {
         int64_t delay = current_time - first_sack->time_created;
         if (delay > sack_list->horizon_delay) {
             picoquic_sack_item_t* next_sack = picoquic_sack_next_item(first_sack);
@@ -431,8 +430,9 @@ int picoquic_sack_list_reset(picoquic_sack_list_t* sack_list, uint64_t range_min
 void picoquic_sack_list_free(picoquic_sack_list_t* sack_list)
 {
     picosplay_empty_tree(&sack_list->ack_tree);
-    memset(sack_list->range_counts, 0, sizeof(sack_list->range_counts));
-    memset(sack_list->range_counts_opp, 0, sizeof(sack_list->range_counts_opp));
+    for (int r = 0; r < 2; r++) {
+        memset(sack_list->rc[r].range_counts, 0, sizeof(sack_list->rc[r].range_counts));
+    }
 }
 
 /* Access to the elements in sack item
@@ -449,44 +449,29 @@ uint64_t picoquic_sack_item_range_end(picoquic_sack_item_t* sack_item)
 
 int picoquic_sack_item_nb_times_sent(picoquic_sack_item_t* sack_item, int is_opportunistic)
 {
-    return (is_opportunistic)?sack_item->nb_times_sent_opp : sack_item->nb_times_sent;
+    return sack_item->nb_times_sent[is_opportunistic];
 }
 
 void picoquic_sack_item_record_sent(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* sack_item, int is_opportunistic)
 {
-    if (is_opportunistic) {
-        if (sack_item->nb_times_sent_opp < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-            sack_list->range_counts_opp[sack_item->nb_times_sent_opp] -= 1;
-        }
-        sack_item->nb_times_sent_opp++;
-        if (sack_item->nb_times_sent_opp < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-            sack_list->range_counts_opp[sack_item->nb_times_sent_opp] += 1;
-        }
-
+    if (sack_item->nb_times_sent[is_opportunistic] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+        sack_list->rc[is_opportunistic].range_counts[sack_item->nb_times_sent[is_opportunistic]] -= 1;
     }
-    else {
-        if (sack_item->nb_times_sent < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-            sack_list->range_counts[sack_item->nb_times_sent] -= 1;
-        }
-        sack_item->nb_times_sent++;
-        if (sack_item->nb_times_sent < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-            sack_list->range_counts[sack_item->nb_times_sent] += 1;
-        }
+    sack_item->nb_times_sent[is_opportunistic]++;
+    if (sack_item->nb_times_sent[is_opportunistic] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+        sack_list->rc[is_opportunistic].range_counts[sack_item->nb_times_sent[is_opportunistic]] += 1;
     }
 }
 
 void picoquic_sack_item_record_reset(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* sack_item)
 {
-    if (sack_item->nb_times_sent < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-        sack_list->range_counts[sack_item->nb_times_sent] -= 1;
+    for (int r = 0; r < 2; r++) {
+        if (sack_item->nb_times_sent[r] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+            sack_list->rc[r].range_counts[sack_item->nb_times_sent[r]] -= 1;
+        }
+        sack_item->nb_times_sent[r] = 0;
+        sack_list->rc[r].range_counts[sack_item->nb_times_sent[r]] += 1;
     }
-    if (sack_item->nb_times_sent_opp < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-        sack_list->range_counts_opp[sack_item->nb_times_sent] -= 1;
-    }
-    sack_item->nb_times_sent = 0;
-    sack_item->nb_times_sent_opp = 0;
-    sack_list->range_counts[sack_item->nb_times_sent] += 1;
-    sack_list->range_counts_opp[sack_item->nb_times_sent] += 1;
 }
 
 size_t picoquic_sack_list_size(picoquic_sack_list_t* sack_list)

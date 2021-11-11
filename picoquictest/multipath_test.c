@@ -743,7 +743,7 @@ int multipath_back1_test()
 /* Test that a typical wifi+lte scenario provides good performance */
 int multipath_perf_test()
 {
-    uint64_t max_completion_microsec = 1270000;
+    uint64_t max_completion_microsec = 1250000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 0);
 }
@@ -1198,7 +1198,7 @@ int simple_multipath_drop_second_test()
 int simple_multipath_sat_plus_test()
 {
     /* Not to far from theoretical 10-12 sec! */
-    uint64_t max_completion_microsec = 11500000;
+    uint64_t max_completion_microsec = 10000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 1);
 }
@@ -1242,8 +1242,8 @@ int simple_multipath_back1_test()
 
 int simple_multipath_perf_test()
 {
-    /* Compares with 13.1 sec for full multipath */
-    uint64_t max_completion_microsec = 1290000;
+    /* Compares with 1.25 sec for full multipath */
+    uint64_t max_completion_microsec = 1270000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
 }

@@ -68,26 +68,28 @@ static struct expected_ack_t expected_ack[] = {
 int check_ack_ranges(picoquic_sack_list_t* sack_list)
 {
     int ret = 0;
-    int range_sum[PICOQUIC_MAX_ACK_RANGE_REPEAT] = { 0 };
-    picoquic_sack_item_t* sack = picoquic_sack_first_item(sack_list);
 
-    while (sack != NULL) {
-        if (sack->nb_times_sent < 0) {
-            ret = -1;
-            break;
+    for (int r = 0; r < 2; r++) {
+        int range_sum[PICOQUIC_MAX_ACK_RANGE_REPEAT] = { 0 };
+        picoquic_sack_item_t* sack = picoquic_sack_first_item(sack_list);
+
+        while (sack != NULL) {
+            if (sack->nb_times_sent[r] < 0) {
+                ret = -1;
+                break;
+            }
+            else if (sack->nb_times_sent[r] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+                range_sum[sack->nb_times_sent[r]] += 1;
+            }
+            sack = picoquic_sack_next_item(sack);
         }
-        else if (sack->nb_times_sent < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-            range_sum[sack->nb_times_sent] += 1;
+
+        for (int i = 0; ret == 0 && i < PICOQUIC_MAX_ACK_RANGE_REPEAT; i++) {
+            if (sack_list->rc[r].range_counts[i] != range_sum[i]) {
+                ret = -1;
+            }
         }
-        sack = picoquic_sack_next_item(sack);
     }
-
-    for (int i = 0; ret == 0 && i < PICOQUIC_MAX_ACK_RANGE_REPEAT; i++) {
-        if (sack_list->range_counts[i] != range_sum[i]) {
-            ret = -1;
-        }
-    }
-
     return ret;
 }
 

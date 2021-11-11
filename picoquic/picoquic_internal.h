@@ -706,19 +706,18 @@ typedef struct st_picoquic_sack_item_t {
     uint64_t start_of_sack_range;
     uint64_t end_of_sack_range;
     uint64_t time_created;
-    int nb_times_sent;
-    int nb_times_sent_opp;
+    int nb_times_sent[2];
 } picoquic_sack_item_t;
+
+typedef struct st_picoquic_sack_range_count_t {
+    int range_counts[PICOQUIC_MAX_ACK_RANGE_REPEAT];
+} picoquic_sack_range_count_t;
 
 typedef struct st_picoquic_sack_list_t {
     picosplay_tree_t ack_tree;
     uint64_t ack_horizon;
     int64_t horizon_delay;
-    int range_counts[PICOQUIC_MAX_ACK_RANGE_REPEAT];
-    int range_counts_opp[PICOQUIC_MAX_ACK_RANGE_REPEAT];
-#if 0
-    int use_horizon : 1;
-#endif
+    picoquic_sack_range_count_t rc[2];
 } picoquic_sack_list_t;
 
 /*
