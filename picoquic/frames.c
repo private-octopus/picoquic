@@ -915,6 +915,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
             }
             if (stream->fin_received || stream->reset_received) {
                 cnx->ack_ctx[picoquic_packet_context_application].ack_after_fin = 1;
+                cnx->ack_ctx[picoquic_packet_context_application].ack_after_fin_opp = 1;
             }
         }
     }
@@ -2849,6 +2850,9 @@ static int picoquic_process_ack_range(
 
                 if (old_path != NULL) {
                     old_path->delivered += p->length;
+                    /* Reset the flags tracking loss of ack only packets and corresponding ping */
+                    old_path->is_ack_lost = 0;
+                    old_path->is_ack_expected = 0;
                     /* Track timer for the packet */
                     if (p->path_packet_number > old_path->path_packet_acked_number) {
                         old_path->path_packet_acked_number = p->path_packet_number;
@@ -3098,28 +3102,24 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
         }
         else {
             /* Implement adaptive tuning of lowest repeat range */
-#if 0
-            int range_skipped = 0;
-            int lowest_skipped_range = PICOQUIC_MAX_ACK_RANGE_REPEAT;
-#endif
             int nb_sent_max_acked = 0;
             int nb_sent_max_skip = 0;
             picoquic_sack_item_t* next_sack = picoquic_sack_previous_item(last_sack);
 
             /* Update send count for the top range */
-            picoquic_sack_item_record_sent(&ack_ctx->sack_list, last_sack);
+            picoquic_sack_item_record_sent(&ack_ctx->sack_list, last_sack, is_opportunistic);
 
             /* Find the parameters of range selection: max number of repeats, 
              * highest range splits required.
              */
-            picoquic_sack_select_ack_ranges(&ack_ctx->sack_list, last_sack, 32, &nb_sent_max_acked, &nb_sent_max_skip);
+            picoquic_sack_select_ack_ranges(&ack_ctx->sack_list, last_sack, 32, 
+                is_opportunistic, &nb_sent_max_acked, &nb_sent_max_skip);
 
             /* Set the lowest acknowledged */
             lowest_acknowledged = picoquic_sack_item_range_start(last_sack);
-#if 1
             while (num_block < 32 && next_sack != NULL) {
-                if (picoquic_sack_item_nb_times_sent(next_sack) <= nb_sent_max_acked) {
-                    if (picoquic_sack_item_nb_times_sent(next_sack) == nb_sent_max_acked &&
+                if (picoquic_sack_item_nb_times_sent(next_sack, is_opportunistic) <= nb_sent_max_acked) {
+                    if (picoquic_sack_item_nb_times_sent(next_sack, is_opportunistic) == nb_sent_max_acked &&
                         nb_sent_max_skip > 0) {
                         nb_sent_max_skip--;
                     }
@@ -3135,7 +3135,7 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
                             break;
                         }
                         else {
-                            picoquic_sack_item_record_sent(&ack_ctx->sack_list, next_sack);
+                            picoquic_sack_item_record_sent(&ack_ctx->sack_list, next_sack, is_opportunistic);
                             lowest_acknowledged = picoquic_sack_item_range_start(next_sack);
                             num_block++;
                         }
@@ -3143,54 +3143,18 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
                 }
                 next_sack = picoquic_sack_previous_item(next_sack);
             }
-#else
-            /* Encode the ack blocks that fit in the allocated space */
-            while (num_block < 32 && next_sack != NULL) {
-                if (num_block < 4 || picoquic_sack_item_nb_times_sent(next_sack) < ack_ctx->max_repeat_per_range) {
-                    uint8_t* bytes_start_range = bytes;
-                    ack_gap = lowest_acknowledged - picoquic_sack_item_range_end(next_sack) - 2; /* per spec */
-                    ack_range = picoquic_sack_item_range_end(next_sack) - picoquic_sack_item_range_start(next_sack);
-
-                    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) == NULL ||
-                        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range)) == NULL) {
-                        bytes = bytes_start_range;
-                        *more_data = 1;
-                        break;
-                    }
-                    else {
-                        picoquic_sack_item_record_sent(&ack_ctx->sack_list, next_sack);
-                        lowest_acknowledged = picoquic_sack_item_range_start(next_sack);
-                        num_block++;
-                    }
-                }
-                else {
-                    range_skipped = 1;
-                }
-                next_sack = picoquic_sack_previous_item(next_sack);
-            }
-            while (next_sack != NULL) {
-                range_skipped = 1;
-                if (picoquic_sack_item_nb_times_sent(next_sack) < lowest_skipped_range) {
-                    lowest_skipped_range = picoquic_sack_item_nb_times_sent(next_sack);
-                }
-                next_sack = picoquic_sack_previous_item(next_sack);
-            }
-
-            if (range_skipped &&
-                ack_ctx->max_repeat_per_range > PICOQUIC_MIN_ACK_RANGE_REPEAT &&
-                lowest_skipped_range + 1 < ack_ctx->max_repeat_per_range) {
-                ack_ctx->max_repeat_per_range--;
-            }
-            else if (ack_ctx->max_repeat_per_range < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-                ack_ctx->max_repeat_per_range++;
-            }
-#endif
             /* When numbers are lower than 64, varint encoding fits on one byte */
             *num_block_byte = (uint8_t)num_block;
 
             /* Remember the ACK value and time */
-            ack_ctx->highest_ack_sent = picoquic_sack_list_last(&ack_ctx->sack_list);
-            ack_ctx->highest_ack_sent_time = current_time;
+            if (!is_opportunistic) {
+                ack_ctx->highest_ack_sent = picoquic_sack_list_last(&ack_ctx->sack_list);
+                ack_ctx->highest_ack_sent_time = current_time;
+            }
+            else {
+                ack_ctx->highest_ack_sent_opp = picoquic_sack_list_last(&ack_ctx->sack_list);
+                ack_ctx->highest_ack_sent_time_opp = current_time;
+            }
         }
 
         if (bytes > after_stamp && is_ecn) {
@@ -3207,10 +3171,18 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
         }
     }
 
-    if (bytes > after_stamp && !is_opportunistic) {
-        ack_ctx->ack_needed = 0;
-        ack_ctx->ack_after_fin = 0;
-        ack_ctx->out_of_order_received = 0;
+    if (bytes > after_stamp){
+        if (is_opportunistic) {
+            /* TODO: should non opportunistic sending also reset these flags? */
+            ack_ctx->ack_needed_opp = 0;
+            ack_ctx->ack_after_fin_opp = 0;
+            ack_ctx->out_of_order_received_opp = 0;
+        }
+        else {
+            ack_ctx->ack_needed = 0;
+            ack_ctx->ack_after_fin = 0;
+            ack_ctx->out_of_order_received = 0;
+        }
     }
 
     return bytes;
@@ -3233,13 +3205,24 @@ uint8_t * picoquic_format_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t
             if (bytes != NULL) {
                 bytes = picoquic_format_ack_frame_in_context(cnx, bytes, bytes_max, more_data,
                     current_time, ack_ctx, &need_time_stamp, p_local_cnxid->sequence, is_opportunistic);
-                ack_still_needed |= ack_ctx->ack_needed;
-                ack_after_fin |= ack_ctx->ack_after_fin;
+                if (is_opportunistic) {
+                    ack_still_needed |= ack_ctx->ack_needed_opp;
+                    ack_after_fin |= ack_ctx->ack_after_fin_opp;
+                } else {
+                    ack_still_needed |= ack_ctx->ack_needed;
+                    ack_after_fin |= ack_ctx->ack_after_fin;
+                }
             }
             p_local_cnxid = p_local_cnxid->next;
         }
-        cnx->ack_ctx[pc].ack_needed = ack_still_needed;
-        cnx->ack_ctx[pc].ack_after_fin = ack_after_fin;
+        if (is_opportunistic) {
+            cnx->ack_ctx[pc].ack_needed_opp = ack_still_needed;
+            cnx->ack_ctx[pc].ack_after_fin_opp = ack_after_fin;
+        }
+        else {
+            cnx->ack_ctx[pc].ack_needed = ack_still_needed;
+            cnx->ack_ctx[pc].ack_after_fin = ack_after_fin;
+        }
     }
     else {
         bytes = picoquic_format_ack_frame_in_context(cnx, bytes, bytes_max, more_data,
@@ -3257,20 +3240,109 @@ void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoqui
         if (l_cid->ack_ctx.ack_needed) {
             l_cid->ack_ctx.ack_needed = 1;
             l_cid->ack_ctx.time_oldest_unack_packet_received = current_time;
+            l_cid->ack_ctx.time_oldest_unack_packet_received_opp = current_time;
         }
     }
     if (!cnx->ack_ctx[pc].ack_needed) {
         cnx->ack_ctx[pc].ack_needed = 1;
         cnx->ack_ctx[pc].time_oldest_unack_packet_received = current_time;
+        cnx->ack_ctx[pc].ack_needed_opp = 1;
+        cnx->ack_ctx[pc].time_oldest_unack_packet_received_opp = current_time;
     }
 }
 
-int picoquic_is_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx, uint64_t current_time,
-    uint64_t l_cid_sequence, uint64_t * next_wake_time, picoquic_packet_context_enum pc)
+uint64_t picoquic_ack_gap_override_if_needed(picoquic_cnx_t* cnx, uint64_t l_cid_sequence)
+{
+    uint64_t ack_gap = cnx->ack_gap_remote;
+    if (cnx->is_multipath_enabled) {
+        for (int path_id = 0; path_id < cnx->nb_paths; path_id++) {
+            /* TODO: why look at all paths? This is in context of one path */
+            if (cnx->path[path_id]->p_local_cnxid != NULL &&
+                cnx->path[path_id]->p_local_cnxid->sequence == l_cid_sequence &&
+                !cnx->path[path_id]->path_is_demoted &&
+                !cnx->path[path_id]->challenge_failed &&
+                !cnx->path[path_id]->response_required &&
+                cnx->path[path_id]->challenge_verified &&
+                cnx->path[path_id]->received < 100 * PICOQUIC_MAX_PACKET_SIZE) {
+                ack_gap = 2;
+                break;
+            }
+        }
+    }
+    else if (cnx->is_simple_multipath_enabled) {
+        for (int path_id = 0; path_id < cnx->nb_paths; path_id++) {
+            if (!cnx->path[path_id]->path_is_demoted &&
+                !cnx->path[path_id]->challenge_failed &&
+                !cnx->path[path_id]->response_required &&
+                cnx->path[path_id]->challenge_verified &&
+                cnx->path[path_id]->received < 100 * PICOQUIC_MAX_PACKET_SIZE) {
+                ack_gap = 2;
+                break;
+            }
+        }
+    }
+    else if (cnx->nb_packets_received < 128) {
+        ack_gap = 2;
+    }
+
+    return ack_gap;
+}
+
+int picoquic_opportunistic_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx, uint64_t current_time,
+    uint64_t l_cid_sequence, uint64_t* next_wake_time, picoquic_packet_context_enum pc)
 {
     int ret = 0;
 
-    if (ack_ctx->ack_needed) {
+
+    if (ack_ctx->ack_needed_opp) {
+        if (pc != picoquic_packet_context_application || ack_ctx->ack_after_fin_opp) {
+            ret = 1;
+            ack_ctx->ack_after_fin_opp = 0;
+        }
+        else if (ack_ctx->out_of_order_received_opp && !cnx->ack_ignore_order_remote) {
+            ret = 1;
+        }
+        else
+        {
+            uint64_t ack_gap = picoquic_ack_gap_override_if_needed(cnx, l_cid_sequence);
+
+            if (ack_ctx->highest_ack_sent_opp + ack_gap <= picoquic_sack_list_last(&ack_ctx->sack_list) ||
+                ack_ctx->time_oldest_unack_packet_received_opp + cnx->ack_delay_remote <= current_time) {
+                /* Consider counters for opportunistic acks */
+                ret = 1;
+            }
+            else {
+                if (ack_ctx->time_oldest_unack_packet_received_opp + cnx->ack_delay_remote < *next_wake_time) {
+                    *next_wake_time = ack_ctx->time_oldest_unack_packet_received_opp + cnx->ack_delay_remote;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_FRAME);
+                }
+            }
+        }
+    }
+    /* TODO: consider opportunistic ack of ack */
+    else if (ack_ctx->highest_ack_sent_opp + 8 <= picoquic_sack_list_last(&ack_ctx->sack_list) &&
+        ack_ctx->highest_ack_sent_time_opp + cnx->ack_delay_remote <= current_time) {
+        /* Force sending an ack-of-ack from time to time, as a low priority action */
+        if (picoquic_sack_list_last(&ack_ctx->sack_list) == UINT64_MAX) {
+            ret = 0;
+        }
+        else {
+            ret = 1;
+        }
+    }
+    return ret;
+}
+
+int picoquic_is_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx, uint64_t current_time,
+    uint64_t l_cid_sequence, uint64_t * next_wake_time, picoquic_packet_context_enum pc, int is_opportunistic)
+{
+    int ret = 0;
+
+    if (is_opportunistic) {
+        ret = picoquic_opportunistic_ack_needed_in_ctx(cnx, ack_ctx, current_time,
+            l_cid_sequence, next_wake_time, pc);
+    }
+    else if (ack_ctx->ack_needed) {
         if (pc != picoquic_packet_context_application || ack_ctx->ack_after_fin ) {
             ret = 1;
             ack_ctx->ack_after_fin = 0;
@@ -3280,36 +3352,8 @@ int picoquic_is_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* a
         }
         else
         {
-            uint64_t ack_gap = cnx->ack_gap_remote;
-            if (cnx->is_multipath_enabled) {
-                for (int path_id = 0; path_id < cnx->nb_paths; path_id++) {
-                    if (cnx->path[path_id]->p_local_cnxid != NULL &&
-                        cnx->path[path_id]->p_local_cnxid->sequence == l_cid_sequence &&
-                        !cnx->path[path_id]->path_is_demoted &&
-                        !cnx->path[path_id]->challenge_failed &&
-                        !cnx->path[path_id]->response_required &&
-                        cnx->path[path_id]->challenge_verified &&
-                        cnx->path[path_id]->received < 100 * PICOQUIC_MAX_PACKET_SIZE) {
-                        ack_gap = 2;
-                        break;
-                    }
-                }
-            }
-            else if (cnx->is_simple_multipath_enabled) {
-                for (int path_id = 0; path_id < cnx->nb_paths; path_id++) {
-                    if (!cnx->path[path_id]->path_is_demoted &&
-                        !cnx->path[path_id]->challenge_failed &&
-                        !cnx->path[path_id]->response_required &&
-                        cnx->path[path_id]->challenge_verified &&
-                        cnx->path[path_id]->received < 100 * PICOQUIC_MAX_PACKET_SIZE) {
-                        ack_gap = 2;
-                        break;
-                    }
-                }
-            }
-            else if (cnx->nb_packets_received < 128) {
-                ack_gap = 2;
-            }
+            uint64_t ack_gap = picoquic_ack_gap_override_if_needed(cnx, l_cid_sequence);
+
             if (ack_ctx->highest_ack_sent + ack_gap <= picoquic_sack_list_last(&ack_ctx->sack_list) ||
                 ack_ctx->time_oldest_unack_packet_received + cnx->ack_delay_remote <= current_time) {
                 ret = 1;
@@ -3335,15 +3379,18 @@ int picoquic_is_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* a
     return ret;
 }
 
-int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time, picoquic_packet_context_enum pc)
+int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time,
+    picoquic_packet_context_enum pc, int is_opportunistic)
 {
-    int ret = picoquic_is_ack_needed_in_ctx(cnx, &cnx->ack_ctx[pc], current_time, 0, next_wake_time, pc);
+    int ret = picoquic_is_ack_needed_in_ctx(cnx, &cnx->ack_ctx[pc], current_time, 0, next_wake_time, 
+        pc, is_opportunistic);
 
     if (cnx->is_multipath_enabled) {
         picoquic_local_cnxid_t* l_cid = cnx->local_cnxid_first;
 
         while (ret == 0 && l_cid != NULL) {
-            ret |= picoquic_is_ack_needed_in_ctx(cnx, &l_cid->ack_ctx, current_time, l_cid->sequence, next_wake_time, pc);
+            ret |= picoquic_is_ack_needed_in_ctx(cnx, &l_cid->ack_ctx, current_time, l_cid->sequence, 
+                next_wake_time, pc, is_opportunistic);
             l_cid = l_cid->next;
         }
     }

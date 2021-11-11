@@ -1877,12 +1877,13 @@ void picoquic_reset_path_mtu(picoquic_path_t* path_x)
 void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx)
 {
     picoquic_sack_list_init(&ack_ctx->sack_list);
-
     ack_ctx->highest_ack_sent = 0;
     ack_ctx->highest_ack_sent_time = cnx->start_time;
     ack_ctx->time_stamp_largest_received = UINT64_MAX;
     ack_ctx->ack_needed = 0;
-    ack_ctx->max_repeat_per_range = PICOQUIC_MAX_ACK_RANGE_REPEAT;
+    ack_ctx->highest_ack_sent_opp = 0;
+    ack_ctx->highest_ack_sent_time_opp = cnx->start_time;
+    ack_ctx->ack_needed_opp = 0;
 }
 
 void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx)

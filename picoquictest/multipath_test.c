@@ -461,6 +461,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
+        /* set the binary log on the client side */
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        test_ctx->qclient->use_long_log = 1;
+        binlog_new_connection(test_ctx->cnx_client);
         /* Set the multipath option at both client and server */
         multipath_init_params(&server_parameters, is_sat_test, is_simple_multipath);
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
@@ -739,7 +743,7 @@ int multipath_back1_test()
 /* Test that a typical wifi+lte scenario provides good performance */
 int multipath_perf_test()
 {
-    uint64_t max_completion_microsec = 1320000;
+    uint64_t max_completion_microsec = 1270000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 0);
 }
@@ -1194,7 +1198,7 @@ int simple_multipath_drop_second_test()
 int simple_multipath_sat_plus_test()
 {
     /* Not to far from theoretical 10-12 sec! */
-    uint64_t max_completion_microsec = 11000000;
+    uint64_t max_completion_microsec = 11500000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 1);
 }
@@ -1237,7 +1241,7 @@ int simple_multipath_back1_test()
 
 int simple_multipath_perf_test()
 {
-    uint64_t max_completion_microsec = 1450000;
+    uint64_t max_completion_microsec = 1290000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
 }
