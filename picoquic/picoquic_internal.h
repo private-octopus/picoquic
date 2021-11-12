@@ -846,10 +846,22 @@ typedef struct st_picoquic_packet_context_t {
 * 2: Initial
 * The context holds all the data required to manage acknowledgments
 */
+typedef struct st_picoquic_ack_context_track_t {
+    uint64_t highest_ack_sent; /* picoquic_format_ack_frame */
+    uint64_t highest_ack_sent_time; /* picoquic_format_ack_frame */
+    uint64_t time_oldest_unack_packet_received; /* picoquic_is_ack_needed: first packet that has not been acked yet */
+
+    unsigned int ack_needed : 1; /* picoquic_format_ack_frame */
+    unsigned int ack_after_fin : 1; /* picoquic_format_ack_frame */
+    unsigned int out_of_order_received : 1; /* picoquic_is_ack_needed */
+} picoquic_ack_context_track_t;
 
 typedef struct st_picoquic_ack_context_t {
     picoquic_sack_list_t sack_list; /* picoquic_format_ack_frame */
     uint64_t time_stamp_largest_received; /* picoquic_format_ack_frame */
+#if 1
+    picoquic_ack_context_track_t act[2];
+#else
     uint64_t highest_ack_sent; /* picoquic_format_ack_frame */
     uint64_t highest_ack_sent_time; /* picoquic_format_ack_frame */
     uint64_t time_oldest_unack_packet_received; /* picoquic_is_ack_needed: first packet that has not been acked yet */
@@ -857,7 +869,7 @@ typedef struct st_picoquic_ack_context_t {
     uint64_t highest_ack_sent_opp; /* picoquic_format_ack_frame */
     uint64_t highest_ack_sent_time_opp; /* picoquic_format_ack_frame */
     uint64_t time_oldest_unack_packet_received_opp; /* picoquic_is_ack_needed: first packet that has not been acked yet */
-
+#endif
     uint64_t crypto_rotation_sequence; /* Lowest sequence seen with current key */
 
     /* ECN Counters */
@@ -865,13 +877,16 @@ typedef struct st_picoquic_ack_context_t {
     uint64_t ecn_ect1_total_local; /* picoquic_format_ack_frame */
     uint64_t ecn_ce_total_local; /* picoquic_format_ack_frame */
     /* Flags */
+    unsigned int sending_ecn_ack : 1; /* picoquic_format_ack_frame, picoquic_ecn_accounting */
+#if 1
+#else
     unsigned int ack_needed : 1; /* picoquic_format_ack_frame */
     unsigned int ack_after_fin : 1; /* picoquic_format_ack_frame */
-    unsigned int sending_ecn_ack : 1; /* picoquic_format_ack_frame, picoquic_ecn_accounting */
     unsigned int out_of_order_received : 1; /* picoquic_is_ack_needed */
     unsigned int ack_needed_opp : 1; /* picoquic_format_ack_frame */
     unsigned int ack_after_fin_opp : 1; /* picoquic_opportunistic_ack_needed_in_ctx */
     unsigned int out_of_order_received_opp : 1; /* picoquic_opportunistic_ack_needed_in_ctx */
+#endif
 } picoquic_ack_context_t;
 
 /* Local CID.

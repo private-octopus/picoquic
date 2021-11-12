@@ -2263,7 +2263,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
         cnx->initial_repeat_needed = 0;
     }
 
-    if (length == 0 && cnx->ack_ctx[pc].ack_needed != 0 &&
+    if (length == 0 && cnx->ack_ctx[pc].act[0].ack_needed != 0 &&
         pc != picoquic_packet_context_application) {
         packet->ptype =
             (pc == picoquic_packet_context_initial) ? picoquic_packet_initial :
@@ -2456,14 +2456,14 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     if (ret == 0) {
         if (epoch > picoquic_epoch_initial) {
             if (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt != NULL) {
-                if (cnx->ack_ctx[picoquic_packet_context_initial].ack_needed) {
+                if (cnx->ack_ctx[picoquic_packet_context_initial].act[0].ack_needed) {
                     /* Apply some ack delay, because handshake from server arrive in trains */
                     uint64_t ack_delay = cnx->path[0]->smoothed_rtt / 8;
                     uint64_t ack_time;
                     if (ack_delay > PICOQUIC_ACK_DELAY_MAX) {
                         ack_delay = PICOQUIC_ACK_DELAY_MAX;
                     }
-                    ack_time = cnx->ack_ctx[picoquic_packet_context_initial].time_oldest_unack_packet_received + ack_delay;
+                    ack_time = cnx->ack_ctx[picoquic_packet_context_initial].act[0].time_oldest_unack_packet_received + ack_delay;
                     if (ack_time <= current_time) {
                         force_handshake_padding = 1;
                     }
@@ -2534,7 +2534,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             packet->checksum_overhead = checksum_overhead;
         }
         else if (ret == 0 && is_cleartext_mode && tls_ready == 0
-            && cnx->first_misc_frame == NULL && !cnx->ack_ctx[pc].ack_needed && !force_handshake_padding) {
+            && cnx->first_misc_frame == NULL && !cnx->ack_ctx[pc].act[0].ack_needed && !force_handshake_padding) {
             /* when in a clear text mode, only send packets if there is
             * actually something to send, or resend. */
 
@@ -2562,7 +2562,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     length = 0;
                 }
                 else {
-                    if (epoch != 1 && cnx->ack_ctx[pc].ack_needed) {
+                    if (epoch != 1 && cnx->ack_ctx[pc].act[0].ack_needed) {
                         bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 0);
                     }
 
@@ -2602,7 +2602,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
 
                     if (length > header_length && epoch == picoquic_epoch_handshake) {
-                        cnx->ack_ctx[picoquic_packet_context_initial].ack_needed = 0;
+                        cnx->ack_ctx[picoquic_packet_context_initial].act[0].ack_needed = 0;
                     }
 
                     /* If TLS packets are sent, progress the state */
@@ -2804,7 +2804,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         bytes_next = bytes + length;
 
         if ((tls_ready != 0 && path_x->cwin > path_x->bytes_in_transit) 
-            || cnx->ack_ctx[pc].ack_needed) {
+            || cnx->ack_ctx[pc].act[0].ack_needed) {
             bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 0);
             /* Encode the crypto frame */
             bytes_next = picoquic_format_crypto_hs_frame(&cnx->tls_stream[epoch],
@@ -2843,7 +2843,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             packet->send_time = current_time;
             packet->checksum_overhead = checksum_overhead;
         }
-        else if (cnx->ack_ctx[pc].ack_needed) {
+        else if (cnx->ack_ctx[pc].act[0].ack_needed) {
             /* when i, n a handshake mode, send acks asap. */
             length = picoquic_predict_packet_header_length(cnx, packet_type, &cnx->pkt_ctx[pc]);
             bytes_next = bytes + length;
@@ -3008,7 +3008,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
                 delta_t = path_x->retransmit_timer / 2;
             }
             /* if more than N packet received, repeat and erase */
-            if (cnx->ack_ctx[pc].ack_needed) {
+            if (cnx->ack_ctx[pc].act[0].ack_needed) {
                 length = picoquic_predict_packet_header_length(
                     cnx, packet_type, pkt_ctx);
                 packet->ptype = packet_type;
@@ -3026,8 +3026,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
                     bytes_next = picoquic_format_connection_close_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
                 }
                 length = bytes_next - bytes;
-                cnx->ack_ctx[pc].ack_needed = 0;
-                cnx->ack_ctx[pc].out_of_order_received = 0;
+                cnx->ack_ctx[pc].act[0].ack_needed = 0;
+                cnx->ack_ctx[pc].act[0].out_of_order_received = 0;
             }
             next_time = current_time + delta_t;
             if (next_time > exit_time) {
@@ -3103,7 +3103,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         cnx->latest_progress_time = current_time;
         *next_wake_time = current_time + delta_t;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-        cnx->ack_ctx[pc].ack_needed = 0;
+        cnx->ack_ctx[pc].act[0].ack_needed = 0;
     }
     else {
         length = 0;
@@ -3358,8 +3358,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x);
             if (next_challenge_time <= current_time || path_x->challenge_repeat_count == 0) {
                 if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
-                    int ack_needed = cnx->ack_ctx[pc].ack_needed;
-                    int out_of_order_received = cnx->ack_ctx[pc].out_of_order_received;
+                    int ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
+                    int out_of_order_received = cnx->ack_ctx[pc].act[0].out_of_order_received;
                     uint8_t* bytes_challenge = bytes_next;
 
                     bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, &more_data, &is_pure_ack,
@@ -3373,8 +3373,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     /* add an ACK just to be nice */
                     if (ack_needed) {
                         bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 1);
-                        cnx->ack_ctx[pc].out_of_order_received = out_of_order_received;
-                        cnx->ack_ctx[pc].out_of_order_received_opp = out_of_order_received;
+                        cnx->ack_ctx[pc].act[0].out_of_order_received = out_of_order_received;
+                        cnx->ack_ctx[pc].act[1].out_of_order_received = out_of_order_received;
                     }
                 }
                 else {
@@ -3707,7 +3707,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
             uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x);
             if (next_challenge_time <= current_time || path_x->challenge_repeat_count == 0) {
                 if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
-                    int ack_needed = cnx->ack_ctx[pc].ack_needed;
+                    int ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
                     /* When blocked, repeat the path challenge or wait */
                     uint8_t* bytes_challenge = bytes_next;
 

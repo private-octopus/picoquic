@@ -250,14 +250,19 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
         uint64_t pn_last = picoquic_sack_list_last(sack_list);
         if (pn64 > pn_last) {
             if (pn64 > pn_last + 1) {
-                cnx->ack_ctx[pc].out_of_order_received = 1;
-                cnx->ack_ctx[pc].out_of_order_received_opp = 1;
+                cnx->ack_ctx[pc].act[0].out_of_order_received = 1;
+                cnx->ack_ctx[pc].act[1].out_of_order_received = 1;
             }
             cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
         }
-        else if (cnx->ack_ctx[pc].ack_needed && pn64 < cnx->ack_ctx[pc].highest_ack_sent) {
-            cnx->ack_ctx[pc].out_of_order_received = 1;
-            cnx->ack_ctx[pc].out_of_order_received_opp = 1;
+        else
+        {
+            if (cnx->ack_ctx[pc].act[0].ack_needed && pn64 < cnx->ack_ctx[pc].act[0].highest_ack_sent) {
+                cnx->ack_ctx[pc].act[0].out_of_order_received = 1;
+            }
+            if (cnx->ack_ctx[pc].act[1].ack_needed && pn64 < cnx->ack_ctx[pc].act[1].highest_ack_sent) {
+                cnx->ack_ctx[pc].act[1].out_of_order_received = 1;
+            }
         }
     }
 
