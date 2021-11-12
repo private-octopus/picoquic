@@ -3238,9 +3238,10 @@ void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoqui
     if (pc == picoquic_packet_context_application &&
         cnx->is_multipath_enabled) {
         /* TODO: this code seems wrong */
-        if (l_cid->ack_ctx.act[0].ack_needed) {
+        if (!l_cid->ack_ctx.act[0].ack_needed) {
             l_cid->ack_ctx.act[0].ack_needed = 1;
             l_cid->ack_ctx.act[0].time_oldest_unack_packet_received = current_time;
+            l_cid->ack_ctx.act[1].ack_needed = 1;
             l_cid->ack_ctx.act[1].time_oldest_unack_packet_received = current_time;
         }
     }
@@ -3289,86 +3290,37 @@ uint64_t picoquic_ack_gap_override_if_needed(picoquic_cnx_t* cnx, uint64_t l_cid
     return ack_gap;
 }
 
-int picoquic_opportunistic_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx, uint64_t current_time,
-    uint64_t l_cid_sequence, uint64_t* next_wake_time, picoquic_packet_context_enum pc)
-{
-    int ret = 0;
-
-
-    if (ack_ctx->act[1].ack_needed) {
-        if (pc != picoquic_packet_context_application || ack_ctx->act[1].ack_after_fin) {
-            ret = 1;
-            ack_ctx->act[1].ack_after_fin = 0;
-        }
-        else if (ack_ctx->act[1].out_of_order_received && !cnx->ack_ignore_order_remote) {
-            ret = 1;
-        }
-        else
-        {
-            uint64_t ack_gap = picoquic_ack_gap_override_if_needed(cnx, l_cid_sequence);
-
-            if (ack_ctx->act[1].highest_ack_sent + ack_gap <= picoquic_sack_list_last(&ack_ctx->sack_list) ||
-                ack_ctx->act[1].time_oldest_unack_packet_received + cnx->ack_delay_remote <= current_time) {
-                /* Consider counters for opportunistic acks */
-                ret = 1;
-            }
-            else {
-                if (ack_ctx->act[1].time_oldest_unack_packet_received + cnx->ack_delay_remote < *next_wake_time) {
-                    *next_wake_time = ack_ctx->act[1].time_oldest_unack_packet_received + cnx->ack_delay_remote;
-                    SET_LAST_WAKE(cnx->quic, PICOQUIC_FRAME);
-                }
-            }
-        }
-    }
-    /* TODO: consider opportunistic ack of ack */
-    else if (ack_ctx->act[1].highest_ack_sent + 8 <= picoquic_sack_list_last(&ack_ctx->sack_list) &&
-        ack_ctx->act[1].highest_ack_sent_time + cnx->ack_delay_remote <= current_time) {
-        /* Force sending an ack-of-ack from time to time, as a low priority action */
-        if (picoquic_sack_list_last(&ack_ctx->sack_list) == UINT64_MAX) {
-            ret = 0;
-        }
-        else {
-            ret = 1;
-        }
-    }
-    return ret;
-}
-
 int picoquic_is_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx, uint64_t current_time,
     uint64_t l_cid_sequence, uint64_t * next_wake_time, picoquic_packet_context_enum pc, int is_opportunistic)
 {
     int ret = 0;
 
-    if (is_opportunistic) {
-        ret = picoquic_opportunistic_ack_needed_in_ctx(cnx, ack_ctx, current_time,
-            l_cid_sequence, next_wake_time, pc);
-    }
-    else if (ack_ctx->act[0].ack_needed) {
-        if (pc != picoquic_packet_context_application || ack_ctx->act[0].ack_after_fin ) {
+    if (ack_ctx->act[is_opportunistic].ack_needed) {
+        if (pc != picoquic_packet_context_application || ack_ctx->act[is_opportunistic].ack_after_fin) {
             ret = 1;
-            ack_ctx->act[0].ack_after_fin = 0;
+            ack_ctx->act[is_opportunistic].ack_after_fin = 0;
         }
-        else if (ack_ctx->act[0].out_of_order_received && !cnx->ack_ignore_order_remote) {
+        else if (ack_ctx->act[is_opportunistic].out_of_order_received && !cnx->ack_ignore_order_remote) {
             ret = 1;
         }
         else
         {
             uint64_t ack_gap = picoquic_ack_gap_override_if_needed(cnx, l_cid_sequence);
 
-            if (ack_ctx->act[0].highest_ack_sent + ack_gap <= picoquic_sack_list_last(&ack_ctx->sack_list) ||
-                ack_ctx->act[0].time_oldest_unack_packet_received + cnx->ack_delay_remote <= current_time) {
+            if (ack_ctx->act[is_opportunistic].highest_ack_sent + ack_gap <= picoquic_sack_list_last(&ack_ctx->sack_list) ||
+                ack_ctx->act[is_opportunistic].time_oldest_unack_packet_received + cnx->ack_delay_remote <= current_time) {
                 ret = 1;
             }
-            else{
-                if (ack_ctx->act[0].time_oldest_unack_packet_received + cnx->ack_delay_remote < *next_wake_time) {
-                    *next_wake_time = ack_ctx->act[0].time_oldest_unack_packet_received + cnx->ack_delay_remote;
+            else {
+                if (ack_ctx->act[is_opportunistic].time_oldest_unack_packet_received + cnx->ack_delay_remote < *next_wake_time) {
+                    *next_wake_time = ack_ctx->act[is_opportunistic].time_oldest_unack_packet_received + cnx->ack_delay_remote;
                     SET_LAST_WAKE(cnx->quic, PICOQUIC_FRAME);
                 }
             }
         }
     }
-    else if (ack_ctx->act[0].highest_ack_sent + 8 <= picoquic_sack_list_last(&ack_ctx->sack_list) &&
-        ack_ctx->act[0].highest_ack_sent_time + cnx->ack_delay_remote <= current_time) {
+    else if (ack_ctx->act[is_opportunistic].highest_ack_sent + 8 <= picoquic_sack_list_last(&ack_ctx->sack_list) &&
+        ack_ctx->act[is_opportunistic].highest_ack_sent_time + cnx->ack_delay_remote <= current_time) {
         /* Force sending an ack-of-ack from time to time, as a low priority action */
         if (picoquic_sack_list_last(&ack_ctx->sack_list) == UINT64_MAX) {
             ret = 0;
@@ -3377,6 +3329,7 @@ int picoquic_is_ack_needed_in_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* a
             ret = 1;
         }
     }
+
     return ret;
 }
 

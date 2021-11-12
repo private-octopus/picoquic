@@ -1187,11 +1187,6 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
 
     int should_retransmit = 0;
     int is_timer_based = 0;
-#if 1
-    if (p->sequence_number == 1124) {
-        DBG_PRINTF("%s", "Debug");
-    }
-#endif
 
     if (p->send_path == NULL) {
         /* This is a bug. Can only happen if the sending path has been

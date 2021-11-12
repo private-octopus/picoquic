@@ -681,7 +681,7 @@ int multipath_drop_first_test()
 
 int multipath_drop_second_test()
 {
-    uint64_t max_completion_microsec = 1220000;
+    uint64_t max_completion_microsec = 1230000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second, 0);
 }
