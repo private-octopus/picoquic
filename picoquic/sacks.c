@@ -106,11 +106,10 @@ int picoquic_sack_insert_item(picoquic_sack_list_t* sack_list, uint64_t range_mi
 void picoquic_sack_delete_item(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* sack)
 {
     /* Accounting of deleted values */
-    if (sack->nb_times_sent[0] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-        sack_list->rc[0].range_counts[sack->nb_times_sent[0]] -= 1;
-    }
-    if (sack->nb_times_sent[1] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-        sack_list->rc[1].range_counts[sack->nb_times_sent[1]] -= 1;
+    for (int r = 0; r < 2; r++) {
+        if (sack->nb_times_sent[r] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+            sack_list->rc[r].range_counts[sack->nb_times_sent[r]] -= 1;
+        }
     }
     /* Delete the item in the splay */
     picosplay_delete_hint(&sack_list->ack_tree, &sack->node);
@@ -281,7 +280,7 @@ void picoquic_sack_select_ack_ranges(picoquic_sack_list_t* sack_list, picoquic_s
     *nb_sent_max_skip = 0;
 
     for (int i = 0; i < PICOQUIC_MAX_ACK_RANGE_REPEAT; i++) {
-        cumul_sent += (is_opportunistic)?sack_list->rc[1].range_counts[i]: sack_list->rc[0].range_counts[i];
+        cumul_sent += sack_list->rc[is_opportunistic].range_counts[i];
         if (i == first_sack_count) {
             cumul_sent -= 1;
         }
@@ -337,13 +336,11 @@ picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_list_t* sa
         else if (previous->end_of_sack_range == end_of_range) {
             /* Matching ACK */
             if (sack_list->horizon_delay > 0) {
-                if (previous->nb_times_sent[0] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-                    sack_list->rc[0].range_counts[previous->nb_times_sent[0]] -= 1;
-                    previous->nb_times_sent[0] = PICOQUIC_MAX_ACK_RANGE_REPEAT;
-                }
-                if (previous->nb_times_sent[1] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
-                    sack_list->rc[1].range_counts[previous->nb_times_sent[1]] -= 1;
-                    previous->nb_times_sent[1] = PICOQUIC_MAX_ACK_RANGE_REPEAT;
+                for (int r = 0; r < 2; r++) {
+                    if (previous->nb_times_sent[r] < PICOQUIC_MAX_ACK_RANGE_REPEAT) {
+                        sack_list->rc[r].range_counts[previous->nb_times_sent[r]] -= 1;
+                        previous->nb_times_sent[r] = PICOQUIC_MAX_ACK_RANGE_REPEAT;
+                    }
                 }
             } else {
                 picoquic_sack_delete_item(sack_list, previous);
