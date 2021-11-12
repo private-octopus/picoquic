@@ -1876,13 +1876,14 @@ void picoquic_reset_path_mtu(picoquic_path_t* path_x)
 /* Manage ACK context and Packet context */
 void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx)
 {
-    picoquic_sack_list_init(&ack_ctx->first_sack_item);
-
-    ack_ctx->highest_ack_sent = 0;
-    ack_ctx->highest_ack_sent_time = cnx->start_time;
+    picoquic_sack_list_init(&ack_ctx->sack_list);
     ack_ctx->time_stamp_largest_received = UINT64_MAX;
-    ack_ctx->ack_needed = 0;
-    ack_ctx->max_repeat_per_range = PICOQUIC_MAX_ACK_RANGE_REPEAT;
+    ack_ctx->act[0].highest_ack_sent = 0;
+    ack_ctx->act[0].highest_ack_sent_time = cnx->start_time;
+    ack_ctx->act[0].ack_needed = 0;
+    ack_ctx->act[1].highest_ack_sent = 0;
+    ack_ctx->act[1].highest_ack_sent_time = cnx->start_time;
+    ack_ctx->act[1].ack_needed = 0;
 }
 
 void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx)
@@ -2324,12 +2325,7 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
     }
 
     picosplay_empty_tree(&stream->stream_data_tree);
-
-    while (stream->first_sack_item.next_sack != NULL) {
-        picoquic_sack_item_t * sack = stream->first_sack_item.next_sack;
-        stream->first_sack_item.next_sack = sack->next_sack;
-        free(sack);
-    }
+    picoquic_sack_list_free(&stream->sack_list);
 }
 
 
@@ -2455,8 +2451,15 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
 {
     picoquic_stream_head_t* stream = (picoquic_stream_head_t*)malloc(sizeof(picoquic_stream_head_t));
     if (stream != NULL) {
-        int is_output_stream = 0;
         memset(stream, 0, sizeof(picoquic_stream_head_t));
+        if (picoquic_sack_list_init(&stream->sack_list) != 0) {
+            free(stream);
+            stream = NULL;
+        }
+    }
+
+    if (stream != NULL){
+        int is_output_stream = 0;
         stream->stream_id = stream_id;
 
         if (IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
@@ -3496,11 +3499,7 @@ void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_m
 
 void picoquic_clear_ack_ctx(picoquic_ack_context_t* ack_ctx)
 {
-    while (ack_ctx->first_sack_item.next_sack != NULL) {
-        picoquic_sack_item_t* next = ack_ctx->first_sack_item.next_sack;
-        ack_ctx->first_sack_item.next_sack = next->next_sack;
-        free(next);
-    }
+    picoquic_sack_list_free(&ack_ctx->sack_list);
 }
 
 void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
@@ -3521,7 +3520,7 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     pkt_ctx->retransmitted_oldest = NULL;
 
     picoquic_clear_ack_ctx(ack_ctx);
-    picoquic_sack_list_init(&ack_ctx->first_sack_item);
+    picoquic_sack_list_init(&ack_ctx->sack_list);
 
     /* Reset the ECN data */
     ack_ctx->ecn_ect0_total_local = 0;
@@ -3650,7 +3649,7 @@ int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
     /* Verify that a packet of the previous rotation was acked */
     if (cnx->cnx_state != picoquic_state_ready ||
         cnx->crypto_epoch_sequence >
-        picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_application].first_sack_item)) {
+        picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_application].sack_list)) {
         ret = PICOQUIC_ERROR_KEY_ROTATION_NOT_READY;
     }
     else {

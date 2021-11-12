@@ -76,6 +76,8 @@ int tls_api_retry_test();
 int tls_api_retry_large_test();
 int ackrange_test();
 int ack_of_ack_test();
+int ack_disorder_test();
+int ack_horizon_test();
 int tls_api_two_connections_test();
 int cleartext_aead_test();
 int tls_api_multiple_versions_test();

@@ -461,6 +461,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
+        /* set the binary log on the client side */
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        test_ctx->qclient->use_long_log = 1;
+        binlog_new_connection(test_ctx->cnx_client);
         /* Set the multipath option at both client and server */
         multipath_init_params(&server_parameters, is_sat_test, is_simple_multipath);
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
@@ -666,7 +670,7 @@ int multipath_basic_test()
 
 int multipath_drop_first_test()
 {
-    uint64_t max_completion_microsec = 1320000;
+    uint64_t max_completion_microsec = 1310000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_first, 0);
 }
@@ -677,7 +681,7 @@ int multipath_drop_first_test()
 
 int multipath_drop_second_test()
 {
-    uint64_t max_completion_microsec = 1450000;
+    uint64_t max_completion_microsec = 1230000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second, 0);
 }
@@ -722,7 +726,7 @@ int multipath_nat_test()
  */
 int multipath_break1_test()
 {
-    uint64_t max_completion_microsec = 13000000;
+    uint64_t max_completion_microsec = 10600000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break1, 0);
 }
@@ -731,7 +735,7 @@ int multipath_break1_test()
  */
 int multipath_back1_test()
 {
-    uint64_t max_completion_microsec = 3210000;
+    uint64_t max_completion_microsec = 3200000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_back1, 0);
 }
@@ -739,7 +743,7 @@ int multipath_back1_test()
 /* Test that a typical wifi+lte scenario provides good performance */
 int multipath_perf_test()
 {
-    uint64_t max_completion_microsec = 1320000;
+    uint64_t max_completion_microsec = 1250000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 0);
 }
@@ -1177,8 +1181,8 @@ int simple_multipath_basic_test()
 
 int simple_multipath_drop_first_test()
 {
-    /* This is about same as the full multipath test */
-    uint64_t max_completion_microsec = 1420000;
+    /* This is faster than 1.31sec for full multipath */
+    uint64_t max_completion_microsec = 1240000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_first, 1);
 }
@@ -1186,7 +1190,7 @@ int simple_multipath_drop_first_test()
 int simple_multipath_drop_second_test()
 {
     /* This is about same as the full multipath test */
-    uint64_t max_completion_microsec = 1510000;
+    uint64_t max_completion_microsec = 1230000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second, 1);
 }
@@ -1194,7 +1198,7 @@ int simple_multipath_drop_second_test()
 int simple_multipath_sat_plus_test()
 {
     /* Not to far from theoretical 10-12 sec! */
-    uint64_t max_completion_microsec = 11000000;
+    uint64_t max_completion_microsec = 10000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 1);
 }
@@ -1222,22 +1226,24 @@ int simple_multipath_nat_test()
 
 int simple_multipath_break1_test()
 {
-    uint64_t max_completion_microsec = 12000000;
+    /* On par with 10.6 for full multipath */
+    uint64_t max_completion_microsec = 10500000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break1, 1);
 }
 
 int simple_multipath_back1_test()
 {
-    /* Slightly better than 3.7 sec in full multipath test */
-    uint64_t max_completion_microsec = 3100000;
+    /* Slightly better than 3.2 sec in full multipath test */
+    uint64_t max_completion_microsec = 3000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_back1, 1);
 }
 
 int simple_multipath_perf_test()
 {
-    uint64_t max_completion_microsec = 1450000;
+    /* Compares with 1.25 sec for full multipath */
+    uint64_t max_completion_microsec = 1270000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
 }

@@ -107,6 +107,9 @@ extern "C" {
 #define PICOQUIC_CC_ALGO_NUMBER_FAST 4
 #define PICOQUIC_CC_ALGO_NUMBER_BBR 5
 
+#define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
+#define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
+
 /*
  * Types of frames.
  */
@@ -699,13 +702,23 @@ void picoquic_registered_token_clear(picoquic_quic_t* quic, uint64_t expiry_time
  */
 
 typedef struct st_picoquic_sack_item_t {
-    struct st_picoquic_sack_item_t* next_sack;
+    picosplay_node_t node;
     uint64_t start_of_sack_range;
     uint64_t end_of_sack_range;
-    int nb_times_sent;
+    uint64_t time_created;
+    int nb_times_sent[2];
 } picoquic_sack_item_t;
 
-typedef picoquic_sack_item_t picoquic_sack_list_t;
+typedef struct st_picoquic_sack_range_count_t {
+    int range_counts[PICOQUIC_MAX_ACK_RANGE_REPEAT];
+} picoquic_sack_range_count_t;
+
+typedef struct st_picoquic_sack_list_t {
+    picosplay_tree_t ack_tree;
+    uint64_t ack_horizon;
+    int64_t horizon_delay;
+    picoquic_sack_range_count_t rc[2];
+} picoquic_sack_list_t;
 
 /*
  * Stream head.
@@ -749,7 +762,7 @@ typedef struct st_picoquic_stream_head_t {
     void * app_stream_ctx;
     picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
     void* direct_receive_ctx; /* direct receive context */
-    picoquic_sack_list_t first_sack_item; /* Track which parts of the stream were acknowledged by the peer */
+    picoquic_sack_list_t sack_list; /* Track which parts of the stream were acknowledged by the peer */
     /* Flags describing the state of the stream */
     unsigned int is_active : 1; /* The application is actively managing data sending through callbacks */
     unsigned int fin_requested : 1; /* Application has requested Fin of sending stream */
@@ -833,30 +846,28 @@ typedef struct st_picoquic_packet_context_t {
 * 2: Initial
 * The context holds all the data required to manage acknowledgments
 */
-#define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
-#define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
-
-typedef struct st_picoquic_ack_context_t {
-    picoquic_sack_list_t first_sack_item; /* picoquic_format_ack_frame */
-    uint64_t time_stamp_largest_received; /* picoquic_format_ack_frame */
+typedef struct st_picoquic_ack_context_track_t {
     uint64_t highest_ack_sent; /* picoquic_format_ack_frame */
     uint64_t highest_ack_sent_time; /* picoquic_format_ack_frame */
-
     uint64_t time_oldest_unack_packet_received; /* picoquic_is_ack_needed: first packet that has not been acked yet */
 
-    uint64_t crypto_rotation_sequence; /* Lowest sequence seen with current key */
+    unsigned int ack_needed : 1; /* picoquic_format_ack_frame */
+    unsigned int ack_after_fin : 1; /* picoquic_format_ack_frame */
+    unsigned int out_of_order_received : 1; /* picoquic_is_ack_needed */
+} picoquic_ack_context_track_t;
 
-    int max_repeat_per_range; /* Max repeat counter used to fill ack ranges */
+typedef struct st_picoquic_ack_context_t {
+    picoquic_sack_list_t sack_list; /* picoquic_format_ack_frame */
+    uint64_t time_stamp_largest_received; /* picoquic_format_ack_frame */
+    picoquic_ack_context_track_t act[2];
+    uint64_t crypto_rotation_sequence; /* Lowest sequence seen with current key */
 
     /* ECN Counters */
     uint64_t ecn_ect0_total_local; /* picoquic_format_ack_frame */
     uint64_t ecn_ect1_total_local; /* picoquic_format_ack_frame */
     uint64_t ecn_ce_total_local; /* picoquic_format_ack_frame */
     /* Flags */
-    unsigned int ack_needed : 1; /* picoquic_format_ack_frame */
-    unsigned int ack_after_fin : 1; /* picoquic_format_ack_frame */
     unsigned int sending_ecn_ack : 1; /* picoquic_format_ack_frame, picoquic_ecn_accounting */
-    unsigned int out_of_order_received : 1; /* picoquic_is_ack_needed */
 } picoquic_ack_context_t;
 
 /* Local CID.
@@ -959,6 +970,9 @@ typedef struct st_picoquic_path_t {
     unsigned int is_token_published : 1;
     unsigned int is_ticket_seeded : 1; /* Whether the current ticket has been updated with RTT and CWIN */
     unsigned int is_bdp_sent : 1;
+    unsigned int is_nominal_ack_path : 1;
+    unsigned int is_ack_lost : 1;
+    unsigned int is_ack_expected : 1;
 
 
     /* Path priority, for multipath management */
@@ -1315,6 +1329,7 @@ typedef struct st_picoquic_cnx_t {
     int nb_path_alloc;
     int last_path_polled;
     uint64_t path_sequence_next;
+    picoquic_path_t* nominal_path_for_ack;
 
     /* Management of the CNX-ID stash */
     uint64_t retire_cnxid_before;
@@ -1533,20 +1548,35 @@ int picoquic_parse_header_and_decrypt(
 /* handling of ACK logic */
 void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx);
 
-int picoquic_is_ack_needed(picoquic_cnx_t* cnx,  uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);
+int picoquic_is_ack_needed(picoquic_cnx_t* cnx,  uint64_t current_time, uint64_t * next_wake_time, 
+    picoquic_packet_context_enum pc, int is_opportunistic);
 
 int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
     picoquic_local_cnxid_t * l_cid, uint64_t pn64);
 int picoquic_record_pn_received(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
     picoquic_local_cnxid_t* l_cid, uint64_t pn64, uint64_t current_microsec);
 
+void picoquic_sack_select_ack_ranges(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* first_sack,
+    int max_ranges, int is_opportunistic, int* nb_sent_max, int* nb_sent_max_skip);
+
 int picoquic_update_sack_list(picoquic_sack_list_t* sack,
-    uint64_t pn64_min, uint64_t pn64_max);
+    uint64_t pn64_min, uint64_t pn64_max, uint64_t current_time);
 /* Check whether the data fills a hole. returns 0 if it does, -1 otherwise. */
 int picoquic_check_sack_list(picoquic_sack_list_t* sack,
     uint64_t pn64_min, uint64_t pn64_max);
 
 picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_list_t* first_sack, picoquic_sack_item_t* previous, uint64_t start_of_range, uint64_t end_of_range);
+void picoquic_update_ack_horizon(picoquic_sack_list_t* sack_list, uint64_t current_time);
+
+/* Return the first ACK item in the list */
+picoquic_sack_item_t* picoquic_sack_first_item(picoquic_sack_list_t* sack_list);
+picoquic_sack_item_t* picoquic_sack_last_item(picoquic_sack_list_t* sack_list);
+picoquic_sack_item_t* picoquic_sack_next_item(picoquic_sack_item_t * sack);
+picoquic_sack_item_t* picoquic_sack_previous_item(picoquic_sack_item_t* sack);
+int picoquic_sack_insert_item(picoquic_sack_list_t* sack_list, uint64_t range_min, 
+    uint64_t range_max, uint64_t current_time);
+
+int picoquic_sack_list_is_empty(picoquic_sack_list_t* sack_list);
 
 uint64_t picoquic_sack_list_first(picoquic_sack_list_t* first_sack);
 
@@ -1554,21 +1584,23 @@ uint64_t picoquic_sack_list_last(picoquic_sack_list_t* first_sack);
 
 picoquic_sack_item_t* picoquic_sack_list_first_range(picoquic_sack_list_t* first_sack);
 
-void picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
+int picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
 
-void picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, uint64_t range_min, uint64_t range_max);
+int picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, 
+    uint64_t range_min, uint64_t range_max, uint64_t current_time);
 
 void picoquic_sack_list_free(picoquic_sack_list_t* first_sack);
 
-uint64_t picoquic_sack_item_first(picoquic_sack_item_t* sack_item);
+uint64_t picoquic_sack_item_range_start(picoquic_sack_item_t* sack_item);
 
-uint64_t picoquic_sack_item_last(picoquic_sack_item_t* sack_item);
+uint64_t picoquic_sack_item_range_end(picoquic_sack_item_t* sack_item);
 
-picoquic_sack_item_t* picoquic_sack_item_next(picoquic_sack_item_t* sack_item);
+int picoquic_sack_item_nb_times_sent(picoquic_sack_item_t* sack_item, int is_opportunistic);
 
-int picoquic_sack_item_nb_times_sent(picoquic_sack_item_t* sack_item);
+void picoquic_sack_item_record_sent(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* sack_item, int is_opportunistic);
+void picoquic_sack_item_record_reset(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* sack_item);
 
-void picoquic_sack_item_record_sent(picoquic_sack_item_t* sack_item);
+size_t picoquic_sack_list_size(picoquic_sack_list_t* first_sack);
 
 void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet);
 

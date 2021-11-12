@@ -1371,24 +1371,26 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
             }
 
             /* Prepare retransmission if needed */
-            if (ret == 0 && !frame_is_pure_ack) {
-                if (PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-                    ret = picoquic_queue_stream_frame_for_retransmit(cnx, &old_p->bytes[byte_index], frame_length);
-                }
-                else {
-                    if ((force_queue || frame_length > send_buffer_max_minus_checksum - *length) &&
-                        (old_p->ptype == picoquic_packet_0rtt_protected || 
-                            old_p->ptype == picoquic_packet_1rtt_protected)) {
-                        ret = picoquic_queue_misc_frame(cnx, &old_p->bytes[byte_index], frame_length, 0);
+            if (ret == 0) {
+                if (!frame_is_pure_ack) {
+                    if (PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
+                        ret = picoquic_queue_stream_frame_for_retransmit(cnx, &old_p->bytes[byte_index], frame_length);
                     }
                     else {
-                        memcpy(&new_bytes[*length], &old_p->bytes[byte_index], frame_length);
-                        *length += frame_length;
+                        if ((force_queue || frame_length > send_buffer_max_minus_checksum - *length) &&
+                            (old_p->ptype == picoquic_packet_0rtt_protected ||
+                                old_p->ptype == picoquic_packet_1rtt_protected)) {
+                            ret = picoquic_queue_misc_frame(cnx, &old_p->bytes[byte_index], frame_length, 0);
+                        }
+                        else {
+                            memcpy(&new_bytes[*length], &old_p->bytes[byte_index], frame_length);
+                            *length += frame_length;
+                        }
                     }
+                    *packet_is_pure_ack = 0;
                 }
-                *packet_is_pure_ack = 0;
+                byte_index += frame_length;
             }
-            byte_index += frame_length;
         }
     }
 
@@ -1514,6 +1516,12 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
                 (timer_based_retransmit == 0) ? "repeat" : "timer",
                 (old_p->send_path == NULL) ? NULL : &old_p->send_path->p_remote_cnxid->cnx_id,
                 old_p->length, current_time);
+
+
+            if (old_p->send_path != NULL && (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)) {
+                /* If ack only packets are lost, bundle a ping next time an ACK is sent on that path */
+                old_p->send_path->is_ack_lost = 1;
+            }
 
             old_p = picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, packet_is_pure_ack & do_not_detect_spurious);
 
@@ -2250,7 +2258,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
         cnx->initial_repeat_needed = 0;
     }
 
-    if (length == 0 && cnx->ack_ctx[pc].ack_needed != 0 &&
+    if (length == 0 && cnx->ack_ctx[pc].act[0].ack_needed != 0 &&
         pc != picoquic_packet_context_application) {
         packet->ptype =
             (pc == picoquic_packet_context_initial) ? picoquic_packet_initial :
@@ -2266,8 +2274,9 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
 
     if (length > 0) {
         if (packet->ptype != picoquic_packet_0rtt_protected) {
-            /* Check whether it makes sens to add an ACK at the end of the retransmission */
-            bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc, 0);
+            /* Check whether it makes sense to add an ACK at the end of the retransmission */
+            bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, 
+                current_time, pc, 0);
             length = bytes_next - bytes;
         }
         packet->length = length;
@@ -2442,14 +2451,14 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     if (ret == 0) {
         if (epoch > picoquic_epoch_initial) {
             if (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt != NULL) {
-                if (cnx->ack_ctx[picoquic_packet_context_initial].ack_needed) {
+                if (cnx->ack_ctx[picoquic_packet_context_initial].act[0].ack_needed) {
                     /* Apply some ack delay, because handshake from server arrive in trains */
                     uint64_t ack_delay = cnx->path[0]->smoothed_rtt / 8;
                     uint64_t ack_time;
                     if (ack_delay > PICOQUIC_ACK_DELAY_MAX) {
                         ack_delay = PICOQUIC_ACK_DELAY_MAX;
                     }
-                    ack_time = cnx->ack_ctx[picoquic_packet_context_initial].time_oldest_unack_packet_received + ack_delay;
+                    ack_time = cnx->ack_ctx[picoquic_packet_context_initial].act[0].time_oldest_unack_packet_received + ack_delay;
                     if (ack_time <= current_time) {
                         force_handshake_padding = 1;
                     }
@@ -2520,7 +2529,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             packet->checksum_overhead = checksum_overhead;
         }
         else if (ret == 0 && is_cleartext_mode && tls_ready == 0
-            && cnx->first_misc_frame == NULL && !cnx->ack_ctx[pc].ack_needed && !force_handshake_padding) {
+            && cnx->first_misc_frame == NULL && !cnx->ack_ctx[pc].act[0].ack_needed && !force_handshake_padding) {
             /* when in a clear text mode, only send packets if there is
             * actually something to send, or resend. */
 
@@ -2543,12 +2552,12 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
                 if ((tls_ready == 0 || path_x->cwin <= path_x->bytes_in_transit)
                     && (cnx->cnx_state == picoquic_state_client_almost_ready
-                        || picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc) == 0)
+                        || picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc, 0) == 0)
                     && cnx->first_misc_frame == NULL && !force_handshake_padding) {
                     length = 0;
                 }
                 else {
-                    if (epoch != 1 && cnx->ack_ctx[pc].ack_needed) {
+                    if (epoch != 1 && cnx->ack_ctx[pc].act[0].ack_needed) {
                         bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 0);
                     }
 
@@ -2588,7 +2597,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
 
                     if (length > header_length && epoch == picoquic_epoch_handshake) {
-                        cnx->ack_ctx[picoquic_packet_context_initial].ack_needed = 0;
+                        cnx->ack_ctx[picoquic_packet_context_initial].act[0].ack_needed = 0;
                     }
 
                     /* If TLS packets are sent, progress the state */
@@ -2629,10 +2638,10 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
          * server is performing anti-dos mitigation and the client has nothing to repeat */
         if ((packet->ptype == picoquic_packet_initial && cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt == NULL &&
             cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_newest == NULL &&
-            picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_initial].first_sack_item) != UINT64_MAX) ||
+            picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_initial].sack_list) != UINT64_MAX) ||
             (packet->ptype == picoquic_packet_handshake &&
                 cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_newest == NULL &&
-                picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_handshake].first_sack_item) == UINT64_MAX &&
+                picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_handshake].sack_list) == UINT64_MAX &&
                 cnx->pkt_ctx[picoquic_packet_context_handshake].send_sequence == 0))
         {
             uint64_t try_time_next = cnx->path[0]->latest_sent_time + cnx->path[0]->smoothed_rtt;
@@ -2790,7 +2799,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         bytes_next = bytes + length;
 
         if ((tls_ready != 0 && path_x->cwin > path_x->bytes_in_transit) 
-            || cnx->ack_ctx[pc].ack_needed) {
+            || cnx->ack_ctx[pc].act[0].ack_needed) {
             bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 0);
             /* Encode the crypto frame */
             bytes_next = picoquic_format_crypto_hs_frame(&cnx->tls_stream[epoch],
@@ -2829,7 +2838,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             packet->send_time = current_time;
             packet->checksum_overhead = checksum_overhead;
         }
-        else if (cnx->ack_ctx[pc].ack_needed) {
+        else if (cnx->ack_ctx[pc].act[0].ack_needed) {
             /* when i, n a handshake mode, send acks asap. */
             length = picoquic_predict_packet_header_length(cnx, packet_type, &cnx->pkt_ctx[pc]);
             bytes_next = bytes + length;
@@ -2908,7 +2917,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     case picoquic_state_handshake_failure:
         /* TODO: check whether closing can be requested in "initial" mode */
         if (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt != NULL &&
-            picoquic_sack_list_first(&cnx->ack_ctx[picoquic_packet_context_handshake].first_sack_item) != UINT64_MAX) {
+            picoquic_sack_list_first(&cnx->ack_ctx[picoquic_packet_context_handshake].sack_list) != UINT64_MAX) {
             pc = picoquic_packet_context_handshake;
             packet_type = picoquic_packet_handshake;
             epoch = picoquic_epoch_handshake;
@@ -2994,7 +3003,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
                 delta_t = path_x->retransmit_timer / 2;
             }
             /* if more than N packet received, repeat and erase */
-            if (cnx->ack_ctx[pc].ack_needed) {
+            if (cnx->ack_ctx[pc].act[0].ack_needed) {
                 length = picoquic_predict_packet_header_length(
                     cnx, packet_type, pkt_ctx);
                 packet->ptype = packet_type;
@@ -3012,8 +3021,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
                     bytes_next = picoquic_format_connection_close_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
                 }
                 length = bytes_next - bytes;
-                cnx->ack_ctx[pc].ack_needed = 0;
-                cnx->ack_ctx[pc].out_of_order_received = 0;
+                cnx->ack_ctx[pc].act[0].ack_needed = 0;
+                cnx->ack_ctx[pc].act[0].out_of_order_received = 0;
             }
             next_time = current_time + delta_t;
             if (next_time > exit_time) {
@@ -3089,7 +3098,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         cnx->latest_progress_time = current_time;
         *next_wake_time = current_time + delta_t;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-        cnx->ack_ctx[pc].ack_needed = 0;
+        cnx->ack_ctx[pc].act[0].ack_needed = 0;
     }
     else {
         length = 0;
@@ -3195,7 +3204,6 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
         (void)picoquic_queue_handshake_done_frame(cnx);
     }
 
-
     if (cnx->is_half_open){
         if (cnx->quic->current_number_half_open > 0) {
             cnx->quic->current_number_half_open--;
@@ -3218,6 +3226,11 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     if (cnx->crypto_epoch_length_max == 0) {
         cnx->crypto_epoch_length_max = 
             picoquic_aead_confidentiality_limit(cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
+    }
+
+    /* Use ACK list optimization if simple multipath */
+    if (cnx->is_simple_multipath_enabled) {
+        cnx->ack_ctx[0].sack_list.horizon_delay = 1000000;
     }
 
     /* Start migration to server preferred address if present */
@@ -3340,8 +3353,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x);
             if (next_challenge_time <= current_time || path_x->challenge_repeat_count == 0) {
                 if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
-                    int ack_needed = cnx->ack_ctx[pc].ack_needed;
-                    int out_of_order_received = cnx->ack_ctx[pc].out_of_order_received;
+                    int ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
+                    int out_of_order_received = cnx->ack_ctx[pc].act[0].out_of_order_received;
                     uint8_t* bytes_challenge = bytes_next;
 
                     bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, &more_data, &is_pure_ack,
@@ -3355,7 +3368,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     /* add an ACK just to be nice */
                     if (ack_needed) {
                         bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 1);
-                        cnx->ack_ctx[pc].out_of_order_received = out_of_order_received;
+                        cnx->ack_ctx[pc].act[0].out_of_order_received = out_of_order_received;
+                        cnx->ack_ctx[pc].act[1].out_of_order_received = out_of_order_received;
                     }
                 }
                 else {
@@ -3400,7 +3414,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             if (picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, next_wake_time)) {
                 /* Send here the frames that are not exempt from the pacing control,
                  * but are exempt for congestion control */
-                if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc)) {
+                if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc, 0)) {
                     bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data,
                         current_time, pc, 0);
                 }
@@ -3606,6 +3620,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     int more_data = 0;
     int ack_sent = 0;
     int is_challenge_padding_needed = 0;
+    int is_nominal_ack_path = (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) ?
+        path_x->is_nominal_ack_path : path_x == cnx->path[0];
 
     picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled) ?
         &path_x->p_remote_cnxid->pkt_ctx : &cnx->pkt_ctx[picoquic_packet_context_application];
@@ -3656,10 +3672,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, 
         send_buffer_min_max, &header_length)) > 0) {
         /* Check whether it makes sense to add an ACK at the end of the retransmission */
-        /* Don't do that if it risks mixing clear text and encrypted ack */
-        bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
-            current_time, pc, 0);
-        length = bytes_next - bytes;
+        if (bytes + length + 256 < bytes_max) {
+            /* Don't do that if it risks mixing clear text and encrypted ack */
+            bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
+                current_time, pc, !is_nominal_ack_path);
+            length = bytes_next - bytes;
+        }
         /* document the send time & overhead */
         is_pure_ack = 0;
         packet->send_time = current_time;
@@ -3684,7 +3702,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
             uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x);
             if (next_challenge_time <= current_time || path_x->challenge_repeat_count == 0) {
                 if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
-                    int ack_needed = cnx->ack_ctx[pc].ack_needed;
+                    int ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
                     /* When blocked, repeat the path challenge or wait */
                     uint8_t* bytes_challenge = bytes_next;
 
@@ -3697,7 +3715,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     }
 
                     /* add an ACK just to be nice */
-                    if (ack_needed) {
+                    if (ack_needed && is_nominal_ack_path) {
                         bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data,
                             current_time, pc, 1);
                     }
@@ -3763,10 +3781,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
             if (picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, next_wake_time)) {
                 /* Send here the frames that are not exempt from the pacing control,
                  * but are exempt for congestion control */
-                if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc)) {
+                if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc, !is_nominal_ack_path)) {
                     uint8_t* bytes_ack = bytes_next;
                     bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data,
-                        current_time, pc, 0);
+                        current_time, pc, !is_nominal_ack_path);
                     ack_sent = (bytes_next > bytes_ack);
                 }
 
@@ -3959,6 +3977,22 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     is_pure_ack = 0;
                     length = bytes_next - bytes;
                 }
+            }
+
+            if (is_pure_ack && (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) && 
+                path_x->is_ack_lost && !path_x->is_ack_expected) {
+                /* In some multipath scenarios, we may need to ping a path if we see 
+                 * non-ackable packets being lost. */
+                bytes_next = bytes + length;
+                if (bytes_next < bytes_max) {
+                    is_pure_ack = 0;
+                    *bytes_next = picoquic_frame_type_ping;
+                    length++;
+                }
+            }
+
+            if (!is_pure_ack) {
+                path_x->is_ack_expected = 1;
             }
         }
 
@@ -4181,13 +4215,18 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     uint64_t highest_retransmit = UINT64_MAX;
     uint64_t last_sent_pacing = UINT64_MAX;
     uint64_t last_sent_cwin = UINT64_MAX;
+    int i;
+    int i_min_rtt = -1;
+    int is_min_rtt_pacing_ok = 0;
+    int is_ack_needed = 0;
 
     cnx->last_path_polled++;
     if (cnx->last_path_polled > cnx->nb_paths) {
         cnx->last_path_polled = 0;
     }
 
-    for (int i = 0; i < cnx->nb_paths; i++) {
+    for (i = 0; i < cnx->nb_paths; i++) {
+        cnx->path[i]->is_nominal_ack_path = 0;
         if (cnx->path[i]->path_is_demoted) {
             continue;
         }
@@ -4250,13 +4289,23 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                     pacing_time_next = UINT64_MAX;
                     last_sent_pacing = UINT64_MAX;
                     last_sent_cwin = UINT64_MAX;
+                    i_min_rtt = -1;
+                    is_min_rtt_pacing_ok = 0;
                 }
-                if (is_polled){
+                if (is_polled) {
+                    /* This path is a candidate for min rtt */
+                    if (i_min_rtt < 0 || cnx->path[i]->rtt_min < cnx->path[i_min_rtt]->rtt_min) {
+                        i_min_rtt = i;
+                        is_min_rtt_pacing_ok = 0;
+                    }
                     cnx->path[i]->polled++;
                     if (picoquic_is_sending_authorized_by_pacing(cnx, cnx->path[i], current_time, &pacing_time_next)) {
                         if (cnx->path[i]->last_sent_time < last_sent_pacing) {
                             last_sent_pacing = cnx->path[i]->last_sent_time;
                             data_path_pacing = i;
+                            if (i == i_min_rtt) {
+                                is_min_rtt_pacing_ok = 1;
+                            }
                         }
                         if (cnx->path[i]->bytes_in_transit < cnx->path[i]->cwin) {
                             if (cnx->path[i]->last_sent_time < last_sent_cwin) {
@@ -4276,8 +4325,20 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
         }
     }
 
+    /* Ensure that at most one path is marked as nominal ack path */
+    for (i += 1; i < cnx->nb_paths; i++) {
+        cnx->path[i]->is_nominal_ack_path = 0;
+    }
+    if (i_min_rtt >= 0) {
+        is_ack_needed = picoquic_is_ack_needed(cnx, current_time, next_wake_time, 0, 0);
+        cnx->path[i_min_rtt]->is_nominal_ack_path = 1;
+    }
+
     if (challenge_path >= 0) {
         path_id = challenge_path;
+    }
+    else if (is_ack_needed && is_min_rtt_pacing_ok) {
+        path_id = i_min_rtt;
     }
     else if (data_path_cwin >= 0) {
         path_id = data_path_cwin;
@@ -4331,7 +4392,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
              * logic.
              */
             if (cnx->client_mode || cnx->path[i]->last_non_validating_pn >=
-                picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_application].first_sack_item) ||
+                picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_application].sack_list) ||
                 cnx->path[i]->is_nat_challenge) {
                 /* This path becomes the new default */
                 picoquic_promote_path_to_default(cnx, i, current_time);

@@ -671,7 +671,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, NULL, epoch, 
             NULL, NULL, 0, 0, simulated_time);
 
-        *ack_needed = cnx->ack_ctx[pc].ack_needed;
+        *ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
 
         if (ret == 0 &&
             (cnx->cnx_state == picoquic_state_disconnecting ||
