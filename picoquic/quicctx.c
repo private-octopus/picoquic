@@ -669,8 +669,12 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
 {
     quic->default_multipath_option = multipath_option;
     if (quic->default_tp != NULL) {
+#if 1
+        quic->default_tp->enable_multipath;
+#else
         quic->default_tp->enable_multipath = multipath_option&1;
         quic->default_tp->enable_simple_multipath = (multipath_option>>1)&1;
+#endif
     }
 }
 
@@ -2860,8 +2864,12 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         if (quic->default_tp == NULL) {
             picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
             cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
+#if 1
+            cnx->local_parameters.enable_multipath = quic->default_multipath_option;
+#else
             cnx->local_parameters.enable_multipath = quic->default_multipath_option & 1;
             cnx->local_parameters.enable_simple_multipath = (quic->default_multipath_option >> 1) & 1;
+#endif
             /* Apply the defined MTU MAX instead of default, if specified */
             if (cnx->quic->mtu_max > 0)
             {

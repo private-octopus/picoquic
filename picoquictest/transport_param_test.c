@@ -79,12 +79,12 @@ static picoquic_tp_t transport_param_test1 = {
 
 static picoquic_tp_t transport_param_test2 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 0, 1, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 0, 2
 };
 
 static picoquic_tp_t transport_param_test3 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, 0, 1
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, 1
 };
 
 static picoquic_tp_t transport_param_test4 = {
@@ -155,7 +155,8 @@ uint8_t client_param2[] = {
     0x50, 0x57, 0x01, 0x01,
     0x80, 0, 0x71, 0x58, 0x01, 0x03,
     0x80, (uint8_t)((picoquic_tp_enable_multipath >> 16) & 0xFF),
-    (uint8_t)((picoquic_tp_enable_multipath>>8) & 0xFF), (uint8_t)(picoquic_tp_enable_multipath&0xFF), 1, 0x01,
+    (uint8_t)((picoquic_tp_enable_multipath>>8) & 0xFF),
+    (uint8_t)(picoquic_tp_enable_multipath&0xFF), 1, 0x02,
 };
 
 uint8_t client_param3[] = {
@@ -166,9 +167,9 @@ uint8_t client_param3[] = {
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
     0xC0, 0, 0, 0, 0xFF, 0x02, 0xDE, 0x1A, 2, 0x43, 0xE8, /* min ack delay */
     0x80, 0, 0x71, 0x58, 0x01, 0x03,
-    0x80, (uint8_t)((picoquic_tp_enable_simple_multipath >> 16) & 0xFF),
-    (uint8_t)((picoquic_tp_enable_simple_multipath >> 8) & 0xFF),
-    (uint8_t)(picoquic_tp_enable_simple_multipath & 0xFF), 1, 0x01,
+    0x80, (uint8_t)((picoquic_tp_enable_multipath >> 16) & 0xFF),
+    (uint8_t)((picoquic_tp_enable_multipath >> 8) & 0xFF),
+    (uint8_t)(picoquic_tp_enable_multipath & 0xFF), 1, 0x01,
 };
 
 uint8_t client_param4[] = {
