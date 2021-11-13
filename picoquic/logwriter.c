@@ -400,15 +400,11 @@ static const uint8_t* picoquic_log_qoe_frame(FILE* f, const uint8_t* bytes, cons
     return bytes;
 }
 
-static const uint8_t* picoquic_log_path_status_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+static const uint8_t* picoquic_log_path_abandon_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
-
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
-    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* path_id as varint */
-    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* status as varint */
-    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* priority as varint */
-
+    bytes = picoquic_skip_path_abandon_frame(bytes, bytes_max); /* skip abandon frame */
     picoquic_binlog_frame(f, bytes_begin, bytes);
 
     return bytes;
@@ -565,16 +561,21 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         case picoquic_frame_type_time_stamp:
             bytes = picoquic_log_time_stamp_frame(f, bytes, bytes_max);
             break;
+#if 1
+        case picoquic_frame_type_path_abandon:
+            bytes = picoquic_log_path_abandon_frame(f, bytes, bytes_max);
+            break;
+#else
         case picoquic_frame_type_qoe:
             bytes = picoquic_log_qoe_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_path_status:
             bytes = picoquic_log_path_status_frame(f, bytes, bytes_max);
             break;
+#endif
         case picoquic_frame_type_bdp:
             bytes = picoquic_log_bdp_frame(f, bytes, bytes_max);
             break;
-
         default:
             bytes = picoquic_log_erroring_frame(f, bytes, bytes_max);
             break;

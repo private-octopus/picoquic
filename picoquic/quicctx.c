@@ -1746,6 +1746,49 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
     return path_id;
 }
 
+/* Find path by path-ID. This is designed for 
+ */
+int picoquic_find_path_by_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_incoming,
+    uint64_t path_id_type, uint64_t path_id_value)
+{
+    int path_id = -1;
+
+    if (!is_incoming) {
+        path_id_type ^= 1;
+    }
+    if (path_id_type == 0)
+
+        switch (path_id_type) {
+        case 0:
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                if (cnx->path[i]->p_local_cnxid->sequence == path_id_value) {
+                    path_id = i;
+                    break;
+                }
+            }
+            break;
+        case 1:
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                if (cnx->path[i]->p_remote_cnxid->sequence == path_id_value) {
+                    path_id = i;
+                    break;
+                }
+            }
+            break;
+        case 2:
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                if (cnx->path[i] == path_x) {
+                    path_id = i;
+                    break;
+                }
+            }
+            break;
+        default:
+            break;
+        }
+    return path_id;
+}
+
 /* Process a destination unreachable notification. */
 void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx, uint64_t current_time,
     struct sockaddr* addr_peer, struct sockaddr* addr_local, int if_index, int socket_err)

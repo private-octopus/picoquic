@@ -219,16 +219,33 @@ static uint8_t test_frame_type_time_stamp[] = {
     0x44, 0
 };
 
-static uint8_t test_frame_type_qoe[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_qoe >> 24)), (uint8_t)(picoquic_frame_type_qoe >> 16),
-    (uint8_t)(picoquic_frame_type_qoe >> 8), (uint8_t)(picoquic_frame_type_qoe & 0xFF),
-    0x11, 0x08, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+static uint8_t test_frame_type_path_abandon_0[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
+    (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
+    0x00, /* type 0 */
+    0x01,
+    0x00, /* No error */
+    0x00 /* No phrase */
 };
 
-static uint8_t test_frame_type_path_status[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_status >> 24)), (uint8_t)(picoquic_frame_type_path_status >> 16),
-    (uint8_t)(picoquic_frame_type_path_status >> 8), (uint8_t)(picoquic_frame_type_path_status & 0xFF),
-    0x11, 0x01, 0x01
+static uint8_t test_frame_type_path_abandon_1[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
+    (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
+    0x01, /* type 1 */
+    0x01,
+    0x11, /* Some new error */
+    0x03, 
+    (uint8_t)'b',
+    (uint8_t)'a',
+    (uint8_t)'d',
+};
+
+static uint8_t test_frame_type_path_abandon_2[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
+    (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
+    0x02, /* type 2, this path */
+    0x00, /* No error */
+    0x00 /* No phrase */
 };
 
 static uint8_t test_frame_type_bdp[] = {
@@ -274,8 +291,14 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3),
     TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3),
     TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3),
+#if 1
+    TEST_SKIP_ITEM("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3),
+    TEST_SKIP_ITEM("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3),
+    TEST_SKIP_ITEM("path_abandon_2", test_frame_type_path_abandon_2, 0, 0, 3),
+#else
     TEST_SKIP_ITEM("qoe", test_frame_type_qoe, 1, 0, 3),
     TEST_SKIP_ITEM("path_status", test_frame_type_path_status, 0, 0, 3),
+#endif
     TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3)
 };
 
@@ -410,17 +433,38 @@ static uint8_t test_frame_stream_hang[] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
 
-static uint8_t test_frame_type_qoe_bad[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_qoe >> 24)), (uint8_t)(picoquic_frame_type_qoe >> 16),
-    (uint8_t)(picoquic_frame_type_qoe >> 8), (uint8_t)(picoquic_frame_type_qoe & 0xFF),
-    0x11, 0x80, 0xff, 0xff, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+static uint8_t test_frame_type_path_abandon_bad_0[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
+    (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
+    0x00, /* type 0 */
+    /* 0x01, missing type */
+    0x00, /* No error */
+    0x00 /* No phrase */
 };
 
-static uint8_t test_frame_type_path_status_bad[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_status >> 24)), (uint8_t)(picoquic_frame_type_path_status >> 16),
-    (uint8_t)(picoquic_frame_type_path_status >> 8), (uint8_t)(picoquic_frame_type_path_status & 0xFF),
-    0x11, 0x01, 0x80
+static uint8_t test_frame_type_path_abandon_bad_1[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)),
+    (uint8_t)(picoquic_frame_type_path_abandon >> 16),
+    (uint8_t)(picoquic_frame_type_path_abandon >> 8), 
+    (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
+    0x01, /* type 1 */
+    0x01,
+    0x11, /* Some new error */
+    0x4f,
+    0xff, /* bad length */
+    (uint8_t)'b',
+    (uint8_t)'a',
+    (uint8_t)'d',
 };
+
+static uint8_t test_frame_type_path_abandon_bad_2[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
+    (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
+    0x03, /* unknown type */
+    0x00, /* No error */
+    0x00 /* No phrase */
+};
+
 
 static uint8_t test_frame_type_bdp_bad[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_bdp >> 24)), (uint8_t)(picoquic_frame_type_bdp >> 16),
@@ -458,8 +502,14 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM("bad_crypto_hs", test_frame_type_bad_crypto_hs, 0, 0, 2),
     TEST_SKIP_ITEM("bad_datagram", test_frame_type_bad_datagram, 1, 0, 3),
     TEST_SKIP_ITEM("stream_hang", test_frame_stream_hang, 1, 0, 3),
+    TEST_SKIP_ITEM("bad_abandon_0", test_frame_type_path_abandon_bad_0, 0, 1, 3),
+    TEST_SKIP_ITEM("bad_abandon_1", test_frame_type_path_abandon_bad_1, 0, 0, 3),
+    TEST_SKIP_ITEM("bad_abandon_2", test_frame_type_path_abandon_bad_2, 0, 0, 3),
+#if 1
+#else
     TEST_SKIP_ITEM("bad_qoe", test_frame_type_qoe_bad, 1, 0, 3),
     TEST_SKIP_ITEM("bad_path_status", test_frame_type_path_status_bad, 0, 1, 3),
+#endif
     TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3),
     TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad_addr, 1, 0, 3),
     TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad_length, 1, 0, 3)
@@ -662,6 +712,9 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         
         /* Set enable_bdp so there is no issue with bdp frame */
         cnx->local_parameters.enable_bdp_frame = 3;
+
+        /* Enable multipath so the test of multipath frames works. */
+        cnx->is_multipath_enabled = 1;
        
         /* if testing handshake done, set state to ready so frame is ignored. */
         if (epoch == 3) {
