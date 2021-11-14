@@ -1499,9 +1499,7 @@ void picoquic_empty_path_packet_queue(picoquic_path_t* path_x)
     while (p != NULL) {
         picoquic_packet_t* p_next = p->path_packet_next;
         picoquic_dequeue_packet_from_path(p);
-#if 1
         p->send_path = NULL;
-#endif
         p = p_next;
     }
 }
@@ -3602,11 +3600,6 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     picoquic_ack_context_t* ack_ctx = &cnx->ack_ctx[pc];
 
     while (pkt_ctx->retransmit_newest != NULL) {
-#if 1
-        if (!pkt_ctx->retransmit_newest->is_queued_for_retransmit) {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
         (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->retransmit_newest, 1);
     }
     
