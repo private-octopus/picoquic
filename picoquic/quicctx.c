@@ -669,12 +669,7 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
 {
     quic->default_multipath_option = multipath_option;
     if (quic->default_tp != NULL) {
-#if 1
         quic->default_tp->enable_multipath;
-#else
-        quic->default_tp->enable_multipath = multipath_option&1;
-        quic->default_tp->enable_simple_multipath = (multipath_option>>1)&1;
-#endif
     }
 }
 
@@ -1909,6 +1904,51 @@ int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_fro
     return picoquic_probe_new_path_ex(cnx, addr_from, addr_to, current_time, 0);
 }
 
+int picoquic_abandon_path(picoquic_cnx_t* cnx, int path_id, uint64_t reason, char const * phrase)
+{
+    int ret = 0;
+
+    if (path_id < 0 || path_id >= cnx->nb_paths || cnx->nb_paths == 1 ||
+        (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled)) {
+        ret = -1;
+    }
+    else if (!cnx->path[path_id]->path_is_demoted) {
+        /* if demotion is not already in progress, demote the path,
+         * and if the path can be properly identified, post a path abandon frame.
+         */
+        uint64_t path_id_type = 2;
+        uint64_t path_id_value = 0;
+
+        picoquic_demote_path(cnx, path_id, picoquic_get_quic_time(cnx->quic));
+        if (cnx->path[path_id]->p_remote_cnxid->cnx_id.id_len > 0) {
+            path_id_type = 0;
+            path_id_value = cnx->path[path_id]->p_remote_cnxid->sequence;
+        }
+        else if (cnx->path[path_id]->p_local_cnxid->cnx_id.id_len > 0) {
+            path_id_type = 1;
+            path_id_value = cnx->path[path_id]->p_local_cnxid->sequence;
+        }
+        if (path_id_type < 2) {
+            /* Identifier type 2 means "the path over which this is transmitted.
+             * We cannot support that now, because we cannot really steer an abandon frame
+             * or its repetition request to a specific transmission path.
+             */
+            uint8_t buffer[512];
+            int more_data = 0;
+            uint8_t* end_bytes = picoquic_format_path_abandon_frame(buffer, buffer + sizeof(buffer), &more_data,
+                path_id_type, path_id_value, reason, phrase);
+            if (end_bytes != NULL) {
+                ret = picoquic_queue_misc_frame(cnx, buffer, end_bytes - buffer, 0);
+                if (ret == 0) {
+                    picoquic_log_app_message(cnx, "Abandon path %d, reason %" PRIu64, path_id, reason);
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
 /* Reset the path MTU, for example if too many packet losses are detected */
 void picoquic_reset_path_mtu(picoquic_path_t* path_x)
 {
@@ -2907,12 +2947,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         if (quic->default_tp == NULL) {
             picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
             cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
-#if 1
             cnx->local_parameters.enable_multipath = quic->default_multipath_option;
-#else
-            cnx->local_parameters.enable_multipath = quic->default_multipath_option & 1;
-            cnx->local_parameters.enable_simple_multipath = (quic->default_multipath_option >> 1) & 1;
-#endif
             /* Apply the defined MTU MAX instead of default, if specified */
             if (cnx->quic->mtu_max > 0)
             {

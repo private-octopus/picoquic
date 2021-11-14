@@ -561,18 +561,9 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         case picoquic_frame_type_time_stamp:
             bytes = picoquic_log_time_stamp_frame(f, bytes, bytes_max);
             break;
-#if 1
         case picoquic_frame_type_path_abandon:
             bytes = picoquic_log_path_abandon_frame(f, bytes, bytes_max);
             break;
-#else
-        case picoquic_frame_type_qoe:
-            bytes = picoquic_log_qoe_frame(f, bytes, bytes_max);
-            break;
-        case picoquic_frame_type_path_status:
-            bytes = picoquic_log_path_status_frame(f, bytes, bytes_max);
-            break;
-#endif
         case picoquic_frame_type_bdp:
             bytes = picoquic_log_bdp_frame(f, bytes, bytes_max);
             break;
@@ -964,11 +955,7 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
 
     if (ret == 0) {
         cnx->f_binlog = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic),
-#if 1
             cnx->local_parameters.enable_multipath);
-#else
-            cnx->local_parameters.enable_multipath || cnx->local_parameters.enable_simple_multipath);
-#endif
         if (cnx->f_binlog == NULL) {
             cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
             ret = -1;

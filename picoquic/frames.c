@@ -4292,64 +4292,6 @@ size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_t
     return (2 + picoquic_encode_varint_length(time_stamp));
 }
 
-#if 1
-#else 
-/* Multipath QOE frames
- */
-const uint8_t* picoquic_skip_qoe_frame(const uint8_t* bytes, const uint8_t* bytes_max)
-{
-    /* This code assumes that the frame type is already skipped */
-    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL) {
-        bytes = picoquic_frames_length_data_skip(bytes, bytes_max);
-    }
-    return bytes;
-}
-
-const uint8_t* picoquic_parse_qoe_frame(const uint8_t* bytes, const uint8_t* bytes_max,
-    uint64_t* path_id, size_t* length, const uint8_t ** qoe_data)
-{
-    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, path_id)) != NULL &&
-        (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, length)) != NULL) {
-        if (*length > (size_t)(bytes_max - bytes)) {
-            bytes = NULL;
-        }
-        else {
-            *qoe_data = bytes;
-            bytes += *length;
-        }
-    }
-    return bytes;
-}
-
-const uint8_t* picoquic_decode_qoe_frame(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_cnx_t* cnx)
-{
-    uint64_t path_id = 0;
-    size_t length = 0;
-    const uint8_t* qoe_data = NULL;
-
-    /* This code assumes that the frame type is already skipped */
-    if ((bytes = picoquic_parse_qoe_frame(bytes, bytes_max, &path_id, &length, &qoe_data)) != NULL) {
-        /* TODO: process the QOE frame, maybe with app callback. */
-    }
-    return bytes;
-}
-
-uint8_t* picoquic_format_qoe_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, 
-    uint64_t path_id, size_t length, const uint8_t * qoe_data)
-{
-    uint8_t* bytes0 = bytes;
-
-    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_qoe)) == NULL ||
-        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, path_id)) == NULL ||
-        (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, length, qoe_data)) == NULL) {
-        bytes = bytes0;
-        *more_data = 1;
-    }
-
-    return bytes;
-}
-#endif
-
 /* Multipath PATH ABANDON frames
  */
 const uint8_t* picoquic_parse_path_identifier(const uint8_t* bytes, const uint8_t* bytes_max,
@@ -5120,20 +5062,10 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
                 case picoquic_frame_type_ack_mp_ecn:
                     bytes = picoquic_skip_ack_frame_maybe_ecn(bytes_before_type, bytes_max, 1, 1);
                     break;
-#if 1
                 case picoquic_frame_type_path_abandon:
                     bytes = picoquic_skip_path_abandon_frame(bytes, bytes_max);
                     *pure_ack = 0;
                     break;
-#else
-                case picoquic_frame_type_qoe:
-                    bytes = picoquic_skip_qoe_frame(bytes, bytes_max);
-                    break;
-                case picoquic_frame_type_path_status:
-                    bytes = picoquic_skip_path_status_frame(bytes, bytes_max);
-                    *pure_ack = 0;
-                    break;
-#endif
                 case picoquic_frame_type_bdp:
                     bytes = picoquic_skip_bdp_frame(bytes, bytes_max);
                     *pure_ack = 0;

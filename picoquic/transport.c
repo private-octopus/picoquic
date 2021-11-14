@@ -394,7 +394,6 @@ const uint8_t * picoquic_process_tp_version_negotiation(const uint8_t* bytes, co
     return bytes;
 }
 
-#if 1
 int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
 {
     int ret = 0;
@@ -420,7 +419,6 @@ int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
     }
     return ret;
 }
-#endif
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_length, size_t* consumed)
@@ -570,13 +568,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_multipath,
             (uint64_t)cnx->local_parameters.enable_multipath);
     }
-#if 1
-#else
-    if (cnx->local_parameters.enable_simple_multipath > 0 && bytes != NULL) {
-        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_simple_multipath,
-            (uint64_t)cnx->local_parameters.enable_simple_multipath);
-    }
-#endif
     if (cnx->do_version_negotiation && bytes != NULL) {
         bytes = picoquic_encode_transport_param_version_negotiation(bytes, bytes_max, extension_mode, cnx);
     }
@@ -873,7 +864,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         cnx->remote_parameters.do_grease_quic_bit = 1;
                     }
                     break;
-#if 1
                 case picoquic_tp_enable_multipath: {
                     uint64_t enable_multipath =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
@@ -887,34 +877,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     break;
                 }
-#else
-                case picoquic_tp_enable_multipath: {
-                    uint64_t enable_multipath =
-                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    if (ret == 0) {
-                        if (enable_multipath > 1) {
-                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Multipath TP");
-                        }
-                        else {
-                            cnx->remote_parameters.enable_multipath = (int)enable_multipath;
-                        }
-                    }
-                    break;
-                }
-                case picoquic_tp_enable_simple_multipath: {
-                    uint64_t enable_simple_multipath =
-                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    if (ret == 0) {
-                        if (enable_simple_multipath > 1) {
-                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Simple multipath TP");
-                        }
-                        else {
-                            cnx->remote_parameters.enable_simple_multipath = (int)enable_simple_multipath;
-                        }
-                    }
-                    break;
-                }
-#endif
                 case picoquic_tp_version_negotiation: {
                     uint64_t error_found;
                     uint32_t negotiated_vn;
@@ -1050,12 +1012,11 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             }
         }
     }
-#if 1
+
     if (ret == 0) {
         /* Negotiate the multipath option */
         ret = picoquic_negotiate_multipath_option(cnx);
     }
-#endif
 
     /* Loss bit is only enabled if negotiated by both parties */
     cnx->is_loss_bit_enabled_outgoing = (cnx->local_parameters.enable_loss_bit > 1) && (cnx->remote_parameters.enable_loss_bit > 0);
@@ -1064,23 +1025,13 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     /* Send-receive BDP frame is only enabled if negotiated by both parties */
     cnx->send_receive_bdp_frame = (cnx->local_parameters.enable_bdp_frame > 0) && (cnx->remote_parameters.enable_bdp_frame > 0);
 
-#if 1
     /* One way delay, Quic_bit_grease and Multipath only enabled if asked by client and accepted by server */
-#else
-    /* If both multipath options proposed by server, retain "complete" multipath. */
-#endif
     if (cnx->client_mode) {
         cnx->is_time_stamp_enabled = 
             (cnx->local_parameters.enable_time_stamp&1) && (cnx->remote_parameters.enable_time_stamp&2);
         cnx->is_time_stamp_sent =
             (cnx->local_parameters.enable_time_stamp & 2) && (cnx->remote_parameters.enable_time_stamp & 1);
         cnx->do_grease_quic_bit = cnx->local_parameters.do_grease_quic_bit && cnx->remote_parameters.do_grease_quic_bit;
-#if 1
-#else
-        cnx->is_multipath_enabled = cnx->local_parameters.enable_multipath && cnx->remote_parameters.enable_multipath;
-        cnx->is_simple_multipath_enabled = cnx->local_parameters.enable_simple_multipath &&
-            cnx->remote_parameters.enable_simple_multipath && !cnx->is_multipath_enabled;
-#endif
     }
     else
     {
@@ -1102,22 +1053,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
          * but will not announce support of the grease quic bit, thus asking the client to not set it */
         cnx->local_parameters.do_grease_quic_bit = cnx->remote_parameters.do_grease_quic_bit && !cnx->quic->one_way_grease_quic_bit;
         cnx->do_grease_quic_bit = cnx->remote_parameters.do_grease_quic_bit;
-#if 1
-#else
-        /* Similarly, servers only announce multipath support if clients request it.
-         * enable only one of multipath and simple multipath
-         */
-        cnx->local_parameters.enable_simple_multipath &= cnx->remote_parameters.enable_simple_multipath;
-        cnx->is_simple_multipath_enabled = cnx->local_parameters.enable_simple_multipath;
-        if (cnx->is_simple_multipath_enabled) {
-            cnx->local_parameters.enable_multipath = 0;
-            cnx->is_multipath_enabled = 0;
-        }
-        else {
-            cnx->local_parameters.enable_multipath &= cnx->remote_parameters.enable_multipath;
-            cnx->is_multipath_enabled = cnx->local_parameters.enable_multipath;
-        }
-#endif
     }
 
     /* ACK Frequency is only enabled on server if negotiated by client */

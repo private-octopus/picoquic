@@ -291,14 +291,9 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3),
     TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3),
     TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3),
-#if 1
     TEST_SKIP_ITEM("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3),
     TEST_SKIP_ITEM("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3),
     TEST_SKIP_ITEM("path_abandon_2", test_frame_type_path_abandon_2, 0, 0, 3),
-#else
-    TEST_SKIP_ITEM("qoe", test_frame_type_qoe, 1, 0, 3),
-    TEST_SKIP_ITEM("path_status", test_frame_type_path_status, 0, 0, 3),
-#endif
     TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3)
 };
 
@@ -505,11 +500,6 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM("bad_abandon_0", test_frame_type_path_abandon_bad_0, 0, 1, 3),
     TEST_SKIP_ITEM("bad_abandon_1", test_frame_type_path_abandon_bad_1, 0, 0, 3),
     TEST_SKIP_ITEM("bad_abandon_2", test_frame_type_path_abandon_bad_2, 0, 0, 3),
-#if 1
-#else
-    TEST_SKIP_ITEM("bad_qoe", test_frame_type_qoe_bad, 1, 0, 3),
-    TEST_SKIP_ITEM("bad_path_status", test_frame_type_path_status_bad, 0, 1, 3),
-#endif
     TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3),
     TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad_addr, 1, 0, 3),
     TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad_length, 1, 0, 3)

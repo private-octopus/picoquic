@@ -365,18 +365,9 @@ char const* picoquic_log_frame_names(uint64_t frame_type)
     case picoquic_frame_type_time_stamp:
         frame_name = "time_stamp";
         break;
-#if 1
     case picoquic_frame_type_path_abandon:
         frame_name = "path_abandon";
         break;
-#else
-    case picoquic_frame_type_qoe:
-        frame_name = "qoe";
-        break;
-    case picoquic_frame_type_path_status:
-        frame_name = "path_status";
-        break;
-#endif
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             frame_name = "stream";
