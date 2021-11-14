@@ -745,7 +745,7 @@ void qlog_path_abandon_frame(FILE* f, bytestream* s)
         byteread_vint(s, &path_id_value);
     }
     byteread_vint(s, &reason);
-    byteread_vint(s, &phrase_length);
+    byteread_vlen(s, &phrase_length);
     fprintf(f, ", \"path_id_type\": %"PRIu64, path_id_type);
     if (path_id_type != 2) {
         fprintf(f, ", \"path_id_value\": %"PRIu64, path_id_value);

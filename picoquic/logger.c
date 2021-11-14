@@ -929,7 +929,7 @@ size_t picoquic_log_generic_close_frame(FILE* F, const uint8_t* bytes, size_t by
                 fprintf(F, "%" PRIx64 ": ", cnx_id64);
             }
             fprintf(F, "        Reason: ");
-            picoquic_log_reason_text(F, string_length, bytes + byte_index);
+            picoquic_log_reason_text(F, (size_t)string_length, bytes + byte_index);
             fprintf(F, "\n");
             byte_index += (size_t)string_length;
         }
