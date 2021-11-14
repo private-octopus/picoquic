@@ -161,7 +161,7 @@ const uint8_t* picoquic_frames_uint64_decode(const uint8_t * bytes, const uint8_
 const uint8_t* picoquic_frames_length_data_skip(const uint8_t * bytes, const uint8_t * bytes_max);
 const uint8_t* picoquic_frames_cid_decode(const uint8_t * bytes, const uint8_t * bytes_max, picoquic_connection_id_t * cid);
 
-#define VARINT_LEN(bytes) ((uint8_t)1 << ((bytes[0] >> 6)&3))
+#define VARINT_LEN(bytes) (((uint8_t)1) << ((bytes[0] >> 6)&3))
 
 /* Encoding functions of the form uint8_t * picoquic_frame_XXX_encode(uint8_t * bytes, uint8_t * bytes-max, ...)
  */

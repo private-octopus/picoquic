@@ -389,6 +389,7 @@ void picoquic_recycle_packet(picoquic_quic_t * quic, picoquic_packet_t* packet)
             quic->nb_packets_allocated--;
         }
         else {
+            memset(packet, 0, offsetof(struct st_picoquic_packet_t, bytes));
             packet->next_packet = quic->p_first_packet;
             quic->p_first_packet = packet;
             quic->nb_packets_in_pool++;
@@ -904,12 +905,12 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
         packet->next_packet->previous_packet = packet;
     }
     pkt_ctx->retransmit_newest = packet;
+    packet->is_queued_for_retransmit = 1;
 
     /* Add at last position of packet per path list
      */
     picoquic_enqueue_packet_with_path(packet);
 
-    /* Manage the double linked packet list for retransmissions */
     if (!packet->is_ack_trap) {
         /* Account for bytes in transit, for congestion control */
         path_x->bytes_in_transit += length;
@@ -924,21 +925,23 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
 {
     size_t dequeued_length = p->length + p->checksum_overhead;
 
-    /* Remove from list */
-    if (p->previous_packet == NULL) {
-        pkt_ctx->retransmit_newest = p->next_packet;
-    }
-    else {
-        p->previous_packet->next_packet = p->next_packet;
-    }
+    if (p->is_queued_for_retransmit) {
+        /* Remove from list */
+        if (p->previous_packet == NULL) {
+            pkt_ctx->retransmit_newest = p->next_packet;
+        }
+        else {
+            p->previous_packet->next_packet = p->next_packet;
+        }
 
-    if (p->next_packet == NULL) {
-        pkt_ctx->retransmit_oldest = p->previous_packet;
+        if (p->next_packet == NULL) {
+            pkt_ctx->retransmit_oldest = p->previous_packet;
+        }
+        else {
+            p->next_packet->previous_packet = p->previous_packet;
+        }
+        p->is_queued_for_retransmit = 0;
     }
-    else {
-        p->next_packet->previous_packet = p->previous_packet;
-    }
-
 
     /* Account for bytes in transit, for congestion control */
 
