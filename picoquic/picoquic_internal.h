@@ -392,6 +392,7 @@ typedef struct st_picoquic_packet_t {
     unsigned int delivered_app_limited : 1;
     unsigned int is_preemptive_repeat : 1;
     unsigned int was_preemptively_repeated : 1;
+    unsigned int is_queued_to_path : 1;
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_packet_t;

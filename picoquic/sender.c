@@ -939,8 +939,6 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
         p->next_packet->previous_packet = p->previous_packet;
     }
 
-    /* Remove from per path list */
-    picoquic_dequeue_packet_from_path(p);
 
     /* Account for bytes in transit, for congestion control */
 
@@ -953,6 +951,9 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
         }
         p->send_path->is_cc_data_updated = 1;
     }
+
+    /* Remove from per path list */
+    picoquic_dequeue_packet_from_path(p);
 
     if (should_free || p->is_ack_trap) {
         picoquic_recycle_packet(cnx->quic, p);
@@ -1522,7 +1523,8 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
                 /* If ack only packets are lost, bundle a ping next time an ACK is sent on that path */
                 old_p->send_path->is_ack_lost = 1;
             }
-
+            /* Keep track of the path, as "old_p->send_path" will be zeroed when dequeued */
+            old_path = old_p->send_path;
             old_p = picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, packet_is_pure_ack & do_not_detect_spurious);
 
             /* If we have a good packet, return it */
@@ -1532,40 +1534,41 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
             }
             else {
                 int exit_early = 0;
-                if (old_p->send_path != NULL) {
-                    old_p->send_path->lost++;
+                if (old_path != NULL) {
+                    old_path->lost++;
                 }
-                if (old_p->send_path != NULL &&
-                    (old_p->length + old_p->checksum_overhead) == old_p->send_path->send_mtu) {
-                    old_p->send_path->nb_mtu_losses++;
-                    if (old_p->send_path->nb_mtu_losses > PICOQUIC_MTU_LOSS_THRESHOLD) {
-                        picoquic_reset_path_mtu(old_p->send_path);
+                if (old_path != NULL &&
+                    (old_p->length + old_p->checksum_overhead) == old_path->send_mtu) {
+                    old_path->nb_mtu_losses++;
+                    if (old_path->nb_mtu_losses > PICOQUIC_MTU_LOSS_THRESHOLD) {
+                        picoquic_reset_path_mtu(old_path);
                         picoquic_log_app_message(cnx,
                             "Reset path MTU after %d retransmissions, %d MTU losses",
-                            old_p->send_path->nb_retransmit,
-                            old_p->send_path->nb_mtu_losses);
+                            old_path->nb_retransmit,
+                            old_path->nb_mtu_losses);
                     }
                 }
 
                 if (timer_based_retransmit != 0) {
                     /* First, keep track of retransmissions per path, in order to
                      * manage scheduling in multipath setup */
-                    if (old_p->send_path != NULL &&
-                        old_p->path_packet_number > old_p->send_path->path_packet_acked_number &&
-                        old_p->send_time > old_p->send_path->last_loss_event_detected) {
-                        old_p->send_path->nb_retransmit++;
-                        old_p->send_path->last_loss_event_detected = current_time;
-                        if (old_p->send_path->nb_retransmit > 7) {
+                    if (old_path != NULL &&
+                        old_p->path_packet_number > old_path->path_packet_acked_number &&
+                        old_p->send_time > old_path->last_loss_event_detected) {
+                        old_path->nb_retransmit++;
+                        old_path->last_loss_event_detected = current_time;
+                        if (old_path->nb_retransmit > 7) {
                             /* Max retransmission reached for this path */
                             DBG_PRINTF("%s\n", "Too many data retransmits, abandon path");
                             picoquic_log_app_message(cnx, "%s", "Too many data retransmits, abandon path");
-                            old_p->send_path->challenge_failed = 1;
+                            old_path->challenge_failed = 1;
                             cnx->path_demotion_needed = 1;
                         }
                     }
 
                     /* Then, manage the total number of retransmissions across all paths. */
-                    if (old_p->send_path->nb_retransmit > 7 && cnx->cnx_state >= picoquic_state_ready) {
+                    if ((old_path == NULL || old_path->nb_retransmit > 7) &&
+                        cnx->cnx_state >= picoquic_state_ready) {
                         /* TODO: only disconnect if there is no other available path */
                         int all_paths_bad = 1;
                         if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {

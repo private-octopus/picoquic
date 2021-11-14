@@ -669,7 +669,7 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
 {
     quic->default_multipath_option = multipath_option;
     if (quic->default_tp != NULL) {
-        quic->default_tp->enable_multipath;
+        quic->default_tp->enable_multipath = multipath_option;
     }
 }
 
@@ -1455,12 +1455,13 @@ void picoquic_enqueue_packet_with_path(picoquic_packet_t* p)
             p->send_path->path_packet_last->path_packet_next = p;
         }
         p->send_path->path_packet_last = p;
+        p->is_queued_to_path = 1;
     }
 }
 
 void picoquic_dequeue_packet_from_path(picoquic_packet_t* p)
 {
-    if (p->send_path != NULL) {
+    if (p->send_path != NULL && p->is_queued_to_path) {
         if (p->path_packet_previous == NULL && p->path_packet_next == NULL) {
             /* verify that the packet was not already dequeued before making any correction. */
             if (p->send_path->path_packet_first == p) {
@@ -1469,24 +1470,25 @@ void picoquic_dequeue_packet_from_path(picoquic_packet_t* p)
             if (p->send_path->path_packet_last == p) {
                 p->send_path->path_packet_last = NULL;
             }
-            return;
-        }
-
-        if (p->path_packet_previous == NULL) {
-            p->send_path->path_packet_first = p->path_packet_next;
         }
         else {
-            p->path_packet_previous->path_packet_next = p->path_packet_next;
-        }
+            if (p->path_packet_previous == NULL) {
+                p->send_path->path_packet_first = p->path_packet_next;
+            }
+            else {
+                p->path_packet_previous->path_packet_next = p->path_packet_next;
+            }
 
-        if (p->path_packet_next == NULL) {
-            p->send_path->path_packet_last = p->path_packet_previous;
+            if (p->path_packet_next == NULL) {
+                p->send_path->path_packet_last = p->path_packet_previous;
+            }
+            else {
+                p->path_packet_next->path_packet_previous = p->path_packet_previous;
+            }
+            p->path_packet_previous = NULL;
+            p->path_packet_next = NULL;
         }
-        else {
-            p->path_packet_next->path_packet_previous = p->path_packet_previous;
-        }
-        p->path_packet_previous = NULL;
-        p->path_packet_next = NULL;
+        p->is_queued_to_path = 0;
     }
 }
 

@@ -384,22 +384,6 @@ static const uint8_t* picoquic_log_time_stamp_frame(FILE* f, const uint8_t* byte
     return bytes;
 }
 
-static const uint8_t* picoquic_log_qoe_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
-{
-    const uint8_t* bytes_begin = bytes;
-    size_t length;
-
-    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
-    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* path_id as varint */
-    /* Length as varint plus byte stream */
-    bytes = picoquic_log_length(bytes, bytes_max, &length);
-    bytes = picoquic_log_fixed_skip(bytes, bytes_max, length);
-
-    picoquic_binlog_frame(f, bytes_begin, bytes);
-
-    return bytes;
-}
-
 static const uint8_t* picoquic_log_path_abandon_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
