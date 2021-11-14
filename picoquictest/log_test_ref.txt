@@ -30,8 +30,9 @@
     handshake_done
     ACK Frequency: S=17, P=10, uS=1056, Ignore order: 1
     Time Stamp: 1024
-    QOE, path: 17, length: 8, v: 0102030405060708
-    Path Status, path: 17, status: 1, priority:  1
+    Path Abandon, path_id_type: 0, path_id: 1, reason: 0
+    Path Abandon, path_id_type: 1, path_id: 1, reason: 17: bad
+    Path Abandon, path_id_type: 2, reason: 0
     BDP sample, lifetime: 1, bytes_in_flight: 2, min_rtt: 3, ip: 0a000001
 0b0c0d0e0f101112: ticket time = 1548462100832, kx = 17, suite = 1302, 61 ticket, 48 secret.
 0b0c0d0e0f101112: lifetime = 7200, age_add = 3fc0960b, 8 nonce, 32 ticket, 8 extensions.

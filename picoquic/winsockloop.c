@@ -426,7 +426,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 
     /* Open the sockets */
     if ((nb_sockets = picoquic_packet_loop_open_sockets_win(
-        local_port, local_af, sock_ctx, sock_af, sock_ports, socket_buffer_size, events, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
+        local_port, local_af, sock_ctx, sock_af, sock_ports, socket_buffer_size, events, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) <= 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (loop_callback != NULL) {

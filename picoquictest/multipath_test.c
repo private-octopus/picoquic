@@ -341,11 +341,11 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
     memset(test_parameters, 0, sizeof(picoquic_tp_t));
 
     picoquic_init_transport_parameters(test_parameters, 1);
-
     if (is_simple_multipath) {
-        test_parameters->enable_simple_multipath = 1;
-    } else {
         test_parameters->enable_multipath = 1;
+    }
+    else {
+        test_parameters->enable_multipath = 2;
     }
     test_parameters->enable_time_stamp = 3;
 }
@@ -411,7 +411,8 @@ typedef enum {
     multipath_test_nat,
     multipath_test_break1,
     multipath_test_back1,
-    multipath_test_perf
+    multipath_test_perf,
+    multipath_test_abandon
 } multipath_test_enum_t;
 
 int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id, int is_simple_multipath)
@@ -469,10 +470,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         multipath_init_params(&server_parameters, is_sat_test, is_simple_multipath);
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
         if (is_simple_multipath) {
-            test_ctx->cnx_client->local_parameters.enable_simple_multipath = 1;
+            test_ctx->cnx_client->local_parameters.enable_multipath = 1;
         }
         else {
-            test_ctx->cnx_client->local_parameters.enable_multipath = 1;
+            test_ctx->cnx_client->local_parameters.enable_multipath = 2;
         }
         test_ctx->cnx_client->local_parameters.enable_time_stamp = 3;
         /* Initialize the client connection */
@@ -546,7 +547,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
     if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
         test_id == multipath_test_renew || test_id == multipath_test_nat ||
-        test_id == multipath_test_break1 || test_id == multipath_test_back1)) {
+        test_id == multipath_test_break1 || test_id == multipath_test_back1 ||
+        test_id == multipath_test_abandon)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link */
         if (ret == 0) {
@@ -569,6 +571,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 test_ctx->client_addr_natted.sin_port += 7;
                 test_ctx->client_use_nat = 1;
             }
+            else if (test_id == multipath_test_abandon) {
+                /* Client abandons the path, causes it to be demoted. Server should follow suit. */
+                picoquic_abandon_path(test_ctx->cnx_client, 0, 0, "test");
+            }
             else {
                 multipath_test_kill_links(test_ctx, (test_id == multipath_test_drop_first) ? 0 : 1);
             }
@@ -588,6 +594,18 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             multipath_test_unkill_links(test_ctx, 1, simulated_time);
         }
     }
+    /* In the "abandon" scenario, allow for a bit more than 1 second of delay for clearing of paths */
+    if (ret == 0 && test_id == multipath_test_abandon) {
+        uint64_t timeout = 1100000;
+
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Wait for %" PRIu64 "us returns %d\n", timeout, ret);
+        }
+    }
+
     /* Perform a final data sending loop, this time to completion  */
     if (ret == 0) {
         ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
@@ -624,7 +642,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
-    if (ret == 0 && test_id == multipath_test_break1) {
+    if (ret == 0 && (test_id == multipath_test_break1 || test_id == multipath_test_abandon)) {
         if (test_ctx->cnx_server->nb_paths != 1) {
             DBG_PRINTF("After break, %d paths on server connection.\n", test_ctx->cnx_server->nb_paths);
             ret = -1;
@@ -729,6 +747,15 @@ int multipath_break1_test()
     uint64_t max_completion_microsec = 10600000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break1, 0);
+}
+
+/* Test that abandoned paths are removed after some time
+ */
+int multipath_abandon_test()
+{
+    uint64_t max_completion_microsec = 3800000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_abandon, 0);
 }
 
 /* Test that breaking paths can come back up after some time
@@ -1230,6 +1257,13 @@ int simple_multipath_break1_test()
     uint64_t max_completion_microsec = 10500000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break1, 1);
+}
+
+int simple_multipath_abandon_test()
+{
+    uint64_t max_completion_microsec = 3800000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_abandon, 1);
 }
 
 int simple_multipath_back1_test()

@@ -1690,6 +1690,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_abandon) {
+            int ret = multipath_abandon_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_back1) {
             int ret = multipath_back1_test();
 
@@ -1752,6 +1758,12 @@ namespace UnitTest1
 
         TEST_METHOD(simple_multipath_break1) {
             int ret = simple_multipath_break1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(simple_multipath_abandon) {
+            int ret = simple_multipath_abandon_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -669,8 +669,7 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
 {
     quic->default_multipath_option = multipath_option;
     if (quic->default_tp != NULL) {
-        quic->default_tp->enable_multipath = multipath_option&1;
-        quic->default_tp->enable_simple_multipath = (multipath_option>>1)&1;
+        quic->default_tp->enable_multipath = multipath_option;
     }
 }
 
@@ -1456,12 +1455,13 @@ void picoquic_enqueue_packet_with_path(picoquic_packet_t* p)
             p->send_path->path_packet_last->path_packet_next = p;
         }
         p->send_path->path_packet_last = p;
+        p->is_queued_to_path = 1;
     }
 }
 
 void picoquic_dequeue_packet_from_path(picoquic_packet_t* p)
 {
-    if (p->send_path != NULL) {
+    if (p->send_path != NULL && p->is_queued_to_path) {
         if (p->path_packet_previous == NULL && p->path_packet_next == NULL) {
             /* verify that the packet was not already dequeued before making any correction. */
             if (p->send_path->path_packet_first == p) {
@@ -1470,24 +1470,25 @@ void picoquic_dequeue_packet_from_path(picoquic_packet_t* p)
             if (p->send_path->path_packet_last == p) {
                 p->send_path->path_packet_last = NULL;
             }
-            return;
-        }
-
-        if (p->path_packet_previous == NULL) {
-            p->send_path->path_packet_first = p->path_packet_next;
         }
         else {
-            p->path_packet_previous->path_packet_next = p->path_packet_next;
-        }
+            if (p->path_packet_previous == NULL) {
+                p->send_path->path_packet_first = p->path_packet_next;
+            }
+            else {
+                p->path_packet_previous->path_packet_next = p->path_packet_next;
+            }
 
-        if (p->path_packet_next == NULL) {
-            p->send_path->path_packet_last = p->path_packet_previous;
+            if (p->path_packet_next == NULL) {
+                p->send_path->path_packet_last = p->path_packet_previous;
+            }
+            else {
+                p->path_packet_next->path_packet_previous = p->path_packet_previous;
+            }
+            p->path_packet_previous = NULL;
+            p->path_packet_next = NULL;
         }
-        else {
-            p->path_packet_next->path_packet_previous = p->path_packet_previous;
-        }
-        p->path_packet_previous = NULL;
-        p->path_packet_next = NULL;
+        p->is_queued_to_path = 0;
     }
 }
 
@@ -1498,6 +1499,7 @@ void picoquic_empty_path_packet_queue(picoquic_path_t* path_x)
     while (p != NULL) {
         picoquic_packet_t* p_next = p->path_packet_next;
         picoquic_dequeue_packet_from_path(p);
+        p->send_path = NULL;
         p = p_next;
     }
 }
@@ -1742,6 +1744,49 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
     return path_id;
 }
 
+/* Find path by path-ID. This is designed for 
+ */
+int picoquic_find_path_by_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_incoming,
+    uint64_t path_id_type, uint64_t path_id_value)
+{
+    int path_id = -1;
+
+    if (!is_incoming) {
+        path_id_type ^= 1;
+    }
+    if (path_id_type == 0)
+
+        switch (path_id_type) {
+        case 0:
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                if (cnx->path[i]->p_local_cnxid->sequence == path_id_value) {
+                    path_id = i;
+                    break;
+                }
+            }
+            break;
+        case 1:
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                if (cnx->path[i]->p_remote_cnxid->sequence == path_id_value) {
+                    path_id = i;
+                    break;
+                }
+            }
+            break;
+        case 2:
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                if (cnx->path[i] == path_x) {
+                    path_id = i;
+                    break;
+                }
+            }
+            break;
+        default:
+            break;
+        }
+    return path_id;
+}
+
 /* Process a destination unreachable notification. */
 void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx, uint64_t current_time,
     struct sockaddr* addr_peer, struct sockaddr* addr_local, int if_index, int socket_err)
@@ -1860,6 +1905,51 @@ int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_fro
     const struct sockaddr* addr_to, uint64_t current_time)
 {
     return picoquic_probe_new_path_ex(cnx, addr_from, addr_to, current_time, 0);
+}
+
+int picoquic_abandon_path(picoquic_cnx_t* cnx, int path_id, uint64_t reason, char const * phrase)
+{
+    int ret = 0;
+
+    if (path_id < 0 || path_id >= cnx->nb_paths || cnx->nb_paths == 1 ||
+        (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled)) {
+        ret = -1;
+    }
+    else if (!cnx->path[path_id]->path_is_demoted) {
+        /* if demotion is not already in progress, demote the path,
+         * and if the path can be properly identified, post a path abandon frame.
+         */
+        uint64_t path_id_type = 2;
+        uint64_t path_id_value = 0;
+
+        picoquic_demote_path(cnx, path_id, picoquic_get_quic_time(cnx->quic));
+        if (cnx->path[path_id]->p_remote_cnxid->cnx_id.id_len > 0) {
+            path_id_type = 0;
+            path_id_value = cnx->path[path_id]->p_remote_cnxid->sequence;
+        }
+        else if (cnx->path[path_id]->p_local_cnxid->cnx_id.id_len > 0) {
+            path_id_type = 1;
+            path_id_value = cnx->path[path_id]->p_local_cnxid->sequence;
+        }
+        if (path_id_type < 2) {
+            /* Identifier type 2 means "the path over which this is transmitted.
+             * We cannot support that now, because we cannot really steer an abandon frame
+             * or its repetition request to a specific transmission path.
+             */
+            uint8_t buffer[512];
+            int more_data = 0;
+            uint8_t* end_bytes = picoquic_format_path_abandon_frame(buffer, buffer + sizeof(buffer), &more_data,
+                path_id_type, path_id_value, reason, phrase);
+            if (end_bytes != NULL) {
+                ret = picoquic_queue_misc_frame(cnx, buffer, end_bytes - buffer, 0);
+                if (ret == 0) {
+                    picoquic_log_app_message(cnx, "Abandon path %d, reason %" PRIu64, path_id, reason);
+                }
+            }
+        }
+    }
+
+    return 0;
 }
 
 /* Reset the path MTU, for example if too many packet losses are detected */
@@ -2195,7 +2285,8 @@ int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path
         if (stashed == NULL) {
             ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
         }
-        else if (stashed->sequence == path_x->p_remote_cnxid->sequence) {
+        else if (path_x->p_remote_cnxid != NULL &&
+            stashed->sequence == path_x->p_remote_cnxid->sequence) {
             /* If the available cnx_id is same as old one, we do nothing */
             ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
         } else {
@@ -2860,8 +2951,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         if (quic->default_tp == NULL) {
             picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
             cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
-            cnx->local_parameters.enable_multipath = quic->default_multipath_option & 1;
-            cnx->local_parameters.enable_simple_multipath = (quic->default_multipath_option >> 1) & 1;
+            cnx->local_parameters.enable_multipath = quic->default_multipath_option;
             /* Apply the defined MTU MAX instead of default, if specified */
             if (cnx->quic->mtu_max > 0)
             {

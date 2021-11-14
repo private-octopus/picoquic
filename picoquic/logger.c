@@ -365,11 +365,8 @@ char const* picoquic_log_frame_names(uint64_t frame_type)
     case picoquic_frame_type_time_stamp:
         frame_name = "time_stamp";
         break;
-    case picoquic_frame_type_qoe:
-        frame_name = "qoe";
-        break;
-    case picoquic_frame_type_path_status:
-        frame_name = "path_status";
+    case picoquic_frame_type_path_abandon:
+        frame_name = "path_abandon";
         break;
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
@@ -460,9 +457,6 @@ char const* picoquic_log_tp_name(picoquic_tp_enum tp_number)
         break;
     case picoquic_tp_enable_multipath:
         tp_name = "enable_multipath";
-        break;
-    case picoquic_tp_enable_simple_multipath:
-        tp_name = "enable_simple_multipath";
         break;
     case picoquic_tp_enable_bdp_frame:
         tp_name = "enable_bdp_frame";
@@ -859,6 +853,27 @@ size_t picoquic_log_stop_sending_frame(FILE* F, const uint8_t* bytes, size_t byt
     return byte_index;
 }
 
+void picoquic_log_reason_text(FILE* F, size_t string_length, const uint8_t* text_bytes)
+{
+    /* Print the UTF8 string */
+    char reason_string[49];
+    uint64_t printed_length = (string_length > 48) ? 48 : string_length;
+
+    for (uint32_t i = 0; i < printed_length; i++) {
+        int c = text_bytes[i];
+
+        if (c < 0x20 || c > 0x7E) {
+            c = '.';
+        }
+        reason_string[i] = (char)c;
+    }
+    reason_string[printed_length] = 0;
+    fprintf(F, "%s", reason_string);
+    if (string_length > printed_length) {
+        fprintf(F, "...");
+    }
+}
+
 size_t picoquic_log_generic_close_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint8_t ftype, uint64_t cnx_id64)
 {
     size_t byte_index = 1;
@@ -910,29 +925,12 @@ size_t picoquic_log_generic_close_frame(FILE* F, const uint8_t* bytes, size_t by
         }
         else if (string_length > 0) {
             /* Print the UTF8 string */
-            char reason_string[49];
-            uint64_t printed_length = (string_length > 48) ? 48 : string_length;
-
-            for (uint32_t i = 0; i < printed_length; i++) {
-                int c = bytes[byte_index + i];
-
-                if (c < 0x20 || c > 0x7E) {
-                    c = '.';
-                }
-                reason_string[i] = (char) c;
-            }
-            reason_string[printed_length] = 0;
-
             if (cnx_id64 != 0) {
                 fprintf(F, "%" PRIx64 ": ", cnx_id64);
             }
-
-            fprintf(F, "        Reason: %s", reason_string);
-            if (string_length > printed_length) {
-                fprintf(F, "...");
-            }
+            fprintf(F, "        Reason: ");
+            picoquic_log_reason_text(F, (size_t)string_length, bytes + byte_index);
             fprintf(F, "\n");
-
             byte_index += (size_t)string_length;
         }
     }
@@ -1383,22 +1381,27 @@ size_t picoquic_log_qoe_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-size_t picoquic_log_path_status_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     const uint8_t* bytes_end = bytes + bytes_max;
     const uint8_t* bytes0 = bytes;
-    uint64_t path_id;
-    uint64_t status;
-    uint64_t priority;
+    uint64_t path_id_type;
+    uint64_t path_id_value = 0;
+    uint64_t reason;
+    size_t phrase_length;
+    const uint8_t* phrase;
 
     size_t byte_index = 0;
 
 
     if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &status)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &priority)) == NULL) {
-        fprintf(F, "    Malformed Path Status frame: ");
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id_type)) == NULL ||
+        (path_id_type != 2 &&
+            (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id_value)) == NULL) ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &reason)) == NULL ||
+        (bytes = picoquic_frames_varlen_decode(bytes, bytes_end, &phrase_length)) == NULL ||
+        bytes + phrase_length > bytes_end) {
+        fprintf(F, "    Malformed Path Abandon frame: ");
         /* log format error */
         for (size_t i = 0; i < bytes_max && i < 8; i++) {
             fprintf(F, "%02x", bytes0[i]);
@@ -1410,12 +1413,20 @@ size_t picoquic_log_path_status_frame(FILE* F, const uint8_t* bytes, size_t byte
         byte_index = bytes_max;
     }
     else {
-        fprintf(F, "    Path Status, path: %" PRIu64 ", status: %" PRIu64 ", priority:  %" PRIu64 "\n",
-            path_id, status, priority);
-
+        phrase = bytes;
+        bytes += phrase_length;
+        fprintf(F, "    Path Abandon, path_id_type: %" PRIu64, path_id_type);
+        if (path_id_type != 2) {
+            fprintf(F, ", path_id: %" PRIu64, path_id_value);
+        }
+        fprintf(F, ", reason: %" PRIu64, reason);
+        if (phrase_length > 0) {
+            fprintf(F, ": ");
+            picoquic_log_reason_text(F, phrase_length, phrase);
+        }
+        fprintf(F, "\n");
         byte_index = (bytes - bytes0);
     }
-
     return byte_index;
 }
 
@@ -1596,16 +1607,12 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_
         case picoquic_frame_type_time_stamp:
             byte_index += picoquic_log_time_stamp_frame(F, bytes + byte_index, length - byte_index);
             break;
-        case picoquic_frame_type_qoe:
-            byte_index += picoquic_log_qoe_frame(F, bytes + byte_index, length - byte_index);
-            break;
-        case picoquic_frame_type_path_status:
-            byte_index += picoquic_log_path_status_frame(F, bytes + byte_index, length - byte_index);
+        case picoquic_frame_type_path_abandon:
+            byte_index += picoquic_log_path_abandon_frame(F, bytes + byte_index, length - byte_index);
             break;
         case picoquic_frame_type_bdp:
             byte_index += picoquic_log_bdp_frame(F, bytes + byte_index, length - byte_index);
             break;
-
         default: {
             /* Not implemented yet! */
             fprintf(F, "    Unknown frame, type: %" PRIu64 " (0x", frame_id);

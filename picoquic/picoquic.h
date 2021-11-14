@@ -274,7 +274,6 @@ typedef struct st_picoquic_tp_t {
     uint64_t min_ack_delay;
     int do_grease_quic_bit;
     int enable_multipath;
-    int enable_simple_multipath;
     picoquic_tp_version_negotiation_t version_negotiation;
     int enable_bdp_frame;
 } picoquic_tp_t;
@@ -636,9 +635,18 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
 /* Support for encrypted SNI*/
 int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_file_name);
 
-/* Connection events */
+/* Connection events.
+ * The "probe new path" API attempts to validate a new path. If multipath is enabled,
+ * the new path will come in addition to the set of existing paths; if not,
+ * the new path when validated will replace the default path.
+ * The "abandon path" should only be used if multipath is enabled, and if more than
+ * one path is available -- otherwise, just close the connection. If the command
+ * is accepted, the peer will be informed of the need to close the path, and the
+ * path will be demoted after a short delay.
+ */
 int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
     const struct sockaddr* addr_to, uint64_t current_time);
+int picoquic_abandon_path(picoquic_cnx_t* cnx, int path_id, uint64_t reason, char const* phrase);
 
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 
