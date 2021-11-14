@@ -409,8 +409,17 @@ int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
         cnx->is_multipath_enabled = 1;
         break;
     case 3:
-        /* same as case 2 */
-        cnx->is_multipath_enabled = 1;
+        /* Peer and local have been programmed to support either simple or full multipath.
+         * The default response is to do full multipath, but full multipath degrades to
+         * simple multipath is the client uses null length CID. 
+         */
+        if (!cnx->client_mode && cnx->path[0]->p_remote_cnxid->cnx_id.id_len == 0) {
+            cnx->is_simple_multipath_enabled = 1;
+            cnx->local_parameters.enable_multipath = 1;
+        }
+        else {
+            cnx->is_multipath_enabled = 1;
+        }
         break;
     default:
         /* error */
