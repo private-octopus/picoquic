@@ -4670,7 +4670,19 @@ int bad_client_certificate_test()
 * response, and that the connection completes.
 */
 
-int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid)
+int nat_rebinding_count_r_cid(picoquic_cnx_t* cnx) {
+    int nb_cid = 0;
+    picoquic_remote_cnxid_t* r_cid = cnx->cnxid_stash_first;
+
+    while (r_cid) {
+        nb_cid++;
+        r_cid = r_cid->next;
+    }
+
+    return nb_cid;
+}
+
+int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid, uint64_t latency)
 {
     int ret;
     uint64_t simulated_time = 0;
@@ -4696,6 +4708,10 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid)
         ret = PICOQUIC_ERROR_MEMORY;
     }
     else {
+        if (latency > 0) {
+            test_ctx->c_to_s_link->microsec_latency = latency;
+            test_ctx->s_to_c_link->microsec_latency = latency;
+        }
         picoquic_set_log_level(test_ctx->qserver, 1);
         ret = picoquic_set_binlog(test_ctx->qserver, ".");
         picoquic_set_log_level(test_ctx->qclient, 1);
@@ -4722,7 +4738,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid)
         test_ctx->client_addr_natted = test_ctx->client_addr;
         test_ctx->client_addr_natted.sin_port += 17;
         test_ctx->client_use_nat = 1;
-        
+
         /* Prepare to send data */
         ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r, sizeof(test_scenario_q_and_r));
     }
@@ -4741,8 +4757,11 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid)
     next_time = simulated_time + 3000000;
     loss_mask = 0;
     while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY 
-        && TEST_SERVER_READY
-        && test_ctx->cnx_server->path[0]->challenge_verified != 1) {
+        && TEST_SERVER_READY && !zero_cid
+        && (test_ctx->cnx_server->path[0]->challenge_verified != 1 ||
+            test_ctx->cnx_server->nb_paths > 1 ||
+            test_ctx->cnx_server->cnxid_stash_first->sequence == 0 ||
+            nat_rebinding_count_r_cid(test_ctx->cnx_server) < 8 )) {
         int was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
@@ -4788,14 +4807,14 @@ int nat_rebinding_test()
 {
     uint64_t loss_mask = 0;
 
-    return nat_rebinding_test_one(loss_mask, 0);
+    return nat_rebinding_test_one(loss_mask, 0, 0);
 }
 
 int nat_rebinding_loss_test()
 {
     uint64_t loss_mask = 0x2012;
 
-    return nat_rebinding_test_one(loss_mask, 0);
+    return nat_rebinding_test_one(loss_mask, 0, 0);
 }
 
 int nat_rebinding_zero_test()
@@ -4803,7 +4822,15 @@ int nat_rebinding_zero_test()
     /* Test of NAT rebinding with zero-length client CID */
     uint64_t loss_mask = 0;
 
-    return nat_rebinding_test_one(loss_mask, 1);
+    return nat_rebinding_test_one(loss_mask, 1, 0);
+}
+
+int nat_rebinding_latency_test()
+{
+    /* Test of NAT rebinding with zero-length client CID */
+    uint64_t loss_mask = 0;
+
+    return nat_rebinding_test_one(loss_mask, 0, 100000);
 }
 
 
