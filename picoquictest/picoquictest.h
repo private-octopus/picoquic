@@ -126,6 +126,7 @@ int bad_client_certificate_test();
 int nat_rebinding_test();
 int nat_rebinding_loss_test();
 int nat_rebinding_zero_test();
+int nat_rebinding_latency_test();
 int spin_bit_test();
 int loss_bit_test();
 int client_error_test();

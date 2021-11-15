@@ -172,6 +172,7 @@ static const picoquic_test_def_t test_table[] = {
     { "nat_rebinding", nat_rebinding_test },
     { "nat_rebinding_loss", nat_rebinding_loss_test },
     { "nat_rebinding_zero", nat_rebinding_zero_test },
+    { "nat_rebinding_latency", nat_rebinding_latency_test },
     { "nat_rebinding_fast", fast_nat_rebinding_test},
     { "spin_bit", spin_bit_test},
     { "loss_bit", loss_bit_test},
