@@ -640,6 +640,7 @@ int packet_enc_dec_test()
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
+    const char *prefix_label;
 
     ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
 
@@ -702,12 +703,14 @@ int packet_enc_dec_test()
         }
     }
 
+    prefix_label = picoquic_supported_versions[cnx_client->version_index].tls_prefix_label;
+
     /* Try handshake packet from client */
     if (ret == 0) {
-        cnx_client->crypto_context[2].aead_encrypt = picoquic_setup_test_aead_context(1, test_handshake_secret);
-        cnx_server->crypto_context[2].aead_decrypt = picoquic_setup_test_aead_context(0, test_handshake_secret);
-        cnx_client->crypto_context[2].pn_enc = picoquic_pn_enc_create_for_test(test_handshake_secret);
-        cnx_server->crypto_context[2].pn_dec = picoquic_pn_enc_create_for_test(test_handshake_secret);
+        cnx_client->crypto_context[2].aead_encrypt = picoquic_setup_test_aead_context(1, test_handshake_secret, prefix_label);
+        cnx_server->crypto_context[2].aead_decrypt = picoquic_setup_test_aead_context(0, test_handshake_secret, prefix_label);
+        cnx_client->crypto_context[2].pn_enc = picoquic_pn_enc_create_for_test(test_handshake_secret, prefix_label);
+        cnx_server->crypto_context[2].pn_dec = picoquic_pn_enc_create_for_test(test_handshake_secret, prefix_label);
         ret = test_packet_encrypt_one(
             (struct sockaddr *) &test_addr_c,
             cnx_client, qserver, cnx_server, picoquic_packet_handshake, 1256);
@@ -715,10 +718,10 @@ int packet_enc_dec_test()
 
     /* Now try a zero RTT packet */
     if (ret == 0) {
-        cnx_client->crypto_context[1].aead_encrypt = picoquic_setup_test_aead_context(1, test_0rtt_secret);
-        cnx_server->crypto_context[1].aead_decrypt = picoquic_setup_test_aead_context(0, test_0rtt_secret);
-        cnx_client->crypto_context[1].pn_enc = picoquic_pn_enc_create_for_test(test_0rtt_secret);
-        cnx_server->crypto_context[1].pn_dec = picoquic_pn_enc_create_for_test(test_0rtt_secret);
+        cnx_client->crypto_context[1].aead_encrypt = picoquic_setup_test_aead_context(1, test_0rtt_secret, prefix_label);
+        cnx_server->crypto_context[1].aead_decrypt = picoquic_setup_test_aead_context(0, test_0rtt_secret, prefix_label);
+        cnx_client->crypto_context[1].pn_enc = picoquic_pn_enc_create_for_test(test_0rtt_secret, prefix_label);
+        cnx_server->crypto_context[1].pn_dec = picoquic_pn_enc_create_for_test(test_0rtt_secret, prefix_label);
 
         /* Use a null connection ID to trigger use of initial ID */
         cnx_client->path[0]->p_remote_cnxid->cnx_id = picoquic_null_connection_id;
@@ -734,10 +737,10 @@ int packet_enc_dec_test()
 
     /* And try a 1 RTT packet */
     if (ret == 0) {
-        cnx_client->crypto_context[3].aead_encrypt = picoquic_setup_test_aead_context(1, test_1rtt_secret);
-        cnx_server->crypto_context[3].aead_decrypt = picoquic_setup_test_aead_context(0, test_1rtt_secret);
-        cnx_client->crypto_context[3].pn_enc = picoquic_pn_enc_create_for_test(test_1rtt_secret);
-        cnx_server->crypto_context[3].pn_dec = picoquic_pn_enc_create_for_test(test_1rtt_secret);
+        cnx_client->crypto_context[3].aead_encrypt = picoquic_setup_test_aead_context(1, test_1rtt_secret, prefix_label);
+        cnx_server->crypto_context[3].aead_decrypt = picoquic_setup_test_aead_context(0, test_1rtt_secret, prefix_label);
+        cnx_client->crypto_context[3].pn_enc = picoquic_pn_enc_create_for_test(test_1rtt_secret, prefix_label);
+        cnx_server->crypto_context[3].pn_dec = picoquic_pn_enc_create_for_test(test_1rtt_secret, prefix_label);
 
         ret = test_packet_encrypt_one(
             (struct sockaddr *) &test_addr_c,

@@ -919,8 +919,8 @@ int multipath_aead_test()
         16, 17, 18, 19, 20, 21, 22, 23, 24, 35, 26, 27, 28, 29, 30, 31
     };
     /* Create AEAD contexts for encryption and decryption */
-    void* aead_encrypt = picoquic_setup_test_aead_context(1, mp_aead_secret);
-    void* aead_decrypt = picoquic_setup_test_aead_context(0, mp_aead_secret);
+    void* aead_encrypt = picoquic_setup_test_aead_context(1, mp_aead_secret, PICOQUIC_LABEL_QUIC_V1_KEY_BASE);
+    void* aead_decrypt = picoquic_setup_test_aead_context(0, mp_aead_secret, PICOQUIC_LABEL_QUIC_V1_KEY_BASE);
 
     if (aead_encrypt == NULL || aead_decrypt == NULL) {
         DBG_PRINTF("%s", "Could not create the AEAD contexts.\n");

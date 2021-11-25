@@ -200,7 +200,7 @@ typedef enum {
 #define PICOQUIC_POST_IESG_VERSION 0xFF000022
 #define PICOQUIC_V1_VERSION 0x00000001
 #define PICOQUIC_V2_VERSION 0x00000002
-#define PICOQUIC_V2_VERSION_DRAFT 0xFF010000
+#define PICOQUIC_V2_VERSION_DRAFT 0xFF020000
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 #define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
@@ -215,6 +215,8 @@ typedef struct st_picoquic_version_parameters_t {
     uint8_t* version_aead_key;
     size_t version_retry_key_length;
     uint8_t* version_retry_key;
+    char* tls_prefix_label;
+    char* tls_traffic_update_label;
 } picoquic_version_parameters_t;
 
 extern const picoquic_version_parameters_t picoquic_supported_versions[];

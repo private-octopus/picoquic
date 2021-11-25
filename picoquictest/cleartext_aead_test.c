@@ -921,37 +921,37 @@ int draft17_vector_test()
     }
     else {
         /* Check the label expansions */
-        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
             draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
             draft17_test_server_key, sizeof(draft17_test_server_key));
     }
 
     if (ret == 0) {
-        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_IV, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_IV, PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
             draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
             draft17_test_server_iv, sizeof(draft17_test_server_iv));
     }
 
     if (ret == 0) {
-        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_HP, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_HP, PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
             draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
             draft17_test_server_pn, sizeof(draft17_test_server_pn));
     }
 
     if (ret == 0) {
-        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
             draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret),
             draft17_test_client_key, sizeof(draft17_test_client_key));
     }
 
     if (ret == 0) {
-        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_IV, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_IV, PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
             draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret),
             draft17_test_client_iv, sizeof(draft17_test_client_iv));
     }
 
     if (ret == 0) {
-        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_HP, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        ret = draft17_label_expansion_test(cipher, PICOQUIC_LABEL_HP, PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
             draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret),
             draft17_test_client_pn, sizeof(draft17_test_client_pn));
     }
@@ -1090,7 +1090,7 @@ int key_rotation_vector_test()
         memset(new_secret, 0, sizeof(new_secret));
         memcpy(new_secret, key_rotation_test_init, key_rotation_test_suites[i]->hash->digest_size);
         /* TODO: update to use the test vector of draft 25 and up */
-        ret = picoquic_rotate_app_secret(key_rotation_test_suites[i], new_secret);
+        ret = picoquic_rotate_app_secret(key_rotation_test_suites[i], new_secret, PICOQUIC_LABEL_V1_TRAFFIC_UPDATE);
         if (ret != 0) {
             DBG_PRINTF("Cannot rotate secret[%d], ret=%x\n", i, ret);
         }
@@ -1168,7 +1168,7 @@ int retry_protection_vector_test()
 {
     /* First, create a protection context to test the basic mechanisms */
     int ret = 0;
-    void* protection_ctx = picoquic_create_retry_protection_context(1, picoquic_retry_protection_key_25);
+    void* protection_ctx = picoquic_create_retry_protection_context(1, picoquic_retry_protection_key_25, PICOQUIC_LABEL_QUIC_V1_KEY_BASE);
 
     if (protection_ctx == NULL) {
         DBG_PRINTF("%s", "Cannot create protection context!");
@@ -1194,7 +1194,7 @@ int retry_protection_vector_test()
         picoquic_aead_free(protection_ctx);
 
         if (ret == 0) {
-            void* verification_ctx = picoquic_create_retry_protection_context(0, picoquic_retry_protection_key_25);
+            void* verification_ctx = picoquic_create_retry_protection_context(0, picoquic_retry_protection_key_25, PICOQUIC_LABEL_QUIC_V1_KEY_BASE);
             if (verification_ctx == NULL) {
                 DBG_PRINTF("%s", "Cannot create verification context!");
                 ret = -1;
@@ -1228,7 +1228,7 @@ int retry_protection_vector_test()
 
     if (ret == 0) {
         /* Test the verification functions */
-        void* protection_ctx = picoquic_create_retry_protection_context(1, picoquic_retry_protection_key_25);
+        void* protection_ctx = picoquic_create_retry_protection_context(1, picoquic_retry_protection_key_25, PICOQUIC_LABEL_QUIC_V1_KEY_BASE);
         uint8_t packet[PICOQUIC_MAX_PACKET_SIZE];
         size_t packet_index = sizeof(retry_protection_test_input);
 
@@ -1254,7 +1254,7 @@ int retry_protection_vector_test()
             picoquic_aead_free(protection_ctx);
 
             if (ret == 0) {
-                void* verification_ctx = picoquic_create_retry_protection_context(0, picoquic_retry_protection_key_25);
+                void* verification_ctx = picoquic_create_retry_protection_context(0, picoquic_retry_protection_key_25, PICOQUIC_LABEL_QUIC_V1_KEY_BASE);
                 if (verification_ctx == NULL) {
                     DBG_PRINTF("%s", "Cannot create verification context!");
                     ret = -1;
