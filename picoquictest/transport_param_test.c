@@ -1164,7 +1164,7 @@ int vn_tp_test_one(size_t len, const uint8_t* t, int mode, uint32_t envelop_vn, 
     return ret;
 }
 
-#define VN_TP_V2_DRAFT 0xff, 0x01, 0x00, 0x00
+#define VN_TP_V2_DRAFT 0xff, 0x02, 0x00, 0x00
 
 uint8_t vn_tp_client_0[] = {
     0x0, 0x0, 0x0, 0x1,

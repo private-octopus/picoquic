@@ -26,8 +26,8 @@
 #define PICOQUIC_LABEL_INITIAL_CLIENT "client in"
 #define PICOQUIC_LABEL_INITIAL_SERVER "server in"
 
-#define PICOQUIC_LABEL_TRAFFIC_UPDATE "quic ku"
-#define PICOQUIC_LABEL_TRAFFIC_UPDATE_23 "traffic upd"
+#define PICOQUIC_LABEL_V1_TRAFFIC_UPDATE "quic ku"
+#define PICOQUIC_LABEL_V2_TRAFFIC_UPDATE "quicv2 ku"
 
 #define PICOQUIC_LABEL_KEY "key"
 #define PICOQUIC_LABEL_IV "iv"
@@ -37,7 +37,8 @@
 #define PICOQUIC_LABEL_CID_GLOBAL_ROUNDS 4
 
 #define PICOQUIC_LABEL_QUIC_BASE NULL
-#define PICOQUIC_LABEL_QUIC_KEY_BASE "tls13 quic "
+#define PICOQUIC_LABEL_QUIC_V1_KEY_BASE "tls13 quic "
+#define PICOQUIC_LABEL_QUIC_V2_KEY_BASE "tls13 quicv2 "
 
 #ifdef __cplusplus
 extern "C" {
@@ -113,12 +114,12 @@ uint8_t * picoquic_get_app_secret(picoquic_cnx_t* cnx, int is_enc);
 size_t picoquic_get_app_secret_size(picoquic_cnx_t* cnx);
 int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx);
 void picoquic_apply_rotated_keys(picoquic_cnx_t * cnx, int is_enc);
-int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * secret);
+int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * secret, const char *traffic_update_label);
 
 void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx);
 
-void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret);
-void * picoquic_pn_enc_create_for_test(const uint8_t * secret);
+void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret, const char *prefix_label);
+void * picoquic_pn_enc_create_for_test(const uint8_t * secret, const char *prefix_label);
 
 #if 0
 /* TODO: find replacement for this test */
@@ -161,7 +162,7 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
     const uint8_t * token, size_t token_size, int new_context_created);
 
 void picoquic_cid_free_under_mask_ctx(void * v_pn_enc);
-int picoquic_cid_get_under_mask_ctx(void ** v_pn_enc, const void * secret);
+int picoquic_cid_get_under_mask_ctx(void ** v_pn_enc, const void * secret, const char *prefix_label);
 void picoquic_cid_encrypt_under_mask(void * cid_enc, const picoquic_connection_id_t * cid_in, const picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
 void picoquic_cid_decrypt_under_mask(void * cid_enc, const picoquic_connection_id_t * cid_in, const picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
 
@@ -188,7 +189,7 @@ ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count
 
 
 /* Special AEAD context definition functions used for stateless retry integrity protection */
-void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key);
+void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key, const char *prefix_label);
 void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending);
 void picoquic_delete_retry_protection_contexts(picoquic_quic_t * quic);
 size_t picoquic_encode_retry_protection(void * integrity_aead, uint8_t * bytes, size_t bytes_max, size_t byte_index, const picoquic_connection_id_t * odcid);
