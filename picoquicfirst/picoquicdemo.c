@@ -729,6 +729,17 @@ int quic_client(const char* ip_address_text, int server_port,
             fprintf(stdout, "ECN was not acknowledged.\n");
         }
 
+        if (config->desired_version != 0) {
+            uint32_t v = picoquic_supported_versions[cnx_client->version_index].version;
+            if (v == config->desired_version) {
+                fprintf(stdout, "Successfully negotiated version 0x%" PRIx32 ".\n", v);
+            }
+            else {
+                fprintf(stdout, "Could not negotiate version 0x%" PRIx32 ", used version 0x%" PRIu32 ".\n", 
+                    config->desired_version, v);
+            }
+        }
+
         if (loop_cb.force_migration){
             if (!loop_cb.migration_started) {
                 fprintf(stdout, "Could not start testing migration.\n");
