@@ -562,7 +562,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_enable_time_stamp 0x7158  /* x&1 */
 #define picoquic_tp_grease_quic_bit 0x2ab2
 #define picoquic_tp_enable_multipath 0xbabf
-#define picoquic_tp_version_negotiation 0x73db
+#define picoquic_tp_version_negotiation 0xff73db
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
