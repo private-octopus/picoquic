@@ -293,6 +293,22 @@ uint8_t* picoquic_encode_transport_param_version_negotiation(uint8_t* bytes, uin
         (bytes = picoquic_frames_uint16_encode(bytes, bytes_max, 0)) != NULL &&
         (bytes = picoquic_frames_uint32_encode(bytes, bytes_max,
             picoquic_supported_versions[cnx->version_index].version)) != NULL) {
+#if 1
+        if (extension_mode == 0) {
+            if (cnx->desired_version != 0 && cnx->desired_version != picoquic_supported_versions[cnx->version_index].version) {
+                bytes = picoquic_frames_uint32_encode(bytes, bytes_max, cnx->desired_version);
+            }
+        }
+        else {
+            for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
+                if ((bytes = picoquic_frames_uint32_encode(bytes, bytes_max,
+                    picoquic_supported_versions[i].version)) == NULL) {
+                    break;
+                }
+            }
+        }
+       
+#else
         if (extension_mode == 0) {
             if ((bytes = picoquic_frames_uint32_encode(bytes, bytes_max, cnx->rejected_version)) != NULL &&
                 (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0)) != NULL) {
@@ -314,6 +330,7 @@ uint8_t* picoquic_encode_transport_param_version_negotiation(uint8_t* bytes, uin
                 }
             }
         }
+#endif
     }
 
     if (bytes != NULL) {
@@ -335,60 +352,60 @@ const uint8_t * picoquic_process_tp_version_negotiation(const uint8_t* bytes, co
     int extension_mode, uint32_t envelop_vn, uint32_t *negotiated_vn, int * negotiated_index, uint64_t * vn_error)
 {
     uint32_t current;
+#if 0
     uint32_t previous = 0;
     uint64_t nb_received = 0;
     uint64_t nb_compatible;
     uint32_t compatible;
+#endif
 
     *negotiated_vn = 0;
     *negotiated_index = -1;
     *vn_error = 0;
 
-    if ((bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &current)) != NULL) {
+    if ((bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &current)) == NULL) {
+        *vn_error = PICOQUIC_TRANSPORT_PARAMETER_ERROR;
+    } else {
         if (current != envelop_vn) {
             /* Packet was tempered with */
             *vn_error = PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR;
             bytes = NULL;
-        } else if (extension_mode == 0) {
+        }
+        else if (extension_mode == 0) {
             /* Processing the client extensions */
-            if ((bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &previous)) != NULL &&
-                (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &nb_received)) != NULL &&
-                (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, nb_received * 4)) != NULL &&
-                (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &nb_compatible)) != NULL) {
-                /* Check that previous is OK */
-                if (previous != 0 && picoquic_get_version_index(previous) != -1) {
-                    /* VN was not justified, was tempered with */
-                    *vn_error = PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR;
-                    bytes = NULL;
+            while (bytes < bytes_max) {
+                uint32_t proposed;
+                if ((bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &proposed)) == NULL) {
+                    /* Decoding error */
+                    *vn_error = PICOQUIC_TRANSPORT_PARAMETER_ERROR;
+                    break;
                 }
                 else {
-                    for (uint64_t i = 0; i < nb_compatible; i++) {
-                        if ((bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &compatible)) == NULL) {
-                            break;
-                        }
-                        else {
-                            int this_rank = picoquic_get_version_index(compatible);
-                            if (this_rank >= 0 && (*negotiated_index < 0 || *negotiated_index > this_rank)) {
-                                *negotiated_vn = compatible;
-                                *negotiated_index = this_rank;
-                            }
-                        }
+                    /* Select the first version proposed by the client that is locally supported,
+                     * and is deemed compatible with the current version
+                     */
+                    int this_rank = picoquic_get_version_index(proposed);
+                    if (this_rank >= 0) {
+                        *negotiated_vn = proposed;
+                        *negotiated_index = this_rank;
+                        break;
                     }
                 }
             }
         }
-        else if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &nb_compatible)) != NULL) {
-            /* Skipping the server extensions */
-            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, nb_compatible * 4);
+        else {
+            /* Processing the server extensions */
+            /* TODO: Check whether the chosen version corresponds to something the client wanted */
+            /* TODO: Check whether the chosen version is officially supported, could be reused in 0-RTT */
+            while (bytes < bytes_max) {
+                uint32_t proposed;
+                if ((bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &proposed)) == NULL) {
+                    /* Decoding error */
+                    *vn_error = PICOQUIC_TRANSPORT_PARAMETER_ERROR;
+                    break;
+                }
+            }
         }
-    }
-
-    if (bytes == NULL && *vn_error == 0) {
-        *vn_error = PICOQUIC_TRANSPORT_PARAMETER_ERROR;
-    }
-    else if (bytes != NULL && bytes != bytes_max) {
-        *vn_error = PICOQUIC_TRANSPORT_PARAMETER_ERROR;
-        bytes = NULL;
     }
 
     return bytes;
