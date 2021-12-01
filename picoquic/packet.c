@@ -697,8 +697,24 @@ int picoquic_parse_header_and_decrypt(
 
             if (ret == 0) {
                 if (*pcnx != NULL) {
-                    /* Remove header protection at this point -- values of bytes will change */
-                    ret = picoquic_remove_header_protection(*pcnx, (uint8_t *)bytes, decrypted_data->data, ph);
+                    /* Test whether we need to do a version upgrade */
+                    if (ph->version_index != (*pcnx)->version_index) {
+                        if ((*pcnx)->client_mode &&
+                            (*pcnx)->cnx_state < picoquic_state_client_almost_ready &&
+                            ph->version_index >= 0 &&
+                            picoquic_supported_versions[ph->version_index].version == (*pcnx)->desired_version) {
+                            /* The server already accepted the version upgrade */
+                            ret = picoquic_process_version_upgrade(*pcnx, (*pcnx)->version_index, ph->version_index);
+                        }
+                        else {
+                            ret = PICOQUIC_ERROR_PACKET_WRONG_VERSION;
+                        }
+                    }
+
+                    if (ret == 0) {
+                        /* Remove header protection at this point -- values of bytes will change */
+                        ret = picoquic_remove_header_protection(*pcnx, (uint8_t*)bytes, decrypted_data->data, ph);
+                    }
 
                     if (ret == 0) {
                         decoded_length = picoquic_remove_packet_protection(*pcnx, (uint8_t *) bytes,
@@ -1435,17 +1451,7 @@ int picoquic_incoming_server_initial(
                         ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
                     }
                 }
-                if (ret == 0) {
-                    /* Test whether we need to do a version upgrade */
-                    if (ph->version_index != cnx->version_index) {
-                        if (ph->version_index >= 0 &&
-                            picoquic_supported_versions[ph->version_index].version == cnx->desired_version) {
-                            /* Version upgrade is succeeding! */
-                            /* TODO: consider version specific upgrade code */
-                            cnx->version_index = ph->version_index;
-                        }
-                    }
-                }
+
                 /* If no error, process the packet */
                 if (ret == 0) {
                     ret = picoquic_decode_frames(cnx, cnx->path[0],
@@ -2276,6 +2282,7 @@ int picoquic_incoming_segment(
             picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
         }
     } else if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_INITIAL_TOO_SHORT ||
+        ret == PICOQUIC_ERROR_PACKET_WRONG_VERSION ||
         ret == PICOQUIC_ERROR_INITIAL_CID_TOO_SHORT ||
         ret == PICOQUIC_ERROR_UNEXPECTED_PACKET || 
         ret == PICOQUIC_ERROR_CNXID_CHECK || 
@@ -2288,6 +2295,7 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_AEAD_NOT_READY) {
         /* Bad packets are dropped silently */
         if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
+            ret == PICOQUIC_ERROR_PACKET_WRONG_VERSION ||
             ret == PICOQUIC_ERROR_AEAD_NOT_READY ||
             ret == PICOQUIC_ERROR_PACKET_TOO_LONG ||
             ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED) {

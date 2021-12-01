@@ -885,8 +885,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     else {
                         cnx->do_version_negotiation = 1;
-                        if (negotiated_vn != 0) {
-                            cnx->version_index = negotiated_index;
+                        if (negotiated_vn != 0 && cnx->version_index != negotiated_index){
+                            ret = picoquic_process_version_upgrade(cnx, cnx->version_index, negotiated_index);
                         }
                     }
                     break;

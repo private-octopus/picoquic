@@ -4201,3 +4201,38 @@ uint64_t picoquic_get_data_received(picoquic_cnx_t* cnx)
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {
     picoquic_tls_set_client_authentication(quic, client_authentication);
 }
+
+/* Supported version upgrade.
+ * Upgrades are only supported between compatible versions.
+ * 
+ * When upgrading, there may be a need to update more than the version field. For example,
+ * there may be a need to update encryption contexts if they were computed differently,
+ * or to revisit some default options.
+ * 
+ * The function takes three arguments: connection context, old version_index and new version.
+ * The return code is zero if the upgrade was done, -1 if it could not be.
+ * If the function is called with a null connection context, it returns 0 if the
+ * upgrade is possible, -1 if it is not.
+ */
+
+int picoquic_process_version_upgrade(picoquic_cnx_t* cnx, int old_version_index, int new_version_index)
+{
+    int ret = -1;
+    /* Check whether upgrade is supported */
+    if (new_version_index == old_version_index) {
+        /* not an upgrade, nothing to do. */
+        ret = 0;
+    } else if (picoquic_supported_versions[new_version_index].version == PICOQUIC_V2_VERSION_DRAFT) {
+        if (picoquic_supported_versions[old_version_index].version == PICOQUIC_V1_VERSION) {
+            /* Supported */
+            ret = 0;
+            if (cnx != NULL) {
+                /* Install the new keys */
+                cnx->version_index = new_version_index;
+                picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
+                ret = picoquic_setup_initial_traffic_keys(cnx);
+            }
+        }
+    }
+    return ret;
+}

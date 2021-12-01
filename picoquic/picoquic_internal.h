@@ -1780,6 +1780,20 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
 picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length, int is_pure_ack);
 
+/* Supported version upgrade.
+ * Upgrades are only supported between compatible versions.
+ *
+ * When upgrading, there may be a need to update more than the version field. For example,
+ * there may be a need to update encryption contexts if they were computed differently,
+ * or to revisit some default options.
+ *
+ * The function takes three arguments: connection context, old version index and new version index.
+ * The return code is zero if the upgrade was done, -1 if it could not be.
+ * If the function is called with a null connection context, it returns 0 if the
+ * upgrade is possible, -1 if it is not.
+ */
+int picoquic_process_version_upgrade(picoquic_cnx_t* cnx, int old_version_index, int new_version_index);
+
 #ifdef __cplusplus
 }
 #endif
