@@ -211,6 +211,39 @@ void qlog_preferred_address(FILE* f, bytestream* s, uint64_t len)
     s->size = old_size;
 }
 
+void qlog_tp_version_negotiation(FILE* f, bytestream* s, uint64_t len)
+{
+    size_t old_size = s->size;
+
+    s->size = s->ptr + (size_t)len;
+    fprintf(f, "{ ");
+    if ((len & 3) != 0 || len == 0) {
+        fprintf(f, "\"bad_length\": \"%" PRIu64, len);
+    } else {
+        fprintf(f, "\"chosen\": \"");
+        for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
+            fprintf(f, "%02x", s->data[s->ptr]);
+        }
+        fprintf(f, "\"");
+        if (s->ptr < s->size) {
+            int is_first = 1;
+            fprintf(f, ", \"others\": [");
+            do {
+                fprintf(f, "%s", (is_first)?"\"":", \"");
+                is_first = 0;
+                for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
+                    fprintf(f, "%02x", s->data[s->ptr]);
+                }
+                fprintf(f, "\"");
+            } while (s->ptr < s->size);
+            fprintf(f, "]");
+        }
+    }
+    fprintf(f, "}");
+    s->size = old_size;
+}
+
+
 int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
 {
     int ret = 0;
@@ -315,7 +348,11 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                     qlog_boolean_transport_extension(f, "grease_quic_bit", s, extension_length);
                     break;
                 case picoquic_tp_enable_multipath:
-                    qlog_boolean_transport_extension(f, "enable_multipath", s, extension_length);
+                    qlog_vint_transport_extension(f, "enable_multipath", s, extension_length);
+                    break;
+                case picoquic_tp_version_negotiation:
+                    fprintf(f, "\"version_negotiation\": ");
+                    qlog_tp_version_negotiation(f, s, extension_length);
                     break;
                 case picoquic_tp_enable_bdp_frame:
                     qlog_vint_transport_extension(f, "enable_bdp_frame", s, extension_length);
