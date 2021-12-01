@@ -293,7 +293,6 @@ uint8_t* picoquic_encode_transport_param_version_negotiation(uint8_t* bytes, uin
         (bytes = picoquic_frames_uint16_encode(bytes, bytes_max, 0)) != NULL &&
         (bytes = picoquic_frames_uint32_encode(bytes, bytes_max,
             picoquic_supported_versions[cnx->version_index].version)) != NULL) {
-#if 1
         if (extension_mode == 0) {
             if (cnx->desired_version != 0 && cnx->desired_version != picoquic_supported_versions[cnx->version_index].version) {
                 bytes = picoquic_frames_uint32_encode(bytes, bytes_max, cnx->desired_version);
@@ -307,30 +306,6 @@ uint8_t* picoquic_encode_transport_param_version_negotiation(uint8_t* bytes, uin
                 }
             }
         }
-       
-#else
-        if (extension_mode == 0) {
-            if ((bytes = picoquic_frames_uint32_encode(bytes, bytes_max, cnx->rejected_version)) != NULL &&
-                (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0)) != NULL) {
-                if (cnx->desired_version == 0) {
-                    bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0);
-                }
-                else {
-                    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, 1)) != NULL) {
-                        bytes = picoquic_frames_uint32_encode(bytes, bytes_max, cnx->desired_version);
-                    }
-                }
-            }
-        }
-        else if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_nb_supported_versions)) != NULL) {
-            for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
-                if ((bytes = picoquic_frames_uint32_encode(bytes, bytes_max,
-                    picoquic_supported_versions[i].version)) == NULL) {
-                    break;
-                }
-            }
-        }
-#endif
     }
 
     if (bytes != NULL) {
@@ -352,12 +327,6 @@ const uint8_t * picoquic_process_tp_version_negotiation(const uint8_t* bytes, co
     int extension_mode, uint32_t envelop_vn, uint32_t *negotiated_vn, int * negotiated_index, uint64_t * vn_error)
 {
     uint32_t current;
-#if 0
-    uint32_t previous = 0;
-    uint64_t nb_received = 0;
-    uint64_t nb_compatible;
-    uint32_t compatible;
-#endif
 
     *negotiated_vn = 0;
     *negotiated_index = -1;
