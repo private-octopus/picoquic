@@ -257,29 +257,19 @@ size_t picoquic_decode_transport_param_prefered_address(uint8_t * bytes, size_t 
 
 /* Version negotiation. This is an implementation of:
  *     https://quicwg.org/version-negotiation/draft-ietf-quic-version-negotiation.html
- * On the client side, we can have the following scenarios:
- *   1- Proposal of a compatible versions. The parameter encodes the selected version,
- *      and the compatible versions
- *   2- Response to incoming VN. Same parameters, plus encoding of incoming VN. The incoming
- *      VN proposal is passed as a parameter of the connection context.
- * Client Handshake Version Information {
- *   Currently Attempted Version (32),
- *   Previously Attempted Version (32),
- *   Received Negotiation Version Count (i),
- *   Received Negotiation Version (32) ...,
- *   Compatible Version Count (i),
- *   Compatible Version (32) ...,
+ * 
+ * The version information parameter is defined as:
+ * 
+ * Version Information {
+ *   Chosen Version (32),
+ *   Other Versions (32) ...,
  * }
- * On the server side:
- * Server Handshake Version Information {
- *   Negotiated Version (32),
- *   Supported Version Count (i),
- *   Supported Version (32) ...,
- * }
- * Server processing of incoming client message:
- * - If VN is present, verify that VN matches what sender would send???
- * - If VN is present, verify that initial proposal is not 
- *
+ * 
+ * On the client side, the other version include the versions that the client will want
+ * to upgrade to, in order of preference. Somewhere in the list is the currently chosen
+ * version, to indidcate its order of preference.
+ * 
+ * On the server side, the other version provides the list of versions supported by the server.
  */
 uint8_t* picoquic_encode_transport_param_version_negotiation(uint8_t* bytes, uint8_t* bytes_max,
     int extension_mode, picoquic_cnx_t* cnx)
@@ -296,6 +286,10 @@ uint8_t* picoquic_encode_transport_param_version_negotiation(uint8_t* bytes, uin
         if (extension_mode == 0) {
             if (cnx->desired_version != 0 && cnx->desired_version != picoquic_supported_versions[cnx->version_index].version) {
                 bytes = picoquic_frames_uint32_encode(bytes, bytes_max, cnx->desired_version);
+            }
+            if (bytes != NULL) {
+                bytes = picoquic_frames_uint32_encode(bytes, bytes_max,
+                    picoquic_supported_versions[cnx->version_index].version);
             }
         }
         else {
