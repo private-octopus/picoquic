@@ -297,6 +297,10 @@ uint8_t* picoquic_encode_transport_param_version_negotiation(uint8_t* bytes, uin
             if (cnx->desired_version != 0 && cnx->desired_version != picoquic_supported_versions[cnx->version_index].version) {
                 bytes = picoquic_frames_uint32_encode(bytes, bytes_max, cnx->desired_version);
             }
+            if (bytes != NULL) {
+                bytes = picoquic_frames_uint32_encode(bytes, bytes_max,
+                    picoquic_supported_versions[cnx->version_index].version);
+            }
         }
         else {
             for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
