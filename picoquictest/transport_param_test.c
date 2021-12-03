@@ -1164,28 +1164,31 @@ int vn_tp_test_one(size_t len, const uint8_t* t, int mode, uint32_t envelop_vn, 
     return ret;
 }
 
+#define VN_TP_V1 0x0, 0x0, 0x0, 0x1
 #define VN_TP_V2_DRAFT 0xff, 0x02, 0x00, 0x00
 
 uint8_t vn_tp_client_0[] = {
-    0x0, 0x0, 0x0, 0x1,
-    VN_TP_V2_DRAFT
+    VN_TP_V1,
+    VN_TP_V2_DRAFT,
+    VN_TP_V1
 };
 
 uint8_t vn_tp_client_1[] = {
-    0x0, 0x0, 0x0, 0x1,
+    VN_TP_V1,
     0x0a, 0x0a, 0x0a, 0x0a,
     VN_TP_V2_DRAFT
 };
 
 uint8_t vn_tp_client_2[] = {
-    0x0, 0x0, 0x0, 0x1,
+    VN_TP_V1,
     0x0a, 0x0a, 0x0a, 0x0a,
+    VN_TP_V1,
     VN_TP_V2_DRAFT,
     0xfa, 0x0a, 0x0a, 0x0a
 };
 
 uint8_t vn_tp_client_3[] = {
-    0x0, 0x0, 0x0, 0x1
+    VN_TP_V1
 };
 
 
@@ -1194,7 +1197,7 @@ uint8_t vn_tp_client_bad_1[] = {
 };
 
 uint8_t vn_tp_client_bad_2[] = {
-    0x0, 0x0, 0x0, 0x1,
+    VN_TP_V1,
     0x0a, 0x0a, 0x0a, 
 };
 
@@ -1203,7 +1206,7 @@ uint8_t vn_tp_client_bad_3[] = {
 };
 
 uint8_t vn_tp_client_bad_4[] = {
-    0x0, 0x0, 0x0, 0x1,
+    VN_TP_V1,
     0x0, 0x0, 0x0, 0x2,
     0x0, 0x0, 0x0, 0x3,
     0x50, 0x43
@@ -1215,14 +1218,14 @@ uint8_t vn_tp_server_0[] = {
 
 uint8_t vn_tp_server_1[] = {
     VN_TP_V2_DRAFT,
-    0x0, 0x0, 0x0, 0x1,
+    VN_TP_V1,
     0x0, 0x0, 0x0, 0x2,
     0x0, 0x0, 0x0, 0x3,
 };
 
 uint8_t vn_tp_server_bad_1[] = {
     VN_TP_V2_DRAFT,
-    0x0, 0x0, 0x0, 0x1,
+    VN_TP_V1,
     VN_TP_V2_DRAFT,
     0x50, 0x43
 };
@@ -1240,7 +1243,7 @@ uint8_t vn_tp_server_bad_3[] = {
 uint8_t vn_tp_server_bad_4[] = {
     VN_TP_V2_DRAFT,
     0x0, 0x0, 0x0,
-    0x0, 0x0, 0x0, 0x1
+    VN_TP_V1
 };
 
 typedef struct st_vn_tp_test_t {
@@ -1255,18 +1258,18 @@ typedef struct st_vn_tp_test_t {
 #define VN_TP_TEST_CASE(mode, ve, vx, ex, vn_tp) { (mode), (ve), (vx), (ex), vn_tp, sizeof(vn_tp)}
 
 vn_tp_test_t vn_tp_test_case[] = {
-    VN_TP_TEST_CASE(0, 0x00000001, PICOQUIC_V2_VERSION_DRAFT, 0, vn_tp_client_0),
-    VN_TP_TEST_CASE(0, 0x00000001, PICOQUIC_V2_VERSION_DRAFT, 0, vn_tp_client_1),
-    VN_TP_TEST_CASE(0, 0x00000001, PICOQUIC_V2_VERSION_DRAFT, 0, vn_tp_client_2),
-    VN_TP_TEST_CASE(0, 0x00000001, 0x00000000, 0, vn_tp_client_3),
+    VN_TP_TEST_CASE(0, PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION_DRAFT, 0, vn_tp_client_0),
+    VN_TP_TEST_CASE(0, PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION_DRAFT, 0, vn_tp_client_1),
+    VN_TP_TEST_CASE(0, PICOQUIC_V1_VERSION, PICOQUIC_V1_VERSION, 0, vn_tp_client_2),
+    VN_TP_TEST_CASE(0, PICOQUIC_V1_VERSION, 0x00000000, 0, vn_tp_client_3),
     VN_TP_TEST_CASE(0, PICOQUIC_V2_VERSION_DRAFT, 0, PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR, vn_tp_client_3),
-    VN_TP_TEST_CASE(0, 0x00000001, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_1),
-    VN_TP_TEST_CASE(0, 0x00000001, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_2),
-    VN_TP_TEST_CASE(0, 0x00000001, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_3),
-    VN_TP_TEST_CASE(0, 0x00000001, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_4),
+    VN_TP_TEST_CASE(0, PICOQUIC_V1_VERSION, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_1),
+    VN_TP_TEST_CASE(0, PICOQUIC_V1_VERSION, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_2),
+    VN_TP_TEST_CASE(0, PICOQUIC_V1_VERSION, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_3),
+    VN_TP_TEST_CASE(0, PICOQUIC_V1_VERSION, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_client_bad_4),
     VN_TP_TEST_CASE(1, PICOQUIC_V2_VERSION_DRAFT, 0, 0, vn_tp_server_0),
     VN_TP_TEST_CASE(1, PICOQUIC_V2_VERSION_DRAFT, 0, 0, vn_tp_server_1),
-    VN_TP_TEST_CASE(1, 0x00000001, 0, PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR, vn_tp_server_0),
+    VN_TP_TEST_CASE(1, PICOQUIC_V1_VERSION, 0, PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR, vn_tp_server_0),
     VN_TP_TEST_CASE(1, PICOQUIC_V2_VERSION_DRAFT, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_server_bad_1),
     VN_TP_TEST_CASE(1, PICOQUIC_V2_VERSION_DRAFT, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_server_bad_2),
     VN_TP_TEST_CASE(1, PICOQUIC_V2_VERSION_DRAFT, 0, PICOQUIC_TRANSPORT_PARAMETER_ERROR, vn_tp_server_bad_3),
