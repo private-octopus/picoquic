@@ -229,6 +229,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     uint16_t next_port = 0; /* Data for the migration test */
     picoquic_cnx_t* last_cnx = NULL;
     int loop_immediate = 0;
+    picoquic_packet_loop_options_t options = { 0 };
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
@@ -242,7 +243,8 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     }
     else if (loop_callback != NULL) {
         struct sockaddr_storage l_addr;
-        ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx, NULL);
+        ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx, &options);
+
         if (picoquic_store_loopback_addr(&l_addr, sock_af[0], sock_ports[0]) == 0) {
             ret = loop_callback(quic, picoquic_packet_loop_port_update, loop_callback_ctx, &l_addr);
         }
@@ -270,6 +272,15 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
         /* TODO: rewrite the code and avoid using the "loop_immediate" state variable */
         if (!loop_immediate) {
             delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
+            if (options.do_time_check) {
+                packet_loop_time_check_arg_t time_check_arg;
+                time_check_arg.current_time = current_time;
+                time_check_arg.delta_t = delta_t;
+                ret = loop_callback(quic, picoquic_packet_loop_time_check, loop_callback_ctx, &time_check_arg);
+                if (time_check_arg.delta_t < delta_t) {
+                    delta_t = time_check_arg.delta_t;
+                }
+            }
         }
         loop_immediate = 0;
 
