@@ -273,10 +273,12 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
         if (!loop_immediate) {
             delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
             if (options.do_time_check) {
-                uint64_t app_next_time = UINT64_MAX;
-                ret = loop_callback(quic, picoquic_packet_loop_time_check, loop_callback_ctx, &app_next_time);
-                if (current_time + delta_t < app_next_time) {
-                    delta_t = app_next_time - current_time;
+                packet_loop_time_check_arg_t time_check_arg;
+                time_check_arg.current_time = current_time;
+                time_check_arg.delta_t = delta_t;
+                ret = loop_callback(quic, picoquic_packet_loop_time_check, loop_callback_ctx, &time_check_arg);
+                if (time_check_arg.delta_t < delta_t) {
+                    delta_t = time_check_arg.delta_t;
                 }
             }
         }

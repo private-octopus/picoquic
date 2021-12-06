@@ -39,7 +39,7 @@ typedef enum {
     picoquic_packet_loop_after_receive, /* Argument type size_t*: nb packets received */
     picoquic_packet_loop_after_send, /* Argument type size_t*: nb packets sent */
     picoquic_packet_loop_port_update, /* argument type struct_sockaddr*: new address for wakeup */
-    picoquic_packet_loop_time_check /* argument type uin64_t, next app wakeup time. Optional. */
+    picoquic_packet_loop_time_check /* argument type . Optional. */
 } picoquic_packet_loop_cb_enum;
 
 typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packet_loop_cb_enum cb_mode, void * callback_ctx, void * callback_argv);
@@ -51,6 +51,15 @@ typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packe
 typedef struct st_picoquic_packet_loop_options_t {
     int do_time_check : 1; /* App should be polled for next time before sock select */
 } picoquic_packet_loop_options_t;
+
+/* The time check option passes as argument a pointer to a structure specifying
+ * the current time and the proposed delta. The application uses the specified
+ * current time to compute an updated delta.
+ */
+typedef struct st_packet_loop_time_check_arg_t {
+    uint64_t current_time;
+    int64_t delta_t;
+} packet_loop_time_check_arg_t;
 
 /* Two versions of the packet loop, one portable and one speciailezed
  * for winsock.
