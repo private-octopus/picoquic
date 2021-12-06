@@ -32,15 +32,29 @@ extern "C" {
 #define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 2
 #define PICOQUIC_PACKET_LOOP_SEND_MAX 10
 
+/* The packet loop will call the application back after specific events.
+ */
 typedef enum {
-    picoquic_packet_loop_ready = 0, /* No argument */
+    picoquic_packet_loop_ready = 0, /* Argument type: packet loop options */
     picoquic_packet_loop_after_receive, /* Argument type size_t*: nb packets received */
     picoquic_packet_loop_after_send, /* Argument type size_t*: nb packets sent */
-    picoquic_packet_loop_port_update /* argument type struct_sockaddr*: new address for wakeup */
+    picoquic_packet_loop_port_update, /* argument type struct_sockaddr*: new address for wakeup */
+    picoquic_packet_loop_time_check /* argument type uin64_t, next app wakeup time. Optional. */
 } picoquic_packet_loop_cb_enum;
 
 typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packet_loop_cb_enum cb_mode, void * callback_ctx, void * callback_argv);
 
+/* Packet loop option list shows support by application of optional features.
+ * It is set to null initially, and then passed to the socket as argument to
+ * the "ready" callback. Application should set the flags corresponding to
+ * the features that it supports */
+typedef struct st_picoquic_packet_loop_options_t {
+    int do_time_check : 1; /* App should be polled for next time before sock select */
+} picoquic_packet_loop_options_t;
+
+/* Two versions of the packet loop, one portable and one speciailezed
+ * for winsock.
+ */
 int picoquic_packet_loop(picoquic_quic_t* quic,
     int local_port,
     int local_af,
