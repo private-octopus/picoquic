@@ -214,6 +214,7 @@ int bdp_rtt_test();
 int bdp_ip_test();
 int bdp_delay_test();
 int long_rtt_test();
+int high_latency_basic_test();
 int cid_length_test();
 int initial_server_close_test();
 int h3zero_integer_test();
