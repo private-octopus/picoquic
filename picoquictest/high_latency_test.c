@@ -184,16 +184,20 @@ static test_api_stream_desc_t hilat_scenario_10mb[] = {
  * connection will not reach full bandwidth before going out
  * of slow start, so we can expect a much longer time.
  * 
- * TODO: with the current software version, the transfer takes more than
- * 85 seconds. This is common to cubic and bbr tests. Initial analysis
- * points to slow-start (hy-start) exiting too soon, when the bandwidth
- * is only about 2.9 Mbps. 
+ * The first iteration of this test surfaced a bug in the
+ * way hystart tests for 'excessive" delays. There was some leftover
+ * code to set a tight delay bound in long delay links, which
+ * cause hystart to exit too soon.
+ * 
+ * TODO: in both BBR and Cubic, the congestion remains in slow start
+ * for the all duration of the 10MB transfer. Should use a bigger
+ * value!
  */
 
 int high_latency_bbr_test()
 {
     uint64_t latency = 5000000;
-    uint64_t expected_completion = 90000000;
+    uint64_t expected_completion = 63600000;
 
     return high_latency_one(picoquic_bbr_algorithm,
         hilat_scenario_10mb, sizeof(hilat_scenario_10mb),
@@ -204,7 +208,7 @@ int high_latency_cubic_test()
 {
     /* Simple test. */
     uint64_t latency = 5000000;
-    uint64_t expected_completion = 90000000;
+    uint64_t expected_completion = 63600000;
 
     return high_latency_one(picoquic_bbr_algorithm,
         hilat_scenario_10mb, sizeof(hilat_scenario_10mb),
