@@ -160,10 +160,57 @@ int high_latency_basic_test()
     uint64_t latency = 5000000;
     uint64_t expected_completion = latency*7;
 
-    return high_latency_one(picoquic_bbr_algorithm, 
+    return high_latency_one(picoquic_newreno_algorithm, 
         hilat_scenario_basic, sizeof(hilat_scenario_basic),
         expected_completion, latency, 10, 10, 0, 0, 0, 0);
 }
+
+
+static test_api_stream_desc_t hilat_scenario_10mb[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 0, 257, 1000000 },
+    { 16, 0, 257, 1000000 },
+    { 20, 0, 257, 1000000 },
+    { 24, 0, 257, 1000000 },
+    { 28, 0, 257, 1000000 },
+    { 32, 0, 257, 1000000 },
+    { 36, 0, 257, 1000000 },
+    { 40, 0, 257, 1000000 }
+};
+
+/* Transfer test, 10MB file over a 10 MB link, using BBR.
+ * In theory, this should require 1 RTT for handshake, then 1RTT for
+ * requesting the file and 8 seconds for transferring it. But the
+ * connection will not reach full bandwidth before going out
+ * of slow start, so we can expect a much longer time.
+ * 
+ * TODO: with the current software version, the transfer takes more than
+ * 85 seconds. This is common to cubic and bbr tests. Initial analysis
+ * points to slow-start (hy-start) exiting too soon, when the bandwidth
+ * is only about 2.9 Mbps. 
+ */
+
+int high_latency_bbr_test()
+{
+    uint64_t latency = 5000000;
+    uint64_t expected_completion = 90000000;
+
+    return high_latency_one(picoquic_bbr_algorithm,
+        hilat_scenario_10mb, sizeof(hilat_scenario_10mb),
+        expected_completion, latency, 10, 10, 0, 0, 0, 0);
+}
+
+int high_latency_cubic_test()
+{
+    /* Simple test. */
+    uint64_t latency = 5000000;
+    uint64_t expected_completion = 90000000;
+
+    return high_latency_one(picoquic_bbr_algorithm,
+        hilat_scenario_10mb, sizeof(hilat_scenario_10mb),
+        expected_completion, latency, 10, 10, 0, 0, 0, 0);
+}
+
 #if 0
 int high_latency_seeded_test()
 {
