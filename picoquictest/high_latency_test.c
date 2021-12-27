@@ -42,7 +42,7 @@
 /* Very high latency test. This requires relaxing the handshake timer, so that it covers
  * at least one rtt.
  */
-static int high_latency_one(picoquic_congestion_algorithm_t* ccalgo,
+static int high_latency_one(uint8_t test_id, picoquic_congestion_algorithm_t* ccalgo,
     test_api_stream_desc_t* scenario, size_t sizeof_scenario,
     uint64_t max_completion_time, uint64_t latency, uint64_t mbps_up,
     uint64_t mbps_down, uint64_t jitter, int has_loss, int do_preemptive, int seed_bw)
@@ -56,7 +56,7 @@ static int high_latency_one(picoquic_congestion_algorithm_t* ccalgo,
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = 0;
 
-    initial_cid.id[2] = ccalgo->congestion_algorithm_number;
+    initial_cid.id[2] = test_id;
     initial_cid.id[3] = (mbps_up > 0xff) ? 0xff : (uint8_t)mbps_up;
     initial_cid.id[4] = (mbps_down > 0xff) ? 0xff : (uint8_t)mbps_down;
     initial_cid.id[5] = (latency > 16000000) ? 0xff : (uint8_t)(latency / 100000);
@@ -160,7 +160,7 @@ int high_latency_basic_test()
     uint64_t latency = 5000000;
     uint64_t expected_completion = latency*7;
 
-    return high_latency_one(picoquic_newreno_algorithm, 
+    return high_latency_one(0xba, picoquic_newreno_algorithm, 
         hilat_scenario_basic, sizeof(hilat_scenario_basic),
         expected_completion, latency, 10, 10, 0, 0, 0, 0);
 }
@@ -298,7 +298,7 @@ int high_latency_bbr_test()
     uint64_t latency = 5000000;
     uint64_t expected_completion = 141000000;
 
-    return high_latency_one(picoquic_bbr_algorithm,
+    return high_latency_one(0xbb, picoquic_bbr_algorithm,
         hilat_scenario_100mb, sizeof(hilat_scenario_100mb),
         expected_completion, latency, 10, 10, 0, 0, 0, 0);
 }
@@ -309,7 +309,7 @@ int high_latency_cubic_test()
     uint64_t latency = 5000000;
     uint64_t expected_completion = 160000000;
 
-    return high_latency_one(picoquic_cubic_algorithm,
+    return high_latency_one(0xcb, picoquic_cubic_algorithm,
         hilat_scenario_100mb, sizeof(hilat_scenario_100mb),
         expected_completion, latency, 10, 10, 0, 0, 0, 0);
 }
@@ -325,38 +325,7 @@ int high_latency_probeRTT_test()
     uint64_t latency = 5000000;
     uint64_t expected_completion = 836000000;
 
-    return high_latency_one(picoquic_bbr_algorithm,
+    return high_latency_one(0xf1, picoquic_bbr_algorithm,
         hilat_scenario_100mb, sizeof(hilat_scenario_100mb),
         expected_completion, latency, 1, 1, 0, 0, 0, 0);
 }
-
-#if 0
-/* We may want to run additional test to check the behavior of BBR over
- * long delay links in the same way as satellite tests.
- */
-int high_latency_seeded_test()
-{
-    /* Simulate remembering RTT and BW from previous connection */
-    return high_latency_one(picoquic_bbr_algorithm, 100000000, 4800000, 250, 3, 0, 0, 0, 1);
-}
-
-int high_latency_loss_test()
-{
-    /* Should be less than 10 sec per draft etosat. */
-    return high_latency_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 0, 1, 0, 0);
-}
-
-int high_latency_preemptive_test()
-{
-    /* Variation of the loss test, using preemptive repeat*/
-    /* Should be less than 10 sec per draft etosat.  */
-    return high_latency_one(picoquic_bbr_algorithm, 100000000, 7000000, 250, 3, 0, 1, 1, 0);
-}
-
-int high_latency_jitter_test()
-{
-    /* Should be less than 7 sec per draft etosat. */
-    return high_latency_one(picoquic_bbr_algorithm, 100000000, 6200000, 250, 3, 3000, 0, 0, 0);
-}
-
-#endif
