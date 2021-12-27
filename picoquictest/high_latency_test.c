@@ -166,19 +166,112 @@ int high_latency_basic_test()
 }
 
 
-static test_api_stream_desc_t hilat_scenario_10mb[] = {
+
+static test_api_stream_desc_t hilat_scenario_100mb[] = {
     { 4, 0, 257, 1000000 },
     { 8, 0, 257, 1000000 },
+    { 12, 0, 257, 1000000 },
     { 16, 0, 257, 1000000 },
     { 20, 0, 257, 1000000 },
     { 24, 0, 257, 1000000 },
     { 28, 0, 257, 1000000 },
     { 32, 0, 257, 1000000 },
     { 36, 0, 257, 1000000 },
-    { 40, 0, 257, 1000000 }
+    { 40, 0, 257, 1000000 },
+    { 44, 0, 257, 1000000 },
+    { 48, 0, 257, 1000000 },
+    { 52, 0, 257, 1000000 },
+    { 56, 0, 257, 1000000 },
+    { 60, 0, 257, 1000000 },
+    { 64, 0, 257, 1000000 },
+    { 68, 0, 257, 1000000 },
+    { 72, 0, 257, 1000000 },
+    { 76, 0, 257, 1000000 },
+    { 80, 0, 257, 1000000 },
+    { 84, 0, 257, 1000000 },
+    { 88, 0, 257, 1000000 },
+    { 92, 0, 257, 1000000 },
+    { 96, 0, 257, 1000000 },
+    { 100, 0, 257, 1000000 },
+    { 104, 0, 257, 1000000 },
+    { 108, 0, 257, 1000000 },
+    { 112, 0, 257, 1000000 },
+    { 116, 0, 257, 1000000 },
+    { 120, 0, 257, 1000000 },
+    { 124, 0, 257, 1000000 },
+    { 128, 0, 257, 1000000 },
+    { 132, 0, 257, 1000000 },
+    { 136, 0, 257, 1000000 },
+    { 140, 0, 257, 1000000 },
+    { 144, 0, 257, 1000000 },
+    { 148, 0, 257, 1000000 },
+    { 152, 0, 257, 1000000 },
+    { 156, 0, 257, 1000000 },
+    { 160, 0, 257, 1000000 },
+    { 164, 0, 257, 1000000 },
+    { 168, 0, 257, 1000000 },
+    { 172, 0, 257, 1000000 },
+    { 176, 0, 257, 1000000 },
+    { 180, 0, 257, 1000000 },
+    { 184, 0, 257, 1000000 },
+    { 188, 0, 257, 1000000 },
+    { 192, 0, 257, 1000000 },
+    { 196, 0, 257, 1000000 },
+    { 200, 0, 257, 1000000 },
+    { 204, 0, 257, 1000000 },
+    { 208, 0, 257, 1000000 },
+    { 212, 0, 257, 1000000 },
+    { 216, 0, 257, 1000000 },
+    { 220, 0, 257, 1000000 },
+    { 224, 0, 257, 1000000 },
+    { 228, 0, 257, 1000000 },
+    { 232, 0, 257, 1000000 },
+    { 236, 0, 257, 1000000 },
+    { 240, 0, 257, 1000000 },
+    { 244, 0, 257, 1000000 },
+    { 248, 0, 257, 1000000 },
+    { 252, 0, 257, 1000000 },
+    { 256, 0, 257, 1000000 },
+    { 260, 0, 257, 1000000 },
+    { 264, 0, 257, 1000000 },
+    { 268, 0, 257, 1000000 },
+    { 272, 0, 257, 1000000 },
+    { 276, 0, 257, 1000000 },
+    { 280, 0, 257, 1000000 },
+    { 284, 0, 257, 1000000 },
+    { 288, 0, 257, 1000000 },
+    { 292, 0, 257, 1000000 },
+    { 296, 0, 257, 1000000 },
+    { 300, 0, 257, 1000000 },
+    { 304, 0, 257, 1000000 },
+    { 308, 0, 257, 1000000 },
+    { 312, 0, 257, 1000000 },
+    { 316, 0, 257, 1000000 },
+    { 320, 0, 257, 1000000 },
+    { 324, 0, 257, 1000000 },
+    { 328, 0, 257, 1000000 },
+    { 332, 0, 257, 1000000 },
+    { 336, 0, 257, 1000000 },
+    { 340, 0, 257, 1000000 },
+    { 344, 0, 257, 1000000 },
+    { 348, 0, 257, 1000000 },
+    { 352, 0, 257, 1000000 },
+    { 356, 0, 257, 1000000 },
+    { 360, 0, 257, 1000000 },
+    { 364, 0, 257, 1000000 },
+    { 368, 0, 257, 1000000 },
+    { 372, 0, 257, 1000000 },
+    { 376, 0, 257, 1000000 },
+    { 380, 0, 257, 1000000 },
+    { 384, 0, 257, 1000000 },
+    { 388, 0, 257, 1000000 },
+    { 392, 0, 257, 1000000 },
+    { 396, 0, 257, 1000000 },
+    { 400, 0, 257, 1000000 }
 };
 
-/* Transfer test, 10MB file over a 10 MB link, using BBR.
+
+/* Transfer test, 100MB file over a 10 MB link, using BBR.
  * In theory, this should require 1 RTT for handshake, then 1RTT for
  * requesting the file and 8 seconds for transferring it. But the
  * connection will not reach full bandwidth before going out
@@ -189,18 +282,24 @@ static test_api_stream_desc_t hilat_scenario_10mb[] = {
  * code to set a tight delay bound in long delay links, which
  * cause hystart to exit too soon.
  * 
- * TODO: in both BBR and Cubic, the congestion remains in slow start
- * for the all duration of the 10MB transfer. Should use a bigger
- * value!
+ * Final iteration shows appropriate behavior with BBR completing
+ * the transfer in 141 seconds -- 121 if we substract the delay
+ * for handshake and file request. In theory, transfering 100MB
+ * over a 10Mbps link lasts 80 seconds. The 40 second penalty is
+ * the "start-up" time.
+ * 
+ * With Cubic, the transfer last 160 seconds. The additional
+ * delay is due to Cubic saturating the link, causing packet losses
+ * that then have to be corrected.
  */
 
 int high_latency_bbr_test()
 {
     uint64_t latency = 5000000;
-    uint64_t expected_completion = 63600000;
+    uint64_t expected_completion = 141000000;
 
     return high_latency_one(picoquic_bbr_algorithm,
-        hilat_scenario_10mb, sizeof(hilat_scenario_10mb),
+        hilat_scenario_100mb, sizeof(hilat_scenario_100mb),
         expected_completion, latency, 10, 10, 0, 0, 0, 0);
 }
 
@@ -208,14 +307,17 @@ int high_latency_cubic_test()
 {
     /* Simple test. */
     uint64_t latency = 5000000;
-    uint64_t expected_completion = 63600000;
+    uint64_t expected_completion = 160000000;
 
-    return high_latency_one(picoquic_bbr_algorithm,
-        hilat_scenario_10mb, sizeof(hilat_scenario_10mb),
+    return high_latency_one(picoquic_cubic_algorithm,
+        hilat_scenario_100mb, sizeof(hilat_scenario_100mb),
         expected_completion, latency, 10, 10, 0, 0, 0, 0);
 }
 
 #if 0
+/* We may want to run additional test to check the behavior of BBR over
+ * long delay links in the same way as satellite tests.
+ */
 int high_latency_seeded_test()
 {
     /* Simulate remembering RTT and BW from previous connection */
@@ -241,33 +343,4 @@ int high_latency_jitter_test()
     return high_latency_one(picoquic_bbr_algorithm, 100000000, 6200000, 250, 3, 3000, 0, 0, 0);
 }
 
-int high_latency_medium_test()
-{
-    /* Should be less than 20 sec per draft etosat. */
-    return high_latency_one(picoquic_bbr_algorithm, 100000000, 18000000, 50, 10, 0, 0, 0, 0);
-}
-
-int high_latency_small_test()
-{
-    /* Should be less than 85 sec per draft etosat. */
-    return high_latency_one(picoquic_bbr_algorithm, 100000000, 81000000, 10, 2, 0, 0, 0, 0);
-}
-
-int high_latency_small_up_test()
-{
-    /* Should be less than 420 sec per draft etosat. */
-    return high_latency_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0, 0, 0);
-}
-
-int high_latency_cubic_test()
-{
-    /* Should be less than 7 sec per draft etosat, but cubic is much slower */
-    return high_latency_one(picoquic_cubic_algorithm, 100000000, 11000000, 250, 3, 0, 0, 0, 0);
-}
-
-int high_latency_cubic_loss_test()
-{
-    /* Should be less than 10 sec per draft etosat, but cubic is a bit slower */
-    return high_latency_one(picoquic_cubic_algorithm, 100000000, 12100000, 250, 3, 0, 1, 0, 0);
-}
 #endif
