@@ -122,10 +122,6 @@ int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measur
             }
             delta_max = rtt_track->rtt_filtered_min / 4;
 
-            if (is_one_way_delay_enabled && delta_max > PICOQUIC_TARGET_RENO_RTT / 2) {
-                delta_max = PICOQUIC_TARGET_RENO_RTT / 2;
-            }
-
             if (rtt_track->sample_min > rtt_track->rtt_filtered_min) {
                 if (rtt_track->sample_min > rtt_track->rtt_filtered_min + delta_max) {
                     rtt_track->nb_rtt_excess++;

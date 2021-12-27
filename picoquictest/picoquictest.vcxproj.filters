@@ -102,6 +102,9 @@
     <ClCompile Include="datagram_tests.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="high_latency_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

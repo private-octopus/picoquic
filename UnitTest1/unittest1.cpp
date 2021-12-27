@@ -1464,6 +1464,34 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(high_latency_basic)
+        {
+            int ret = high_latency_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(high_latency_bbr)
+        {
+            int ret = high_latency_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(high_latency_cubic)
+        {
+            int ret = high_latency_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(high_latency_probeRTT)
+        {
+            int ret = high_latency_probeRTT_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cid_length)
         {
             int ret = cid_length_test();

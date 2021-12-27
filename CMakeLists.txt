@@ -131,6 +131,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cplusplus.cpp
     picoquictest/datagram_tests.c
     picoquictest/hashtest.c
+    picoquictest/high_latency_test.c
     picoquictest/intformattest.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c

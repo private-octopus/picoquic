@@ -36,7 +36,7 @@ extern "C" {
 #define PICOQUIC_TEST_SNI "test.example.com"
 #define PICOQUIC_TEST_ALPN "picoquic-test"
 #define PICOQUIC_TEST_WRONG_ALPN "picoquic-bla-bla"
-#define PICOQUIC_TEST_MAX_TEST_STREAMS 18
+#define PICOQUIC_TEST_MAX_TEST_STREAMS 100
 
 #define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
 
