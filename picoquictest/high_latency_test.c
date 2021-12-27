@@ -314,6 +314,22 @@ int high_latency_cubic_test()
         expected_completion, latency, 10, 10, 0, 0, 0, 0);
 }
 
+/* Test a long duration connection, to detect possible issues with
+ * BBR transitioning to "probe RTT" after 10 seconds. No issue
+ * detected, but still some code verifications to do.
+ */
+
+int high_latency_probeRTT_test()
+{
+    /* Simple test. */
+    uint64_t latency = 5000000;
+    uint64_t expected_completion = 836000000;
+
+    return high_latency_one(picoquic_bbr_algorithm,
+        hilat_scenario_100mb, sizeof(hilat_scenario_100mb),
+        expected_completion, latency, 1, 1, 0, 0, 0, 0);
+}
+
 #if 0
 /* We may want to run additional test to check the behavior of BBR over
  * long delay links in the same way as satellite tests.

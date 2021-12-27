@@ -1485,6 +1485,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(high_latency_probeRTT)
+        {
+            int ret = high_latency_probeRTT_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cid_length)
         {
             int ret = cid_length_test();
