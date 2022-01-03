@@ -82,38 +82,50 @@ static const uint8_t* picoquic_log_stream_frame(FILE* f, const uint8_t* bytes, c
         bytes = picoquic_log_varint_skip(bytes, bytes_max); /* offset */
     }
 
-    if ((ftype & 2) != 0) {
-        bytes = picoquic_log_length(bytes, bytes_max, &length); /* length */
-        has_length = 1;
-    } else {
-        length = bytes_max - bytes;
-    }
-
-    if (length < extra_bytes) {
-        /* Add up to 8 bytes of content that can be documented in the qlog */
-        extra_bytes = length;
-    }
-
-    if (has_length) {
-        picoquic_binlog_frame(f, bytes_begin, bytes + extra_bytes);
-    }
-    else {
-        uint8_t* log_next = log_buffer;
-        size_t l_head = bytes - bytes_begin;
-
-        memcpy(log_buffer, bytes_begin, l_head);
-        log_next += l_head;
-        if ((log_next = picoquic_frames_varint_encode(log_next, log_buffer + 256, length)) != NULL) {
-            memcpy(log_next, bytes, extra_bytes);
-            log_next += extra_bytes;
-            picoquic_binlog_frame(f, log_buffer, log_next);
+    if (bytes != NULL) {
+        if ((ftype & 2) != 0) {
+            bytes = picoquic_log_length(bytes, bytes_max, &length); /* length */
+            has_length = 1;
         }
         else {
-            picoquic_binlog_frame(f, log_buffer, log_buffer + l_head);
+            length = bytes_max - bytes;
         }
     }
 
-    bytes = picoquic_log_fixed_skip(bytes, bytes_max, length);
+    if (bytes != NULL) {
+        if (length < extra_bytes) {
+            /* Add up to 8 bytes of content that can be documented in the qlog */
+            extra_bytes = length;
+        }
+        if (has_length) {
+            picoquic_binlog_frame(f, bytes_begin, bytes + extra_bytes);
+        }
+        else {
+            uint8_t* log_next = log_buffer;
+            size_t l_head = bytes - bytes_begin;
+
+            memcpy(log_buffer, bytes_begin, l_head);
+            log_next += l_head;
+            if ((log_next = picoquic_frames_varint_encode(log_next, log_buffer + 256, length)) != NULL) {
+                memcpy(log_next, bytes, extra_bytes);
+                log_next += extra_bytes;
+                picoquic_binlog_frame(f, log_buffer, log_next);
+            }
+            else {
+                picoquic_binlog_frame(f, log_buffer, log_buffer + l_head);
+            }
+        }
+
+        bytes = picoquic_log_fixed_skip(bytes, bytes_max, length);
+    }
+    else {
+        /* Cautiously log the beginning of the erroneous frame */
+        length = bytes_max - bytes_begin;
+        if (length > 26) {
+            length = 26;
+        }
+        picoquic_binlog_frame(f, bytes_begin, bytes_begin + length);
+    }
     return bytes;
 }
 
