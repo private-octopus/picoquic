@@ -679,14 +679,18 @@ int picoquic_parse_header_and_decrypt(
                         /* Initial CID too short -- ignore the packet */
                         ret = PICOQUIC_ERROR_INITIAL_CID_TOO_SHORT;
                     }
-                    else {
+                    else if (!quic->enforce_client_only) {
                         /* if listening is OK, listen */
+
                         *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
                         /* If an incoming connection was created, register the ICID */
                         *new_ctx_created = (*pcnx == NULL) ? 0 : 1;
                         if (*pcnx == NULL) {
                             DBG_PRINTF("%s", "Cannot create connection context\n");
                         }
+                    }
+                    else {
+                        DBG_PRINTF("%s", "Refuse to create connection context\n");
                     }
                 }
             }

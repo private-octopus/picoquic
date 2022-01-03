@@ -522,6 +522,14 @@ int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic,
 /* Set client authentication in TLS (if enabled, client is required to send certificates). */
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
 
+/* By default, a quic context authorizes incoming connections if the certificate and
+ * private key are provided, but if client authentication is required the client context
+ * will also have certificaye and key. In that case, the function "enforce_client_only"
+ * can be used to specify a pure client (do_enforce=1). For peer-to-peer application
+ * that expect both incoming connections, there is no need to call that API, but it
+ * could be used with "do_enforce = 0". */
+void picoquic_enforce_client_only(picoquic_quic_t* quic, int do_enforce);
+
 /* Set default padding policy for the context */
 void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize);
 

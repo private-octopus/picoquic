@@ -612,6 +612,8 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
                 DBG_PRINTF("%s", "Cannot create TLS context \n");
             }
             else {
+                /* In the absence of certificate or key, we assume that this is a client only context */
+                quic->enforce_client_only = (cert_file_name == NULL || key_file_name == NULL);
                 /* the random generator was initialized as part of the TLS context.
                  * Use it to create the seed for generating the per context stateless
                  * resets and the retry tokens */
@@ -4200,6 +4202,11 @@ uint64_t picoquic_get_data_received(picoquic_cnx_t* cnx)
 
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {
     picoquic_tls_set_client_authentication(quic, client_authentication);
+}
+
+void picoquic_enforce_client_only(picoquic_quic_t* quic, int do_enforce)
+{
+    quic->enforce_client_only = (do_enforce)?1:0;
 }
 
 /* Supported version upgrade.
