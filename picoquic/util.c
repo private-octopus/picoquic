@@ -317,6 +317,9 @@ int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, con
     if (cnx_id1->id_len == cnx_id2->id_len) {
         ret = memcmp(cnx_id1->id, cnx_id2->id, cnx_id1->id_len);
     }
+    else if (cnx_id1->id_len > cnx_id2->id_len) {
+        ret = 1;
+    }
 
     return ret;
 }
@@ -325,10 +328,18 @@ int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, con
 uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid)
 {
     uint64_t val64 = 0;
+    size_t i = 0;
 
-    for (size_t i = 0; i < cid->id_len; i++) {
-        val64 += val64 << 8;
+    for (; i < cid->id_len && i < 8; i++) {
+        val64 <<= 8;
         val64 += cid->id[i];
+    }
+
+    for (; i < cid->id_len; i++) {
+        uint64_t top = val64 >> 56;
+        val64 <<= 8;
+        val64 += cid->id[i];
+        val64 += top * 0x10001;
     }
 
     return val64;
