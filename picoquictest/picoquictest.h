@@ -130,6 +130,7 @@ int nat_rebinding_latency_test();
 int spin_bit_test();
 int loss_bit_test();
 int client_error_test();
+int client_only_test();
 int packet_enc_dec_test();
 int cleartext_pn_vector_test();
 int zero_rtt_spurious_test();

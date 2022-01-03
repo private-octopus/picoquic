@@ -1005,6 +1005,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(client_only)
+        {
+            int ret = client_only_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_packet_enc_dec)
         {
             int ret = packet_enc_dec_test();

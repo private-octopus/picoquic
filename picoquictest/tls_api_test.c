@@ -4470,6 +4470,7 @@ int set_certificate_and_key_test()
 
     /* Proceed with the connection loop. */
     if (ret == 0) {
+        picoquic_enforce_client_only(test_ctx->qserver, 0);
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
@@ -4529,6 +4530,10 @@ int request_client_authentication_test()
 
         if (test_ctx->qclient == NULL) {
             ret = -1;
+        }
+        else {
+            /* Enforce client only mode on the client side. */
+            picoquic_enforce_client_only(test_ctx->qclient, 1);
         }
     }
 
@@ -5244,6 +5249,45 @@ int client_error_test()
             DBG_PRINTF("Client error test mode(%s) failed.\n", mode_name[mode]);
             ret = -1;
         }
+    }
+
+    return ret;
+}
+
+/*
+* Client only test. Verify that if "client only" is set on the server context,
+* then connections are refused.
+*/
+
+int client_only_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0xc1, 0x10, 0, 0, 0, 0, 0, 0}, 8 };
+    int ret;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0) {
+        /* First, try enforcement. We do set log on the server side, but it is expected to be empty */
+        int connection_ret = 0;
+        picoquic_enforce_client_only(test_ctx->qserver, 1);
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        binlog_new_connection(test_ctx->cnx_client);
+        connection_ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        if (connection_ret == 0) {
+            DBG_PRINTF("Connection unexpectedly succeeds, state=%d, ret=%d (0x%x)",
+                test_ctx->cnx_client->cnx_state, connection_ret, connection_ret);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
     }
 
     return ret;
