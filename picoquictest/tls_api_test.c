@@ -4470,6 +4470,7 @@ int set_certificate_and_key_test()
 
     /* Proceed with the connection loop. */
     if (ret == 0) {
+        picoquic_enforce_client_only(test_ctx->qserver, 0);
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
@@ -5261,7 +5262,6 @@ int client_error_test()
 int client_only_test()
 {
     uint64_t simulated_time = 0;
-    uint64_t next_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0xc1, 0x10, 0, 0, 0, 0, 0, 0}, 8 };
