@@ -410,14 +410,14 @@ static uint8_t test_frame_type_bad_ack_blocks[] = {
 static uint8_t test_frame_type_bad_crypto_hs[] = {
     picoquic_frame_type_crypto_hs,
     0,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0x8F, 0xFF, 0xFF, 0xFF,
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
 
 static uint8_t test_frame_type_bad_datagram[] = {
     picoquic_frame_type_datagram_l,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0x8F, 0xFF, 0xFF, 0xFF, 
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
@@ -479,6 +479,11 @@ static uint8_t test_frame_type_bdp_bad_length[] = {
     0x08, 0x02, 0x04, 0x8F, 0xFF, 0xFF, 0xFF, 1, 2, 3, 4
 };
 
+static uint8_t test_frame_type_bad_frame_id[] = {
+    0xbf, 0xff, 0xff, 0xff,
+    0x08, 0x02, 0x04, 0x8F, 0xFF, 0xFF, 0xFF, 1, 2, 3, 4
+};
+
 test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM("bad_reset_stream_offset", test_frame_type_bad_reset_stream_offset, 0, 0, 3),
     TEST_SKIP_ITEM("bad_reset_stream", test_frame_type_bad_reset_stream, 0, 0, 3),
@@ -502,8 +507,8 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM("bad_abandon_2", test_frame_type_path_abandon_bad_2, 0, 0, 3),
     TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3),
     TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad_addr, 1, 0, 3),
-    TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad_length, 1, 0, 3)
-
+    TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad_length, 1, 0, 3),
+    TEST_SKIP_ITEM("bad_frame_id", test_frame_type_bad_frame_id, 1, 0, 3)
 };
 
 size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_skip_frames_t);
@@ -620,7 +625,6 @@ int skip_frame_test()
             size_t byte_max = 0;
             int pure_ack;
             int t_ret = 0;
-
             memcpy(buffer, test_frame_error_list[i].val, test_frame_error_list[i].len);
             byte_max = test_frame_error_list[i].len;
             if (test_frame_error_list[i].must_be_last == 0 && sharp_end == 0) {
@@ -1168,10 +1172,8 @@ int logger_test()
     return ret;
 }
 
-// From logwriter.c
-#if 0
-FILE* create_binlog(char const* binlog_file, uint64_t creation_time, unsigned int multipath_enabled);
-#endif
+// Test of binary logs.
+
 void binlog_new_connection(picoquic_cnx_t* cnx);
 
 void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, uint64_t path_id, int receiving, uint64_t current_time,
@@ -1225,7 +1227,7 @@ int binlog_test()
         }
         else {
             picoquic_log_new_connection(cnx);
-
+            /* Log of good packets */
             for (size_t i = 0; i < nb_test_skip_list; i++) {
 
                 picoquic_packet_header ph;
@@ -1241,7 +1243,21 @@ int binlog_test()
 
                 binlog_packet(cnx->f_binlog, &initial_cid, 0, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len);
             }
+            /* Log of bad backets */
+            for (size_t i = 0; i < nb_test_frame_error_list; i++) {
+                picoquic_packet_header ph;
+                memset(&ph, 0, sizeof(ph));
 
+                ph.ptype = picoquic_packet_1rtt_protected;
+                ph.pn64 = i;
+                ph.dest_cnx_id = initial_cid;
+                ph.srce_cnx_id = dest_cid;
+
+                ph.offset = 0;
+                ph.payload_length = test_frame_error_list[i].len;
+
+                binlog_packet(cnx->f_binlog, &initial_cid, 0, 0, 0, &ph, test_frame_error_list[i].val, test_frame_error_list[i].len);
+            }
             picoquic_delete_cnx(cnx);
         }
     }
