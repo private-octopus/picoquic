@@ -144,6 +144,7 @@ size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* 
 
         if (length > max_bytes) {
             *n64 = 0;
+            length = 0;
         }
         else {
             uint64_t v = *bytes++ & 0x3F;
