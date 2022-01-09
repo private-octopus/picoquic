@@ -135,7 +135,7 @@ void picoquic_varint_encode_16(uint8_t* bytes, uint16_t n16)
 
 size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64)
 {
-    size_t length = ((size_t)1) << ((bytes[0] & 0xC0) >> 6);
+    size_t length = (max_bytes <= 0)?0:((size_t)1) << ((bytes[0] & 0xC0) >> 6);
 
     if (length > max_bytes) {
         length = 0;
