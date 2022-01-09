@@ -1049,7 +1049,7 @@ void qlog_erroring_frame(FILE* f, bytestream* s, uint64_t ftype)
 {
     size_t extra_bytes = s->size - s->ptr;
 
-    fprintf(f, "\"unknown_type\": %" PRIu64 ",", ftype);
+    fprintf(f, ",\"unknown_type\": %" PRIu64 ",", ftype);
 
     fprintf(f, "\"begins_with\": ");
 
