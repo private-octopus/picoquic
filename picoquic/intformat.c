@@ -135,21 +135,27 @@ void picoquic_varint_encode_16(uint8_t* bytes, uint16_t n16)
 
 size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64)
 {
-    size_t length = (max_bytes <= 0)?0:((size_t)1) << ((bytes[0] & 0xC0) >> 6);
-
-    if (length > max_bytes) {
-        length = 0;
+    size_t length = 0;
+    
+    if (max_bytes < 1) {
         *n64 = 0;
     } else {
-        uint64_t v = *bytes++ & 0x3F;
+        length = ((size_t)1) << ((bytes[0] & 0xC0) >> 6);
 
-        for (size_t i = 1; i < length; i++) {
-            v <<= 8;
-            v += *bytes++;
+        if (length > max_bytes) {
+            *n64 = 0;
         }
+        else {
+            uint64_t v = *bytes++ & 0x3F;
 
-        *n64 = v;
-    }
+            for (size_t i = 1; i < length; i++) {
+                v <<= 8;
+                v += *bytes++;
+            }
+
+            *n64 = v;
+        }
+    } 
 
     return length;
 }
