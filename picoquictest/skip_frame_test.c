@@ -410,14 +410,14 @@ static uint8_t test_frame_type_bad_ack_blocks[] = {
 static uint8_t test_frame_type_bad_crypto_hs[] = {
     picoquic_frame_type_crypto_hs,
     0,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0x8F, 0xFF, 0xFF, 0xFF,
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
 
 static uint8_t test_frame_type_bad_datagram[] = {
     picoquic_frame_type_datagram_l,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0x8F, 0xFF, 0xFF, 0xFF, 
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
@@ -626,7 +626,6 @@ int skip_frame_test()
             size_t byte_max = 0;
             int pure_ack;
             int t_ret = 0;
-
             memcpy(buffer, test_frame_error_list[i].val, test_frame_error_list[i].len);
             byte_max = test_frame_error_list[i].len;
             if (test_frame_error_list[i].must_be_last == 0 && sharp_end == 0) {
@@ -1248,6 +1247,11 @@ int binlog_test()
             /* Log of bad backets */
             for (size_t i = 0; i < nb_test_frame_error_list; i++) {
 
+#if 1
+                if (i == 19) {
+                    DBG_PRINTF("%s", "Bug");
+                }
+#endif
                 picoquic_packet_header ph;
                 memset(&ph, 0, sizeof(ph));
 

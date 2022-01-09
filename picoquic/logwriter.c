@@ -50,9 +50,12 @@ static const uint8_t* picoquic_log_varint(const uint8_t* bytes, const uint8_t* b
 static const uint8_t* picoquic_log_length(const uint8_t* bytes, const uint8_t* bytes_max, size_t* nsz)
 {
     uint64_t n64 = 0;
-    size_t len = (bytes == NULL) ? 0 : picoquic_varint_decode(bytes, bytes_max - bytes, &n64);
+    size_t len = 0;
+    if (bytes != NULL) {
+        len = picoquic_varint_decode(bytes, bytes_max - bytes, &n64);
+    }
     *nsz = (size_t)n64;
-    return len == 0 || *nsz != n64 ? NULL : bytes + len;
+    return (len == 0 || *nsz != n64) ? NULL : bytes + len;
 }
 
 static void picoquic_binlog_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
@@ -449,12 +452,12 @@ static const uint8_t* picoquic_log_bdp_frame(FILE* f, const uint8_t* bytes, cons
     const uint8_t* bytes_begin = bytes;
     size_t ip_len = 0;
 
-    bytes = picoquic_log_varint_skip(bytes, bytes_max); 
-    bytes = picoquic_log_varint_skip(bytes, bytes_max); 
-    bytes = picoquic_log_varint_skip(bytes, bytes_max); 
-    bytes = picoquic_log_varint_skip(bytes, bytes_max);
-    bytes = picoquic_log_length(bytes, bytes_max, &ip_len);
-    bytes = picoquic_log_fixed_skip(bytes, bytes_max, ip_len);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Frame type */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Life time */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Bytes in flight */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* min rtt */
+    bytes = picoquic_log_length(bytes, bytes_max, &ip_len); /*  IP Address length */
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, ip_len); /* IP address value */
 
     picoquic_binlog_frame(f, bytes_begin, bytes);
 
