@@ -105,10 +105,4 @@
     "frame_type": "stream", "id": 4611684923227504639, "offset": 4611686018427387903, "length": 3, "fin": true , "has_length": false, "begins_with": "ffffff"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 7, "packet_number": 17, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 12, "packet_number": 18, "dcid": "01020304" }, "frames": []}],
-[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 7, "packet_number": 19, "dcid": "01020304" }, "frames": []}],
-[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 7, "packet_number": 20, "dcid": "01020304" }, "frames": []}],
-[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 13, "packet_number": 21, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "bdp", "lifetime": 1, "bytes_in_flight": 2, "min_rtt": 4, "ip": "0102030405"}]}],
-[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 15, "packet_number": 22, "dcid": "01020304" }, "frames": []}],
-[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 15, "packet_number": 23, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "unknown","unknown_type": 1073741823,"begins_with": "bfffffff0802048f"}]}]]}]}
+[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 7, "packet_number": 19, "dcid": "01020304" }, "frames": []}]]}]}
