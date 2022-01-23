@@ -620,7 +620,7 @@ int ticket_seed_test_one(int bdp_option)
         test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
             picoquic_null_connection_id, picoquic_null_connection_id,
             (struct sockaddr*) & test_ctx->server_addr, simulated_time,
-            0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
 
         if (test_ctx->cnx_client == NULL) {
             ret = -1;
