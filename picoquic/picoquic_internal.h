@@ -444,6 +444,7 @@ typedef struct st_picoquic_stored_ticket_t {
     uint64_t time_valid_until;
     uint16_t sni_length;
     uint16_t alpn_length;
+    uint32_t version;
     uint16_t ticket_length;
     uint8_t ip_addr_length;
     uint8_t ip_addr_client_length;
@@ -454,15 +455,16 @@ typedef struct st_picoquic_stored_ticket_t {
 int picoquic_store_ticket(picoquic_stored_ticket_t** p_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
-    const uint8_t* ip_addr, uint8_t ip_addr_length,
+    uint32_t version, const uint8_t* ip_addr, uint8_t ip_addr_length,
     const uint8_t* ip_addr_client, uint8_t ip_addr_client_length,
     uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const * tp);
 picoquic_stored_ticket_t* picoquic_get_stored_ticket(picoquic_stored_ticket_t* p_first_ticket,
     uint64_t current_time, char const* sni, uint16_t sni_length, 
-    char const* alpn, uint16_t alpn_length, int need_unused, uint64_t ticket_id);
+    char const* alpn, uint16_t alpn_length, uint32_t version, int need_unused, uint64_t ticket_id);
 int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
+    uint32_t version,
     uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t * tp, int mark_used);
 
 int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,

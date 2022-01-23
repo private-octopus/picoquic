@@ -121,12 +121,13 @@ void picoquic_demo_client_set_alpn_from_tickets(picoquic_cnx_t* cnx, picoquic_de
             if ((alpn_list[i].alpn_code == picoquic_alpn_http_3 ||
                 alpn_list[i].alpn_code == picoquic_alpn_http_0_9) &&
                 alpn_list[i].alpn_val != NULL) {
+                uint32_t version = picoquic_supported_versions[cnx->version_index].version;
                 uint8_t* ticket;
                 uint16_t ticket_length;
                 picoquic_tp_t tp;
 
                 if (picoquic_get_ticket(cnx->quic->p_first_ticket, current_time, sni, sni_len,
-                    alpn_list[i].alpn_val, (uint16_t) strlen(alpn_list[i].alpn_val), &ticket, &ticket_length, &tp, 0) == 0) {
+                    alpn_list[i].alpn_val, (uint16_t) strlen(alpn_list[i].alpn_val), version, &ticket, &ticket_length, &tp, 0) == 0) {
                     ctx->alpn = alpn_list[i].alpn_code;
                     cnx->alpn = picoquic_string_duplicate(alpn_list[i].alpn_val);
                     break;

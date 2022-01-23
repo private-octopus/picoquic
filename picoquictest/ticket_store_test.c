@@ -28,6 +28,7 @@ static char const* test_ticket_file_name = "ticket_store_test.bin";
 static char const* test_token_file_name = "token_store_test.bin";
 static char const* test_sni[] = { "example.com", "example.net", "test.example.com" };
 static char const* test_alpn[] = { "hq05", "hq07", "hq09" };
+static const uint32_t test_version[] = { 0x00000001, 0xFF000020, 0x00000002 };
 static const size_t nb_test_sni = sizeof(test_sni) / sizeof(char const*);
 static const size_t nb_test_alpn = sizeof(test_alpn) / sizeof(char const*);
 static picoquic_tp_t test_tp = {
@@ -71,6 +72,7 @@ static int ticket_store_compare(picoquic_stored_ticket_t* s1, picoquic_stored_ti
         } else {
             if (c1->time_valid_until != c2->time_valid_until ||
                 c1->sni_length != c2->sni_length || c1->alpn_length != c2->alpn_length ||
+                c1->version != c2->version ||
                 c1->ip_addr_length != c2->ip_addr_length || c1->ticket_length != c2->ticket_length ||
                 memcmp(c1->sni, c2->sni, c1->sni_length) != 0 || 
                 memcmp(c1->alpn, c2->alpn, c1->alpn_length) != 0 ||
@@ -174,7 +176,7 @@ int ticket_store_test()
             ret = picoquic_store_ticket(&p_first_ticket, current_time,
                 test_sni[i], (uint16_t)strlen(test_sni[i]),
                 test_alpn[j], (uint16_t)strlen(test_alpn[j]),
-                ip_addr, ip_addr_length,
+                test_version[j], ip_addr, ip_addr_length,
                 ip_addr_client, ip_addr_client_length,
                 ticket, ticket_length, &test_tp);
             if (ret != 0) {
@@ -192,6 +194,7 @@ int ticket_store_test()
             ret = picoquic_get_ticket(p_first_ticket, current_time,
                 test_sni[i], (uint16_t)strlen(test_sni[i]),
                 test_alpn[j], (uint16_t)strlen(test_alpn[j]),
+                test_version[j],
                 &ticket, &ticket_length, NULL, 0);
             if (ret != 0) {
                 break;
@@ -557,7 +560,7 @@ int ticket_seed_test_one(int bdp_option)
         client_ticket = picoquic_get_stored_ticket(test_ctx->qclient->p_first_ticket, simulated_time,
             PICOQUIC_TEST_SNI, (uint16_t)strlen(PICOQUIC_TEST_SNI),
             PICOQUIC_TEST_ALPN, (uint16_t)strlen(PICOQUIC_TEST_ALPN),
-            0, test_ctx->cnx_client->issued_ticket_id);
+            0, 0, test_ctx->cnx_client->issued_ticket_id);
 
         if (client_ticket == NULL) {
             DBG_PRINTF("%s", "No ticket found for client.");
@@ -620,7 +623,7 @@ int ticket_seed_test_one(int bdp_option)
         test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
             picoquic_null_connection_id, picoquic_null_connection_id,
             (struct sockaddr*) & test_ctx->server_addr, simulated_time,
-            0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
 
         if (test_ctx->cnx_client == NULL) {
             ret = -1;

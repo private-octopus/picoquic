@@ -1120,23 +1120,34 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
         /* Encoding*/
         if (aead_enc == NULL) {
             ret = -1;
-        } else if ((ret = ptls_buffer_reserve(dst, 8 + src.len + aead_enc->algo->tag_size)) == 0) {
+        } else if ((ret = ptls_buffer_reserve(dst, 8 + 4 + src.len + aead_enc->algo->tag_size)) == 0) {
             /* Create and store the ticket sequence number */
+            uint32_t version_number = picoquic_supported_versions[quic->cnx_in_progress->version_index].version;
             uint64_t seq_num = picoquic_public_random_64();
+            size_t start_off;
+            size_t data_length;
+
             picoformat_64(dst->base + dst->off, seq_num);
             dst->off += 8;
+            start_off = dst->off;
+            /* Copy initial ticket to dst field before encryption. */
+            memcpy(dst->base + dst->off, src.base, src.len);
+            data_length = src.len;
+            /* Add the version number */
+            picoformat_32(dst->base + dst->off + data_length, version_number);
+            data_length += 4;
             /* Run AEAD encryption */
             dst->off += ptls_aead_encrypt(aead_enc, dst->base + dst->off,
-                src.base, src.len, seq_num, NULL, 0);
+                dst->base + start_off, data_length, seq_num, NULL, 0);
             /* Remember issued ticket ID in connection context */
             quic->cnx_in_progress->issued_ticket_id = seq_num;
         }
     } else {
         ptls_aead_context_t* aead_dec = (ptls_aead_context_t*)quic->aead_decrypt_ticket_ctx;
-        /* Encoding*/
+        /* Decoding*/
         if (aead_dec == NULL) {
             ret = -1;
-        } else if (src.len < 8 + aead_dec->algo->tag_size) {
+        } else if (src.len < 8 + 4 + aead_dec->algo->tag_size) {
             ret = -1;
         } else if ((ret = ptls_buffer_reserve(dst, src.len)) == 0) {
             /* Decode the ticket sequence number */
@@ -1151,21 +1162,31 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
                 picoquic_log_app_message(quic->cnx_in_progress, "%s",
                     "Session ticket could not be decrypted");
             } else {
-                picoquic_issued_ticket_t* server_ticket;
-                dst->off += decrypted;
-                picoquic_log_app_message(quic->cnx_in_progress, "%s",
-                    "Session ticket properly decrypted");
-                /* Remember resumed ticket ID in connection context */
-                quic->cnx_in_progress->resumed_ticket_id = seq_num;
-                /* Remember rtt and cwin from ticket */
-                server_ticket = picoquic_retrieve_issued_ticket(quic, seq_num);
-                if (server_ticket != NULL && server_ticket->cwin > 0) {
-                    picoquic_seed_bandwidth(
-                        quic->cnx_in_progress,
-                        server_ticket->rtt,
-                        server_ticket->cwin,
-                        server_ticket->ip_addr,
-                        server_ticket->ip_addr_length);
+                /* decode and verify the version number */
+                uint32_t version_number = PICOPARSE_32(dst->base + dst->off + decrypted - 4);
+                if (version_number != picoquic_supported_versions[quic->cnx_in_progress->version_index].version) {
+                    /* wrong version error */
+                    ret = -1;
+                    picoquic_log_app_message(quic->cnx_in_progress, "Ticket version mismatch, expected 0x%x, got 0x%x",
+                        picoquic_supported_versions[quic->cnx_in_progress->version_index].version, version_number);
+                }
+                else {
+                    picoquic_issued_ticket_t* server_ticket;
+                    dst->off += decrypted - 4;
+                    picoquic_log_app_message(quic->cnx_in_progress, "%s",
+                        "Session ticket properly decrypted");
+                    /* Remember resumed ticket ID in connection context */
+                    quic->cnx_in_progress->resumed_ticket_id = seq_num;
+                    /* Remember rtt and cwin from ticket */
+                    server_ticket = picoquic_retrieve_issued_ticket(quic, seq_num);
+                    if (server_ticket != NULL && server_ticket->cwin > 0) {
+                        picoquic_seed_bandwidth(
+                            quic->cnx_in_progress,
+                            server_ticket->rtt,
+                            server_ticket->cwin,
+                            server_ticket->ip_addr,
+                            server_ticket->ip_addr_length);
+                    }
                 }
             }
         }
@@ -1187,6 +1208,7 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
     const char* sni = ptls_get_server_name(tls);
     const char* alpn = ptls_get_negotiated_protocol(tls);
     picoquic_cnx_t * cnx = (picoquic_cnx_t *)*ptls_get_data_ptr(tls);
+    uint32_t version = picoquic_supported_versions[cnx->version_index].version;
 
     if (alpn == NULL && quic != NULL) {
         alpn = quic->default_alpn;
@@ -1195,7 +1217,7 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
     if (sni != NULL && alpn != NULL) {
         /* TODO: SHOULD STORE IP ADDRESSES? */
         ret = picoquic_store_ticket(&quic->p_first_ticket, 0, sni, (uint16_t)strlen(sni),
-            alpn, (uint16_t)strlen(alpn), NULL, 0, NULL, 0,
+            alpn, (uint16_t)strlen(alpn), version, NULL, 0, NULL, 0,
             input.base, (uint16_t)input.len, &cnx->remote_parameters);
         /* Set first 8 bytes of ticket as identifier */
         if (input.len > 8) {
@@ -2271,7 +2293,7 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
     if (cnx->sni != NULL && cnx->alpn != NULL && !cnx->quic->client_zero_share) {
         picoquic_stored_ticket_t* stored_ticket = picoquic_get_stored_ticket(cnx->quic->p_first_ticket, 
             current_time, cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
-            1, 0);
+            picoquic_supported_versions[cnx->version_index].version, 1, 0);
         if (stored_ticket != NULL) {
             ctx->handshake_properties.client.session_ticket.base = stored_ticket->ticket;
             ctx->handshake_properties.client.session_ticket.len = stored_ticket->ticket_length;
