@@ -1208,6 +1208,7 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
     const char* sni = ptls_get_server_name(tls);
     const char* alpn = ptls_get_negotiated_protocol(tls);
     picoquic_cnx_t * cnx = (picoquic_cnx_t *)*ptls_get_data_ptr(tls);
+    uint32_t version = picoquic_supported_versions[cnx->version_index].version;
 
     if (alpn == NULL && quic != NULL) {
         alpn = quic->default_alpn;
@@ -1216,7 +1217,7 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
     if (sni != NULL && alpn != NULL) {
         /* TODO: SHOULD STORE IP ADDRESSES? */
         ret = picoquic_store_ticket(&quic->p_first_ticket, 0, sni, (uint16_t)strlen(sni),
-            alpn, (uint16_t)strlen(alpn), NULL, 0, NULL, 0,
+            alpn, (uint16_t)strlen(alpn), version, NULL, 0, NULL, 0,
             input.base, (uint16_t)input.len, &cnx->remote_parameters);
         /* Set first 8 bytes of ticket as identifier */
         if (input.len > 8) {
@@ -2292,7 +2293,7 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
     if (cnx->sni != NULL && cnx->alpn != NULL && !cnx->quic->client_zero_share) {
         picoquic_stored_ticket_t* stored_ticket = picoquic_get_stored_ticket(cnx->quic->p_first_ticket, 
             current_time, cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
-            1, 0);
+            picoquic_supported_versions[cnx->version_index].version, 1, 0);
         if (stored_ticket != NULL) {
             ctx->handshake_properties.client.session_ticket.base = stored_ticket->ticket;
             ctx->handshake_properties.client.session_ticket.len = stored_ticket->ticket_length;

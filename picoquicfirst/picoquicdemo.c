@@ -838,7 +838,7 @@ int quic_client(const char* ip_address_text, int server_port,
         uint16_t ticket_length;
 
         if (sni != NULL && loop_cb.saved_alpn != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time, sni, (uint16_t)strlen(sni), loop_cb.saved_alpn,
-            (uint16_t)strlen(loop_cb.saved_alpn), &ticket, &ticket_length, NULL, 0)) {
+            (uint16_t)strlen(loop_cb.saved_alpn), 0, &ticket, &ticket_length, NULL, 0)) {
             fprintf(stdout, "Received ticket from %s (%s):\n", sni, loop_cb.saved_alpn);
             picoquic_log_picotls_ticket(stdout, picoquic_null_connection_id, ticket, ticket_length);
         }
