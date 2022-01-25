@@ -2186,7 +2186,7 @@ int vn_compat_test()
 
     if (ret == 0) {
         /* Set the desired version */
-        picoquic_set_desired_version(test_ctx->cnx_client, PICOQUIC_V2_VERSION_DRAFT);
+        picoquic_set_desired_version(test_ctx->cnx_client, PICOQUIC_V2_VERSION_DRAFT_01);
         /* Start the client connection */
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
@@ -2202,12 +2202,12 @@ int vn_compat_test()
 
 
     if (ret == 0) {
-        if (picoquic_supported_versions[test_ctx->cnx_client->version_index].version != PICOQUIC_V2_VERSION_DRAFT) {
+        if (picoquic_supported_versions[test_ctx->cnx_client->version_index].version != PICOQUIC_V2_VERSION_DRAFT_01) {
             DBG_PRINTF("Client remained to version 0x%8x",
                 picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
             ret = -1;
         }
-        else if (picoquic_supported_versions[test_ctx->cnx_server->version_index].version != PICOQUIC_V2_VERSION_DRAFT) {
+        else if (picoquic_supported_versions[test_ctx->cnx_server->version_index].version != PICOQUIC_V2_VERSION_DRAFT_01) {
             DBG_PRINTF("Server remained to version 0x%8x",
                 picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
             ret = -1;

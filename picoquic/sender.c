@@ -406,6 +406,61 @@ void picoquic_update_payload_length(
     }
 }
 
+uint8_t picoquic_create_long_packet_type(picoquic_packet_type_enum pt, int version_index)
+{
+    uint8_t flags = 0xFF; /* Will cause an error... */
+    if (version_index < 0) {
+        version_index = 0;
+    }
+    switch (picoquic_supported_versions[version_index].packet_type_version) {
+    case PICOQUIC_V1_VERSION:
+        switch (pt) {
+        case picoquic_packet_initial:
+            flags = 0xC3;
+            break;
+        case picoquic_packet_0rtt_protected:
+            flags = 0xD3;
+            break;
+        case picoquic_packet_handshake:
+            flags = 0xE3;
+            break;
+        case picoquic_packet_retry:
+            /* Do not set PP in retry header, the bits are later used for ODCIL */
+            flags = 0xF0;
+            break;
+        default:
+            break;
+        }
+        break;
+    case PICOQUIC_V2_VERSION:
+        /* Initial packets use a packet type field of 0b01. */
+        /* 0-RTT packets use a packet type field of 0b10. */
+        /* Handshake packets use a packet type field of 0b11. */
+        /* Retry packets use a packet type field of 0b00.*/
+        switch (pt) {
+        case picoquic_packet_initial:
+            flags = 0xD3;
+            break;
+        case picoquic_packet_0rtt_protected:
+            flags = 0xE3;
+            break;
+        case picoquic_packet_handshake:
+            flags = 0xF3;
+            break;
+        case picoquic_packet_retry:
+            /* Do not set PP in retry header, the bits are later used for ODCIL */
+            flags = 0xC0;
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+    return flags;
+}
+
 size_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
@@ -466,24 +521,18 @@ size_t picoquic_create_packet_header(
                 && picoquic_is_connection_id_null(&path_x->p_remote_cnxid->cnx_id)) ?
             cnx->initial_cnxid : path_x->p_remote_cnxid->cnx_id;
 
-        switch (packet_type) {
-        case picoquic_packet_initial:
-            bytes[0] = 0xC3;
-            break;
-        case picoquic_packet_0rtt_protected:
-            bytes[0] = 0xD3;
-            break;
-        case picoquic_packet_handshake:
-            bytes[0] = 0xE3;
-            break;
-        case picoquic_packet_retry:
-            /* Do not set PP in retry header, the bits are later used for ODCIL */
-            bytes[0] = 0xF0;
-            break;
-        default:
-            bytes[0] = 0xFF; /* Will cause an error... */
-            break;
-        }
+        /* The first byte is defined in RFC 9000 as:
+         *     Header Form (1) = 1,
+         *     Fixed Bit (1) = 1,
+         *     Long Packet Type (2),
+         *     Type-Specific Bits (4)
+         * The packet type is version dependent. In fact, the whole first byte is version
+         * dependent, the invariant draft only specifies the "header form" bit = 1 for long
+         * header. In version 1, the packet specific bytes are two reserved bytes +
+         * sequence number length, always set to 3 in picoquic (i.e., 4 bytes).
+         * 
+         */
+        bytes[0] = picoquic_create_long_packet_type(packet_type, cnx->version_index);
 
         if (cnx->do_grease_quic_bit) {
             bytes[0] &= 0xBF;
