@@ -569,6 +569,25 @@ int quic_client(const char* ip_address_text, int server_port,
         }
     }
 
+    /* If needed, set ALPN and proposed version from tickets */
+    if (config->alpn == NULL || config->proposed_version == 0) {
+        char const* ticket_alpn;
+        uint32_t ticket_version;
+
+        if (picoquic_demo_client_get_alpn_and_version_from_tickets(qclient,  sni, config->alpn,
+            config->proposed_version, current_time, &ticket_alpn, &ticket_version) == 0) {
+            if (ticket_alpn != NULL) {
+                fprintf(stdout, "Set ALPN to %s based on stored ticket\n", ticket_alpn);
+                picoquic_config_set_option(config, picoquic_option_ALPN, ticket_alpn);
+            }
+            
+            if (ticket_version != 0) {
+                fprintf(stdout, "Set version to 0x%08x based on stored ticket\n", ticket_version);
+                config->proposed_version = ticket_version;
+            }
+        }
+    }
+
     /* Create the client connection */
     if (ret == 0) {
         /* Create a client connection */
@@ -589,15 +608,6 @@ int quic_client(const char* ip_address_text, int server_port,
             }
             else {
                 picoquic_set_callback(cnx_client, picoquic_demo_client_callback, &callback_ctx);
-
-                if (cnx_client->alpn == NULL) {
-                    picoquic_demo_client_set_alpn_from_tickets(cnx_client, &callback_ctx, current_time);
-                    if (cnx_client->alpn != NULL) {
-                        fprintf(stdout, "Set ALPN to %s based on stored ticket\n", cnx_client->alpn);
-                        picoquic_log_app_message(cnx_client,
-                            "Set ALPN to %s based on stored ticket", cnx_client->alpn);
-                    }
-                }
 
                 /* Requires TP grease, for interop tests */
                 cnx_client->grease_transport_parameters = 1;

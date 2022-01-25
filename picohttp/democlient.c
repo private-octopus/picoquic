@@ -111,30 +111,46 @@ picoquic_alpn_enum picoquic_parse_alpn_nz(char const* alpn, size_t len)
     return code;
 }
 
-void picoquic_demo_client_set_alpn_from_tickets(picoquic_cnx_t* cnx, picoquic_demo_callback_ctx_t* ctx, uint64_t current_time)
+int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic,
+    char const* sni, char const* alpn, uint32_t proposed_version, uint64_t current_time, 
+    char const ** ticket_alpn, uint32_t * ticket_version)
 {
-    const char* sni = cnx->sni;
+    int ret = -1;
+    *ticket_version = 0;
+    *ticket_alpn = NULL;
     if (sni != NULL) {
-        uint16_t sni_len = (uint16_t) strlen(sni);
+        uint16_t sni_length = (uint16_t) strlen(sni);
+        uint8_t* ticket = NULL;
+        uint16_t ticket_length = 0;
+        picoquic_tp_t tp;
 
-        for (size_t i = 0; i < nb_alpn_list; i++) {
-            if ((alpn_list[i].alpn_code == picoquic_alpn_http_3 ||
-                alpn_list[i].alpn_code == picoquic_alpn_http_0_9) &&
-                alpn_list[i].alpn_val != NULL) {
-                uint32_t version = picoquic_supported_versions[cnx->version_index].version;
-                uint8_t* ticket;
-                uint16_t ticket_length;
-                picoquic_tp_t tp;
-
-                if (picoquic_get_ticket(cnx->quic->p_first_ticket, current_time, sni, sni_len,
-                    alpn_list[i].alpn_val, (uint16_t) strlen(alpn_list[i].alpn_val), version, &ticket, &ticket_length, &tp, 0) == 0) {
-                    ctx->alpn = alpn_list[i].alpn_code;
-                    cnx->alpn = picoquic_string_duplicate(alpn_list[i].alpn_val);
-                    break;
+        if (alpn == NULL) {
+            for (size_t i = 0; i < nb_alpn_list; i++) {
+                if ((alpn_list[i].alpn_code == picoquic_alpn_http_3 ||
+                    alpn_list[i].alpn_code == picoquic_alpn_http_0_9) &&
+                    alpn_list[i].alpn_val != NULL) {
+                    if (picoquic_get_ticket_and_version(quic->p_first_ticket, current_time,
+                        sni, sni_length, alpn_list[i].alpn_val, (uint16_t)strlen(alpn_list[i].alpn_val), proposed_version, ticket_version,
+                        &ticket, &ticket_length, &tp, 0) == 0){
+                        ret = 0;
+                        *ticket_alpn = alpn_list[i].alpn_val;
+                        break;
+                    }
+                    else {
+                        ticket_version = 0;
+                    }
                 }
             }
         }
+        else if (proposed_version == 0) {
+            if (picoquic_get_ticket_and_version(quic->p_first_ticket, current_time,
+                sni, sni_length, alpn, (uint16_t)strlen(alpn), proposed_version, ticket_version,
+                &ticket, &ticket_length, &tp, 0) == 0) {
+                ret = 0;
+            }
+        }
     }
+    return ret;
 }
 
 /*
