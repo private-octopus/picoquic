@@ -349,10 +349,10 @@ picoquic_stored_ticket_t* picoquic_get_stored_ticket(picoquic_stored_ticket_t* p
     return next;
 }
 
-int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
+int picoquic_get_ticket_and_version(picoquic_stored_ticket_t* p_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
-    uint32_t version,
+    uint32_t version, uint32_t * ticket_version,
     uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t * tp, int mark_used)
 {
     int ret = 0;
@@ -371,11 +371,27 @@ int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
             tp->initial_max_stream_data_uni = next->tp_0rtt[picoquic_tp_0rtt_max_stream_data_uni];
             tp->initial_max_stream_id_bidir = next->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir];
             tp->initial_max_stream_id_unidir = next->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir];
+            *ticket_version = next->version;
         }
         *ticket = next->ticket;
         *ticket_length = next->ticket_length;
         next->was_used = mark_used;
     }
+
+    return ret;
+}
+
+int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
+    uint64_t current_time,
+    char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
+    uint32_t version,
+    uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t* tp, int mark_used)
+{
+    uint32_t ticket_version = 0;
+
+    int ret = picoquic_get_ticket_and_version(p_first_ticket, current_time,
+        sni, sni_length, alpn, alpn_length, version, &ticket_version,
+        ticket, ticket_length, tp, mark_used);
 
     return ret;
 }

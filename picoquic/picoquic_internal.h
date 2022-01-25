@@ -468,6 +468,11 @@ int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     uint32_t version,
     uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t * tp, int mark_used);
+int picoquic_get_ticket_and_version(picoquic_stored_ticket_t* p_first_ticket,
+    uint64_t current_time,
+    char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
+    uint32_t version, uint32_t* ticket_version,
+    uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t* tp, int mark_used);
 
 int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
     uint64_t current_time, char const* ticket_file_name);
