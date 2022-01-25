@@ -920,6 +920,9 @@ uint16_t picoquic_tls_get_quic_extension_id(picoquic_cnx_t* cnx)
 {
     int v = picoquic_supported_versions[cnx->version_index].version;
     uint16_t quic_ext_id = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_V1;
+
+    /* Manage exception for old versions, that were using the
+     * provisional code for the transport parameters */
     
     if (v == PICOQUIC_SEVENTEENTH_INTEROP_VERSION ||
         v == PICOQUIC_EIGHTEENTH_INTEROP_VERSION ||
