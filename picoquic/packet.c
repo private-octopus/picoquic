@@ -35,6 +35,57 @@
 #include <stdlib.h>
 #include <string.h>
 
+picoquic_packet_type_enum picoquic_parse_long_packet_type(uint8_t flags, int version_index)
+{
+    picoquic_packet_type_enum pt = picoquic_packet_error;
+
+    switch (picoquic_supported_versions[version_index].packet_type_version) {
+    case PICOQUIC_V1_VERSION:
+        switch ((flags >> 4) & 3) {
+        case 0: /* Initial */
+            pt = picoquic_packet_initial;
+            break;
+        case 1: /* 0-RTT Protected */
+            pt = picoquic_packet_0rtt_protected;
+            break;
+        case 2: /* Handshake */
+            pt = picoquic_packet_handshake;
+            break;
+        case 3: /* Retry */
+            pt = picoquic_packet_retry;
+            break;
+        default: /* Not a valid packet type */
+            break;
+        }
+        break;
+    case PICOQUIC_V2_VERSION:
+        /* Initial packets use a packet type field of 0b01. */
+        /* 0-RTT packets use a packet type field of 0b10. */
+        /* Handshake packets use a packet type field of 0b11. */
+        /* Retry packets use a packet type field of 0b00.*/
+        switch ((flags >> 4) & 3) {
+        case 1: /* Initial */
+            pt = picoquic_packet_initial;
+            break;
+        case 2: /* 0-RTT Protected */
+            pt = picoquic_packet_0rtt_protected;
+            break;
+        case 3: /* Handshake */
+            pt = picoquic_packet_handshake;
+            break;
+        case 0: /* Retry */
+            pt = picoquic_packet_retry;
+            break;
+        default: /* Not a valid packet type */
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+    return pt;
+}
+
 int picoquic_parse_long_packet_header(
     picoquic_quic_t* quic,
     const uint8_t* bytes,
@@ -98,8 +149,19 @@ int picoquic_parse_long_packet_header(
             ph->has_spin_bit = 0;
             ph->quic_bit_is_zero = (flags & 0x40) == 0;
 
-            switch ((flags >> 4) & 3) {
-            case 0: /* Initial */
+            /* The first byte is defined in RFC 9000 as:
+             *     Header Form (1) = 1,
+             *     Fixed Bit (1) = 1,
+             *     Long Packet Type (2),
+             *     Type-Specific Bits (4)
+             * The packet type is version dependent. In fact, the whole first byte is version
+             * dependent, the invariant draft only specifies the "header form" bit = 1 for long
+             * header. In version 1, the packet specific bytes are two reserved bytes +
+             * sequence number length. We assume the same for version 2.
+             */
+            ph->ptype = picoquic_parse_long_packet_type(flags, ph->version_index);
+            switch (ph->ptype) {
+            case picoquic_packet_initial: /* Initial */
             {
                 /* special case of the initial packets. They contain a retry token between the header
                 * and the encrypted payload */
@@ -116,7 +178,6 @@ int picoquic_parse_long_packet_header(
                     ph->offset = length;
                 }
                 else {
-                    ph->ptype = picoquic_packet_initial;
                     ph->pc = picoquic_packet_context_initial;
                     ph->token_length = tok_len;
                     ph->token_bytes = bytes;
@@ -126,23 +187,20 @@ int picoquic_parse_long_packet_header(
 
                 break;
             }
-            case 1: /* 0-RTT Protected */
-                ph->ptype = picoquic_packet_0rtt_protected;
+            case picoquic_packet_0rtt_protected: /* 0-RTT Protected */
                 ph->pc = picoquic_packet_context_application;
                 ph->epoch = picoquic_epoch_0rtt;
                 break;
-            case 2: /* Handshake */
-                ph->ptype = picoquic_packet_handshake;
+            case picoquic_packet_handshake: /* Handshake */
                 ph->pc = picoquic_packet_context_handshake;
                 ph->epoch = picoquic_epoch_handshake;
                 break;
-            case 3: /* Retry */
-                ph->ptype = picoquic_packet_retry;
+            case picoquic_packet_retry: /* Retry */
                 ph->pc = picoquic_packet_context_initial;
                 ph->epoch = picoquic_epoch_initial;
                 break;
             default: /* Not a valid packet type */
-                DBG_PRINTF("Packet type is not recognized: 0x%02x\n", flags);
+                DBG_PRINTF("Packet type is not recognized: v=%08x, p[0]= 0x%02x\n", ph->vn, flags);
                 ph->ptype = picoquic_packet_error;
                 ph->version_index = -1;
                 ph->pc = 0;
