@@ -489,47 +489,6 @@ int quic_client(const char* ip_address_text, int server_port,
 
     memset(&loop_cb, 0, sizeof(client_loop_cb_t));
 
-    if (config->alpn != NULL && (strcmp(config->alpn, "siduck") == 0 || strcmp(config->alpn, "siduck-00") == 0)) {
-        /* Set a siduck client */
-        is_siduck = 1;
-        siduck_ctx = siduck_create_ctx(stdout);
-        if (siduck_ctx == NULL) {
-            fprintf(stdout, "Could not get ready to quack\n");
-            return -1;
-        }
-        fprintf(stdout, "Getting ready to quack\n");
-    }
-    else if (config->alpn != NULL && strcmp(config->alpn, QUICPERF_ALPN) == 0) {
-        /* Set a QUICPERF client */
-        is_quicperf = 1;
-        quicperf_ctx = quicperf_create_ctx(client_scenario_text);
-        if (quicperf_ctx == NULL) {
-            fprintf(stdout, "Could not get ready to run QUICPERF\n");
-            return -1;
-        }
-        fprintf(stdout, "Getting ready to run QUICPERF\n");
-    }
-    else {
-        if (config->no_disk) {
-            fprintf(stdout, "Files not saved to disk (-D, no_disk)\n");
-        }
-
-        if (client_scenario_text == NULL) {
-            client_scenario_text = test_scenario_default;
-        }
-
-        fprintf(stdout, "Testing scenario: <%s>\n", client_scenario_text);
-        ret = demo_client_parse_scenario_desc(client_scenario_text, &client_sc_nb, &client_sc);
-        if (ret != 0) {
-            fprintf(stdout, "Cannot parse the specified scenario.\n");
-            return -1;
-        }
-        else {
-            ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, config->alpn, config->no_disk, 0);
-            callback_ctx.out_dir = config->out_dir;
-        }
-    }
-
     if (ret == 0) {
         ret = picoquic_get_server_address(ip_address_text, server_port, &loop_cb.server_address, &is_name);
         if (sni == NULL && is_name != 0) {
@@ -584,6 +543,49 @@ int quic_client(const char* ip_address_text, int server_port,
             if (ticket_version != 0) {
                 fprintf(stdout, "Set version to 0x%08x based on stored ticket\n", ticket_version);
                 config->proposed_version = ticket_version;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        if (config->alpn != NULL && (strcmp(config->alpn, "siduck") == 0 || strcmp(config->alpn, "siduck-00") == 0)) {
+            /* Set a siduck client */
+            is_siduck = 1;
+            siduck_ctx = siduck_create_ctx(stdout);
+            if (siduck_ctx == NULL) {
+                fprintf(stdout, "Could not get ready to quack\n");
+                return -1;
+            }
+            fprintf(stdout, "Getting ready to quack\n");
+        }
+        else if (config->alpn != NULL && strcmp(config->alpn, QUICPERF_ALPN) == 0) {
+            /* Set a QUICPERF client */
+            is_quicperf = 1;
+            quicperf_ctx = quicperf_create_ctx(client_scenario_text);
+            if (quicperf_ctx == NULL) {
+                fprintf(stdout, "Could not get ready to run QUICPERF\n");
+                return -1;
+            }
+            fprintf(stdout, "Getting ready to run QUICPERF\n");
+        }
+        else {
+            if (config->no_disk) {
+                fprintf(stdout, "Files not saved to disk (-D, no_disk)\n");
+            }
+
+            if (client_scenario_text == NULL) {
+                client_scenario_text = test_scenario_default;
+            }
+
+            fprintf(stdout, "Testing scenario: <%s>\n", client_scenario_text);
+            ret = demo_client_parse_scenario_desc(client_scenario_text, &client_sc_nb, &client_sc);
+            if (ret != 0) {
+                fprintf(stdout, "Cannot parse the specified scenario.\n");
+                return -1;
+            }
+            else {
+                ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, config->alpn, config->no_disk, 0);
+                callback_ctx.out_dir = config->out_dir;
             }
         }
     }
