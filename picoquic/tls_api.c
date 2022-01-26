@@ -919,10 +919,20 @@ uint64_t picoquic_public_uniform_random(uint64_t rnd_max)
 uint16_t picoquic_tls_get_quic_extension_id(picoquic_cnx_t* cnx)
 {
     int v = picoquic_supported_versions[cnx->version_index].version;
-    uint16_t quic_ext_id = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_DRAFT;
+    uint16_t quic_ext_id = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_V1;
 
-    if (v == PICOQUIC_V1_VERSION || v == PICOQUIC_TWENTYFIRST_INTEROP_VERSION || v == PICOQUIC_V2_VERSION_DRAFT) {
-        quic_ext_id = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_V1;
+    /* Manage exception for old versions, that were using the
+     * provisional code for the transport parameters */
+    
+    if (v == PICOQUIC_SEVENTEENTH_INTEROP_VERSION ||
+        v == PICOQUIC_EIGHTEENTH_INTEROP_VERSION ||
+        v == PICOQUIC_NINETEENTH_INTEROP_VERSION ||
+        v == PICOQUIC_NINETEENTH_BIS_INTEROP_VERSION ||
+        v == PICOQUIC_TWENTIETH_PRE_INTEROP_VERSION ||
+        v == PICOQUIC_TWENTIETH_INTEROP_VERSION ||
+        v == PICOQUIC_INTERNAL_TEST_VERSION_1 ||
+        v == PICOQUIC_INTERNAL_TEST_VERSION_2) {
+        quic_ext_id = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_DRAFT;
     }
 
     return quic_ext_id;
