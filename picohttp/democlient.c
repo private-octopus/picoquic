@@ -126,6 +126,7 @@ int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic
 
         if (alpn == NULL) {
             for (size_t i = 0; i < nb_alpn_list; i++) {
+                *ticket_version = 0;
                 if ((alpn_list[i].alpn_code == picoquic_alpn_http_3 ||
                     alpn_list[i].alpn_code == picoquic_alpn_http_0_9) &&
                     alpn_list[i].alpn_val != NULL) {
@@ -135,9 +136,6 @@ int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic
                         ret = 0;
                         *ticket_alpn = alpn_list[i].alpn_val;
                         break;
-                    }
-                    else {
-                        ticket_version = 0;
                     }
                 }
             }
