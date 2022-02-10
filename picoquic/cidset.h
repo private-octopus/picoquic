@@ -18,9 +18,17 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#ifndef PICOQUIC_CIDSET_H
+#define PICOQUIC_CIDSET_H
+
 #include <stdio.h>
 #include "picoquic_internal.h"
 #include "picohash.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 picohash_table * cidset_create();
 picohash_table * cidset_delete(picohash_table * cids);
@@ -56,3 +64,9 @@ int cidset_iterate(const picohash_table * cids, int(*cb)(const picoquic_connecti
  *  \param cids Set of connection ids to print.
  */
 void cidset_print(FILE * f, picohash_table * cids);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* PICOQUIC_CIDSET_H */

@@ -19,11 +19,18 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#ifndef LOGREADER_H
+#define LOGREADER_H
+
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
 #include "picoquic_internal.h"
 #include "bytestream.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*! \brief Read the contents of a binary log file and call the callback
  *         function for each event found in the file.
@@ -98,3 +105,9 @@ FILE * open_outfile(const char * cid_name, const char * binlog_name, const char 
 FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint16_t * flags, uint64_t * log_time);
 
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* LOGREADER_H */

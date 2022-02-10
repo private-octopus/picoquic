@@ -18,7 +18,20 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+#ifndef LOGCONVERT_H
+#define LOGCONVERT_H
+
 #include "picoquic_internal.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 const char * ptype2str(picoquic_packet_type_enum ptype);
 const char * ftype2str(picoquic_frame_type_enum_t ftype);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* LOGCONVERT_H */

@@ -22,6 +22,10 @@
 #ifndef DEMO_SERVER_H
 #define DEMO_SERVER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* This server code is provided for demonstration purposes.
  * The demo server serves a canned index page, or generate
  * variable length content in response to requests of the
@@ -157,5 +161,9 @@ int demo_server_is_path_sane(const uint8_t* path, size_t path_length);
 
 int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size, 
     char ** file_path,char const* web_folder);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* DEMO_SERVER_H */

@@ -21,6 +21,10 @@
 #ifndef H3ZERO_H
 #define H3ZERO_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define H3ZERO_NO_ERROR 0x0100 /* No error */
 #define H3ZERO_GENERAL_PROTOCOL_ERROR  0x0101 /* Protocol violation, or no more specific information */
 #define H3ZERO_INTERNAL_ERROR 0x0102 /* Internal error */
@@ -232,5 +236,10 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state);
 
 int hzero_qpack_huffman_decode(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t * decoded, size_t max_decoded, size_t * nb_decoded);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* H3ZERO_H */

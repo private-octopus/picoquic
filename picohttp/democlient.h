@@ -32,6 +32,10 @@
  * the initial tests, and HTTP 3 for the full stack tests.
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     picoquic_alpn_undef = 0,
 	picoquic_alpn_http_0_9,
@@ -129,5 +133,9 @@ void picoquic_demo_client_delete_context(picoquic_demo_callback_ctx_t* ctx);
 
 int demo_client_parse_scenario_desc(char const * text, size_t * nb_streams, picoquic_demo_stream_desc_t ** desc);
 void demo_client_delete_scenario_desc(size_t nb_streams, picoquic_demo_stream_desc_t * desc);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* DEMO_CLIENT_H */

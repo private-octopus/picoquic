@@ -22,6 +22,10 @@
 #ifndef SIDUCK_H
 #define SIDUCK_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct st_siduck_ctx_t {
     FILE* F;
     int is_auto_alloc;
@@ -38,5 +42,9 @@ siduck_ctx_t* siduck_create_ctx(FILE* F);
 int siduck_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SIDUCK_H */

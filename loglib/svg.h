@@ -26,6 +26,10 @@
 #include "picoquic_internal.h"
 #include "bytestream.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct svg_context_st {
 
     FILE * f_txtlog;      /*!< The file handle of the opened output file. */
@@ -49,3 +53,7 @@ int svg_packet_frame(bytestream * s, void * ptr);
 int svg_packet_end(void * ptr);
 
 int svg_convert(const picoquic_connection_id_t * cid, FILE * f_binlog, FILE * f_template, const char * binlog_name, const char * out_dir);
+
+#ifdef __cplusplus
+}
+#endif
