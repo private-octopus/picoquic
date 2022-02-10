@@ -27,6 +27,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct st_picosplay_node_t {
     struct st_picosplay_node_t *parent, *left, *right;
 } picosplay_node_t;
@@ -63,5 +67,9 @@ void* picosplay_contents(picosplay_tree_t *tree);
 void picosplay_delete(picosplay_tree_t *tree, void *value);
 void picosplay_delete_hint(picosplay_tree_t *tree, picosplay_node_t *node);
 void picosplay_empty_tree(picosplay_tree_t *tree);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* PICOSPLAY_H */

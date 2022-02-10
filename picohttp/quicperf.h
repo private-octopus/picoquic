@@ -33,6 +33,9 @@
 
 #define QUICPERF_STREAM_ID_INITIAL UINT64_MAX
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct st_quicperf_stream_desc_t {
     uint64_t repeat_count;
@@ -80,5 +83,9 @@ void quicperf_delete_ctx(quicperf_ctx_t* ctx);
 int quicperf_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* QUICPERF_H */

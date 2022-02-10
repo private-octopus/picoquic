@@ -22,6 +22,10 @@
 #ifndef CC_COMMON_H
 #define CC_COMMON_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define PICOQUIC_MIN_MAX_RTT_SCOPE 7
 #define PICOQUIC_SMOOTHED_LOSS_SCOPE 32
 #define PICOQUIC_SMOOTHED_LOSS_FACTOR (1.0/16.0)
@@ -84,5 +88,9 @@ void picoquic_newreno_sim_notify(
     picoquic_congestion_notification_t notification,
     uint64_t nb_bytes_acknowledged,
     uint64_t current_time);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

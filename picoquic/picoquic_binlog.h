@@ -29,6 +29,10 @@
 #include <inttypes.h>
 #include "picoquic_internal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     picoquic_log_event_pdu_sent = 0x0002,
     picoquic_log_event_pdu_recv = 0x0003,
@@ -107,5 +111,9 @@ int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir);
 
 /* Enable binary logs, e.g. if autoqlog is requests */
 void picoquic_enable_binlog(picoquic_quic_t* quic);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* PICOQUIC_LOG_WRITER_H */

@@ -22,8 +22,16 @@
 #include <stdio.h>
 #include <inttypes.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint16_t * flags, uint64_t * log_time);
 
 /* Extract all picoquic_log_event_cc_update events from the binary log file and write them into an csv file. */
 int picoquic_cc_log_file_to_csv(char const* bin_cc_log_name, char const* csv_cc_log_name);
 int picoquic_cc_bin_to_csv(FILE * f_binlog, FILE * f_csvlog);
+
+#ifdef __cplusplus
+}
+#endif
