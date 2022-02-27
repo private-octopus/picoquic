@@ -204,6 +204,7 @@ int satellite_loss_test();
 int satellite_jitter_test();
 int satellite_medium_test();
 int satellite_preemptive_test();
+int satellite_preemptive_fc_test();
 int satellite_small_test();
 int satellite_small_up_test();
 int satellite_cubic_test();
