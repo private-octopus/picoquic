@@ -1899,7 +1899,7 @@ static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
                     /* Only perform preemptive repeat if the FIN stream has been sent */
                     uint64_t stream_id = 0;
                     uint64_t offset = 0;
-                    uint64_t data_length = 0;
+                    size_t data_length = 0;
                     int fin = 0;
                     size_t consumed = 0;
 
