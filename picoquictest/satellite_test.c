@@ -73,7 +73,14 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
         initial_cid.id[7] |= 0x80;
     }
     if (do_preemptive) {
-        initial_cid.id[7] ^= 0x0f;
+        initial_cid.id[7] |= 0x40;
+    }
+    if (has_loss) {
+        initial_cid.id[7] |= 0x20;
+
+    }
+    if (low_flow) {
+        initial_cid.id[7] |= 0x10;
     }
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
