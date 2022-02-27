@@ -51,7 +51,7 @@
  * variants: 0% loss, and 1 %loss.
  */
 static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t data_size, uint64_t max_completion_time,
-    uint64_t mbps_up, uint64_t mbps_down, uint64_t jitter, int has_loss, int do_preemptive, int seed_bw)
+    uint64_t mbps_up, uint64_t mbps_down, uint64_t jitter, int has_loss, int do_preemptive, int seed_bw, int low_flow)
 {
     uint64_t simulated_time = 0;
     uint64_t latency = 300000;
@@ -73,7 +73,14 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
         initial_cid.id[7] |= 0x80;
     }
     if (do_preemptive) {
-        initial_cid.id[7] ^= 0x0f;
+        initial_cid.id[7] |= 0x40;
+    }
+    if (has_loss) {
+        initial_cid.id[7] |= 0x20;
+
+    }
+    if (low_flow) {
+        initial_cid.id[7] |= 0x10;
     }
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
@@ -82,7 +89,14 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&server_parameters, 0);
     server_parameters.enable_time_stamp = 3;
+    if (low_flow) {
+        /* For the flow control parameters to a small value */
+        uint64_t bdp_s = (mbps_up * latency * 2) / 8;
+        uint64_t bdp_c = (mbps_up * latency * 2) / 8;
 
+        server_parameters.initial_max_data = bdp_s / 2;
+        client_parameters.initial_max_data = bdp_c / 2;
+    }
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
 
     if (ret == 0 && test_ctx == NULL) {
@@ -117,6 +131,10 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
                 ip_addr, ip_addr_length);
         }
 
+        if (low_flow) {
+            test_ctx->qserver->is_flow_control_limited = 1;
+        }
+
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
 
         /* set the binary log on the client side */
@@ -135,6 +153,16 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
             if (test_ctx->cnx_client->nb_preemptive_repeat == 0) {
                 ret = -1;
             }
+            else {
+                uint64_t bdp = mbps_up * latency * 2;
+                uint64_t bdp_p = bdp / (8 * test_ctx->cnx_client->path[0]->send_mtu);
+
+                if (test_ctx->cnx_client->nb_preemptive_repeat > bdp_p) {
+                    DBG_PRINTF("Preemptive repeats > BDP(packets): %" PRIu64 " vs %" PRIu64, 
+                        test_ctx->cnx_client->nb_preemptive_repeat, bdp_p);
+                    ret = -1;
+                }
+            }
         }
     }
 
@@ -152,60 +180,85 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 int satellite_basic_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6300000, 250, 3, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6300000, 250, 3, 0, 0, 0, 0, 0);
 }
 
 int satellite_seeded_test()
 {
     /* Simulate remembering RTT and BW from previous connection */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4800000, 250, 3, 0, 0, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4800000, 250, 3, 0, 0, 0, 1, 0);
 }
 
 int satellite_loss_test()
 {
     /* Should be less than 10 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 0, 1, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 0, 1, 0, 0, 0);
 }
 
 int satellite_preemptive_test()
 {
     /* Variation of the loss test, using preemptive repeat*/
     /* Should be less than 10 sec per draft etosat.  */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 7000000, 250, 3, 0, 1, 1, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 7000000, 250, 3, 0, 1, 1, 0, 0);
 }
 
 int satellite_jitter_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6200000, 250, 3, 3000, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6200000, 250, 3, 3000, 0, 0, 0, 0);
 }
 
 int satellite_medium_test()
 {
     /* Should be less than 20 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18000000, 50, 10, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18000000, 50, 10, 0, 0, 0, 0, 0);
 }
 
 int satellite_small_test()
 {
     /* Should be less than 85 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81000000, 10, 2, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81000000, 10, 2, 0, 0, 0, 0, 0);
 }
 
 int satellite_small_up_test()
 {
     /* Should be less than 420 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0, 0, 0, 0);
 }
 
 int satellite_cubic_test()
 {
     /* Should be less than 7 sec per draft etosat, but cubic is much slower */
-    return satellite_test_one(picoquic_cubic_algorithm, 100000000, 11000000, 250, 3, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_cubic_algorithm, 100000000, 11000000, 250, 3, 0, 0, 0, 0, 0);
 }
 
 int satellite_cubic_loss_test()
 {
     /* Should be less than 10 sec per draft etosat, but cubic is a bit slower */
-    return satellite_test_one(picoquic_cubic_algorithm, 100000000, 12100000, 250, 3, 0, 1, 0, 0);
+    return satellite_test_one(picoquic_cubic_algorithm, 100000000, 12100000, 250, 3, 0, 1, 0, 0, 0);
+}
+
+/* Satellite loss interop test, as shown in https://interop.sedrubal.de/
+ * 
+ *   File size: 10 MB
+ *   RTT: 600 ms
+ *   Data Rate: 20 Mbps forward link, 2 Mbps return link
+ *  Loss Rate (in SATLOSS test case): 1 %
+ *
+ * We are specially interested in a flow controlled case, in which the flow control
+ * window of the receiver is capped at a low value. In this case, preemptive
+ * repeat helps during the last RTT, but causes undue overhead before that. Testing
+ * requires:
+ * - turning on preemtive repeat and packet loss,
+ * - setting an artificial FC cap on the receiver side,
+ * - measuring both the completion time and the amount of overhead,
+ * - failing the test if the overhead is too high.
+ * This requires modifying the library code to implement an optional max FC window,
+ * and the test code to measure the transmission overhead.
+ */
+
+int satellite_preemptive_fc_test()
+{
+    /* Should be less than 10 sec per draft etosat, but cubic is a bit slower */
+    return satellite_test_one(picoquic_bbr_algorithm, 10000000, 12500000, 20, 2, 0, 1, 1, 0, 1);
 }

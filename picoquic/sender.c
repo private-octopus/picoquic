@@ -213,7 +213,7 @@ int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t
     size_t consumed = 0;
     picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
 
-    if (cnx->cnx_state == picoquic_state_ready){
+    if (cnx->cnx_state == picoquic_state_ready && !cnx->is_flow_control_limited){
         /* Only send the update in ready state, so that the misc frame is not picked by the
          * wrong transport context.
          * TODO: find way to queue the update so it is only sent as 0RTT or 1RTT packet.
@@ -1895,6 +1895,24 @@ static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
             if (ret == 0 && frame_is_pure_ack == 0) {
                 ret = picoquic_check_frame_needs_repeat(cnx, &old_p->bytes[byte_index],
                     frame_length, &frame_is_pure_ack, &do_not_detect_spurious);
+                if (!frame_is_pure_ack && PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
+                    /* Only perform preemptive repeat if the FIN stream has been sent */
+                    uint64_t stream_id = 0;
+                    uint64_t offset = 0;
+                    size_t data_length = 0;
+                    int fin = 0;
+                    size_t consumed = 0;
+
+                    ret = picoquic_parse_stream_header(&old_p->bytes[byte_index], frame_length,
+                        &stream_id, &offset, &data_length, &fin, &consumed);
+                    if (ret == 0) {
+                        picoquic_stream_head_t* p_stream = picoquic_find_stream(cnx, stream_id);
+
+                        if (p_stream == NULL || !p_stream->fin_sent) {
+                            frame_is_pure_ack = 1;
+                        }
+                    }
+                }
             }
 
             /* Prepare retransmission if needed */
