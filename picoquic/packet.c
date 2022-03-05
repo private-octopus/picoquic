@@ -828,6 +828,8 @@ int picoquic_parse_header_and_decrypt(
             }
         }
         else {
+            /* Clear text packet. Copy content to decrypted data */
+            memmove(decrypted_data->data, bytes, length);
             *consumed = length;
         }
     }
