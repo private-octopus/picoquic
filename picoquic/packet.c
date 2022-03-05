@@ -881,16 +881,19 @@ int picoquic_incoming_version_negotiation(
                     cnx->client_mode, length, nb_vn);
                 ret = PICOQUIC_ERROR_DETECTED;
                 break;
-            } else if (vn == cnx->proposed_version) {
+            } else if (vn == cnx->proposed_version || vn == 0) {
                 DBG_PRINTF("VN packet (%d), proposed_version[%d] = 0x%08x.\n", cnx->client_mode, nb_vn, vn);
                 ret = PICOQUIC_ERROR_DETECTED;
                 break;
             }
-            nb_vn++;
+            else if (picoquic_get_version_index(vn) >= 0){
+                /* The VN packet proposes a valid version that is locally supported */
+                nb_vn++;
+            }
         }
         if (ret == 0) {
             if (nb_vn == 0) {
-                DBG_PRINTF("VN packet (%d), does not propose any version.\n", cnx->client_mode);
+                DBG_PRINTF("VN packet (%d), does not propose any interesting version.\n", cnx->client_mode);
                 ret = PICOQUIC_ERROR_DETECTED;
             }
             else {
