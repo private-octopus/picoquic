@@ -43,6 +43,7 @@ int picohash_test();
 int bytestream_test();
 int cnxcreation_test();
 int parseheadertest();
+int incoming_initial_test();
 int pn2pn64test();
 int intformattest();
 int sacktest();

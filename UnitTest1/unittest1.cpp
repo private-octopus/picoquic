@@ -118,9 +118,16 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_parse_header)
+        TEST_METHOD(parse_header)
         {
             int ret = parseheadertest();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(incoming_initial)
+        {
+            int ret = incoming_initial_test();
 
             Assert::AreEqual(ret, 0);
         }
