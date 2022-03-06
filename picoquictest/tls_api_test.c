@@ -2236,7 +2236,7 @@ size_t test_version_negotiation_get_spoofed(picoquic_cnx_t* cnx, int spoof_mode,
                 plausible_vn = this_vn;
             }
             else if (spoof_mode != 6 && picoquic_nb_supported_versions > 1) {
-                int plausible_index = picoquic_nb_supported_versions - 1;
+                size_t plausible_index = picoquic_nb_supported_versions - 1;
                 if (cnx->version_index == plausible_index) {
                     plausible_index = 0;
                 }
