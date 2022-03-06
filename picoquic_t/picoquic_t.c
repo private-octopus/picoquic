@@ -92,6 +92,7 @@ static const picoquic_test_def_t test_table[] = {
     { "silence_test", tls_api_silence_test },
     { "version_negotiation", tls_api_version_negotiation_test },
     { "version_invariant", tls_api_version_invariant_test },
+    { "version_negotiation_spoof", test_version_negotiation_spoof },
     { "first_loss", tls_api_client_first_loss_test },
     { "second_loss", tls_api_client_second_loss_test },
     { "SH_loss", tls_api_server_first_loss_test },

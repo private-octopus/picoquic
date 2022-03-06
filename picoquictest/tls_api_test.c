@@ -2173,6 +2173,174 @@ int tls_api_version_invariant_test()
     return ret;
 }
 
+/* Test that spoofed version negotiation does not delete the connection context
+ * spoof mode:
+ * 0- valid CID
+ * 1- invalid DCID
+ * 2- invalid SCID
+ * 3- invalid VN, empty list
+ * 4- invalid list, contains current version
+ * 5- invalid list, contains null version
+ * 6- invalid list, contains only non existing versions
+ * 7- invalid VN, length not multiple of 4
+ */
+size_t test_version_negotiation_get_spoofed(picoquic_cnx_t* cnx, int spoof_mode, uint8_t * packet, size_t packet_length)
+{
+    size_t packet_index = 0;
+    picoquic_connection_id_t bad_cid = { {0xba, 0xdc, 0x1d, 0, 0, 0, 0, 0}, 8 };
+    uint32_t this_vn = picoquic_supported_versions[cnx->version_index].version;
+    uint32_t random_vn = 0xa5a6a7a8 ^ (this_vn & 0x0f0f0f0f);
+    /* First byte for long header packet */
+    if (packet_index < packet_length) {
+        packet[packet_index++] = (uint8_t)(spoof_mode | 0x80);
+    }
+    /* version value 0 */
+    if (packet_index + 4 < packet_length) {
+        picoformat_32(&packet[packet_index], 0);
+        packet_index += 4;
+    }
+    /* DCID */
+    if (packet_index + 1 < packet_length) {
+        if (spoof_mode == 1) {
+            packet[packet_index++] = bad_cid.id_len;
+            packet_index += picoquic_format_connection_id(&packet[packet_index], packet_length - packet_index, bad_cid);
+        }
+        else {
+            packet[packet_index++] = cnx->path[0]->p_local_cnxid->cnx_id.id_len;
+            packet_index += picoquic_format_connection_id(&packet[packet_index], packet_length - packet_index, cnx->path[0]->p_local_cnxid->cnx_id);
+        }
+    }
+    /* SCID */
+    if (packet_index + 1 < packet_length) {
+        if (spoof_mode == 2) {
+            packet[packet_index++] = bad_cid.id_len;
+            packet_index += picoquic_format_connection_id(&packet[packet_index], packet_length - packet_index, bad_cid);
+        }
+        else {
+            packet[packet_index++] = cnx->initial_cnxid.id_len;
+            packet_index += picoquic_format_connection_id(&packet[packet_index], packet_length - packet_index, cnx->initial_cnxid);
+        }
+    }
+    /* Encode the proposed versions */
+    if (spoof_mode != 3) {
+        if (packet_index + 4 < packet_length) {
+            picoformat_32(&packet[packet_index], random_vn);
+            packet_index += 4;
+        }
+        if (packet_index + 4 < packet_length) {
+            uint32_t plausible_vn = 0xffffffff;
+            if (spoof_mode == 4) {
+                plausible_vn = this_vn;
+            }
+            else if (spoof_mode == 5) {
+                plausible_vn = this_vn;
+            }
+            else if (spoof_mode != 6 && picoquic_nb_supported_versions > 1) {
+                int plausible_index = picoquic_nb_supported_versions - 1;
+                if (cnx->version_index == plausible_index) {
+                    plausible_index = 0;
+                }
+                plausible_vn = picoquic_supported_versions[plausible_index].version;
+            }
+            picoformat_32(&packet[packet_index], plausible_vn);
+            packet_index += 4;
+        }
+        if (spoof_mode == 7 && packet_index < packet_length) {
+            packet[packet_index++] = 0xaf;
+        }
+    }
+
+    return packet_index;
+}
+
+int test_version_negotiation_spoof_one(int spoof_mode)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    uint8_t packet[256];
+    size_t packet_length = 0;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+
+    /* Do one round of simulation so the client connection moves to initial state */
+    while (ret == 0 && nb_trials < 1024 && nb_inactive < 512) {
+        int was_active = 0;
+        nb_trials++;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+        if (test_ctx->cnx_client->cnx_state >= picoquic_state_client_init_sent) {
+            break;
+        }
+
+        if (nb_trials == 512) {
+            DBG_PRINTF("After %d trials, client state = %d, server state = %d",
+                nb_trials, (int)test_ctx->cnx_client->cnx_state,
+                (test_ctx->cnx_server == NULL) ? -1 : test_ctx->cnx_server->cnx_state);
+        }
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+    }
+    /* Verify that the connection is in the right state */
+    if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_client_init_sent) {
+        DBG_PRINTF("After %d trials, client state = %d",
+            nb_trials, (int)test_ctx->cnx_client->cnx_state);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        /* Create the spoofed VN */
+        packet_length = test_version_negotiation_get_spoofed(test_ctx->cnx_client, spoof_mode, packet, sizeof(packet));
+
+        /* Inject the spoofed VN packet */
+        ret = picoquic_incoming_packet(test_ctx->qclient, packet, packet_length,
+            (struct sockaddr*)&test_ctx->server_addr, (struct sockaddr*)&test_ctx->client_addr,
+            0, 0, simulated_time);
+    }
+
+    if (ret == 0) {
+        /* Verify that the connection survived */
+        if (test_ctx->cnx_client->cnx_state != picoquic_state_client_init_sent) {
+            DBG_PRINTF("After VN injection, client state = %d",
+                (int)test_ctx->cnx_client->cnx_state);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int test_version_negotiation_spoof()
+{
+    int ret = 0;
+
+    if (test_version_negotiation_spoof_one(0) == 0) {
+        DBG_PRINTF("%s", "VN spoof mode 0 has no effect");
+        ret = -1;
+    }
+
+    for (int spoof_mode = 1; ret == 0 && spoof_mode < 8; spoof_mode++) {
+        ret = test_version_negotiation_spoof_one(spoof_mode);
+        if (ret != 0) {
+            DBG_PRINTF("VN spoof mode %d caused failure", spoof_mode);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 /* Test the compatible VN setup.
  * This will start a connection with version 1, and verify that it gets established with version 2.
  * TODO: define the transport parameters that require the upgrade.

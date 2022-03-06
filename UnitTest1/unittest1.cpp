@@ -486,6 +486,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(version_negotiation_spoof)
+        {
+            int ret = test_version_negotiation_spoof();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_transport_param_stream_id)
         {
             int ret = transport_param_stream_id_test();

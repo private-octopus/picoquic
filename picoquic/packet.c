@@ -868,7 +868,12 @@ int picoquic_incoming_version_negotiation(
         DBG_PRINTF("Unexpected VN packet (%d), state %d, type: %d, epoch: %d, pc: %d, pn: %d\n",
             cnx->client_mode, cnx->cnx_state, ph->ptype, ph->epoch, ph->pc, (int)ph->pn);
     } else if (picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id) != 0 || ph->vn != 0) {
-        /* Packet that do not match the "echo" checks should be logged and ignored */
+        /* Packet destination ID does not match local CID, should be logged and ignored */
+        DBG_PRINTF("VN packet (%d), does not pass echo test.\n", cnx->client_mode);
+        ret = PICOQUIC_ERROR_DETECTED;
+    }
+    else if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->initial_cnxid) != 0 || ph->vn != 0) {
+        /* Packet destination ID does not match initial DCID, should be logged and ignored */
         DBG_PRINTF("VN packet (%d), does not pass echo test.\n", cnx->client_mode);
         ret = PICOQUIC_ERROR_DETECTED;
     } else {
