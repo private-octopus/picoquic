@@ -1183,6 +1183,9 @@ typedef struct st_picoquic_cnx_t {
     unsigned int send_receive_bdp_frame : 1; /* enable sending and receiving BDP frame */
     unsigned int cwin_notified_from_seed : 1; /* cwin was reset from a seeded value */
     unsigned int is_datagram_ready : 1; /* Active polling for datagrams */
+#if 1
+    unsigned int drop_first_handshake_received : 1; /* Try debug MVFST issue */
+#endif
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
     /* Spin bit policy */

@@ -2288,6 +2288,12 @@ int picoquic_incoming_segment(
                 else if (ph.has_reserved_bit_set) {
                     ret = PICOQUIC_ERROR_PACKET_HEADER_PARSING;
                 }
+#if 1
+                else if (cnx->drop_first_handshake_received) {
+                    ret = PICOQUIC_ERROR_DETECTED;
+                    cnx->drop_first_handshake_received = 0;
+                }
+#endif
                 else if (cnx->client_mode)
                 {
                     ret = picoquic_incoming_server_handshake(cnx, bytes, decrypted_data, addr_to, if_index_to, &ph, current_time);

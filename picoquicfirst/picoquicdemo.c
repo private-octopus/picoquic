@@ -615,6 +615,10 @@ int quic_client(const char* ip_address_text, int server_port,
                 cnx_client->grease_transport_parameters = 1;
                 cnx_client->local_parameters.enable_time_stamp = 3;
                 cnx_client->local_parameters.do_grease_quic_bit = 1;
+#if 1
+                /* Track MVFST server bug */
+                cnx_client->drop_first_handshake_received = 1;
+#endif
 
                 if (callback_ctx.tp != NULL) {
                     picoquic_set_transport_parameters(cnx_client, callback_ctx.tp);
