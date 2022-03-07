@@ -2292,6 +2292,7 @@ int picoquic_incoming_segment(
                 else if (cnx->drop_first_handshake_received) {
                     ret = PICOQUIC_ERROR_DETECTED;
                     cnx->drop_first_handshake_received = 0;
+                    picoquic_log_app_message(cnx, "%s", "dropped first handshake packet");
                 }
 #endif
                 else if (cnx->client_mode)
