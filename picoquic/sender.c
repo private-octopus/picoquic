@@ -2570,7 +2570,12 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
              * the last initial packet was sent, force another one to be sent. */
             uint64_t rto = picoquic_current_retransmit_timer(cnx, cnx->path[0]);
             uint64_t repeat_time = cnx->path[0]->latest_sent_time + rto;
-            force_handshake_padding = (repeat_time <= current_time);
+            if (repeat_time <= current_time) {
+                force_handshake_padding = 1;
+            } else if (*next_wake_time > repeat_time) {
+                *next_wake_time = repeat_time;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+            }
         }
     }
 
