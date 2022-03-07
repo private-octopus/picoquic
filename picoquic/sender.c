@@ -2709,16 +2709,17 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     if (ret == 0 && length == 0) {
         /* In some circumstances, there is a risk that the handshakes stops because the
          * server is performing anti-dos mitigation and the client has nothing to repeat */
-        if ((packet->ptype == picoquic_packet_initial && cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt == NULL &&
+        if ((packet->ptype == picoquic_packet_initial && (force_handshake_padding || 
+            (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt == NULL &&
             cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_newest == NULL &&
-            picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_initial].sack_list) != UINT64_MAX) ||
+            picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_initial].sack_list) != UINT64_MAX))) ||
             (packet->ptype == picoquic_packet_handshake &&
                 cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_newest == NULL &&
                 picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_handshake].sack_list) == UINT64_MAX &&
                 cnx->pkt_ctx[picoquic_packet_context_handshake].send_sequence == 0))
         {
             uint64_t try_time_next = cnx->path[0]->latest_sent_time + cnx->path[0]->smoothed_rtt;
-            if (current_time < try_time_next) {
+            if (current_time < try_time_next && !force_handshake_padding) {
                 /* schedule a wake time to repeat the probing. */
                 if (*next_wake_time > try_time_next) {
                     *next_wake_time = try_time_next;
