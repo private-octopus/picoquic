@@ -13,6 +13,8 @@ jobs:
   citests:
     name: CI-Tests-No-Fusion
     runs-on: ubuntu-latest
+    env:
+        CMAKE_OPTS: -DWITH_FUSION=OFF
 
     steps:
       - name: Checkout repository
@@ -25,7 +27,6 @@ jobs:
 
       - run: |
           sudo apt-get install -y libssl-dev
-          CMAKE_OPTS="-DWITH_FUSION=OFF"
           ./ci/build_picotls.sh
           cmake .
           make
