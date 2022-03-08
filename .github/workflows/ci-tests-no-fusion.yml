@@ -1,5 +1,5 @@
 ---
-name: "CITests"
+name: "CITestsNoFusion"
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 
 jobs:
   citests:
-    name: CI-Tests
+    name: CI-Tests-No-Fusion
     runs-on: ubuntu-latest
 
     steps:
