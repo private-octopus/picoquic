@@ -8,7 +8,6 @@ option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan) for debugging" OF
 
 set(CMAKE_C_STANDARD 11)
 
-
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_C_FLAGS "-std=c99 -Wall -O3 -fno-exceptions -fno-signed-zeros -fno-trapping-math ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 else()
@@ -173,6 +172,12 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(PTLS REQUIRED)
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
 message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
+
+OPTION(PTLS_WITH_FUSION "build 'fusion' AES-GCM engine" ${PTLS_WITH_FUSION_DEFAULT})
+if(PTLS_WITH_FUSION)
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPTLS_WITH_FUSION")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DPTLS_WITH_FUSION")
+endif()
 
 find_package(OpenSSL )
 message(STATUS "root: ${OPENSSL_ROOT_DIR}")
