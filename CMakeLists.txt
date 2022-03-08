@@ -175,8 +175,11 @@ message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
 
 OPTION(PTLS_WITH_FUSION "build 'fusion' AES-GCM engine" ${PTLS_WITH_FUSION_DEFAULT})
 if(PTLS_WITH_FUSION)
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPTLS_WITH_FUSION")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DPTLS_WITH_FUSION")
+    message(STATUS "PTLS Fusion is enabled")
+else()
+    message(STATUS "PTLS compiled without support for Fusion")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPTLS_WITHOUT_FUSION")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DPTLS_WITHOUT_FUSION")
 endif()
 
 find_package(OpenSSL )
