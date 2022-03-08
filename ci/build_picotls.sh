@@ -11,6 +11,7 @@ cd picotls
 git checkout -q "$COMMIT_ID"
 git submodule init
 git submodule update
+echo "Using options:  $CMAKE_OPTS"
 cmake $CMAKE_OPTS .
 make -j$(nproc) all
 cd ..
