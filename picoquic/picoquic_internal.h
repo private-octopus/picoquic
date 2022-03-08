@@ -1151,6 +1151,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int path_demotion_needed : 1; /* If at least one path was recently demoted */
     unsigned int alt_path_challenge_needed : 1; /* If at least one alt path challenge is needed or in progress */
     unsigned int is_handshake_finished : 1; /* If there are no more packets to ack or retransmit in initial  or handshake contexts */
+    unsigned int is_handshake_done_acked : 1; /* If the peer has acked the handshake done packet */
     unsigned int is_1rtt_received : 1; /* If at least one 1RTT packet has been received */
     unsigned int is_1rtt_acked : 1; /* If at least one 1RTT packet has been acked by the peer */
     unsigned int has_successful_probe : 1; /* At least one probe was successful */
