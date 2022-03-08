@@ -1185,6 +1185,9 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_datagram_ready : 1; /* Active polling for datagrams */
 #if 1
     unsigned int drop_first_handshake_received : 1; /* Try debug MVFST issue */
+    unsigned int force_immediate_funny_handshake : 1; /* Try debug MVFST issue */
+
+    uint64_t funny_handshake_time;
 #endif
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;

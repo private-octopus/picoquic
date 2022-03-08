@@ -2292,6 +2292,8 @@ int picoquic_incoming_segment(
                 else if (cnx->drop_first_handshake_received) {
                     ret = PICOQUIC_ERROR_DETECTED;
                     cnx->drop_first_handshake_received = 0;
+                    cnx->force_immediate_funny_handshake = 1;
+                    cnx->funny_handshake_time = current_time;
                     picoquic_log_app_message(cnx, "%s", "dropped first handshake packet");
                 }
 #endif

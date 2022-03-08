@@ -2523,7 +2523,24 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
     if (ret == 0) {
         if (epoch > picoquic_epoch_initial) {
-            if (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt != NULL) {
+#if 1
+            if (cnx->force_immediate_funny_handshake) {
+                if (epoch == picoquic_epoch_1rtt) {
+                    cnx->force_immediate_funny_handshake = 0;
+                }
+                else if (epoch == picoquic_epoch_handshake) {
+                    if (cnx->funny_handshake_time <= current_time) {
+                        picoquic_log_app_message(cnx, "Force padding (funny) at %" PRIu64 " (%" PRIu64 ")", current_time - cnx->start_time, cnx->funny_handshake_time - cnx->start_time);
+                        force_handshake_padding = 1;
+                    }
+                    else if (cnx->funny_handshake_time < *next_wake_time) {
+                        *next_wake_time = cnx->funny_handshake_time;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                    }
+                }
+            }
+#endif
+            if (!force_handshake_padding && cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt != NULL) {
                 if (cnx->ack_ctx[picoquic_packet_context_initial].act[0].ack_needed) {
                     /* Apply some ack delay, because handshake from server arrive in trains */
                     uint64_t ack_delay = cnx->path[0]->smoothed_rtt / 8;
@@ -2532,7 +2549,9 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         ack_delay = PICOQUIC_ACK_DELAY_MAX;
                     }
                     ack_time = cnx->ack_ctx[picoquic_packet_context_initial].act[0].time_oldest_unack_packet_received + ack_delay;
-                    if (ack_time <= current_time) {
+
+                    if (ack_time <= current_time ) {
+                        picoquic_log_app_message(cnx, "Force padding (ack wait) at %" PRIu64 " (%" PRIu64 ")", current_time - cnx->start_time, cnx->funny_handshake_time - cnx->start_time);
                         force_handshake_padding = 1;
                     }
                     else if (ack_time < *next_wake_time) {
@@ -2540,14 +2559,14 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                     }
                 }
-                else if (!force_handshake_padding && cnx->pkt_ctx[pc].retransmit_newest != NULL) {
+                else if (cnx->pkt_ctx[pc].retransmit_newest != NULL) {
                     /* There is a risk of deadlock if the server is doing DDOS mitigation
                      * and does not receive the Handshake sent by the client. If more than RTT has elapsed since
                      * the last handshake packet was sent, force another one to be sent. */
                     uint64_t rto = picoquic_current_retransmit_timer(cnx, cnx->path[0]);
                     uint64_t repeat_time = cnx->pkt_ctx[pc].retransmit_newest->send_time + rto;
-
                     if (repeat_time <= current_time) {
+                        picoquic_log_app_message(cnx, "Force padding (ack wait) at %" PRIu64 " (%" PRIu64 ")", current_time - cnx->start_time, cnx->funny_handshake_time - cnx->start_time);
                         force_handshake_padding = 1;
                         cnx->path[0]->nb_retransmit++;
                         cnx->path[0]->last_loss_event_detected = current_time;
@@ -2669,11 +2688,9 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                             }
                         }
                     }
-
                     if (length == header_length) {
                         length = picoquic_pad_to_target_length(bytes, length, length + 8);
                     }
-
                     if (length > header_length && epoch == picoquic_epoch_handshake) {
                         cnx->ack_ctx[picoquic_packet_context_initial].act[0].ack_needed = 0;
                     }
@@ -2718,12 +2735,17 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt == NULL &&
             cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_newest == NULL &&
             picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_initial].sack_list) != UINT64_MAX))) ||
-            (packet->ptype == picoquic_packet_handshake &&
+            (packet->ptype == picoquic_packet_handshake && (force_handshake_padding ||(
                 cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_newest == NULL &&
                 picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_handshake].sack_list) == UINT64_MAX &&
-                cnx->pkt_ctx[picoquic_packet_context_handshake].send_sequence == 0))
+                cnx->pkt_ctx[picoquic_packet_context_handshake].send_sequence == 0))))
         {
             uint64_t try_time_next = cnx->path[0]->latest_sent_time + cnx->path[0]->smoothed_rtt;
+#if 1
+            if (cnx->force_immediate_funny_handshake) {
+                try_time_next = cnx->funny_handshake_time;
+            }
+#endif
             if (current_time < try_time_next && !force_handshake_padding) {
                 /* schedule a wake time to repeat the probing. */
                 if (*next_wake_time > try_time_next) {
@@ -2786,6 +2808,11 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             ret, length, header_length, checksum_overhead,
             send_length, send_buffer, send_buffer_max,
             path_x, current_time);
+#if 1
+        if (cnx->force_immediate_funny_handshake && length > 0) {
+            cnx->funny_handshake_time = current_time + 30000;
+        }
+#endif
     }
 
     return ret;
