@@ -2679,9 +2679,15 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
             break;
         case picoquic_frame_type_datagram:
         case picoquic_frame_type_datagram_l:
-            /* Path challenge repeat follows its own logic. */
+            /* Datagrams are never repeated. */
             *no_need_to_repeat = 1;
             *do_not_detect_spurious = 0;
+            break;
+        case picoquic_frame_type_handshake_done:
+            /* No need to retransmit if one was previously acked */
+            if (cnx->is_handshake_done_acked) {
+                *no_need_to_repeat = 1;
+            }
             break;
         default: {
             uint64_t frame_id64;
@@ -2778,11 +2784,13 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
             ret = picoquic_process_ack_of_ack_frame(&cnx->ack_ctx[p->pc].sack_list,
                 &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
             byte_index += frame_length;
-        } else if (ftype == picoquic_frame_type_ack_ecn) {
+        }
+        else if (ftype == picoquic_frame_type_ack_ecn) {
             ret = picoquic_process_ack_of_ack_frame(&cnx->ack_ctx[p->pc].sack_list,
                 &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
             byte_index += frame_length;
-        } else if (ftype == picoquic_frame_type_ack_mp) {
+        }
+        else if (ftype == picoquic_frame_type_ack_mp) {
             ret = picoquic_process_ack_of_ack_mp_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
             byte_index += frame_length;
         }
@@ -2790,15 +2798,20 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
             ret = picoquic_process_ack_of_ack_mp_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
             byte_index += frame_length;
         }
+        else if (ftype == picoquic_frame_type_handshake_done) {
+            cnx->is_handshake_done_acked = 1;
+            byte_index += l_ftype;
+        }
         else if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             ret = picoquic_process_ack_of_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
-            if (p->send_path != NULL){
+            if (p->send_path != NULL) {
                 if (p->send_time > p->send_path->last_time_acked_data_frame_sent) {
                     p->send_path->last_time_acked_data_frame_sent = p->send_time;
                 }
             }
-        } else {
+        }
+        else {
             if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_datagram, picoquic_frame_type_datagram_l)) {
                 if (p->send_path != NULL && p->send_time > p->send_path->last_time_acked_data_frame_sent) {
                     p->send_path->last_time_acked_data_frame_sent = p->send_time;
@@ -2813,7 +2826,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
                         &frame_id, &content_length);
 
                     ret = (cnx->callback_fn)(cnx, 0, content_bytes, (size_t)content_length,
-                        (is_spurious)? picoquic_callback_datagram_spurious:picoquic_callback_datagram_acked,
+                        (is_spurious) ? picoquic_callback_datagram_spurious : picoquic_callback_datagram_acked,
                         cnx->callback_ctx, NULL);
                 }
             }

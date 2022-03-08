@@ -260,5 +260,5 @@ int satellite_cubic_loss_test()
 int satellite_preemptive_fc_test()
 {
     /* Should be less than 10 sec per draft etosat, but cubic is a bit slower */
-    return satellite_test_one(picoquic_bbr_algorithm, 10000000, 12500000, 20, 2, 0, 1, 1, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 10000000, 13600000, 20, 2, 0, 1, 1, 0, 1);
 }
