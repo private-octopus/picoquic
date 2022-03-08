@@ -14,7 +14,7 @@ jobs:
     name: CI-Tests-No-Fusion
     runs-on: ubuntu-latest
     env:
-        CMAKE_OPTS: -DWITH_FUSION=OFF
+        PTLS_CMAKE_OPTS: -DWITH_FUSION=OFF
 
     steps:
       - name: Checkout repository
