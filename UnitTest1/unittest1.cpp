@@ -1346,6 +1346,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(edge_case_zero)
+        {
+            int ret = edge_case_zero_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(error_reason)
         {
             int ret = error_reason_test();

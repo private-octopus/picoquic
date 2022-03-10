@@ -219,6 +219,8 @@ int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t* test_ctx,
     test_api_stream_desc_t* stream_desc, size_t size_of_scenarios);
 
+int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t stream_id);
+
 int tls_api_one_scenario_body_connect(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, size_t stream0_target, uint64_t max_data, uint64_t queue_delay_max);
 
@@ -227,6 +229,9 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 
 int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t time_out_delay);
+
+int session_resume_wait_for_ticket(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time);
 
 int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time,

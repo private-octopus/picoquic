@@ -230,6 +230,7 @@ static const picoquic_test_def_t test_table[] = {
     { "perflog", perflog_test },
     { "nat_rebinding_stress", rebinding_stress_test },
     { "random_padding", random_padding_test },
+    { "edge_case_zero", edge_case_zero_test },
     { "error_reason", error_reason_test },
     { "ready_to_send", ready_to_send_test },
     { "ready_to_skip", ready_to_skip_test },

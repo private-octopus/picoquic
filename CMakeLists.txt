@@ -130,6 +130,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cnxstress.c
     picoquictest/cplusplus.cpp
     picoquictest/datagram_tests.c
+    picoquictest/edge_cases.c
     picoquictest/hashtest.c
     picoquictest/high_latency_test.c
     picoquictest/intformattest.c
