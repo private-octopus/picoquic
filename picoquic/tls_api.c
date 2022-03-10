@@ -49,7 +49,7 @@
 #include "picotls.h"
 #include "picoquic_internal.h"
 #include "picotls/openssl.h"
-#if !defined(_WINDOWS) || defined(_WINDOWS64)
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
 #include "picotls/fusion.h"
 #endif
 #include "tls_api.h"
@@ -147,7 +147,7 @@ ptls_cipher_suite_t* picoquic_cipher_suites[] = {
 #endif
     NULL };
 
-#if !defined(_WINDOWS) || defined(_WINDOWS64)
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
 /* Definition of fusion versions of AESGCM */
 ptls_cipher_suite_t picoquic_fusion_aes128gcmsha256 = { PTLS_CIPHER_SUITE_AES_128_GCM_SHA256, &ptls_fusion_aes128gcm,
                                                     &ptls_openssl_sha256 };
@@ -168,7 +168,7 @@ static int picoquic_set_cipher_suite_list(ptls_cipher_suite_t** selected_suites,
 {
     int nb_suites = 0;
         /* Check first if fusion is enabled */
-#if !defined(_WINDOWS) || defined(_WINDOWS64)
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
         if (ptls_fusion_is_supported_by_cpu() && !use_low_memory) {
             if (cipher_suite_id == 0 || cipher_suite_id == 128) {
                 selected_suites[nb_suites++] = &picoquic_fusion_aes128gcmsha256;

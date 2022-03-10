@@ -56,9 +56,19 @@ builds, the tests are run through a command line program.
 As explained in the Wiki, Picoquic is actively tested against other implementations
 during the QUIC Interop days. See https://github.com/private-octopus/picoquic/wiki/QUIC-milestones-and-interop-testing.
 
-The current version is aligned with draft 34. All big features are supported, including
+The current version is aligned with version 1, [RFC 9000](https://datatracker.ietf.org/doc/rfc9000/).
+All big features are supported, including
 the interface between QUIC and TLS, 0-RTT, migration and key rollover. The state of
-development is tracked in the list of issues in this repository.
+development is tracked in the list of issues in this repository. The code also
+supports several features that are not yet standardized, including
+[Datagrams](https://datatracker.ietf.org/doc/draft-ietf-quic-datagram/),
+[ACK Frequency](https://datatracker.ietf.org/doc/draft-ietf-quic-ack-frequency/),
+[Compatible Version Negotiation](https://datatracker.ietf.org/doc/draft-ietf-quic-version-negotiation/),
+and [Multipath](https://datatracker.ietf.org/doc/draft-ietf-quic-multipath/).
+The code includes specific tuning for geostationary satellite links
+and long delay links, including
+support for the [BDP Frame Extension](https://datatracker.ietf.org/doc/draft-kuhn-quic-bdpframe-extension/).
+
 
 We have started an implementation
 of [DNS over QUIC](https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/)
@@ -71,7 +81,7 @@ including a first pass at [documenting architecture and API](doc/architecture.md
 the focus has been on correctness rather than performance. We will keep correctness,
 but we will improve performance, especially in light of practical experience with 
 applications. To facilitate performance tests, the demo program includes an
-implementation of the [quic performance test](doc/quicperf.md).
+implementation of the [quic performance test protocol](doc/quicperf.md).
 Suggestions for documentation, API, performance and more are wellcome. Feel free to
 open an issue!
 
@@ -81,8 +91,8 @@ Picoquic is developed in C, and can be built under Windows or Linux. Building th
 project requires first managing the dependencies, [Picotls](https://github.com/h2o/picotls)
 and OpenSSL. Please note that you will need a recent version of Picotls --
 the Picotls API has eveolved recently to support the latest version of QUIC. The
-current code is tested against the Picotls version of Wed Jul 7 11:47:06 2021 +0900,
-after commit `9accdf4af580e2ad883c929f8ca7a4cc58f15379`. The code uses OpenSSL
+current code is tested against the Picotls version of Mon Dec 13 18:05:31 2021 +0900,
+after commit `047c5fe20bb9ea91c1caded8977134f19681ec76`. The code uses OpenSSL
 version 1.1.1.
 
 ## Picoquic on Windows
@@ -109,8 +119,7 @@ To build Picoquic on Windows, you need to:
 
 ## Picoquic on Linux
 
-The build experience on Linux is now much improved, thanks to check-ins from Deb Banerjee
-and Igor Lubashev. 
+Thanks to check-ins from Deb Banerjee and Igor Lubashev for the build experience on Linux.
 
 To build Picoquic on Linux, you need to:
 
@@ -124,11 +133,17 @@ To build Picoquic on Linux, you need to:
    make
 ~~~
  * Run the test program `picoquic_ct` to verify the port.
+ 
+The tests verify that the code compiles and runs correctly under Ubuntu,
+using GitHub actions on Intel 64 bit VMs. We rely on user reports to verify
+behavior on other architecture, e.g. ARM. Thanks to @defermelowie for testing on ARM 32 bits.
 
 ## Picoquic on MacOSX
 
 Thanks to Frederik Deweerdt for ensuring that Picoquic runs on MacOSX. The build steps
-are the same as for Linux.
+are the same as for Linux. The tests verify that the code compiles and runs correctly under MacOS,
+using GitHub actions on Intel 64 bit VMs. We rely on user reports to verify
+behavior on other architecture, e.g. M1. Thanks to @defermelowie  for testing on M1.
 
 ## Picoquic on FreeBSD
 
@@ -147,9 +162,8 @@ more details.
 ## Testing previous versions
 
 The code is constantly updated to track the latest version of the specification. It currently
-conforms to draft-34, and will negotiate support for the corresponding version `0x00000001` --
-that is, QUIC Transport version 1. The version 1 RFC is not published yet, but it is not expected
-to be much different from draft-34. Picoquic will also accept negotiation of previous versions down to draft-27. 
+conforms to Version 1, and will negotiate support for the corresponding version `0x00000001` --
+that is, QUIC Transport version 1. Picoquic will also accept negotiation of previous versions down to draft-27. 
 
 # Creating QLOG Log Files
 
