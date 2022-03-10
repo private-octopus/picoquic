@@ -49,7 +49,7 @@
 #include "picotls.h"
 #include "picoquic_internal.h"
 #include "picotls/openssl.h"
-#if (!defined(_WINDOWS) || defined(_WINDOWS64) && !defined(PTLS_WITHOUT_FUSION)
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
 #include "picotls/fusion.h"
 #endif
 #include "tls_api.h"
