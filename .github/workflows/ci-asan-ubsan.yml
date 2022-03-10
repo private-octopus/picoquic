@@ -13,6 +13,8 @@ jobs:
   citests:
     name: CI-Leaks
     runs-on: ubuntu-latest
+    env:
+        PTLS_CMAKE_OPTS: "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -DCMAKE_CXX_FLAGS=-fsanitize=address,undefined"
 
     steps:
       - name: Checkout repository
@@ -25,7 +27,6 @@ jobs:
 
       - run: |
           sudo apt-get install -y libssl-dev
-          CMAKE_OPTS="-DCMAKE_C_FLAGS=-fsanitize=address,undefined -DCMAKE_CXX_FLAGS=-fsanitize=address,undefined"
           ./ci/build_picotls.sh
           cmake -DENABLE_ASAN=ON -DENABLE_UBSAN=on .
           make
