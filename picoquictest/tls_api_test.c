@@ -3509,7 +3509,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
     uint64_t loss_mask = 0;
     uint32_t proposed_version = 0;
 
-    picoquic_tp_t server_parameters;
+    picoquic_tp_t server_parameters = { 0 };
     int ret = 0;
 
     /* Initialize an empty ticket store */
