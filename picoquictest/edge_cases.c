@@ -227,6 +227,8 @@ int edge_case_complete(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulate
     }
 
     /* Finish sending data */
+    test_ctx->immediate_exit = 1;
+
     if (ret == 0) {
         uint64_t zero_loss = 0;
         ret = tls_api_data_sending_loop(test_ctx, &zero_loss, simulated_time, 0);
@@ -277,7 +279,10 @@ int edge_case_zero_test()
  * - Client second flight arrives at peer, but handshake ACK is lost
  * - Handshake Done is lost
  * Client appears stuck repeating second flight, intead of trying to
- * make progress and send data
+ * make progress and send data.
+ * 
+ * This is unlocked by enabling retransmission of data in "client almost ready"
+ * state. 
  */
 
 int second_flight_nack_test()
@@ -298,7 +303,7 @@ int second_flight_nack_test()
     }
 
     if (ret == 0) {
-        ret = edge_case_complete(test_ctx, &simulated_time, 400000);
+        ret = edge_case_complete(test_ctx, &simulated_time, 360000);
     }
 
     if (test_ctx != NULL) {

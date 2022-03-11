@@ -1197,7 +1197,7 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
 
     rto <<= (path_x->nb_retransmit < 3) ? path_x->nb_retransmit : 2;
 
-    if (cnx->cnx_state < picoquic_state_ready) {
+    if (cnx->cnx_state < picoquic_state_client_ready_start) {
         if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
             rto = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
         }
@@ -3492,12 +3492,12 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
             if (picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, next_wake_time)) {
                 /* There should not be any retransmission at the server if not ready.
-                 * At the client, it only makes sense to retransmit zero_rtt data, if lost.
+                 * At the client, it mostly makes sense to retransmit zero_rtt data, if lost,
+                 * but other data might be lost too if the client lingers in that state for
+                 * several RTT.
                  */
                 if (length <= header_length && cnx->client_mode &&
                     cnx->first_misc_frame == NULL &&
-                    pkt_ctx->retransmitted_oldest != NULL &&
-                    pkt_ctx->retransmitted_oldest->ptype == picoquic_packet_0rtt_protected &&
                     (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet,
                         send_buffer_min_max, &header_length)) > 0) {
                     /* Check whether it makes sense to add an ACK at the end of the retransmission */
