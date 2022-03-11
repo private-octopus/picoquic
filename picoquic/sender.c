@@ -2904,7 +2904,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             }
             packet->length = length;
         }
-        else  if ((length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_max, &header_length)) > 0) {
+        else if ((length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_max, &header_length)) > 0) {
             /* Set the new checksum length */
             checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
             cnx->initial_repeat_needed = 0;
@@ -3491,6 +3491,28 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
              * was they should be sent here. */
 
             if (picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, next_wake_time)) {
+                /* There should not be any retransmission at the server if not ready.
+                 * At the client, it only makes sense to retransmit zero_rtt data, if lost.
+                 */
+                if (length <= header_length && cnx->client_mode &&
+                    cnx->first_misc_frame == NULL &&
+                    pkt_ctx->retransmitted_oldest != NULL &&
+                    pkt_ctx->retransmitted_oldest->ptype == picoquic_packet_0rtt_protected &&
+                    (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet,
+                        send_buffer_min_max, &header_length)) > 0) {
+                    /* Check whether it makes sense to add an ACK at the end of the retransmission */
+                    if (bytes + length + 256 < bytes_max) {
+                        /* Don't do that if it risks mixing clear text and encrypted ack */
+                        bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
+                            current_time, pc, 0);
+                        length = bytes_next - bytes;
+                    }
+                    /* document the send time & overhead */
+                    is_pure_ack = 0;
+                    packet->send_time = current_time;
+                    packet->checksum_overhead = checksum_overhead;
+                }
+
                 /* Send here the frames that are not exempt from the pacing control,
                  * but are exempt for congestion control */
                 if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc, 0)) {

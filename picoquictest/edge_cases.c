@@ -181,10 +181,13 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
     if (ret == 0) {
         int nb_trials = 0;
         int nb_inactive = 0;
+        uint64_t loss_target = loss_mask >> nb_init_rounds;
+        loss_target |= loss_mask << (64 - nb_init_rounds);
+
         (*p_test_ctx)->c_to_s_link->loss_mask = &loss_mask;
         (*p_test_ctx)->s_to_c_link->loss_mask = &loss_mask;
 
-        while (ret == 0 && nb_trials < nb_init_rounds && nb_inactive < 256) {
+        while (ret == 0 && nb_trials < 4*nb_init_rounds && nb_inactive < 256 && loss_mask != loss_target) {
             int was_active = 0;
 
             nb_trials++;
@@ -259,6 +262,43 @@ int edge_case_zero_test()
             DBG_PRINTF("Nb 0RTT acked = %d", test_ctx->cnx_client->nb_zero_rtt_acked);
             ret = -1;
         }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Reproduce and fix a specific error:
+ * - 0RTT packet was lost
+ * - Client second flight arrives at peer, but handshake ACK is lost
+ * - Handshake Done is lost
+ * Client appears stuck repeating second flight, intead of trying to
+ * make progress and send data
+ */
+
+int second_flight_nack_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t initial_losses = 0x181;
+    uint8_t test_case_id = 0x2f;
+    int ret = edge_case_prepare(&test_ctx, test_case_id, 1, &simulated_time, initial_losses, 10);
+
+    if (ret == 0) {
+        if (test_ctx->cnx_client->cnx_state >= picoquic_state_ready ||
+            test_ctx->cnx_server->cnx_state != picoquic_state_ready) {
+            DBG_PRINTF("Unexpected state, client: %d, server: %d",
+                test_ctx->cnx_client->cnx_state, test_ctx->cnx_server->cnx_state);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = edge_case_complete(test_ctx, &simulated_time, 400000);
     }
 
     if (test_ctx != NULL) {

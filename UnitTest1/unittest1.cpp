@@ -1353,6 +1353,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(second_flight_nack)
+        {
+            int ret = second_flight_nack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(error_reason)
         {
             int ret = error_reason_test();
