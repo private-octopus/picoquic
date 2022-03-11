@@ -155,6 +155,7 @@
     <ClCompile Include="cnx_creation_test.c" />
     <ClCompile Include="config_test.c" />
     <ClCompile Include="datagram_tests.c" />
+    <ClCompile Include="edge_cases.c" />
     <ClCompile Include="h3zerotest.c" />
     <ClCompile Include="hashtest.c" />
     <ClCompile Include="high_latency_test.c" />

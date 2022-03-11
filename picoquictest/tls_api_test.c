@@ -402,7 +402,7 @@ static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from
     return ret;
 }
 
-static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t stream_id)
+int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t stream_id)
 {
     int ret = 0;
     int more_stream = 0;
@@ -3509,7 +3509,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
     uint64_t loss_mask = 0;
     uint32_t proposed_version = 0;
 
-    picoquic_tp_t server_parameters;
+    picoquic_tp_t server_parameters = { 0 };
     int ret = 0;
 
     /* Initialize an empty ticket store */
