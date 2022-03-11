@@ -64,9 +64,6 @@ void edge_case_reset_scenario(picoquic_test_tls_api_ctx_t* test_ctx)
 
 int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_case_id, int zero_rtt, uint64_t* simulated_time, uint64_t loss_mask, int nb_init_rounds)
 {
-    char const* sni = PICOQUIC_TEST_SNI;
-    char const* alpn = PICOQUIC_TEST_ALPN;
-    uint32_t proposed_version = 0;
     picoquic_connection_id_t initial_cid = { { 0xed, 0x9e, 0xca, 0x5e, 0, 0, 0, 0}, 8 };
     int ret = 0;
     FILE* F;
@@ -107,7 +104,6 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
     /* If zero RTT is required, run a single connection */
     if (ret == 0 && zero_rtt) {
         uint32_t ticket_version = 0;
-        uint64_t loss_mask = 0;
         int ret = tls_api_one_scenario_body_connect(*p_test_ctx, simulated_time, 0, 0, 0);
 
         /* Finish sending data */
