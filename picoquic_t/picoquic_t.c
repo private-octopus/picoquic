@@ -232,6 +232,7 @@ static const picoquic_test_def_t test_table[] = {
     { "random_padding", random_padding_test },
     { "edge_case_zero", edge_case_zero_test },
     { "second_flight_nack", second_flight_nack_test },
+    { "corrupted_file", corrupted_file_test },
     { "error_reason", error_reason_test },
     { "ready_to_send", ready_to_send_test },
     { "ready_to_skip", ready_to_skip_test },

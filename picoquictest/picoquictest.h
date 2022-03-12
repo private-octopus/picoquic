@@ -195,6 +195,7 @@ int many_short_loss_test();
 int random_padding_test();
 int edge_case_zero_test();
 int second_flight_nack_test();
+int corrupted_file_test();
 int error_reason_test();
 int ready_to_send_test();
 int ready_to_skip_test();
