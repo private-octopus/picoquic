@@ -362,3 +362,46 @@ int eccf_corrupted_file_test()
 
     return ret;
 }
+
+void eccf_corrupted_file_fuzz(int nb_trials, uint64_t seed, FILE* F)
+{
+    uint64_t random_context = (0x1234567887654321ull) ^ seed;
+
+    for (int i=0; i< nb_trials; i++) {
+
+        uint64_t simulated_time = 0;
+        picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+        uint64_t initial_losses = picoquic_test_random(&random_context) & 0xFFFFFFFF84ull;
+        uint8_t test_case_id = 0xcf;
+        int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 40);
+
+        if (ret == 0) {
+            ret = edge_case_complete(test_ctx, &simulated_time, 400000);
+        }
+
+        if (ret != 0 && F != NULL) {
+            fprintf(F, "0x%" PRIx64 ", %" PRIu64 ", %d, %" PRIu64 "\n",
+                initial_losses, initial_losses, ret, simulated_time);
+        }
+
+        if (test_ctx != NULL) {
+            tls_api_delete_ctx(test_ctx);
+            test_ctx = NULL;
+        }
+    }
+}
+
+int eccf_corrupted_file_fuzz_test()
+{
+    int ret = 0;
+    FILE* F = picoquic_file_open("ECCF_Fuzz_report.csv", "w");
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        fprintf(F, "Seed_hex, Seed, Ret, Elapsed\n");
+        eccf_corrupted_file_fuzz(1000, 0, F);
+        picoquic_file_close(F);
+    }
+    return ret;
+}

@@ -196,6 +196,8 @@ int random_padding_test();
 int ec00_zero_test();
 int ec2f_second_flight_nack_test();
 int eccf_corrupted_file_test();
+void eccf_corrupted_file_fuzz(int nb_trials, uint64_t seed, FILE* seed_report);
+int eccf_corrupted_file_fuzz_test();
 int error_reason_test();
 int ready_to_send_test();
 int ready_to_skip_test();
