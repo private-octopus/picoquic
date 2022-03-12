@@ -352,12 +352,16 @@ void eccf_corrupted_file_fuzz(int nb_trials, uint64_t seed, FILE* F)
     for (int i = 0; i < nb_trials; i++) {
         uint64_t simulated_time = 0;
         picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-        uint64_t initial_losses = picoquic_test_random(&random_context) & 0xFFFFFFFF86ull;
+        uint64_t initial_losses = random_context & 0xFFFFFFFF86ull;
         uint8_t test_case_id = 0xcf;
-        int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 40);
+        int ret = 0;
+
+        (void)picoquic_test_random(&random_context);
+
+        ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 40);
 
         if (ret == 0) {
-            ret = edge_case_complete(test_ctx, &simulated_time, 400000);
+            ret = edge_case_complete(test_ctx, &simulated_time, 15000000);
         }
 
         if (ret != 0 && F != NULL) {
@@ -380,7 +384,7 @@ int eccf_corrupted_file_fuzz_test()
         ret = -1;
     }
     else {
-        fprintf(F, "Seed_hex, Seed, Ret, Elapsed\n");
+        (void)fprintf(F, "Seed_hex, Seed, Ret, Elapsed\n");
         eccf_corrupted_file_fuzz(50, 0, F);
         picoquic_file_close(F);
     }

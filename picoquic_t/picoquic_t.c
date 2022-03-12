@@ -638,6 +638,7 @@ int main(int argc, char** argv)
                         ret = -1;
                     }
                     else {
+                        (void)fprintf(F, "Seed_hex, Seed, Ret, Elapsed\n");
                         eccf_corrupted_file_fuzz(cf_rounds, r_seed, F);
                         picoquic_file_close(F);
                         test_status[i] = test_success;
