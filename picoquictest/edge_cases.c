@@ -93,9 +93,13 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
     }
     /* Set the link latency */
     if (ret == 0) {
-
         (*p_test_ctx)->c_to_s_link->microsec_latency = latency;
         (*p_test_ctx)->s_to_c_link->microsec_latency = latency;
+    }
+
+    if (ret == 0 && edge_case_id == 0xcf) {
+        (*p_test_ctx)->cnx_client->local_parameters.min_ack_delay = 0;
+        picoquic_cnx_set_pmtud_policy((*p_test_ctx)->cnx_client, picoquic_pmtud_blocked);
     }
 
     /* Prepare to send data */
@@ -267,7 +271,7 @@ int edge_case_complete(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulate
 /* Edge case zero: verify that the common code
  * works.
  */
-int edge_case_zero_test()
+int ec00_zero_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -303,7 +307,7 @@ int edge_case_zero_test()
  * state. 
  */
 
-int second_flight_nack_test()
+int ec2f_second_flight_nack_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -337,12 +341,13 @@ int second_flight_nack_test()
  * sent random content instead of repeating the original packet
  * content.
  */
-int corrupted_file_test()
+int eccf_corrupted_file_test()
 {
 
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0xfdeefdd0;
+    uint64_t initial_losses = 0b11110010011001001010101010000000;
+    /*                          ....^^.^^^......................*/
     uint8_t test_case_id = 0xcf;
     int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 40);
 
