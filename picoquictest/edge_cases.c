@@ -336,42 +336,23 @@ int ec2f_second_flight_nack_test()
     return ret;
 }
 
-/* Reproduce and fix a corrupt file transmission occuring
+/* Try reproduce a corrupt file transmission occuring
  * during a lossy handshake. At some point, the server
  * sent random content instead of repeating the original packet
- * content.
+ * content. Attempts to just reproduce the sequence in
+ * the interop runner failed, so instead we add a specialized
+ * fuzzer. Running that fuzzer in ASAN/UBSAN builds might
+ * detect the corruption some day.
  */
-int eccf_corrupted_file_test()
-{
-
-    uint64_t simulated_time = 0;
-    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0b11110010011001001010101010000000;
-    /*                          ....^^.^^^......................*/
-    uint8_t test_case_id = 0xcf;
-    int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 40);
-
-    if (ret == 0) {
-        ret = edge_case_complete(test_ctx, &simulated_time, 400000);
-    }
-
-    if (test_ctx != NULL) {
-        tls_api_delete_ctx(test_ctx);
-        test_ctx = NULL;
-    }
-
-    return ret;
-}
 
 void eccf_corrupted_file_fuzz(int nb_trials, uint64_t seed, FILE* F)
 {
-    uint64_t random_context = (0x1234567887654321ull) ^ seed;
+    uint64_t random_context = (seed == 0)?0x1234567887654321ull:seed;
 
-    for (int i=0; i< nb_trials; i++) {
-
+    for (int i = 0; i < nb_trials; i++) {
         uint64_t simulated_time = 0;
         picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-        uint64_t initial_losses = picoquic_test_random(&random_context) & 0xFFFFFFFF84ull;
+        uint64_t initial_losses = picoquic_test_random(&random_context) & 0xFFFFFFFF86ull;
         uint8_t test_case_id = 0xcf;
         int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 40);
 
@@ -400,7 +381,7 @@ int eccf_corrupted_file_fuzz_test()
     }
     else {
         fprintf(F, "Seed_hex, Seed, Ret, Elapsed\n");
-        eccf_corrupted_file_fuzz(1000, 0, F);
+        eccf_corrupted_file_fuzz(50, 0, F);
         picoquic_file_close(F);
     }
     return ret;
