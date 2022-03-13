@@ -1381,6 +1381,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+
+        TEST_METHOD(ecf1_final_loss)
+        {
+            int ret = ecf1_final_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(error_reason)
         {
             int ret = error_reason_test();

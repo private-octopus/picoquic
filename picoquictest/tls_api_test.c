@@ -1713,8 +1713,8 @@ int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-static int tls_api_attempt_to_close(
-    picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time)
+int tls_api_close_with_losses(
+    picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, uint64_t loss_mask)
 {
     int ret = 0;
     int nb_rounds = 0;
@@ -1725,10 +1725,11 @@ static int tls_api_attempt_to_close(
         /* packet from client to server */
         /* Do not simulate losses there, as there is no way to correct them */
 
-        test_ctx->c_to_s_link->loss_mask = 0;
-        test_ctx->s_to_c_link->loss_mask = 0;
+        test_ctx->c_to_s_link->loss_mask = &loss_mask;
+        test_ctx->s_to_c_link->loss_mask = &loss_mask;
 
-        while (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected || test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) && nb_rounds < 100000) {
+        while (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected || 
+            (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected)) && nb_rounds < 100000) {
             int was_active = 0;
             ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
             if (ret != 0){
@@ -1741,11 +1742,18 @@ static int tls_api_attempt_to_close(
         }
     }
 
-    if (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected || test_ctx->cnx_server->cnx_state != picoquic_state_disconnected)) {
+    if (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected || 
+        (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected))) {
         ret = -1;
     }
 
     return ret;
+}
+
+static int tls_api_attempt_to_close(
+    picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time)
+{
+    return tls_api_close_with_losses(test_ctx, simulated_time, 0);
 }
 
 static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,

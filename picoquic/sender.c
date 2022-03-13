@@ -3115,6 +3115,12 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             *next_wake_time = next_time;
             SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
+        else {
+            if (*next_wake_time > exit_time) {
+                *next_wake_time = exit_time;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+            }
+        }
     } else if (ret == 0 && cnx->cnx_state == picoquic_state_draining) {
         /* Nothing is ever sent in the draining state */
         /* if more than 3*RTO is elapsed, move to disconnected */

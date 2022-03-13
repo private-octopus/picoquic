@@ -235,6 +235,7 @@ static const picoquic_test_def_t test_table[] = {
     { "ec2f_second_flight", ec2f_second_flight_nack_test },
     { "eccf_corrupted_fuzz", eccf_corrupted_file_fuzz_test },
     { "eca1_amplification_loss", eca1_amplification_loss_test },
+    { "ecf1_final_loss", ecf1_final_loss_test },
     { "error_reason", error_reason_test },
     { "ready_to_send", ready_to_send_test },
     { "ready_to_skip", ready_to_skip_test },
