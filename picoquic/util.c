@@ -651,7 +651,7 @@ const uint8_t* picoquic_frames_varint_decode(const uint8_t* bytes, const uint8_t
 {
     uint8_t length;
 
-    if (bytes < bytes_max && bytes + (length = (uint8_t)VARINT_LEN(bytes)) <= bytes_max) {
+    if (bytes < bytes_max && bytes + (length = VARINT_LEN_T(bytes, uint8_t)) <= bytes_max) {
         uint64_t v = *bytes++ & 0x3F;
 
         while (--length > 0) {
