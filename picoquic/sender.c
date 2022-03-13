@@ -2671,6 +2671,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
 
                     if (length == header_length) {
+                        bytes[length++] = picoquic_frame_type_ping;
                         length = picoquic_pad_to_target_length(bytes, length, length + 8);
                     }
 
@@ -2734,6 +2735,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             else {
                 length = header_length;
                 packet->offset = length;
+                bytes[length++] = picoquic_frame_type_ping;
                 if (packet->ptype == picoquic_packet_initial) {
                     /* Repeat an ACK because it helps. */
                     bytes_max = bytes + send_buffer_max - checksum_overhead;

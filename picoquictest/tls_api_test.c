@@ -9347,7 +9347,6 @@ int ddos_amplification_test_one(int use_0rtt, int do_8k)
         ret = -1;
     }
 
-
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;

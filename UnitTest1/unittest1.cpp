@@ -1374,6 +1374,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(eca1_amplification_loss)
+        {
+            int ret = eca1_amplification_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(error_reason)
         {
             int ret = error_reason_test();
