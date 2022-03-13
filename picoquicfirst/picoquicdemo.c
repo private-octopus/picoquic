@@ -601,6 +601,10 @@ int quic_client(const char* ip_address_text, int server_port,
             ret = -1;
         }
         else {
+            /* Set PMTUD policy to delayed on the client, leave to default=basic on server */
+            picoquic_cnx_set_pmtud_policy(cnx_client, picoquic_pmtud_delayed);
+            picoquic_set_default_pmtud_policy(qclient, picoquic_pmtud_delayed);
+
             if (is_siduck) {
                 picoquic_set_callback(cnx_client, siduck_callback, siduck_ctx);
                 cnx_client->local_parameters.max_datagram_frame_size = 128;
