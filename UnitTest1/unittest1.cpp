@@ -1346,16 +1346,23 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(edge_case_zero)
+        TEST_METHOD(ec00_zero)
         {
-            int ret = edge_case_zero_test();
+            int ret = ec00_zero_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(second_flight_nack)
+        TEST_METHOD(ec2f_second_flight)
         {
-            int ret = second_flight_nack_test();
+            int ret = ec2f_second_flight_nack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(eccf_corrupted_fuzz)
+        {
+            int ret = eccf_corrupted_file_fuzz_test();
 
             Assert::AreEqual(ret, 0);
         }

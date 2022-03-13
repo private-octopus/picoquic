@@ -1731,6 +1731,12 @@ static int tls_api_attempt_to_close(
         while (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected || test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) && nb_rounds < 100000) {
             int was_active = 0;
             ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
+            if (ret != 0){
+                if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected && test_ctx->cnx_server->cnx_state == picoquic_state_disconnected) {
+                    ret = 0;
+                    break;
+                }
+            }
             nb_rounds++;
         }
     }

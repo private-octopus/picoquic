@@ -3061,20 +3061,21 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         /* Send the disconnect frame */
         bytes_next = picoquic_format_connection_close_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
         length = bytes_next - bytes;
-
+        cnx->last_close_sent = current_time;
         cnx->cnx_state = picoquic_state_draining;
         *next_wake_time = exit_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
     } else if (ret == 0 && cnx->cnx_state == picoquic_state_closing) {
         /* if more than 3*RTO is elapsed, move to disconnected */
         uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
+        uint64_t next_close_time = cnx->last_close_sent + path_x->smoothed_rtt;
 
         if (current_time >= exit_time) {
             picoquic_connection_disconnect(cnx);
             *next_wake_time = current_time;
             SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
-        else if (current_time >= cnx->next_wake_time) {
+        else if (current_time >= next_close_time) {
             uint64_t delta_t = path_x->rtt_min;
             uint64_t next_time = 0;
 
@@ -3102,6 +3103,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
                 length = bytes_next - bytes;
                 cnx->ack_ctx[pc].act[0].ack_needed = 0;
                 cnx->ack_ctx[pc].act[0].out_of_order_received = 0;
+                cnx->last_close_sent = current_time;
             }
             next_time = current_time + delta_t;
             if (next_time > exit_time) {
@@ -3175,6 +3177,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             cnx->cnx_state = picoquic_state_closing;
         }
         cnx->latest_progress_time = current_time;
+        cnx->last_close_sent = current_time;
         *next_wake_time = current_time + delta_t;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         cnx->ack_ctx[pc].act[0].ack_needed = 0;

@@ -358,13 +358,7 @@
 [106770, 0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 15, "packet_number": 26, "dcid": "0908070605040302" }, "frames": [{ 
     "frame_type": "connection_close", "error_space": "transport", "error_code": 0}]}],
 [106770, 0, "transport", "datagram_sent", { "byte_length": 31}],
-[112902, 0, "transport", "datagram_received", { "byte_length": 30}],
-[112902, 0, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 30, "packet_number": 28, "dcid": "0a09080706050403" }, "frames": [{ 
-    "frame_type": "connection_close", "error_space": "application", "error_code": 0}]}],
-[112902, 0, "transport", "datagram_received", { "byte_length": 30, "addr_from" : {"ip_v4": "10.0.0.2", "port_v4":5586}}],
-[112902, 1, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 30, "packet_number": 27, "dcid": "0b09080706050403" }, "frames": [{ 
-    "frame_type": "connection_close", "error_space": "application", "error_code": 0}]}],
-[256770, 0, "transport", "datagram_received", { "byte_length": 256, "addr_from" : {"ip_v4": "10.0.0.2", "port_v4":1234}}],
+[256770, 0, "transport", "datagram_received", { "byte_length": 256}],
 [256770, 0, "transport", "packet_dropped", {
     "packet_type" : "1RTT",
     "packet_size" : 256,

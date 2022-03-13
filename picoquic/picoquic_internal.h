@@ -1255,7 +1255,8 @@ typedef struct st_picoquic_cnx_t {
     uint64_t crypto_failure_count;
     /* Liveness detection */
     uint64_t latest_progress_time; /* last local time at which the connection progressed */
-
+    /* Close connection management */
+    uint64_t last_close_sent;
     /* Sequence and retransmission state */
     picoquic_packet_context_t pkt_ctx[picoquic_nb_packet_context];
     /* Acknowledgement state */
