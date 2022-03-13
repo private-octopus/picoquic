@@ -9186,7 +9186,7 @@ int large_client_hello_test()
  * of data sent by the client.
  */
 
-int ddos_amplification_test_one(int use_0rtt)
+int ddos_amplification_test_one(int use_0rtt, int do_8k)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -9211,6 +9211,10 @@ int ddos_amplification_test_one(int use_0rtt)
     {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
         ret = -1;
+    }
+
+    if (ret == 0 && do_8k) {
+        test_ctx->qserver->test_large_server_flight = 1;
     }
 
     if (ret == 0 && use_0rtt) {
@@ -9358,12 +9362,17 @@ int ddos_amplification_test_one(int use_0rtt)
 
 int ddos_amplification_test()
 {
-    return ddos_amplification_test_one(0);
+    return ddos_amplification_test_one(0, 0);
 }
 
 int ddos_amplification_0rtt_test()
 {
-    return ddos_amplification_test_one(1);
+    return ddos_amplification_test_one(1, 0);
+}
+
+int ddos_amplification_8k_test()
+{
+    return ddos_amplification_test_one(0, 1);
 }
 
 /* ESNI Test. */

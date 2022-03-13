@@ -286,6 +286,7 @@ int datagram_loss_test();
 int datagram_size_test();
 int ddos_amplification_test();
 int ddos_amplification_0rtt_test();
+int ddos_amplification_8k_test();
 int blackhole_test();
 int no_ack_frequency_test();
 int connection_drop_test();

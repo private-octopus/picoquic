@@ -566,6 +566,24 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             (uint64_t)cnx->local_parameters.enable_bdp_frame);
     }
 
+    /* This test extension must be the last one in the encoding, as it consumes all the available space */
+    if (extension_mode == 1 && !cnx->test_large_chello &&
+        cnx->quic->test_large_server_flight && bytes != NULL){
+        size_t available = bytes_max - bytes;
+        size_t pad_length = (available > 24) ? available - 24 : 1;
+
+        if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_test_large_chello)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, pad_length)) != NULL) {
+            if (bytes + pad_length > bytes_max) {
+                bytes = NULL;
+            }
+            else {
+                memset(bytes, 'Q', pad_length);
+                bytes += pad_length;
+            }
+        }
+    }
+
     if (bytes == NULL) {
         *consumed = 0;
         ret = PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL;
