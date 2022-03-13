@@ -96,10 +96,16 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
         (*p_test_ctx)->c_to_s_link->microsec_latency = latency;
         (*p_test_ctx)->s_to_c_link->microsec_latency = latency;
     }
-
-    if (ret == 0 && edge_case_id == 0xcf) {
-        (*p_test_ctx)->cnx_client->local_parameters.min_ack_delay = 0;
-        picoquic_cnx_set_pmtud_policy((*p_test_ctx)->cnx_client, picoquic_pmtud_blocked);
+    /* Set PMTUD policy & ACK Frequency policy */
+    if (ret == 0){
+        if (edge_case_id == 0xcf) {
+            (*p_test_ctx)->cnx_client->local_parameters.min_ack_delay = 0;
+            picoquic_cnx_set_pmtud_policy((*p_test_ctx)->cnx_client, picoquic_pmtud_blocked);
+        }
+        else {
+            picoquic_cnx_set_pmtud_policy((*p_test_ctx)->cnx_client, picoquic_pmtud_delayed);
+            picoquic_set_default_pmtud_policy((*p_test_ctx)->qclient, picoquic_pmtud_delayed);
+        }
     }
 
     /* Prepare to send data */
@@ -278,7 +284,7 @@ int ec00_zero_test()
     int ret = edge_case_prepare(&test_ctx, 0, 1, &simulated_time, 0, 4);
 
     if (ret == 0) {
-        ret = edge_case_complete(test_ctx, &simulated_time, 100000);
+        ret = edge_case_complete(test_ctx, &simulated_time, 40000);
     }
 
     if (ret == 0) {
@@ -325,7 +331,7 @@ int ec2f_second_flight_nack_test()
     }
 
     if (ret == 0) {
-        ret = edge_case_complete(test_ctx, &simulated_time, 360000);
+        ret = edge_case_complete(test_ctx, &simulated_time, 330000);
     }
 
     if (test_ctx != NULL) {
