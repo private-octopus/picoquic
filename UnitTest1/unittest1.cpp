@@ -451,6 +451,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ddos_amplification_8k)
+        {
+            int ret = ddos_amplification_8k_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(blackhole)
         {
             int ret = blackhole_test();
@@ -1363,6 +1370,21 @@ namespace UnitTest1
         TEST_METHOD(eccf_corrupted_fuzz)
         {
             int ret = eccf_corrupted_file_fuzz_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(eca1_amplification_loss)
+        {
+            int ret = eca1_amplification_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+
+        TEST_METHOD(ecf1_final_loss)
+        {
+            int ret = ecf1_final_loss_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -102,6 +102,15 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
             (*p_test_ctx)->cnx_client->local_parameters.min_ack_delay = 0;
             picoquic_cnx_set_pmtud_policy((*p_test_ctx)->cnx_client, picoquic_pmtud_blocked);
         }
+        else if (edge_case_id == 0xa1) {
+            (*p_test_ctx)->cnx_client->local_parameters.min_ack_delay = 0;
+            (*p_test_ctx)->qserver->test_large_server_flight = 1;
+            picoquic_cnx_set_pmtud_policy((*p_test_ctx)->cnx_client, picoquic_pmtud_blocked);
+        }
+        else if (edge_case_id == 0xf1) {
+            (*p_test_ctx)->cnx_client->local_parameters.min_ack_delay = 0;
+            picoquic_cnx_set_pmtud_policy((*p_test_ctx)->cnx_client, picoquic_pmtud_blocked);
+        }
         else {
             picoquic_cnx_set_pmtud_policy((*p_test_ctx)->cnx_client, picoquic_pmtud_delayed);
             picoquic_set_default_pmtud_policy((*p_test_ctx)->qclient, picoquic_pmtud_delayed);
@@ -213,7 +222,9 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
         (*p_test_ctx)->s_to_c_link->loss_mask = &loss_mask;
 
         /* Set preemtive repeat on server */
-        picoquic_set_preemptive_repeat_policy((*p_test_ctx)->qserver, 1);
+        if (edge_case_id != 0xf1) {
+            picoquic_set_preemptive_repeat_policy((*p_test_ctx)->qserver, 1);
+        }
 
         while (ret == 0 && nb_trials < 4*nb_init_rounds && nb_inactive < 256 && loss_mask != loss_target) {
             int was_active = 0;
@@ -238,6 +249,10 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
                 break;
             }
         }
+        if (loss_mask != loss_target) {
+            DBG_PRINTF("Stop after %d trials, %d inactive, loss_mask = %" PRIu64,
+                nb_trials, nb_inactive, loss_mask);
+        }
     }
 
     return ret;
@@ -247,7 +262,7 @@ int edge_case_complete(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulate
 {
     int ret = 0;
     uint64_t loss_mask = 0;
-    
+
     ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, simulated_time);
     if (ret != 0)
     {
@@ -258,8 +273,7 @@ int edge_case_complete(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulate
     test_ctx->immediate_exit = 1;
 
     if (ret == 0) {
-        uint64_t zero_loss = 0;
-        ret = tls_api_data_sending_loop(test_ctx, &zero_loss, simulated_time, 0);
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, simulated_time, 0);
 
         if (ret != 0)
         {
@@ -394,5 +408,78 @@ int eccf_corrupted_file_fuzz_test()
         eccf_corrupted_file_fuzz(50, 0, F);
         picoquic_file_close(F);
     }
+    return ret;
+}
+
+/* Amplification test using large 
+ * server hello with losses.
+ */
+int eca1_amplification_loss_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t initial_losses = 0b0111111111100;
+    uint8_t test_case_id = 0xa1;
+    int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 16);
+
+    if (ret == 0) {
+        ret = edge_case_complete(test_ctx, &simulated_time, 2000000);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Loss of final closing packet, verify that overall time
+ * is acceptable.
+ */
+
+int ecf1_final_loss_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t final_losses = 0b10;
+    uint8_t test_case_id = 0xf1;
+    int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, 0, 20);
+    uint64_t zero_loss_mask = 0;
+
+    /* Finish the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &zero_loss_mask, 0, &simulated_time);
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connect loop returns %d\n", ret);
+        }
+    }
+    /* Finish sending data */
+    test_ctx->immediate_exit = 1;
+
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &zero_loss_mask, &simulated_time, 0);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Data sending loop returns %d\n", ret);
+        }
+    }
+    /* Simulate losses during closing */
+    if (ret == 0) {
+        ret = tls_api_close_with_losses(test_ctx, &simulated_time, final_losses);
+    }
+
+    if (ret == 0 && simulated_time > 10000000) {
+        DBG_PRINTF("Took %" PRIu64 "us to complete, too long", simulated_time);
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
     return ret;
 }

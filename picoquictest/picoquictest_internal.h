@@ -237,6 +237,9 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time,
     uint64_t max_completion_microsec);
 
+int tls_api_close_with_losses(
+    picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, uint64_t loss_mask);
+
 int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, test_api_stream_desc_t* scenario, size_t sizeof_scenario, size_t stream0_target, uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max, uint64_t max_completion_microsec);
 
 int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx);
