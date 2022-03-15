@@ -1525,6 +1525,15 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
             packet->offset = length;
         }
 
+        if (should_retransmit != 0 && (old_p->ptype == picoquic_packet_initial || old_p->ptype == picoquic_packet_handshake)) {
+            /* Need to verify that there is no coalescing issue! */
+            if (old_p->length > send_buffer_max) {
+                picoquic_log_app_message(cnx, "Delay retransmission in type %d, seq %" PRIu64 ", buffer too small",
+                    old_p->ptype, old_p->sequence_number);
+                return 0;
+            }
+        }
+
         if (should_retransmit != 0) {
             packet->sequence_number = pkt_ctx->send_sequence;
             packet->send_path = path_x;
@@ -2540,7 +2549,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                     }
                 }
-                else if (!force_handshake_padding && cnx->pkt_ctx[pc].retransmit_newest != NULL) {
+                else if (cnx->pkt_ctx[pc].retransmit_newest != NULL) {
                     /* There is a risk of deadlock if the server is doing DDOS mitigation
                      * and does not receive the Handshake sent by the client. If more than RTT has elapsed since
                      * the last handshake packet was sent, force another one to be sent. */
@@ -4680,6 +4689,11 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                         break;
                     }
                 }
+            }
+            if (packet_size > packet_max) {
+                int* x = NULL;
+                *x += 1;
+                picoquic_log_app_message(cnx, "BUFFER OVERFLOW? Packet size %zu larger than %zu", packet_size, packet_max);
             }
             if (packet_size > 0) {
                 if (packet_size > cnx->max_mtu_sent) {

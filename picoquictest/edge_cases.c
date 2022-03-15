@@ -418,12 +418,12 @@ int eca1_amplification_loss_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0b0111111111100;
+    uint64_t initial_losses = 0b0111111110100;
     uint8_t test_case_id = 0xa1;
     int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 16);
 
     if (ret == 0) {
-        ret = edge_case_complete(test_ctx, &simulated_time, 2000000);
+        ret = edge_case_complete(test_ctx, &simulated_time, 15000000);
     }
 
     if (test_ctx != NULL) {
