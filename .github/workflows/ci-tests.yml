@@ -13,6 +13,8 @@ jobs:
   citests:
     name: CI-Tests
     runs-on: ubuntu-latest
+    env:
+        PTLS_CMAKE_OPTS: "-DCMAKE_C_FLAGS=-g -DCMAKE_CXX_FLAGS=-g"
 
     steps:
       - name: Checkout repository
@@ -27,6 +29,8 @@ jobs:
           sudo apt-get install -y libssl-dev
           ./ci/build_picotls.sh
           cmake .
+          CXXFLAGS="-Wall -Wextra -Wpedantic -Werror -g"
+          CFLAGS="-Wall -Wextra -Wpedantic -Werror -g"
           make
 
       - name: Perform Unit Tests
