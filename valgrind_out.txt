@@ -1,0 +1,523 @@
+==5552== Memcheck, a memory error detector
+==5552== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==5552== Using Valgrind-3.15.0-608cb11914-20190413 and LibVEX; rerun with -h for copyright info
+==5552== Command: ./picoquic_ct -n
+==5552== 
+--5552-- Valgrind options:
+--5552--    -v
+--5552--    --error-exitcode=1
+--5552--    --track-origins=yes
+--5552-- Contents of /proc/version:
+--5552--   Linux version 5.4.0-104-generic (buildd@ubuntu) (gcc version 9.3.0 (Ubuntu 9.3.0-17ubuntu1~20.04)) #118-Ubuntu SMP Wed Mar 2 19:02:41 UTC 2022
+--5552-- 
+--5552-- Arch and hwcaps: AMD64, LittleEndian, amd64-cx16-lzcnt-rdtscp-sse3-ssse3-avx-avx2-rdrand
+--5552-- Page sizes: currently 4096, max supported 4096
+--5552-- Valgrind library directory: /usr/lib/x86_64-linux-gnu/valgrind
+--5552-- Reading syms from /home/christian/picoquic/picoquic_ct
+--5552-- Reading syms from /usr/lib/x86_64-linux-gnu/ld-2.31.so
+--5552--   Considering /usr/lib/x86_64-linux-gnu/ld-2.31.so ..
+--5552--   .. CRC mismatch (computed 0306b78c wanted 8d362b37)
+--5552--   Considering /lib/x86_64-linux-gnu/ld-2.31.so ..
+--5552--   .. CRC mismatch (computed 0306b78c wanted 8d362b37)
+--5552--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/ld-2.31.so ..
+--5552--   .. CRC is valid
+--5552-- Reading syms from /usr/lib/x86_64-linux-gnu/valgrind/memcheck-amd64-linux
+--5552--    object doesn't have a symbol table
+--5552--    object doesn't have a dynamic symbol table
+--5552-- Scheduler: using generic scheduler lock implementation.
+--5552-- Reading suppressions file: /usr/lib/x86_64-linux-gnu/valgrind/default.supp
+==5552== embedded gdbserver: reading from /tmp/vgdb-pipe-from-vgdb-to-5552-by-christian-on-???
+==5552== embedded gdbserver: writing to   /tmp/vgdb-pipe-to-vgdb-from-5552-by-christian-on-???
+==5552== embedded gdbserver: shared mem   /tmp/vgdb-pipe-shared-mem-vgdb-5552-by-christian-on-???
+==5552== 
+==5552== TO CONTROL THIS PROCESS USING vgdb (which you probably
+==5552== don't want to do, unless you know exactly what you're doing,
+==5552== or are doing some strange experiment):
+==5552==   /usr/lib/x86_64-linux-gnu/valgrind/../../bin/vgdb --pid=5552 ...command...
+==5552== 
+==5552== TO DEBUG THIS PROCESS USING GDB: start GDB like this
+==5552==   /path/to/gdb ./picoquic_ct
+==5552== and then give GDB the following command
+==5552==   target remote | /usr/lib/x86_64-linux-gnu/valgrind/../../bin/vgdb --pid=5552
+==5552== --pid is optional if only one valgrind process is running
+==5552== 
+--5552-- REDIR: 0x4022e10 (ld-linux-x86-64.so.2:strlen) redirected to 0x580c9ce2 (???)
+--5552-- REDIR: 0x4022be0 (ld-linux-x86-64.so.2:index) redirected to 0x580c9cfc (???)
+--5552-- Reading syms from /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_core-amd64-linux.so
+--5552--    object doesn't have a symbol table
+--5552-- Reading syms from /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so
+--5552--    object doesn't have a symbol table
+==5552== WARNING: new redirection conflicts with existing -- ignoring it
+--5552--     old: 0x04022e10 (strlen              ) R-> (0000.0) 0x580c9ce2 ???
+--5552--     new: 0x04022e10 (strlen              ) R-> (2007.0) 0x0483f060 strlen
+--5552-- REDIR: 0x401f5f0 (ld-linux-x86-64.so.2:strcmp) redirected to 0x483ffd0 (strcmp)
+--5552-- REDIR: 0x4023370 (ld-linux-x86-64.so.2:mempcpy) redirected to 0x4843a20 (mempcpy)
+--5552-- Reading syms from /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1
+--5552--    object doesn't have a symbol table
+--5552-- Reading syms from /usr/lib/x86_64-linux-gnu/libpthread-2.31.so
+--5552--   Considering /usr/lib/debug/.build-id/f0/983025f0e0f327a6da752ff4ffa675e0be393f.debug ..
+--5552--   .. build-id is valid
+--5552-- Reading syms from /usr/lib/x86_64-linux-gnu/libc-2.31.so
+--5552--   Considering /usr/lib/x86_64-linux-gnu/libc-2.31.so ..
+--5552--   .. CRC mismatch (computed ef41b1a0 wanted f854b801)
+--5552--   Considering /lib/x86_64-linux-gnu/libc-2.31.so ..
+--5552--   .. CRC mismatch (computed ef41b1a0 wanted f854b801)
+--5552--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/libc-2.31.so ..
+--5552--   .. CRC is valid
+--5552-- Reading syms from /usr/lib/x86_64-linux-gnu/libdl-2.31.so
+--5552--   Considering /usr/lib/x86_64-linux-gnu/libdl-2.31.so ..
+--5552--   .. CRC mismatch (computed 2bb25318 wanted f334bb32)
+--5552--   Considering /lib/x86_64-linux-gnu/libdl-2.31.so ..
+--5552--   .. CRC mismatch (computed 2bb25318 wanted f334bb32)
+--5552--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/libdl-2.31.so ..
+--5552--   .. CRC is valid
+--5552-- REDIR: 0x4bf64b0 (libc.so.6:memmove) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf57b0 (libc.so.6:strncpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf67e0 (libc.so.6:strcasecmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf50d0 (libc.so.6:strcat) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf5810 (libc.so.6:rindex) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf7c80 (libc.so.6:rawmemchr) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4c12d10 (libc.so.6:wmemchr) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4c12850 (libc.so.6:wcscmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf6610 (libc.so.6:mempcpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf6440 (libc.so.6:bcmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf5740 (libc.so.6:strncmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf5180 (libc.so.6:strcmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf6570 (libc.so.6:memset) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4c12810 (libc.so.6:wcschr) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf56a0 (libc.so.6:strnlen) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf5260 (libc.so.6:strcspn) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf6830 (libc.so.6:strncasecmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf5200 (libc.so.6:strcpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf6980 (libc.so.6:memcpy@@GLIBC_2.14) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4c13f80 (libc.so.6:wcsnlen) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4c12890 (libc.so.6:wcscpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf5850 (libc.so.6:strpbrk) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf5130 (libc.so.6:index) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf5660 (libc.so.6:strlen) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bfebd0 (libc.so.6:memrchr) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf6880 (libc.so.6:strcasecmp_l) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf6400 (libc.so.6:memchr) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4c12960 (libc.so.6:wcslen) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf5b10 (libc.so.6:strspn) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf6780 (libc.so.6:stpncpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf6720 (libc.so.6:stpcpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf7cc0 (libc.so.6:strchrnul) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf68d0 (libc.so.6:strncasecmp_l) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4c83880 (libc.so.6:__memcpy_chk) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4bf6320 (libc.so.6:strstr) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--5552-- REDIR: 0x4cde410 (libc.so.6:__strrchr_avx2) redirected to 0x483ea10 (rindex)
+--5552-- REDIR: 0x4cde5e0 (libc.so.6:__strlen_avx2) redirected to 0x483ef40 (strlen)
+--5552-- REDIR: 0x4bf1b40 (libc.so.6:calloc) redirected to 0x483dce0 (calloc)
+--5552-- REDIR: 0x4cddff0 (libc.so.6:__strchr_avx2) redirected to 0x483ebf0 (index)
+--5552-- REDIR: 0x4cde220 (libc.so.6:__strchrnul_avx2) redirected to 0x4843540 (strchrnul)
+--5552-- REDIR: 0x4bf0110 (libc.so.6:malloc) redirected to 0x483b780 (malloc)
+--5552-- REDIR: 0x4ce15d0 (libc.so.6:__mempcpy_avx_unaligned_erms) redirected to 0x4843660 (mempcpy)
+Starting test number 0, connection_id_print
+--5552-- REDIR: 0x4cd9ae0 (libc.so.6:__strcmp_avx2) redirected to 0x483fed0 (strcmp)
+    Success.
+Starting test number 1, connection_id_parse
+--5552-- REDIR: 0x4cdabd0 (libc.so.6:__memcmp_avx2_movbe) redirected to 0x48421e0 (bcmp)
+    Success.
+Starting test number 2, sprintf
+    Success.
+Starting test number 3, memcmp
+--5552-- REDIR: 0x4ce15f0 (libc.so.6:__memcpy_avx_unaligned_erms) redirected to 0x48429f0 (memmove)
+--5552-- REDIR: 0x4bf0700 (libc.so.6:free) redirected to 0x483c9d0 (free)
+    Success.
+Starting test number 4, threading
+    Success.
+Starting test number 5, picohash
+    Success.
+Starting test number 6, bytestream
+--5552-- REDIR: 0x4ce1a70 (libc.so.6:__memset_avx2_unaligned_erms) redirected to 0x48428e0 (memset)
+    Success.
+Starting test number 7, splay
+    Success.
+Starting test number 8, cnxcreation
+--5552-- REDIR: 0x4bf0eb0 (libc.so.6:realloc) redirected to 0x483df30 (realloc)
+--5552-- REDIR: 0x4ce0810 (libc.so.6:__stpcpy_avx2) redirected to 0x4842300 (stpcpy)
+--5552-- REDIR: 0x4cdafb0 (libc.so.6:__strcasecmp_avx) redirected to 0x483f830 (strcasecmp)
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1E0FAF: ptls_fusion_is_supported_by_cpu (fusion.c:1048)
+==5552==    by 0x1C0BEE: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BEE: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BEE: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BEE: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BEE: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x136962: cnxcreation_test (cnx_creation_test.c:130)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x136962: cnxcreation_test (cnx_creation_test.c:130)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+    Success.
+Starting test number 9, parseheader
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1E0FAF: ptls_fusion_is_supported_by_cpu (fusion.c:1048)
+==5552==    by 0x1C0BEE: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BEE: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BEE: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BEE: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BEE: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x141145: parseheadertest (parseheadertest.c:442)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x141145: parseheadertest (parseheadertest.c:442)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+--5552-- REDIR: 0x4ce15e0 (libc.so.6:__memcpy_chk_avx_unaligned_erms) redirected to 0x4843b10 (__memcpy_chk)
+    Success.
+Starting test number 10, incoming_initial
+--5552-- REDIR: 0x4bf5fd0 (libc.so.6:__GI_strstr) redirected to 0x4843ca0 (__strstr_sse2)
+--5552-- REDIR: 0x4cda440 (libc.so.6:__memchr_avx2) redirected to 0x4840050 (memchr)
+--5552-- REDIR: 0x4cd9f20 (libc.so.6:__strncmp_avx2) redirected to 0x483f670 (strncmp)
+    Success.
+Starting test number 11, pn2pn64
+    Success.
+Starting test number 12, intformat
+    Success.
+Starting test number 13, varint
+    Success.
+Starting test number 14, ack_sack
+    Success.
+Starting test number 15, skip_frames
+    Success.
+Starting test number 16, parse_frames
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1E0FAF: ptls_fusion_is_supported_by_cpu (fusion.c:1048)
+==5552==    by 0x1C0BEE: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BEE: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BEE: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BEE: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BEE: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x145F97: parse_test_packet (skip_frame_test.c:677)
+==5552==    by 0x146207: parse_frame_test (skip_frame_test.c:771)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x145F97: parse_test_packet (skip_frame_test.c:677)
+==5552==    by 0x146207: parse_frame_test (skip_frame_test.c:771)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x145F97: parse_test_packet (skip_frame_test.c:677)
+==5552==    by 0x1463BC: parse_frame_test (skip_frame_test.c:802)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x145F97: parse_test_packet (skip_frame_test.c:677)
+==5552==    by 0x14637A: parse_frame_test (skip_frame_test.c:802)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1E0FAF: ptls_fusion_is_supported_by_cpu (fusion.c:1048)
+==5552==    by 0x1C0BEE: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BEE: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BEE: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BEE: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BEE: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x1457F6: parse_test_packet.constprop.0 (skip_frame_test.c:677)
+==5552==    by 0x1464A5: parse_frame_test (skip_frame_test.c:848)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x1457F6: parse_test_packet.constprop.0 (skip_frame_test.c:677)
+==5552==    by 0x1464A5: parse_frame_test (skip_frame_test.c:848)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x1457F6: parse_test_packet.constprop.0 (skip_frame_test.c:677)
+==5552==    by 0x1465D4: parse_frame_test (skip_frame_test.c:858)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== 
+==5552== Process terminating with default action of signal 2 (SIGINT)
+==5552==    at 0x49BD4D0: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552==    by 0x49C95A8: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552==    by 0x49FD216: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552==    by 0x49FD27E: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552==    by 0x49FD2F8: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552==    by 0x49FD6C7: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552==    by 0x49FDAA4: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552==    by 0x49FE91F: RAND_DRBG_generate (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552==    by 0x49FEB98: RAND_DRBG_bytes (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552==    by 0x1DE1AC: ptls_openssl_random_bytes (openssl.c:172)
+==5552==    by 0x1ABD6B: picoquic_create_random_cnx_id (quicctx.c:1367)
+==5552==    by 0x1ABD6B: picoquic_create_cnx (quicctx.c:2963)
+==5552==    by 0x1457F6: parse_test_packet.constprop.0 (skip_frame_test.c:677)
+==5552== 
+==5552== HEAP SUMMARY:
+==5552==     in use at exit: 103,228 bytes in 2,944 blocks
+==5552==   total heap usage: 503,348 allocs, 500,404 frees, 211,664,627 bytes allocated
+==5552== 
+==5552== Searching for pointers to 2,944 not-freed blocks
+==5552== Checked 250,608 bytes
+==5552== 
+==5552== LEAK SUMMARY:
+==5552==    definitely lost: 0 bytes in 0 blocks
+==5552==    indirectly lost: 0 bytes in 0 blocks
+==5552==      possibly lost: 0 bytes in 0 blocks
+==5552==    still reachable: 103,228 bytes in 2,944 blocks
+==5552==         suppressed: 0 bytes in 0 blocks
+==5552== Rerun with --leak-check=full to see details of leaked memory
+==5552== 
+==5552== ERROR SUMMARY: 18680 errors from 11 contexts (suppressed: 0 from 0)
+==5552== 
+==5552== 1 errors in context 1 of 11:
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x141145: parseheadertest (parseheadertest.c:442)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== 
+==5552== 1 errors in context 2 of 11:
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1E0FAF: ptls_fusion_is_supported_by_cpu (fusion.c:1048)
+==5552==    by 0x1C0BEE: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BEE: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BEE: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BEE: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BEE: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x141145: parseheadertest (parseheadertest.c:442)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== 
+==5552== 7 errors in context 3 of 11:
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x136962: cnxcreation_test (cnx_creation_test.c:130)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== 
+==5552== 7 errors in context 4 of 11:
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1E0FAF: ptls_fusion_is_supported_by_cpu (fusion.c:1048)
+==5552==    by 0x1C0BEE: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BEE: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BEE: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BEE: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BEE: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x136962: cnxcreation_test (cnx_creation_test.c:130)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== 
+==5552== 23 errors in context 5 of 11:
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x145F97: parse_test_packet (skip_frame_test.c:677)
+==5552==    by 0x1463BC: parse_frame_test (skip_frame_test.c:802)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== 
+==5552== 25 errors in context 6 of 11:
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x145F97: parse_test_packet (skip_frame_test.c:677)
+==5552==    by 0x14637A: parse_frame_test (skip_frame_test.c:802)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== 
+==5552== 44 errors in context 7 of 11:
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x145F97: parse_test_packet (skip_frame_test.c:677)
+==5552==    by 0x146207: parse_frame_test (skip_frame_test.c:771)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== 
+==5552== 92 errors in context 8 of 11:
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x1457F6: parse_test_packet.constprop.0 (skip_frame_test.c:677)
+==5552==    by 0x1464A5: parse_frame_test (skip_frame_test.c:848)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== 
+==5552== 92 errors in context 9 of 11:
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1E0FAF: ptls_fusion_is_supported_by_cpu (fusion.c:1048)
+==5552==    by 0x1C0BEE: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BEE: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BEE: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BEE: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BEE: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x145F97: parse_test_packet (skip_frame_test.c:677)
+==5552==    by 0x146207: parse_frame_test (skip_frame_test.c:771)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== 
+==5552== 9148 errors in context 10 of 11:
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1C0BF1: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BF1: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BF1: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BF1: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BF1: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x1457F6: parse_test_packet.constprop.0 (skip_frame_test.c:677)
+==5552==    by 0x1465D4: parse_frame_test (skip_frame_test.c:858)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== 
+==5552== 9240 errors in context 11 of 11:
+==5552== Conditional jump or move depends on uninitialised value(s)
+==5552==    at 0x1E0FAF: ptls_fusion_is_supported_by_cpu (fusion.c:1048)
+==5552==    by 0x1C0BEE: picoquic_set_cipher_suite_list (tls_api.c:172)
+==5552==    by 0x1C0BEE: picoquic_get_selected_cipher_suite_by_id (tls_api.c:248)
+==5552==    by 0x1C0BEE: picoquic_get_cipher_suite_by_id (tls_api.c:562)
+==5552==    by 0x1C0BEE: picoquic_get_aes128gcm_sha256 (tls_api.c:734)
+==5552==    by 0x1C0BEE: picoquic_setup_initial_traffic_keys (tls_api.c:1476)
+==5552==    by 0x1ABD0D: picoquic_create_cnx (quicctx.c:3206)
+==5552==    by 0x1457F6: parse_test_packet.constprop.0 (skip_frame_test.c:677)
+==5552==    by 0x1464A5: parse_frame_test (skip_frame_test.c:848)
+==5552==    by 0x12E633: do_one_test (picoquic_t.c:367)
+==5552==    by 0x12DDB6: main (picoquic_t.c:667)
+==5552==  Uninitialised value was created by a stack allocation
+==5552==    at 0x49FDA07: ??? (in /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1)
+==5552== 
+==5552== ERROR SUMMARY: 18680 errors from 11 contexts (suppressed: 0 from 0)
