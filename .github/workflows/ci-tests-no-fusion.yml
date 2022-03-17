@@ -28,7 +28,7 @@ jobs:
       - run: |
           sudo apt-get install -y libssl-dev
           ./ci/build_picotls.sh
-          cmake "-DCFLAGS=-g CXXFLAGS=-g" .
+          cmake "-DCMAKE_CFLAGS=-g CMAKE_CXXFLAGS=-g" .
           make
 
       - name: Perform Unit Tests
