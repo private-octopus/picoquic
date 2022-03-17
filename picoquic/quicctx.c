@@ -2419,11 +2419,10 @@ picoquic_stream_data_node_t* picoquic_stream_data_node_alloc(picoquic_quic_t* qu
             malloc(sizeof(picoquic_stream_data_node_t));
 
         if (stream_data != NULL) {
-#if 1
+            /* It might be sufficient to zero the metadata, but zeroing everything
+             * appears safer, and does not confuse checkers like valgrind.
+             */
             memset(stream_data, 0, sizeof(picoquic_stream_data_node_t));
-#else
-            memset(stream_data, 0, offsetof(struct st_picoquic_stream_data_node_t, data));
-#endif
             stream_data->quic = quic;
             quic->nb_data_nodes_allocated++;
         }
