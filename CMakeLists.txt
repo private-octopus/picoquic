@@ -8,6 +8,8 @@ option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan) for debugging" OF
 
 set(CMAKE_C_STANDARD 11)
 
+message(STATUS "Initial CMAKE_C_FLAGS=${CMAKE_CFLAGS}")
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_C_FLAGS "-std=c99 -Wall -O3 -fno-exceptions -fno-signed-zeros -fno-trapping-math ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 else()
