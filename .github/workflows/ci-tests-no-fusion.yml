@@ -43,4 +43,4 @@ jobs:
         run: |
             sudo apt-get update
             sudo apt-get install -y valgrind
-            valgrind -v --error-exitcode=1  --track-origins=yes ./picoquic_ct -n
+            valgrind -v --error-exitcode=1  --track-origins=yes ./picoquic_ct zero_rtt_many_losses
