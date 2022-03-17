@@ -13,8 +13,6 @@ jobs:
   citests:
     name: CI-Tests
     runs-on: ubuntu-latest
-    env:
-        PTLS_CMAKE_OPTS: "-DCMAKE_C_FLAGS=-g -DCMAKE_CXX_FLAGS=-g"
 
     steps:
       - name: Checkout repository
@@ -28,8 +26,6 @@ jobs:
       - run: |
           sudo apt-get install -y libssl-dev
           ./ci/build_picotls.sh
-          CXXFLAGS="-Wall -Wextra -Wpedantic -Werror -g"
-          CFLAGS="-Wall -Wextra -Wpedantic -Werror -g"
           cmake .
           make
 
@@ -40,9 +36,3 @@ jobs:
             ./picohttp_ct -n -r -x http_corrupt && HTTPRESULT=$?
             if [[ ${QUICRESULT} == 0 ]] && [[ ${HTTPRESULT} == 0 ]]; then exit 0; fi;
             exit 1
-
-      - name: Run Valgrind
-        run: |
-            sudo apt-get update
-            sudo apt-get install -y valgrind
-            valgrind -v --error-exitcode=1  --track-origins=yes ./picoquic_ct -n
