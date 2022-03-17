@@ -375,7 +375,11 @@ picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic)
     }
 
     if (packet != NULL) {
+#if 1
+        memset(packet, 0, sizeof(picoquic_packet_t));
+#else
         memset(packet, 0, offsetof(struct st_picoquic_packet_t, bytes));
+#endif
     }
 
     return packet;
