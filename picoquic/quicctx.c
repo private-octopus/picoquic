@@ -2105,6 +2105,8 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx, uint64_t retire_before_nex
         if (picoquic_compare_connection_id(&cnx_id, &next_stash->cnx_id) == 0)
         {
             if (next_stash->sequence == sequence &&
+                cnx_id.id_len == next_stash->cnx_id.id_len &&
+                (cnx_id.id_len == 0 || memcmp(cnx_id.id, next_stash->cnx_id.id, cnx_id.id_len) == 0) &&
                 memcmp(secret_bytes, next_stash->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
                 is_duplicate = 1;
             }
@@ -2417,7 +2419,10 @@ picoquic_stream_data_node_t* picoquic_stream_data_node_alloc(picoquic_quic_t* qu
             malloc(sizeof(picoquic_stream_data_node_t));
 
         if (stream_data != NULL) {
-            memset(stream_data, 0, offsetof(struct st_picoquic_stream_data_node_t, data));
+            /* It might be sufficient to zero the metadata, but zeroing everything
+             * appears safer, and does not confuse checkers like valgrind.
+             */
+            memset(stream_data, 0, sizeof(picoquic_stream_data_node_t));
             stream_data->quic = quic;
             quic->nb_data_nodes_allocated++;
         }

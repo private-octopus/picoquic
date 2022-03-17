@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.00a"
+#define PICOQUIC_VERSION "1.00b"
 
 #ifndef PICOQUIC_MAX_PACKET_SIZE
 #define PICOQUIC_MAX_PACKET_SIZE 1536

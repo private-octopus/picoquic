@@ -375,7 +375,10 @@ picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic)
     }
 
     if (packet != NULL) {
-        memset(packet, 0, offsetof(struct st_picoquic_packet_t, bytes));
+        /* It might be sufficient to zero the metadata, but zeroing everything
+         * appears safer, and does not confuse checkers like valgrind.
+         */
+        memset(packet, 0, sizeof(picoquic_packet_t));
     }
 
     return packet;

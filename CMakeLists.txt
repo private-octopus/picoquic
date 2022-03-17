@@ -8,6 +8,8 @@ option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan) for debugging" OF
 
 set(CMAKE_C_STANDARD 11)
 
+message(STATUS "Initial CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_C_FLAGS "-std=c99 -Wall -O3 -fno-exceptions -fno-signed-zeros -fno-trapping-math ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 else()
@@ -188,6 +190,8 @@ message(STATUS "root: ${OPENSSL_ROOT_DIR}")
 message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
 message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
 message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
+message(STATUS "CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
+message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 
 include_directories(picoquic picoquictest
     ${PTLS_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
