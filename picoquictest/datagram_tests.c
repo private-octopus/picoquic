@@ -48,21 +48,24 @@
  */
 typedef struct st_test_datagram_send_recv_ctx_t {
     uint32_t dg_max_size;
+    uint32_t dg_small_size;
     int dg_target[2];
     int dg_sent[2];
     int dg_recv[2];
     int dg_acked[2];
     int dg_nacked[2];
     int dg_spurious[2];
+    int batch_size[2];
     uint64_t send_delay;
-    uint64_t next_gen_time;
+    uint64_t next_gen_time[2];
     int is_ready[2];
+    int max_packets_received;
 } test_datagram_send_recv_ctx_t;
 
 int test_datagram_check_ready(test_datagram_send_recv_ctx_t* dg_ctx, int client_mode, uint64_t current_time)
 {
     dg_ctx->is_ready[client_mode] = (dg_ctx->dg_sent[client_mode] < dg_ctx->dg_target[client_mode] &&
-        current_time >= dg_ctx->next_gen_time);
+        current_time >= dg_ctx->next_gen_time[client_mode]);
     return dg_ctx->is_ready[client_mode];
 }
 
@@ -76,22 +79,37 @@ int test_datagram_send(picoquic_cnx_t* cnx,
     if (!cnx->client_mode && length > dg_ctx->dg_max_size) {
         ret = -1;
     } else if (dg_ctx->dg_sent[cnx->client_mode] < dg_ctx->dg_target[cnx->client_mode] &&
-        current_time >= dg_ctx->next_gen_time){
+        current_time >= dg_ctx->next_gen_time[cnx->client_mode]){
         size_t available = length - (size_t)(dg_ctx->dg_sent[cnx->client_mode]%6);
-        uint8_t* buffer = picoquic_provide_datagram_buffer(bytes, available);
+        uint8_t* buffer = NULL;
 
+        if (dg_ctx->dg_small_size > 0){
+            if (available >= dg_ctx->dg_small_size) {
+                available = dg_ctx->dg_small_size;
+            }
+            else {
+                available = 0;
+            }
+        }
+
+        buffer = picoquic_provide_datagram_buffer(bytes, available);
         if (buffer != NULL) {
             memset(buffer, 'd', available);
             dg_ctx->dg_sent[cnx->client_mode]++;
-            dg_ctx->next_gen_time += dg_ctx->send_delay;
-            picoquic_mark_datagram_ready(cnx, test_datagram_check_ready(dg_ctx, cnx->client_mode, current_time));
+            if (dg_ctx->batch_size[cnx->client_mode] == 0 ||
+                (dg_ctx->dg_sent[cnx->client_mode] % dg_ctx->batch_size[cnx->client_mode]) == 0) {
+                dg_ctx->next_gen_time[cnx->client_mode] += dg_ctx->send_delay;
+            }
+            /* picoquic_mark_datagram_ready(cnx, test_datagram_check_ready(dg_ctx, cnx->client_mode, current_time)); */
         }
         else {
             ret = -1;
         }
     }
-    else {
-        picoquic_mark_datagram_ready(cnx, test_datagram_check_ready(dg_ctx, cnx->client_mode, current_time));
+
+    if (ret == 0){
+        dg_ctx->is_ready[cnx->client_mode] = test_datagram_check_ready(dg_ctx, cnx->client_mode, current_time);
+        picoquic_mark_datagram_ready(cnx, dg_ctx->is_ready[cnx->client_mode]);
     }
     return ret;
 }
@@ -189,6 +207,8 @@ int datagram_test_one(test_datagram_send_recv_ctx_t *dg_ctx, uint64_t loss_mask_
     if (ret == 0) {
         picoquic_mark_datagram_ready(test_ctx->cnx_client, 1);
         picoquic_mark_datagram_ready(test_ctx->cnx_server, 1);
+        dg_ctx->is_ready[0] = 1;
+        dg_ctx->is_ready[1] = 1;
     }
 
     /* Set the loss mask */
@@ -233,11 +253,20 @@ int datagram_test_one(test_datagram_send_recv_ctx_t *dg_ctx, uint64_t loss_mask_
         /* Simulate wake up when data is ready for real time operation */
         if (!dg_ctx->is_ready[0] && test_datagram_check_ready(dg_ctx, 0, simulated_time)) {
             picoquic_mark_datagram_ready(test_ctx->cnx_server, 1);
+            dg_ctx->is_ready[0] = 1;
         }
         if (!dg_ctx->is_ready[1] && test_datagram_check_ready(dg_ctx, 1, simulated_time)) {
             picoquic_mark_datagram_ready(test_ctx->cnx_client, 1);
+            dg_ctx->is_ready[1] = 1;
+        }
+
+        if ((dg_ctx->is_ready[0] && !test_ctx->cnx_server->is_datagram_ready) ||
+            (dg_ctx->is_ready[1] && !test_ctx->cnx_client->is_datagram_ready))
+        {
+            DBG_PRINTF("%s", "Datagram ready out of synch!");
         }
     }
+
     if (ret == 0) {
         if (loss_mask_init == 0) {
             /* Verify datagrams have been received */
@@ -250,6 +279,14 @@ int datagram_test_one(test_datagram_send_recv_ctx_t *dg_ctx, uint64_t loss_mask_
                         i, dg_ctx->dg_target[i], i, dg_ctx->dg_sent[i], 1 - i, dg_ctx->dg_recv[1 - i]);
                 }
                 ret = -1;
+            }
+            /* Verify that the number of packets is as expected */
+            if (ret == 0 && dg_ctx->max_packets_received > 0) {
+                if (test_ctx->cnx_client->nb_packets_received > dg_ctx->max_packets_received) {
+                    DBG_PRINTF("Expected at most %d packets for %d datagrams, batch by %d, got %d",
+                        dg_ctx->max_packets_received, dg_ctx->dg_recv[1], dg_ctx->batch_size[0], test_ctx->cnx_client->nb_packets_received);
+                    ret = -1;
+                }
             }
         }
         else {
@@ -308,7 +345,8 @@ int datagram_rt_test()
     dg_ctx.dg_target[0] = 100;
     dg_ctx.dg_target[1] = 100;
     dg_ctx.send_delay = 20000;
-    dg_ctx.next_gen_time = 100000;
+    dg_ctx.next_gen_time[0] = 100000;
+    dg_ctx.next_gen_time[1] = 100000;
 
 
     return datagram_test_one(&dg_ctx, 0);
@@ -322,7 +360,8 @@ int datagram_loss_test()
     dg_ctx.dg_target[0] = 100;
     dg_ctx.dg_target[1] = 100;
     dg_ctx.send_delay = 20000;
-    dg_ctx.next_gen_time = 100000;
+    dg_ctx.next_gen_time[0] = 100000;
+    dg_ctx.next_gen_time[1] = 100000;
 
 
     return datagram_test_one(&dg_ctx, 0x040080100200400ull);
@@ -335,6 +374,23 @@ int datagram_size_test()
     dg_ctx.dg_target[0] = 100;
     dg_ctx.dg_target[1] = 100;
     dg_ctx.send_delay = 5000;
+
+    return datagram_test_one(&dg_ctx, 0);
+}
+
+int datagram_small_test()
+{
+    test_datagram_send_recv_ctx_t dg_ctx = { 0 };
+    dg_ctx.dg_max_size = 512;
+    dg_ctx.dg_small_size = 64;
+    dg_ctx.batch_size[0] = 4;
+    dg_ctx.batch_size[1] = 4;
+    dg_ctx.dg_target[0] = 100;
+    dg_ctx.dg_target[1] = 100;
+    dg_ctx.send_delay = 5000;
+    dg_ctx.next_gen_time[0] = 50000;
+    dg_ctx.next_gen_time[1] = 50000;
+    dg_ctx.max_packets_received = 55;
 
     return datagram_test_one(&dg_ctx, 0);
 }

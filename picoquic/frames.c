@@ -4101,7 +4101,8 @@ uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byte
 {
     uint8_t* bytes0 = bytes;
 
-    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_datagram_l)) == NULL){
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_datagram_l)) == NULL ||
+        bytes + 16 > bytes_max){
         bytes = bytes0;
         *more_data = 1;
     }
