@@ -1277,7 +1277,7 @@ int simple_multipath_back1_test()
 int simple_multipath_perf_test()
 {
     /* Compares with 1.25 sec for full multipath */
-    uint64_t max_completion_microsec = 1270000;
+    uint64_t max_completion_microsec = 1500000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
 }

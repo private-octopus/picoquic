@@ -285,6 +285,7 @@ int datagram_test();
 int datagram_rt_test();
 int datagram_loss_test();
 int datagram_size_test();
+int datagram_small_test();
 int ddos_amplification_test();
 int ddos_amplification_0rtt_test();
 int ddos_amplification_8k_test();
