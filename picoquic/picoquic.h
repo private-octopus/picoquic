@@ -23,6 +23,7 @@
 #define PICOQUIC_H
 
 #include <stdint.h>
+#include <stdarg.h>
 #ifdef _WINDOWS
 #include <WS2tcpip.h>
 #include <Ws2def.h>
@@ -364,6 +365,7 @@ void picoquic_set_fuzz(picoquic_quic_t* quic, picoquic_fuzz_fn fuzz_fn, void * f
 
 /* Log application messages or other messages to the text log and binary log.
  */
+void picoquic_log_app_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list vargs);
 void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...);
 
 /* Set the log level:
