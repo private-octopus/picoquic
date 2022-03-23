@@ -40,6 +40,17 @@ void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curren
 
 /* Log an event relating to a specific connection */
 
+void picoquic_log_app_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
+{
+    if (cnx->quic->F_log != NULL) {
+        cnx->quic->text_log_fns->log_app_message(cnx, fmt, vargs);
+    }
+
+    if (cnx->f_binlog != NULL) {
+        cnx->quic->bin_log_fns->log_app_message(cnx, fmt, vargs);
+    }
+}
+
 void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
 {
     if (cnx->quic->F_log != NULL) {
