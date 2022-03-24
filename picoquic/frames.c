@@ -329,34 +329,43 @@ const uint8_t* picoquic_skip_new_connection_id_frame(const uint8_t* bytes, const
     return bytes;
 }
 
+const uint8_t* picoquic_parse_new_connection_id_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t* sequence, uint64_t* retire_before, uint8_t* cid_length, const uint8_t** cnxid_bytes,
+    const uint8_t** secret_bytes)
+{
+    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, sequence)) != NULL) {
+        bytes = picoquic_frames_varint_decode(bytes, bytes_max, retire_before);
+        if (bytes != NULL) {
+            bytes = picoquic_frames_uint8_decode(bytes, bytes_max, cid_length);
+        }
+        if (bytes != NULL) {
+            *cnxid_bytes = bytes;
+            *secret_bytes = bytes + *cid_length;
+            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (uint64_t)*cid_length + PICOQUIC_RESET_SECRET_SIZE);
+        }
+    }
+
+    return bytes;
+}
+
 const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t current_time)
 {
     /* store the connection ID in order to support migration. */
     uint64_t sequence = 0;
     uint64_t retire_before = 0;
     uint8_t cid_length = 0;
-    const uint8_t * cnxid_bytes = NULL;
-    const uint8_t * secret_bytes = NULL;
+    const uint8_t* cnxid_bytes = NULL;
+    const uint8_t* secret_bytes = NULL;
 
-    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &sequence)) != NULL) {
-        bytes = picoquic_frames_varint_decode(bytes, bytes_max, &retire_before);
-        if (bytes != NULL) {
-            bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &cid_length);
-        }
-    }
-
-    if (bytes != NULL) {
-        cnxid_bytes = bytes;
-        secret_bytes = bytes + cid_length;
-        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (uint64_t)cid_length + PICOQUIC_RESET_SECRET_SIZE);
-    }
+    bytes = picoquic_parse_new_connection_id_frame(bytes, bytes_max, &sequence, &retire_before, &cid_length, &cnxid_bytes, &secret_bytes);
 
     if (bytes == NULL || cid_length > PICOQUIC_CONNECTION_ID_MAX_SIZE ||
         retire_before > sequence) {
         picoquic_connection_error(cnx, (bytes == NULL) ? PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR : PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_new_connection_id);
         bytes = NULL;
-    } else {
+    }
+    else {
         uint16_t ret = (uint16_t)picoquic_enqueue_cnxid_stash(cnx, retire_before,
             sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
 
@@ -373,6 +382,76 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
     }
 
     return bytes;
+}
+
+int picoquic_process_ack_of_new_cid_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, size_t* consumed)
+{
+    int ret = 0;
+    uint64_t sequence = 0;
+    uint64_t retire_before = 0;
+    uint8_t cid_length = 0;
+    const uint8_t* cnxid_bytes = NULL;
+    const uint8_t* secret_bytes = NULL;
+
+    const uint8_t * bytes_next = picoquic_parse_new_connection_id_frame(bytes, bytes + bytes_max, &sequence, &retire_before, &cid_length, &cnxid_bytes, &secret_bytes);
+
+    if (bytes_next != NULL) {
+        picoquic_local_cnxid_t* local_cnxid = cnx->local_cnxid_first;
+        *consumed = bytes_next - bytes;
+        /* Locate the CID being acknowledged */
+
+        while (local_cnxid != NULL) {
+            if (local_cnxid->sequence == sequence) {
+                local_cnxid->is_acked = 1;
+                break;
+            }
+            else {
+                local_cnxid = local_cnxid->next;
+            }
+        }
+    }
+    else {
+        /* Internal error -- cannot parse the stored packet */
+        *consumed = bytes_max;
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int picoquic_check_new_cid_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, int* no_need_to_repeat)
+{
+    int ret = 0;
+    uint64_t sequence = 0;
+    uint64_t retire_before = 0;
+    uint8_t cid_length = 0;
+    const uint8_t* cnxid_bytes = NULL;
+    const uint8_t* secret_bytes = NULL;
+    const uint8_t* bytes_next = picoquic_parse_new_connection_id_frame(bytes, bytes + bytes_max, &sequence, &retire_before, &cid_length, &cnxid_bytes, &secret_bytes);
+
+    *no_need_to_repeat = 1;
+
+    if (bytes_next == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_local_cnxid_t* local_cnxid = cnx->local_cnxid_first;
+        /* Locate the CID being acknowledged. if not present, do not repeat */
+
+        while (local_cnxid != NULL) {
+            if (local_cnxid->sequence == sequence) {
+                *no_need_to_repeat =  local_cnxid->is_acked;
+                break;
+            }
+            else {
+                local_cnxid = local_cnxid->next;
+            }
+        }
+    }
+
+    return ret;
 }
 
 /*
@@ -2689,6 +2768,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                 *no_need_to_repeat = 1;
             }
             break;
+        case picoquic_frame_type_new_connection_id:
+            ret = picoquic_check_new_cid_needs_repeat(cnx, bytes, bytes_max, no_need_to_repeat);
+            break;
         default: {
             uint64_t frame_id64;
             *no_need_to_repeat = 0;
@@ -2801,6 +2883,11 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
         else if (ftype == picoquic_frame_type_handshake_done) {
             cnx->is_handshake_done_acked = 1;
             byte_index += l_ftype;
+        }
+        else if (ftype == picoquic_frame_type_new_connection_id) {
+            /* TODO: mark CID frame as acked */
+            ret = picoquic_process_ack_of_new_cid_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+            byte_index += frame_length;
         }
         else if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             ret = picoquic_process_ack_of_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);

@@ -901,6 +901,7 @@ typedef struct st_picoquic_local_cnxid_t {
     uint64_t create_time;
     picoquic_connection_id_t cnx_id;
     picoquic_ack_context_t ack_ctx;
+    unsigned int is_acked;
 } picoquic_local_cnxid_t;
 
 /* Remote CID.

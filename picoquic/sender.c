@@ -3248,9 +3248,7 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
                 /* Oops. Try again next time. */
                 picoquic_delete_local_cnxid(cnx, l_cid);
                 cnx->local_cnxid_sequence_next--;
-#if 1
                 cnx->nb_local_cnxid--;
-#endif
                 break;
             }
         }
