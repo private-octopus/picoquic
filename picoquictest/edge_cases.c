@@ -65,7 +65,7 @@ void edge_case_reset_scenario(picoquic_test_tls_api_ctx_t* test_ctx)
 int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_case_id, int zero_rtt, uint64_t* simulated_time, uint64_t loss_mask, int nb_init_rounds)
 {
     picoquic_connection_id_t initial_cid = { { 0xed, 0x9e, 0xca, 0x5e, 0, 0, 0, 0}, 8 };
-    uint64_t latency = 18000;
+    uint64_t latency = 17000;
     int ret = 0;
     FILE* F;
 
@@ -108,6 +108,10 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
             picoquic_cnx_set_pmtud_policy((*p_test_ctx)->cnx_client, picoquic_pmtud_blocked);
         }
         else if (edge_case_id == 0xf1) {
+            (*p_test_ctx)->cnx_client->local_parameters.min_ack_delay = 0;
+            picoquic_cnx_set_pmtud_policy((*p_test_ctx)->cnx_client, picoquic_pmtud_blocked);
+        }
+        else if (edge_case_id == 0x5c) {
             (*p_test_ctx)->cnx_client->local_parameters.min_ack_delay = 0;
             picoquic_cnx_set_pmtud_policy((*p_test_ctx)->cnx_client, picoquic_pmtud_blocked);
         }
@@ -222,7 +226,7 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
         (*p_test_ctx)->s_to_c_link->loss_mask = &loss_mask;
 
         /* Set preemtive repeat on server */
-        if (edge_case_id != 0xf1) {
+        if (edge_case_id != 0xf1 && edge_case_id != 0x5c) {
             picoquic_set_preemptive_repeat_policy((*p_test_ctx)->qserver, 1);
         }
 
@@ -442,7 +446,7 @@ int ecf1_final_loss_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t final_losses = 0b10;
+    uint64_t final_losses = 0xb10;
     uint8_t test_case_id = 0xf1;
     int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, 0, 20);
     uint64_t zero_loss_mask = 0;
@@ -475,6 +479,45 @@ int ecf1_final_loss_test()
         DBG_PRINTF("Took %" PRIu64 "us to complete, too long", simulated_time);
         ret = -1;
     }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Some traces show the CID packet from the server being dropped,
+ * then repeated a couple time, with one success but a drop
+ * of the clien't ack, and the server then sending a bogus repeat.
+ */
+
+int ec5c_silly_cid_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t initial_losses = 0b0000011110000010000100;
+    uint8_t test_case_id = 0x5c;
+    int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 48);
+
+    if (ret == 0) {
+        if (test_ctx->cnx_server == NULL) {
+            DBG_PRINTF("Unexpected state, client: %d, server: NULL",
+                test_ctx->cnx_client->cnx_state);
+
+        } else if (test_ctx->cnx_client->cnx_state != picoquic_state_ready ||
+            test_ctx->cnx_server->cnx_state != picoquic_state_ready) {
+            DBG_PRINTF("Unexpected state, client: %d, server: %d",
+                test_ctx->cnx_client->cnx_state, test_ctx->cnx_server->cnx_state);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = edge_case_complete(test_ctx, &simulated_time, 600000);
+    }
+
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
