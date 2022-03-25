@@ -591,19 +591,33 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(test_server_reset)
+		TEST_METHOD(stateless_reset)
 		{
-			int ret = tls_api_server_reset_test();
+			int ret = stateless_reset_test();
 
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(test_bad_server_reset)
+		TEST_METHOD(stateless_reset_bad)
 		{
-			int ret = tls_api_bad_server_reset_test();
+			int ret = stateless_reset_bad_test();
 
 			Assert::AreEqual(ret, 0);
 		}
+
+        TEST_METHOD(stateless_reset_client)
+        {
+            int ret = stateless_reset_client_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stateless_reset_handshake)
+        {
+            int ret = stateless_reset_handshake_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 
 		TEST_METHOD(test_very_long_stream)
 		{

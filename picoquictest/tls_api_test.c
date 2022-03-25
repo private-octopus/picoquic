@@ -2740,7 +2740,7 @@ int many_short_loss_test()
  * with a stateless reset, the client closes its own connection.
  */
 
-int tls_api_server_reset_test()
+int stateless_reset_test()
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -2809,7 +2809,7 @@ int tls_api_server_reset_test()
 * send it to the client.
 * Expected result: the client ignores the bogus reset.
 */
-int tls_api_bad_server_reset_test()
+int stateless_reset_bad_test()
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -2847,6 +2847,125 @@ int tls_api_bad_server_reset_test()
 
     return ret;
 }
+
+/*
+* Server reset client test.
+* Establish a connection between server and client.
+* Get the connection almost established on server,
+* fabricate a bogus stateless reset and
+* send it from the client to the server.
+* Expected result: the server connection ignores the bogus reset.
+*/
+int stateless_reset_client_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    uint8_t buffer[256];
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare the bogus reset */
+    if (ret == 0) {
+        size_t byte_index = 0;
+        buffer[byte_index++] = 0x41;
+        /* Copy the client ID */
+        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id);
+        /* Change one byte of the client ID */
+        if (byte_index > 5) {
+            buffer[5] ^= 0xff;
+        }
+        else {
+            buffer[1] ^= 0xff;
+        }
+        /* rest of packet is null */
+        memset(buffer + byte_index, 0xcc, sizeof(buffer) - byte_index);
+
+        /* Submit bogus request to server */
+        ret = picoquic_incoming_packet(test_ctx->qserver, buffer, sizeof(buffer),
+            (struct sockaddr*)(&test_ctx->client_addr),
+            (struct sockaddr*)(&test_ctx->server_addr), 0, test_ctx->recv_ecn_server,
+            simulated_time);
+    }
+
+    /* check that the server is still up */
+    if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state > picoquic_state_ready) {
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
+/*
+* Server reset handshake test.
+* Verify that the server does not send a reset in response to
+* a bogus long header packet
+*/
+int stateless_reset_handshake_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    uint8_t buffer[256];
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare the bogus reset */
+    if (ret == 0) {
+        size_t byte_index = 0;
+        buffer[byte_index++] = 0xff;
+        buffer[byte_index++] = test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id_len;
+        buffer[byte_index++] = test_ctx->cnx_server->path[0]->p_remote_cnxid->cnx_id.id_len;
+        /* Copy the client ID */
+        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id);
+        /* Change one byte of the client ID */
+        if (byte_index > 5) {
+            buffer[5] ^= 0xff;
+        }
+        else {
+            buffer[1] ^= 0xff;
+        }
+        /* Copy the server ID */
+        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_server->path[0]->p_remote_cnxid->cnx_id);
+        /* rest of packet is null */
+        memset(buffer + byte_index, 0xcc, sizeof(buffer) - byte_index);
+
+        /* Submit bogus request to server */
+        ret = picoquic_incoming_packet(test_ctx->qserver, buffer, sizeof(buffer),
+            (struct sockaddr*)(&test_ctx->client_addr),
+            (struct sockaddr*)(&test_ctx->server_addr), 0, test_ctx->recv_ecn_server,
+            simulated_time);
+    }
+
+    /* check that the server is still up */
+    if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state > picoquic_state_ready) {
+        ret = -1;
+    }
+    /* Check that no stateless packet is queued */
+    if (ret == 0 && test_ctx->qserver->pending_stateless_packet != NULL) {
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 
 /*
  * verify that a connection is correctly established after a stateless retry,
