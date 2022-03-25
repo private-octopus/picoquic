@@ -792,6 +792,7 @@ int picoquic_parse_header_and_decrypt(
                             memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
                             (*pcnx)->path[0]->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
                             ret = PICOQUIC_ERROR_STATELESS_RESET;
+                            picoquic_log_app_message(*pcnx, "Decrypt error, matching reset secret, ret = %d", ret);
                         }
                         else {
                             if (ret != PICOQUIC_ERROR_AEAD_NOT_READY) {
@@ -822,6 +823,7 @@ int picoquic_parse_header_and_decrypt(
                         *pcnx = picoquic_cnx_by_secret(quic, bytes + length - PICOQUIC_RESET_SECRET_SIZE, addr_from);
                         if (*pcnx != NULL) {
                             ret = PICOQUIC_ERROR_STATELESS_RESET;
+                            picoquic_log_app_message(*pcnx, "Found connection from reset secret, ret = %d", ret);
                         }
                     }
                 }
