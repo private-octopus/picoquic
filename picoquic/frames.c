@@ -2603,8 +2603,8 @@ int picoquic_process_ack_of_ack_mp_frame(
     return ret;
 }
 
-int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_max, int* no_need_to_repeat, int* do_not_detect_spurious)
+int picoquic_check_frame_needs_repeat_ex(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, int* no_need_to_repeat, int* do_not_detect_spurious, int is_preemptive)
 {
     int ret = 0;
     int fin;
@@ -2790,9 +2790,12 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     *no_need_to_repeat = 1;
                     break;
                 case picoquic_frame_type_path_abandon:
-                    *no_need_to_repeat = 0;
+                    /* TODO: check whether there is still a need to abandon the path */
+                    *no_need_to_repeat = is_preemptive;
                     break;
                 default:
+                    /* If preemptive repeat, only repeat if the frame is explicitly required. */
+                    *no_need_to_repeat = is_preemptive;
                     break;
                 }
             }
@@ -2802,6 +2805,12 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     }
 
     return ret;
+}
+
+int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, int* no_need_to_repeat, int* do_not_detect_spurious)
+{
+    return picoquic_check_frame_needs_repeat_ex(cnx, bytes, bytes_max, no_need_to_repeat, do_not_detect_spurious, 0);
 }
 
 int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
