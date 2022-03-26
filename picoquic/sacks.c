@@ -406,15 +406,11 @@ picoquic_sack_item_t * picoquic_sack_list_first_range(picoquic_sack_list_t* sack
 
 /* Initialize a sack list
  */
-int picoquic_sack_list_init(picoquic_sack_list_t* sack_list)
+void picoquic_sack_list_init(picoquic_sack_list_t* sack_list)
 {
-    int ret = 0;
-
     memset(sack_list, 0, sizeof(picoquic_sack_list_t));
     picosplay_init_tree(&sack_list->ack_tree, picoquic_sack_item_compare,
         picoquic_sack_node_create, picoquic_sack_node_delete, picoquic_sack_node_value);
-
-    return ret;
 }
 
 /* Reset a SACK list to single range

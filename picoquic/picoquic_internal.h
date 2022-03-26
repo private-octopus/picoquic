@@ -1604,7 +1604,7 @@ uint64_t picoquic_sack_list_last(picoquic_sack_list_t* first_sack);
 
 picoquic_sack_item_t* picoquic_sack_list_first_range(picoquic_sack_list_t* first_sack);
 
-int picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
+void picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
 
 int picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, 
     uint64_t range_min, uint64_t range_max, uint64_t current_time);
@@ -1681,10 +1681,8 @@ void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_he
  *
  * May have to split a retransmitted stream frame if it does not fit in the new packet size */
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_max, int* no_need_to_repeat, int* do_not_detect_spurious);
-int picoquic_check_frame_needs_repeat_ex(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_max, int* no_need_to_repeat, int* do_not_detect_spurious, int is_preemptive);
-
+    size_t bytes_max, picoquic_packet_type_enum p_type,
+    int* no_need_to_repeat, int* do_not_detect_spurious, int is_preemptive);
 uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);
 uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, 

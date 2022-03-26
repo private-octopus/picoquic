@@ -105,7 +105,7 @@ int sacktest()
 
     memset(&cnx, 0, sizeof(cnx));
 
-    ret = picoquic_sack_list_init(&cnx.ack_ctx[pc].sack_list);
+    picoquic_sack_list_init(&cnx.ack_ctx[pc].sack_list);
 
     /* Do a basic test with packet zero */
     if (picoquic_is_pn_already_received(&cnx, pc,
@@ -387,7 +387,7 @@ int ackrange_test()
     int ret = 0;
     picoquic_sack_list_t sack0;
 
-    ret = picoquic_sack_list_init(&sack0);
+    picoquic_sack_list_init(&sack0);
 
     for (size_t i = 0; ret == 0 && i < nb_ack_range; i++) {
         ret = picoquic_check_sack_list(&sack0,
@@ -503,7 +503,7 @@ int ack_disorder_test_one(char const * log_name, int64_t horizon_delay, double r
         ret = -1;
     } 
     else {
-        ret = picoquic_sack_list_init(&sack0);
+        picoquic_sack_list_init(&sack0);
     }
 
     sack0.horizon_delay = horizon_delay;
