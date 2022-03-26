@@ -2848,6 +2848,12 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                 *no_need_to_repeat = 1;
             }
             break;
+        case picoquic_frame_type_new_token:
+            /* No need to retransmit if one was previously acked */
+            if (cnx->is_new_token_acked) {
+                *no_need_to_repeat = 1;
+            }
+            break;
         case picoquic_frame_type_crypto_hs:
             ret = picoquic_check_crypto_frame_needs_repeat(cnx, bytes, bytes_max, p_type, no_need_to_repeat);
             break;
@@ -2978,6 +2984,12 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
         else if (ftype == picoquic_frame_type_crypto_hs) {
             ret = picoquic_process_ack_of_crypto_frame(cnx, &p->bytes[byte_index], p->length - byte_index, p->ptype, &frame_length);
             byte_index += frame_length;
+        }
+        else if (ftype == picoquic_frame_type_new_token) {
+            ret = picoquic_skip_frame(&p->bytes[byte_index],
+                p->length - byte_index, &frame_length, &frame_is_pure_ack);
+            byte_index += frame_length;
+            cnx->is_new_token_acked = 1;
         }
         else if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             ret = picoquic_process_ack_of_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
