@@ -4708,8 +4708,10 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 }
             }
             if (packet_size > packet_max) {
+#ifdef HUNTING_FOR_BUFFER_OVERFLOW
                 int* x = NULL;
                 *x += 1;
+#endif
                 picoquic_log_app_message(cnx, "BUFFER OVERFLOW? Packet size %zu larger than %zu", packet_size, packet_max);
             }
             if (packet_size > 0) {
