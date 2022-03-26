@@ -2469,7 +2469,7 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
         }
         free(next);
     }
-
+    stream->send_queue = NULL;
     picosplay_empty_tree(&stream->stream_data_tree);
     picoquic_sack_list_free(&stream->sack_list);
 }
@@ -2598,10 +2598,7 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
     picoquic_stream_head_t* stream = (picoquic_stream_head_t*)malloc(sizeof(picoquic_stream_head_t));
     if (stream != NULL) {
         memset(stream, 0, sizeof(picoquic_stream_head_t));
-        if (picoquic_sack_list_init(&stream->sack_list) != 0) {
-            free(stream);
-            stream = NULL;
-        }
+        picoquic_sack_list_init(&stream->sack_list);
     }
 
     if (stream != NULL){
@@ -3089,6 +3086,10 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         /* Initialize key rotation interval to default value */
         cnx->crypto_epoch_length_max = quic->crypto_epoch_length_max;
 
+        for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
+            cnx->tls_stream[epoch].send_queue = NULL;
+        }
+
         /* Perform different initializations for clients and servers */
         if (cnx->client_mode) {
             if (preferred_version == 0) {
@@ -3125,9 +3126,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->quic->current_number_half_open += 1;
             if (cnx->quic->current_number_half_open > cnx->quic->max_half_open_before_retry) {
                 cnx->quic->check_token = 1;
-            }
-            for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
-                cnx->tls_stream[epoch].send_queue = NULL;
             }
             cnx->cnx_state = picoquic_state_server_init;
             cnx->initial_cnxid = initial_cnx_id;
@@ -3172,7 +3170,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->tls_stream[epoch].maxdata_remote = UINT64_MAX;
 
             picosplay_init_tree(&cnx->tls_stream[epoch].stream_data_tree, picoquic_stream_data_node_compare, picoquic_stream_data_node_create, picoquic_stream_data_node_delete, picoquic_stream_data_node_value);
-
+            picoquic_sack_list_init(&cnx->tls_stream[epoch].sack_list);
             /* No need to reset the state flags, as they are not used for the crypto stream */
         }
         
@@ -3862,7 +3860,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         picoquic_remove_cnx_from_list(cnx);
         picoquic_remove_cnx_from_wake_list(cnx);
 
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < PICOQUIC_NUMBER_OF_EPOCHS; i++) {
             picoquic_crypto_context_free(&cnx->crypto_context[i]);
         }
 

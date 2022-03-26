@@ -2796,7 +2796,7 @@ int stream_ack_test()
                     int no_need_to_repeat;
 
                     ret = picoquic_check_frame_needs_repeat(cnx,
-                        bytes + byte_index, consumed, &no_need_to_repeat, &do_not_detect_spurious);
+                        bytes + byte_index, consumed, picoquic_packet_1rtt_protected, &no_need_to_repeat, &do_not_detect_spurious, 0);
                     if (no_need_to_repeat && !stream_ack_case[i].should_ack) {
                         DBG_PRINTF("Case %zu, failed to repeat frame index %zu",
                             i, byte_index);

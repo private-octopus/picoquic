@@ -186,12 +186,12 @@ static size_t build_test_ack(test_ack_range_t const* ranges, size_t nb_ranges,
  */
 static int ack_of_ack_do_one_test(test_ack_of_ack_t const* sample)
 {
-    int ret;
+    int ret = 0;
     picoquic_sack_list_t sack_list;
     uint8_t ack[1024];
     size_t consumed;
 
-    ret = picoquic_sack_list_init(&sack_list);
+    picoquic_sack_list_init(&sack_list);
 
     if (ret == 0) {
         ret = fill_test_sack_list(&sack_list, sample->initial, sample->nb_initial);

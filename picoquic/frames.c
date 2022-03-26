@@ -1653,6 +1653,21 @@ int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx)
     return ret;
 }
 
+const uint8_t* picoquic_parse_crypto_hs_frame(const uint8_t* bytes,
+    const uint8_t* bytes_max, uint64_t * offset, uint64_t * data_length,
+    const uint8_t** data_bytes)
+{
+    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, offset)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, data_length)) != NULL)
+    {
+        *data_bytes = bytes;
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *data_length);
+
+    }
+    return bytes;
+}
+
+
 const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
     const uint8_t* bytes_max,
     picoquic_stream_data_node_t* received_data,
@@ -1660,31 +1675,100 @@ const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_
 {
     uint64_t offset;
     uint64_t data_length;
-    int      new_data_available;  // Unused
+    const uint8_t* data_bytes;
 
-    if ((bytes = picoquic_frames_varint_decode(bytes+1, bytes_max, &offset))      == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes,   bytes_max, &data_length)) == NULL )
-    {
+    if ((bytes = picoquic_parse_crypto_hs_frame(bytes, bytes_max, &offset, &data_length, &data_bytes)) == NULL) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_crypto_hs);
-
-    } else if ((uint64_t)(bytes_max - bytes) < data_length) {
-        DBG_PRINTF("crypto hs data past the end of the packet: data_length=%" PRIst ", remaining_space=%" PRIst, data_length, bytes_max - bytes);
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_crypto_hs);
-        bytes = NULL;
-
     } else {
         picoquic_stream_head_t* stream = &cnx->tls_stream[epoch];
+        int new_data_available;
         int ret = picoquic_queue_network_input(cnx->quic, &stream->stream_data_tree, stream->consumed_offset,
-            offset, bytes, (size_t)data_length, received_data, &new_data_available);
+            offset, data_bytes, (size_t)data_length, received_data, &new_data_available);
         if (ret != 0) {
             picoquic_connection_error(cnx, (int64_t)ret, picoquic_frame_type_crypto_hs);
             bytes = NULL;
-        } else {
-            bytes += data_length;
         }
     }
 
     return bytes;
+}
+
+static picoquic_stream_head_t* picoquic_crypto_stream_from_ptype(picoquic_cnx_t * cnx, picoquic_packet_type_enum p_type)
+{
+    picoquic_stream_head_t* stream = NULL;
+
+    switch (p_type) {
+    case picoquic_packet_initial:
+        stream = &cnx->tls_stream[picoquic_epoch_initial];
+        break;
+    case picoquic_packet_0rtt_protected:
+        stream = &cnx->tls_stream[picoquic_epoch_0rtt];
+        break;
+    case picoquic_packet_handshake:
+        stream = &cnx->tls_stream[picoquic_epoch_handshake];
+        break;
+    case picoquic_packet_1rtt_protected:
+        stream = &cnx->tls_stream[picoquic_epoch_1rtt];
+        break;
+    default:
+        break;
+    }
+
+    return stream;
+}
+
+int picoquic_process_ack_of_crypto_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_size, picoquic_packet_type_enum p_type, size_t* consumed)
+{
+    int ret = 0;
+    uint64_t offset = 0;
+    uint64_t data_length = 0;
+    const uint8_t* data_bytes = 0;
+    const uint8_t* byte_zero = bytes;
+
+    if ((bytes = picoquic_parse_crypto_hs_frame(bytes, bytes + bytes_size, &offset, &data_length, &data_bytes)) == NULL) {
+        *consumed = bytes_size;
+        ret = -1;
+    }
+    else {
+        picoquic_stream_head_t* stream = picoquic_crypto_stream_from_ptype(cnx, p_type);
+        *consumed = (bytes - byte_zero);
+
+        if (stream != NULL) {
+            (void)picoquic_update_sack_list(&stream->sack_list,
+                offset, offset + data_length, 0);
+        }
+    }
+
+    return ret;
+}
+
+int picoquic_check_crypto_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_size, picoquic_packet_type_enum p_type, int* no_need_to_repeat)
+{
+    int ret = 0;
+    uint64_t offset = 0;
+    uint64_t data_length = 0;
+    const uint8_t* data_bytes = 0;
+
+    if ((bytes = picoquic_parse_crypto_hs_frame(bytes, bytes + bytes_size, &offset, &data_length, &data_bytes)) == NULL) {
+        *no_need_to_repeat = 1;
+        ret = -1;
+    }
+    else {
+        picoquic_stream_head_t* stream = picoquic_crypto_stream_from_ptype(cnx, p_type);
+
+        if (stream == NULL) {
+            /* Stream was deleted, probably already closed */
+            *no_need_to_repeat = 1;
+        }
+        else {
+            /* Check whether the ack was already received */
+            *no_need_to_repeat = picoquic_check_sack_list(&stream->sack_list, offset, offset + data_length);
+        }
+    }
+
+    return ret;
 }
 
 uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack)
@@ -1740,7 +1824,6 @@ uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t
 
     return bytes;
 }
-
 
 /*
  * ACK Frames
@@ -2604,7 +2687,8 @@ int picoquic_process_ack_of_ack_mp_frame(
 }
 
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_max, int* no_need_to_repeat, int* do_not_detect_spurious)
+    size_t bytes_max, picoquic_packet_type_enum p_type, 
+    int* no_need_to_repeat, int* do_not_detect_spurious, int is_preemptive)
 {
     int ret = 0;
     int fin;
@@ -2764,6 +2848,15 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                 *no_need_to_repeat = 1;
             }
             break;
+        case picoquic_frame_type_new_token:
+            /* No need to retransmit if one was previously acked */
+            if (cnx->is_new_token_acked) {
+                *no_need_to_repeat = 1;
+            }
+            break;
+        case picoquic_frame_type_crypto_hs:
+            ret = picoquic_check_crypto_frame_needs_repeat(cnx, bytes, bytes_max, p_type, no_need_to_repeat);
+            break;
         case picoquic_frame_type_new_connection_id:
             ret = picoquic_check_new_cid_needs_repeat(cnx, bytes, bytes_max, no_need_to_repeat);
             break;
@@ -2790,9 +2883,12 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     *no_need_to_repeat = 1;
                     break;
                 case picoquic_frame_type_path_abandon:
-                    *no_need_to_repeat = 0;
+                    /* TODO: check whether there is still a need to abandon the path */
+                    *no_need_to_repeat = is_preemptive;
                     break;
                 default:
+                    /* If preemptive repeat, only repeat if the frame is explicitly required. */
+                    *no_need_to_repeat = is_preemptive;
                     break;
                 }
             }
@@ -2884,6 +2980,16 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
             /* TODO: mark CID frame as acked */
             ret = picoquic_process_ack_of_new_cid_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
+        }
+        else if (ftype == picoquic_frame_type_crypto_hs) {
+            ret = picoquic_process_ack_of_crypto_frame(cnx, &p->bytes[byte_index], p->length - byte_index, p->ptype, &frame_length);
+            byte_index += frame_length;
+        }
+        else if (ftype == picoquic_frame_type_new_token) {
+            ret = picoquic_skip_frame(&p->bytes[byte_index],
+                p->length - byte_index, &frame_length, &frame_is_pure_ack);
+            byte_index += frame_length;
+            cnx->is_new_token_acked = 1;
         }
         else if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             ret = picoquic_process_ack_of_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);

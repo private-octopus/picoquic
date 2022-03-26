@@ -1404,7 +1404,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
              * case of spurious retransmissions */
             if (ret == 0 && frame_is_pure_ack == 0) {
                 ret = picoquic_check_frame_needs_repeat(cnx, &old_p->bytes[byte_index],
-                    frame_length, &frame_is_pure_ack, do_not_detect_spurious);
+                    frame_length, old_p->ptype, &frame_is_pure_ack, do_not_detect_spurious, 0);
             }
 
             /* Keep track of datagram frames that are possibly lost */
@@ -1906,7 +1906,7 @@ static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
              * case of spurious retransmissions */
             if (ret == 0 && frame_is_pure_ack == 0) {
                 ret = picoquic_check_frame_needs_repeat(cnx, &old_p->bytes[byte_index],
-                    frame_length, &frame_is_pure_ack, &do_not_detect_spurious);
+                    frame_length, old_p->ptype, &frame_is_pure_ack, &do_not_detect_spurious, 1);
                 if (!frame_is_pure_ack && PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
                     /* Only perform preemptive repeat if the FIN stream has been sent */
                     uint64_t stream_id = 0;
