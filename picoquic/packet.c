@@ -1520,7 +1520,8 @@ int picoquic_incoming_server_initial(
                             break;
                         }
                     }
-                    if (ack_needed) {
+                    if (ack_needed && cnx->retry_token_length == 0) {
+                        /* perform the test on new paths, but not if resuming an existing path */
                         picoquic_log_app_message(cnx, "Server initial too short (%zu bytes)", packet_length);
                         ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
                     }
