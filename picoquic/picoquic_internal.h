@@ -766,6 +766,7 @@ typedef struct st_picoquic_stream_head_t {
     uint64_t consumed_offset; /* amount of data consumed by the application */
     uint64_t fin_offset; /* If the fin mark is received, index of the byte after last */
     uint64_t maxdata_local; /* flow control limit of how much the peer is authorized to send */
+    uint64_t maxdata_local_acked; /* highest value in max stream data frame acked by the peer */
     uint64_t maxdata_remote; /* flow control limit of how much we authorize the peer to send */
     uint64_t local_error;
     uint64_t remote_error;
@@ -1310,14 +1311,17 @@ typedef struct st_picoquic_cnx_t {
     /* Flow control information */
     uint64_t data_sent;
     uint64_t data_received;
-    uint64_t maxdata_local;
-    uint64_t maxdata_remote;
-    uint64_t max_stream_id_bidir_local;
-    uint64_t max_stream_id_bidir_local_computed;
-    uint64_t max_stream_id_unidir_local;
-    uint64_t max_stream_id_unidir_local_computed;
-    uint64_t max_stream_id_bidir_remote;
-    uint64_t max_stream_id_unidir_remote;
+    uint64_t maxdata_local; /* Highest value sent to the peer */
+    uint64_t maxdata_local_acked; /* Highest value acked by the peer */
+    uint64_t maxdata_remote; /* Highest value received from the peer */
+    uint64_t max_stream_id_bidir_local; /* Highest value sent to the peer */
+    uint64_t max_stream_id_bidir_rank_acked; /* Highest rank value acked by the peer */
+    uint64_t max_stream_id_bidir_local_computed; /* Value computed from stream FIN but not yet sent */
+    uint64_t max_stream_id_bidir_remote; /* Highest value received from the peer */
+    uint64_t max_stream_id_unidir_local; /* Highest value sent to the peer */
+    uint64_t max_stream_id_unidir_rank_acked; /* Highest rank value acked by the peer */
+    uint64_t max_stream_id_unidir_local_computed;  /* Value computed from stream FIN but not yet sent */
+    uint64_t max_stream_id_unidir_remote; /* Highest value received from the peer */
 
     /* Queue for frames waiting to be sent */
     picoquic_misc_frame_header_t* first_misc_frame;
