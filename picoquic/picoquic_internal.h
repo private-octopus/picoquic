@@ -915,7 +915,9 @@ typedef struct st_picoquic_remote_cnxid_t {
     picoquic_connection_id_t cnx_id;
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     int nb_path_references;
-    int needs_removal;
+    unsigned int needs_removal : 1;
+    unsigned int retire_sent : 1;
+    unsigned int retire_acked : 1;
     picoquic_packet_context_t pkt_ctx;
 } picoquic_remote_cnxid_t;
 
@@ -1284,6 +1286,11 @@ typedef struct st_picoquic_cnx_t {
     uint64_t nb_packets_logged;
     uint64_t nb_retransmission_total;
     uint64_t nb_preemptive_repeat;
+#if 1
+    uint64_t nb_preemptive_data_blocked;
+    uint64_t nb_preemptive_steam_blocked;
+    uint64_t nb_preemptive_others;
+#endif
     uint64_t nb_spurious;
     uint64_t nb_crypto_key_rotations;
     uint64_t nb_packet_holes_inserted;

@@ -515,7 +515,6 @@ const uint8_t* picoquic_skip_retire_connection_id_frame(const uint8_t* bytes, co
  * Applications MAY note an error if the connection ID does not exist, but then they
  * MUST be damn sure that this not just a repeat of a previous retire connection ID message...
  */
-
 const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t current_time, picoquic_path_t * path_x)
 {
     /* store the connection ID in order to support migration. */
@@ -544,6 +543,72 @@ const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, c
     }
 
     return bytes;
+}
+
+/* Controling the number of repeat of the retire connection ID frame requires
+ * keeping track of stashed remote CID until the retirement has been acked.
+ */
+
+int picoquic_check_retire_connection_id_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_size, int* no_need_to_repeat)
+{
+    int ret = 0;
+    uint64_t sequence = 0;
+    const uint8_t* bytes_next = picoquic_frames_varint_decode(bytes + 1, bytes + bytes_size, &sequence);
+    *no_need_to_repeat = 1;
+
+    if (bytes_next == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Check whether the CID is still in the stash, and not yet acked. 
+         * Otherwise, no need to repeat the message.
+         */
+        picoquic_remote_cnxid_t* stashed = cnx->cnxid_stash_first;
+        while (stashed != NULL) {
+            if (stashed->sequence == sequence) {
+                *no_need_to_repeat = stashed->retire_acked;
+                break;
+            }
+            stashed = stashed->next;
+        }
+    }
+
+    return ret;
+}
+
+int picoquic_process_ack_of_retire_connection_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_size, size_t* consumed)
+{
+    int ret = 0;
+    uint64_t sequence = 0;
+    const uint8_t* bytes_next = picoquic_frames_varint_decode(bytes + 1, bytes + bytes_size, &sequence);
+
+    if (bytes_next != NULL) {
+        /* Check whether the retired CID is still in the stash.
+         * If yes, try remove it.
+         */
+        picoquic_remote_cnxid_t* stashed = cnx->cnxid_stash_first;
+        picoquic_remote_cnxid_t* previous_stash = NULL;
+        *consumed = bytes_next - bytes;
+
+        while (stashed != NULL) {
+            if (stashed->sequence == sequence) {
+                stashed->retire_acked = 1;
+                (void)picoquic_remove_stashed_cnxid(cnx, stashed, previous_stash, 1);
+                break;
+            }
+            previous_stash = stashed;
+            stashed = stashed->next;
+        }
+    }
+    else {
+        /* Internal error -- cannot parse the stored packet */
+        *consumed = bytes_size;
+        ret = -1;
+    }
+
+    return ret;
 }
 
 /*
@@ -2757,8 +2822,8 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                 /* Stream stopped, no need to increase the window */
                 *no_need_to_repeat = 1;
             }
-            else if (maxdata < stream->maxdata_local || maxdata < stream->maxdata_local_acked) {
-                /* Stream max data already increased */
+            else if (maxdata < stream->maxdata_local || maxdata <= stream->maxdata_local_acked) {
+                /* Stream max data already increased or acked */
                 *no_need_to_repeat = 1;
             }
             break;
@@ -2873,6 +2938,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
             break;
         case picoquic_frame_type_new_connection_id:
             ret = picoquic_check_new_cid_needs_repeat(cnx, bytes, bytes_max, no_need_to_repeat);
+            break;
+        case picoquic_frame_type_retire_connection_id:
+            ret = picoquic_check_retire_connection_id_needs_repeat(cnx, bytes, bytes_max, no_need_to_repeat);
             break;
         default: {
             uint64_t frame_id64;
@@ -2991,8 +3059,11 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
             byte_index += l_ftype;
         }
         else if (ftype == picoquic_frame_type_new_connection_id) {
-            /* TODO: mark CID frame as acked */
             ret = picoquic_process_ack_of_new_cid_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+            byte_index += frame_length;
+        }
+        else if (ftype == picoquic_frame_type_retire_connection_id) {
+            ret = picoquic_process_ack_of_retire_connection_id_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
         }
         else if (ftype == picoquic_frame_type_crypto_hs) {
