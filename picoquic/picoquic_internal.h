@@ -1286,11 +1286,6 @@ typedef struct st_picoquic_cnx_t {
     uint64_t nb_packets_logged;
     uint64_t nb_retransmission_total;
     uint64_t nb_preemptive_repeat;
-#if 1
-    uint64_t nb_preemptive_data_blocked;
-    uint64_t nb_preemptive_steam_blocked;
-    uint64_t nb_preemptive_others;
-#endif
     uint64_t nb_spurious;
     uint64_t nb_crypto_key_rotations;
     uint64_t nb_packet_holes_inserted;

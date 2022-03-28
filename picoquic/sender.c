@@ -1921,9 +1921,6 @@ static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
                         picoquic_stream_head_t* p_stream = picoquic_find_stream(cnx, stream_id);
 
                         if (p_stream == NULL || !p_stream->fin_sent) {
-                            if (p_stream->sent_offset >= p_stream->maxdata_remote) {
-                                cnx->nb_preemptive_steam_blocked++;
-                            }
                             frame_is_pure_ack = 1;
                         }
                     }
