@@ -2122,7 +2122,7 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx, uint64_t retire_before_nex
             ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
         }
         else {
-            if (next_stash->sequence < retire_before_next) {
+            if (next_stash->sequence < retire_before_next || next_stash->retire_sent) {
                 nb_cid_retired_before++;
             }
             nb_cid_received++;
@@ -2253,14 +2253,19 @@ void picoquic_dereference_stashed_cnxid(picoquic_cnx_t* cnx, picoquic_path_t * p
 {
     if (path_x->p_remote_cnxid != NULL) {
         if (path_x->p_remote_cnxid->nb_path_references <= 1) {
-            if (!is_deleting_cnx) {
+            if (!is_deleting_cnx && !path_x->p_remote_cnxid->retire_sent) {
                 /* if this was the last reference, retire the old cnxid */
                 if (picoquic_queue_retire_connection_id_frame(cnx, path_x->p_remote_cnxid->sequence) != 0) {
                     DBG_PRINTF("Could not properly retire CID[%" PRIu64 "]", path_x->p_remote_cnxid->sequence);
                 }
+                else {
+                    path_x->p_remote_cnxid->retire_sent = 1;
+                }
             }
-            /* Delete and perhaps recycle the queued packets */
-            (void)picoquic_remove_stashed_cnxid(cnx, path_x->p_remote_cnxid, NULL, !is_deleting_cnx);
+            if (is_deleting_cnx || path_x->p_remote_cnxid->retire_acked) {
+                /* Delete and perhaps recycle the queued packets */
+                (void)picoquic_remove_stashed_cnxid(cnx, path_x->p_remote_cnxid, NULL, !is_deleting_cnx);
+            }
         }
         else {
             path_x->p_remote_cnxid->nb_path_references--;
@@ -2276,11 +2281,20 @@ int picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t not_before, uin
     picoquic_remote_cnxid_t * previous_stash = NULL;
 
     while (ret == 0 && next_stash != NULL) {
-        next_stash->needs_removal = (next_stash->sequence < not_before);
+        next_stash->needs_removal |= (next_stash->sequence < not_before);
         if (next_stash->needs_removal && next_stash->nb_path_references == 0) {
-            ret = picoquic_queue_retire_connection_id_frame(cnx, next_stash->sequence);
-            if (ret == 0) {
+            if (!next_stash->retire_sent) {
+                ret = picoquic_queue_retire_connection_id_frame(cnx, next_stash->sequence);
+                if (ret == 0) {
+                    next_stash->retire_sent = 1;
+                }
+            }
+            if (ret == 0 && next_stash->retire_acked) {
                 next_stash = picoquic_remove_stashed_cnxid(cnx, next_stash, previous_stash, 1);
+            }
+            else {
+                previous_stash = next_stash;
+                next_stash = next_stash->next;
             }
         }
         else {

@@ -156,8 +156,9 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
             else {
                 uint64_t bdp = mbps_up * latency * 2;
                 uint64_t bdp_p = bdp / (8 * test_ctx->cnx_client->path[0]->send_mtu);
+                uint64_t bdp_p_plus = bdp_p + (bdp_p / 8);
 
-                if (test_ctx->cnx_client->nb_preemptive_repeat > bdp_p) {
+                if (test_ctx->cnx_client->nb_preemptive_repeat > bdp_p_plus) {
                     DBG_PRINTF("Preemptive repeats > BDP(packets): %" PRIu64 " vs %" PRIu64, 
                         test_ctx->cnx_client->nb_preemptive_repeat, bdp_p);
                     ret = -1;

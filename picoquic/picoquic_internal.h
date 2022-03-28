@@ -915,7 +915,9 @@ typedef struct st_picoquic_remote_cnxid_t {
     picoquic_connection_id_t cnx_id;
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     int nb_path_references;
-    int needs_removal;
+    unsigned int needs_removal : 1;
+    unsigned int retire_sent : 1;
+    unsigned int retire_acked : 1;
     picoquic_packet_context_t pkt_ctx;
 } picoquic_remote_cnxid_t;
 
@@ -1708,7 +1710,7 @@ void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoqui
 /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic.
  * Record stream data as acknowledged, signal datagram frames as acknowledged.
  */
-void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_packet_t* p,
+void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
     int is_spurious, uint64_t current_time);
 
 /* Coding and decoding of frames */
