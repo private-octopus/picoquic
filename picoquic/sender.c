@@ -2912,14 +2912,6 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             /* document the send time & overhead */
             packet->send_time = current_time;
             packet->checksum_overhead = checksum_overhead;
-        }
-        else if (cnx->ack_ctx[pc].act[0].ack_needed) {
-            /* when i, n a handshake mode, send acks asap. */
-            length = picoquic_predict_packet_header_length(cnx, packet_type, &cnx->pkt_ctx[pc]);
-            bytes_next = bytes + length;
-            bytes_max = bytes + send_buffer_max - checksum_overhead;
-            bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 0);
-            length = bytes_next - bytes;
         } else {
             length = 0;
             packet->length = 0;

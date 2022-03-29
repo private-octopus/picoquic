@@ -937,3 +937,158 @@ int incoming_initial_test()
 
     return ret;
 }
+
+/* Header length test. verify that the header length prediction
+ * matches the actual length of the encoding.
+ * Loop through a set of variables: state of connection, type of packet,
+ * sequence number, last packet not acknowledged.
+ */
+
+typedef struct st_header_length_case_t {
+    int is_client;
+    int i_cid_length;
+    int local_cid_length;
+    int remote_cid_length;
+    picoquic_packet_type_enum ptype;
+    uint64_t sequence;
+    uint64_t sequence_unack;
+} header_length_case_t;
+
+static header_length_case_t header_length_case[] = {
+    { 0, 8, 8, 8, picoquic_packet_initial, 0, UINT64_MAX },
+    { 0, 8, 8, 16, picoquic_packet_initial, 0, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_initial, 0, UINT64_MAX },
+    { 0, 16, 8, 0, picoquic_packet_initial, 0, UINT64_MAX },
+    { 0, 16, 0, 0, picoquic_packet_initial, 0, UINT64_MAX },
+    { 0, 8, 8, 8, picoquic_packet_handshake, 0, UINT64_MAX },
+    { 0, 8, 8, 16, picoquic_packet_handshake, 0, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_handshake, 0, UINT64_MAX },
+    { 0, 16, 8, 0, picoquic_packet_handshake, 0, UINT64_MAX },
+    { 0, 16, 0, 0, picoquic_packet_handshake, 0, UINT64_MAX },
+    { 0, 8, 8, 8, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
+    { 0, 8, 8, 16, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
+    { 0, 16, 8, 0, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
+    { 0, 16, 0, 0, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
+    { 0, 8, 0, 0, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 63, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 64, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 255, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffff, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffffff, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffffffff, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffffffffffull, UINT64_MAX },
+};
+
+static size_t nb_header_length_cases = sizeof(header_length_case) / sizeof(header_length_case_t);
+
+
+int header_length_test_one(header_length_case_t * hlc)
+{
+    int ret = 0;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_connection_id_t i_cid;
+    picoquic_connection_id_t r_cid;
+    struct sockaddr_in addr_to;
+    picoquic_packet_context_t* pkt_ctx = NULL;
+    size_t predicted_length = 0;
+    size_t header_length = 0;
+    size_t pn_offset;
+    size_t pn_length;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+
+    /* Create the remote address */
+    picoquic_set_test_address(&addr_to, 0xabcd, 12345);
+    /* Set cid to required value */
+    memset(i_cid.id, 0x11, 20);
+    memset(r_cid.id, 0xdd, 20);
+    i_cid.id_len = hlc->i_cid_length;
+    r_cid.id_len = hlc->remote_cid_length;
+
+    /* Create the quic context */
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
+    else {
+        quic = picoquic_create(8,
+            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+            "h3", NULL, NULL, NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+        if (quic == NULL) {
+            DBG_PRINTF("%s", "Could not create Quic context.\n");
+            ret = -1;
+        }
+        else {
+            quic->local_cnxid_length = hlc->local_cid_length;
+        }
+    }
+
+    /* Create a connection with desired characteristics */
+    cnx = picoquic_create_cnx(quic, i_cid, r_cid, (struct sockaddr*)&addr_to, 0, 0, "test", "h3", hlc->is_client);
+    if (cnx == NULL) {
+        ret = -1;
+    } else {
+        /* Find the required packet context and initialize the sequence and retransmit or retransmitted queue */
+        if (hlc->ptype == picoquic_packet_initial) {
+            pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_initial];
+        }
+        else if (hlc->ptype == picoquic_packet_handshake) {
+            pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_handshake];
+        }
+        else if (hlc->ptype == picoquic_packet_0rtt_protected || hlc->ptype == picoquic_packet_1rtt_protected) {
+            pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_handshake];
+        }
+        if (pkt_ctx != NULL) {
+            pkt_ctx->send_sequence = hlc->sequence;
+            /* TODO : init the queue */
+        }
+        /* Compute the predicted length */
+        predicted_length = picoquic_predict_packet_header_length(cnx, hlc->ptype, pkt_ctx);
+        /* Compute the header length */
+        header_length = picoquic_create_packet_header(cnx, hlc->ptype,
+            hlc->sequence, cnx->path[0], predicted_length, buffer, &pn_offset, &pn_length);
+        /* Check the results */
+        if (header_length != predicted_length) {
+            DBG_PRINTF("Error, predicted header length %zu, actual %zu", header_length, predicted_length);
+            ret = -1;
+        }
+        else if (pn_length == 0 || pn_length > 4) {
+            DBG_PRINTF("Error, invalid PN length %zu", pn_length);
+            ret = -1;
+        }
+        else if (pn_length + pn_offset != header_length){
+            DBG_PRINTF("Error, PN offset %zu + %zu != header_length %zu", pn_offset, pn_length, header_length);
+            ret = -1;
+        }
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
+int header_length_test()
+{
+    int ret = 0;
+    for (size_t i = 0; i < nb_header_length_cases; i++) {
+        ret = header_length_test_one(&header_length_case[i]);
+        if (ret != 0) {
+            DBG_PRINTF("Header length test %zu fails", i);
+            break;
+        }
+    }
+    return ret;
+}
