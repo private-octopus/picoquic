@@ -685,6 +685,13 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     /* Create the packet header just before encrypting the content */
     h_length = picoquic_create_packet_header(cnx, ptype,
         sequence_number, path_x, header_length, send_buffer, &pn_offset, &pn_length);
+#if 1
+    if (h_length != header_length) {
+        char* x = NULL;
+        DBG_PRINTF("Packet header prediction fails, %zu instead of %zu", h_length, header_length);
+        *x++;
+    }
+#endif
     if (ptype == picoquic_packet_1rtt_protected) {
         if (cnx->is_loss_bit_enabled_outgoing) {
             first_mask = 0x07;

@@ -1040,6 +1040,7 @@ int header_length_test_one(header_length_case_t * hlc)
         ret = -1;
     } else {
         /* Find the required packet context and initialize the sequence and retransmit or retransmitted queue */
+        /* TODO: add option for trying packet type retry */
         if (hlc->ptype == picoquic_packet_initial) {
             pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_initial];
         }
