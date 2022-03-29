@@ -722,15 +722,15 @@ const uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, const uin
     {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_stop_sending);
-
     }
     else if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 1)) == NULL) {
-        bytes = NULL;  // Error already signaled
+        /* The stream is already finished. Should just ignore the frame */
+        picoquic_log_app_message(cnx, "Received redundant stop sending for old stream %" PRIu64, stream_id);
     } else if (!IS_BIDIR_STREAM_ID(stream_id) && !IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_stop_sending);
         bytes = NULL;
-    } else if (!stream->stop_sending_received && !stream->reset_requested) {
+    } else if (!stream->stop_sending_received && !stream->reset_requested && !stream->fin_sent) {
         stream->stop_sending_received = 1;
         stream->remote_stop_error = error_code;
 
@@ -743,6 +743,9 @@ const uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, const uin
             }
             stream->stop_sending_signalled = 1;
         }
+    } else {
+        /* The stream is already finished. Should just ignore the frame */
+        picoquic_log_app_message(cnx, "Received stop sending for finished stream %" PRIu64, stream_id);
     }
 
     return bytes;
