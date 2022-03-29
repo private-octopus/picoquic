@@ -952,38 +952,66 @@ typedef struct st_header_length_case_t {
     picoquic_packet_type_enum ptype;
     uint64_t sequence;
     uint64_t sequence_unack;
+    uint64_t sequence_unack_after;
 } header_length_case_t;
 
 static header_length_case_t header_length_case[] = {
-    { 0, 8, 8, 8, picoquic_packet_initial, 0, UINT64_MAX },
-    { 0, 8, 8, 16, picoquic_packet_initial, 0, UINT64_MAX },
-    { 0, 16, 8, 4, picoquic_packet_initial, 0, UINT64_MAX },
-    { 0, 16, 8, 0, picoquic_packet_initial, 0, UINT64_MAX },
-    { 0, 16, 0, 0, picoquic_packet_initial, 0, UINT64_MAX },
-    { 0, 8, 8, 8, picoquic_packet_handshake, 0, UINT64_MAX },
-    { 0, 8, 8, 16, picoquic_packet_handshake, 0, UINT64_MAX },
-    { 0, 16, 8, 4, picoquic_packet_handshake, 0, UINT64_MAX },
-    { 0, 16, 8, 0, picoquic_packet_handshake, 0, UINT64_MAX },
-    { 0, 16, 0, 0, picoquic_packet_handshake, 0, UINT64_MAX },
-    { 0, 8, 8, 8, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
-    { 0, 8, 8, 16, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
-    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
-    { 0, 16, 8, 0, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
-    { 0, 16, 0, 0, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
-    { 0, 8, 0, 0, picoquic_packet_1rtt_protected, 0, UINT64_MAX },
-    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 63, UINT64_MAX },
-    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 64, UINT64_MAX },
-    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 255, UINT64_MAX },
-    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffff, UINT64_MAX },
-    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffffff, UINT64_MAX },
-    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffffffff, UINT64_MAX },
-    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffffffffffull, UINT64_MAX },
+    { 0, 8, 8, 8, picoquic_packet_initial, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 8, 8, 16, picoquic_packet_initial, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_initial, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 0, picoquic_packet_initial, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 0, 0, picoquic_packet_initial, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 8, 8, 8, picoquic_packet_handshake, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 8, 8, 16, picoquic_packet_handshake, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_handshake, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 0, picoquic_packet_handshake, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 0, 0, picoquic_packet_handshake, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 8, 8, 8, picoquic_packet_1rtt_protected, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 8, 8, 16, picoquic_packet_1rtt_protected, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 0, picoquic_packet_1rtt_protected, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 0, 0, picoquic_packet_1rtt_protected, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 8, 0, 0, picoquic_packet_1rtt_protected, 0, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 63, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 64, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 255, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffff, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffffff, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffffffff, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffffffffffull, UINT64_MAX, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffffffff, 0xffffff00, 0xfffffffe },
+    { 0, 16, 8, 4, picoquic_packet_1rtt_protected, 0xffffffff, 0xffffff00, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_handshake, 0xffffffff, 0xffffff00, 0xfffffffe },
+    { 0, 16, 8, 4, picoquic_packet_handshake, 0xffffffff, 0xffffff00, UINT64_MAX },
+    { 0, 16, 8, 4, picoquic_packet_initial, 0xffffffff, 0xffffff00, 0xfffffffe },
+    { 0, 16, 8, 4, picoquic_packet_initial, 0xffffffff, 0xffffff00, UINT64_MAX }
 };
 
 static size_t nb_header_length_cases = sizeof(header_length_case) / sizeof(header_length_case_t);
 
+static int header_length_test_set_queue(picoquic_cnx_t* cnx, header_length_case_t* hlc,
+    uint64_t unack, picoquic_packet_context_enum pc, picoquic_packet_context_t* pkt_ctx, uint64_t simulated_time)
+{
+    int ret = 0;
+    pkt_ctx->send_sequence = hlc->sequence;
 
-int header_length_test_one(header_length_case_t * hlc)
+    if (unack != UINT64_MAX) {
+        picoquic_packet_t* packet = picoquic_create_packet(cnx->quic);
+        if (packet == NULL) {
+            ret = -1;
+        }
+        else {
+            packet->ptype = hlc->ptype;
+            packet->sequence_number = unack;
+            packet->length = PICOQUIC_MAX_PACKET_SIZE;
+            packet->pc = pc;
+            picoquic_queue_for_retransmit(cnx, cnx->path[0], packet, packet->length, simulated_time);
+        }
+    }
+    return ret;
+}
+
+static int header_length_test_one(header_length_case_t * hlc)
 {
     int ret = 0;
     char test_server_cert_file[512];
@@ -995,6 +1023,7 @@ int header_length_test_one(header_length_case_t * hlc)
     picoquic_connection_id_t i_cid;
     picoquic_connection_id_t r_cid;
     struct sockaddr_in addr_to;
+    picoquic_packet_context_enum pc = 0;
     picoquic_packet_context_t* pkt_ctx = NULL;
     size_t predicted_length = 0;
     size_t header_length = 0;
@@ -1035,27 +1064,50 @@ int header_length_test_one(header_length_case_t * hlc)
     }
 
     /* Create a connection with desired characteristics */
-    cnx = picoquic_create_cnx(quic, i_cid, r_cid, (struct sockaddr*)&addr_to, 0, 0, "test", "h3", hlc->is_client);
-    if (cnx == NULL) {
-        ret = -1;
-    } else {
-        /* Find the required packet context and initialize the sequence and retransmit or retransmitted queue */
-        /* TODO: add option for trying packet type retry */
-        if (hlc->ptype == picoquic_packet_initial) {
-            pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_initial];
+    if (ret == 0) {
+        cnx = picoquic_create_cnx(quic, i_cid, r_cid, (struct sockaddr*)&addr_to, 0, 0, "test", "h3", hlc->is_client);
+        if (cnx == NULL) {
+            ret = -1;
         }
-        else if (hlc->ptype == picoquic_packet_handshake) {
-            pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_handshake];
+        else {
+            /* Find the required packet context and initialize the sequence and retransmit or retransmitted queue */
+            /* TODO: add option for trying packet type retry */
+            if (hlc->ptype == picoquic_packet_initial) {
+                pc = picoquic_packet_context_initial;
+                pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_initial];
+            }
+            else if (hlc->ptype == picoquic_packet_handshake) {
+                pc = picoquic_packet_context_handshake;
+                pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_handshake];
+            }
+            else if (hlc->ptype == picoquic_packet_0rtt_protected || hlc->ptype == picoquic_packet_1rtt_protected) {
+                pc = picoquic_packet_context_application;
+                pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+            }
+            if (pkt_ctx != NULL) {
+                pkt_ctx->send_sequence = hlc->sequence;
+
+                if (hlc->sequence_unack != UINT64_MAX) {
+                    ret = header_length_test_set_queue(cnx, hlc, hlc->sequence_unack, pc, pkt_ctx, simulated_time);
+                }
+            }
         }
-        else if (hlc->ptype == picoquic_packet_0rtt_protected || hlc->ptype == picoquic_packet_1rtt_protected) {
-            pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_handshake];
-        }
-        if (pkt_ctx != NULL) {
-            pkt_ctx->send_sequence = hlc->sequence;
-            /* TODO : init the queue */
-        }
+    }
+
+    if (ret == 0) {
         /* Compute the predicted length */
         predicted_length = picoquic_predict_packet_header_length(cnx, hlc->ptype, pkt_ctx);
+        /* Reset the retransmit queue to simulate unack */
+        if (hlc->sequence_unack != hlc->sequence_unack_after) {
+            if (hlc->sequence_unack != UINT64_MAX) {
+                picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->retransmit_oldest, 1);
+            }
+            if (hlc->sequence_unack_after != UINT64_MAX) {
+                ret = header_length_test_set_queue(cnx, hlc, hlc->sequence_unack_after, pc, pkt_ctx, simulated_time);
+            }
+        }
+    }
+    if (ret == 0) {
         /* Compute the header length */
         header_length = picoquic_create_packet_header(cnx, hlc->ptype,
             hlc->sequence, cnx->path[0], predicted_length, buffer, &pn_offset, &pn_length);
@@ -1068,11 +1120,12 @@ int header_length_test_one(header_length_case_t * hlc)
             DBG_PRINTF("Error, invalid PN length %zu", pn_length);
             ret = -1;
         }
-        else if (pn_length + pn_offset != header_length){
+        else if (pn_length + pn_offset != header_length) {
             DBG_PRINTF("Error, PN offset %zu + %zu != header_length %zu", pn_offset, pn_length, header_length);
             ret = -1;
         }
     }
+
 
     if (quic != NULL) {
         picoquic_free(quic);
