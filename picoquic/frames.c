@@ -2835,26 +2835,7 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
             break;
         case picoquic_frame_type_max_streams_bidir:
         case picoquic_frame_type_max_streams_unidir:
-            if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &max_stream_rank)) == NULL) {
-                /* Malformed frame, do not retransmit */
-                *no_need_to_repeat = 1;
-            }
-            else {
-                if (bytes[0] == picoquic_frame_type_max_streams_bidir) {
-                    if (max_stream_rank <= cnx->max_stream_id_bidir_rank_acked ||
-                        cnx->max_stream_id_bidir_local > STREAM_ID_FROM_RANK(max_stream_rank, cnx->client_mode, 0)) {
-                        /* Streams bidir already increased or already acked  */
-                        *no_need_to_repeat = 1;
-                    }
-                }
-                else {
-                    if (max_stream_rank <= cnx->max_stream_id_unidir_rank_acked ||
-                        cnx->max_stream_id_unidir_local > STREAM_ID_FROM_RANK(max_stream_rank, cnx->client_mode, 1)) {
-                        /* Streams unidir already increased or acked */
-                        *no_need_to_repeat = 1;
-                    }
-                }
-            }
+            ret = picoquic_check_max_streams_frame_needs_repeat(cnx, bytes, p_last_byte, no_need_to_repeat);
             break;
         case picoquic_frame_type_data_blocked:
             if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &maxdata)) == NULL) {
@@ -4058,6 +4039,42 @@ int picoquic_process_ack_of_max_streams_frame(picoquic_cnx_t* cnx, const uint8_t
 
     return ret;
 }
+
+int picoquic_check_max_streams_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t * p_last_byte, int* no_need_to_repeat)
+{
+    int ret = 0;
+    uint64_t max_stream_rank = 0;
+
+    if (picoquic_frames_varint_decode(bytes + 1, p_last_byte, &max_stream_rank) == NULL) {
+        /* Malformed frame, do not retransmit */
+        *no_need_to_repeat = 1;
+    }
+    else {
+        if (bytes[0] == picoquic_frame_type_max_streams_bidir) {
+            if (max_stream_rank <= cnx->max_stream_id_bidir_rank_acked ||
+                cnx->max_stream_id_bidir_local > STREAM_ID_FROM_RANK(max_stream_rank, cnx->client_mode, 0)) {
+                /* Streams bidir already increased or already acked  */
+                *no_need_to_repeat = 1;
+            }
+            else {
+                /* Adding debugging info to trace a potential loop */
+                picoquic_log_app_message(cnx, "Repeat max streams %" PRIu64 ", acked %" PRIu64 ", local %" PRIu64,
+                    max_stream_rank, cnx->max_stream_id_bidir_rank_acked, cnx->max_stream_id_bidir_local);
+            }
+        }
+        else {
+            if (max_stream_rank <= cnx->max_stream_id_unidir_rank_acked ||
+                cnx->max_stream_id_unidir_local > STREAM_ID_FROM_RANK(max_stream_rank, cnx->client_mode, 1)) {
+                /* Streams unidir already increased or acked */
+                *no_need_to_repeat = 1;
+            }
+        }
+    }
+
+    return ret;
+}
+
 
 /* Common code for datagrams and misc frames
  */
