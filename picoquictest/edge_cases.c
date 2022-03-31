@@ -335,9 +335,9 @@ int ec2f_second_flight_nack_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0x181;
+    uint64_t initial_losses = 0b111000001;
     uint8_t test_case_id = 0x2f;
-    int ret = edge_case_prepare(&test_ctx, test_case_id, 1, &simulated_time, initial_losses, 10);
+    int ret = edge_case_prepare(&test_ctx, test_case_id, 1, &simulated_time, initial_losses, 9);
 
     if (ret == 0) {
         if (test_ctx->cnx_client->cnx_state >= picoquic_state_ready ||
@@ -349,7 +349,7 @@ int ec2f_second_flight_nack_test()
     }
 
     if (ret == 0) {
-        ret = edge_case_complete(test_ctx, &simulated_time, 330000);
+        ret = edge_case_complete(test_ctx, &simulated_time, 360000);
     }
 
     if (test_ctx != NULL) {

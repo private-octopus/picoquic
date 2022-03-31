@@ -685,13 +685,15 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     /* Create the packet header just before encrypting the content */
     h_length = picoquic_create_packet_header(cnx, ptype,
         sequence_number, path_x, header_length, send_buffer, &pn_offset, &pn_length);
-#if 1
+
     if (h_length != header_length) {
+#ifdef HUNTING_FOR_BUFFER_OVERFLOW
         char* x = NULL;
-        DBG_PRINTF("Packet header prediction fails, %zu instead of %zu", h_length, header_length);
         *x++;
-    }
 #endif
+        picoquic_log_app_message(cnx, "BUFFER OVERFLOW? Packet header prediction fails, %zu instead of %zu\n", h_length, header_length);
+    }
+
     if (ptype == picoquic_packet_1rtt_protected) {
         if (cnx->is_loss_bit_enabled_outgoing) {
             first_mask = 0x07;
@@ -1986,7 +1988,8 @@ int picoquic_preemptive_retransmit_in_context(
     }
     /* Try to format the repeated packet */
     while (pkt_ctx->preemptive_repeat_ptr != NULL) {
-        uint64_t early_time = pkt_ctx->preemptive_repeat_ptr->send_time + rtt / 8;
+        uint64_t early_delay = (rtt > 8 * PICOQUIC_ACK_DELAY_MAX) ? rtt / 8 : PICOQUIC_ACK_DELAY_MAX;
+        uint64_t early_time = pkt_ctx->preemptive_repeat_ptr->send_time + early_delay;
 
         if (!pkt_ctx->preemptive_repeat_ptr->was_preemptively_repeated) {
             if (early_time > current_time) {
