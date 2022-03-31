@@ -2459,7 +2459,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 {
     int ret = 0;
     int tls_ready = 0;
-    picoquic_packet_type_enum packet_type = 0;
     size_t checksum_overhead = 16;
     int is_cleartext_mode = 1;
     int retransmit_possible = 0;
@@ -2468,9 +2467,10 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     uint8_t* bytes_max;
     uint8_t* bytes_next;
     size_t length = 0;
-    int epoch = 0;
     int is_pure_ack = 1;
     int more_data = 0;
+    int epoch = picoquic_epoch_initial;
+    picoquic_packet_type_enum packet_type = picoquic_packet_initial;
     picoquic_packet_context_enum pc = picoquic_packet_context_initial;
 
     if (*next_wake_time > cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
@@ -2483,20 +2483,20 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     if (cnx->tls_stream[0].send_queue == NULL) {
         if (cnx->crypto_context[1].aead_encrypt != NULL &&
             cnx->tls_stream[1].send_queue != NULL) {
-            epoch = 1;
+            epoch = picoquic_epoch_0rtt;
             pc = picoquic_packet_context_application;
+            packet_type = picoquic_packet_0rtt_protected;
         } else if (cnx->crypto_context[2].aead_encrypt != NULL && 
             cnx->tls_stream[1].send_queue == NULL) {
             epoch = 2;
             pc = picoquic_packet_context_handshake;
+            packet_type = picoquic_packet_handshake;
         } 
     }
 
-    packet_type = picoquic_packet_type_from_epoch(epoch);
-
     send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
 
-    /* Prepare header -- depend on connection state */
+    /* Prepare header parameters -- depend on connection state */
     switch (cnx->cnx_state) {
     case picoquic_state_client_init:
         if (cnx->retry_token_length == 0 && cnx->sni != NULL) {
@@ -2639,7 +2639,13 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     length = 0;
                 }
                 else {
-                    if (epoch != 1 && cnx->ack_ctx[pc].act[0].ack_needed) {
+                    if (force_handshake_padding) {
+                        /* Add PING if handshake is forced */
+                        *bytes_next++ = picoquic_frame_type_ping;
+                    }
+                    if (epoch != picoquic_epoch_0rtt && 
+                        (cnx->ack_ctx[pc].act[0].ack_needed ||
+                            (force_handshake_padding && picoquic_sack_list_last(&cnx->ack_ctx[pc].sack_list) != UINT64_MAX))) {
                         bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 0);
                     }
 
@@ -2674,11 +2680,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         }
                     }
 
-                    if (length == header_length) {
-                        bytes[length++] = picoquic_frame_type_ping;
-                        length = picoquic_pad_to_target_length(bytes, length, length + 8);
-                    }
-
                     if (length > header_length && epoch == picoquic_epoch_handshake) {
                         cnx->ack_ctx[picoquic_packet_context_initial].act[0].ack_needed = 0;
                     }
@@ -2711,45 +2712,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                             break;
                         }
                     }
-                }
-            }
-        }
-    }
-
-    if (ret == 0 && length == 0) {
-        /* In some circumstances, there is a risk that the handshakes stops because the
-         * server is performing anti-dos mitigation and the client has nothing to repeat */
-        if ((packet->ptype == picoquic_packet_initial && (force_handshake_padding || 
-            (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt == NULL &&
-            cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_newest == NULL &&
-            picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_initial].sack_list) != UINT64_MAX))) ||
-            (packet->ptype == picoquic_packet_handshake &&
-                cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_newest == NULL &&
-                picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_handshake].sack_list) == UINT64_MAX &&
-                cnx->pkt_ctx[picoquic_packet_context_handshake].send_sequence == 0))
-        {
-            uint64_t try_time_next = cnx->path[0]->latest_sent_time + cnx->path[0]->smoothed_rtt;
-            if (current_time < try_time_next && !force_handshake_padding) {
-                /* schedule a wake time to repeat the probing. */
-                if (*next_wake_time > try_time_next) {
-                    *next_wake_time = try_time_next;
-                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                }
-            }
-            else {
-                length = header_length;
-                packet->offset = length;
-                bytes[length++] = picoquic_frame_type_ping;
-                if (packet->ptype == picoquic_packet_initial) {
-                    /* Repeat an ACK because it helps. */
-                    bytes_max = bytes + send_buffer_max - checksum_overhead;
-                    bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc, 0);
-                    length = bytes_next - bytes;
-
-                    length = picoquic_pad_to_target_length(bytes, length, send_buffer_max - checksum_overhead);
-                }
-                else {
-                    length = picoquic_pad_to_target_length(bytes, length, length + 8);
                 }
             }
         }
