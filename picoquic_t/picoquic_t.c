@@ -52,6 +52,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cnxcreation", cnxcreation_test },
     { "parseheader", parseheadertest },
     { "incoming_initial", incoming_initial_test },
+    { "header_length", header_length_test },
     { "pn2pn64", pn2pn64test },
     { "intformat", intformattest },
     { "varint", varint_test },

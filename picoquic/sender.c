@@ -685,6 +685,15 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     /* Create the packet header just before encrypting the content */
     h_length = picoquic_create_packet_header(cnx, ptype,
         sequence_number, path_x, header_length, send_buffer, &pn_offset, &pn_length);
+
+    if (h_length != header_length) {
+#ifdef HUNTING_FOR_BUFFER_OVERFLOW
+        char* x = NULL;
+        *x++;
+#endif
+        picoquic_log_app_message(cnx, "BUFFER OVERFLOW? Packet header prediction fails, %zu instead of %zu\n", h_length, header_length);
+    }
+
     if (ptype == picoquic_packet_1rtt_protected) {
         if (cnx->is_loss_bit_enabled_outgoing) {
             first_mask = 0x07;
@@ -1979,7 +1988,8 @@ int picoquic_preemptive_retransmit_in_context(
     }
     /* Try to format the repeated packet */
     while (pkt_ctx->preemptive_repeat_ptr != NULL) {
-        uint64_t early_time = pkt_ctx->preemptive_repeat_ptr->send_time + rtt / 8;
+        uint64_t early_delay = (rtt > 8 * PICOQUIC_ACK_DELAY_MAX) ? rtt / 8 : PICOQUIC_ACK_DELAY_MAX;
+        uint64_t early_time = pkt_ctx->preemptive_repeat_ptr->send_time + early_delay;
 
         if (!pkt_ctx->preemptive_repeat_ptr->was_preemptively_repeated) {
             if (early_time > current_time) {
@@ -2314,12 +2324,11 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
     uint8_t* bytes_max = bytes + send_buffer_max - checksum_overhead;
     uint8_t* bytes_next;
-
-    *header_length = 0;
+    size_t this_header_length = 0;
 
     send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
 
-    length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_max, header_length);
+    length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_max, &this_header_length);
     if (length > 0 && (pc == picoquic_packet_context_handshake || cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_oldest == NULL ||
         cnx->cnx_state == picoquic_state_server_init || cnx->cnx_state == picoquic_state_server_handshake)) {
         cnx->initial_repeat_needed = 0;
@@ -2333,7 +2342,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
                 picoquic_packet_0rtt_protected;
         length = picoquic_predict_packet_header_length(cnx, packet->ptype, &cnx->pkt_ctx[pc]);
         packet->offset = length;
-        *header_length = length;
+        this_header_length = length;
         packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
         packet->send_time = current_time;
         packet->send_path = path_x;
@@ -2351,6 +2360,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
         packet->send_time = current_time;
         packet->checksum_overhead = checksum_overhead;
         packet->pc = pc;
+        *header_length = this_header_length;
     }
 
     return length;
@@ -2912,14 +2922,6 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             /* document the send time & overhead */
             packet->send_time = current_time;
             packet->checksum_overhead = checksum_overhead;
-        }
-        else if (cnx->ack_ctx[pc].act[0].ack_needed) {
-            /* when i, n a handshake mode, send acks asap. */
-            length = picoquic_predict_packet_header_length(cnx, packet_type, &cnx->pkt_ctx[pc]);
-            bytes_next = bytes + length;
-            bytes_max = bytes + send_buffer_max - checksum_overhead;
-            bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 0);
-            length = bytes_next - bytes;
         } else {
             length = 0;
             packet->length = 0;
