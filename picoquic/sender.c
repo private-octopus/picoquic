@@ -2324,12 +2324,11 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
     uint8_t* bytes_max = bytes + send_buffer_max - checksum_overhead;
     uint8_t* bytes_next;
-
-    *header_length = 0;
+    size_t this_header_length = 0;
 
     send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
 
-    length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_max, header_length);
+    length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_max, &this_header_length);
     if (length > 0 && (pc == picoquic_packet_context_handshake || cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_oldest == NULL ||
         cnx->cnx_state == picoquic_state_server_init || cnx->cnx_state == picoquic_state_server_handshake)) {
         cnx->initial_repeat_needed = 0;
@@ -2343,7 +2342,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
                 picoquic_packet_0rtt_protected;
         length = picoquic_predict_packet_header_length(cnx, packet->ptype, &cnx->pkt_ctx[pc]);
         packet->offset = length;
-        *header_length = length;
+        this_header_length = length;
         packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
         packet->send_time = current_time;
         packet->send_path = path_x;
@@ -2361,6 +2360,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
         packet->send_time = current_time;
         packet->checksum_overhead = checksum_overhead;
         packet->pc = pc;
+        *header_length = this_header_length;
     }
 
     return length;
