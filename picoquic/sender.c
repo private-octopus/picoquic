@@ -1976,6 +1976,13 @@ int picoquic_preemptive_retransmit_in_context(
      */
     int ret = 0;
 
+    /* Check that the connection is still active before adding more preemptive repeats */
+    if (cnx->latest_progress_time + rtt < current_time ||
+        cnx->latest_receive_time + 2*rtt < current_time) {
+        return 0;
+    }
+
+    /* Find the first packet that might be repeated */
     if (pkt_ctx->preemptive_repeat_ptr == NULL) {
         pkt_ctx->preemptive_repeat_ptr = pkt_ctx->retransmit_oldest;
     }

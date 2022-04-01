@@ -518,6 +518,92 @@ int ec5c_silly_cid_test()
         ret = edge_case_complete(test_ctx, &simulated_time, 600000);
     }
 
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Some traces show that if a connection close from the client is dropped and
+ * then the client goes away, the server can produce a vast number of
+ * preemptive repeats before giving up. Repro, then verify.
+ */
+
+int ec9a_preemptive_amok_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t initial_losses = 0b100000000000;
+    uint8_t test_case_id = 0x9a;
+    int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 12);
+
+    if (ret == 0) {
+        if (test_ctx->cnx_server == NULL) {
+            DBG_PRINTF("Unexpected state, client: %d, server: NULL",
+                test_ctx->cnx_client->cnx_state);
+            ret = -1;
+        }
+        else if ( test_ctx->cnx_server->cnx_state != picoquic_state_ready ||
+            !test_ctx->test_finished || 
+            test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest == NULL){
+            DBG_PRINTF("Unexpected state, server: %d, test finished: %d, queue for repeat %s",
+                test_ctx->cnx_server->cnx_state, test_ctx->test_finished, 
+                (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest == NULL)?"empty":"full");
+            ret = -1;
+        }
+    }
+    /* Do a loop involving only the server */
+    if (ret == 0) {
+        uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+        size_t send_length;
+        size_t send_msg_size;
+        struct sockaddr_storage addr_to;
+        struct sockaddr_storage addr_from;
+        int if_index;
+        picoquic_connection_id_t log_id;
+        picoquic_cnx_t * last_cnx;
+        int loop_count = 0;
+        int send_count = 0;
+        const int send_count_max = 25;
+        uint64_t repeat_begin = simulated_time;
+        uint64_t repeat_duration = 0;
+
+        picoquic_reinsert_by_wake_time(test_ctx->qserver, test_ctx->cnx_server, simulated_time);
+
+        while (test_ctx->cnx_server->cnx_state == picoquic_state_ready && loop_count < 10000 && ret == 0) {
+            loop_count++;
+            simulated_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
+            ret = picoquic_prepare_next_packet_ex(test_ctx->qserver, simulated_time, buffer,
+                sizeof(buffer), &send_length, &addr_to, &addr_from, &if_index, &log_id,
+                &last_cnx, &send_msg_size);
+            if (ret != 0) {
+                DBG_PRINTF("Prepare next returns an error: %d (0x%x)", ret, ret);
+            }
+            else if (send_length > 0) {
+                send_count++;
+            }
+        }
+
+        if (ret == 0) {
+            repeat_duration = simulated_time - repeat_begin;
+            if (send_count > send_count_max) {
+                DBG_PRINTF("Repeated %d packets, more that the %d expected",
+                    send_count, send_count_max);
+                ret = -1;
+            }
+            else if (repeat_duration > test_ctx->cnx_server->idle_timeout) {
+                DBG_PRINTF("End at t=%" PRIu64 ", later than %" PRIu64,
+                    simulated_time, test_ctx->cnx_server->idle_timeout);
+                ret = -1;
+            }
+            else if (test_ctx->cnx_server->nb_preemptive_repeat == 0) {
+                DBG_PRINTF("%s", "No preemptive repeat");
+                ret = -1;
+            }
+        }
+    }
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);

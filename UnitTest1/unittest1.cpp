@@ -1424,6 +1424,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ec9a_preemptive_amok)
+        {
+            int ret = ec9a_preemptive_amok_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(error_reason)
         {
             int ret = error_reason_test();
