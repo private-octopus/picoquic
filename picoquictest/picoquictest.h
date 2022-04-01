@@ -203,6 +203,7 @@ int eccf_corrupted_file_fuzz_test();
 int eca1_amplification_loss_test();
 int ecf1_final_loss_test();
 int ec5c_silly_cid_test();
+int ec9a_preemptive_amok_test();
 int error_reason_test();
 int ready_to_send_test();
 int ready_to_skip_test();

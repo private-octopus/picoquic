@@ -241,6 +241,7 @@ static const picoquic_test_def_t test_table[] = {
     { "eca1_amplification_loss", eca1_amplification_loss_test },
     { "ecf1_final_loss", ecf1_final_loss_test },
     { "ec5c_silly_cid", ec5c_silly_cid_test },
+    { "ec9a_preemptive_amok", ec9a_preemptive_amok_test },
     { "error_reason", error_reason_test },
     { "ready_to_send", ready_to_send_test },
     { "ready_to_skip", ready_to_skip_test },

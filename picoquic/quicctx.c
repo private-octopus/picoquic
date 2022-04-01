@@ -3169,6 +3169,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->ack_ignore_order_remote = 0;
 
         cnx->latest_progress_time = start_time;
+        cnx->latest_receive_time = start_time;
 
         for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
             cnx->tls_stream[epoch].stream_id = 0;
