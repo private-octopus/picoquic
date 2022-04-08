@@ -370,6 +370,10 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                             sock_ret = picoquic_sendmsg(send_socket,
                                 (struct sockaddr*)&peer_addr, (struct sockaddr*)&local_addr, if_index,
                                 (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
+
+                            if (sock_ret != (int)send_length && last_cnx != NULL) {
+                                picoquic_log_app_message(last_cnx, "sendmsg(%zu, %zu) => %d, err=%d", send_length, send_msg_size, sock_ret, sock_err);
+                            }
                         }
 
                         if (sock_ret <= 0) {
