@@ -44,7 +44,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <picosocks.h>
-#include "picoquic_config.h"
 #include "picoquic_sample.h"
 
 static void usage(char const * sample_name)
