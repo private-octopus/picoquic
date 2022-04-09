@@ -69,6 +69,10 @@
 #define ERROR_THREAD_TEST_MESSAGE 1
 #define ERROR_THREAD_TEST_DUPLICATE 2
 typedef struct st_thread_test_context_t {
+#ifdef _WINDOWS
+
+#else
+#endif
     int should_stop;
     struct sockaddr_in network_thread_addr;
     int network_thread_addr_len;
@@ -97,7 +101,11 @@ void network_wake_up()
 DWORD WINAPI network_thread(LPVOID lpParam)
 {
     thread_test_context_t* ctx = (thread_test_context_t*)lpParam;
+#ifdef _WINDOWS
+    picoquic_recvmsg_async_ctx_t* recv_ctx;
+#else
     SOCKET_TYPE n_socket;
+#endif
     uint64_t current_time = 0;
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     /* Create a socket */
@@ -108,6 +116,10 @@ DWORD WINAPI network_thread(LPVOID lpParam)
         int receive_ready = 0;
         uint64_t message_number = 0;
         /* wait for socket or event */
+#ifdef _WINDOWS
+        DWORD ret_event = WSAWaitForMultipleEvents(nb_sockets, events, FALSE, delta_t_ms, TRUE);
+#else
+#endif
         /* get time */
         /* if event received */
         while (ctx->event_seen_count < ctx->event_sent_count) {
