@@ -45,6 +45,7 @@
 #include <picosocks.h>
 #include <picoquic_utils.h>
 #include <autoqlog.h>
+
 #include "picoquic_sample.h"
 #include "picoquic_packet_loop.h"
 
@@ -372,7 +373,7 @@ int sample_server_callback(picoquic_cnx_t* cnx,
  * - The loop breaks if the socket return an error. 
  */
 
-int picoquic_sample_server(int server_port, const char* server_cert, const char* server_key, const char* default_dir)
+int picoquic_sample_server(int server_port, const char* server_cert, const char* server_key, const char* default_dir, int do_not_use_gso)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -410,7 +411,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
 
     /* Wait for packets */
     if (ret == 0) {
-        ret = picoquic_packet_loop(quic, server_port, 0, 0, 0, 0, NULL, NULL);
+        ret = picoquic_packet_loop(quic, server_port, 0, 0, 0, do_not_use_gso, NULL, NULL);
     }
 
     /* And finish. */
