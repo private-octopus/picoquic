@@ -45,7 +45,6 @@
 #include <picosocks.h>
 #include <picoquic_utils.h>
 #include <autoqlog.h>
-
 #include "picoquic_sample.h"
 #include "picoquic_packet_loop.h"
 
@@ -373,7 +372,7 @@ int sample_server_callback(picoquic_cnx_t* cnx,
  * - The loop breaks if the socket return an error. 
  */
 
-int picoquic_sample_server(int server_port, const char* server_cert, const char* server_key, const char* default_dir, int do_not_use_gso)
+int picoquic_sample_server(int server_port, const char* server_cert, const char* server_key, const char* default_dir)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -409,9 +408,17 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
         picoquic_set_key_log_file_from_env(quic);
     }
 
-    /* Wait for packets */
+    /* Wait for packets using the wait loop provided in the library.
+     * On Linux, the default is to use UDP GSO when the system version is
+     * recent enough to provide it, because this provides much better
+     * performance. This may cause packet loss if a faulty driver fails
+     * to provide UDP GSO and also does not return an error code when
+     * doing so. In that case, the fourth zero below should be
+     * changed to 1, i.e. passing "do_not_use_gso = 1". Or, better
+     * still, get the faulty driver fixed.
+     */
     if (ret == 0) {
-        ret = picoquic_packet_loop(quic, server_port, 0, 0, 0, do_not_use_gso, NULL, NULL);
+        ret = picoquic_packet_loop(quic, server_port, 0, 0, 0, 0, NULL, NULL);
     }
 
     /* And finish. */

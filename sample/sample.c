@@ -44,6 +44,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <picosocks.h>
+#include "picoquic_config.h"
 #include "picoquic_sample.h"
 
 static void usage(char const * sample_name)
@@ -51,10 +52,7 @@ static void usage(char const * sample_name)
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "    %s client server_name port folder *queried_file\n", sample_name);
     fprintf(stderr, "or :\n");
-    fprintf(stderr, "    %s server port cert_file private_key_file folder [no_gso]\n", sample_name);
-    fprintf(stderr, "Adding the key word \"no_gso\" after the server parameters disables\n");
-    fprintf(stderr, "the UDP GSO offload. This is sometimes required if incompatible\n");
-    fprintf(stderr, "drivers would cause packet losses when using UDP GSO.\n");
+    fprintf(stderr, "    %s server port cert_file private_key_file folder\n", sample_name);
     exit(1);
 }
 
@@ -92,19 +90,12 @@ int main(int argc, char** argv)
         }
     }
     else if (strcmp(argv[1], "server") == 0) {
-        int do_not_use_gso = 0;
-        int nb_arg_desired = 6;
-
-        if (argc > 6 && strcmp(argv[6], "no_gso") == 0) {
-            do_not_use_gso = 1;
-            nb_arg_desired = 7;
-        }
-        if (argc != nb_arg_desired) {
+        if (argc < 5) {
             usage(argv[0]);
         }
         else {
             int server_port = get_port(argv[0], argv[2]);
-            exit_code = picoquic_sample_server(server_port, argv[3], argv[4], argv[5], do_not_use_gso);
+            exit_code = picoquic_sample_server(server_port, argv[3], argv[4], argv[5]);
         }
     }
     else
