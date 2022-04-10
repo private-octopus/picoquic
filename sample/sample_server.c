@@ -408,7 +408,15 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
         picoquic_set_key_log_file_from_env(quic);
     }
 
-    /* Wait for packets */
+    /* Wait for packets using the wait loop provided in the library.
+     * On Linux, the default is to use UDP GSO when the system version is
+     * recent enough to provide it, because this provides much better
+     * performance. This may cause packet loss if a faulty driver fails
+     * to provide UDP GSO and also does not return an error code when
+     * doing so. In that case, the fourth zero below should be
+     * changed to 1, i.e. passing "do_not_use_gso = 1". Or, better
+     * still, get the faulty driver fixed.
+     */
     if (ret == 0) {
         ret = picoquic_packet_loop(quic, server_port, 0, 0, 0, 0, NULL, NULL);
     }

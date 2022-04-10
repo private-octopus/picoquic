@@ -410,6 +410,11 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                                         picoquic_log_app_message(last_cnx, "Retry of %zu bytes by chunks of %zu bytes succeeds.",
                                             send_length, send_msg_size);
                                     }
+                                    if (send_msg_ptr != NULL) {
+                                        /* Make sure that we do not use GSO anymore in this run */
+                                        send_msg_ptr = NULL;
+                                        picoquic_log_app_message(last_cnx, "%s", "UDP GSO was disabled");
+                                    }
                                 }
                             }
                         }
