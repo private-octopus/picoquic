@@ -97,7 +97,7 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
         PICOQUIC_V1_VERSION},
-    { PICOQUIC_V2_VERSION_DRAFT_01,
+    { PICOQUIC_V2_VERSION,
         sizeof(picoquic_cleartext_v2_salt),
         picoquic_cleartext_v2_salt,
         sizeof(picoquic_retry_protection_v2),
@@ -105,14 +105,6 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         PICOQUIC_LABEL_QUIC_V2_KEY_BASE,
         PICOQUIC_LABEL_V2_TRAFFIC_UPDATE,
         PICOQUIC_V2_VERSION},
-    { PICOQUIC_V2_VERSION_DRAFT,
-        sizeof(picoquic_cleartext_v2_salt),
-        picoquic_cleartext_v2_salt,
-        sizeof(picoquic_retry_protection_v2),
-        picoquic_retry_protection_v2,
-        PICOQUIC_LABEL_QUIC_V2_KEY_BASE,
-        PICOQUIC_LABEL_V2_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION},
     { PICOQUIC_POST_IESG_VERSION,
         sizeof(picoquic_cleartext_v1_salt),
         picoquic_cleartext_v1_salt,
@@ -4268,8 +4260,7 @@ int picoquic_process_version_upgrade(picoquic_cnx_t* cnx, int old_version_index,
     if (new_version_index == old_version_index) {
         /* not an upgrade, nothing to do. */
         ret = 0;
-    } else if (picoquic_supported_versions[new_version_index].version == PICOQUIC_V2_VERSION_DRAFT || 
-        picoquic_supported_versions[new_version_index].version == PICOQUIC_V2_VERSION_DRAFT_01 ) {
+    } else if (picoquic_supported_versions[new_version_index].version == PICOQUIC_V2_VERSION) {
         if (picoquic_supported_versions[old_version_index].version == PICOQUIC_V1_VERSION) {
             /* Supported */
             ret = 0;
