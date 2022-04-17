@@ -177,6 +177,7 @@ int network_thread(void * lpParam)
         int event_rank = -1;
         int receive_ready = 0;
         uint64_t message_number = 0;
+        uint8_t* recv_buf = NULL;
         /* wait for socket or event */
 #ifdef _WINDOWS
         DWORD ret_event = WSAWaitForMultipleEvents(2, events, FALSE, 1000, TRUE);
@@ -261,6 +262,7 @@ int network_thread(void * lpParam)
                     DBG_PRINTF("Message too sort, nb_bytes = %d", received_length);
                 }
             }
+#ifdef _WINDOWS
             if (ret == 0) {
                 /* Start receiving */
                 ret = picoquic_recvmsg_async_start(recv_ctx);
@@ -268,6 +270,7 @@ int network_thread(void * lpParam)
                     DBG_PRINTF("Cannot start recv on socket, err = %d (0x%x)", ret, ret);
                 }
             }
+#endif
         }
     }
     ctx->network_exit_time = current_time;
