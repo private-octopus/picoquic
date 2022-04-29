@@ -381,6 +381,28 @@ int h3zero_parse_status(uint8_t * content, size_t content_length)
     return val;
 }
 
+uint8_t* h3zero_parse_qpack_header_value_string(uint8_t * bytes, uint8_t* decoded,
+    size_t decoded_length, const uint8_t ** field, size_t * length)
+{
+    if (*field != NULL) {
+        /* Duplicate field! */
+        bytes = NULL;
+    }
+    else {
+        *field = malloc(decoded_length + 1);
+        if (*field == NULL) {
+            bytes = 0;
+            *length = 0;
+        }
+        else {
+            memcpy((void*)*field, decoded, decoded_length);
+            ((uint8_t*)(*field))[decoded_length] = 0;
+            *length = (size_t)decoded_length;
+        }
+    }
+    return bytes;
+}
+
 uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
     http_header_enum_t header, h3zero_header_parts_t * parts)
 {
@@ -436,22 +458,9 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                 }
                 break;
             case http_pseudo_header_path:
-                if (parts->path != NULL) {
-                    /* Duplicate path! */
-                    bytes = 0;
-                }
-                else {
-                    parts->path = malloc(decoded_length+1);
-                    if (parts->path == NULL) {
-                        bytes = 0;
-                        parts->path_length = 0;
-                    }
-                    else {
-                        memcpy((void *)parts->path, decoded, decoded_length);
-                        ((uint8_t *)(parts->path))[decoded_length] = 0;
-                        parts->path_length = (size_t)decoded_length;
-                    }
-                }
+                bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                    decoded_length, &parts->path, &parts->path_length);
+                break;
                 break;
             default:
                 break;
@@ -713,8 +722,9 @@ uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zer
     return bytes;
 }
 
-uint8_t * h3zero_create_post_header_frame(uint8_t * bytes, uint8_t * bytes_max,
-    uint8_t const * path, size_t path_length, char const * host, h3zero_content_type_enum content_type)
+uint8_t * h3zero_create_post_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max,
+    uint8_t const * path, size_t path_length, char const * host, 
+    h3zero_content_type_enum content_type, char const* ua_string)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -732,14 +742,25 @@ uint8_t * h3zero_create_post_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     if (host != NULL) {
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const *)host, strlen(host));
     }
+    /* User Agent */
+    if (ua_string != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_USER_AGENT, (uint8_t const*)ua_string, strlen(ua_string));
+    }
     /* Document type */
     bytes = h3zero_encode_content_type(bytes, bytes_max, content_type);
 
     return bytes;
 }
 
-uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
-    uint8_t const * path, size_t path_length, char const * host)
+uint8_t* h3zero_create_post_header_frame(uint8_t* bytes, uint8_t* bytes_max,
+    uint8_t const* path, size_t path_length, char const* host, h3zero_content_type_enum content_type)
+{
+    return h3zero_create_post_header_frame_ex(bytes, bytes_max, path, path_length, host,
+        content_type, H3ZERO_USER_AGENT_STRING);
+}
+
+uint8_t * h3zero_create_request_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max,
+    uint8_t const * path, size_t path_length, char const * host, char const* ua_string)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -757,11 +778,22 @@ uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_ma
     if (host != NULL) {
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const *)host, strlen(host));
     }
+    /* User Agent */
+    if (ua_string != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_USER_AGENT, (uint8_t const*)ua_string, strlen(ua_string));
+    }
     return bytes;
 }
 
-uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
-    h3zero_content_type_enum doc_type)
+uint8_t* h3zero_create_request_header_frame(uint8_t* bytes, uint8_t* bytes_max,
+    uint8_t const* path, size_t path_length, char const* host)
+{
+    return h3zero_create_request_header_frame_ex(bytes, bytes_max, path, path_length,
+        host, H3ZERO_USER_AGENT_STRING);
+}
+
+uint8_t * h3zero_create_response_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max,
+    h3zero_content_type_enum doc_type, char const* server_string)
 {
 
     if (bytes == NULL || bytes + 2 > bytes_max) {
@@ -774,13 +806,24 @@ uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_m
     /* Status = 200 */
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_200);
 
+    /* Server string */
+    if (server_string != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_SERVER, (uint8_t const*)server_string, strlen(server_string));
+    }
+
     /* Content type header */
     bytes = h3zero_encode_content_type(bytes, bytes_max, doc_type);
 
     return bytes;
 }
 
-uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max)
+uint8_t* h3zero_create_response_header_frame(uint8_t* bytes, uint8_t* bytes_max,
+    h3zero_content_type_enum doc_type)
+{
+    return h3zero_create_response_header_frame_ex(bytes, bytes_max, doc_type, H3ZERO_USER_AGENT_STRING);
+}
+
+uint8_t * h3zero_create_not_found_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max, char const* server_string)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -791,10 +834,20 @@ uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_
     /* Status = 404 */
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_404);
 
+    /* Server string */
+    if (server_string != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_SERVER, (uint8_t const*)server_string, strlen(server_string));
+    }
+
     return bytes;
 }
 
-uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes_max)
+uint8_t* h3zero_create_not_found_header_frame(uint8_t* bytes, uint8_t* bytes_max)
+{
+    return h3zero_create_not_found_header_frame_ex(bytes, bytes_max, H3ZERO_USER_AGENT_STRING);
+}
+
+uint8_t * h3zero_create_bad_method_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max, char const* server_string)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -810,10 +863,21 @@ uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes
         *bytes++ = '0';
         *bytes++ = '5';
     }
+
+    /* Server string */
+    if (server_string != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_SERVER, (uint8_t const*)server_string, strlen(server_string));
+    }
+
     /* Allow GET and POST */
     bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_ALLOW_GET, (uint8_t *)"GET, POST", 9);
 
     return bytes;
+}
+
+uint8_t* h3zero_create_bad_method_header_frame(uint8_t* bytes, uint8_t* bytes_max)
+{
+    return h3zero_create_bad_method_header_frame_ex(bytes, bytes_max, H3ZERO_USER_AGENT_STRING);
 }
 
 /* Parsing of a data stream. This is implemented as a filter, with a set of states:
