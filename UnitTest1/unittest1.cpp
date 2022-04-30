@@ -1968,6 +1968,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_user_agent) {
+            int ret = h3zero_user_agent_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_qpack_fuzz) {
             int ret = h3zero_qpack_fuzz_test();
 
