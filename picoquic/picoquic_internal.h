@@ -631,6 +631,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int is_cert_verifier_custom : 1;
     unsigned int use_long_log : 1;
     unsigned int should_close_log : 1;
+    unsigned int use_unique_log_names : 1; /* Add 64 bit random number to log names for uniqueness */
     unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
     unsigned int one_way_grease_quic_bit : 1; /* Grease of QUIC bit, but do not announce support */
     unsigned int log_pn_dec : 1; /* Log key hashes on key changes to debug crypto */
@@ -1379,6 +1380,8 @@ typedef struct st_picoquic_cnx_t {
     picoquic_stateless_packet_t* first_sooner;
     picoquic_stateless_packet_t* last_sooner;
 
+    /* Log handling */
+    uint16_t log_unique;
     FILE* f_binlog;
     char* binlog_file_name;
 

@@ -373,6 +373,24 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...);
  * 0: only log the first 100 packets for each connection. */
 void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
 
+/* By default, the binary log and qlog files are named from the Initial CID
+ * chosen by the client. For example, if the initial CID is set
+ * to { 0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04, 0x05 } the
+ * qlog files will be named:
+ *  - deadbeef0102030405.client.qlog (on the client)
+ *  - deadbeef0102030405.server.qlog (on the server)
+ * This works well if clients follow the guidance in RFC9000 and set the
+ * files to a random value, with only a very small chance of collisions.
+ * But if the client use non standard names, the risk of collision
+ * increases.
+ * 
+ * Setting the "use unique log names" option causes the insertion
+ * of a random 16 bit string in the name, as in:
+ *  - deadbeef0102030405.a1ea.server.qlog (on the server)
+ * Setting the option to 0 restores the default behavior.
+ */
+void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_names);
+
 /* Require randomization of initial PN numbers */
 void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial);
 
