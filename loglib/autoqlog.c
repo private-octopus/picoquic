@@ -49,23 +49,36 @@ int autoqlog(picoquic_cnx_t* cnx)
             DBG_PRINTF("Cannot convert connection id for %s", cnx->binlog_file_name);
             ret = -1;
         }
-        else if (picoquic_sprintf(filename, sizeof(filename), NULL, "%s%s%s.%s.%s",
-            cnx->quic->qlog_dir, PICOQUIC_FILE_SEPARATOR, cid_name,
-            (cnx->client_mode) ? "client" : "server", "qlog") != 0) {
-            DBG_PRINTF("Cannot format file name for connection %s in file %s", cid_name, cnx->binlog_file_name);
-            ret = -1;
-        }
-        else {
-            ret = qlog_convert(&cnx->initial_cnxid, f_binlog, cnx->binlog_file_name, filename, cnx->quic->qlog_dir, flags);
-            picoquic_file_close(f_binlog);
-            if (ret != 0) {
-                DBG_PRINTF("Cannot convert file %s to qlog, err = %d.\n", cnx->binlog_file_name, ret);
+        else
+        {
+            int sprintf_ret = -1;
+            if (cnx->quic->use_unique_log_names) {
+                sprintf_ret = picoquic_sprintf(filename, sizeof(filename), NULL, "%s%s%s.%x.%s.%s",
+                    cnx->quic->qlog_dir, PICOQUIC_FILE_SEPARATOR, cid_name, cnx->log_unique,
+                    (cnx->client_mode) ? "client" : "server", "qlog");
             }
             else {
-                if (cnx->quic->binlog_dir == NULL) {
-                    int last_err = 0;
-                    if ((ret = picoquic_file_delete(cnx->binlog_file_name, &last_err)) != 0) {
-                        DBG_PRINTF("Cannot delete file %s to qlog, err = %d.\n", cnx->binlog_file_name, last_err);
+                sprintf_ret = picoquic_sprintf(filename, sizeof(filename), NULL, "%s%s%s.%s.%s",
+                    cnx->quic->qlog_dir, PICOQUIC_FILE_SEPARATOR, cid_name,
+                    (cnx->client_mode) ? "client" : "server", "qlog");
+            }
+
+            if (sprintf_ret != 0) {
+                DBG_PRINTF("Cannot format file name for connection %s in file %s", cid_name, cnx->binlog_file_name);
+                ret = -1;
+            }
+            else {
+                ret = qlog_convert(&cnx->initial_cnxid, f_binlog, cnx->binlog_file_name, filename, cnx->quic->qlog_dir, flags);
+                picoquic_file_close(f_binlog);
+                if (ret != 0) {
+                    DBG_PRINTF("Cannot convert file %s to qlog, err = %d.\n", cnx->binlog_file_name, ret);
+                }
+                else {
+                    if (cnx->quic->binlog_dir == NULL) {
+                        int last_err = 0;
+                        if ((ret = picoquic_file_delete(cnx->binlog_file_name, &last_err)) != 0) {
+                            DBG_PRINTF("Cannot delete file %s to qlog, err = %d.\n", cnx->binlog_file_name, last_err);
+                        }
                     }
                 }
             }

@@ -2977,10 +2977,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->local_cnxid_oldest_created = start_time;
 
         /* Initialize the connection ID stash */
-        
-        /* Should return 0, since this is the first path */
         ret = picoquic_create_path(cnx, start_time, NULL, addr_to);
         if (ret == 0) {
+            /* Should return 0, since this is the first path */
             ret = picoquic_init_cnxid_stash(cnx);
         }
 
@@ -3224,6 +3223,10 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             picoquic_delete_cnx(cnx);
             cnx = NULL;
         }
+    }
+
+    if (quic->use_unique_log_names) {
+        picoquic_crypto_random(quic, &cnx->log_unique, sizeof(cnx->log_unique));
     }
 
     if (cnx != NULL && !cnx->client_mode) {
@@ -3476,6 +3479,11 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level)
 {
     /* Only two level for now: log first 100 packets, or log everything. */
     quic->use_long_log = (log_level > 0) ? 1 : 0;
+}
+
+void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_names)
+{
+    quic->use_unique_log_names = use_unique_log_names;
 }
 
 void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial)
