@@ -347,6 +347,7 @@ int token_reuse_api_test();
 int grease_quic_bit_test();
 int grease_quic_bit_one_way_test();
 int pn_random_test();
+int port_blocked_test();
 int red_cc_test();
 int multi_segment_test();
 int pacing_cc_test();

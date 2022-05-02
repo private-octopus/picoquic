@@ -720,7 +720,8 @@ int picoquic_parse_header_and_decrypt(
                 *pcnx = NULL;
                 *new_ctx_created = 0;
             }
-        } else if (ph->ptype != picoquic_packet_version_negotiation && 
+        }
+        else if (ph->ptype != picoquic_packet_version_negotiation &&
             ph->ptype != picoquic_packet_retry && ph->ptype != picoquic_packet_error) {
             /* TODO: clarify length, payload length, packet length -- special case of initial packet */
             length = ph->offset + ph->payload_length;
@@ -736,6 +737,10 @@ int picoquic_parse_header_and_decrypt(
                     else if (ph->dest_cnx_id.id_len < PICOQUIC_ENFORCED_INITIAL_CID_LENGTH) {
                         /* Initial CID too short -- ignore the packet */
                         ret = PICOQUIC_ERROR_INITIAL_CID_TOO_SHORT;
+                    }
+                    else if (!quic->is_port_blocking_disabled && picoquic_check_addr_blocked(addr_from)) {
+                        /* Port is blocked, do not create a connection */
+                        ret = PICOQUIC_ERROR_PORT_BLOCKED;
                     }
                     else if (!quic->enforce_client_only) {
                         /* if listening is OK, listen */
@@ -779,7 +784,7 @@ int picoquic_parse_header_and_decrypt(
                     }
 
                     if (ret == 0) {
-                        decoded_length = picoquic_remove_packet_protection(*pcnx, (uint8_t *) bytes,
+                        decoded_length = picoquic_remove_packet_protection(*pcnx, (uint8_t*)bytes,
                             decrypted_data->data, ph, current_time, &already_received);
                     }
                     else {
@@ -790,7 +795,7 @@ int picoquic_parse_header_and_decrypt(
                         if (ph->ptype == picoquic_packet_1rtt_protected &&
                             length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
                             memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                            (*pcnx)->path[0]->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                                (*pcnx)->path[0]->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
                             ret = PICOQUIC_ERROR_STATELESS_RESET;
                             picoquic_log_app_message(*pcnx, "Decrypt error, matching reset secret, ret = %d", ret);
                         }
@@ -819,7 +824,10 @@ int picoquic_parse_header_and_decrypt(
                      * of registered secrets. If there is a match, the corresponding connection is
                      * found and the packet is marked as Stateless Reset */
 
-                    if (length >= PICOQUIC_RESET_PACKET_MIN_SIZE) {
+                    if (!quic->is_port_blocking_disabled && picoquic_check_addr_blocked(addr_from)) {
+                        ret = PICOQUIC_ERROR_PORT_BLOCKED;
+                    }
+                    else if (length >= PICOQUIC_RESET_PACKET_MIN_SIZE) {
                         *pcnx = picoquic_cnx_by_secret(quic, bytes + length - PICOQUIC_RESET_SECRET_SIZE, addr_from);
                         if (*pcnx != NULL) {
                             ret = PICOQUIC_ERROR_STATELESS_RESET;
@@ -2217,7 +2225,9 @@ int picoquic_incoming_segment(
     }
 
     if (ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED) {
-        if (packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU) {
+        if (packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU &&
+            (quic->is_port_blocking_disabled ||
+            !picoquic_check_addr_blocked(addr_from))) {
             /* use the result of parsing to consider version negotiation */
             picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph, raw_bytes);
         }
@@ -2360,6 +2370,7 @@ int picoquic_incoming_segment(
     } else if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_INITIAL_TOO_SHORT ||
         ret == PICOQUIC_ERROR_PACKET_WRONG_VERSION ||
         ret == PICOQUIC_ERROR_INITIAL_CID_TOO_SHORT ||
+        ret == PICOQUIC_ERROR_PORT_BLOCKED ||
         ret == PICOQUIC_ERROR_UNEXPECTED_PACKET || 
         ret == PICOQUIC_ERROR_CNXID_CHECK || 
         ret == PICOQUIC_ERROR_RETRY || ret == PICOQUIC_ERROR_DETECTED ||

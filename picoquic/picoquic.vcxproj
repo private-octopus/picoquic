@@ -159,6 +159,7 @@
     <ClCompile Include="picoquic_lb.c" />
     <ClCompile Include="picosocks.c" />
     <ClCompile Include="picosplay.c" />
+    <ClCompile Include="port_blocking.c" />
     <ClCompile Include="quicctx.c" />
     <ClCompile Include="packet.c" />
     <ClCompile Include="picohash.c" />

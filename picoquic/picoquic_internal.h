@@ -644,6 +644,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int enforce_client_only : 1; /* Do not authorize incoming connections */
     unsigned int is_flow_control_limited : 1; /* Enforce flow control limit for tests */
     unsigned int test_large_server_flight : 1; /* Use TP to ensure server flight is at least 8K */
+    unsigned int is_port_blocking_disabled : 1; /* Do not check client port on incoming connections */
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 
