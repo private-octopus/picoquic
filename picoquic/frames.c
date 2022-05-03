@@ -3103,7 +3103,7 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                         content_bytes = picoquic_decode_datagram_frame_header(&p->bytes[byte_index], &p->bytes[p->length],
                             &frame_id, &content_length);
 
-                        ret = (cnx->callback_fn)(cnx, 0, content_bytes, (size_t)content_length,
+                        ret = (cnx->callback_fn)(cnx, p->send_time, content_bytes, (size_t)content_length,
                             (is_spurious) ? picoquic_callback_datagram_spurious : picoquic_callback_datagram_acked,
                             cnx->callback_ctx, NULL);
                     }
