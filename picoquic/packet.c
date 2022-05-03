@@ -720,7 +720,8 @@ int picoquic_parse_header_and_decrypt(
                 *pcnx = NULL;
                 *new_ctx_created = 0;
             }
-        } else if (ph->ptype != picoquic_packet_version_negotiation && 
+        }
+        else if (ph->ptype != picoquic_packet_version_negotiation &&
             ph->ptype != picoquic_packet_retry && ph->ptype != picoquic_packet_error) {
             /* TODO: clarify length, payload length, packet length -- special case of initial packet */
             length = ph->offset + ph->payload_length;
@@ -779,7 +780,7 @@ int picoquic_parse_header_and_decrypt(
                     }
 
                     if (ret == 0) {
-                        decoded_length = picoquic_remove_packet_protection(*pcnx, (uint8_t *) bytes,
+                        decoded_length = picoquic_remove_packet_protection(*pcnx, (uint8_t*)bytes,
                             decrypted_data->data, ph, current_time, &already_received);
                     }
                     else {
@@ -790,7 +791,7 @@ int picoquic_parse_header_and_decrypt(
                         if (ph->ptype == picoquic_packet_1rtt_protected &&
                             length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
                             memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                            (*pcnx)->path[0]->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                                (*pcnx)->path[0]->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
                             ret = PICOQUIC_ERROR_STATELESS_RESET;
                             picoquic_log_app_message(*pcnx, "Decrypt error, matching reset secret, ret = %d", ret);
                         }
@@ -818,7 +819,6 @@ int picoquic_parse_header_and_decrypt(
                      * We test the address + putative reset secret pair against the hash table
                      * of registered secrets. If there is a match, the corresponding connection is
                      * found and the packet is marked as Stateless Reset */
-
                     if (length >= PICOQUIC_RESET_PACKET_MIN_SIZE) {
                         *pcnx = picoquic_cnx_by_secret(quic, bytes + length - PICOQUIC_RESET_SECRET_SIZE, addr_from);
                         if (*pcnx != NULL) {
@@ -2360,6 +2360,7 @@ int picoquic_incoming_segment(
     } else if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_INITIAL_TOO_SHORT ||
         ret == PICOQUIC_ERROR_PACKET_WRONG_VERSION ||
         ret == PICOQUIC_ERROR_INITIAL_CID_TOO_SHORT ||
+        ret == PICOQUIC_ERROR_PORT_BLOCKED ||
         ret == PICOQUIC_ERROR_UNEXPECTED_PACKET || 
         ret == PICOQUIC_ERROR_CNXID_CHECK || 
         ret == PICOQUIC_ERROR_RETRY || ret == PICOQUIC_ERROR_DETECTED ||
@@ -2416,6 +2417,11 @@ int picoquic_incoming_packet_ex(
     size_t consumed_index = 0;
     int ret = 0;
     picoquic_connection_id_t previous_destid = picoquic_null_connection_id;
+
+    if (!quic->is_port_blocking_disabled && picoquic_check_addr_blocked(addr_from)) {
+        /* if the port is blocked, do not process the packet */
+        return 0;
+    }
 
 
     while (consumed_index < packet_length) {

@@ -81,6 +81,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/picoquic_lb.c
     picoquic/picosocks.c
     picoquic/picosplay.c
+    picoquic/port_blocking.c
     picoquic/quicctx.c
     picoquic/sacks.c
     picoquic/sender.c

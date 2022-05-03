@@ -108,6 +108,9 @@
     <ClCompile Include="picoquic_lb.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="port_blocking.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

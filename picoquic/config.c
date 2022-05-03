@@ -61,6 +61,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_DO_RETRY, 'r', "do_retry", 0, "", "Do Retry Request" },
     { picoquic_option_INITIAL_RANDOM, 'R', "initial_random", 0, "", "randomize initial packet number" },
     { picoquic_option_RESET_SEED, 's', "reset_seed", 2, "<64b 64b>", "Reset seed" },
+    { picoquic_option_DisablePortBlocking, 'X', "disable_block", 0, "", "Disable the check for blocked ports"},
     { picoquic_option_SOLUTION_DIR, 'S', "solution_dir", 1, "folder", "Set the path to the source files to find the default files" },
     { picoquic_option_CC_ALGO, 'G', "cc_algo", 1, "cc_algorithm",
     "Use the specified congestion control algorithm: reno, cubic, bbr or fast. Defaults to bbr." },
@@ -357,6 +358,9 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_RESET_SEED:
         config->reset_seed[1] = config_atoull(params, nb_params, 0, &ret);
         config->reset_seed[0] = config_atoull(params, nb_params, 1, &ret);
+        break;
+    case picoquic_option_DisablePortBlocking:
+        config->disable_port_blocking = 1;
         break;
     case picoquic_option_SOLUTION_DIR:
         ret = config_set_string_param(&config->solution_dir, params, nb_params, 0);
@@ -808,6 +812,8 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_log_level(quic, config->use_long_log);
 
         picoquic_set_preemptive_repeat_policy(quic, config->do_preemptive_repeat);
+
+        picoquic_disable_port_blocking(quic, config->disable_port_blocking);
 
         if (config->initial_random) {
             picoquic_set_random_initial(quic, 1);

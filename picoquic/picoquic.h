@@ -98,6 +98,7 @@ extern "C" {
 #define PICOQUIC_ERROR_VERSION_NEGOTIATION (PICOQUIC_ERROR_CLASS + 55)
 #define PICOQUIC_ERROR_PACKET_TOO_LONG (PICOQUIC_ERROR_CLASS + 56)
 #define PICOQUIC_ERROR_PACKET_WRONG_VERSION (PICOQUIC_ERROR_CLASS + 57)
+#define PICOQUIC_ERROR_PORT_BLOCKED (PICOQUIC_ERROR_CLASS + 58)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -457,6 +458,11 @@ typedef int (*picoquic_verify_certificate_cb_fn)(void* ctx, picoquic_cnx_t* cnx,
 
 /* Is called to free the verify certificate ctx */
 typedef void (*picoquic_free_verify_certificate_ctx)(void* ctx);
+
+/* Management of the blocked port list */
+int picoquic_check_port_blocked(uint16_t port);
+int picoquic_check_addr_blocked(const struct sockaddr* addr_from);
+void picoquic_disable_port_blocking(picoquic_quic_t* quic, int is_port_blocking_disabled);
 
 /* QUIC context create and dispose */
 picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
