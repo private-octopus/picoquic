@@ -4416,8 +4416,17 @@ uint8_t * picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byt
 {
     if (bytes + cnx->first_datagram->length > bytes_max) {
         /* TODO: don't do that if this is a coalesced packet... */
+#if 1
+        if (cnx->first_datagram->length <= 1200) {
+            *more_data = 1;
+        }
+        else {
+            (void)picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_datagram, "Datagram too long, must be dropped.");
+        }
+#else
         /* This datagram is not compatible with the path. Just drop. */
         picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
+#endif
     }
     else {
         bytes = picoquic_format_first_misc_or_dg_frame(bytes, bytes_max, more_data, is_pure_ack, 
