@@ -99,6 +99,7 @@ extern "C" {
 #define PICOQUIC_ERROR_PACKET_TOO_LONG (PICOQUIC_ERROR_CLASS + 56)
 #define PICOQUIC_ERROR_PACKET_WRONG_VERSION (PICOQUIC_ERROR_CLASS + 57)
 #define PICOQUIC_ERROR_PORT_BLOCKED (PICOQUIC_ERROR_CLASS + 58)
+#define PICOQUIC_ERROR_DATAGRAM_TOO_LONG (PICOQUIC_ERROR_CLASS + 59)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -758,7 +759,12 @@ void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
 /* Send extra frames */
 int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length, int is_pure_ack);
 
-/* Send datagram frame */
+/* Queue a datagram frame for sending later.
+ * The datagram length must be no more than PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH,
+ * i.e., must fit in the minimum packet length supported by Quic. Trying to
+ * queue a larger datagram will result in an error PICOQUIC_ERROR_DATAGRAM_TOO_LONG.
+ */
+#define PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH 1200
 int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, size_t length, const uint8_t* bytes);
 
 /* The incoming packet API is used to pass incoming packets to a 
