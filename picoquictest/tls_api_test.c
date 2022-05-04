@@ -698,7 +698,7 @@ int test_api_callback(picoquic_cnx_t* cnx,
         int ret = -1;
         if (ctx->datagram_ack_fn != NULL) {
             ret = ctx->datagram_ack_fn(cnx, fin_or_event,
-                bytes, length, ctx->datagram_ctx);
+                bytes, length, stream_id /* encode send_time */, ctx->datagram_ctx);
         }
         return ret;
     }

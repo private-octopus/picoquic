@@ -48,7 +48,7 @@ typedef int (*picoquic_datagram_send_fn)(picoquic_cnx_t* cnx,
 typedef int (*picoquic_datagram_recv_fn)(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length, void* datagram_ctx);
 typedef int (*picoquic_datagram_ack_fn)(picoquic_cnx_t* cnx,
-    picoquic_call_back_event_t d_event, uint8_t* bytes, size_t length, void* datagram_ctx);
+    picoquic_call_back_event_t d_event, uint8_t* bytes, size_t length, uint64_t sent_time, void* datagram_ctx);
 /* Test context
  */
 
