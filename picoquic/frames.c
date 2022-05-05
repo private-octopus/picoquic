@@ -4394,20 +4394,24 @@ uint8_t * picoquic_format_datagram_frame(uint8_t* bytes, uint8_t* bytes_max, int
 int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, size_t length, const uint8_t * src)
 {
     int ret;
-    size_t consumed = 0;
-    uint8_t frame_buffer[PICOQUIC_MAX_PACKET_SIZE];
-    int more_data = 0;
-    int is_pure_ack = 1;
-    uint8_t * bytes_next = picoquic_format_datagram_frame(frame_buffer, frame_buffer + sizeof(frame_buffer), &more_data, &is_pure_ack, length, src);
-
-    if ((consumed = bytes_next - frame_buffer) > 0) {
-        ret = picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_datagram, &cnx->last_datagram, 
-            frame_buffer, consumed, 0);
+    if (length > PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
+        ret = PICOQUIC_ERROR_DATAGRAM_TOO_LONG;
     }
     else {
-        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-    }
+        size_t consumed = 0;
+        uint8_t frame_buffer[PICOQUIC_MAX_PACKET_SIZE];
+        int more_data = 0;
+        int is_pure_ack = 1;
+        uint8_t* bytes_next = picoquic_format_datagram_frame(frame_buffer, frame_buffer + sizeof(frame_buffer), &more_data, &is_pure_ack, length, src);
 
+        if ((consumed = bytes_next - frame_buffer) > 0) {
+            ret = picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_datagram, &cnx->last_datagram,
+                frame_buffer, consumed, 0);
+        }
+        else {
+            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        }
+    }
     return ret;
 }
 
@@ -4416,8 +4420,12 @@ uint8_t * picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byt
 {
     if (bytes + cnx->first_datagram->length > bytes_max) {
         /* TODO: don't do that if this is a coalesced packet... */
-        /* This datagram is not compatible with the path. Just drop. */
-        picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
+        if (cnx->first_datagram->length <= PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
+            *more_data = 1;
+        }
+        else {
+            (void)picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_datagram, "Datagram too long, must be dropped.");
+        }
     }
     else {
         bytes = picoquic_format_first_misc_or_dg_frame(bytes, bytes_max, more_data, is_pure_ack, 

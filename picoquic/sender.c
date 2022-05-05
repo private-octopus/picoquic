@@ -3899,6 +3899,13 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 /* If present, send misc frame */
                 while (cnx->first_misc_frame != NULL) {
                     uint8_t* bytes_misc = bytes_next;
+                    /* Funky code alert:
+                     * if misc frames are present the function `picoquic_retransmit_needed` is bypassed.
+                     * if "more data" was not set, the code would not reset the wait time, and the
+                     * program could stall.
+                     * TODO: rework the way packets are repeated so this is not necessary.
+                     */
+                    more_data = 1; 
                     bytes_next = picoquic_format_first_misc_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
                     if (bytes_next > bytes_misc) {
                         split_repeat_queued |=
