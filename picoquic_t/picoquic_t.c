@@ -346,6 +346,7 @@ static const picoquic_test_def_t test_table[] = {
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },
     { "pn_random", pn_random_test },
+    { "port_blocked", port_blocked_test },
     { "cplusplus", cplusplustest },
     { "stress", stress_test },
     { "fuzz", fuzz_test },

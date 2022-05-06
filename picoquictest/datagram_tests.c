@@ -123,7 +123,7 @@ int test_datagram_recv(picoquic_cnx_t* cnx,
 }
 
 int test_datagram_ack(picoquic_cnx_t* cnx,
-    picoquic_call_back_event_t d_event, uint8_t* bytes, size_t length, void* datagram_ctx)
+    picoquic_call_back_event_t d_event, uint8_t* bytes, size_t length, uint64_t sent_time, void* datagram_ctx)
 {
     int ret = 0;
     test_datagram_send_recv_ctx_t* dg_ctx = datagram_ctx;

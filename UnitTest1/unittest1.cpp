@@ -2147,6 +2147,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(port_blocked) {
+            int ret = port_blocked_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cplusplus) {
             int ret = cplusplustest();
 

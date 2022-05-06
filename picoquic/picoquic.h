@@ -98,6 +98,8 @@ extern "C" {
 #define PICOQUIC_ERROR_VERSION_NEGOTIATION (PICOQUIC_ERROR_CLASS + 55)
 #define PICOQUIC_ERROR_PACKET_TOO_LONG (PICOQUIC_ERROR_CLASS + 56)
 #define PICOQUIC_ERROR_PACKET_WRONG_VERSION (PICOQUIC_ERROR_CLASS + 57)
+#define PICOQUIC_ERROR_PORT_BLOCKED (PICOQUIC_ERROR_CLASS + 58)
+#define PICOQUIC_ERROR_DATAGRAM_TOO_LONG (PICOQUIC_ERROR_CLASS + 59)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -373,6 +375,24 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...);
  * 0: only log the first 100 packets for each connection. */
 void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
 
+/* By default, the binary log and qlog files are named from the Initial CID
+ * chosen by the client. For example, if the initial CID is set
+ * to { 0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04, 0x05 } the
+ * qlog files will be named:
+ *  - deadbeef0102030405.client.qlog (on the client)
+ *  - deadbeef0102030405.server.qlog (on the server)
+ * This works well if clients follow the guidance in RFC9000 and set the
+ * files to a random value, with only a very small chance of collisions.
+ * But if the client use non standard names, the risk of collision
+ * increases.
+ * 
+ * Setting the "use unique log names" option causes the insertion
+ * of a random 16 bit string in the name, as in:
+ *  - deadbeef0102030405.a1ea.server.qlog (on the server)
+ * Setting the option to 0 restores the default behavior.
+ */
+void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_names);
+
 /* Require randomization of initial PN numbers */
 void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial);
 
@@ -439,6 +459,11 @@ typedef int (*picoquic_verify_certificate_cb_fn)(void* ctx, picoquic_cnx_t* cnx,
 
 /* Is called to free the verify certificate ctx */
 typedef void (*picoquic_free_verify_certificate_ctx)(void* ctx);
+
+/* Management of the blocked port list */
+int picoquic_check_port_blocked(uint16_t port);
+int picoquic_check_addr_blocked(const struct sockaddr* addr_from);
+void picoquic_disable_port_blocking(picoquic_quic_t* quic, int is_port_blocking_disabled);
 
 /* QUIC context create and dispose */
 picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
@@ -734,7 +759,12 @@ void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
 /* Send extra frames */
 int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length, int is_pure_ack);
 
-/* Send datagram frame */
+/* Queue a datagram frame for sending later.
+ * The datagram length must be no more than PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH,
+ * i.e., must fit in the minimum packet length supported by Quic. Trying to
+ * queue a larger datagram will result in an error PICOQUIC_ERROR_DATAGRAM_TOO_LONG.
+ */
+#define PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH 1200
 int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, size_t length, const uint8_t* bytes);
 
 /* The incoming packet API is used to pass incoming packets to a 
