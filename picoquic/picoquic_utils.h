@@ -227,6 +227,10 @@ void picoquic_test_random_bytes(uint64_t* random_context, uint8_t* bytes, size_t
 uint64_t picoquic_test_uniform_random(uint64_t* random_context, uint64_t rnd_max);
 double picoquic_test_gauss_random(uint64_t* random_context); /* random gaussian of variance 1.0, average 0 */
 
+/* Convert text carried in uint8_t arrays to text string
+ * suitable for logs */
+char* picoquic_uint8_to_str(char* text, size_t text_len, const uint8_t* data, size_t data_len);
+
 /* Really basic network simulator, only simulates a simple link using a
  * packet structure.
  * Init: link creation. Returns a link structure with defined bandwidth,
