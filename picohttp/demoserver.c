@@ -231,7 +231,7 @@ int demo_server_is_path_sane(const uint8_t* path, size_t path_length)
 }
 
 int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size,
-    char** file_path, char const* web_folder)
+    char** file_path, char const* web_folder, int * file_error)
 {
     int ret = -1;
     size_t len = strlen(web_folder);
@@ -256,7 +256,7 @@ int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* e
         len += path_length - 1;
         file_name[len] = 0;
 
-        F = picoquic_file_open(file_name, "rb");
+        F = picoquic_file_open_ex(file_name, "rb", file_error);
 
         if (F != NULL) {
             long sz;
@@ -281,9 +281,11 @@ int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* e
 }
 
 static int demo_server_parse_path(const uint8_t * path, size_t path_length, size_t * echo_size, 
-    char ** file_path, char const * web_folder)
+    char ** file_path, char const * web_folder, int * file_error)
 {
     int ret = 0;
+
+    *file_error = 0;
 
     if (path != NULL && path_length == 1 && path[0] == '/') {
         /* Redirect the root requests to the default index so it can be read from file if file is present */
@@ -296,7 +298,7 @@ static int demo_server_parse_path(const uint8_t * path, size_t path_length, size
         ret = -1;
     }
     else if (web_folder != NULL && demo_server_try_file_path(path, path_length, echo_size,
-        file_path, web_folder) == 0) {
+        file_path, web_folder, file_error) == 0) {
         ret = 0;
     }
     else if (path_length > 1 && (path_length != 11 || memcmp(path, "/index.html", 11) != 0)) {
@@ -355,6 +357,7 @@ static int h3zero_server_process_request_frame(
     uint8_t * o_bytes_max = o_bytes + sizeof(buffer);
     size_t response_length = 0;
     int ret = 0;
+    int file_error = 0;
 
     *o_bytes++ = h3zero_frame_header;
     o_bytes += 2; /* reserve two bytes for frame length */
@@ -366,10 +369,15 @@ static int h3zero_server_process_request_frame(
     }
     else if (stream_ctx->ps.stream_state.header.method == h3zero_method_get &&
         demo_server_parse_path(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length,
-            &stream_ctx->echo_length, &stream_ctx->file_path, app_ctx->web_folder) != 0) {
+            &stream_ctx->echo_length, &stream_ctx->file_path, app_ctx->web_folder, &file_error) != 0) {
+        char log_text[256];
+        picoquic_log_app_message(cnx, "Cannot find file for path: <%s> in folder <%s>, error: 0x%x", 
+            picoquic_uint8_to_str(log_text, 256, stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length),
+            (app_ctx->web_folder == NULL) ? "NULL" : app_ctx->web_folder, file_error);
         /* If unknown, 404 */
         o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
         /* TODO: consider known-url?data construct */
+
     }
     else {
         if (stream_ctx->ps.stream_state.header.method == h3zero_method_post) {
@@ -1065,8 +1073,13 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                 stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
 
             if (stream_ctx->method == 0) {
+                int file_error = 0;
                 if (demo_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length,
-                    &stream_ctx->echo_length, &stream_ctx->file_path, app_ctx->web_folder)) {
+                    &stream_ctx->echo_length, &stream_ctx->file_path, app_ctx->web_folder, &file_error)) {
+                    char log_text[256];
+                    picoquic_log_app_message(cnx, "Cannot find file for path: <%s> in folder <%s>, error: 0x%x",
+                        picoquic_uint8_to_str(log_text, 256, stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length),
+                        (app_ctx->web_folder==NULL)?"NULL": app_ctx->web_folder, file_error);
                     is_not_found = 1;
                 }
             }

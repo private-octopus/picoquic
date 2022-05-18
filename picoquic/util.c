@@ -1174,3 +1174,37 @@ double picoquic_test_gauss_random(uint64_t* random_context)
 
     return dx;
 }
+
+/* Convert binary string to test string for logging purposes.
+ */
+char* picoquic_uint8_to_str(char* text, size_t text_len, const uint8_t* data, size_t data_len)
+{
+    size_t render_length = data_len;
+    size_t rendered;
+
+    if (render_length + 1 > text_len) {
+        if (text_len > 4) {
+            render_length = text_len - 4;
+        }
+        else {
+            render_length = 0;
+        }
+    }
+
+    for (rendered = 0; rendered < render_length; rendered++) {
+        int c = data[rendered];
+        if (c < ' ' || c >= 127) {
+            c = '?';
+        }
+        text[rendered] = (char)c;
+    }
+
+    if (rendered < data_len) {
+        for (size_t i = 0; i < 3 && rendered + 1 < text_len; i++, rendered++) {
+            text[rendered] = '.';
+        }
+    }
+    text[rendered] = 0;
+
+    return text;
+}
