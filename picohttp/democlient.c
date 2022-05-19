@@ -243,6 +243,9 @@ int h3zero_client_create_stream_request(
     if (max_bytes < 3) {
         o_bytes = NULL;
     }
+    else if (host == NULL) {
+        o_bytes = NULL;
+    }
     else {
         /* Create the request frame for the specified document */
         *o_bytes++ = h3zero_frame_header;

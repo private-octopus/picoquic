@@ -1981,6 +1981,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_null_sni) {
+            int ret = h3zero_null_sni_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_qpack_fuzz) {
             int ret = h3zero_qpack_fuzz_test();
 
