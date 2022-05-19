@@ -1028,8 +1028,6 @@ int h3zero_null_sni_test()
     int ret = 0;
     int hret;
     uint8_t buffer[256];
-    uint8_t* bytes_max = &buffer[0] + sizeof(buffer);
-    uint8_t* bytes = NULL;
     size_t consumed = 0;
     
     hret = h3zero_client_create_stream_request(buffer, 256,
