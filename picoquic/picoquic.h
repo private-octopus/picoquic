@@ -959,6 +959,11 @@ uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error);
 
+/* Discard stream. This is equivalent to sending a stream reset
+ * and a stop sending request, and also setting the app context
+ * of the stream to NULL */
+int picoquic_discard_stream(picoquic_cnx_t* cnx, uint64_t stream_id, uint16_t local_stream_error);
+
 /* The function picoquic_set_datagram_ready indicates to the stack
  * whether the application is ready to send datagrams. */
 int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready);
