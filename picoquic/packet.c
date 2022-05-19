@@ -1983,13 +1983,13 @@ int picoquic_incoming_1rtt(
         /* TODO: consider treatment of migration during closing mode */
 
         /* Do not process data in closing or draining modes */
-        if (cnx->cnx_state >= picoquic_state_closing_received) {
+        if (cnx->cnx_state >= picoquic_state_disconnecting) {
             /* only look for closing frames in closing modes */
-            if (cnx->cnx_state == picoquic_state_closing) {
+            if (cnx->cnx_state == picoquic_state_closing || cnx->cnx_state == picoquic_state_disconnecting) {
                 int closing_received = 0;
 
                 ret = picoquic_decode_closing_frames(
-                    bytes + ph->offset, ph->payload_length, &closing_received);
+                    cnx, bytes + ph->offset, ph->payload_length, &closing_received);
 
                 if (ret == 0) {
                     if (closing_received) {

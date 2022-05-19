@@ -841,9 +841,6 @@ void BBRCheckProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
 void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x,
     uint64_t rtt_sample, uint64_t bytes_in_transit, uint64_t packets_lost, uint64_t current_time)
 {
-    if (current_time > 2000000) {
-        DBG_PRINTF("%s", "Stop?");
-    }
     BBRUpdateBtlBw(bbr_state, path_x, current_time);
     BBRCheckCyclePhase(bbr_state, packets_lost, current_time);
     BBRCheckFullPipe(bbr_state, path_x->last_bw_estimate_path_limited);

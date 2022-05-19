@@ -2027,6 +2027,7 @@ int demo_file_access_test()
     char buf[128];
     char* file_path;
     const int nb_blocks = 16;
+    int file_error = 0;
 
     FILE* F = picoquic_file_open(path + 1, "wb");
 
@@ -2045,9 +2046,9 @@ int demo_file_access_test()
 
     if (ret == 0) {
         ret = demo_server_try_file_path((uint8_t*)path, strlen(path), &echo_size,
-            &file_path, folder);
+            &file_path, folder, &file_error);
         if (ret != 0) {
-            DBG_PRINTF("Could not try file path <%s> <%s>, ret = %d", folder, path, ret);
+            DBG_PRINTF("Could not try file path <%s> <%s>, ret = %d, err = 0x%x", folder, path, ret, file_error);
         }
         else if (echo_size != f_size) {
             DBG_PRINTF("Found size = %d instead of %d", (int)echo_size, (int)f_size);
@@ -2094,7 +2095,7 @@ int demo_file_access_test()
     }
 
     if (ret == 0) {
-        if (demo_server_try_file_path((uint8_t*)path, strlen(path), &echo_size, &file_path, folder) == 0) {
+        if (demo_server_try_file_path((uint8_t*)path, strlen(path), &echo_size, &file_path, folder, &file_error) == 0) {
             DBG_PRINTF("Could open deleted file path <%s> <%s>", folder, path);
             ret = -1;
         }
@@ -2106,8 +2107,8 @@ int demo_file_access_test()
 
     if (ret == 0) {
         if (demo_server_try_file_path((uint8_t*)bad_path, strlen(bad_path), &echo_size,
-            &file_path, folder) == 0) {
-            DBG_PRINTF("Could open deleted bad path <%s> <%s>", folder, bad_path);
+            &file_path, folder, &file_error) == 0) {
+            DBG_PRINTF("Could open bad path <%s> <%s>", folder, bad_path);
             ret = -1;
         }
         if (file_path != NULL) {

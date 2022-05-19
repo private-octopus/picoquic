@@ -160,7 +160,7 @@ size_t picoquic_demo_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iov
 int demo_server_is_path_sane(const uint8_t* path, size_t path_length);
 
 int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size, 
-    char ** file_path,char const* web_folder);
+    char ** file_path,char const* web_folder, int* file_error);
 
 #ifdef __cplusplus
 }

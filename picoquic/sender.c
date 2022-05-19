@@ -318,6 +318,37 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
     return ret;
 }
 
+int picoquic_discard_stream(picoquic_cnx_t* cnx, uint64_t stream_id, uint16_t local_stream_error)
+{
+    int ret = 0;
+    picoquic_stream_head_t* stream = NULL;
+
+    stream = picoquic_find_stream(cnx, stream_id);
+
+    if (stream == NULL) {
+        ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+    }
+    else {
+        if (IS_BIDIR_STREAM_ID(stream_id) || !IS_CLIENT_STREAM_ID(stream_id)) {
+            ret = picoquic_stop_sending(cnx, stream_id, local_stream_error);
+            if (ret == PICOQUIC_ERROR_STREAM_ALREADY_CLOSED) {
+                ret = 0;
+            }
+        }
+        if (ret == 0 &&
+            (IS_BIDIR_STREAM_ID(stream_id) || IS_CLIENT_STREAM_ID(stream_id))) {
+            ret = picoquic_reset_stream(cnx, stream_id, local_stream_error);
+            if (ret == PICOQUIC_ERROR_STREAM_ALREADY_CLOSED) {
+                ret = 0;
+            }
+        }
+        stream->app_stream_ctx = NULL;
+        stream->is_discarded = 1;
+    }
+
+    return ret;
+}
+
 /*
  * Manage content padding
  */

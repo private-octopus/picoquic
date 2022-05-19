@@ -816,9 +816,16 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_stop_sending)
+        TEST_METHOD(stop_sending)
         {
             int ret = stop_sending_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(discard_stream)
+        {
+            int ret = discard_stream_test();
 
             Assert::AreEqual(ret, 0);
         }
