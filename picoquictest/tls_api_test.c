@@ -3970,9 +3970,12 @@ int zero_rtt_delay_test()
  * send a stop sending request. Then ask for another transmission. The
  * test succeeds if only few bytes of the first are received, and all bytes
  * of the second.
+ * 
+ * The same code is used to test the "stream discard" test, creates a reset
+ * and a stop sending in a single call.
  */
 
-int stop_sending_test()
+int stop_sending_test_one(int discard)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -4003,7 +4006,18 @@ int stop_sending_test()
 
     /* issue the stop sending command */
     if (ret == 0 && test_ctx->cnx_client != NULL) {
-        ret = picoquic_stop_sending(test_ctx->cnx_client, test_scenario_stop_sending[0].stream_id, 1);
+        if (discard) {
+            ret = picoquic_discard_stream(test_ctx->cnx_client, test_scenario_stop_sending[0].stream_id, 1);
+            /* discarding the stream causes end of notifications, so we
+             * simulate a reset notification */
+            if (test_api_callback(test_ctx->cnx_client, test_scenario_stop_sending[0].stream_id,
+                NULL, 0, picoquic_callback_stream_reset, (void*)&test_ctx->client_callback, NULL) != 0) {
+                ret = -1;
+            }
+        }
+        else {
+            ret = picoquic_stop_sending(test_ctx->cnx_client, test_scenario_stop_sending[0].stream_id, 1);
+        }
     }
 
     /* resume the sending scenario */
@@ -4040,6 +4054,18 @@ int stop_sending_test()
         test_ctx = NULL;
     }
 
+    return ret;
+}
+
+int stop_sending_test()
+{
+    int ret = stop_sending_test_one(0);
+    return ret;
+}
+
+int discard_stream_test()
+{
+    int ret = stop_sending_test_one(1);
     return ret;
 }
 

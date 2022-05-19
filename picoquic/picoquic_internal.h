@@ -797,6 +797,7 @@ typedef struct st_picoquic_stream_head_t {
     unsigned int stream_data_blocked_sent : 1; /* If stream_data_blocked has been sent to peer, and no data sent on stream since */
     unsigned int is_output_stream : 1; /* If stream is listed in the output list */
     unsigned int is_closed : 1; /* Stream is closed, closure is accouted for */
+    unsigned int is_discarded : 1; /* There should be no more callback for that stream, the application has discarded it */
 } picoquic_stream_head_t;
 
 #define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)
@@ -1785,7 +1786,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max);
 
-int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closing_received);
+int picoquic_decode_closing_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, int* closing_received);
 
 uint64_t picoquic_decode_transport_param_stream_id(uint64_t rank, int extension_mode, int stream_type);
 uint64_t picoquic_prepare_transport_param_stream_id(uint64_t stream_id);

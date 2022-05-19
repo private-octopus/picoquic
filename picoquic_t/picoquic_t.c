@@ -155,6 +155,7 @@ static const picoquic_test_def_t test_table[] = {
     { "zero_rtt", zero_rtt_test },
     { "zero_rtt_loss", zero_rtt_loss_test },
     { "stop_sending", stop_sending_test },
+    { "discard_stream", discard_stream_test },
     { "unidir", unidir_test },
     { "mtu_discovery", mtu_discovery_test },
     { "mtu_blocked", mtu_blocked_test },

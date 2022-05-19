@@ -283,9 +283,11 @@ const uint8_t* picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, const uin
         picoquic_update_max_stream_ID_local(cnx, stream);
 
         if (cnx->callback_fn != NULL && !stream->reset_signalled) {
-            if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_reset, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
-                    picoquic_frame_type_reset_stream);
+            if (!stream->is_discarded) {
+                if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_reset, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
+                    picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
+                        picoquic_frame_type_reset_stream);
+                }
             }
             stream->reset_signalled = 1;
             (void)picoquic_delete_stream_if_closed(cnx, stream);
@@ -737,11 +739,13 @@ const uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, const uin
         stream->remote_stop_error = error_code;
 
         if (cnx->callback_fn != NULL && !stream->stop_sending_signalled) {
-            if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stop_sending, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
-                picoquic_log_app_message(cnx, "Stop sending callback on stream %" PRIu64 " returns error 0x%x",
-                    stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
-                    picoquic_frame_type_stop_sending);
+            if (!stream->is_discarded) {
+                if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stop_sending, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
+                    picoquic_log_app_message(cnx, "Stop sending callback on stream %" PRIu64 " returns error 0x%x",
+                        stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                    picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
+                        picoquic_frame_type_stop_sending);
+                }
             }
             stream->stop_sending_signalled = 1;
         }
@@ -843,7 +847,7 @@ static void picoquic_stream_data_chunk_callback(picoquic_cnx_t* cnx, picoquic_st
         call_back_needed = 1;
     }
 
-    if (call_back_needed && !stream->stop_sending_requested && 
+    if (call_back_needed && !stream->stop_sending_requested && !stream->is_discarded &&
         cnx->callback_fn(cnx, stream->stream_id, (uint8_t *)bytes, data_length, fin_now,
         cnx->callback_ctx, stream->app_stream_ctx) != 0) {
         picoquic_log_app_message(cnx, "Data callback (%d, l=%zu) on stream %" PRIu64 " returns error 0x%x",
@@ -5500,7 +5504,7 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
     return bytes == NULL;
 }
 
-int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closing_received)
+int picoquic_decode_closing_frames(picoquic_cnx_t * cnx, uint8_t* bytes, size_t bytes_max, int* closing_received)
 {
     int ret = 0;
     size_t byte_index = 0;
@@ -5511,6 +5515,17 @@ int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closin
 
         if (first_byte == picoquic_frame_type_connection_close || first_byte == picoquic_frame_type_application_close) {
             *closing_received = 1;
+            if (cnx->cnx_state <= picoquic_state_disconnecting) {
+                switch (first_byte) {
+                case picoquic_frame_type_connection_close:
+                    (void) picoquic_decode_connection_close_frame(cnx, bytes + byte_index, bytes + bytes_max);
+                    break;
+                case picoquic_frame_type_application_close:
+                    (void) picoquic_decode_application_close_frame(cnx, bytes + byte_index, bytes + bytes_max);
+                    break;
+                default: break;
+                }
+            }
             break;
         } else {
             size_t consumed = 0;
