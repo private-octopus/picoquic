@@ -4008,6 +4008,12 @@ int stop_sending_test_one(int discard)
     if (ret == 0 && test_ctx->cnx_client != NULL) {
         if (discard) {
             ret = picoquic_discard_stream(test_ctx->cnx_client, test_scenario_stop_sending[0].stream_id, 1);
+            /* discarding the stream causes end of notifications, so we
+             * simulate a reset notification */
+            if (test_api_callback(test_ctx->cnx_client, test_scenario_stop_sending[0].stream_id,
+                NULL, 0, picoquic_callback_stream_reset, (void*)&test_ctx->client_callback, NULL) != 0) {
+                ret = -1;
+            }
         }
         else {
             ret = picoquic_stop_sending(test_ctx->cnx_client, test_scenario_stop_sending[0].stream_id, 1);

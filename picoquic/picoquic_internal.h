@@ -797,6 +797,7 @@ typedef struct st_picoquic_stream_head_t {
     unsigned int stream_data_blocked_sent : 1; /* If stream_data_blocked has been sent to peer, and no data sent on stream since */
     unsigned int is_output_stream : 1; /* If stream is listed in the output list */
     unsigned int is_closed : 1; /* Stream is closed, closure is accouted for */
+    unsigned int is_discarded : 1; /* There should be no more callback for that stream, the application has discarded it */
 } picoquic_stream_head_t;
 
 #define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)

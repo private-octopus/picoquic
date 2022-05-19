@@ -343,6 +343,7 @@ int picoquic_discard_stream(picoquic_cnx_t* cnx, uint64_t stream_id, uint16_t lo
             }
         }
         stream->app_stream_ctx = NULL;
+        stream->is_discarded = 1;
     }
 
     return ret;
