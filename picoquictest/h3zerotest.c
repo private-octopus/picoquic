@@ -970,7 +970,7 @@ int h3zero_user_agent_test_one(int test_mode, char const * ua_string, uint8_t * 
     switch (test_mode) {
     case 0:
         bytes = h3zero_create_request_header_frame_ex(buffer, bytes_max,
-            "/", 1, "example.com", ua_string);
+            (uint8_t*)"/", 1, "example.com", ua_string);
         break;
     case 1:
         bytes = h3zero_create_post_header_frame_ex(buffer, bytes_max,
@@ -1023,6 +1023,29 @@ int h3zero_user_agent_test()
     return ret;
 }
 
+int h3zero_null_sni_test()
+{
+    int ret = 0;
+    int hret;
+    uint8_t buffer[256];
+    size_t consumed = 0;
+    
+    hret = h3zero_client_create_stream_request(buffer, 256,
+        (uint8_t const *)"/", 1, 0, NULL, &consumed);
+    if (hret == 0) {
+        DBG_PRINTF("%s", "Unexpected success, create request header with NULL host");
+            ret = -1;
+    }
+    else {
+        hret = h3zero_client_create_stream_request(buffer, 256,
+            (uint8_t const*)"/", 1, 0, NULL, &consumed);
+        if (hret == 0) {
+            DBG_PRINTF("%s", "Unexpected success, create post header with NULL host");
+            ret = -1;
+        }
+    }
+    return ret;
+}
 
 /* Fuzz test of the qpack parser.
  * Start from valid frames, stick several of them in a buffer,
