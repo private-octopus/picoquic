@@ -5500,7 +5500,7 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
     return bytes == NULL;
 }
 
-int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closing_received)
+int picoquic_decode_closing_frames(picoquic_cnx_t * cnx, uint8_t* bytes, size_t bytes_max, int* closing_received)
 {
     int ret = 0;
     size_t byte_index = 0;
@@ -5511,6 +5511,17 @@ int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closin
 
         if (first_byte == picoquic_frame_type_connection_close || first_byte == picoquic_frame_type_application_close) {
             *closing_received = 1;
+            if (cnx->cnx_state <= picoquic_state_disconnecting) {
+                switch (first_byte) {
+                case picoquic_frame_type_connection_close:
+                    (void) picoquic_decode_connection_close_frame(cnx, bytes + byte_index, bytes + bytes_max);
+                    break;
+                case picoquic_frame_type_application_close:
+                    (void) picoquic_decode_application_close_frame(cnx, bytes + byte_index, bytes + bytes_max);
+                    break;
+                default: break;
+                }
+            }
             break;
         } else {
             size_t consumed = 0;
