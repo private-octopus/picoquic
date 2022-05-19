@@ -4423,13 +4423,7 @@ uint8_t * picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byt
     uint8_t *bytes_max, int * more_data, int * is_pure_ack)
 {
     if (bytes + cnx->first_datagram->length > bytes_max) {
-        /* TODO: don't do that if this is a coalesced packet... */
-        if (cnx->first_datagram->length <= PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
-            *more_data = 1;
-        }
-        else {
-            (void)picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_datagram, "Datagram too long, must be dropped.");
-        }
+        *more_data = 1;
     }
     else {
         bytes = picoquic_format_first_misc_or_dg_frame(bytes, bytes_max, more_data, is_pure_ack, 
