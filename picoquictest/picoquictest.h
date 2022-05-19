@@ -242,6 +242,7 @@ int qpack_huffman_base_test();
 int h3zero_parse_qpack_test();
 int h3zero_prepare_qpack_test();
 int h3zero_user_agent_test();
+int h3zero_null_sni_test();
 int h3zero_qpack_fuzz_test();
 int h3zero_stream_test();
 int parse_demo_scenario_test();

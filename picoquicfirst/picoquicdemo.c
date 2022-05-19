@@ -455,7 +455,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
 
                 if (!cb_ctx->zero_rtt_available && !cb_ctx->is_siduck && !cb_ctx->is_quicperf) {
                     /* Start the download scenario */
-                    picoquic_demo_client_start_streams(cb_ctx->cnx_client, cb_ctx->demo_callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+                    ret = picoquic_demo_client_start_streams(cb_ctx->cnx_client, cb_ctx->demo_callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
                 }
             }
             break;
@@ -591,6 +591,10 @@ int quic_client(const char* ip_address_text, int server_port,
                 callback_ctx.out_dir = config->out_dir;
             }
         }
+    }
+    /* Check that if we are using H3 the SNI is not NULL */
+    if (ret == 0 && sni == NULL) {
+        fprintf(stdout, "Careful: NULL SNI is incompatible with HTTP 3. Expect errors!\n");
     }
 
     /* Create the client connection */
