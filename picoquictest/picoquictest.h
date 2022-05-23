@@ -72,6 +72,7 @@ int stateless_reset_test();
 int stateless_reset_bad_test();
 int stateless_reset_client_test();
 int stateless_reset_handshake_test();
+int immediate_close_test();
 int sim_link_test();
 int tls_api_very_long_stream_test();
 int tls_api_very_long_max_test();

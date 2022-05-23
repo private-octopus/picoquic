@@ -127,6 +127,7 @@ static const picoquic_test_def_t test_table[] = {
     { "stateless_reset_bad", stateless_reset_bad_test },
     { "stateless_reset_client", stateless_reset_client_test },
     { "stateless_reset_handshake", stateless_reset_handshake_test },
+    { "immediate_close", immediate_close_test },
     { "tls_api_very_long_stream", tls_api_very_long_stream_test },
     { "tls_api_very_long_max", tls_api_very_long_max_test },
     { "tls_api_very_long_with_err", tls_api_very_long_with_err_test },
