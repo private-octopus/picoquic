@@ -2967,6 +2967,73 @@ int stateless_reset_handshake_test()
     return ret;
 }
 
+/* Immediate close. Test that a server can issue an immediate close,
+ * and that the client eventually closes the connection. 
+ */
+
+int immediate_close_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t nb_packet_sent_before_close = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    uint8_t buffer[128];
+    int was_active = 0;
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    /* Immediate close */
+    if (ret == 0) {
+        nb_packet_sent_before_close = test_ctx->cnx_server->nb_packets_sent;
+        picoquic_close_immediate(test_ctx->cnx_server);
+    }
+    /* Client sends some data, in order to test the connection */
+    if (ret == 0) {
+        memset(buffer, 0xaa, sizeof(buffer));
+        ret = picoquic_add_to_stream(test_ctx->cnx_client, 4,
+            buffer, sizeof(buffer), 1);
+    }
+
+    /* Perform a couple rounds of sending data */
+    for (int i = 0; ret == 0 && i < 256 ; i++) {
+        was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        if (test_ctx->cnx_client->cnx_state >= picoquic_state_disconnected) {
+            /* Client has noticed the disconnect */
+            break;
+        }
+    }
+
+    /* Client and server should now be in state disconnected */
+    if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+        ret = -1;
+    }
+
+    if (ret == 0 && test_ctx->cnx_server != NULL){
+        if (test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+            ret = -1;
+        }
+        else if (nb_packet_sent_before_close != test_ctx->cnx_server->nb_packets_sent)
+        {
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
 
 /*
  * verify that a connection is correctly established after a stateless retry,

@@ -653,9 +653,32 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
 
 int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
 
-void picoquic_delete_cnx(picoquic_cnx_t* cnx);
-
+/* Closing the quic connection can be done in one of three ways.
+ *
+ * The function "picoquic_close" performs an ordered close. The "reason code"
+ * is sent to the peer, and should be visible by the peer's application,
+ * unless of course the peer discards the connection before receiving
+ * the closing message. The action is delayed until the next
+ * packet can be sent.
+ * 
+ * The function "picoquic_close_immediate" performs an abrupt close. The
+ * connection will immediately move to a "draining" state, no more
+ * packets will be sent, no information will be provided to the peer.
+ * The connection context will be kept for a very
+ * limited time, until it can be safely deleted.
+ * This should be safe to use inclduing inside a picoquic callback,
+ * but it is a bit experimental. Please file an issue if you see a problem.
+ * 
+ * The function "picoquic_delete_cnx" deletes all the resource associated
+ * with the connection, including the connection context. Any reference
+ * to the context after making this call will cause an error, which
+ * makes it unsafe to use inside a callback.
+ */
 int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code);
+
+void picoquic_close_immediate(picoquic_cnx_t* cnx);
+
+void picoquic_delete_cnx(picoquic_cnx_t* cnx);
 
 /* Support for version negotiation:
  * Setting the "desired version" parameter will trigger compatible version

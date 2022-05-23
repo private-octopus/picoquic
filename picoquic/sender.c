@@ -4795,6 +4795,21 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code)
     return ret;
 }
 
+void picoquic_close_immediate(picoquic_cnx_t* cnx)
+{
+    if (cnx->cnx_state < picoquic_state_draining) {
+        /* Behave exactly as if having received a closing message from the peer */
+        uint64_t current_time = picoquic_get_quic_time(cnx->quic);
+        uint64_t exit_time = current_time + 3 * cnx->path[0]->retransmit_timer;
+        cnx->cnx_state = picoquic_state_draining;
+        cnx->local_error = UINT64_MAX;
+        cnx->latest_progress_time = current_time;
+        cnx->last_close_sent = current_time;
+        picoquic_reinsert_by_wake_time(cnx->quic, cnx, exit_time);
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+    }
+}
+
 /* Quic context level call.
  * will send a stateless packet if one is queued, or ask the first connection in
  * the wake list to prepare a packet */
