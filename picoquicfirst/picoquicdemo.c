@@ -494,7 +494,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
     if (ret == 0) {
         ret = picoquic_get_server_address(ip_address_text, server_port, &loop_cb.server_address, &is_name);
-        if (sni == NULL && is_name != 0) {
+        if (sni == NULL) {
             sni = ip_address_text;
         }
     }
