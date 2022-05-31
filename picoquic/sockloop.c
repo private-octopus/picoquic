@@ -98,6 +98,7 @@
 #include "picoquic_internal.h"
 #include "picoquic_packet_loop.h"
 #include "picoquic_unified_log.h"
+#include "picoquic_config.h"
 
 #if defined(_WINDOWS)
 static int udp_gso_available = 0;
@@ -109,7 +110,7 @@ static int udp_gso_available = 0;
 #endif
 #endif
 
-int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af, 
+int picoquic_packet_loop_open_sockets(char *ip, int local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af,
     uint16_t * sock_ports, int socket_buffer_size, int nb_sockets_max)
 {
     int nb_sockets = (local_af == AF_UNSPEC) ? 2 : 1;
@@ -134,11 +135,11 @@ int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE 
         struct sockaddr_storage local_address;
         int recv_set = 0;
         int send_set = 0;
-        
+
         if ((s_socket[i] = socket(sock_af[i], SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET ||
             picoquic_socket_set_ecn_options(s_socket[i], sock_af[i], &recv_set, &send_set) != 0 ||
             picoquic_socket_set_pkt_info(s_socket[i], sock_af[i]) != 0 ||
-            picoquic_bind_to_port(s_socket[i], sock_af[i], local_port) != 0 ||
+            picoquic_bind_to_port(ip, s_socket[i], sock_af[i], local_port) != 0 ||
             picoquic_get_local_address(s_socket[i], &local_address) != 0)
         {
             DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", sock_af[i], local_port);
@@ -199,6 +200,8 @@ int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE 
 }
 
 int picoquic_packet_loop(picoquic_quic_t* quic,
+    picoquic_quic_config_t * config,
+    picoquic_cnx_t* cnx,
     int local_port,
     int local_af,
     int dest_if,
@@ -237,9 +240,15 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     memset(sock_af, 0, sizeof(sock_af));
     memset(sock_ports, 0, sizeof(sock_ports));
 
-    if ((nb_sockets = picoquic_packet_loop_open_sockets(local_port, local_af, s_socket, sock_af, 
-        sock_ports, socket_buffer_size, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
+    if ((nb_sockets = picoquic_packet_loop_open_sockets(config->multipath_default_ip, local_port, local_af,
+                                                        s_socket, sock_af, sock_ports, socket_buffer_size,
+                                                        PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    } else if (config->multipath_alternative_ip != NULL) {
+        nb_sockets += picoquic_packet_loop_open_sockets(config->multipath_alternative_ip, local_port, local_af,
+                                                        s_socket+nb_sockets, sock_af+nb_sockets,
+                                                        sock_ports+nb_sockets, socket_buffer_size,
+                                                        PICOQUIC_PACKET_LOOP_SOCKETS_MAX);
     }
     else if (loop_callback != NULL) {
         struct sockaddr_storage l_addr;
@@ -440,8 +449,9 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
             int sock_ret;
             int testing_nat = (ret == PICOQUIC_NO_ERROR_SIMULATE_NAT);
 
-            sock_ret = picoquic_packet_loop_open_sockets(0, sock_af[0], &s_mig, &s_mig_af,
-                &next_port, socket_buffer_size, 1);
+            sock_ret = picoquic_packet_loop_open_sockets(config->multipath_default_ip, 0,
+                                                         sock_af[0], &s_mig, &s_mig_af,
+                                                         &next_port, socket_buffer_size, 1);
             if (sock_ret != 1 || s_mig == INVALID_SOCKET) {
                 if (last_cnx != NULL) {
                     picoquic_log_app_message(last_cnx, "Could not create socket for migration test, port=%d, af=%d, err=%d",

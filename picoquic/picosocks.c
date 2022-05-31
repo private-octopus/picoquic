@@ -22,7 +22,7 @@
 #include "picosocks.h"
 #include "picoquic_utils.h"
 
-int picoquic_bind_to_port(SOCKET_TYPE fd, int af, int port)
+int picoquic_bind_to_port(char *ip, SOCKET_TYPE fd, int af, int port)
 {
     struct sockaddr_storage sa;
     int addr_length = 0;
@@ -36,6 +36,11 @@ int picoquic_bind_to_port(SOCKET_TYPE fd, int af, int port)
 #else
         s4->sin_family = af;
 #endif
+        if (ip != NULL) {
+            s4->sin_addr.s_addr = inet_addr(ip);
+        } else {
+            s4->sin_addr.s_addr = inet_addr("0.0.0.0");
+        }
         s4->sin_port = htons((unsigned short)port);
         addr_length = sizeof(struct sockaddr_in);
     } else {
@@ -303,7 +308,7 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port)
             }
             ret = picoquic_socket_set_pkt_info(sockets->s_socket[i], sock_af[i]);
             if (ret == 0) {
-                ret = picoquic_bind_to_port(sockets->s_socket[i], sock_af[i], port);
+                ret = picoquic_bind_to_port(NULL, sockets->s_socket[i], sock_af[i], port);
             }
         }
     }
