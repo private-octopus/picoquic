@@ -220,7 +220,7 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
         ret = picoquic_packet_loop_win(qserver, config->server_port, 0, config->dest_if, 
             config->socket_buffer_size, server_loop_cb, &loop_cb_ctx);
 #else
-        ret = picoquic_packet_loop(qserver, config, NULL, config->server_port, 0, config->dest_if,
+        ret = picoquic_packet_loop(qserver, config->server_port, 0, config->dest_if,
             config->socket_buffer_size, config->do_not_use_gso, server_loop_cb, &loop_cb_ctx);
 #endif
     }
@@ -271,6 +271,7 @@ typedef struct st_client_loop_cb_t {
     int is_siduck;
     int is_quicperf;
     int socket_buffer_size;
+    int multipath_probe_done;
     char const* saved_alpn;
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
@@ -339,12 +340,13 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             else if (ret == 0 && (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready ||
                 picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
 
-                if (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready) {
+                if (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready && cb_ctx->multipath_probe_done == 0) {
                     if (picoquic_probe_new_path(cb_ctx->cnx_client, (struct sockaddr *)&cb_ctx->server_address, (struct sockaddr *)&cb_ctx->client_alt_address, picoquic_get_quic_time(quic))) {
                         picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d\n", ret);
                     } else {
                         picoquic_log_app_message(cb_ctx->cnx_client, "New path added, total path available %d\n", cb_ctx->cnx_client->nb_paths);
                     }
+                    cb_ctx->multipath_probe_done = 1;
                 }
 
                 /* Track the migration to server preferred address */
@@ -689,11 +691,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
     /* Wait for packets */
     if (ret == 0) {
-        struct sockaddr_in alt_addr;
-        memset(&alt_addr, 0, sizeof(alt_addr));
-        alt_addr.sin_family = AF_INET;
-        alt_addr.sin_addr.s_addr = inet_addr(config->multipath_alternative_ip);
-        memcpy(&loop_cb.client_alt_address, &alt_addr, sizeof(alt_addr));
+        picoquic_store_text_addr(&loop_cb.client_alt_address, config->multipath_alternative_ip, 0);
 
         loop_cb.cnx_client = cnx_client;
         loop_cb.force_migration = force_migration;
@@ -712,7 +710,7 @@ int quic_client(const char* ip_address_text, int server_port,
         ret = picoquic_packet_loop_win(qclient, 0, loop_cb.server_address.ss_family, 0, 
             config->socket_buffer_size, client_loop_cb, &loop_cb);
 #else
-        ret = picoquic_packet_loop(qclient, config, loop_cb.cnx_client, 0, loop_cb.server_address.ss_family, 0,
+        ret = picoquic_packet_loop(qclient, 0, loop_cb.server_address.ss_family, 0,
             config->socket_buffer_size, config->do_not_use_gso, client_loop_cb, &loop_cb);
 #endif
     }
@@ -997,9 +995,8 @@ int main(int argc, char** argv)
                 just_once = 1;
                 break;
             case 'A':
-                config.multipath_alternative_ip = malloc(sizeof(char) * strlen(optarg));
-                memcpy(config.multipath_alternative_ip, optarg, sizeof(char) * strlen(optarg));
-                printf("alternative ip: %s\n", config.multipath_alternative_ip);
+                config.multipath_alternative_ip = malloc(sizeof(char) * (strlen(optarg)+1));
+                memcpy(config.multipath_alternative_ip, optarg, sizeof(char) * (strlen(optarg)+1));
                 break;
             default:
                 if (picoquic_config_command_line(opt, &optind, argc, (char const **)argv, optarg, &config) != 0) {

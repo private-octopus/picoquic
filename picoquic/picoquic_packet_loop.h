@@ -24,13 +24,12 @@
 
 #include "picosocks.h"
 #include "picoquic.h"
-#include "picoquic_config.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 4
+#define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 2
 #define PICOQUIC_PACKET_LOOP_SEND_MAX 10
 
 /* The packet loop will call the application back after specific events.
@@ -66,8 +65,6 @@ typedef struct st_packet_loop_time_check_arg_t {
  * for winsock.
  */
 int picoquic_packet_loop(picoquic_quic_t* quic,
-    picoquic_quic_config_t * config,
-    picoquic_cnx_t* cnx,
     int local_port,
     int local_af,
     int dest_if,

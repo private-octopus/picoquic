@@ -418,7 +418,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
      * still, get the faulty driver fixed.
      */
     if (ret == 0) {
-        ret = picoquic_packet_loop(quic, NULL, NULL, server_port, 0, 0, 0, 0, NULL, NULL);
+        ret = picoquic_packet_loop(quic, server_port, 0, 0, 0, 0, NULL, NULL);
     }
 
     /* And finish. */
