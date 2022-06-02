@@ -98,7 +98,6 @@ typedef struct st_picoquic_quic_config_t {
     picoquic_lossbit_version_enum lossbit_policy; /* control loss bit */
     int multipath_option;
     char *multipath_alternative_ip;
-    char *multipath_default_ip;
     int bdp_frame_option;
     /* TODO: control other extensions, e.g. time stamp, ack delay */
     /* Common flags */

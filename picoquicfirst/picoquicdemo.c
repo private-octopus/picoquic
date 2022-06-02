@@ -294,16 +294,6 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             fprintf(stdout, "Waiting for packets.\n");
             break;
         case picoquic_packet_loop_after_receive:
-            if (cb_ctx->cnx_client->is_1rtt_acked) {
-                // TODO
-                uint64_t simulated_time = 0;
-                if ((ret = picoquic_probe_new_path(cb_ctx->cnx_client, (struct sockaddr *)&cb_ctx->server_address, (struct sockaddr *)&cb_ctx->client_alt_address, simulated_time)) && ret != 0) {
-                    picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d\n", ret);
-                } else {
-                    picoquic_log_app_message(cb_ctx->cnx_client, "New path added, total path available %d\n", cb_ctx->cnx_client->nb_paths);
-                }
-            }
-
             /* Post receive callback */
             if ((!cb_ctx->is_siduck && !cb_ctx->is_quicperf && cb_ctx->demo_callback_ctx->connection_closed) ||
                 cb_ctx->cnx_client->cnx_state == picoquic_state_disconnected) {
@@ -348,6 +338,15 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             }
             else if (ret == 0 && (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready ||
                 picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
+
+                if (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready) {
+                    if (picoquic_probe_new_path(cb_ctx->cnx_client, (struct sockaddr *)&cb_ctx->server_address, (struct sockaddr *)&cb_ctx->client_alt_address, picoquic_get_quic_time(quic))) {
+                        picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d\n", ret);
+                    } else {
+                        picoquic_log_app_message(cb_ctx->cnx_client, "New path added, total path available %d\n", cb_ctx->cnx_client->nb_paths);
+                    }
+                }
+
                 /* Track the migration to server preferred address */
                 if (cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined && !cb_ctx->migration_to_preferred_finished) {
                     if (picoquic_compare_addr(
@@ -996,11 +995,6 @@ int main(int argc, char** argv)
                 break;
             case '1':
                 just_once = 1;
-                break;
-            case 'd':
-                config.multipath_default_ip = malloc(sizeof(char) * strlen(optarg));
-                memcpy(config.multipath_default_ip, optarg, sizeof(char) * strlen(optarg));
-                printf("multipath default ip: %s\n", config.multipath_default_ip);
                 break;
             case 'A':
                 config.multipath_alternative_ip = malloc(sizeof(char) * strlen(optarg));
