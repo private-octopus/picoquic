@@ -691,7 +691,9 @@ int quic_client(const char* ip_address_text, int server_port,
 
     /* Wait for packets */
     if (ret == 0) {
-        picoquic_store_text_addr(&loop_cb.client_alt_address, config->multipath_alternative_ip, 0);
+        if (config->multipath_alternative_ip != NULL) {
+            picoquic_store_text_addr(&loop_cb.client_alt_address, config->multipath_alternative_ip, 0);
+        }
 
         loop_cb.cnx_client = cnx_client;
         loop_cb.force_migration = force_migration;
@@ -971,8 +973,8 @@ int main(int argc, char** argv)
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
     picoquic_config_init(&config);
-    memcpy(option_string, "A:d:u:f:1", 9);
-    ret = picoquic_config_option_letters(option_string + 9, sizeof(option_string) - 9, NULL);
+    memcpy(option_string, "A:u:f:1", 7);
+    ret = picoquic_config_option_letters(option_string + 7, sizeof(option_string) - 7, NULL);
 
     if (ret == 0) {
         /* Get the parameters */
