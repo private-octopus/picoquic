@@ -626,6 +626,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(immediate_close)
+        {
+            int ret = immediate_close_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_very_long_stream)
 		{
 			int ret = tls_api_very_long_stream_test();

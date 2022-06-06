@@ -907,6 +907,10 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     {
         free((void*)config->cnx_id_cbdata);
     }
+    if (config->multipath_alternative_ip != NULL)
+    {
+        free((void*)config->multipath_alternative_ip);
+    }
     if (config->www_dir != NULL)
     {
         free((void*)config->www_dir);

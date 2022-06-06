@@ -271,9 +271,11 @@ typedef struct st_client_loop_cb_t {
     int is_siduck;
     int is_quicperf;
     int socket_buffer_size;
+    int multipath_probe_done;
     char const* saved_alpn;
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
+    struct sockaddr_storage client_alt_address;
     picoquic_connection_id_t server_cid_before_migration;
     picoquic_connection_id_t client_cid_before_migration;
 } client_loop_cb_t;
@@ -337,6 +339,16 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             }
             else if (ret == 0 && (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready ||
                 picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
+
+                if (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready && cb_ctx->multipath_probe_done == 0) {
+                    if (picoquic_probe_new_path(cb_ctx->cnx_client, (struct sockaddr *)&cb_ctx->server_address, (struct sockaddr *)&cb_ctx->client_alt_address, picoquic_get_quic_time(quic))) {
+                        picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d\n", ret);
+                    } else {
+                        picoquic_log_app_message(cb_ctx->cnx_client, "New path added, total path available %d\n", cb_ctx->cnx_client->nb_paths);
+                    }
+                    cb_ctx->multipath_probe_done = 1;
+                }
+
                 /* Track the migration to server preferred address */
                 if (cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined && !cb_ctx->migration_to_preferred_finished) {
                     if (picoquic_compare_addr(
@@ -679,6 +691,10 @@ int quic_client(const char* ip_address_text, int server_port,
 
     /* Wait for packets */
     if (ret == 0) {
+        if (config->multipath_alternative_ip != NULL) {
+            picoquic_store_text_addr(&loop_cb.client_alt_address, config->multipath_alternative_ip, 0);
+        }
+
         loop_cb.cnx_client = cnx_client;
         loop_cb.force_migration = force_migration;
         loop_cb.nb_packets_before_key_update = nb_packets_before_key_update;
@@ -957,8 +973,8 @@ int main(int argc, char** argv)
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
     picoquic_config_init(&config);
-    memcpy(option_string, "u:f:1", 5);
-    ret = picoquic_config_option_letters(option_string + 5, sizeof(option_string) - 5, NULL);
+    memcpy(option_string, "A:u:f:1", 7);
+    ret = picoquic_config_option_letters(option_string + 7, sizeof(option_string) - 7, NULL);
 
     if (ret == 0) {
         /* Get the parameters */
@@ -979,6 +995,10 @@ int main(int argc, char** argv)
                 break;
             case '1':
                 just_once = 1;
+                break;
+            case 'A':
+                config.multipath_alternative_ip = malloc(sizeof(char) * (strlen(optarg)+1));
+                memcpy(config.multipath_alternative_ip, optarg, sizeof(char) * (strlen(optarg)+1));
                 break;
             default:
                 if (picoquic_config_command_line(opt, &optind, argc, (char const **)argv, optarg, &config) != 0) {
