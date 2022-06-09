@@ -276,9 +276,51 @@ typedef struct st_client_loop_cb_t {
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
     struct sockaddr_storage client_alt_address;
+    int client_alt_if;
     picoquic_connection_id_t server_cid_before_migration;
     picoquic_connection_id_t client_cid_before_migration;
 } client_loop_cb_t;
+
+#ifdef _WINDOWS
+char *strsep(char **stringp, const char *delim) {
+    if (*stringp == NULL) {
+        return NULL;
+    }
+    char *token_start = *stringp;
+    *stringp = strpbrk(token_start, delim);
+    if (*stringp) {
+        **stringp = '\0';
+        (*stringp)++;
+    }
+    return token_start;
+}
+#endif
+
+/*
+ * mp_config is consisted with src_if and alt_ip, seperated by ","
+ * where src_if is an int, and alt_ip is a string.
+ * alt_ip is the ip of the alternative path
+ * src_if is the index of the interface where the alt_ip is bounded with
+ */
+int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct sockaddr_storage *alt_ip)
+{
+    int ret = 0;
+    char *token, *ptr, *str;
+    str = malloc(sizeof(char) * (strlen(mp_config) + 1));
+    if (str == NULL) {
+        ret = -1;
+    }
+    memcpy(str, mp_config, sizeof(char) * (strlen(mp_config) + 1));
+    ptr = str;
+
+    while ((token = strsep(&str, ","))) {
+        if ((picoquic_store_text_addr(alt_ip, token, 0) == -1) && (*src_if = atoi(token)) <= 0) {
+            ret = -1;
+        }
+    }
+    free(ptr);
+    return ret;
+}
 
 int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
     void* callback_ctx, void * callback_arg)
@@ -341,7 +383,8 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                 picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
 
                 if (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready && cb_ctx->multipath_probe_done == 0) {
-                    if (picoquic_probe_new_path(cb_ctx->cnx_client, (struct sockaddr *)&cb_ctx->server_address, (struct sockaddr *)&cb_ctx->client_alt_address, picoquic_get_quic_time(quic))) {
+                    if (picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr *)&cb_ctx->server_address,
+                            (struct sockaddr *)&cb_ctx->client_alt_address, cb_ctx->client_alt_if, picoquic_get_quic_time(quic), 0)) {
                         picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d\n", ret);
                     } else {
                         picoquic_log_app_message(cb_ctx->cnx_client, "New path added, total path available %d\n", cb_ctx->cnx_client->nb_paths);
@@ -691,8 +734,8 @@ int quic_client(const char* ip_address_text, int server_port,
 
     /* Wait for packets */
     if (ret == 0) {
-        if (config->multipath_alternative_ip != NULL) {
-            picoquic_store_text_addr(&loop_cb.client_alt_address, config->multipath_alternative_ip, 0);
+        if (config->multipath_alt_config != NULL) {
+            picoquic_parse_client_multipath_config(config->multipath_alt_config, &loop_cb.client_alt_if, &loop_cb.client_alt_address);
         }
 
         loop_cb.cnx_client = cnx_client;
@@ -928,6 +971,7 @@ void usage()
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     picoquic_config_usage();
     fprintf(stderr, "Picoquic demo options:\n");
+    fprintf(stderr, "  -A ifindex,ip         Interface index and ip for multipath alternative path\n");
     fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
     fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
     fprintf(stderr, "                        -f 2  test CNXID renewal,\n");
@@ -997,8 +1041,9 @@ int main(int argc, char** argv)
                 just_once = 1;
                 break;
             case 'A':
-                config.multipath_alternative_ip = malloc(sizeof(char) * (strlen(optarg)+1));
-                memcpy(config.multipath_alternative_ip, optarg, sizeof(char) * (strlen(optarg)+1));
+                config.multipath_alt_config = malloc(sizeof(char) * (strlen(optarg) + 1));
+                memcpy(config.multipath_alt_config, optarg, sizeof(char) * (strlen(optarg) + 1));
+                printf("config.multipath_alt_config: %s\n", config.multipath_alt_config);
                 break;
             default:
                 if (picoquic_config_command_line(opt, &optind, argc, (char const **)argv, optarg, &config) != 0) {
