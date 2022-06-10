@@ -320,7 +320,7 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
     struct sockaddr_storage ip;
     while ((token = picoquic_strsep(&str, "/"))) {
         if (picoquic_store_text_addr(&ip, token, 0) == 0) {
-            *alt_ip = ip;
+            memcpy(alt_ip, &ip, sizeof(struct sockaddr_storage));
         }
         if (atoi(token) > 0) {
             *src_if = atoi(token);
