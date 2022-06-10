@@ -281,8 +281,10 @@ typedef struct st_client_loop_cb_t {
     picoquic_connection_id_t client_cid_before_migration;
 } client_loop_cb_t;
 
+
+char * picoquic_strsep(char **stringp, const char *delim)
+{
 #ifdef _WINDOWS
-char *strsep(char **stringp, const char *delim) {
     if (*stringp == NULL) {
         return NULL;
     }
@@ -293,11 +295,13 @@ char *strsep(char **stringp, const char *delim) {
         (*stringp)++;
     }
     return token_start;
-}
+#else
+    return strsep(stringp, delim);
 #endif
+}
 
 /*
- * mp_config is consisted with src_if and alt_ip, seperated by ","
+ * mp_config is consisted with src_if and alt_ip, seperated by "/"
  * where src_if is an int, and alt_ip is a string.
  * alt_ip is the ip of the alternative path
  * src_if is the index of the interface where the alt_ip is bounded with
@@ -313,9 +317,13 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
     memcpy(str, mp_config, sizeof(char) * (strlen(mp_config) + 1));
     ptr = str;
 
-    while ((token = strsep(&str, ","))) {
-        if ((picoquic_store_text_addr(alt_ip, token, 0) == -1) && (*src_if = atoi(token)) <= 0) {
-            ret = -1;
+    struct sockaddr_storage ip;
+    while ((token = picoquic_strsep(&str, "/"))) {
+        if (picoquic_store_text_addr(&ip, token, 0) == 0) {
+            *alt_ip = ip;
+        }
+        if (atoi(token) > 0) {
+            *src_if = atoi(token);
         }
     }
     free(ptr);
@@ -762,7 +770,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
     if (ret == 0) {
         uint64_t last_err;
-        
+
         if ((last_err = picoquic_get_local_error(cnx_client)) != 0) {
             fprintf(stdout, "Connection end with local error 0x%" PRIx64 ".\n", last_err);
             ret = -1;
@@ -971,7 +979,7 @@ void usage()
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     picoquic_config_usage();
     fprintf(stderr, "Picoquic demo options:\n");
-    fprintf(stderr, "  -A ifindex,ip         Interface index and ip for multipath alternative path\n");
+    fprintf(stderr, "  -A ip/ifindex         IP and interface index for multipath alternative path, e.g. 10.0.0.2/3\n");
     fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
     fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
     fprintf(stderr, "                        -f 2  test CNXID renewal,\n");
