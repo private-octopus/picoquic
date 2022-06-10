@@ -2481,7 +2481,7 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
                     local_addr = (struct sockaddr*) & cnx->path[0]->local_addr;
                 }
 
-                ret = picoquic_probe_new_path_ex(cnx, (struct sockaddr *)&dest_addr, local_addr,
+                ret = picoquic_probe_new_path_ex(cnx, (struct sockaddr *)&dest_addr, local_addr, 0,
                     picoquic_get_quic_time(cnx->quic), 1);
             }
         }

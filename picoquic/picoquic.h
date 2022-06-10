@@ -1130,6 +1130,10 @@ uint64_t picoquic_get_pacing_rate(picoquic_cnx_t* cnx);
 uint64_t picoquic_get_cwin(picoquic_cnx_t* cnx);
 uint64_t picoquic_get_rtt(picoquic_cnx_t* cnx);
 
+/* Probing new path for multipath scenarios.*/
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
+        const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address);
+
 #ifdef __cplusplus
 }
 #endif

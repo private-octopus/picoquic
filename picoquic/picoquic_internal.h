@@ -1432,8 +1432,6 @@ int picoquic_find_path_by_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int i
     uint64_t path_id_type, uint64_t path_id_value);
 int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
-int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, uint64_t current_time, int to_preferred_address);
 
 /* Management of the CNX-ID stash */
 int picoquic_init_cnxid_stash(picoquic_cnx_t* cnx);
