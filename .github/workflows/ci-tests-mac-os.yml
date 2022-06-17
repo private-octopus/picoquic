@@ -27,7 +27,7 @@ jobs:
           brew reinstall openssl
           export PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig"
           ./ci/build_picotls.sh
-          cmake .
+          cmake -DENABLE_FETCH_CONTENT=ON .
           make
 
       - name: Perform Unit Tests
