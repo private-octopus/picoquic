@@ -172,8 +172,21 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
 )
 
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-find_package(PTLS REQUIRED)
+option(ENABLE_FETCH_CONTENT "use cmake fetch-content for dependency management" OFF)
+
+if(ENABLE_FETCH_CONTENT)
+  include(FetchContent)
+  FetchContent_Declare(   picotls
+      GIT_REPOSITORY      https://github.com/h2o/picotls.git
+      GIT_TAG             master)
+  FetchContent_MakeAvailable(picotls)
+  set(PTLS_INCLUDE_DIRS ${picotls_SOURCE_DIR}/include)
+  set(PTLS_LIBRARIES picotls-core picotls-openssl picotls-fusion)
+else()
+  set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  find_package(PTLS REQUIRED)
+endif(ENABLE_FETCH_CONTENT)
+
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
 message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
 
