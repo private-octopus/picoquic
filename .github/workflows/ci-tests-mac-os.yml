@@ -26,7 +26,6 @@ jobs:
       - run: |
           brew reinstall openssl
           export PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig"
-          ./ci/build_picotls.sh
           cmake -DENABLE_FETCH_CONTENT=ON .
           make
 
