@@ -178,7 +178,7 @@ if(ENABLE_FETCH_CONTENT)
   include(FetchContent)
   FetchContent_Declare(   picotls
       GIT_REPOSITORY      https://github.com/h2o/picotls.git
-      GIT_TAG             master)
+      GIT_TAG             047c5fe20bb9ea91c1caded8977134f19681ec76)
   FetchContent_MakeAvailable(picotls)
   set(PTLS_INCLUDE_DIRS ${picotls_SOURCE_DIR}/include)
   set(PTLS_LIBRARIES picotls-core picotls-openssl picotls-fusion)
