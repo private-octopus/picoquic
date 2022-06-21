@@ -508,7 +508,7 @@ char const* picoquic_addr_text(struct sockaddr* addr, char* text, size_t text_si
         addr_text = inet_ntop(AF_INET,
             (const void*)(&((struct sockaddr_in*)addr)->sin_addr),
             addr_buffer, sizeof(addr_buffer));
-        if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ((struct sockaddr_in*) addr)->sin_port) == 0) {
+        if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ntohs(((struct sockaddr_in*) addr)->sin_port)) == 0) {
             ret_text = text;
         }
         break;
@@ -516,7 +516,7 @@ char const* picoquic_addr_text(struct sockaddr* addr, char* text, size_t text_si
         addr_text = inet_ntop(AF_INET6,
             (const void*)(&((struct sockaddr_in6*)addr)->sin6_addr),
             addr_buffer, sizeof(addr_buffer));
-        if (picoquic_sprintf(text, text_size, NULL, "[%s]:%d", addr_text, ((struct sockaddr_in6*) addr)->sin6_port) == 0) {
+        if (picoquic_sprintf(text, text_size, NULL, "[%s]:%d", addr_text, ntohs(((struct sockaddr_in6*) addr)->sin6_port)) == 0) {
             ret_text = text;
         }
     default:
