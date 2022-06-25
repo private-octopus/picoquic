@@ -211,9 +211,12 @@ int demo_server_is_path_sane(const uint8_t* path, size_t path_length)
         if ((c >= 'a' && c <= 'z') ||
             (c >= 'A' && c <= 'Z') ||
             (c >= '0' && c <= '9') ||
-            c == '-' || c == '_' || c == '/') {
+            c == '-' || c == '_') {
             nb_good++;
             past_is_dot = 0;
+        }
+        else if (c == '/' && i < path_length - 1 && nb_good > 0) {
+            nb_good++;
         }
         else if (c == '.' && !past_is_dot && nb_good > 0){
             past_is_dot = 1;
