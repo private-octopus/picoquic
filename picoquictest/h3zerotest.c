@@ -2014,7 +2014,7 @@ int demo_file_sanitize_test()
     };
     size_t nb_good = sizeof(good) / sizeof(char const*);
     char const* bad[] = {
-        "/../index.html", "example.com.txt", "/5000000/", "/.123_45.png", "/a-b-C-Z\\..\\password.txt"
+        "/../index.html", "example.com.txt", "/5000000/", "/.123_45.png", "/a-b-C-Z\\..\\password.txt", "//remote-server/example"
     };
     size_t nb_bad = sizeof(bad) / sizeof(char const*);
 
