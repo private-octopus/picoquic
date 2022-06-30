@@ -136,6 +136,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/hashtest.c
     picoquictest/high_latency_test.c
     picoquictest/intformattest.c
+    picoquictest/l4s_test.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
     picoquictest/parseheadertest.c

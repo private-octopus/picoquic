@@ -1186,6 +1186,9 @@ static int tls_api_one_sim_link_arrival(picoquictest_sim_link_t* sim_link, struc
         /* Check the destination address  before submitting the packet */
         if (picoquic_compare_addr(target_addr, (struct sockaddr*) & packet->addr_to) == 0 ||
             (packet->addr_to.ss_family == target_addr->sa_family  && multiple_address)) {
+            if (recv_ecn == 0) {
+                recv_ecn = packet->ecn_mark;
+            }
             if (packet->length > 16) {
                 ret = picoquic_incoming_packet(quic, packet->bytes, (uint32_t)packet->length,
                     (struct sockaddr*) & packet->addr_from,
@@ -1441,6 +1444,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                         else {
                             picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & addr_from);
                             picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & addr_to);
+                            packet->ecn_mark = test_ctx->packet_ecn_default;
                             packet->length = send_length - size_sent;
                             if (packet->length > segment_size) {
                                 packet->length = segment_size;

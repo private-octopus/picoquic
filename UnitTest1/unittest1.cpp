@@ -1577,6 +1577,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(l4s_reno)
+        {
+            int ret = l4s_reno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(long_rtt)
         {
             int ret = long_rtt_test();

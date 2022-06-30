@@ -850,6 +850,11 @@ typedef struct st_picoquic_packet_context_t {
     uint64_t ecn_ect0_total_remote;
     uint64_t ecn_ect1_total_remote;
     uint64_t ecn_ce_total_remote;
+    /* L3S/ECN values */
+    uint64_t l3s_epoch_send;
+    uint64_t l3s_epoch_ect0;
+    uint64_t l3s_epoch_ce;
+    uint64_t l3s_frac;
     /* Flags */
     unsigned int ack_of_ack_requested : 1; /* TODO: Initialized, unused */
 } picoquic_packet_context_t;
