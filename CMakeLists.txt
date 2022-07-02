@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.11)
+cmake_minimum_required(VERSION 3.13)
 cmake_policy(SET CMP0003 NEW)
 project(picoquic C CXX)
 find_package (Threads REQUIRED)
@@ -174,6 +174,16 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
 )
 
+OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
+if(PICOQUIC_FETCH_PTLS)
+    include(FetchContent)
+    FetchContent_Declare(
+            picotls
+            GIT_REPOSITORY      https://github.com/h2o/picotls.git
+            GIT_TAG             master)
+    FetchContent_MakeAvailable(picotls)
+endif()
+
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(PTLS REQUIRED)
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
@@ -203,6 +213,8 @@ add_library(picoquic-core ${PICOQUIC_CORE_HEADERS}
     ${PICOQUIC_LIBRARY_FILES}
 )
 
+target_include_directories(picoquic-core PUBLIC picoquic)
+
 target_link_libraries(picoquic-core
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
@@ -211,6 +223,8 @@ target_link_libraries(picoquic-core
 add_library(picoquic-log
     ${LOGLIB_LIBRARY_FILES}
 )
+
+target_include_directories(picoquic-log PUBLIC loglib)
 
 add_library(picohttp-core
     ${PICOHTTP_LIBRARY_FILES}
