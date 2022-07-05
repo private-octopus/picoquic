@@ -1,6 +1,6 @@
 /*
 * Author: Christian Huitema
-* Copyright (c) 2017, Private Octopus, Inc.
+* Copyright (c) 2022, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -17,6 +17,9 @@
 * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* 
+* This code is derived in part from the initial implementation of the prague
+* algorithm in picoquic, written in 2019 by by Quentin De Coninck.
 */
 
 #include "picoquic_internal.h"
@@ -24,11 +27,8 @@
 #include <string.h>
 #include "cc_common.h"
 
-/* Implementation of L4S/Prague, derived from New Reno
- */
-
 /*
- * We implement here the Prague algotithm as a simple modification of New Reno,
+ * We implement here the Prague algorithm as a simple modification of New Reno,
  * with the following changes:
  * 
  * - maintain a coefficient "alpha", exponentially smoothed value of "frac", the
@@ -36,13 +36,11 @@
  *       As a slight deviation from the base prague specification, we set
  *       alpha to frac if frac is more than alpha + 0.5. This addresses the
  *       issue of sudden onset of congestion.
- * - modify HyStart to not exit immediately on ECN notification, unless "frac"
- *   is larger than 0.5 (i.e., 512 since computations are fixed point with 10
- *   bits of precision)
- * - use alpha in HyStart, i.e. increase window by (1-alpha)*acked_data instead
- *   of full increase.
+ * - modify HyStart to not exit immediately on ECN notification
  * - use alpha in New Reno: control amount of window increase or decrease, as
  *   in Prague spec.
+ * - reset the L3S computation on "enter_recovery". This is a useful but
+ *   imperfect attempt at avoiding "double dipping".
  * 
  */
 
@@ -71,7 +69,10 @@
  * due to increased delays, observed before the end of the epoch. Shortly
  * after that, congestion marks are reported at end of epoch, causing window
  * to shrink further. Same could happen if losses are observed, followed
- * by CE marks.
+ * by CE marks. This is mitigated by restarting the L4S computation after
+ * slow start, but the mitigation is not sufficient. It would be better
+ * to wait for the a full RTT, so packets sent with excessive rate are
+ * purged from the queue.
  * 
  * Correlated CE marks. If CE marks happen at epoch N, the traffic in flight
  * correpond to the old window, before the window is reduced. CE marks will
@@ -82,16 +83,6 @@
  * drops. Too high, and the amount of losses increases too much. In the
  * tests, the threshold is set approximately BDP/4. This may be dues to
  * inefficient solutions of the issues mentioned above.
- * 
- * Current implementation relies on stack to measure "frac". This is probably
- * a bad idea, as the "frac" epoch is not synchronized with other signals,
- * such as exit of hystart, delay detections, or packet losses. It would
- * be better to move that computation inside the "prague" code.
- * 
- * Restarted the implementation using the code from the prague PR. Issue:
- * the callbacks for ECN do not seem to happen! Also, the computation seems
- * to only work by computing "acknowledged data", but the frequency indices
- * correspond to number of marks, not number of bytes.
  */
 
 #include "picoquic_internal.h"

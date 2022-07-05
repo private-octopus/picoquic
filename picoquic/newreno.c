@@ -52,7 +52,6 @@ static void picoquic_newreno_sim_enter_recovery(
     uint64_t current_time)
 {
     nr_state->ssthresh = nr_state->cwin / 2;
-
     if (nr_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
         nr_state->ssthresh = PICOQUIC_CWIN_MINIMUM;
     }
@@ -109,8 +108,7 @@ void picoquic_newreno_sim_notify(
             break;
         case picoquic_newreno_alg_congestion_avoidance:
         default: {
-            uint64_t complete_delta;
-            complete_delta = nb_bytes_acknowledged * path_x->send_mtu + nr_state->residual_ack;
+            uint64_t complete_delta = nb_bytes_acknowledged * path_x->send_mtu + nr_state->residual_ack;
             nr_state->residual_ack = complete_delta % nr_state->cwin;
             nr_state->cwin += complete_delta / nr_state->cwin;
             break;
