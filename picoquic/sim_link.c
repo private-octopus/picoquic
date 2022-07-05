@@ -187,7 +187,7 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
     if (!should_drop) {
         link->queue_time = current_time + queue_delay + transmit_time;
         /* TODO: proper simulation of marking policy */
-        if (link->l4s_delay > 0 && queue_delay >= link->l4s_delay) {
+        if (link->l4s_max > 0 && queue_delay >= link->l4s_max) {
             packet->ecn_mark = PICOQUIC_ECN_CE;
         }
         if (packet->length > link->path_mtu || picoquictest_sim_link_testloss(link->loss_mask) != 0 ||

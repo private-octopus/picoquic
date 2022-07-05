@@ -254,7 +254,6 @@ typedef struct st_picoquictest_sim_link_t {
     uint64_t next_send_time;
     uint64_t queue_time;
     uint64_t queue_delay_max;
-    uint64_t l4s_delay;
     uint64_t picosec_per_byte;
     uint64_t microsec_latency;
     uint64_t* loss_mask;

@@ -1061,7 +1061,7 @@ typedef enum {
     picoquic_congestion_notification_ecn_ec,
     picoquic_congestion_notification_cwin_blocked,
     picoquic_congestion_notification_seed_cwin,
-    picoquic_congestion_notification_reset
+    picoquic_congestion_notification_reset,
 } picoquic_congestion_notification_t;
 
 typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x, uint64_t current_time);
@@ -1092,6 +1092,7 @@ extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_prague_algorithm;
 
 #define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
 

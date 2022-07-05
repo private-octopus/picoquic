@@ -3327,21 +3327,6 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     }
 
     if (bytes != 0 && is_ecn) {
-        if (largest > pkt_ctx->l3s_epoch_send) {
-            /* The packet sent at the beginning of the epoch is now acknowledged */
-            uint64_t delta_ect0 = ecnx3[0] - pkt_ctx->l3s_epoch_ect0;
-            uint64_t delta_ce = ecnx3[2] - pkt_ctx->l3s_epoch_ce;
-
-            if (delta_ce > 0) {
-                pkt_ctx->l3s_frac = (delta_ce * 1024) / (delta_ce + delta_ect0);
-            }
-            else {
-                pkt_ctx->l3s_frac = 0;
-            }
-            pkt_ctx->l3s_epoch_send = pkt_ctx->send_sequence;
-            pkt_ctx->l3s_epoch_ect0 = ecnx3[0];
-            pkt_ctx->l3s_epoch_ce = ecnx3[2];
-        }
         if (ecnx3[0] > pkt_ctx->ecn_ect0_total_remote) {
             pkt_ctx->ecn_ect0_total_remote = ecnx3[0];
         }
@@ -3358,6 +3343,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
 
     return bytes;
 }
+
 
 uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
     int* more_data, uint64_t current_time, picoquic_ack_context_t* ack_ctx, int* need_time_stamp,

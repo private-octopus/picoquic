@@ -289,6 +289,7 @@ int bbr_asym100_test();
 int bbr_asym100_nodelay_test();
 int bbr_asym400_test();
 int l4s_reno_test();
+int l4s_prague_test();
 int large_client_hello_test();
 int fast_nat_rebinding_test();
 int datagram_test();

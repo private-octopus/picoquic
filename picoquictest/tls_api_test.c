@@ -11103,16 +11103,17 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
 int excess_repeat_test()
 {
     const int nb_repeat_max = 128;
-    picoquic_congestion_algorithm_t* algo_list[5] = {
+    picoquic_congestion_algorithm_t* algo_list[6] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,
         picoquic_dcubic_algorithm,
         picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
+        picoquic_bbr_algorithm,
+        picoquic_prague_algorithm
     };
     int ret = 0;
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
+    for (int i = 0; i < 6 && ret == 0; i++) {
         ret = excess_repeat_test_one(algo_list[i], nb_repeat_max);
         if (ret != 0) {
             DBG_PRINTF("Excess repeat test fails for CC=%s", algo_list[i]->congestion_algorithm_id);

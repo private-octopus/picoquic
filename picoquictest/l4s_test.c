@@ -64,10 +64,12 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, uint64_t
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
 
-        test_ctx->c_to_s_link->l4s_max = l4s_max;
-        test_ctx->s_to_c_link->l4s_max = l4s_max;
-        test_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_0;
 
+        if (strcmp(ccalgo->congestion_algorithm_id, "prague") == 0) {
+            test_ctx->c_to_s_link->l4s_max = l4s_max;
+            test_ctx->s_to_c_link->l4s_max = l4s_max;
+            test_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_0;
+        }
         picoquic_set_binlog(test_ctx->qserver, ".");
 
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
@@ -103,11 +105,23 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, uint64_t
     return ret;
 }
 
+/* This test is used for reference. Perf is bad, because each CE mark is
+ * a congestion mark.
+ */
 int l4s_reno_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_newreno_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 4000000, 50, 6000);
+    int ret = l4s_congestion_test(ccalgo, 3850000, 50, 6000);
+
+    return ret;
+}
+
+int l4s_prague_test()
+{
+    picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
+
+    int ret = l4s_congestion_test(ccalgo, 3700000, 5, 6000);
 
     return ret;
 }

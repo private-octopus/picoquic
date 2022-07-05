@@ -4066,6 +4066,9 @@ picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char co
         else if (strcmp(alg_name, "bbr") == 0) {
             alg = picoquic_bbr_algorithm;
         }
+        else if (strcmp(alg_name, "prague") == 0) {
+            alg = picoquic_prague_algorithm;
+        }
         else {
             alg = NULL;
         }
