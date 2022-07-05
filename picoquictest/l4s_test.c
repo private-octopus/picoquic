@@ -89,7 +89,7 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, uint64_t
             ret = -1;
         }
         else if (test_ctx->cnx_server->path[0]->rtt_variant > max_rttvar) {
-            DBG_PRINTF("RTT variant %" PRIu64 ", expected maximum %" PRIu64, test_ctx->cnx_server->path[0]->rtt_variant > max_rttvar);
+            DBG_PRINTF("RTT variant %" PRIu64 ", expected maximum %" PRIu64, test_ctx->cnx_server->path[0]->rtt_variant, max_rttvar);
             ret = -1;
         }
     }
