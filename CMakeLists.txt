@@ -82,6 +82,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/picosocks.c
     picoquic/picosplay.c
     picoquic/port_blocking.c
+    picoquic/prague.c
     picoquic/quicctx.c
     picoquic/sacks.c
     picoquic/sender.c
@@ -136,6 +137,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/hashtest.c
     picoquictest/high_latency_test.c
     picoquictest/intformattest.c
+    picoquictest/l4s_test.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
     picoquictest/parseheadertest.c

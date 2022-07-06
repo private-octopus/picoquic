@@ -149,6 +149,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     uint64_t blackhole_end;
 
     /* ECN simulation */
+    uint8_t packet_ecn_default;
     uint8_t recv_ecn_client;
     uint8_t recv_ecn_server;
 

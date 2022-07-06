@@ -246,6 +246,7 @@ typedef struct st_picoquictest_sim_packet_t {
     size_t length;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
+    uint8_t ecn_mark;
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquictest_sim_packet_t;
 
@@ -266,6 +267,8 @@ typedef struct st_picoquictest_sim_link_t {
     /* Variables for random early drop simulation */
     uint64_t red_drop_mask;
     uint64_t red_queue_max;
+    /* L4S MAX sets the ECN mark threshold if doing L4S or DCTCP style ECN marking. */
+    uint64_t l4s_max;
     /* Variables for rate limiter simulation */
     double bucket_increase_per_microsec;
     uint64_t bucket_max;

@@ -3215,6 +3215,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
     uint64_t ecnx3[3] = { 0, 0, 0 };
     uint8_t first_byte = bytes[0];
+    picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
 
     if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block,
         (has_path_id)?&path_id:NULL,
@@ -3224,8 +3225,6 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
     }
     else {
-        picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
-        
         if (has_path_id) {
             picoquic_remote_cnxid_t * r_cid = picoquic_find_remote_cnxid_by_number(cnx, path_id);
 
@@ -3328,23 +3327,23 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     }
 
     if (bytes != 0 && is_ecn) {
-        if (ecnx3[0] > cnx->pkt_ctx[pc].ecn_ect0_total_remote) {
-            cnx->pkt_ctx[pc].ecn_ect0_total_remote = ecnx3[0];
+        if (ecnx3[0] > pkt_ctx->ecn_ect0_total_remote) {
+            pkt_ctx->ecn_ect0_total_remote = ecnx3[0];
         }
-        if (ecnx3[1] > cnx->pkt_ctx[pc].ecn_ect1_total_remote) {
-            cnx->pkt_ctx[pc].ecn_ect1_total_remote = ecnx3[1];
+        if (ecnx3[1] > pkt_ctx->ecn_ect1_total_remote) {
+            pkt_ctx->ecn_ect1_total_remote = ecnx3[1];
         }
-        if (ecnx3[2] > cnx->pkt_ctx[pc].ecn_ce_total_remote) {
-            cnx->pkt_ctx[pc].ecn_ce_total_remote = ecnx3[2];
-
+        if (ecnx3[2] > pkt_ctx->ecn_ce_total_remote) {
+            pkt_ctx->ecn_ce_total_remote = ecnx3[2];
             cnx->congestion_alg->alg_notify(cnx, cnx->path[0],
                 picoquic_congestion_notification_ecn_ec,
-                0, 0, 0, picoquic_sack_list_last(&cnx->ack_ctx[pc].sack_list), current_time);
+                0, 0, 0, largest, current_time);
         }
     }
 
     return bytes;
 }
+
 
 uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
     int* more_data, uint64_t current_time, picoquic_ack_context_t* ack_ctx, int* need_time_stamp,
