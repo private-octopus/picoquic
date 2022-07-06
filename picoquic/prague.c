@@ -106,7 +106,7 @@ typedef struct st_picoquic_prague_state_t {
     uint64_t residual_ack;
     uint64_t ssthresh;
     uint64_t recovery_start;
-
+    uint64_t l4s_update_sent;
     uint64_t l4s_epoch_send;
     uint64_t l4s_epoch_ect0;
     uint64_t l4s_epoch_ce;
@@ -153,15 +153,24 @@ static picoquic_packet_context_t* picoquic_prague_get_pkt_ctx(picoquic_cnx_t* cn
     return pkt_ctx;
 }
 
-static void picoquic_prague_reset(picoquic_cnx_t * cnx, picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
+
+static void picoquic_prague_reset_l3s(picoquic_cnx_t* cnx, picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
 {
     picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
-    picoquic_prague_init_reno(pr_state, path_x);
     pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
     pr_state->l4s_epoch_ect0 = pkt_ctx->ecn_ect0_total_remote;
     pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;
     pr_state->alpha = 0;
     pr_state->alpha_shifted = 0;
+
+}
+
+
+static void picoquic_prague_reset(picoquic_cnx_t * cnx, picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
+{
+    
+    picoquic_prague_init_reno(pr_state, path_x);
+    picoquic_prague_reset_l3s(cnx, pr_state, path_x);
 }
 
 
@@ -192,13 +201,7 @@ static void picoquic_prague_enter_recovery(
 
     pr_state->residual_ack = 0;
     
-    picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
-
-    pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
-    pr_state->l4s_epoch_ect0 = pkt_ctx->ecn_ect0_total_remote;
-    pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;
-    pr_state->alpha = 0;
-    pr_state->alpha_shifted = 0;
+    picoquic_prague_reset_l3s(cnx, pr_state, path_x);
 }
 
 static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
@@ -206,10 +209,13 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
 {
     /* Check the L4S epoch, based on first number sent in previous epoch */
     picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
+    uint64_t update_sent = pkt_ctx->latest_time_acknowledged;
 
-    if (path_x->path_packet_acked_number >= pr_state->l4s_epoch_send) {
+    if (pkt_ctx->highest_acknowledged != UINT64_MAX &&
+        pkt_ctx->highest_acknowledged > pr_state->l4s_epoch_send) {
         /* The epoch packet has been acked. Time to update alpha. */
         uint64_t frac = 0;
+        int is_suspect = 0;
         pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
         uint64_t delta_ect0 = pkt_ctx->ecn_ect0_total_remote - pr_state->l4s_epoch_ect0;
         uint64_t delta_ce = pkt_ctx->ecn_ce_total_remote - pr_state->l4s_epoch_ce;
@@ -221,8 +227,24 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
             frac = 0;
         }
 
+        if (frac > 512) {
+            DBG_PRINTF("%s", "bug");
+        }
+
+        if (pr_state->l4s_update_sent != 0 && frac > 512 && pr_state->alpha < 128 &&
+            update_sent - pr_state->l4s_update_sent > path_x->smoothed_rtt) {
+            /* 
+             * the epoch lasted more than the RTT. This is most
+             * probably due to period of inactivity, then effects of imprecise
+             * tuning of pacing's leaky bucket algorithm. Limiting the
+             * fraction frac to about 1/8th to avoid too much bad effects. */
+            is_suspect = 1;
+            frac = 128;
+        }
+        pr_state->l4s_update_sent = update_sent;
+
         if (delta_ce > 0 || delta_ect0 > 0) {
-            if (frac > 512) {
+            if (frac > pr_state->alpha && (frac > 512 || is_suspect)) {
                 pr_state->alpha = frac;
                 pr_state->alpha_shifted = frac << PRAGUE_SHIFT_G;
             }
@@ -233,7 +255,6 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
                 pr_state->alpha = pr_state->alpha_shifted >> PRAGUE_SHIFT_G;
             }
         }
-
         pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
         pr_state->l4s_epoch_ect0 = pkt_ctx->ecn_ect0_total_remote;
         pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;

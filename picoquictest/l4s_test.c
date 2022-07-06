@@ -121,7 +121,7 @@ int l4s_prague_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 3700000, 5, 6000);
+    int ret = l4s_congestion_test(ccalgo, 3500000, 5, 6000);
 
     return ret;
 }
