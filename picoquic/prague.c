@@ -103,23 +103,14 @@ typedef struct st_picoquic_prague_state_t {
     // double alpha;
     uint64_t alpha_shifted;
     uint64_t alpha;
-    uint64_t acked_bytes_ecn;
-    uint64_t acked_bytes_total;
-    uint64_t loss_cwnd;
     uint64_t residual_ack;
     uint64_t ssthresh;
     uint64_t recovery_start;
-    uint64_t min_rtt;
-    uint64_t last_rtt[NB_RTT_RENO];
 
     uint64_t l4s_epoch_send;
     uint64_t l4s_epoch_ect0;
     uint64_t l4s_epoch_ce;
-    int nb_rtt;
-    
     picoquic_min_max_rtt_t rtt_filter;
-
-    uint64_t flags;
 } picoquic_prague_state_t;
 
 void picoquic_prague_init(picoquic_path_t* path_x, uint64_t current_time)
@@ -188,8 +179,6 @@ static void picoquic_prague_enter_recovery(
 
 static void picoquic_prague_reset(picoquic_prague_state_t* pr_state)
 {
-    pr_state->acked_bytes_ecn = 0;
-    pr_state->acked_bytes_total = 0;
 }
 
 static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
@@ -245,7 +234,6 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
             }
             else {
                 /* If we got ECN marks in the last RTT, update the ssthresh and the CWIN */
-                pr_state->loss_cwnd = path_x->cwin;
                 uint64_t reduction = (path_x->cwin * pr_state->alpha) / 2048;
                 pr_state->ssthresh = path_x->cwin - reduction;
                 if (pr_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
@@ -282,11 +270,9 @@ void picoquic_prague_notify(
     if (pr_state != NULL) {
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement: {
-            if (nb_bytes_acknowledged) {
-                pr_state->acked_bytes_total += nb_bytes_acknowledged;
-            }
-            // Regardless of the alg state, update alpha
+            /* Regardless of the alg state, update alpha */
             picoquic_prague_update_alpha(cnx, path_x, pr_state, nb_bytes_acknowledged, current_time);
+            /* Increae or reduce the congestion window based on alpha */
             switch (pr_state->alg_state) {
             case picoquic_prague_alg_slow_start:
                 if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
@@ -388,6 +374,7 @@ void picoquic_prague_notify(
                 }
             }
             break;
+        case picoquic_congestion_notification_cwin_blocked:
         case picoquic_congestion_notification_reset:
             picoquic_prague_reset(pr_state);
             break;
