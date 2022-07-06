@@ -113,6 +113,14 @@ typedef struct st_picoquic_prague_state_t {
     picoquic_min_max_rtt_t rtt_filter;
 } picoquic_prague_state_t;
 
+static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
+{
+    pr_state->alg_state = picoquic_prague_alg_slow_start;
+    pr_state->ssthresh = (uint64_t)((int64_t)-1);
+    pr_state->alpha = 0;
+    path_x->cwin = PICOQUIC_CWIN_INITIAL;
+}
+
 void picoquic_prague_init(picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
@@ -121,15 +129,41 @@ void picoquic_prague_init(picoquic_path_t* path_x, uint64_t current_time)
     if (pr_state != NULL) {
         memset(pr_state, 0, sizeof(picoquic_prague_state_t));
         path_x->congestion_alg_state = (void*)pr_state;
-        pr_state->alg_state = picoquic_prague_alg_slow_start;
-        pr_state->ssthresh = (uint64_t)((int64_t)-1);
-        pr_state->alpha = 0;
-        path_x->cwin = PICOQUIC_CWIN_INITIAL;
+        picoquic_prague_init_reno(pr_state, path_x);
     }
     else {
         path_x->congestion_alg_state = NULL;
     }
 }
+
+static picoquic_packet_context_t* picoquic_prague_get_pkt_ctx(picoquic_cnx_t* cnx,  picoquic_path_t* path_x)
+{
+    picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+
+    /* Reset the L3S measurement context to the current value */
+    if (cnx->is_multipath_enabled) {
+        /* TODO: if the RCID index has changed, reset the counters. */
+        picoquic_remote_cnxid_t* r_cid = path_x->p_remote_cnxid;
+
+        if (r_cid != NULL) {
+            pkt_ctx = &r_cid->pkt_ctx;
+        }
+    }
+
+    return pkt_ctx;
+}
+
+static void picoquic_prague_reset(picoquic_cnx_t * cnx, picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
+{
+    picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
+    picoquic_prague_init_reno(pr_state, path_x);
+    pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
+    pr_state->l4s_epoch_ect0 = pkt_ctx->ecn_ect0_total_remote;
+    pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;
+    pr_state->alpha = 0;
+    pr_state->alpha_shifted = 0;
+}
+
 
 /* The recovery state last 1 RTT, during which parameters will be frozen
  */
@@ -158,17 +192,8 @@ static void picoquic_prague_enter_recovery(
 
     pr_state->residual_ack = 0;
     
-    picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+    picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
 
-    /* Reset the L3S measurement context to the current value */
-    if (cnx->is_multipath_enabled) {
-        /* TODO: if the RCID index has changed, reset the counters. */
-        picoquic_remote_cnxid_t* r_cid = path_x->p_remote_cnxid;
-
-        if (r_cid != NULL) {
-            pkt_ctx = &r_cid->pkt_ctx;
-        }
-    }
     pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
     pr_state->l4s_epoch_ect0 = pkt_ctx->ecn_ect0_total_remote;
     pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;
@@ -176,25 +201,11 @@ static void picoquic_prague_enter_recovery(
     pr_state->alpha_shifted = 0;
 }
 
-
-static void picoquic_prague_reset(picoquic_prague_state_t* pr_state)
-{
-}
-
 static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
     picoquic_path_t* path_x, picoquic_prague_state_t* pr_state, uint64_t nb_bytes_acknowledged, uint64_t current_time)
 {
     /* Check the L4S epoch, based on first number sent in previous epoch */
-    picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
-
-    if (cnx->is_multipath_enabled) {
-        /* TODO: if the RCID index has changed, reset the counters. */
-        picoquic_remote_cnxid_t* r_cid = path_x->p_remote_cnxid;
-
-        if (r_cid != NULL) {
-            pkt_ctx = &r_cid->pkt_ctx;
-        }
-    }
+    picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
 
     if (path_x->path_packet_acked_number >= pr_state->l4s_epoch_send) {
         /* The epoch packet has been acked. Time to update alpha. */
@@ -374,10 +385,10 @@ void picoquic_prague_notify(
                 }
             }
             break;
-        case picoquic_congestion_notification_cwin_blocked:
         case picoquic_congestion_notification_reset:
-            picoquic_prague_reset(pr_state);
+            picoquic_prague_reset(cnx, pr_state, path_x);
             break;
+        case picoquic_congestion_notification_cwin_blocked:
         default:
             /* ignore */
             break;
