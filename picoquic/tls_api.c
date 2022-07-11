@@ -44,6 +44,10 @@
 
 #ifdef _WINDOWS
 #include "wincompat.h"
+#ifndef PTLS_WITHOUT_FUSION
+/* temporary disabling of PTLS_FUSION until memory alaignment issues are fixed*/
+#define PTLS_WITHOUT_FUSION
+#endif
 #endif
 #include <stddef.h>
 #include "picotls.h"
@@ -473,8 +477,11 @@ ptls_openssl_verify_certificate_t* picoquic_openssl_get_certificate_verifier(cha
                 *is_cert_store_not_empty = 1;
             }
         }
-
+#ifdef PTLS_OPENSSL_VERIFY_CERTIFICATE_ENABLE_OVERRIDE
+        ptls_openssl_init_verify_certificate(verifier, store, NULL);
+#else
         ptls_openssl_init_verify_certificate(verifier, store);
+#endif
 
         // If we created an instance of the store, release our reference after giving it to the verify_certificate callback.
         // The callback internally increased the reference counter by one.
@@ -1812,7 +1819,15 @@ static void free_certificates_list(ptls_iovec_t* certs, size_t len) {
     }
 
     for (size_t i = 0; i < len; ++i) {
+#if 1
+        ptls_buffer_dispose(&certs[i]);
+#else
+#if defined(_WINDOWS) && defined(PTLS_OPENSSL_VERIFY_CERTIFICATE_ENABLE_OVERRIDE)
+        _aligned_free(certs[i].base);
+#else
         free(certs[i].base);
+#endif
+#endif
     }
     free(certs);
 }
