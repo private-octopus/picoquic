@@ -1819,15 +1819,7 @@ static void free_certificates_list(ptls_iovec_t* certs, size_t len) {
     }
 
     for (size_t i = 0; i < len; ++i) {
-#if 1
-        ptls_buffer_dispose(&certs[i]);
-#else
-#if defined(_WINDOWS) && defined(PTLS_OPENSSL_VERIFY_CERTIFICATE_ENABLE_OVERRIDE)
-        _aligned_free(certs[i].base);
-#else
         free(certs[i].base);
-#endif
-#endif
     }
     free(certs);
 }
