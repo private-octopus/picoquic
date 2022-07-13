@@ -66,3 +66,4 @@ int picoquic_perflog_setup(picoquic_quic_t* quic, char const* perflog_file_name)
 }
 #endif
 #endif /* PICOQUIC_PERFORMANCE_LOG_H */
+
