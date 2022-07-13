@@ -33,6 +33,7 @@ jobs:
           echo $CXX
           $CC --version
           ./ci/build_picotls.sh
+          cmake "-DCMAKE_C_FLAGS=-Wnewline-eof" "-DCMAKE_CXX_FLAGS=-Wnewline-eof" .
           cmake .
           make
 
