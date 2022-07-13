@@ -93,4 +93,4 @@ void picoquic_newreno_sim_notify(
 }
 #endif
 
-#endif
+#endif /* CC_COMMON_H */
