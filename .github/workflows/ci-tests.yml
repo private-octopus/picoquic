@@ -25,8 +25,8 @@ jobs:
 
       - run: |
           sudo apt-get install -y libssl-dev
-          ./ci/build_picotls.sh
-          cmake .
+          # ./ci/build_picotls.sh
+          cmake -DPICOQUIC_FETCH_PTLS=ON .
           make
 
       - name: Perform Unit Tests
