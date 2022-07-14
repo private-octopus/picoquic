@@ -25,14 +25,13 @@ jobs:
 
       - run: |
           sudo apt-get install -y libssl-dev
-          # ./ci/build_picotls.sh
-          cmake -DPICOQUIC_FETCH_PTLS=ON .
-          make
+          cmake -S . -B build -DPICOQUIC_FETCH_PTLS:BOOL=ON
+          cmake --build build
 
       - name: Perform Unit Tests
         run: |
             ulimit -c unlimited -S
-            ./picoquic_ct -n -r && QUICRESULT=$?
-            ./picohttp_ct -n -r -x http_corrupt && HTTPRESULT=$?
+            build/picoquic_ct -n -r && QUICRESULT=$?
+            build/picohttp_ct -n -r -x http_corrupt && HTTPRESULT=$?
             if [[ ${QUICRESULT} == 0 ]] && [[ ${HTTPRESULT} == 0 ]]; then exit 0; fi;
             exit 1
