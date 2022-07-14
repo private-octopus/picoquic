@@ -115,9 +115,11 @@ To build Picoquic on Windows, you need to:
 
 Thanks to check-ins from Deb Banerjee and Igor Lubashev for the build experience on Linux.
 
-To build Picoquic on Linux, you need to:
+To build Picoquic on Linux, you need can either build picotls separately 
+or use an integrated option. In both cases, you need first to install and 
+build Openssl on your machine
 
- * Install and build Openssl on your machine
+To build step by step, you should:
 
  * Clone and compile Picotls, using cmake as explained in the Picotls documentation.
 
@@ -126,6 +128,18 @@ To build Picoquic on Linux, you need to:
    cmake .
    make
 ~~~
+
+Instead of building picotls separately, you can use an integrated option 
+(thanks to Paul E. Jones and Suhas Nandakumar for developing that):
+
+ * Clone and compile Picoquic and Picotls in a single command:
+~~~
+   cmake -DPICOQUIC_FETCH_PTLS .
+   make
+~~~
+
+Either way, you can verify that everything worked:
+
  * Run the test program `picoquic_ct` to verify the port.
  
 The tests verify that the code compiles and runs correctly under Ubuntu,
