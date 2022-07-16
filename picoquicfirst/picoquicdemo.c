@@ -1048,6 +1048,9 @@ int main(int argc, char** argv)
     picoquic_config_init(&config);
     memcpy(option_string, "A:u:f:1", 7);
     ret = picoquic_config_option_letters(option_string + 7, sizeof(option_string) - 7, NULL);
+    if (ret == 0) {
+        ret = picoquic_config_set_option(&config, picoquic_option_INITIAL_RANDOM, "1");
+    }
 
     if (ret == 0) {
         /* Get the parameters */

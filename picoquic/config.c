@@ -59,7 +59,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_MAX_CONNECTIONS, 'x', "max_connections", 1, "number",
     "Maximum number of concurrent connections, default 256" },
     { picoquic_option_DO_RETRY, 'r', "do_retry", 0, "", "Do Retry Request" },
-    { picoquic_option_INITIAL_RANDOM, 'R', "initial_random", 0, "", "randomize initial packet number" },
+    { picoquic_option_INITIAL_RANDOM, 'R', "initial_random", 1, "option", "randomize initial packet number (1) or not (0)" },
     { picoquic_option_RESET_SEED, 's', "reset_seed", 2, "<64b 64b>", "Reset seed" },
     { picoquic_option_DisablePortBlocking, 'X', "disable_block", 0, "", "Disable the check for blocked ports"},
     { picoquic_option_SOLUTION_DIR, 'S', "solution_dir", 1, "folder", "Set the path to the source files to find the default files" },
@@ -352,9 +352,17 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_DO_RETRY:
         config->do_retry = 1;
         break;
-    case picoquic_option_INITIAL_RANDOM:
-        config->initial_random = 1;
+    case picoquic_option_INITIAL_RANDOM: {
+        int v = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || v < 0 || v >1) {
+            fprintf(stderr, "Invalid initial random value: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = (ret == 0) ? -1 : ret;
+        }
+        else {
+            config->initial_random = v;
+        }
         break;
+    }
     case picoquic_option_RESET_SEED:
         config->reset_seed[1] = config_atoull(params, nb_params, 0, &ret);
         config->reset_seed[0] = config_atoull(params, nb_params, 1, &ret);
@@ -592,19 +600,25 @@ int picoquic_config_command_line(int opt, int * p_optind, int argc, char const *
     else {
         if (option_table[option_index].nb_params_required > 0) {
             params[0].param = optarg;
-            params[0].length = strlen(optarg);
-            nb_params++;
-            while (nb_params < option_table[option_index].nb_params_required) {
-                if (*p_optind + 1 > argc) {
-                    fprintf(stderr, "option -%c requires %d arguments\n", opt, option_table[option_index].nb_params_required);
-                    ret = -1;
-                    break;
-                }
-                else {
-                    params[nb_params].param = argv[*p_optind];
-                    params[nb_params].length = (int)strlen(argv[*p_optind]);
-                    nb_params++;
-                    *p_optind += 1;
+            if (optarg == NULL) {
+                fprintf(stderr, "option -%c requires %d arguments\n", opt, option_table[option_index].nb_params_required);
+                ret = -1;
+            }
+            else {
+                params[0].length = strlen(optarg);
+                nb_params++;
+                while (nb_params < option_table[option_index].nb_params_required) {
+                    if (*p_optind + 1 > argc) {
+                        fprintf(stderr, "option -%c requires %d arguments\n", opt, option_table[option_index].nb_params_required);
+                        ret = -1;
+                        break;
+                    }
+                    else {
+                        params[nb_params].param = argv[*p_optind];
+                        params[nb_params].length = (int)strlen(argv[*p_optind]);
+                        nb_params++;
+                        *p_optind += 1;
+                    }
                 }
             }
         }

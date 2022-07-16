@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:K:p:v:o:w:x:rRs:XS:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:VU:0j:h";
+static char* ref_option_text = "c:k:K:p:v:o:w:x:rR:s:XS:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:VU:0j:h";
 
 int config_option_letters_test()
 {
@@ -113,7 +113,7 @@ static char const* config_argv1[] = {
     "-P", "3",
     "-O", "2",
     "-M", "3",
-    "-R",
+    "-R", "1",
     "-L",
     "-w", "/data/www/",
     "-r",
@@ -326,7 +326,7 @@ int config_test_parse_command_line(const picoquic_quic_config_t* expected, const
         }
         ret = picoquic_config_command_line(opt, &opt_ind, argc, argv, optval, &actual);
         if (ret != 0) {
-            DBG_PRINTF("Could not part opt -%c", opt);
+            DBG_PRINTF("Could not parse opt -%c", opt);
         }
     }
 
