@@ -560,7 +560,7 @@ int quic_client(const char* ip_address_text, int server_port,
     int ret = 0;
     picoquic_quic_t* qclient = NULL;
     picoquic_cnx_t* cnx_client = NULL;
-    picoquic_demo_callback_ctx_t callback_ctx;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
     uint64_t current_time = 0;
     int is_name = 0;
     size_t client_sc_nb = 0;
@@ -614,20 +614,22 @@ int quic_client(const char* ip_address_text, int server_port,
     }
 
     /* If needed, set ALPN and proposed version from tickets */
-    if (config->alpn == NULL || config->proposed_version == 0) {
-        char const* ticket_alpn;
-        uint32_t ticket_version;
+    if (ret == 0) {
+        if (config->alpn == NULL || config->proposed_version == 0) {
+            char const* ticket_alpn;
+            uint32_t ticket_version;
 
-        if (picoquic_demo_client_get_alpn_and_version_from_tickets(qclient,  sni, config->alpn,
-            config->proposed_version, current_time, &ticket_alpn, &ticket_version) == 0) {
-            if (ticket_alpn != NULL) {
-                fprintf(stdout, "Set ALPN to %s based on stored ticket\n", ticket_alpn);
-                picoquic_config_set_option(config, picoquic_option_ALPN, ticket_alpn);
-            }
-            
-            if (ticket_version != 0) {
-                fprintf(stdout, "Set version to 0x%08x based on stored ticket\n", ticket_version);
-                config->proposed_version = ticket_version;
+            if (picoquic_demo_client_get_alpn_and_version_from_tickets(qclient, sni, config->alpn,
+                config->proposed_version, current_time, &ticket_alpn, &ticket_version) == 0) {
+                if (ticket_alpn != NULL) {
+                    fprintf(stdout, "Set ALPN to %s based on stored ticket\n", ticket_alpn);
+                    picoquic_config_set_option(config, picoquic_option_ALPN, ticket_alpn);
+                }
+
+                if (ticket_version != 0) {
+                    fprintf(stdout, "Set version to 0x%08x based on stored ticket\n", ticket_version);
+                    config->proposed_version = ticket_version;
+                }
             }
         }
     }
