@@ -26,20 +26,21 @@ jobs:
           fetch-depth: 2
           submodules: 'recursive'
 
-      - run: |
+      - name: Building picoquic
+        run: |
           sudo apt-get install clangd
           sudo apt-get install -y libssl-dev
           echo $CC
           echo $CXX
           $CC --version
           ./ci/build_picotls.sh
-          cmake .
-          make
+          cmake -S . -B build
+          cmake --build build
 
       - name: Perform Unit Tests
         run: |
             ulimit -c unlimited -S
-            ./picoquic_ct -n -r && QUICRESULT=$?
-            ./picohttp_ct -n -r -x http_corrupt && HTTPRESULT=$?
-            if [[ ${QUICRESULT} == 0 ]] && [[ ${HTTPRESULT} == 0 ]]; then exit 0; fi;
+            cd build
+            make test && QUICRESULT=$?
+            if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
             exit 1
