@@ -1096,6 +1096,9 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
             else if (cid_zero){
                 test_ctx->qclient->local_cnxid_length = 0;
             }
+            /* Do not use randomization by default during tests */
+            picoquic_set_random_initial(test_ctx->qclient, 0);
+            picoquic_set_random_initial(test_ctx->qserver, 0);
 
             /* register the links */
             if (ret == 0) {
@@ -11311,13 +11314,20 @@ int cnx_ddos_unit_test()
  * Test randomization of initial packet number
  */
 
-int pn_random_check_sequence(picoquic_cnx_t* cnx, char const* cnx_name)
+int pn_random_check_sequence(picoquic_cnx_t* cnx, char const* cnx_name, int randomize_all)
 {
     int ret = 0;
     for (picoquic_packet_context_enum pc = picoquic_packet_context_application;
         pc < picoquic_nb_packet_context; pc++) {
-        if (cnx->pkt_ctx[pc].send_sequence < PICOQUIC_PN_RANDOM_MIN) {
-            DBG_PRINTF("For connection %s, context number %d, sequencee number is only %" PRIu64,
+        if (randomize_all || pc == picoquic_packet_context_initial) {
+            if (cnx->pkt_ctx[pc].send_sequence < PICOQUIC_PN_RANDOM_MIN) {
+                DBG_PRINTF("For connection %s, context number %d, sequencee number is only %" PRIu64,
+                    cnx_name, (int)pc, cnx->pkt_ctx[pc].send_sequence);
+                ret = -1;
+                break;
+            }
+        } else if (cnx->pkt_ctx[pc].send_sequence >= PICOQUIC_PN_RANDOM_MIN) {
+            DBG_PRINTF("For connection %s, context number %d, sequencee number is %" PRIu64,
                 cnx_name, (int)pc, cnx->pkt_ctx[pc].send_sequence);
             ret = -1;
             break;
@@ -11327,7 +11337,7 @@ int pn_random_check_sequence(picoquic_cnx_t* cnx, char const* cnx_name)
     return ret;
 }
 
-int pn_random_test()
+int pn_random_test_one(int randomize_all)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -11343,11 +11353,12 @@ int pn_random_test()
 
     /* Set the initial packet number randomization */
     if (ret == 0) {
-        picoquic_set_random_initial(test_ctx->qclient, 1);
-        picoquic_set_random_initial(test_ctx->qserver, 1);
+        picoquic_set_random_initial(test_ctx->qclient, (randomize_all) ? 2 : 1);
+        picoquic_set_random_initial(test_ctx->qserver, (randomize_all) ? 2 : 1);
         picoquic_set_qlog(test_ctx->qserver, ".");
         /* The client connection is already created, so we force randomization of sequence numbers here */
-        for (picoquic_packet_context_enum pc = picoquic_packet_context_application;
+        for (picoquic_packet_context_enum pc = 
+            (randomize_all)?picoquic_packet_context_application: picoquic_packet_context_initial;
             pc < picoquic_nb_packet_context; pc++) {
             test_ctx->cnx_client->pkt_ctx[pc].send_sequence = ((uint64_t)PICOQUIC_PN_RANDOM_MIN) + 17 + (uint64_t)pc;
         }
@@ -11364,9 +11375,9 @@ int pn_random_test()
         }
         else {
             /* Check that the sequence numbers for all number spaces are larger than random minimum */
-            ret = pn_random_check_sequence(test_ctx->cnx_client, "client");
+            ret = pn_random_check_sequence(test_ctx->cnx_client, "client", randomize_all);
             if (ret == 0) {
-                ret = pn_random_check_sequence(test_ctx->cnx_server, "server");
+                ret = pn_random_check_sequence(test_ctx->cnx_server, "server", randomize_all);
             }
         }
     }
@@ -11396,6 +11407,32 @@ int pn_random_test()
 
     return ret;
 }
+
+int pn_random_test()
+{
+
+    int ret = pn_random_test_one(0);
+
+    if (ret != 0) {
+        DBG_PRINTF("Randomize initials fails, ret = %d", ret);
+    } else{
+        ret = pn_random_test_one(1);
+        if (ret != 0) {
+            DBG_PRINTF("Randomize all fails, ret = %d", ret);
+        }
+    }
+
+    return ret;
+}
+
+int pn_random_init_test()
+{
+    int ret = pn_random_test_one(0);
+
+    return ret;
+}
+
+
 
 /* Test the stateless reset blowback control mechanism
  */
