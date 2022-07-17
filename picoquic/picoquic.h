@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.01b"
+#define PICOQUIC_VERSION "1.01c"
 
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
@@ -395,7 +395,24 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
  */
 void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_names);
 
-/* Require randomization of initial PN numbers */
+/* 
+ * picoquic_set_random_initial:
+ * randomization of initial PN numbers, i.e.. the number assigned to
+ * the first packet in a given number space. The option has three possible values:
+ * 
+ *  0: do not randomize.
+ *  1: only randomize the number of the first "Initial" packet
+ *  2: randomize the value of the first packet in all packet spaces.
+ * 
+ * By default, the variable is set to 1, because randomizing the initial
+ * packet numbers in the Initial space prevents some possible DOS amplification
+ * attacks. Use the `picoquic_set_random_initial` API to set the value:
+ * 
+ *  - To 0 for test cases for which any randomization makes regression
+ *    difficult to detect
+ *  - To 2 to test whether the implementation or its peers correctly
+ *    handles non-zero initial packet numbers.
+ */
 void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial);
 
 /* Set the "packet train" mode for pacing */

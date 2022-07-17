@@ -3271,7 +3271,7 @@ void picoquic_client_almost_ready_transition(picoquic_cnx_t* cnx)
         picoquic_packet_context_t* n_pkt_ctx = &cnx->cnxid_stash_first->pkt_ctx;
 
         *n_pkt_ctx = *o_pkt_ctx;
-        picoquic_init_packet_ctx(cnx, o_pkt_ctx);
+        picoquic_init_packet_ctx(cnx, o_pkt_ctx, picoquic_packet_context_application);
     }
 }
 

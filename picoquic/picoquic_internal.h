@@ -635,7 +635,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
     unsigned int one_way_grease_quic_bit : 1; /* Grease of QUIC bit, but do not announce support */
     unsigned int log_pn_dec : 1; /* Log key hashes on key changes to debug crypto */
-    unsigned int random_initial : 1; /* Randomize the initial PN number */
+    unsigned int random_initial : 2; /* Randomize the initial PN number */
     unsigned int packet_train_mode : 1; /* Tune pacing for sending packet trains */
     unsigned int use_constant_challenges : 1; /* Use predictable challenges when producing constant logs. */
     unsigned int use_low_memory : 1; /* if possible, use low memory alternatives, e.g. for AES */
@@ -1635,7 +1635,7 @@ size_t picoquic_sack_list_size(picoquic_sack_list_t* first_sack);
 
 void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet);
 
-void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx);
+void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx, picoquic_packet_context_enum pc);
 
 /*
  * Process ack of ack

@@ -1266,7 +1266,8 @@ int picoquic_incoming_client_initial(
     }
 
     if (ret == 0) {
-        if (picoquic_compare_connection_id(&ph->dest_cnx_id, &(*pcnx)->path[0]->p_local_cnxid->cnx_id) == 0) {
+        if ((*pcnx)->path[0]->p_local_cnxid->cnx_id.id_len > 0 &&
+            picoquic_compare_connection_id(&ph->dest_cnx_id, &(*pcnx)->path[0]->p_local_cnxid->cnx_id) == 0) {
             (*pcnx)->initial_validated = 1;
         }
 

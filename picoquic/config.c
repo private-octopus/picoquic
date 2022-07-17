@@ -354,7 +354,7 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         break;
     case picoquic_option_INITIAL_RANDOM: {
         int v = config_atoi(params, nb_params, 0, &ret);
-        if (ret != 0 || v < 0 || v >1) {
+        if (ret != 0 || v < 0 || v > 2) {
             fprintf(stderr, "Invalid initial random value: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
             ret = (ret == 0) ? -1 : ret;
         }
@@ -829,8 +829,8 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
 
         picoquic_disable_port_blocking(quic, config->disable_port_blocking);
 
-        if (config->initial_random) {
-            picoquic_set_random_initial(quic, 1);
+        if (config->initial_random >= 0 && config->initial_random <= 2) {
+            picoquic_set_random_initial(quic, config->initial_random);
         }
 
         if (config->cipher_suite_id != 0) {
@@ -873,6 +873,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     memset(config, 0, sizeof(picoquic_quic_config_t));
     config->cnx_id_length = -1;
     config->nb_connections = 256;
+    config->initial_random = 3;
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)
