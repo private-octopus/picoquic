@@ -227,10 +227,6 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
             frac = 0;
         }
 
-        if (frac > 512) {
-            DBG_PRINTF("%s", "bug");
-        }
-
         if (pr_state->l4s_update_sent != 0 && frac > 512 && pr_state->alpha < 128 &&
             update_sent - pr_state->l4s_update_sent > path_x->smoothed_rtt) {
             /* 
