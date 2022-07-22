@@ -25,7 +25,8 @@ jobs:
           fetch-depth: 2
           submodules: 'recursive'
 
-      - run: |
+      - name: Building picoquic
+        run: |
           sudo apt-get install -y libssl-dev
           ./ci/build_picotls.sh
           cmake -DENABLE_ASAN=ON -DENABLE_UBSAN=on .
