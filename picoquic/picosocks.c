@@ -240,6 +240,16 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     return ret;
 }
 
+int picoquic_socket_set_pmtud_options(SOCKET_TYPE sd, int af)
+{
+    int ret = 0;
+#if defined(IP_MTU_DISCOVER) && defined(IP_PMTUDISC_PROBE)
+    int val = IP_PMTUDISC_PROBE;
+    ret = setsockopt(sd, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(int));
+#endif
+    return ret;
+}
+
 SOCKET_TYPE picoquic_open_client_socket(int af)
 {
 #ifdef _WINDOWS
@@ -259,6 +269,9 @@ SOCKET_TYPE picoquic_open_client_socket(int af)
         }
         if (picoquic_socket_set_ecn_options(sd, af, &recv_set, &send_set) != 0) {
             DBG_PRINTF("Cannot set ECN options (af=%d)\n", af);
+        }
+        if (picoquic_socket_set_pmtud_options(sd, af) != 0) {
+            DBG_PRINTF("Cannot set PMTUD options (af=%d)\n", af);
         }
     }
     else {
