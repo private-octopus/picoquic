@@ -318,6 +318,9 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port)
             if (ret == 0) {
                 ret = picoquic_bind_to_port(sockets->s_socket[i], sock_af[i], port);
             }
+            if (ret == 0) {
+                ret = picoquic_socket_set_pmtud_options(sockets->s_socket[i], sock_af[i]);
+            }
         }
     }
 
