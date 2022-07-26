@@ -240,12 +240,17 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     return ret;
 }
 
-int picoquic_socket_set_pmtud_options(SOCKET_TYPE sd)
+int picoquic_socket_set_pmtud_options(SOCKET_TYPE sd, int af)
 {
     int ret = 0;
-#if defined(IP_MTU_DISCOVER) && defined(IP_PMTUDISC_PROBE)
+#if (defined(IP_MTU_DISCOVER) || defined(IPV6_MTU_DISCOVER)) && defined(IP_PMTUDISC_PROBE)
     int val = IP_PMTUDISC_PROBE;
-    ret = setsockopt(sd, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(int));
+    if (af == AF_INET6) {
+        ret = setsockopt(sd, IPPROTO_IPV6, IPV6_MTU_DISCOVER, &val, sizeof(int));
+    }
+    else {
+        ret = setsockopt(sd, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(int));
+    }
 #endif
     return ret;
 }
@@ -270,7 +275,7 @@ SOCKET_TYPE picoquic_open_client_socket(int af)
         if (picoquic_socket_set_ecn_options(sd, af, &recv_set, &send_set) != 0) {
             DBG_PRINTF("Cannot set ECN options (af=%d)\n", af);
         }
-        if (picoquic_socket_set_pmtud_options(sd) != 0) {
+        if (picoquic_socket_set_pmtud_options(sd, af) != 0) {
             DBG_PRINTF("Cannot set PMTUD options (af=%d)\n", af);
         }
     }
@@ -319,7 +324,7 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port)
                 ret = picoquic_bind_to_port(sockets->s_socket[i], sock_af[i], port);
             }
             if (ret == 0) {
-                ret = picoquic_socket_set_pmtud_options(sockets->s_socket[i]);
+                ret = picoquic_socket_set_pmtud_options(sockets->s_socket[i], sock_af[i]);
             }
         }
     }
