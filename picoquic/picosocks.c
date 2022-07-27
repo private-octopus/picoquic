@@ -243,7 +243,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 int picoquic_socket_set_pmtud_options(SOCKET_TYPE sd, int af)
 {
     int ret = 0;
-#if (defined(IP_MTU_DISCOVER) || defined(IPV6_MTU_DISCOVER)) && defined(IP_PMTUDISC_PROBE)
+#if defined __linux && defined(IP_MTU_DISCOVER) && defined(IPV6_MTU_DISCOVER) && defined(IP_PMTUDISC_PROBE)
     int val = IP_PMTUDISC_PROBE;
     if (af == AF_INET6) {
         ret = setsockopt(sd, IPPROTO_IPV6, IPV6_MTU_DISCOVER, &val, sizeof(int));
@@ -251,7 +251,10 @@ int picoquic_socket_set_pmtud_options(SOCKET_TYPE sd, int af)
     else {
         ret = setsockopt(sd, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(int));
     }
-#endif
+#else
+    UNREFERENCED_PARAMETER(af);
+    UNREFERENCED_PARAMETER(sd);
+#endif  /* #if defined __linux && ... */
     return ret;
 }
 
