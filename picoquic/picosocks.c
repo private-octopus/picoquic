@@ -252,8 +252,10 @@ int picoquic_socket_set_pmtud_options(SOCKET_TYPE sd, int af)
         ret = setsockopt(sd, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(int));
     }
 #else
+#ifdef UNREFERENCED_PARAMETER
     UNREFERENCED_PARAMETER(af);
     UNREFERENCED_PARAMETER(sd);
+#endif
 #endif  /* #if defined __linux && ... */
     return ret;
 }
