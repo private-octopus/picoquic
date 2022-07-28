@@ -59,7 +59,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_MAX_CONNECTIONS, 'x', "max_connections", 1, "number",
     "Maximum number of concurrent connections, default 256" },
     { picoquic_option_DO_RETRY, 'r', "do_retry", 0, "", "Do Retry Request" },
-    { picoquic_option_INITIAL_RANDOM, 'R', "initial_random", 1, "option", "randomize initial packet number (1) or not (0)" },
+    { picoquic_option_INITIAL_RANDOM, 'R', "initial_random", 1, "option", "Randomize packet number spaces: none(0), initial(1, default), all(2)." },
     { picoquic_option_RESET_SEED, 's', "reset_seed", 2, "<64b 64b>", "Reset seed" },
     { picoquic_option_DisablePortBlocking, 'X', "disable_block", 0, "", "Disable the check for blocked ports"},
     { picoquic_option_SOLUTION_DIR, 'S', "solution_dir", 1, "folder", "Set the path to the source files to find the default files" },

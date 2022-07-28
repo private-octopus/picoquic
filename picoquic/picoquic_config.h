@@ -101,7 +101,7 @@ typedef struct st_picoquic_quic_config_t {
     int bdp_frame_option;
     /* TODO: control other extensions, e.g. time stamp, ack delay */
     /* Common flags */
-    unsigned int initial_random : 1;
+    unsigned int initial_random;
     unsigned int use_long_log : 1;
     unsigned int do_preemptive_repeat : 1;
     unsigned int do_not_use_gso : 1;
