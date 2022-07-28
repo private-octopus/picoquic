@@ -6,7 +6,7 @@
 "events": [
 [0, "transport", "datagram_received", { "byte_length": 1252, "addr_from" : {"ip_v4": "10.0.0.2", "port_v4":1234}, "addr_to" : {"ip_v4": "10.0.0.1", "port_v4":4321}}],
 [0, "transport", "packet_received", { "packet_type": "initial", "header": { "packet_size": 1252, "packet_number": 0, "version": "50435130", "payload_length": 1206, "scid": "0203040506070809", "dcid": "0102030405060708" }, "frames": [{ 
-    "frame_type": "crypto", "offset": 0, "length": 285}, { 
+    "frame_type": "crypto", "offset": 0, "length": 279}, { 
     "frame_type": "padding"}]}],
 [0, "info", "message", { "message": "ALPN[0] matches default alpn (picoquic-test)"}],
 [0, "transport", "parameters_set", {

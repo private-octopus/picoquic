@@ -23,7 +23,8 @@ jobs:
           fetch-depth: 2
           submodules: 'recursive'
 
-      - run: |
+      - name: Building picoquic
+        run: |
           sudo apt-get install -y libssl-dev
           cmake -S . -B build -DPICOQUIC_FETCH_PTLS:BOOL=ON
           cmake --build build
@@ -31,7 +32,7 @@ jobs:
       - name: Perform Unit Tests
         run: |
             ulimit -c unlimited -S
-            build/picoquic_ct -n -r && QUICRESULT=$?
-            build/picohttp_ct -n -r -x http_corrupt && HTTPRESULT=$?
-            if [[ ${QUICRESULT} == 0 ]] && [[ ${HTTPRESULT} == 0 ]]; then exit 0; fi;
+            cd build
+            make test && QUICRESULT=$?
+            if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
             exit 1

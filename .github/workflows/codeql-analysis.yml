@@ -30,7 +30,8 @@ jobs:
           languages: cpp
           config-file: ./.github/codeql/codeql-config.yml
 
-      - run: |
+      - name: Building picoquic
+        run: |
           sudo apt-get install -y libssl-dev
           ./ci/build_picotls.sh
           mkdir build
