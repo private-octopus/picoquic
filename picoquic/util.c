@@ -750,6 +750,25 @@ const uint8_t* picoquic_frames_cid_decode(const uint8_t* bytes, const uint8_t* b
     return bytes;
 }
 
+/* Predict length of a varint encoding */
+size_t picoquic_frames_varint_encode_length(uint64_t n64)
+{
+    size_t len = 8;
+
+    if (n64 < 16384) {
+        if (n64 < 64) {
+            len = 1;
+        }
+        else {
+            len = 2;
+        }
+    }
+    else if (n64 < 1073741824) {
+        len = 4;
+    }
+
+    return len;
+}
 
 /* Encoding functions of the form uint8_t * picoquic_frame_XXX_encode(uint8_t * bytes, uint8_t * bytes-max, ...)
  */
