@@ -170,6 +170,8 @@ typedef struct st_test_skip_frames_t {
     int is_pure_ack;
     int must_be_last;
     int epoch;
+    uint64_t expected_error;
+    int skip_fails;
 } test_skip_frames_t;
 
 extern test_skip_frames_t test_skip_list[];
