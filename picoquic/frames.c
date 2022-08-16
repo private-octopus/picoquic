@@ -366,9 +366,16 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
 
     bytes = picoquic_parse_new_connection_id_frame(bytes, bytes_max, &sequence, &retire_before, &cid_length, &cnxid_bytes, &secret_bytes);
 
-    if (bytes == NULL || cid_length > PICOQUIC_CONNECTION_ID_MAX_SIZE ||
+    if (bytes == NULL || 
         retire_before > sequence) {
-        picoquic_connection_error(cnx, (bytes == NULL) ? PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR : PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+        /* TODO: should be PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION if retire_before > sequence */
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_frame_type_new_connection_id);
+        bytes = NULL;
+    }
+    else if (cid_length > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+        /* TODO: should be PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION if retire_before > sequence */
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_new_connection_id);
         bytes = NULL;
     }
@@ -672,7 +679,12 @@ const uint8_t* picoquic_decode_new_token_frame(picoquic_cnx_t* cnx, const uint8_
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_new_token);
     }
-    else if (addr_to != NULL && cnx->client_mode && cnx->sni != NULL){
+    else if (!cnx->client_mode) {
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_new_token, "Only server can send tokens");
+        bytes = NULL;
+    }
+    else  if (addr_to != NULL && cnx->sni != NULL){
         uint8_t * ip_addr;
         uint8_t ip_addr_length;
         picoquic_get_ip_addr(addr_to, &ip_addr, &ip_addr_length);
@@ -731,7 +743,7 @@ const uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, const uin
         /* The stream is already finished. Should just ignore the frame */
         picoquic_log_app_message(cnx, "Received redundant stop sending for old stream %" PRIu64, stream_id);
     } else if (!IS_BIDIR_STREAM_ID(stream_id) && !IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR,
             picoquic_frame_type_stop_sending);
         bytes = NULL;
     } else if (!stream->stop_sending_received && !stream->reset_requested && !stream->fin_sent) {
@@ -4784,24 +4796,28 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
     uint64_t reason = 0;
 
     /* This code assumes that the frame type is already skipped */
-    if ((bytes = picoquic_parse_path_abandon_frame(bytes, bytes_max, &path_id_type, &path_id_value, &reason)) != NULL) {
-        if (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled) {
-            /* Frame is unexpected */
-            picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-                picoquic_frame_type_path_abandon, "multipath not negotiated");
+
+    if (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled) {
+        /* Frame is unexpected */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_frame_type_path_abandon, "multipath not negotiated");
+    }
+    else if ((bytes = picoquic_parse_path_abandon_frame(bytes, bytes_max, &path_id_type, &path_id_value, &reason)) != NULL) {
+        /* process the abandon frame */
+        int path_id = picoquic_find_path_by_id(cnx, path_x, 1, path_id_type, path_id_value);
+        if (path_id < 0) {
+            /* Invalid path ID. Just ignore this frame. Add line in log for debug */
+            picoquic_log_app_message(cnx, "Ignore abandon path with invalid ID: %" PRIu64 ",%" PRIu64,
+                path_id_type, path_id_value);
         }
         else {
-            /* process the abandon frame */
-            int path_id = picoquic_find_path_by_id(cnx, path_x, 1, path_id_type, path_id_value);
-            if (path_id < 0) {
-                /* Invalid path ID. Just ignore this frame. Add line in log for debug */
-                picoquic_log_app_message(cnx, "Ignore abandon path with invalid ID: %" PRIu64 ",%" PRIu64,
-                    path_id_type, path_id_value);
-            }
-            else {
-                picoquic_demote_path(cnx, path_id, current_time);
-            }
+            picoquic_demote_path(cnx, path_id, current_time);
         }
+    }
+    else {
+        /* Bad frame encoding */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_frame_type_path_abandon, "bad abandon frame");
     }
     return bytes;
 }
