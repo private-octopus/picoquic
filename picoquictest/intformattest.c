@@ -251,11 +251,11 @@ int varint_test()
     int ret = 0;
     const picoquic_varintformat_test_t* max_test = varint_test_cases + nb_varint_test_cases;
 
-    for (picoquic_varintformat_test_t* test = varint_test_cases; test < max_test; test++) {
-        for (int is_new_decode = 0; is_new_decode <= 1; is_new_decode++) {
-            for (size_t buf_size = 0; buf_size <= test->length + 2; buf_size++) {
+    for (picoquic_varintformat_test_t* test = varint_test_cases; ret == 0 && test < max_test; test++) {
+        for (int is_new_decode = 0; ret == 0 && is_new_decode <= 1; is_new_decode++) {
+            for (size_t buf_size = 0; ret == 0 && buf_size <= test->length + 2; buf_size++) {
                 int test_ret = 0;
-                uint64_t n64;
+                uint64_t n64 = 0;
                 size_t length;
 
                 if (is_new_decode) {
@@ -287,7 +287,7 @@ int varint_test()
             }
         }
 
-        for (int is_new_encode = 0; is_new_encode <= 1; is_new_encode++) {
+        for (int is_new_encode = 0; ret == 0 && is_new_encode <= 1; is_new_encode++) {
             if (test->is_canonical != 0) {
                 uint8_t encoding[8];
                 size_t coded_length = 0;
