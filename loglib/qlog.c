@@ -1022,6 +1022,7 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
     for (uint64_t i = 0; i <= num; i++) {
         uint64_t skip = 0;
         int64_t start_range;
+        int64_t end_range;
 
         if (i != 0) {
             byteread_vint(s, &skip);
@@ -1034,7 +1035,8 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
         byteread_vint(s, &range);
 
         start_range = largest - range;
-        fprintf(f, "[%"PRId64", %"PRIu64"]", start_range, largest);
+        end_range = (int64_t)largest;
+        fprintf(f, "[%"PRId64", %"PRId64"]", start_range, end_range);
 
         largest -= range + 1;
     }
