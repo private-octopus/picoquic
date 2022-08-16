@@ -2481,7 +2481,7 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
                     local_addr = (struct sockaddr*) & cnx->path[0]->local_addr;
                 }
 
-                ret = picoquic_probe_new_path_ex(cnx, (struct sockaddr *)&dest_addr, local_addr,
+                ret = picoquic_probe_new_path_ex(cnx, (struct sockaddr *)&dest_addr, local_addr, 0,
                     picoquic_get_quic_time(cnx->quic), 1);
             }
         }
@@ -3271,7 +3271,7 @@ void picoquic_client_almost_ready_transition(picoquic_cnx_t* cnx)
         picoquic_packet_context_t* n_pkt_ctx = &cnx->cnxid_stash_first->pkt_ctx;
 
         *n_pkt_ctx = *o_pkt_ctx;
-        picoquic_init_packet_ctx(cnx, o_pkt_ctx);
+        picoquic_init_packet_ctx(cnx, o_pkt_ctx, picoquic_packet_context_application);
     }
 }
 

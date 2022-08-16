@@ -1266,7 +1266,8 @@ int picoquic_incoming_client_initial(
     }
 
     if (ret == 0) {
-        if (picoquic_compare_connection_id(&ph->dest_cnx_id, &(*pcnx)->path[0]->p_local_cnxid->cnx_id) == 0) {
+        if ((*pcnx)->path[0]->p_local_cnxid->cnx_id.id_len > 0 &&
+            picoquic_compare_connection_id(&ph->dest_cnx_id, &(*pcnx)->path[0]->p_local_cnxid->cnx_id) == 0) {
             (*pcnx)->initial_validated = 1;
         }
 
@@ -1303,9 +1304,16 @@ int picoquic_incoming_client_initial(
 
             /* decode the incoming frames */
             if (ret == 0) {
+                uint64_t highest_ack_before = (*pcnx)->pkt_ctx[picoquic_packet_context_initial].highest_acknowledged;
                 ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
                     bytes + ph->offset, ph->payload_length, received_data,
                 ph->epoch, addr_from, addr_to, ph->pn64, 0, current_time);
+                if ((*pcnx)->pkt_ctx[picoquic_packet_context_initial].highest_acknowledged > highest_ack_before &&
+                    (*pcnx)->quic->random_initial > 1) {
+                    /* Randomized sequence number was acknowledged. Consider the
+                     * connection validated */
+                    (*pcnx)->initial_validated = 1;
+                }
             }
 
             /* processing of client initial packet */

@@ -1096,6 +1096,9 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
             else if (cid_zero){
                 test_ctx->qclient->local_cnxid_length = 0;
             }
+            /* Do not use randomization by default during tests */
+            picoquic_set_random_initial(test_ctx->qclient, 0);
+            picoquic_set_random_initial(test_ctx->qserver, 0);
 
             /* register the links */
             if (ret == 0) {
@@ -1186,6 +1189,9 @@ static int tls_api_one_sim_link_arrival(picoquictest_sim_link_t* sim_link, struc
         /* Check the destination address  before submitting the packet */
         if (picoquic_compare_addr(target_addr, (struct sockaddr*) & packet->addr_to) == 0 ||
             (packet->addr_to.ss_family == target_addr->sa_family  && multiple_address)) {
+            if (recv_ecn == 0) {
+                recv_ecn = packet->ecn_mark;
+            }
             if (packet->length > 16) {
                 ret = picoquic_incoming_packet(quic, packet->bytes, (uint32_t)packet->length,
                     (struct sockaddr*) & packet->addr_from,
@@ -1441,6 +1447,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                         else {
                             picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & addr_from);
                             picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & addr_to);
+                            packet->ecn_mark = test_ctx->packet_ecn_default;
                             packet->length = send_length - size_sent;
                             if (packet->length > segment_size) {
                                 packet->length = segment_size;
@@ -11099,16 +11106,17 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
 int excess_repeat_test()
 {
     const int nb_repeat_max = 128;
-    picoquic_congestion_algorithm_t* algo_list[5] = {
+    picoquic_congestion_algorithm_t* algo_list[6] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,
         picoquic_dcubic_algorithm,
         picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
+        picoquic_bbr_algorithm,
+        picoquic_prague_algorithm
     };
     int ret = 0;
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
+    for (int i = 0; i < 6 && ret == 0; i++) {
         ret = excess_repeat_test_one(algo_list[i], nb_repeat_max);
         if (ret != 0) {
             DBG_PRINTF("Excess repeat test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
@@ -11306,13 +11314,20 @@ int cnx_ddos_unit_test()
  * Test randomization of initial packet number
  */
 
-int pn_random_check_sequence(picoquic_cnx_t* cnx, char const* cnx_name)
+int pn_random_check_sequence(picoquic_cnx_t* cnx, char const* cnx_name, int randomize_all)
 {
     int ret = 0;
     for (picoquic_packet_context_enum pc = picoquic_packet_context_application;
         pc < picoquic_nb_packet_context; pc++) {
-        if (cnx->pkt_ctx[pc].send_sequence < PICOQUIC_PN_RANDOM_MIN) {
-            DBG_PRINTF("For connection %s, context number %d, sequencee number is only %" PRIu64,
+        if (randomize_all || pc == picoquic_packet_context_initial) {
+            if (cnx->pkt_ctx[pc].send_sequence < PICOQUIC_PN_RANDOM_MIN) {
+                DBG_PRINTF("For connection %s, context number %d, sequencee number is only %" PRIu64,
+                    cnx_name, (int)pc, cnx->pkt_ctx[pc].send_sequence);
+                ret = -1;
+                break;
+            }
+        } else if (cnx->pkt_ctx[pc].send_sequence >= PICOQUIC_PN_RANDOM_MIN) {
+            DBG_PRINTF("For connection %s, context number %d, sequencee number is %" PRIu64,
                 cnx_name, (int)pc, cnx->pkt_ctx[pc].send_sequence);
             ret = -1;
             break;
@@ -11322,7 +11337,7 @@ int pn_random_check_sequence(picoquic_cnx_t* cnx, char const* cnx_name)
     return ret;
 }
 
-int pn_random_test()
+int pn_random_test_one(int randomize_all)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -11338,11 +11353,12 @@ int pn_random_test()
 
     /* Set the initial packet number randomization */
     if (ret == 0) {
-        picoquic_set_random_initial(test_ctx->qclient, 1);
-        picoquic_set_random_initial(test_ctx->qserver, 1);
+        picoquic_set_random_initial(test_ctx->qclient, (randomize_all) ? 2 : 1);
+        picoquic_set_random_initial(test_ctx->qserver, (randomize_all) ? 2 : 1);
         picoquic_set_qlog(test_ctx->qserver, ".");
         /* The client connection is already created, so we force randomization of sequence numbers here */
-        for (picoquic_packet_context_enum pc = picoquic_packet_context_application;
+        for (picoquic_packet_context_enum pc = 
+            (randomize_all)?picoquic_packet_context_application: picoquic_packet_context_initial;
             pc < picoquic_nb_packet_context; pc++) {
             test_ctx->cnx_client->pkt_ctx[pc].send_sequence = ((uint64_t)PICOQUIC_PN_RANDOM_MIN) + 17 + (uint64_t)pc;
         }
@@ -11359,9 +11375,9 @@ int pn_random_test()
         }
         else {
             /* Check that the sequence numbers for all number spaces are larger than random minimum */
-            ret = pn_random_check_sequence(test_ctx->cnx_client, "client");
+            ret = pn_random_check_sequence(test_ctx->cnx_client, "client", randomize_all);
             if (ret == 0) {
-                ret = pn_random_check_sequence(test_ctx->cnx_server, "server");
+                ret = pn_random_check_sequence(test_ctx->cnx_server, "server", randomize_all);
             }
         }
     }
@@ -11391,6 +11407,32 @@ int pn_random_test()
 
     return ret;
 }
+
+int pn_random_test()
+{
+
+    int ret = pn_random_test_one(0);
+
+    if (ret != 0) {
+        DBG_PRINTF("Randomize initials fails, ret = %d", ret);
+    } else{
+        ret = pn_random_test_one(1);
+        if (ret != 0) {
+            DBG_PRINTF("Randomize all fails, ret = %d", ret);
+        }
+    }
+
+    return ret;
+}
+
+int pn_random_init_test()
+{
+    int ret = pn_random_test_one(0);
+
+    return ret;
+}
+
+
 
 /* Test the stateless reset blowback control mechanism
  */

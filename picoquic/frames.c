@@ -366,9 +366,16 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
 
     bytes = picoquic_parse_new_connection_id_frame(bytes, bytes_max, &sequence, &retire_before, &cid_length, &cnxid_bytes, &secret_bytes);
 
-    if (bytes == NULL || cid_length > PICOQUIC_CONNECTION_ID_MAX_SIZE ||
+    if (bytes == NULL || 
         retire_before > sequence) {
-        picoquic_connection_error(cnx, (bytes == NULL) ? PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR : PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+        /* TODO: should be PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION if retire_before > sequence */
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_frame_type_new_connection_id);
+        bytes = NULL;
+    }
+    else if (cid_length > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+        /* TODO: should be PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION if retire_before > sequence */
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_new_connection_id);
         bytes = NULL;
     }
@@ -672,7 +679,12 @@ const uint8_t* picoquic_decode_new_token_frame(picoquic_cnx_t* cnx, const uint8_
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_new_token);
     }
-    else if (addr_to != NULL && cnx->client_mode && cnx->sni != NULL){
+    else if (!cnx->client_mode) {
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_new_token, "Only server can send tokens");
+        bytes = NULL;
+    }
+    else  if (addr_to != NULL && cnx->sni != NULL){
         uint8_t * ip_addr;
         uint8_t ip_addr_length;
         picoquic_get_ip_addr(addr_to, &ip_addr, &ip_addr_length);
@@ -731,7 +743,7 @@ const uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, const uin
         /* The stream is already finished. Should just ignore the frame */
         picoquic_log_app_message(cnx, "Received redundant stop sending for old stream %" PRIu64, stream_id);
     } else if (!IS_BIDIR_STREAM_ID(stream_id) && !IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR,
             picoquic_frame_type_stop_sending);
         bytes = NULL;
     } else if (!stream->stop_sending_received && !stream->reset_requested && !stream->fin_sent) {
@@ -3215,6 +3227,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
     uint64_t ecnx3[3] = { 0, 0, 0 };
     uint8_t first_byte = bytes[0];
+    picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
 
     if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block,
         (has_path_id)?&path_id:NULL,
@@ -3224,8 +3237,6 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
     }
     else {
-        picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
-        
         if (has_path_id) {
             picoquic_remote_cnxid_t * r_cid = picoquic_find_remote_cnxid_by_number(cnx, path_id);
 
@@ -3328,23 +3339,23 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     }
 
     if (bytes != 0 && is_ecn) {
-        if (ecnx3[0] > cnx->pkt_ctx[pc].ecn_ect0_total_remote) {
-            cnx->pkt_ctx[pc].ecn_ect0_total_remote = ecnx3[0];
+        if (ecnx3[0] > pkt_ctx->ecn_ect0_total_remote) {
+            pkt_ctx->ecn_ect0_total_remote = ecnx3[0];
         }
-        if (ecnx3[1] > cnx->pkt_ctx[pc].ecn_ect1_total_remote) {
-            cnx->pkt_ctx[pc].ecn_ect1_total_remote = ecnx3[1];
+        if (ecnx3[1] > pkt_ctx->ecn_ect1_total_remote) {
+            pkt_ctx->ecn_ect1_total_remote = ecnx3[1];
         }
-        if (ecnx3[2] > cnx->pkt_ctx[pc].ecn_ce_total_remote) {
-            cnx->pkt_ctx[pc].ecn_ce_total_remote = ecnx3[2];
-
+        if (ecnx3[2] > pkt_ctx->ecn_ce_total_remote) {
+            pkt_ctx->ecn_ce_total_remote = ecnx3[2];
             cnx->congestion_alg->alg_notify(cnx, cnx->path[0],
                 picoquic_congestion_notification_ecn_ec,
-                0, 0, 0, picoquic_sack_list_last(&cnx->ack_ctx[pc].sack_list), current_time);
+                0, 0, 0, largest, current_time);
         }
     }
 
     return bytes;
 }
+
 
 uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
     int* more_data, uint64_t current_time, picoquic_ack_context_t* ack_ctx, int* need_time_stamp,
@@ -4785,24 +4796,28 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
     uint64_t reason = 0;
 
     /* This code assumes that the frame type is already skipped */
-    if ((bytes = picoquic_parse_path_abandon_frame(bytes, bytes_max, &path_id_type, &path_id_value, &reason)) != NULL) {
-        if (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled) {
-            /* Frame is unexpected */
-            picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-                picoquic_frame_type_path_abandon, "multipath not negotiated");
+
+    if (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled) {
+        /* Frame is unexpected */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_frame_type_path_abandon, "multipath not negotiated");
+    }
+    else if ((bytes = picoquic_parse_path_abandon_frame(bytes, bytes_max, &path_id_type, &path_id_value, &reason)) != NULL) {
+        /* process the abandon frame */
+        int path_id = picoquic_find_path_by_id(cnx, path_x, 1, path_id_type, path_id_value);
+        if (path_id < 0) {
+            /* Invalid path ID. Just ignore this frame. Add line in log for debug */
+            picoquic_log_app_message(cnx, "Ignore abandon path with invalid ID: %" PRIu64 ",%" PRIu64,
+                path_id_type, path_id_value);
         }
         else {
-            /* process the abandon frame */
-            int path_id = picoquic_find_path_by_id(cnx, path_x, 1, path_id_type, path_id_value);
-            if (path_id < 0) {
-                /* Invalid path ID. Just ignore this frame. Add line in log for debug */
-                picoquic_log_app_message(cnx, "Ignore abandon path with invalid ID: %" PRIu64 ",%" PRIu64,
-                    path_id_type, path_id_value);
-            }
-            else {
-                picoquic_demote_path(cnx, path_id, current_time);
-            }
+            picoquic_demote_path(cnx, path_id, current_time);
         }
+    }
+    else {
+        /* Bad frame encoding */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_frame_type_path_abandon, "bad abandon frame");
     }
     return bytes;
 }

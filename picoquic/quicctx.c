@@ -567,6 +567,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         quic->local_cnxid_ttl = UINT64_MAX;
         quic->stateless_reset_next_time = current_time;
         quic->stateless_reset_min_interval = PICOQUIC_MICROSEC_STATELESS_RESET_INTERVAL_DEFAULT;
+        quic->random_initial = 1;
         picoquic_wake_list_init(quic);
 
         if (cnx_id_callback != NULL) {
@@ -1894,7 +1895,7 @@ int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id)
 
 /* Create a new path in order to trigger a migration */
 int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, uint64_t current_time, int to_preferred_address)
+    const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address)
 {
     int ret = 0;
     int partial_match_path = -1;
@@ -1937,6 +1938,7 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
             picoquic_set_path_challenge(cnx, path_id, current_time);
             cnx->path[path_id]->path_is_preferred_path = to_preferred_address;
             cnx->path[path_id]->is_nat_challenge = 0;
+            cnx->path[path_id]->if_index_dest = if_index;
         }
     }
 
@@ -1946,7 +1948,7 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
 int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
     const struct sockaddr* addr_to, uint64_t current_time)
 {
-    return picoquic_probe_new_path_ex(cnx, addr_from, addr_to, current_time, 0);
+    return picoquic_probe_new_path_ex(cnx, addr_from, addr_to, 0, current_time, 0);
 }
 
 int picoquic_abandon_path(picoquic_cnx_t* cnx, int path_id, uint64_t reason, char const * phrase)
@@ -2018,9 +2020,10 @@ void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx)
     ack_ctx->act[1].ack_needed = 0;
 }
 
-void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx)
+void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx, picoquic_packet_context_enum pc)
 {
-    if (cnx->quic->random_initial) {
+    if (cnx->quic->random_initial && 
+        (pc == picoquic_packet_context_initial || cnx->quic->random_initial > 1)){
         pkt_ctx->send_sequence = picoquic_crypto_uniform_random(cnx->quic, PICOQUIC_PN_RANDOM_RANGE) +
             PICOQUIC_PN_RANDOM_MIN;
     }
@@ -2053,7 +2056,7 @@ int picoquic_init_cnxid_stash(picoquic_cnx_t* cnx)
         else {
             memset(cnx->cnxid_stash_first, 0, sizeof(picoquic_remote_cnxid_t));
             cnx->cnxid_stash_first->nb_path_references++;
-            picoquic_init_packet_ctx(cnx, &cnx->cnxid_stash_first->pkt_ctx);
+            picoquic_init_packet_ctx(cnx, &cnx->cnxid_stash_first->pkt_ctx, picoquic_packet_context_application);
 
             /* Initialize the reset secret to a random value. This
             * will prevent spurious matches to an all zero value, for example.
@@ -2137,7 +2140,7 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx, uint64_t retire_before_nex
                 memset(stashed, 0, sizeof(picoquic_remote_cnxid_t));
                 (void)picoquic_parse_connection_id(cnxid_bytes, cid_length, &stashed->cnx_id);
                 stashed->sequence = sequence;
-                picoquic_init_packet_ctx(cnx, &stashed->pkt_ctx);
+                picoquic_init_packet_ctx(cnx, &stashed->pkt_ctx, picoquic_packet_context_application);
                 memcpy(stashed->reset_secret, secret_bytes, PICOQUIC_RESET_SECRET_SIZE);
                 stashed->next = NULL;
 
@@ -3149,7 +3152,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         for (picoquic_packet_context_enum pc = 0;
             pc < picoquic_nb_packet_context; pc++) {
             picoquic_init_ack_ctx(cnx, &cnx->ack_ctx[pc]);
-            picoquic_init_packet_ctx(cnx, &cnx->pkt_ctx[pc]);
+            picoquic_init_packet_ctx(cnx, &cnx->pkt_ctx[pc], pc);
         }
         /* Initialize the ACK behavior. By default, picoquic abides with the recommendation to send
          * ACK immediately if packets are received out of order (ack_ignore_order_remote = 0),
@@ -3489,7 +3492,7 @@ void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_nam
 void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial)
 {
     /* If set, triggers randomization of initial PN numbers. */
-    quic->random_initial = (random_initial > 0) ? 1 : 0;
+    quic->random_initial = (random_initial > 1) ? 2 : ((random_initial > 0) ? 1 : 0);
 }
 
 void picoquic_set_packet_train_mode(picoquic_quic_t* quic, int train_mode)
@@ -4064,6 +4067,9 @@ picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char co
         }
         else if (strcmp(alg_name, "bbr") == 0) {
             alg = picoquic_bbr_algorithm;
+        }
+        else if (strcmp(alg_name, "prague") == 0) {
+            alg = picoquic_prague_algorithm;
         }
         else {
             alg = NULL;

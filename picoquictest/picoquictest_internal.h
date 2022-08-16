@@ -149,6 +149,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     uint64_t blackhole_end;
 
     /* ECN simulation */
+    uint8_t packet_ecn_default;
     uint8_t recv_ecn_client;
     uint8_t recv_ecn_server;
 
@@ -169,6 +170,8 @@ typedef struct st_test_skip_frames_t {
     int is_pure_ack;
     int must_be_last;
     int epoch;
+    uint64_t expected_error;
+    int skip_fails;
 } test_skip_frames_t;
 
 extern test_skip_frames_t test_skip_list[];

@@ -127,7 +127,7 @@ int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const
 #define DBG_PRINTF(fmt, ...)                                                                 \
     debug_printf("%s:%u [%s]: " fmt "\n",                                                    \
         &__FILE__[MAX(DBG_PRINTF_FILENAME_MAX, sizeof(__FILE__)) - DBG_PRINTF_FILENAME_MAX], \
-        __LINE__, __FUNCTION__, __VA_ARGS__)
+        __LINE__, __func__ , __VA_ARGS__)
 
 #define DBG_FATAL_PRINTF(fmt, ...)                    \
     do {                                              \
@@ -163,6 +163,9 @@ const uint8_t* picoquic_frames_cid_decode(const uint8_t * bytes, const uint8_t *
 
 #define VARINT_LEN(bytes) (((uint8_t)1) << ((bytes[0] >> 6)&3))
 #define VARINT_LEN_T(bytes, t_len) (((t_len)1) << ((bytes[0] >> 6)&3))
+
+/* Predict length of a varint encoding */
+size_t picoquic_frames_varint_encode_length(uint64_t n64);
 
 /* Encoding functions of the form uint8_t * picoquic_frame_XXX_encode(uint8_t * bytes, uint8_t * bytes-max, ...)
  */
@@ -247,6 +250,7 @@ typedef struct st_picoquictest_sim_packet_t {
     size_t length;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
+    uint8_t ecn_mark;
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquictest_sim_packet_t;
 
@@ -267,6 +271,8 @@ typedef struct st_picoquictest_sim_link_t {
     /* Variables for random early drop simulation */
     uint64_t red_drop_mask;
     uint64_t red_queue_max;
+    /* L4S MAX sets the ECN mark threshold if doing L4S or DCTCP style ECN marking. */
+    uint64_t l4s_max;
     /* Variables for rate limiter simulation */
     double bucket_increase_per_microsec;
     uint64_t bucket_max;

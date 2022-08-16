@@ -275,10 +275,77 @@ typedef struct st_client_loop_cb_t {
     char const* saved_alpn;
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
-    struct sockaddr_storage client_alt_address;
+    struct sockaddr_storage client_alt_address[PICOQUIC_NB_PATH_TARGET];
+    int client_alt_if[PICOQUIC_NB_PATH_TARGET];
+    int nb_alt_paths;
     picoquic_connection_id_t server_cid_before_migration;
     picoquic_connection_id_t client_cid_before_migration;
 } client_loop_cb_t;
+
+
+char * picoquic_strsep(char **stringp, const char *delim)
+{
+#ifdef _WINDOWS
+    if (*stringp == NULL) {
+        return NULL;
+    }
+    char *token_start = *stringp;
+    *stringp = strpbrk(token_start, delim);
+    if (*stringp) {
+        **stringp = '\0';
+        (*stringp)++;
+    }
+    return token_start;
+#else
+    return strsep(stringp, delim);
+#endif
+}
+
+/*
+ * mp_config is consisted with src_if and alt_ip, seperated by "/" and ","
+ * e.g. 10.0.0.2/3,10.0.0.3/4,10.0.0.4/5
+ * where src_if is an int list, and alt_ip is a string list.
+ * alt_ip is the ip of the alternative path
+ * src_if is the index of the interface where the alt_ip is bounded with
+ */
+int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct sockaddr_storage *alt_ip, int *nb_alt_paths)
+{
+    int ret = 0;
+    int valid_ip, valid_index = 0;
+    char *token, *token2, *ptr, *str;
+    str = malloc(sizeof(char) * (strlen(mp_config) + 1));
+    if (str == NULL) {
+        ret = -1;
+    }
+    memcpy(str, mp_config, sizeof(char) * (strlen(mp_config) + 1));
+    ptr = str;
+
+    while ((token = picoquic_strsep(&str, ","))) {
+        struct sockaddr_storage ip;
+        valid_index = valid_ip = 0;
+
+        while ((token2 = picoquic_strsep(&token, "/"))) {
+            if (picoquic_store_text_addr(&ip, token2, 0) == 0) {
+                memcpy(alt_ip+(*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
+                valid_ip = 1;
+            }
+            if (atoi(token2) > 0) {
+                *(src_if+(*nb_alt_paths)) = atoi(token2);
+                valid_index = 1;
+            }
+        }
+
+        if ((valid_ip == 1) && (valid_index == 1)){
+            (*nb_alt_paths)++;
+            /* If more than PICOQUIC_NB_PATH_TARGET alt paths are specified, the remaining are ignored */
+            if (*nb_alt_paths >= PICOQUIC_NB_PATH_TARGET) {
+                break;
+            }
+        }
+    }
+    free(ptr);
+    return ret;
+}
 
 int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
     void* callback_ctx, void * callback_arg)
@@ -341,12 +408,15 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                 picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
 
                 if (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready && cb_ctx->multipath_probe_done == 0) {
-                    if (picoquic_probe_new_path(cb_ctx->cnx_client, (struct sockaddr *)&cb_ctx->server_address, (struct sockaddr *)&cb_ctx->client_alt_address, picoquic_get_quic_time(quic))) {
-                        picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d\n", ret);
-                    } else {
-                        picoquic_log_app_message(cb_ctx->cnx_client, "New path added, total path available %d\n", cb_ctx->cnx_client->nb_paths);
+                    for (int i = 0; i < cb_ctx->nb_alt_paths; i++) {
+                        if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr *)&cb_ctx->server_address,
+                                (struct sockaddr *)&cb_ctx->client_alt_address[i], cb_ctx->client_alt_if[i], picoquic_get_quic_time(quic), 0)) != 0) {
+                            picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d\n", ret);
+                        } else {
+                            picoquic_log_app_message(cb_ctx->cnx_client, "New path added, total path available %d\n", cb_ctx->cnx_client->nb_paths);
+                        }
+                        cb_ctx->multipath_probe_done = 1;
                     }
-                    cb_ctx->multipath_probe_done = 1;
                 }
 
                 /* Track the migration to server preferred address */
@@ -490,7 +560,7 @@ int quic_client(const char* ip_address_text, int server_port,
     int ret = 0;
     picoquic_quic_t* qclient = NULL;
     picoquic_cnx_t* cnx_client = NULL;
-    picoquic_demo_callback_ctx_t callback_ctx;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
     uint64_t current_time = 0;
     int is_name = 0;
     size_t client_sc_nb = 0;
@@ -544,20 +614,22 @@ int quic_client(const char* ip_address_text, int server_port,
     }
 
     /* If needed, set ALPN and proposed version from tickets */
-    if (config->alpn == NULL || config->proposed_version == 0) {
-        char const* ticket_alpn;
-        uint32_t ticket_version;
+    if (ret == 0) {
+        if (config->alpn == NULL || config->proposed_version == 0) {
+            char const* ticket_alpn;
+            uint32_t ticket_version;
 
-        if (picoquic_demo_client_get_alpn_and_version_from_tickets(qclient,  sni, config->alpn,
-            config->proposed_version, current_time, &ticket_alpn, &ticket_version) == 0) {
-            if (ticket_alpn != NULL) {
-                fprintf(stdout, "Set ALPN to %s based on stored ticket\n", ticket_alpn);
-                picoquic_config_set_option(config, picoquic_option_ALPN, ticket_alpn);
-            }
-            
-            if (ticket_version != 0) {
-                fprintf(stdout, "Set version to 0x%08x based on stored ticket\n", ticket_version);
-                config->proposed_version = ticket_version;
+            if (picoquic_demo_client_get_alpn_and_version_from_tickets(qclient, sni, config->alpn,
+                config->proposed_version, current_time, &ticket_alpn, &ticket_version) == 0) {
+                if (ticket_alpn != NULL) {
+                    fprintf(stdout, "Set ALPN to %s based on stored ticket\n", ticket_alpn);
+                    picoquic_config_set_option(config, picoquic_option_ALPN, ticket_alpn);
+                }
+
+                if (ticket_version != 0) {
+                    fprintf(stdout, "Set version to 0x%08x based on stored ticket\n", ticket_version);
+                    config->proposed_version = ticket_version;
+                }
             }
         }
     }
@@ -691,8 +763,8 @@ int quic_client(const char* ip_address_text, int server_port,
 
     /* Wait for packets */
     if (ret == 0) {
-        if (config->multipath_alternative_ip != NULL) {
-            picoquic_store_text_addr(&loop_cb.client_alt_address, config->multipath_alternative_ip, 0);
+        if (config->multipath_alt_config != NULL) {
+            picoquic_parse_client_multipath_config(config->multipath_alt_config, loop_cb.client_alt_if, loop_cb.client_alt_address, &loop_cb.nb_alt_paths);
         }
 
         loop_cb.cnx_client = cnx_client;
@@ -719,7 +791,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
     if (ret == 0) {
         uint64_t last_err;
-        
+
         if ((last_err = picoquic_get_local_error(cnx_client)) != 0) {
             fprintf(stdout, "Connection end with local error 0x%" PRIx64 ".\n", last_err);
             ret = -1;
@@ -928,6 +1000,7 @@ void usage()
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     picoquic_config_usage();
     fprintf(stderr, "Picoquic demo options:\n");
+    fprintf(stderr, "  -A ip/ifindex[,ip/ifindex]  IP and interface index for multipath alternative path, e.g. 10.0.0.2/3,10.0.0.3/4\n");
     fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
     fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
     fprintf(stderr, "                        -f 2  test CNXID renewal,\n");
@@ -997,8 +1070,9 @@ int main(int argc, char** argv)
                 just_once = 1;
                 break;
             case 'A':
-                config.multipath_alternative_ip = malloc(sizeof(char) * (strlen(optarg)+1));
-                memcpy(config.multipath_alternative_ip, optarg, sizeof(char) * (strlen(optarg)+1));
+                config.multipath_alt_config = malloc(sizeof(char) * (strlen(optarg) + 1));
+                memcpy(config.multipath_alt_config, optarg, sizeof(char) * (strlen(optarg) + 1));
+                printf("config.multipath_alt_config: %s\n", config.multipath_alt_config);
                 break;
             default:
                 if (picoquic_config_command_line(opt, &optind, argc, (char const **)argv, optarg, &config) != 0) {

@@ -6,28 +6,23 @@ implemented in Chrome, but the IETF spec is independent of Chrome, and
 does not attempt to be backward compatible. The main developer is 
 Christian Huitema.
 
-The first goal of this project is to provide feedback on the development
+The first goal of this project was to provide feedback on the development
 of a QUIC standard in the IETF QUIC WG. Information on the WG is available at
-https://datatracker.ietf.org/wg/quic/charter/. The in-progress version of
-the spec is available on GitHub at https://github.com/quicwg.
+https://datatracker.ietf.org/wg/quic/charter/. QUIC has been published as
+RFC 9000, but there is still ongoing work, for example on multipath. Picoquic
+enables developers to test this new work.
 
 The second goal is to experiment with API for non-HTTP development, such as
-DNS over QUIC. Then there are plenty of other features we may dream off,
+DNS over QUIC -- see RFC 9250. Then there are plenty of other features we may dream off,
 such as support for multipath, or support for peer-to-peer applications.
 That's on the horizon, but not there now.
 
-The code in this repo is getting stable, just
-like the specification itself. The version 34 of the QUIC draft has passed all IETF
-reviews, and publication as an RFc is imminent.
-At this stage the
-changes in Picoquic are mostly driven by performance issues, or API
-improvements. And bug fixing, too. The goal is to have the "1.0" version of
-picoquic ready as soon as the RFC are published.
+The code in this repo is stable, supporting the QUIC v1 and testing compliance.
+It also includes support for a number of extensions. Performance work is
+ongoing -- recent tests showed picoquic sending data at up to 5Gbps.
 
 There are many implementations of Quic, listed
-at https://github.com/quicwg/base-drafts/wiki/Implementations. The interop
-goals are defined at https://github.com/quicwg/base-drafts/wiki/21st-Implementation-Draft,
-which points to the current interoperability matrix. Several implementations provide
+at https://github.com/quicwg/base-drafts/wiki/Implementations. Several implementations provide
 docker images to the "Quic Interop Runner" project, with results updated daily
 at https://interop.seemann.io/.
 
@@ -70,8 +65,7 @@ and long delay links, including
 support for the [BDP Frame Extension](https://datatracker.ietf.org/doc/draft-kuhn-quic-bdpframe-extension/).
 
 
-We have started an implementation
-of [DNS over QUIC](https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/)
+An implemention of DNS over QUIC is available
 as [Quicdoq](https://github.com/private-octopus/quicdoq). DNS over Quic is interesting
 by itself, but it also provides an example for building an application different than
 HTTP on top of Picoquic.
@@ -91,8 +85,8 @@ Picoquic is developed in C, and can be built under Windows or Linux. Building th
 project requires first managing the dependencies, [Picotls](https://github.com/h2o/picotls)
 and OpenSSL. Please note that you will need a recent version of Picotls --
 the Picotls API has eveolved recently to support the latest version of QUIC. The
-current code is tested against the Picotls version of Mon Dec 13 18:05:31 2021 +0900,
-after commit `047c5fe20bb9ea91c1caded8977134f19681ec76`. The code uses OpenSSL
+current code is tested against the Picotls version of Thu Jul 21 19:15:14 2022 +0900,
+after commit `7970614ad049d194fe1691bdf0cc66c6930a3a2f`. The code uses OpenSSL
 version 1.1.1.
 
 ## Picoquic on Windows
@@ -121,9 +115,11 @@ To build Picoquic on Windows, you need to:
 
 Thanks to check-ins from Deb Banerjee and Igor Lubashev for the build experience on Linux.
 
-To build Picoquic on Linux, you need to:
+To build Picoquic on Linux, you need can either build picotls separately 
+or use an integrated option. In both cases, you need first to install and 
+build Openssl on your machine
 
- * Install and build Openssl on your machine
+To build step by step, you should:
 
  * Clone and compile Picotls, using cmake as explained in the Picotls documentation.
 
@@ -132,6 +128,18 @@ To build Picoquic on Linux, you need to:
    cmake .
    make
 ~~~
+
+Instead of building picotls separately, you can use an integrated option 
+(thanks to Paul E. Jones and Suhas Nandakumar for developing that):
+
+ * Clone and compile Picoquic and Picotls in a single command:
+~~~
+   cmake -DPICOQUIC_FETCH_PTLS .
+   make
+~~~
+
+Either way, you can verify that everything worked:
+
  * Run the test program `picoquic_ct` to verify the port.
  
 The tests verify that the code compiles and runs correctly under Ubuntu,

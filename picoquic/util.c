@@ -508,7 +508,7 @@ char const* picoquic_addr_text(struct sockaddr* addr, char* text, size_t text_si
         addr_text = inet_ntop(AF_INET,
             (const void*)(&((struct sockaddr_in*)addr)->sin_addr),
             addr_buffer, sizeof(addr_buffer));
-        if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ((struct sockaddr_in*) addr)->sin_port) == 0) {
+        if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ntohs(((struct sockaddr_in*) addr)->sin_port)) == 0) {
             ret_text = text;
         }
         break;
@@ -516,7 +516,7 @@ char const* picoquic_addr_text(struct sockaddr* addr, char* text, size_t text_si
         addr_text = inet_ntop(AF_INET6,
             (const void*)(&((struct sockaddr_in6*)addr)->sin6_addr),
             addr_buffer, sizeof(addr_buffer));
-        if (picoquic_sprintf(text, text_size, NULL, "[%s]:%d", addr_text, ((struct sockaddr_in6*) addr)->sin6_port) == 0) {
+        if (picoquic_sprintf(text, text_size, NULL, "[%s]:%d", addr_text, ntohs(((struct sockaddr_in6*) addr)->sin6_port)) == 0) {
             ret_text = text;
         }
     default:
@@ -750,6 +750,25 @@ const uint8_t* picoquic_frames_cid_decode(const uint8_t* bytes, const uint8_t* b
     return bytes;
 }
 
+/* Predict length of a varint encoding */
+size_t picoquic_frames_varint_encode_length(uint64_t n64)
+{
+    size_t len = 8;
+
+    if (n64 < 16384) {
+        if (n64 < 64) {
+            len = 1;
+        }
+        else {
+            len = 2;
+        }
+    }
+    else if (n64 < 1073741824) {
+        len = 4;
+    }
+
+    return len;
+}
 
 /* Encoding functions of the form uint8_t * picoquic_frame_XXX_encode(uint8_t * bytes, uint8_t * bytes-max, ...)
  */
