@@ -1225,7 +1225,7 @@ int simple_multipath_drop_second_test()
 int simple_multipath_sat_plus_test()
 {
     /* Not to far from theoretical 10-12 sec! */
-    uint64_t max_completion_microsec = 10200000;
+    uint64_t max_completion_microsec = 10500000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 1);
 }

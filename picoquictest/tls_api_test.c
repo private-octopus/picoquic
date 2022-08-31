@@ -10868,14 +10868,14 @@ int pacing_cc_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        1050000,
+        900000,
         910000,
         900000,
         1000000,
         900000
     };
     uint64_t algo_loss[5] = {
-        80,
+        100,
         140,
         230,
         200,
