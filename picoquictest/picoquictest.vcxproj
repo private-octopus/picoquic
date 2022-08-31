@@ -161,6 +161,7 @@
     <ClCompile Include="high_latency_test.c" />
     <ClCompile Include="intformattest.c" />
     <ClCompile Include="l4s_test.c" />
+    <ClCompile Include="mediatest.c" />
     <ClCompile Include="multipath_test.c" />
     <ClCompile Include="netperf_test.c" />
     <ClCompile Include="parseheadertest.c" />
