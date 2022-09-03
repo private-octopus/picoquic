@@ -62,6 +62,9 @@
 #include <openssl/engine.h>
 #include <openssl/conf.h>
 #include <openssl/ssl.h>
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/provider.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 #include "picoquic_unified_log.h"
@@ -132,11 +135,15 @@ static void picoquic_init_openssl()
         openssl_is_init = 1;
         ERR_load_crypto_strings();
         OpenSSL_add_all_algorithms();
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+    /* OSSL_PROVIDER *dflt = */(void) OSSL_PROVIDER_load(NULL, "default");
+#else
 #if !defined(OPENSSL_NO_ENGINE)
         /* Load all compiled-in ENGINEs */
         ENGINE_load_builtin_engines();
         ENGINE_register_all_ciphers();
         ENGINE_register_all_digests();
+#endif
 #endif
     }
 }
@@ -527,7 +534,14 @@ int picoquic_openssl_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec
 /* Explain OPENSSL errors */
 int picoquic_open_ssl_explain_crypto_error(char const** err_file, int* err_line)
 {
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+    const char *func = NULL;
+    const char *data = NULL;
+    int flags=0;
+    return (int)ERR_get_error_all(err_file, err_line, &func, &data, &flags);
+#else
     return ERR_get_error_line(err_file, err_line);
+#endif
 }
 
 /* Clear the recorded errors in the crypto stack, e.g. before
