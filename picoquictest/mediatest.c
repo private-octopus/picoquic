@@ -80,6 +80,11 @@ typedef struct st_mediatest_stream_ctx_t {
     media_test_type_enum stream_type;
     /* Specify the state of the stream: number of frames sent  or received */
     unsigned int is_sender : 1;
+    unsigned int finished_sending : 1;
+    unsigned int fin_received : 1;
+    unsigned int is_fin_sent : 1;
+
+    uint64_t frames_to_send;
     uint64_t frames_sent;
     uint64_t frames_received;
     size_t bytes_sent;
@@ -248,13 +253,15 @@ int mediatest_receive_stream_data(mediatest_stream_ctx_t* stream_ctx, uint8_t* b
                     ret = -1;
                 }
                 else {
-                    uint32_t required = stream_ctx->message_received.message_size - stream_ctx->message_received.bytes_received;
+                    size_t required = stream_ctx->message_received.message_size - stream_ctx->message_received.bytes_received;
                     if (required <= available) {
                         /* Message is fully received */
                         stream_ctx->bytes_received += stream_ctx->message_received.bytes_received;
                         stream_ctx->frames_received += 1;
                         length -= required;
-                        /* TODO: statistics on frame delay */
+                        /* TODO: statistics on frame delay -- min, max, average, number above threshold.
+                         * Compute for audio and video?
+                         */
                         memset(&stream_ctx->message_received, 0, sizeof(mediatest_message_buffer_t));
                     }
                     else {
@@ -265,6 +272,10 @@ int mediatest_receive_stream_data(mediatest_stream_ctx_t* stream_ctx, uint8_t* b
             }
         }
     }
+    if (is_fin && ret == 0) {
+        /* Check whether the stream should be marked finished. */
+        /* If both side finished, delete stream? */
+    }
     return ret;
 }
 
@@ -274,9 +285,94 @@ int mediatest_receive_stream_data(mediatest_stream_ctx_t* stream_ctx, uint8_t* b
  * If no more frame, mark FIN.
  * For receiver, only send a FIN mark if FIN has been received.
  */
-int mediatest_prepare_to_send_on_stream(mediatest_stream_ctx_t* stream_ctx, uint8_t* bytes, size_t length, uint64_t current_time)
+int mediatest_prepare_to_send_on_stream(mediatest_stream_ctx_t* stream_ctx, void* context, size_t space, uint64_t current_time)
 {
-    return -1;
+    int ret = 0;
+
+    if (stream_ctx->is_sender) {
+        /* If no ongoing message, try prepare a new one. */
+        if (stream_ctx->message_sent.message_size == 0 && !stream_ctx->finished_sending) {
+            /* Is this the right time? */
+            if (stream_ctx->next_frame_time >= current_time) {
+                stream_ctx->message_sent.sent_time = (stream_ctx->frames_sent == 0) ? current_time : stream_ctx->next_frame_time;
+            }
+            stream_ctx->message_sent.message_type = stream_ctx->stream_type;
+            switch (stream_ctx->stream_type) {
+            case media_test_data:
+                stream_ctx->message_sent.message_size = 0x10000;
+                stream_ctx->message_sent.sent_time = current_time;
+                stream_ctx->next_frame_time = current_time;
+                break;
+            case media_test_audio:
+                stream_ctx->message_sent.message_size = 32;
+                stream_ctx->next_frame_time = stream_ctx->message_sent.sent_time + 20000;
+                break;
+            case media_test_video:
+                stream_ctx->message_sent.message_size = ((stream_ctx->frames_sent % 100) == 0) ? 0x8000 : 0x800;
+                stream_ctx->next_frame_time = stream_ctx->message_sent.sent_time + 33333;
+                break;
+            default:
+                ret = -1;
+                break;
+            }
+            if (ret == 0) {
+                stream_ctx->message_sent.header[0] = stream_ctx->stream_type;
+                if (picoquic_frames_uint32_encode(stream_ctx->message_sent.header + 1,
+                    stream_ctx->message_sent.header + MEDIATEST_HEADER_SIZE, (uint32_t)stream_ctx->message_sent.message_size) == NULL ||
+                    picoquic_frames_uint64_encode(stream_ctx->message_sent.header + 5,
+                        stream_ctx->message_sent.header + MEDIATEST_HEADER_SIZE, stream_ctx->message_sent.sent_time) == NULL) {
+                    ret = -1;
+                }
+            }
+        }
+        if (stream_ctx->message_sent.message_size > stream_ctx->message_sent.bytes_sent) {
+            uint8_t* buffer;
+            size_t header_bytes = 0;
+            int is_still_active = 0;
+            /* Compute bytes that need to be sent */
+            size_t available = stream_ctx->message_sent.message_size - stream_ctx->message_sent.bytes_sent;
+            if (available > space) {
+                available = space;
+                is_still_active = 1;
+            }
+            else {
+                is_still_active = (current_time > stream_ctx->next_frame_time && stream_ctx->frames_sent + 1 < stream_ctx->frames_to_send) ? 1 : 0;
+            }
+            buffer = (uint8_t*)picoquic_provide_stream_data_buffer(context, available, 0, is_still_active);
+            if (buffer == NULL) {
+                ret = -1;
+            }
+            else {
+                /* fill the header bytes if needed */
+                if (stream_ctx->message_sent.bytes_sent < MEDIATEST_HEADER_SIZE) {
+                    header_bytes = MEDIATEST_HEADER_SIZE - stream_ctx->message_sent.bytes_sent;
+                    if (header_bytes > available) {
+                        header_bytes = available;
+                    }
+                    memcpy(buffer, stream_ctx->message_sent.header + stream_ctx->message_sent.bytes_sent, header_bytes);
+                }
+                /* fill the other bytes */
+                if (available > header_bytes) {
+                    memset(buffer + header_bytes, (uint8_t)stream_ctx->message_sent.message_type, available - header_bytes);
+                }
+                stream_ctx->message_sent.bytes_sent += available;
+                stream_ctx->bytes_sent += available;
+                if (stream_ctx->message_sent.bytes_sent >= stream_ctx->message_sent.message_size) {
+                    memset(&stream_ctx->message_sent, 0, sizeof(mediatest_message_buffer_t));
+                    stream_ctx->frames_sent += 1;
+                    stream_ctx->finished_sending = (stream_ctx->frames_sent >= stream_ctx->frames_to_send) ? 1 : 0;
+                }
+            }
+        }
+        else if (stream_ctx->finished_sending && !stream_ctx->is_fin_sent) {
+            (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
+            stream_ctx->is_fin_sent = 1;
+        }
+        else {
+            (void)picoquic_provide_stream_data_buffer(context, 0, 0, 0);
+        }
+    }
+    return ret;
 }
 
 /* Callback from Quic
