@@ -31,6 +31,7 @@ extern "C" {
 
 #define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 2
 #define PICOQUIC_PACKET_LOOP_SEND_MAX 10
+#define PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX 2500
 
 /* The packet loop will call the application back after specific events.
  */

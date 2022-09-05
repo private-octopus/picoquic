@@ -231,6 +231,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     picoquic_cnx_t* last_cnx = NULL;
     int loop_immediate = 0;
     picoquic_packet_loop_options_t options = { 0 };
+    uint64_t next_send_time = current_time + PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX;
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
@@ -321,14 +322,18 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                     size_t b_recvd = (size_t)bytes_recv;
                     ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx, &b_recvd);
                 }
-                if (ret == 0) {
+                if (ret == 0 && current_time < next_send_time) {
                     /* Try to receive more packets if possible */
                     loop_immediate = 1;
                     continue;
                 }
+                else {
+                    next_send_time = current_time + PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX;
+                }
             }
             if (ret != PICOQUIC_NO_ERROR_SIMULATE_NAT && ret != PICOQUIC_NO_ERROR_SIMULATE_MIGRATION) {
                 size_t bytes_sent = 0;
+
                 while (ret == 0) {
                     struct sockaddr_storage peer_addr;
                     struct sockaddr_storage local_addr;

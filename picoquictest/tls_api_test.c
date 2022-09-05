@@ -8390,12 +8390,12 @@ static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uin
 
 int cubic_test() 
 {
-    return congestion_control_test(picoquic_cubic_algorithm, 3600000, 0, 0);
+    return congestion_control_test(picoquic_cubic_algorithm, 3500000, 0, 0);
 }
 
 int cubic_jitter_test()
 {
-    return congestion_control_test(picoquic_cubic_algorithm, 3600000, 5000, 5);
+    return congestion_control_test(picoquic_cubic_algorithm, 3500000, 5000, 5);
 }
 
 int fastcc_test()
@@ -10868,17 +10868,17 @@ int pacing_cc_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        1050000,
-        910000,
         900000,
-        1000000,
+        900000,
+        900000,
+        940000,
         900000
     };
     uint64_t algo_loss[5] = {
-        80,
-        140,
+        100,
+        205,
         230,
-        200,
+        180,
         210
     };
 

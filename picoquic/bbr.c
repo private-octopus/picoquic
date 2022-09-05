@@ -221,7 +221,6 @@ typedef struct st_picoquic_bbr_state_t {
     picoquic_bbr_alg_state_t state;
     uint64_t btl_bw;
     uint64_t next_round_delivered;
-    uint64_t round_start_time;
     uint64_t btl_bw_filter[BBR_BTL_BW_FILTER_LENGTH];
     uint64_t full_bw;
     uint64_t rt_prop;
@@ -248,6 +247,7 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t previous_sampling_delivered;
     uint64_t previous_sampling_lost;
     uint64_t loss_interval_start; /* Time in microsec when last loss considered */
+    uint64_t congestion_sequence; /* sequence number after congestion notification */
 
     unsigned int filled_pipe : 1;
     unsigned int round_start : 1;
@@ -989,6 +989,7 @@ void BBRExitFastRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_
  */
 void picoquic_bbr_notify_congestion(
     picoquic_bbr_state_t* bbr_state,
+    picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
     uint64_t current_time,
     int is_timeout)
@@ -1006,6 +1007,7 @@ void picoquic_bbr_notify_congestion(
 
     bbr_state->loss_interval_start = current_time;
     bbr_state->last_loss_was_timeout = is_timeout;
+    bbr_state->congestion_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
 
     /* Update and check the packet loss rate */
     if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
@@ -1049,13 +1051,16 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_ecn_ec:
             /* Non standard code to react on ECN_EC */
-            picoquic_bbr_notify_congestion(bbr_state, path_x, current_time, 0);
+            if (lost_packet_number >= bbr_state->congestion_sequence) {
+                picoquic_bbr_notify_congestion(bbr_state, cnx, path_x, current_time, 0);
+            }
             break;
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
             /* Non standard code to react to high rate of packet loss, or timeout loss */
-            if (picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification, lost_packet_number)) {
-                picoquic_bbr_notify_congestion(bbr_state, path_x, current_time,
+            if (lost_packet_number >= bbr_state->congestion_sequence &&
+                picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification, lost_packet_number)) {
+                picoquic_bbr_notify_congestion(bbr_state, cnx, path_x, current_time,
                     (notification == picoquic_congestion_notification_timeout) ? 1 : 0);
             }
             break;
