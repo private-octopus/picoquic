@@ -3228,6 +3228,8 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     uint64_t ecnx3[3] = { 0, 0, 0 };
     uint8_t first_byte = bytes[0];
     picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
+    uint64_t largest_in_path = 0;
+    picoquic_path_t * ack_path = cnx->path[0];
 
     if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block,
         (has_path_id)?&path_id:NULL,
@@ -3265,6 +3267,9 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
             picoquic_packet_t* p_retransmitted_previous = pkt_ctx->retransmitted_newest;
 
             if (top_packet != NULL && is_new_ack) {
+                largest_in_path = top_packet->path_packet_number;
+                ack_path = top_packet->send_path;
+
                 if (pkt_ctx->latest_time_acknowledged < top_packet->send_time) {
                     pkt_ctx->latest_time_acknowledged = top_packet->send_time;
                 }
@@ -3347,9 +3352,9 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
         }
         if (ecnx3[2] > pkt_ctx->ecn_ce_total_remote) {
             pkt_ctx->ecn_ce_total_remote = ecnx3[2];
-            cnx->congestion_alg->alg_notify(cnx, cnx->path[0],
+            cnx->congestion_alg->alg_notify(cnx, ack_path,
                 picoquic_congestion_notification_ecn_ec,
-                0, 0, 0, largest, current_time);
+                0, 0, 0, largest_in_path, current_time);
         }
     }
 

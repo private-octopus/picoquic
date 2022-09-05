@@ -94,6 +94,7 @@ void picoquic_newreno_sim_notify(
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t nb_bytes_acknowledged,
+    uint64_t lost_packet_number,
     uint64_t current_time)
 {
     switch (notification) {
@@ -119,18 +120,9 @@ void picoquic_newreno_sim_notify(
     case picoquic_congestion_notification_ecn_ec:
     case picoquic_congestion_notification_repeat:
     case picoquic_congestion_notification_timeout:
-        /* enter recovery */
-        if (!cnx->is_multipath_enabled) {
-            if (current_time - nr_state->recovery_start > path_x->smoothed_rtt ||
-                nr_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
-                picoquic_newreno_sim_enter_recovery(nr_state, cnx, path_x, notification, current_time);
-            }
-        }
-        else {
-            if (current_time - nr_state->recovery_start > path_x->smoothed_rtt ||
-                nr_state->recovery_start <= picoquic_cc_get_ack_sent_time(cnx, path_x)) {
-                picoquic_newreno_sim_enter_recovery(nr_state, cnx, path_x, notification, current_time);
-            }
+        /* if the loss happened in this period, enter recovery */
+        if (nr_state->recovery_sequence <= lost_packet_number) {
+            picoquic_newreno_sim_enter_recovery(nr_state, cnx, path_x, notification, current_time);
         }
         break;
     case picoquic_congestion_notification_spurious_repeat:
@@ -235,7 +227,7 @@ static void picoquic_newreno_notify(
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement:
             if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, current_time);
+                picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, lost_packet_number, current_time);
                 path_x->cwin = nr_state->nrss.cwin;
             }
             break;
@@ -243,11 +235,11 @@ static void picoquic_newreno_notify(
         case picoquic_congestion_notification_ecn_ec:
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
-            picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, current_time);
+            picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, lost_packet_number, current_time);
             path_x->cwin = nr_state->nrss.cwin;
             break;
         case picoquic_congestion_notification_spurious_repeat:
-            picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, current_time);
+            picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, lost_packet_number, current_time);
             path_x->cwin = nr_state->nrss.cwin;
             break;
         case picoquic_congestion_notification_rtt_measurement:
