@@ -22,9 +22,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
+#include "autoqlog.h"
 
 /* Media tests: simulate media transmission, include cases in which
 * the media bandwidth is much lower than the available bandwidth on
@@ -53,11 +55,17 @@
 #define MEDIATEST_ALPN "picoquic_mediatest"
 #define MEDIATEST_HEADER_SIZE 13
 #define MEDIATEST_ERROR_INTERNAL 1
+#define MEDIATEST_DURATION 10000000
+#define MEDIATEST_AUDIO_PERIOD 20000
+#define MEDIATEST_VIDEO_PERIOD 33333
+#define MEDIATEST_DATA_FRAME_SIZE 0x4000
+
 
 typedef enum {
     media_test_data = 0,
     media_test_audio,
-    media_test_video
+    media_test_video,
+    media_test_nb_types
 } media_test_type_enum;
 
 typedef struct st_mediatest_message_buffer_t {
@@ -110,6 +118,15 @@ typedef struct st_mediatest_cnx_ctx_t {
     struct st_mediatest_stream_ctx_t* last_stream;
 } mediatest_cnx_ctx_t;
 
+/* Mediatest statistics per media type */
+typedef struct st_mediatest_media_stats_t {
+    int nb_frames;
+    uint64_t sum_delays;
+    uint64_t sum_square_delays;
+    uint64_t min_delay;
+    uint64_t max_delay;
+} mediatest_media_stats_t;
+
 /* Mediatest context */
 typedef struct st_mediatest_ctx_t {
     uint64_t simulated_time;
@@ -119,10 +136,8 @@ typedef struct st_mediatest_ctx_t {
     mediatest_cnx_ctx_t* client_cnx; /* client connection context */
     struct st_mediatest_cnx_ctx_t* first_cnx;
     struct st_mediatest_cnx_ctx_t* last_cnx;
-    /* Audio generation model */
-    /* Video generation model */
-    /* Data generation model */
     /* Statistics */
+    mediatest_media_stats_t media_stats[media_test_nb_types];
 } mediatest_ctx_t;
 
 int mediatest_callback(picoquic_cnx_t* cnx,
@@ -133,6 +148,30 @@ static const uint8_t mediatest_ticket_encrypt_key[32] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
 };
+
+
+void mediatest_delete_stream_ctx(mediatest_stream_ctx_t* stream_ctx)
+{
+    if (stream_ctx->previous_stream == NULL) {
+        stream_ctx->cnx_ctx->first_stream = stream_ctx->next_stream;
+    }
+    else {
+        stream_ctx->previous_stream->next_stream = stream_ctx->next_stream;
+    }
+
+    if (stream_ctx->next_stream == NULL) {
+        stream_ctx->cnx_ctx->last_stream = stream_ctx->previous_stream;
+    }
+    else {
+        stream_ctx->next_stream->previous_stream = stream_ctx->previous_stream;
+    }
+
+    if (stream_ctx->cnx_ctx->cnx != NULL) {
+        (void)picoquic_set_app_stream_ctx(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, NULL);
+    }
+
+    free(stream_ctx);
+}
 
 mediatest_stream_ctx_t* mediatest_create_stream_context(mediatest_cnx_ctx_t* cnx_ctx, uint64_t stream_id)
 {
@@ -151,6 +190,10 @@ mediatest_stream_ctx_t* mediatest_create_stream_context(mediatest_cnx_ctx_t* cnx
         cnx_ctx->last_stream = stream_ctx;
         /* simplification: only clients are senders. */
         stream_ctx->is_sender = !stream_ctx->cnx_ctx->is_server;
+
+        if (cnx_ctx->cnx != NULL) {
+            (void)picoquic_set_app_stream_ctx(cnx_ctx->cnx, stream_id, stream_ctx);
+        }
     }
 
     return stream_ctx;
@@ -179,8 +222,31 @@ mediatest_stream_ctx_t* mediatest_find_or_create_stream(
 /* Delete a connection context */
 void mediatest_delete_cnx_context(mediatest_cnx_ctx_t* cnx_ctx)
 {
-    /* TODO */
-    return;
+    while (cnx_ctx->first_stream != NULL) {
+        mediatest_delete_stream_ctx(cnx_ctx->first_stream);
+    }
+
+    if (cnx_ctx->cnx != NULL) {
+        picoquic_set_callback(cnx_ctx->cnx, NULL, NULL);
+        /* Check whether this is right, versus just delete the context link. */
+        picoquic_delete_cnx(cnx_ctx->cnx);
+    }
+
+    if (cnx_ctx->previous_cnx == NULL) {
+        cnx_ctx->mt_ctx->first_cnx = cnx_ctx->next_cnx;
+    }
+    else {
+        cnx_ctx->previous_cnx->next_cnx = cnx_ctx->next_cnx;
+    }
+
+    if (cnx_ctx->next_cnx == NULL) {
+        cnx_ctx->mt_ctx->last_cnx = cnx_ctx->previous_cnx;
+    }
+    else {
+        cnx_ctx->next_cnx->previous_cnx = cnx_ctx->previous_cnx;
+    }
+
+    free(cnx_ctx);
 }
 
 /* Create a connection context. 
@@ -207,6 +273,52 @@ mediatest_cnx_ctx_t* mediatest_create_cnx_context(mediatest_ctx_t* mt_ctx, picoq
     }
     return cnx_ctx;
 }
+
+void mediatest_record_stats(mediatest_ctx_t* mt_ctx, mediatest_stream_ctx_t* stream_ctx)
+{
+    uint64_t delay = mt_ctx->simulated_time - stream_ctx->message_received.sent_time;
+
+    if (stream_ctx->message_received.message_type >= 0 && stream_ctx->message_received.message_type < media_test_nb_types) {
+        mediatest_media_stats_t* stats = mt_ctx->media_stats + stream_ctx->message_received.message_type;
+        stats->nb_frames++;
+        stats->sum_delays += delay;
+        stats->sum_square_delays += delay * delay;
+        if (stats->min_delay > delay) {
+            stats->min_delay = delay;
+        }
+        if (stats->max_delay < delay) {
+            stats->max_delay = delay;
+        }
+    }
+}
+
+
+int mediatest_check_stats(mediatest_ctx_t* mt_ctx, media_test_type_enum media_type)
+{
+    int ret = 0;
+
+    if (media_type >= 0 && media_type < media_test_nb_types) {
+        mediatest_media_stats_t* stats = mt_ctx->media_stats + media_type;
+        uint64_t period = (media_type == media_test_audio) ? MEDIATEST_AUDIO_PERIOD : MEDIATEST_VIDEO_PERIOD;
+        uint64_t expected = MEDIATEST_DURATION / period;
+
+        if (stats->nb_frames != expected) {
+            ret = -1;
+        }
+        else if (stats->nb_frames != 0) {
+            uint64_t average = stats->sum_delays / stats->nb_frames;
+            uint64_t variance = (stats->sum_square_delays / stats->nb_frames) - (average * average);
+            uint64_t sigma = (uint64_t)sqrt((double)variance);
+
+            if (average > 50000 || sigma > 10000 || stats->max_delay > 200000) {
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
+}
+
 
 /* Receive stream data. This is composed of a set of messages.
  * All message received must have the same type
@@ -259,13 +371,12 @@ int mediatest_receive_stream_data(mediatest_stream_ctx_t* stream_ctx, uint8_t* b
                         stream_ctx->bytes_received += stream_ctx->message_received.bytes_received;
                         stream_ctx->frames_received += 1;
                         length -= required;
-                        /* TODO: statistics on frame delay -- min, max, average, number above threshold.
-                         * Compute for audio and video?
-                         */
+                        /* Record statistics */
+                        mediatest_record_stats(stream_ctx->cnx_ctx->mt_ctx, stream_ctx);
                         memset(&stream_ctx->message_received, 0, sizeof(mediatest_message_buffer_t));
                     }
                     else {
-                        stream_ctx->bytes_received += available;
+                        stream_ctx->message_received.bytes_received += available;
                         length = 0;
                     }
                 }
@@ -274,7 +385,11 @@ int mediatest_receive_stream_data(mediatest_stream_ctx_t* stream_ctx, uint8_t* b
     }
     if (is_fin && ret == 0) {
         /* Check whether the stream should be marked finished. */
-        /* If both side finished, delete stream? */
+        /* If both sides finished, delete stream? */
+        stream_ctx->fin_received = 1;
+        if (!stream_ctx->is_fin_sent) {
+            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+        }
     }
     return ret;
 }
@@ -293,35 +408,38 @@ int mediatest_prepare_to_send_on_stream(mediatest_stream_ctx_t* stream_ctx, void
         /* If no ongoing message, try prepare a new one. */
         if (stream_ctx->message_sent.message_size == 0 && !stream_ctx->finished_sending) {
             /* Is this the right time? */
-            if (stream_ctx->next_frame_time >= current_time) {
-                stream_ctx->message_sent.sent_time = (stream_ctx->frames_sent == 0) ? current_time : stream_ctx->next_frame_time;
-            }
-            stream_ctx->message_sent.message_type = stream_ctx->stream_type;
-            switch (stream_ctx->stream_type) {
-            case media_test_data:
-                stream_ctx->message_sent.message_size = 0x10000;
-                stream_ctx->message_sent.sent_time = current_time;
-                stream_ctx->next_frame_time = current_time;
-                break;
-            case media_test_audio:
-                stream_ctx->message_sent.message_size = 32;
-                stream_ctx->next_frame_time = stream_ctx->message_sent.sent_time + 20000;
-                break;
-            case media_test_video:
-                stream_ctx->message_sent.message_size = ((stream_ctx->frames_sent % 100) == 0) ? 0x8000 : 0x800;
-                stream_ctx->next_frame_time = stream_ctx->message_sent.sent_time + 33333;
-                break;
-            default:
-                ret = -1;
-                break;
-            }
-            if (ret == 0) {
-                stream_ctx->message_sent.header[0] = stream_ctx->stream_type;
-                if (picoquic_frames_uint32_encode(stream_ctx->message_sent.header + 1,
-                    stream_ctx->message_sent.header + MEDIATEST_HEADER_SIZE, (uint32_t)stream_ctx->message_sent.message_size) == NULL ||
-                    picoquic_frames_uint64_encode(stream_ctx->message_sent.header + 5,
-                        stream_ctx->message_sent.header + MEDIATEST_HEADER_SIZE, stream_ctx->message_sent.sent_time) == NULL) {
+            if (stream_ctx->next_frame_time <= current_time) {
+                if (stream_ctx->frames_sent == 0) {
+                    stream_ctx->next_frame_time = current_time;
+                }
+                stream_ctx->message_sent.sent_time = stream_ctx->next_frame_time;
+
+                stream_ctx->message_sent.message_type = stream_ctx->stream_type;
+                switch (stream_ctx->stream_type) {
+                case media_test_data:
+                    stream_ctx->message_sent.message_size = MEDIATEST_DATA_FRAME_SIZE;
+                    stream_ctx->next_frame_time = current_time;
+                    break;
+                case media_test_audio:
+                    stream_ctx->message_sent.message_size = 32;
+                    stream_ctx->next_frame_time += MEDIATEST_AUDIO_PERIOD;
+                    break;
+                case media_test_video:
+                    stream_ctx->message_sent.message_size = ((stream_ctx->frames_sent % 100) == 0) ? 0x8000 : 0x800;
+                    stream_ctx->next_frame_time += MEDIATEST_VIDEO_PERIOD;
+                    break;
+                default:
                     ret = -1;
+                    break;
+                }
+                if (ret == 0) {
+                    stream_ctx->message_sent.header[0] = stream_ctx->stream_type;
+                    if (picoquic_frames_uint32_encode(stream_ctx->message_sent.header + 1,
+                        stream_ctx->message_sent.header + MEDIATEST_HEADER_SIZE, (uint32_t)stream_ctx->message_sent.message_size) == NULL ||
+                        picoquic_frames_uint64_encode(stream_ctx->message_sent.header + 5,
+                            stream_ctx->message_sent.header + MEDIATEST_HEADER_SIZE, stream_ctx->message_sent.sent_time) == NULL) {
+                        ret = -1;
+                    }
                 }
             }
         }
@@ -329,6 +447,7 @@ int mediatest_prepare_to_send_on_stream(mediatest_stream_ctx_t* stream_ctx, void
             uint8_t* buffer;
             size_t header_bytes = 0;
             int is_still_active = 0;
+            int is_fin = 0;
             /* Compute bytes that need to be sent */
             size_t available = stream_ctx->message_sent.message_size - stream_ctx->message_sent.bytes_sent;
             if (available > space) {
@@ -336,13 +455,15 @@ int mediatest_prepare_to_send_on_stream(mediatest_stream_ctx_t* stream_ctx, void
                 is_still_active = 1;
             }
             else {
-                is_still_active = (current_time > stream_ctx->next_frame_time && stream_ctx->frames_sent + 1 < stream_ctx->frames_to_send) ? 1 : 0;
+                is_fin = (stream_ctx->frames_sent + 1 >= stream_ctx->frames_to_send);
+                is_still_active = (current_time > stream_ctx->next_frame_time && !is_fin) ? 1 : 0;
             }
-            buffer = (uint8_t*)picoquic_provide_stream_data_buffer(context, available, 0, is_still_active);
+            buffer = (uint8_t*)picoquic_provide_stream_data_buffer(context, available, is_fin, is_still_active);
             if (buffer == NULL) {
                 ret = -1;
             }
             else {
+                stream_ctx->is_fin_sent = is_fin;
                 /* fill the header bytes if needed */
                 if (stream_ctx->message_sent.bytes_sent < MEDIATEST_HEADER_SIZE) {
                     header_bytes = MEDIATEST_HEADER_SIZE - stream_ctx->message_sent.bytes_sent;
@@ -364,13 +485,13 @@ int mediatest_prepare_to_send_on_stream(mediatest_stream_ctx_t* stream_ctx, void
                 }
             }
         }
-        else if (stream_ctx->finished_sending && !stream_ctx->is_fin_sent) {
-            (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
-            stream_ctx->is_fin_sent = 1;
-        }
         else {
             (void)picoquic_provide_stream_data_buffer(context, 0, 0, 0);
         }
+    }
+    else if (stream_ctx->fin_received && !stream_ctx->is_fin_sent) {
+        (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
+        stream_ctx->is_fin_sent = 1;
     }
     return ret;
 }
@@ -480,7 +601,7 @@ int mediatest_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
-            /* Check that the transport parameters are what the sample expects */
+            /* TODO: Check that the transport parameters are what the sample expects */
             break;
         case picoquic_callback_datagram_acked:
             /* Ack for packet carrying datagram-object received from peer */
@@ -513,35 +634,245 @@ int mediatest_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-/* Simulation step */
-int mediatest_step()
+
+/* Process arrival of a packet from a link */
+int mediatest_packet_arrival(mediatest_ctx_t* mt_ctx, int link_id, int * is_active)
 {
-    /* Check earliest media arrival */
+    int ret = 0;
+    picoquictest_sim_packet_t* packet = picoquictest_sim_link_dequeue(mt_ctx->link[link_id], mt_ctx->simulated_time);
+
+    if (packet == NULL) {
+        /* unexpected, probably bug in test program */
+        ret = -1;
+    }
+    else {
+        int node_id = link_id;
+        /* uint64_t loss = (config->simulate_loss & 1);
+        config->simulate_loss >>= 1;
+        config->simulate_loss |= (loss << 63);
+
+        if (node_id >= 0 && loss == 0) {
+        */
+        *is_active = 1;
+
+        ret = picoquic_incoming_packet(mt_ctx->quic[link_id],
+                packet->bytes, (uint32_t)packet->length,
+                (struct sockaddr*)&packet->addr_from,
+                (struct sockaddr*)&packet->addr_to, 0, 0,
+            mt_ctx->simulated_time);
+
+        free(packet);
+    }
+
+    return ret;
+}
+
+
+/* Packet departure from selected node */
+int mediatest_packet_departure(mediatest_ctx_t* mt_ctx, int node_id, int* is_active)
+{
+    int ret = 0;
+    picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+
+    if (packet == NULL) {
+        /* memory error during test. Something is really wrong. */
+        ret = -1;
+    }
+    else {
+        /* check whether there is something to send */
+        int if_index = 0;
+
+        ret = picoquic_prepare_next_packet(mt_ctx->quic[node_id], mt_ctx->simulated_time,
+            packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+            &packet->addr_to, &packet->addr_from, &if_index, NULL, NULL);
+
+        if (ret != 0)
+        {
+            /* useless test, but makes it easier to add a breakpoint under debugger */
+            free(packet);
+            ret = -1;
+        }
+        else if (packet->length > 0) {
+            /* Only one link per node */
+            int link_id = 1 - node_id;
+
+            /* If the source address is not set, set it */
+            if (packet->addr_from.ss_family == 0) {
+                picoquic_store_addr(&packet->addr_from, (struct sockaddr*)& mt_ctx->addr[link_id]);
+            }
+            /* send now. */
+            *is_active = 1;
+            picoquictest_sim_link_submit(mt_ctx->link[link_id], packet, mt_ctx->simulated_time);
+        }
+        else {
+            free(packet);
+        }
+    }
+
+    return ret;
+}
+
+
+/* Simulation step */
+int mediatest_step(mediatest_ctx_t* mt_ctx, int* is_active)
+{
+    int ret = 0;
+    uint64_t next_arrival_time = UINT64_MAX;
+    int arrival_index = -1;
+    uint64_t next_departure_time = UINT64_MAX;
+    int departure_index = -1;
+    uint64_t next_frame_time = UINT64_MAX;
+    uint64_t next_time;
     /* Check earliest packet arrival */
+    for (int i = 0; i < 2; i++) {
+        uint64_t arrival = picoquictest_sim_link_next_arrival(mt_ctx->link[i], next_arrival_time);
+        if (arrival < next_arrival_time) {
+            next_arrival_time = arrival;
+            arrival_index = i;
+        }
+    }
+    next_time = next_arrival_time;
+
     /* Check earliest packet departure */
+    for (int i = 0; i < 2; i++) {
+        uint64_t departure = picoquic_get_next_wake_time(mt_ctx->quic[i], mt_ctx->simulated_time);
+        if (departure < next_departure_time) {
+            next_departure_time = departure;
+            departure_index = i;
+        }
+    }
+    if (next_time > next_departure_time) {
+        next_time = next_departure_time;
+    }
+
+    /* Check earliest media arrival */
+    if (mt_ctx->client_cnx != NULL && mt_ctx->client_cnx->cnx != NULL && picoquic_get_cnx_state(mt_ctx->client_cnx->cnx) >= picoquic_state_ready) {
+        mediatest_stream_ctx_t* stream_ctx = mt_ctx->client_cnx->first_stream;
+
+        while (stream_ctx != NULL) {
+            if (stream_ctx->is_sender && stream_ctx->message_sent.bytes_sent >= stream_ctx->message_sent.message_size &&
+                stream_ctx->next_frame_time < next_frame_time && !stream_ctx->finished_sending) {
+                next_frame_time = stream_ctx->next_frame_time;
+            }
+            stream_ctx = stream_ctx->next_stream;
+        }
+
+        if (next_frame_time <= next_time) {
+            next_time = next_frame_time;
+            stream_ctx = mt_ctx->client_cnx->first_stream;
+            while (stream_ctx != NULL) {
+                if (stream_ctx->is_sender && stream_ctx->message_sent.bytes_sent >= stream_ctx->message_sent.message_size &&
+                    stream_ctx->next_frame_time <= next_time && !stream_ctx->finished_sending) {
+                    picoquic_mark_active_stream(mt_ctx->client_cnx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+                }
+                stream_ctx = stream_ctx->next_stream;
+            }
+            /* Recompute the departure time */
+            for (int i = 0; i < 2; i++) {
+                uint64_t departure = picoquic_get_next_wake_time(mt_ctx->quic[i], next_time);
+                if (departure <= next_time) {
+                    next_departure_time = next_time;
+                    departure_index = i;
+                }
+            }
+        }
+    }
     /* Update time */
+    if (next_time > mt_ctx->simulated_time) {
+        mt_ctx->simulated_time = next_time;
+    }
     /* Perform earliest action */
-    return -1;
+    if (next_arrival_time <= next_time) {
+        /* Process next packet from simulated link */
+        ret = mediatest_packet_arrival(mt_ctx, arrival_index, is_active);
+    }
+    else {
+        /* Prepare next packet from selected connection */
+        ret = mediatest_packet_departure(mt_ctx, departure_index, is_active);
+    }
+
+    return ret;
+}
+
+int mediatest_is_finished(mediatest_ctx_t* mt_ctx)
+{
+    int is_finished = 1;
+    mediatest_cnx_ctx_t* cnx_ctx = mt_ctx->first_cnx;
+    while(cnx_ctx != NULL && is_finished) {
+        mediatest_stream_ctx_t* stream_ctx =  cnx_ctx->first_stream;
+        while (stream_ctx != NULL && is_finished) {
+            is_finished &= stream_ctx->is_fin_sent && stream_ctx->fin_received;
+            stream_ctx = stream_ctx->next_stream;
+        }
+        cnx_ctx = cnx_ctx->next_cnx;
+    }
+
+    return is_finished;
 }
 
 /* Test configuration */
-int mediatest_configure_stream() {
-    /* TODO */
-    return -1;
+int mediatest_configure_stream(mediatest_cnx_ctx_t * cnx_ctx, media_test_type_enum stream_type, size_t data_size)
+{
+    int ret = 0;
+    /* Find the next available stream id */
+    uint64_t stream_id = picoquic_get_next_local_stream_id(cnx_ctx->cnx, 0);
+    /* Create a stream context */
+    mediatest_stream_ctx_t* stream_ctx = mediatest_create_stream_context(cnx_ctx, stream_id);
+    if (stream_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Set the media generation parameters */
+        stream_ctx->is_sender = 1;
+        stream_ctx->stream_type = stream_type;
+        switch (stream_type) {
+        case media_test_audio:
+            stream_ctx->frames_to_send = MEDIATEST_DURATION / MEDIATEST_AUDIO_PERIOD;
+            break;
+        case media_test_video:
+            stream_ctx->frames_to_send = MEDIATEST_DURATION / MEDIATEST_VIDEO_PERIOD;
+            break;
+        case media_test_data:
+        default:
+            stream_ctx->frames_to_send = data_size / MEDIATEST_DATA_FRAME_SIZE;
+            break;
+        }
+        ret = picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
+    }
+    return ret;
 }
 
 void mediatest_delete_ctx(mediatest_ctx_t* mt_ctx)
 {
-    /* TODO */
+    /* Delete the connections */
+    while (mt_ctx->first_cnx != NULL) {
+        mediatest_delete_cnx_context(mt_ctx->first_cnx);
+    }
+    /* Delete the links */
+    for (int i = 0; i < 2; i++) {
+        if (mt_ctx->link[i] != NULL) {
+            picoquictest_sim_link_delete(mt_ctx->link[i]);
+        }
+    }
+    /* Delete the QUIC contexts */
+    for (int i = 0; i < 2; i++) {
+        if (mt_ctx->quic[i] != NULL) {
+            picoquic_free(mt_ctx->quic[i]);
+        }
+    }
+    /* Free the context */
+    free(mt_ctx);
 }
 
-mediatest_ctx_t * mediatest_configure(int do_audio, int do_video, size_t data_size, double bandwidth)
+mediatest_ctx_t * mediatest_configure(int media_test_id, picoquic_congestion_algorithm_t* ccalgo, int do_audio, int do_video, size_t data_size, double bandwidth)
 {
     int ret = 0;
     mediatest_ctx_t* mt_ctx = NULL;
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
+    picoquic_connection_id_t icid = { { 0xed, 0x1a, 0x7e, 0x57, 0, 0, 0, 0}, 8 };
+    icid.id[4] = media_test_id;
 
     ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
 
@@ -556,7 +887,7 @@ mediatest_ctx_t * mediatest_configure(int do_audio, int do_video, size_t data_si
     }
     else {
         mt_ctx = (mediatest_ctx_t*)malloc(sizeof(mediatest_ctx_t));
-        if (mt_ctx != NULL) {
+        if (mt_ctx == NULL) {
             ret = -1;
         }
     }
@@ -573,6 +904,11 @@ mediatest_ctx_t * mediatest_configure(int do_audio, int do_video, size_t data_si
 
         if (mt_ctx->quic[0] == NULL || mt_ctx->quic[1] == NULL) {
             ret = -1;
+        }
+        
+        for (int i=0; i < 2 && ret == 0; i++){
+            picoquic_set_default_congestion_algorithm(mt_ctx->quic[i], ccalgo);
+            ret = picoquic_set_qlog(mt_ctx->quic[i], ".");
         }
     }
 
@@ -598,7 +934,7 @@ mediatest_ctx_t * mediatest_configure(int do_audio, int do_video, size_t data_si
         /* Create the client connection, from which media will flow. */
         mediatest_cnx_ctx_t* cnx_ctx = NULL;
         picoquic_cnx_t * cnx = picoquic_create_cnx(mt_ctx->quic[0],
-            picoquic_null_connection_id, picoquic_null_connection_id,
+            icid, picoquic_null_connection_id,
             (struct sockaddr*)&mt_ctx->addr[1], mt_ctx->simulated_time, 0, PICOQUIC_TEST_SNI, MEDIATEST_ALPN, 1);
         /* Start the connection and create the context */
         if (cnx != NULL) {
@@ -612,14 +948,24 @@ mediatest_ctx_t * mediatest_configure(int do_audio, int do_video, size_t data_si
                     picoquic_delete_cnx(cnx);
                     ret = -1;
                 }
+                if (do_audio && ret == 0) {
+                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_audio, 0);
+                }
+                if (do_video && ret == 0) {
+                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_video, 0);
+                }
+                if (data_size > 0 && ret == 0) {
+                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_data, data_size);
+                }
+                for (int i = 0; i < media_test_nb_types; i++) {
+                    mt_ctx->media_stats[i].min_delay = UINT64_MAX;
+                }
+
             }
         }
     }
-    if (ret == 0){
-        /* Set the stream models if needed */
-    }
 
-    if (ret != 0 && mt_ctx) {
+    if (ret != 0 && mt_ctx != NULL) {
         mediatest_delete_ctx(mt_ctx);
         mt_ctx = NULL;
     }
@@ -628,17 +974,56 @@ mediatest_ctx_t * mediatest_configure(int do_audio, int do_video, size_t data_si
 }
 
 /* One test */
-int mediatest_one()
+int mediatest_one(int media_test_id, picoquic_congestion_algorithm_t* ccalgo, int do_audio, int do_video, size_t data_size, double bandwidth)
 {
+    int ret = 0;
+    int nb_steps = 0;
+    int nb_inactive = 0;
+    int is_finished = 0;
+
     /* set the configuration */
+    mediatest_ctx_t* mt_ctx = mediatest_configure(media_test_id, ccalgo, do_audio, do_video, data_size, bandwidth);
+    if (mt_ctx == NULL) {
+        ret = -1;
+    }
     /* Run the simulation until done */
+    while (ret == 0 && !is_finished && nb_steps < 100000 && nb_inactive < 512 && mt_ctx->simulated_time < 30000000) {
+        int is_active = 0;
+        nb_steps += 1;
+        ret = mediatest_step(mt_ctx, &is_active);
+        if (is_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive += 1;
+        }
+        is_finished = mediatest_is_finished(mt_ctx);
+    }
+
     /* Check that the simulation ran to the end. */
-    /* Check that delays meet requirements */
-    return -1;
+    if (ret == 0) {
+        if (!is_finished) {
+            ret = -1;
+        }
+        /* Check that the results are as expected. */
+        if (ret == 0 && do_audio) {
+            ret = mediatest_check_stats(mt_ctx, media_test_audio);
+        }
+        if (ret == 0 && do_video) {
+            ret = mediatest_check_stats(mt_ctx, media_test_video);
+        }
+        
+    }
+    if (mt_ctx != NULL) {
+        mediatest_delete_ctx(mt_ctx);
+    }
+    return ret;
 }
 
 /* Test cases */
-int mediatest_video()
+int mediatest_video_test()
 {
-    return -1;
+    int ret = mediatest_one(1, picoquic_bbr_algorithm, 0, 1, 0, 0.01);
+
+    return ret;
 }

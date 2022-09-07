@@ -1454,6 +1454,7 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                 else if (stream_data_context.length == 0 && stream_data_context.is_fin == 0) {
                     /* The application did not send any data */
                     bytes = bytes0;
+                    stream->is_active = stream_data_context.is_still_active;
                 }
                 else
                 {
