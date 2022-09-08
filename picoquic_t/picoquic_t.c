@@ -315,6 +315,7 @@ static const picoquic_test_def_t test_table[] = {
     { "client_cert_callback", set_verify_certificate_callback_test },
     { "mediatest_video", mediatest_video_test },
     { "mediatest_video_audio", mediatest_video_audio_test },
+    { "mediatest_video_data_audio", mediatest_video_data_audio_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
     { "monopath_basic", monopath_basic_test },

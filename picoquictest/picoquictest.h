@@ -318,6 +318,7 @@ int cert_verify_rsa_test();
 int cid_quiescence_test();
 int mediatest_video_test();
 int mediatest_video_audio_test();
+int mediatest_video_data_audio_test();
 int migration_controlled_test();
 int migration_mtu_drop_test();
 int monopath_basic_test();

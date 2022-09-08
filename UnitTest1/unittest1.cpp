@@ -1777,6 +1777,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(mediatest_video_data_audio) {
+            int ret = mediatest_video_data_audio_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(migration_controlled) {
             int ret = migration_controlled_test();
 

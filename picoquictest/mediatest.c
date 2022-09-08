@@ -978,14 +978,14 @@ mediatest_ctx_t * mediatest_configure(int media_test_id, picoquic_congestion_alg
                     picoquic_delete_cnx(cnx);
                     ret = -1;
                 }
+                if (data_size > 0 && ret == 0) {
+                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_data, data_size);
+                }
                 if (do_audio && ret == 0) {
                     ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_audio, 0);
                 }
                 if (do_video && ret == 0) {
                     ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_video, 0);
-                }
-                if (data_size > 0 && ret == 0) {
-                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_data, data_size);
                 }
                 for (int i = 0; i < media_test_nb_types; i++) {
                     mt_ctx->media_stats[i].min_delay = UINT64_MAX;
@@ -1060,14 +1060,14 @@ int mediatest_video_test()
 
 int mediatest_video_audio_test()
 {
-    int ret = mediatest_one(1, picoquic_bbr_algorithm, 1, 1, 0, 0.01);
+    int ret = mediatest_one(2, picoquic_bbr_algorithm, 1, 1, 0, 0.01);
 
     return ret;
 }
 
 int mediatest_video_data_audio_test()
 {
-    int ret = mediatest_one(1, picoquic_bbr_algorithm, 1, 1, 5000000, 0.01);
+    int ret = mediatest_one(3, picoquic_bbr_algorithm, 1, 1, 10000000, 0.01);
 
     return ret;
 }
