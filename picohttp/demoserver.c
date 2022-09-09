@@ -630,6 +630,9 @@ static int h3zero_server_init(picoquic_cnx_t* cnx)
     if (ret == 0) {
         /* set the stream 11 as the decoder stream, although we do not actually create dynamic codes. */
         ret = picoquic_add_to_stream(cnx, 11, &decoder_stream_head, 1, 0);
+        if (ret == 0) {
+            ret = picoquic_set_stream_priority(cnx, 11, 1);
+        }
     }
 
     return ret;
