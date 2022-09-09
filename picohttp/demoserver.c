@@ -616,12 +616,15 @@ static int h3zero_server_init(picoquic_cnx_t* cnx)
 
     if (ret == 0) {
         /* set the stream #3 to be the next stream to write! */
-        ret = picoquic_mark_high_priority_stream(cnx, 3, 1);
+        ret = picoquic_set_stream_priority(cnx, 3, 0);
     }
 
     if (ret == 0) {
         /* set the stream 7 as the encoder stream, although we do not actually create dynamic codes. */
         ret = picoquic_add_to_stream(cnx, 7, &encoder_stream_head, 1, 0);
+        if (ret == 0) {
+            ret = picoquic_set_stream_priority(cnx, 7, 1);
+        }
     }
 
     if (ret == 0) {
