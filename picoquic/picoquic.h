@@ -935,18 +935,54 @@ int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void* v_stream_ctx);
 
-/* Mark stream as high priority. This guarantees that the data
- * queued on this stream will be sent before data from any other
- * stream. It is used for example in the HTTP3 implementation
- * to guarantee that the "settings" frame is sent from the
- * control stream before any other frame. 
- * Priority is immediately removed when all data from that
- * stream is sent; it should be reset if new data is added 
- * for which priority handling is still required. 
- * Priority is also removed if the "is_high_priority"
- * parameter is set to 0, or if another stream is set
- * to high priority.
+/* Handling of stream priority. 
+ * 
+ * Picoquic handles priority as an 8 bit unsigned integer.
+ * When ready to send stream frames, picoquic will pick the lowest priority
+ * stream for which data can be send, i.e., it is available and flow control
+ * allows it.
+ *
+ * When several streams are available at the same priority level, the
+ * handling depends on the least significant bit of the priority code.
+ * If that bit is zero, picoquic implements round robin scheduling and
+ * select the stream on which data was least recently sent. If it is
+ * one, picoquic implements FIFO scheduling and selects the stream with
+ * the lowest stream id.
+ * 
+ * There is no formal association between priority level and stream
+ * content. Application developers can pick whatever convention they
+ * see fit. One possible example could be:
+ * 
+ * - 0: system priority, e.g., the "settings" stream in HTTP3 (FIFO)
+ * - 1: high priority data (round robin)
+ * - 2: real time audio (round robin)
+ * - 4: real time video (round robin)
+ * - 7: urgent data, such as CSS or JSON files (FIFO)
+ * - 8: progressive data such as JPG files (round robin) 
+ * - 9: web data (FIFO)
+ * - 255: background data (FIFO)
+ * 
+ * When streams are created, the priority is set to a default value for
+ * the QUIC context. By default, the default is 9 (FIFO), which mimics the
+ * behavior of previous versions of picoquic before the formal priority
+ * handling was introduced. The default stream priority can be changed
+ * with the `picoquic_set_default_priority` API. Changing the default
+ * priority only affects stream created after that change.
+ * 
+ * Individual stream priority can be set using `picoquic_set_stream_priority`.
+ * 
+ * The API `picoquic_mark_high_priority_stream` is a legacy of the previous
+ * versions. It is equivalent to setting the priority of the specified
+ * stream to zero if "is_high_priority" is true, or to the default
+ * stream priority if it is not.
  */
+
+/* Set the default priority for newly created streams */
+#define PICOQUIC_DEFAULT_STREAM_PRIORITY 9
+void picoquic_set_default_priority(picoquic_quic_t* quic, uint8_t default_stream_priority);
+
+/* Set the priority level of a stream. */
+int picoquic_set_stream_priority(picoquic_cnx_t* cnx, uint64_t stream_id, uint8_t stream_priority);
 
 int picoquic_mark_high_priority_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_high_priority);

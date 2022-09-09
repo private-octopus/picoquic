@@ -700,7 +700,10 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
                 previous = previous->next_output_stream;
             }
         }
-        /* Call find ready stream to trigger deletion */
+        /* Delete the stream explicitly */
+        picoquic_remove_output_stream(cnx, stream, NULL);
+        picoquic_delete_stream_if_closed(cnx, stream);
+        /* Call ready stream to check availability after deletion  */
         ready_stream = picoquic_find_ready_stream(cnx);
         /* Verify that ready stream is as expected */
         if (ready_stream == NULL) {
@@ -748,8 +751,8 @@ int stream_output_test()
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
     uint64_t values[] = { 0, 3, 4, 1, 2, 8, 5, 7 };
-    uint64_t output1[] = { 1, 0, 4, 2, 5 };
-    uint64_t output2[] = { 1, 0, 4, 2, 5, 8 };
+    uint64_t output1[] = { 0, 1, 2, 4, 5 };
+    uint64_t output2[] = { 0, 1, 2, 4, 5, 8 };
     uint64_t delete_order[] = { 1, 0, 4, 2, 5, 8 };
     picoquic_stream_head_t * stream = NULL;
 

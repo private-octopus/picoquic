@@ -831,11 +831,9 @@ int mediatest_is_finished(mediatest_ctx_t* mt_ctx)
         }
         cnx_ctx = cnx_ctx->next_cnx;
     }
-#if 1
     if (is_finished) {
         DBG_PRINTF("Media transmission finished at %" PRIu64, mt_ctx->simulated_time);
     }
-#endif
 
     return is_finished;
 }
@@ -858,16 +856,20 @@ int mediatest_configure_stream(mediatest_cnx_ctx_t * cnx_ctx, media_test_type_en
         switch (stream_type) {
         case media_test_audio:
             stream_ctx->frames_to_send = MEDIATEST_DURATION / MEDIATEST_AUDIO_PERIOD;
+            ret = picoquic_set_stream_priority(cnx_ctx->cnx, stream_ctx->stream_id, 2);
             break;
         case media_test_video:
             stream_ctx->frames_to_send = MEDIATEST_DURATION / MEDIATEST_VIDEO_PERIOD;
+            ret = picoquic_set_stream_priority(cnx_ctx->cnx, stream_ctx->stream_id, 4);
             break;
         case media_test_data:
         default:
             stream_ctx->frames_to_send = data_size / MEDIATEST_DATA_FRAME_SIZE;
             break;
         }
-        ret = picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
+        if (ret == 0) {
+            ret = picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
+        }
     }
     return ret;
 }
@@ -990,7 +992,6 @@ mediatest_ctx_t * mediatest_configure(int media_test_id, picoquic_congestion_alg
                 for (int i = 0; i < media_test_nb_types; i++) {
                     mt_ctx->media_stats[i].min_delay = UINT64_MAX;
                 }
-
             }
         }
     }

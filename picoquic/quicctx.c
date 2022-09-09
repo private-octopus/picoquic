@@ -567,6 +567,8 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         quic->local_cnxid_ttl = UINT64_MAX;
         quic->stateless_reset_next_time = current_time;
         quic->stateless_reset_min_interval = PICOQUIC_MICROSEC_STATELESS_RESET_INTERVAL_DEFAULT;
+        quic->default_stream_priority = PICOQUIC_DEFAULT_STREAM_PRIORITY;
+
         quic->random_initial = 1;
         picoquic_wake_list_init(quic);
 
@@ -2522,29 +2524,73 @@ picoquic_stream_head_t * picoquic_last_stream(picoquic_cnx_t* cnx)
 #endif
 }
 
-void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream)
+int picoquic_compare_stream_priority(picoquic_stream_head_t * stream, picoquic_stream_head_t * other) {
+    int ret = 1;
+    if (stream->stream_priority < other->stream_priority) {
+        ret = -1;
+    }
+    else if (stream->stream_priority == other->stream_priority) {
+        if (stream->stream_id < other->stream_id) {
+            ret = -1;
+        }
+        else if (stream->stream_id == other->stream_id) {
+            ret = 0;
+        }
+    }
+    return ret;
+}
+
+/* This code assumes that the stream is not currently present in the output stream.
+ */
+void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
 {
     if (stream->is_output_stream == 0) {
-        if (stream->stream_id == cnx->high_priority_stream_id) {
-            /* insert in front */
-            stream->previous_output_stream = NULL;
-            stream->next_output_stream = cnx->first_output_stream;
-            if (cnx->first_output_stream != NULL) {
-                cnx->first_output_stream->previous_output_stream = stream;
-            }
+        if (cnx->last_output_stream == NULL) {
+            /* insert first stream */
+            cnx->last_output_stream = stream;
             cnx->first_output_stream = stream;
-        } else {
+        }
+        else if (picoquic_compare_stream_priority(stream, cnx->last_output_stream) > 0) {
+            /* insert after last stream. Common case for most applications. */
             stream->previous_output_stream = cnx->last_output_stream;
-            stream->next_output_stream = NULL;
-            if (cnx->last_output_stream == NULL) {
-                cnx->first_output_stream = stream;
-                cnx->last_output_stream = stream;
+            cnx->last_output_stream->next_output_stream = stream;
+            cnx->last_output_stream = stream;
+        }
+        else {
+            picoquic_stream_head_t* current = cnx->first_output_stream;
+
+            while (current != NULL) {
+                int cmp = picoquic_compare_stream_priority(stream, current);
+
+                if (cmp < 0) {
+                    /* insert before the current stream, then break */
+                    stream->previous_output_stream = current->previous_output_stream;
+                    if (stream->previous_output_stream == NULL) {
+                        cnx->first_output_stream = stream;
+                    }
+                    else {
+                        stream->previous_output_stream->next_output_stream = stream;
+                    }
+                    current->previous_output_stream = stream;
+                    stream->next_output_stream = current;
+                    break;
+                }
+                else if (cmp == 0) {
+                    /* Stream is already there. This is unexpected */
+                    break;
+                }
+                else {
+                    current = current->next_output_stream;
+                }
             }
-            else {
+            if (current == NULL) {
+                /* insert after last stream */
+                stream->previous_output_stream = cnx->last_output_stream;
                 cnx->last_output_stream->next_output_stream = stream;
                 cnx->last_output_stream = stream;
             }
         }
+
         stream->is_output_stream = 1;
     }
 }
@@ -2567,6 +2613,26 @@ void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t *
         else {
             stream->next_output_stream->previous_output_stream = stream->previous_output_stream;
         }
+    }
+}
+
+void picoquic_reorder_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
+{
+    int in_order = 0;
+    if (stream->is_output_stream) {
+        if ((stream->previous_output_stream == NULL ||
+            picoquic_compare_stream_priority(stream, stream->previous_output_stream) > 0) &&
+            (stream->next_output_stream == NULL ||
+                picoquic_compare_stream_priority(stream, stream->next_output_stream) < 0)) {
+            in_order = 1;
+        }
+        else {
+            picoquic_remove_output_stream(cnx, stream, NULL);
+            stream->is_output_stream = 0;
+        }
+    }
+    if (!in_order) {
+        picoquic_insert_output_stream(cnx, stream);
     }
 }
 
@@ -2639,6 +2705,8 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
                 is_output_stream = 0;
             }
         }
+
+        stream->stream_priority = cnx->quic->default_stream_priority;
 
         picosplay_init_tree(&stream->stream_data_tree, picoquic_stream_data_node_compare, picoquic_stream_data_node_create, picoquic_stream_data_node_delete, picoquic_stream_data_node_value);
 
