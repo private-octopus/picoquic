@@ -326,7 +326,7 @@ int mediatest_check_stats(mediatest_ctx_t* mt_ctx, media_test_type_enum media_ty
             uint64_t variance = (stats->sum_square_delays / stats->nb_frames) - (average * average);
             uint64_t sigma = (uint64_t)sqrt((double)variance);
 
-            if (average > 50000 || sigma > 10000 || stats->max_delay > 200000) {
+            if (average > 60000 || sigma > 20000 || stats->max_delay > 200000) {
                 ret = -1;
             }
         }
@@ -660,7 +660,7 @@ int mediatest_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
-            if (cnx_ctx->mt_ctx->datagram_data_requested > 0) {
+            if (cnx_ctx->mt_ctx->datagram_data_requested > 0 && !cnx_ctx->is_server) {
                 ret = picoquic_mark_datagram_ready(cnx, 1);
             }
             break;
