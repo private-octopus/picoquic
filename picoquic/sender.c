@@ -84,12 +84,19 @@ int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
 
 int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready)
 {
+    int ret = 0;
     int was_ready = cnx->is_datagram_ready;
+
     cnx->is_datagram_ready = is_ready;
     if (!was_ready && is_ready) {
-        picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+        if (cnx->remote_parameters.max_datagram_frame_size == 0) {
+            ret = -1;
+        }
+        else {
+            picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+        }
     }
-    return 0;
+    return ret;
 }
 
 
@@ -3987,6 +3994,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                      * three values: not needed at all, optional, or required.
                      * If required, PMTU discovery takes priority over sending stream data.
                      */
+                    int datagram_sent = 0;
                     int datagram_tried_and_failed = 0;
                     int stream_tried_and_failed = 0;
                     int preemptive_repeat = 0;
@@ -4008,7 +4016,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         /* Start of CC controlled frames */
-                        if (ret == 0) {
+                        if (ret == 0 && cnx->datagram_conflicts_max >= cnx->datagram_conflicts_count) {
                             uint8_t* bytes0 = bytes_next;
 
                             if (cnx->first_datagram != NULL) {
@@ -4025,6 +4033,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                                 }
                             }
                             datagram_tried_and_failed = (bytes_next == bytes0);
+                            datagram_sent = !datagram_tried_and_failed;
                         }
 
                         /* If present, send stream frames queued for retransmission */
@@ -4038,8 +4047,24 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         /* Encode the stream frame, or frames */
-                        if (ret == 0 && !split_repeat_queued && bytes_next + 8 < bytes_max) {
-                            bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
+                        if (ret == 0 && !split_repeat_queued){
+                            if (bytes_next + 8 < bytes_max) {
+                                bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
+                                cnx->datagram_conflicts_count = 0;
+                            }
+                            else {
+                                picoquic_stream_head_t* stream = picoquic_find_ready_stream(cnx);
+
+                                if (stream == NULL) {
+                                    cnx->datagram_conflicts_count = 0;
+                                }
+                                else {
+                                    if (datagram_sent) {
+                                        cnx->datagram_conflicts_count += 1;
+                                    }
+                                    more_data |= 1;
+                                }
+                            }
                         }
 
                         /* TODO: replace this by scheduling of BDP frame when window has been estimated */
