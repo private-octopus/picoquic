@@ -707,13 +707,6 @@ int mediatest_packet_arrival(mediatest_ctx_t* mt_ctx, int link_id, int * is_acti
         ret = -1;
     }
     else {
-        int node_id = link_id;
-        /* uint64_t loss = (config->simulate_loss & 1);
-        config->simulate_loss >>= 1;
-        config->simulate_loss |= (loss << 63);
-
-        if (node_id >= 0 && loss == 0) {
-        */
         *is_active = 1;
 
         ret = picoquic_incoming_packet(mt_ctx->quic[link_id],
@@ -1044,7 +1037,6 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
     }
     if (ret == 0) {
         /* Create the client connection, from which media will flow. */
-        mediatest_cnx_ctx_t* cnx_ctx = NULL;
         picoquic_cnx_t * cnx = picoquic_create_cnx(mt_ctx->quic[0],
             icid, picoquic_null_connection_id,
             (struct sockaddr*)&mt_ctx->addr[1], mt_ctx->simulated_time, 0, PICOQUIC_TEST_SNI, MEDIATEST_ALPN, 1);
