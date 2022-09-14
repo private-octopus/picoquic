@@ -600,7 +600,7 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
             ret = demo_server_prepare_to_send(context, space, stream_ctx);
             if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
                 picohttp_delete_stream(&ctx->h3_stream_tree, stream_ctx);
-                (void)picoquic_set_app_stream_ctx(cnx, stream_id, NULL);
+                picoquic_unlink_app_stream_ctx(cnx, stream_id);
             }
         }
     }
@@ -1268,7 +1268,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                     int ret = demo_server_prepare_to_send((void*)bytes, length, stream_ctx);
                     if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
                         picohttp_delete_stream(&ctx->h09_stream_tree, stream_ctx);
-                        (void)picoquic_set_app_stream_ctx(cnx, stream_id, NULL);
+                        picoquic_unlink_app_stream_ctx(cnx, stream_id);
                     }
                     return ret;
                 }

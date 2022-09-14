@@ -926,6 +926,8 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx,
 /* Associate stream with app context */
 int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
     uint64_t stream_id, void* app_stream_ctx);
+/* Remove association between stream and context */
+void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
 
 /* Mark stream as active, or not.
  * If a stream is active, it will be polled for data when the transport

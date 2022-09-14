@@ -82,6 +82,14 @@ int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
     return ret;
 }
 
+void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id)
+{
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+    if (stream != NULL) {
+        stream->app_stream_ctx = NULL;
+    }
+}
+
 int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready)
 {
     int ret = 0;
