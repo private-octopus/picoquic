@@ -3744,6 +3744,31 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     return ret;
 }
 
+/* Try to send datagrams */
+static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max,
+    int* more_data, int* is_pure_ack, int* datagram_tried_and_failed, int* datagram_sent, int * ret)
+{
+    uint8_t* bytes0 = bytes_next;
+
+    if (cnx->first_datagram != NULL) {
+        bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, more_data, is_pure_ack);
+    }
+    else {
+        while (cnx->is_datagram_ready) {
+            uint8_t* dg_start = bytes_next;
+            bytes_next = picoquic_format_ready_datagram_frame(cnx, bytes_next, bytes_max,
+                more_data, is_pure_ack, ret);
+            if (bytes_next == NULL || bytes_next == dg_start) {
+                break;
+            }
+        }
+    }
+    *datagram_tried_and_failed = (bytes_next == bytes0);
+    *datagram_sent = !*datagram_tried_and_failed;
+
+    return bytes_next;
+}
+
 /*  Prepare the next packet to send when in the ready state */
 int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time,
@@ -3994,6 +4019,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                      * three values: not needed at all, optional, or required.
                      * If required, PMTU discovery takes priority over sending stream data.
                      */
+                    int datagram_first = (cnx->datagram_conflicts_max >= cnx->datagram_conflicts_count);
                     int datagram_sent = 0;
                     int datagram_tried_and_failed = 0;
                     int stream_tried_and_failed = 0;
@@ -4016,24 +4042,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         /* Start of CC controlled frames */
-                        if (ret == 0 && cnx->datagram_conflicts_max >= cnx->datagram_conflicts_count) {
-                            uint8_t* bytes0 = bytes_next;
-
-                            if (cnx->first_datagram != NULL) {
-                                bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
-                            }
-                            else {
-                                while (cnx->is_datagram_ready) {
-                                    uint8_t * dg_start = bytes_next;
-                                    bytes_next = picoquic_format_ready_datagram_frame(cnx, bytes_next, bytes_max,
-                                        &more_data, &is_pure_ack, &ret);
-                                    if (bytes_next == NULL || bytes_next == dg_start) {
-                                        break;
-                                    }
-                                }
-                            }
-                            datagram_tried_and_failed = (bytes_next == bytes0);
-                            datagram_sent = !datagram_tried_and_failed;
+                        if (ret == 0 && datagram_first) {
+                            bytes_next = picoquic_prepare_datagram_ready(cnx, bytes_next, bytes_max,
+                                &more_data, &is_pure_ack, &datagram_tried_and_failed, &datagram_sent, &ret);
                         }
 
                         /* If present, send stream frames queued for retransmission */
@@ -4065,6 +4076,11 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                                     more_data |= 1;
                                 }
                             }
+                        }
+
+                        if (ret == 0 && !datagram_first) {
+                            bytes_next = picoquic_prepare_datagram_ready(cnx, bytes_next, bytes_max,
+                                &more_data, &is_pure_ack, &datagram_tried_and_failed, &datagram_sent, &ret);
                         }
 
                         /* TODO: replace this by scheduling of BDP frame when window has been estimated */
