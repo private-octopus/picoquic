@@ -674,7 +674,7 @@ int mediatest_callback(picoquic_cnx_t* cnx,
             ret = mediatest_handle_datagram_ack_nack(cnx_ctx, fin_or_event, stream_id /* encodes the send time!*/,
                 bytes, length, picoquic_get_quic_time(cnx_ctx->mt_ctx->quic));
 #else
-                ret = -1;
+            ret = 0;
 #endif
             break;
         case picoquic_callback_pacing_changed:
