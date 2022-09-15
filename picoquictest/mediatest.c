@@ -136,9 +136,26 @@ typedef struct st_mediatest_ctx_t {
     mediatest_cnx_ctx_t* client_cnx; /* client connection context */
     struct st_mediatest_cnx_ctx_t* first_cnx;
     struct st_mediatest_cnx_ctx_t* last_cnx;
+    /* managemenent of datagram load */
+    size_t datagram_data_requested;
+    size_t datagram_data_sent;
+    size_t datagram_data_received;
+    int nb_datagrams_sent;
+    int nb_datagrams_received;
+
     /* Statistics */
     mediatest_media_stats_t media_stats[media_test_nb_types];
 } mediatest_ctx_t;
+
+/* mediatest test specification */
+typedef struct st_mediatest_spec_t {
+    picoquic_congestion_algorithm_t* ccalgo; 
+    int do_audio;
+    int do_video;
+    size_t data_size;
+    size_t datagram_data_size;
+    double bandwidth;
+} mediatest_spec_t;
 
 int mediatest_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
@@ -167,7 +184,7 @@ void mediatest_delete_stream_ctx(mediatest_stream_ctx_t* stream_ctx)
     }
 
     if (stream_ctx->cnx_ctx->cnx != NULL) {
-        (void)picoquic_set_app_stream_ctx(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, NULL);
+        picoquic_unlink_app_stream_ctx(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id);
     }
 
     free(stream_ctx);
@@ -292,7 +309,6 @@ void mediatest_record_stats(mediatest_ctx_t* mt_ctx, mediatest_stream_ctx_t* str
     }
 }
 
-
 int mediatest_check_stats(mediatest_ctx_t* mt_ctx, media_test_type_enum media_type)
 {
     int ret = 0;
@@ -310,7 +326,7 @@ int mediatest_check_stats(mediatest_ctx_t* mt_ctx, media_test_type_enum media_ty
             uint64_t variance = (stats->sum_square_delays / stats->nb_frames) - (average * average);
             uint64_t sigma = (uint64_t)sqrt((double)variance);
 
-            if (average > 50000 || sigma > 10000 || stats->max_delay > 200000) {
+            if (average > 25000 || sigma > 12500 || stats->max_delay > 100000) {
                 ret = -1;
             }
         }
@@ -505,6 +521,50 @@ int mediatest_prepare_to_send_on_stream(mediatest_stream_ctx_t* stream_ctx, void
     return ret;
 }
 
+/* Receive datagram data.
+ * We only use datagrams to test conflicts between datagrams and streams,
+ * deliberately causing bandwidth saturation with datagrams.
+ */
+int mediatest_receive_datagram(mediatest_cnx_ctx_t* cnx_ctx, size_t  length)
+{
+    cnx_ctx->mt_ctx->nb_datagrams_received++;
+    cnx_ctx->mt_ctx->datagram_data_received += length;
+    return 0;
+}
+
+int mediatest_prepare_to_send_datagram(mediatest_cnx_ctx_t* cnx_ctx, void * context, size_t length)
+{
+    int ret = 0;
+    mediatest_ctx_t* mt_ctx = cnx_ctx->mt_ctx;
+    size_t available = 0;
+    int is_active = 0;
+    if (mt_ctx->datagram_data_sent < mt_ctx->datagram_data_requested) {
+        void* buffer;
+
+        is_active = 1;
+        available = mt_ctx->datagram_data_requested - mt_ctx->datagram_data_sent;
+        if (available < length) {
+            length = available;
+            is_active = 0;
+        }
+        /* Get a buffer inside the datagram packet */
+        buffer = picoquic_provide_datagram_buffer(context, length);
+        if (buffer == NULL) {
+            ret = -1;
+        }
+        else {
+            memset(buffer, 'd', length);
+            mt_ctx->datagram_data_sent += length;
+            mt_ctx->nb_datagrams_sent++;
+        }
+    }
+    if (ret == 0) {
+        ret = picoquic_mark_datagram_ready(cnx_ctx->cnx, is_active);
+    }
+
+    return ret;
+}
+
 /* Callback from Quic
 */
 int mediatest_callback(picoquic_cnx_t* cnx,
@@ -572,24 +632,14 @@ int mediatest_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_datagram:
             /* Receive data in a datagram */
-#if 0
-            ret = mediatest_receive_datagram(cnx_ctx, bytes, length, cnx_ctx->mt_ctx->simulated_time);
-#else
-            ret = -1;
-#endif
+            ret = mediatest_receive_datagram(cnx_ctx, length);
             break;
         case picoquic_callback_prepare_datagram:
             /* Prepare to send a datagram */
-#if 0
         {
-            uint64_t current_time = picoquic_get_quic_time(cnx_ctx->mt_ctx->quic);
-            ret = mediatest_prepare_to_send_datagram(cnx_ctx, bytes, length, current_time);
+            ret = mediatest_prepare_to_send_datagram(cnx_ctx, bytes, length);
             break;
         }
-#else
-            ret = -1;
-            break;
-#endif
         case picoquic_callback_stream_reset: /* Client reset stream #x */
         case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
                                              /* TODO: react to abandon stream, etc. */
@@ -610,7 +660,9 @@ int mediatest_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
-            /* TODO: Check that the transport parameters are what the sample expects */
+            if (cnx_ctx->mt_ctx->datagram_data_requested > 0 && !cnx_ctx->is_server) {
+                ret = picoquic_mark_datagram_ready(cnx, 1);
+            }
             break;
         case picoquic_callback_datagram_acked:
             /* Ack for packet carrying datagram-object received from peer */
@@ -622,7 +674,7 @@ int mediatest_callback(picoquic_cnx_t* cnx,
             ret = mediatest_handle_datagram_ack_nack(cnx_ctx, fin_or_event, stream_id /* encodes the send time!*/,
                 bytes, length, picoquic_get_quic_time(cnx_ctx->mt_ctx->quic));
 #else
-                ret = -1;
+            ret = 0;
 #endif
             break;
         case picoquic_callback_pacing_changed:
@@ -655,13 +707,6 @@ int mediatest_packet_arrival(mediatest_ctx_t* mt_ctx, int link_id, int * is_acti
         ret = -1;
     }
     else {
-        int node_id = link_id;
-        /* uint64_t loss = (config->simulate_loss & 1);
-        config->simulate_loss >>= 1;
-        config->simulate_loss |= (loss << 63);
-
-        if (node_id >= 0 && loss == 0) {
-        */
         *is_active = 1;
 
         ret = picoquic_incoming_packet(mt_ctx->quic[link_id],
@@ -874,6 +919,32 @@ int mediatest_configure_stream(mediatest_cnx_ctx_t * cnx_ctx, media_test_type_en
     return ret;
 }
 
+void mediatest_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
+{
+    memset(tp, 0, sizeof(picoquic_tp_t));
+    tp->initial_max_stream_data_bidi_local = 0x200000;
+    tp->initial_max_stream_data_bidi_remote = 65635;
+    tp->initial_max_stream_data_uni = 65535;
+    tp->initial_max_data = 0x100000;
+    if (client_mode) {
+        tp->initial_max_stream_id_bidir = 2049;
+        tp->initial_max_stream_id_unidir = 2051;
+    }
+    else {
+        tp->initial_max_stream_id_bidir = 2048;
+        tp->initial_max_stream_id_unidir = 2050;
+    }
+    tp->idle_timeout = 30000;
+    tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE;
+    tp->ack_delay_exponent = 3;
+    tp->active_connection_id_limit = 4;
+    tp->max_ack_delay = 10000ull;
+    tp->enable_loss_bit = 2;
+    tp->min_ack_delay = 1000ull;
+    tp->enable_time_stamp = 0;
+    tp->max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+}
+
 void mediatest_delete_ctx(mediatest_ctx_t* mt_ctx)
 {
     /* Delete the connections */
@@ -896,7 +967,7 @@ void mediatest_delete_ctx(mediatest_ctx_t* mt_ctx)
     free(mt_ctx);
 }
 
-mediatest_ctx_t * mediatest_configure(int media_test_id, picoquic_congestion_algorithm_t* ccalgo, int do_audio, int do_video, size_t data_size, double bandwidth)
+mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spec)
 {
     int ret = 0;
     mediatest_ctx_t* mt_ctx = NULL;
@@ -938,9 +1009,11 @@ mediatest_ctx_t * mediatest_configure(int media_test_id, picoquic_congestion_alg
             ret = -1;
         }
         
-        for (int i=0; i < 2 && ret == 0; i++){
-            picoquic_set_default_congestion_algorithm(mt_ctx->quic[i], ccalgo);
-            ret = picoquic_set_qlog(mt_ctx->quic[i], ".");
+        if (spec->ccalgo != NULL) {
+            for (int i = 0; i < 2 && ret == 0; i++) {
+                picoquic_set_default_congestion_algorithm(mt_ctx->quic[i], spec->ccalgo);
+                ret = picoquic_set_qlog(mt_ctx->quic[i], ".");
+            }
         }
     }
 
@@ -964,12 +1037,15 @@ mediatest_ctx_t * mediatest_configure(int media_test_id, picoquic_congestion_alg
     }
     if (ret == 0) {
         /* Create the client connection, from which media will flow. */
-        mediatest_cnx_ctx_t* cnx_ctx = NULL;
         picoquic_cnx_t * cnx = picoquic_create_cnx(mt_ctx->quic[0],
             icid, picoquic_null_connection_id,
             (struct sockaddr*)&mt_ctx->addr[1], mt_ctx->simulated_time, 0, PICOQUIC_TEST_SNI, MEDIATEST_ALPN, 1);
         /* Start the connection and create the context */
         if (cnx != NULL) {
+            picoquic_tp_t client_parameters;
+            mediatest_init_transport_parameters(&client_parameters, 1);
+            picoquic_set_transport_parameters(cnx, &client_parameters);
+
             if (picoquic_start_client_cnx(cnx) != 0) {
                 picoquic_delete_cnx(cnx);
                 ret = -1;
@@ -980,15 +1056,19 @@ mediatest_ctx_t * mediatest_configure(int media_test_id, picoquic_congestion_alg
                     picoquic_delete_cnx(cnx);
                     ret = -1;
                 }
-                if (data_size > 0 && ret == 0) {
-                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_data, data_size);
+                if (spec->data_size > 0 && ret == 0) {
+                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_data, spec->data_size);
                 }
-                if (do_audio && ret == 0) {
+                if (spec->do_audio && ret == 0) {
                     ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_audio, 0);
                 }
-                if (do_video && ret == 0) {
+                if (spec->do_video && ret == 0) {
                     ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_video, 0);
                 }
+                if (spec->datagram_data_size > 0 && ret == 0) {
+                    mt_ctx->datagram_data_requested = spec->datagram_data_size;
+                }
+            
                 for (int i = 0; i < media_test_nb_types; i++) {
                     mt_ctx->media_stats[i].min_delay = UINT64_MAX;
                 }
@@ -1005,7 +1085,7 @@ mediatest_ctx_t * mediatest_configure(int media_test_id, picoquic_congestion_alg
 }
 
 /* One test */
-int mediatest_one(int media_test_id, picoquic_congestion_algorithm_t* ccalgo, int do_audio, int do_video, size_t data_size, double bandwidth)
+int mediatest_one(int media_test_id, mediatest_spec_t * spec)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -1013,7 +1093,7 @@ int mediatest_one(int media_test_id, picoquic_congestion_algorithm_t* ccalgo, in
     int is_finished = 0;
 
     /* set the configuration */
-    mediatest_ctx_t* mt_ctx = mediatest_configure(media_test_id, ccalgo, do_audio, do_video, data_size, bandwidth);
+    mediatest_ctx_t* mt_ctx = mediatest_configure(media_test_id, spec);
     if (mt_ctx == NULL) {
         ret = -1;
     }
@@ -1037,10 +1117,10 @@ int mediatest_one(int media_test_id, picoquic_congestion_algorithm_t* ccalgo, in
             ret = -1;
         }
         /* Check that the results are as expected. */
-        if (ret == 0 && do_audio) {
+        if (ret == 0 && spec->do_audio) {
             ret = mediatest_check_stats(mt_ctx, media_test_audio);
         }
-        if (ret == 0 && do_video) {
+        if (ret == 0 && spec->do_video) {
             ret = mediatest_check_stats(mt_ctx, media_test_video);
         }
         
@@ -1054,21 +1134,53 @@ int mediatest_one(int media_test_id, picoquic_congestion_algorithm_t* ccalgo, in
 /* Test cases */
 int mediatest_video_test()
 {
-    int ret = mediatest_one(1, picoquic_bbr_algorithm, 0, 1, 0, 0.01);
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.01;
+    spec.do_video = 1;
+    ret = mediatest_one(1, &spec);
 
     return ret;
 }
 
 int mediatest_video_audio_test()
 {
-    int ret = mediatest_one(2, picoquic_bbr_algorithm, 1, 1, 0, 0.01);
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.01;
+    spec.do_video = 1;
+    spec.do_audio = 1;
+    ret = mediatest_one(2, &spec);
 
     return ret;
 }
 
 int mediatest_video_data_audio_test()
 {
-    int ret = mediatest_one(3, picoquic_bbr_algorithm, 1, 1, 10000000, 0.01);
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.01;
+    spec.do_video = 1;
+    spec.do_audio = 1;
+    spec.data_size = 10000000;
+    ret = mediatest_one(3, &spec);
+
+    return ret;
+}
+
+int mediatest_worst_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.01;
+    spec.do_video = 1;
+    spec.do_audio = 1;
+    spec.datagram_data_size = 10000000;
+    ret = mediatest_one(4, &spec);
 
     return ret;
 }

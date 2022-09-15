@@ -1347,9 +1347,17 @@ typedef struct st_picoquic_cnx_t {
     struct st_picoquic_misc_frame_header_t* stream_frame_retransmit_queue;
     struct st_picoquic_misc_frame_header_t* stream_frame_retransmit_queue_last;
 
-    /* Management of datagrams */
+    /* Management of datagram queue (see also active datagram flag)
+     * The "conflict" count indicates how many datagrams have been sent while
+     * stream data was also waiting. If this passes the max value
+     * picoquic will try sending stream data before the next datagram.
+     * This is provisional -- we need to consider managing datagram
+     * priorities in a way similar to stream priorities.
+     */
     picoquic_misc_frame_header_t* first_datagram;
     picoquic_misc_frame_header_t* last_datagram;
+    int datagram_conflicts_count;
+    int datagram_conflicts_max;
 
     /* If not `0`, the connection will send keep alive messages in the given interval. */
     uint64_t keep_alive_interval;
