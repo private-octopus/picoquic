@@ -935,14 +935,14 @@ void mediatest_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
         tp->initial_max_stream_id_unidir = 2050;
     }
     tp->idle_timeout = 30000;
-    tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
+    tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE;
     tp->ack_delay_exponent = 3;
     tp->active_connection_id_limit = 4;
     tp->max_ack_delay = 10000ull;
     tp->enable_loss_bit = 2;
     tp->min_ack_delay = 1000ull;
     tp->enable_time_stamp = 0;
-    tp->max_datagram_frame_size = PICOQUIC_PRACTICAL_MAX_MTU;
+    tp->max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
 }
 
 void mediatest_delete_ctx(mediatest_ctx_t* mt_ctx)
