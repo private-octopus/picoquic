@@ -955,13 +955,14 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
  * content. Application developers can pick whatever convention they
  * see fit. One possible example could be:
  * 
- * - 0: system priority, e.g., the "settings" stream in HTTP3 (FIFO)
- * - 1: high priority data (round robin)
- * - 2: real time audio (round robin)
- * - 4: real time video (round robin)
- * - 7: urgent data, such as CSS or JSON files (FIFO)
- * - 8: progressive data such as JPG files (round robin) 
- * - 9: web data (FIFO)
+ * - 0: system priority, e.g., the "settings" stream in HTTP3 (round robin)
+ * - 1: high priority data (FIFO)
+ * - 2: high priority data (Round Robin)
+ * - 4: real time audio (round robin)
+ * - 6: real time video (round robin)
+ * - 9: urgent data, such as CSS or JSON files (FIFO)
+ * - 10: progressive data such as JPG files (round robin) 
+ * - 11: web data (FIFO)
  * - 255: background data (FIFO)
  * 
  * When streams are created, the priority is set to a default value for
