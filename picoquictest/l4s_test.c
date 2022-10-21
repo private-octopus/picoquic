@@ -121,7 +121,7 @@ int l4s_reno_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_newreno_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 3850000, 50, 6000);
+    int ret = l4s_congestion_test(ccalgo, 1, 3850000, 50, 6000, 0, NULL);
 
     return ret;
 }
