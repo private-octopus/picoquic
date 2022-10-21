@@ -1845,12 +1845,24 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
         }
     }
     else if (cnx->is_simple_multipath_enabled && cnx->cnx_state == picoquic_state_ready) {
+        /* The per-path algorithm excludes the packets that were sent on
+         * a path now deleted. The path is set to NULL. */
+        picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
+        picoquic_packet_t* old_p = pkt_ctx->retransmit_oldest;
+        int continue_next = 1;
+
+        while (old_p != NULL && old_p->send_path == NULL && continue_next) {
+            picoquic_packet_t* p_next = old_p->previous_packet;
+            length = picoquic_retransmit_needed_packet(cnx, pkt_ctx, old_p, pc, path_x, current_time,
+                next_wake_time, packet, send_buffer_max, header_length, &continue_next);
+            old_p = p_next;
+        }
         /* Find the path with the lowest repeat wait? */
         for (int i_path = 0; i_path < cnx->nb_paths; i_path++) {
-            picoquic_packet_t* old_p = cnx->path[i_path]->path_packet_first;
+            old_p = cnx->path[i_path]->path_packet_first;
 
             if (length == 0) {
-                int continue_next = 1;
+                continue_next = 1;
 
                 /* Call the per packet routine in a loop */
                 while (old_p != 0 && continue_next) {
