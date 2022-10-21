@@ -175,7 +175,7 @@ void cnx_stress_delete_stream_context(
             stream_ctx->next_stream->previous_stream = stream_ctx->previous_stream;
         }
         /* Remove from connection context */
-        (void)picoquic_set_app_stream_ctx(cnx_ctx->cnx, stream_ctx->stream_id, NULL);
+        picoquic_unlink_app_stream_ctx(cnx_ctx->cnx, stream_ctx->stream_id);
         /* Release the memory */
         memset(stream_ctx, 0, sizeof(cnx_stress_stream_ctx_t));
         free(stream_ctx);

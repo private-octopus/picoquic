@@ -280,6 +280,7 @@ typedef struct st_picoquictest_sim_link_t {
     uint64_t bucket_arrival_last;
     /* Variable for multipath simulation */
     int is_switched_off;
+    int is_unreachable;
 } picoquictest_sim_link_t;
 
 picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,

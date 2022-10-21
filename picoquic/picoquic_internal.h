@@ -601,6 +601,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_stored_token_t * p_first_token;
     picosplay_tree_t token_reuse_tree; /* detection of token reuse */
     uint8_t local_cnxid_length;
+    uint8_t default_stream_priority;
     uint64_t local_cnxid_ttl; /* Max time to live of Connection ID in microsec, init to "forever" */
     uint32_t mtu_max;
     uint32_t padding_multiple_default;
@@ -772,6 +773,7 @@ typedef struct st_picoquic_stream_head_t {
     uint64_t remote_error;
     uint64_t local_stop_error;
     uint64_t remote_stop_error;
+    uint64_t last_time_data_sent;
     picosplay_tree_t stream_data_tree; /* splay of received stream segments */
     uint64_t sent_offset; /* Amount of data sent in the stream */
     picoquic_stream_queue_node_t* send_queue; /* if the stream is not "active", list of data segments ready to send */
@@ -779,6 +781,8 @@ typedef struct st_picoquic_stream_head_t {
     picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
     void* direct_receive_ctx; /* direct receive context */
     picoquic_sack_list_t sack_list; /* Track which parts of the stream were acknowledged by the peer */
+    /* Stream priority -- lowest is most urgent */
+    uint8_t stream_priority;
     /* Flags describing the state of the stream */
     unsigned int is_active : 1; /* The application is actively managing data sending through callbacks */
     unsigned int fin_requested : 1; /* Application has requested Fin of sending stream */
@@ -1343,9 +1347,17 @@ typedef struct st_picoquic_cnx_t {
     struct st_picoquic_misc_frame_header_t* stream_frame_retransmit_queue;
     struct st_picoquic_misc_frame_header_t* stream_frame_retransmit_queue_last;
 
-    /* Management of datagrams */
+    /* Management of datagram queue (see also active datagram flag)
+     * The "conflict" count indicates how many datagrams have been sent while
+     * stream data was also waiting. If this passes the max value
+     * picoquic will try sending stream data before the next datagram.
+     * This is provisional -- we need to consider managing datagram
+     * priorities in a way similar to stream priorities.
+     */
     picoquic_misc_frame_header_t* first_datagram;
     picoquic_misc_frame_header_t* last_datagram;
+    int datagram_conflicts_count;
+    int datagram_conflicts_max;
 
     /* If not `0`, the connection will send keep alive messages in the given interval. */
     uint64_t keep_alive_interval;

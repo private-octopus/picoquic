@@ -1,6 +1,8 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
-RUN apt-get update && \
+ENV DEBIAN_FRONTEND=noninteractive
+RUN ln -fs /usr/share/zoneinfo/UTC /etc/localtime && \
+    apt-get update && \
     apt-get install -y build-essential git cmake software-properties-common \
     openssl libssl-dev pkg-config clang
 
@@ -25,3 +27,4 @@ RUN git clone https://github.com/h2o/picotls.git && \
 RUN cd /src/picoquic && \
     cmake . && \
     make
+

@@ -600,7 +600,7 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
             ret = demo_server_prepare_to_send(context, space, stream_ctx);
             if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
                 picohttp_delete_stream(&ctx->h3_stream_tree, stream_ctx);
-                (void)picoquic_set_app_stream_ctx(cnx, stream_id, NULL);
+                picoquic_unlink_app_stream_ctx(cnx, stream_id);
             }
         }
     }
@@ -616,17 +616,23 @@ static int h3zero_server_init(picoquic_cnx_t* cnx)
 
     if (ret == 0) {
         /* set the stream #3 to be the next stream to write! */
-        ret = picoquic_mark_high_priority_stream(cnx, 3, 1);
+        ret = picoquic_set_stream_priority(cnx, 3, 0);
     }
 
     if (ret == 0) {
         /* set the stream 7 as the encoder stream, although we do not actually create dynamic codes. */
         ret = picoquic_add_to_stream(cnx, 7, &encoder_stream_head, 1, 0);
+        if (ret == 0) {
+            ret = picoquic_set_stream_priority(cnx, 7, 1);
+        }
     }
 
     if (ret == 0) {
         /* set the stream 11 as the decoder stream, although we do not actually create dynamic codes. */
         ret = picoquic_add_to_stream(cnx, 11, &decoder_stream_head, 1, 0);
+        if (ret == 0) {
+            ret = picoquic_set_stream_priority(cnx, 11, 1);
+        }
     }
 
     return ret;
@@ -1262,7 +1268,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                     int ret = demo_server_prepare_to_send((void*)bytes, length, stream_ctx);
                     if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
                         picohttp_delete_stream(&ctx->h09_stream_tree, stream_ctx);
-                        (void)picoquic_set_app_stream_ctx(cnx, stream_id, NULL);
+                        picoquic_unlink_app_stream_ctx(cnx, stream_id);
                     }
                     return ret;
                 }

@@ -140,6 +140,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/high_latency_test.c
     picoquictest/intformattest.c
     picoquictest/l4s_test.c
+    picoquictest/mediatest.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
     picoquictest/parseheadertest.c
@@ -177,7 +178,7 @@ if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
         GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             7970614ad049d194fe1691bdf0cc66c6930a3a2f)
+        GIT_TAG             2bb3e454a7aae0f0542374973c9daf83bfef8ffe)
     FetchContent_MakeAvailable(picotls)
 endif()
 

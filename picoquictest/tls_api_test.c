@@ -1404,7 +1404,27 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 
             if (send_length > 0) {
                 int simulate_loss = 0;
-                if (target_link == test_ctx->s_to_c_link) {
+                /* TODO: simulate "unreachable" error */
+                /* If sending from client, callback client connection,
+                 * else callback server connection. Use source and dest address from packet */
+
+                if (target_link->is_unreachable) {
+#ifdef _WINDOWS
+                    static int unreachable_error = WSAENETUNREACH;
+#else
+                    static int unreachable_error = EHOSTUNREACH;
+#endif
+                    picoquic_cnx_t * cnx = test_ctx->cnx_client;
+                    if (target_link == test_ctx->s_to_c_link || target_link == test_ctx->s_to_c_link_2) {
+                        cnx = test_ctx->cnx_server;
+                    }
+                    if (cnx != NULL) {
+                        picoquic_notify_destination_unreachable(cnx, *simulated_time, (struct sockaddr*)&addr_to,
+                            (struct sockaddr*)&addr_from, 0, unreachable_error);
+                    }
+                    simulate_loss = 1;
+                }
+                else if (target_link == test_ctx->s_to_c_link) {
                     if (!test_ctx->client_use_multiple_addresses) {
                         if (test_ctx->client_use_nat) {
                             if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted,
@@ -8390,12 +8410,12 @@ static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uin
 
 int cubic_test() 
 {
-    return congestion_control_test(picoquic_cubic_algorithm, 3600000, 0, 0);
+    return congestion_control_test(picoquic_cubic_algorithm, 3500000, 0, 0);
 }
 
 int cubic_jitter_test()
 {
-    return congestion_control_test(picoquic_cubic_algorithm, 3600000, 5000, 5);
+    return congestion_control_test(picoquic_cubic_algorithm, 3500000, 5000, 5);
 }
 
 int fastcc_test()
@@ -10868,17 +10888,17 @@ int pacing_cc_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        1050000,
-        910000,
         900000,
-        1000000,
+        900000,
+        900000,
+        940000,
         900000
     };
     uint64_t algo_loss[5] = {
-        80,
-        140,
+        100,
+        205,
         230,
-        200,
+        180,
         210
     };
 

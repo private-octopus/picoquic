@@ -307,17 +307,23 @@ int h3zero_client_init(picoquic_cnx_t* cnx)
 
     if (ret == 0) {
 		/* set the stream #2 to be the next stream to write! */
-        ret = picoquic_mark_high_priority_stream(cnx, 2, 1);
+        ret = picoquic_set_stream_priority(cnx, 2, 0);
     }
 
     if (ret == 0) {
         /* set the stream 6 as the encoder stream, although we do not actually create dynamic codes. */
         ret = picoquic_add_to_stream(cnx, 6, &encoder_stream_head, 1, 0);
+        if (ret == 0) {
+            ret = picoquic_set_stream_priority(cnx, 6, 1);
+        }
     }
 
     if (ret == 0) {
         /* set the stream 10 as the decoder stream, although we do not actually create dynamic codes. */
         ret = picoquic_add_to_stream(cnx, 10, &decoder_stream_head, 1, 0);
+        if (ret == 0) {
+            ret = picoquic_set_stream_priority(cnx, 10, 1);
+        }
     }
 
 
@@ -516,7 +522,7 @@ static int picoquic_demo_client_close_stream(picoquic_cnx_t * cnx,
 {
     int ret = 0;
     if (stream_ctx != NULL && stream_ctx->is_open) {
-        picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
+        picoquic_unlink_app_stream_ctx(cnx, stream_ctx->stream_id);
         if (stream_ctx->f_name != NULL) {
             free(stream_ctx->f_name);
             stream_ctx->f_name = NULL;

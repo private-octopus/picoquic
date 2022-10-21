@@ -418,6 +418,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     picoquic_sendmsg_ctx_t* send_ctx_first = NULL;
     picoquic_sendmsg_ctx_t* send_ctx_last = NULL;
     picoquic_packet_loop_options_t options = { 0 };
+    uint64_t next_send_time = current_time + PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX;
     WSADATA wsaData = { 0 };
     /* TODO: rewrite the code and avoid using the "loop_immediate" state variable */
     int loop_immediate = 0;
@@ -560,11 +561,14 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                         ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx, &recv_bytes);
                     }
 
-                    if (ret == 0) {
-                        /* TODO: this use of a state variable is ugly. Consider rewriting the code
-                         * and avoid it. */
+
+                    if (ret == 0 && current_time < next_send_time) {
+                        /* Try to receive more packets if possible */
                         loop_immediate = 1;
                         continue;
+                    }
+                    else {
+                        next_send_time = current_time + PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX;
                     }
                 }
             }
