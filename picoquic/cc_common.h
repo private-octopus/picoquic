@@ -87,6 +87,7 @@ void picoquic_newreno_sim_notify(
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t nb_bytes_acknowledged,
+    uint64_t lost_packet_number,
     uint64_t current_time);
 
 #ifdef __cplusplus

@@ -1125,22 +1125,39 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 
     /* Look for a ready stream */
     while (stream != NULL) {
-        if ((cnx->maxdata_remote > cnx->data_sent&& stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
-            (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
-            (stream->fin_requested && !stream->fin_sent))) ||
-            (stream->reset_requested && !stream->reset_sent) ||
-            (stream->stop_sending_requested && !stream->stop_sending_sent)) {
-            /* Something can be sent */
-            found_stream = stream;
+        int has_data = 0;
+        picoquic_stream_head_t* next_stream = stream->next_output_stream;
+
+        if (found_stream != NULL && stream->stream_priority > found_stream->stream_priority) {
+            /* All the streams at that priority level have been examined,
+             * the current selection is validated */
             break;
         }
+        has_data = (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
+            (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+                (stream->fin_requested && !stream->fin_sent)));
+        if ((stream->reset_requested && !stream->reset_sent) ||
+            (stream->stop_sending_requested && !stream->stop_sending_sent)) {
+            /* urgent action is needed, this takes precedence over FIFO vs round-robin processing */
+            found_stream = stream;
+            break;
+        } else if (has_data) {
+            /* Something can be sent */
+            if ((stream->stream_priority & 1) != 0) {
+                /* This priority level requests FIFO processing, so we return the first available stream */
+                found_stream = stream;
+                break;
+            }
+            else if (found_stream == NULL || stream->last_time_data_sent < found_stream->last_time_data_sent) {
+                /* Select this stream, but need to check if another stream should go before in round robin order */
+                found_stream = stream;
+            }
+        }
         else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
-            picoquic_stream_head_t* next_stream = stream->next_output_stream;
             /* If stream is exhausted, remove from output list */
             picoquic_remove_output_stream(cnx, stream, previous_stream);
 
             picoquic_delete_stream_if_closed(cnx, stream);
-            stream = next_stream;
         }
         else {
             if (stream->is_active ||
@@ -1153,8 +1170,8 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
                 }
             }
             previous_stream = stream;
-            stream = stream->next_output_stream;
         }
+        stream = next_stream;
     }
 
     return found_stream;
@@ -1454,11 +1471,13 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                 else if (stream_data_context.length == 0 && stream_data_context.is_fin == 0) {
                     /* The application did not send any data */
                     bytes = bytes0;
+                    stream->is_active = stream_data_context.is_still_active;
                 }
                 else
                 {
                     bytes = bytes0 + stream_data_context.byte_index + stream_data_context.length;
                     stream->sent_offset += stream_data_context.length;
+                    stream->last_time_data_sent = picoquic_get_quic_time(cnx->quic);
                     cnx->data_sent += stream_data_context.length;
 
                     if (stream_data_context.length > 0) {
@@ -1523,6 +1542,7 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                     }
 
                     stream->sent_offset += length;
+                    stream->last_time_data_sent = picoquic_get_quic_time(cnx->quic);
                     cnx->data_sent += length;
                 }
 
@@ -3228,6 +3248,8 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     uint64_t ecnx3[3] = { 0, 0, 0 };
     uint8_t first_byte = bytes[0];
     picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
+    uint64_t largest_in_path = 0;
+    picoquic_path_t * ack_path = cnx->path[0];
 
     if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block,
         (has_path_id)?&path_id:NULL,
@@ -3265,6 +3287,9 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
             picoquic_packet_t* p_retransmitted_previous = pkt_ctx->retransmitted_newest;
 
             if (top_packet != NULL && is_new_ack) {
+                largest_in_path = top_packet->path_packet_number;
+                ack_path = top_packet->send_path;
+
                 if (pkt_ctx->latest_time_acknowledged < top_packet->send_time) {
                     pkt_ctx->latest_time_acknowledged = top_packet->send_time;
                 }
@@ -3347,9 +3372,9 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
         }
         if (ecnx3[2] > pkt_ctx->ecn_ce_total_remote) {
             pkt_ctx->ecn_ce_total_remote = ecnx3[2];
-            cnx->congestion_alg->alg_notify(cnx, cnx->path[0],
+            cnx->congestion_alg->alg_notify(cnx, ack_path,
                 picoquic_congestion_notification_ecn_ec,
-                0, 0, 0, largest, current_time);
+                0, 0, 0, largest_in_path, current_time);
         }
     }
 
@@ -4540,6 +4565,9 @@ uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byte
         }
         else {
             bytes = datagram_data_context.after_data;
+            if (bytes > bytes0) {
+                *is_pure_ack = 0;
+            }
         }
     }
 

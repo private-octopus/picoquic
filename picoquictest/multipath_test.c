@@ -51,7 +51,7 @@ static int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int m
     return ret;
 }
 
-/* Add the additional links for multipath scenario */
+/* Manage  the additional links for multipath scenario */
 static void multipath_test_kill_links(picoquic_test_tls_api_ctx_t* test_ctx, int link_id)
 {
     /* Make sure that nothing gets sent on the old links */
@@ -66,6 +66,19 @@ static void multipath_test_kill_links(picoquic_test_tls_api_ctx_t* test_ctx, int
         test_ctx->c_to_s_link_2->is_switched_off = 1;
         test_ctx->s_to_c_link_2->next_send_time = UINT64_MAX;
         test_ctx->s_to_c_link_2->is_switched_off = 1;
+    }
+}
+
+
+static void multipath_test_set_unreachable(picoquic_test_tls_api_ctx_t* test_ctx, int link_id)
+{
+    if (link_id == 0) {
+        test_ctx->c_to_s_link->is_unreachable = 1;
+        test_ctx->s_to_c_link->is_unreachable = 1;
+    }
+    else {
+        test_ctx->c_to_s_link_2->is_unreachable = 1;
+        test_ctx->s_to_c_link_2->is_unreachable = 1;
     }
 }
 
@@ -410,6 +423,7 @@ typedef enum {
     multipath_test_rotation,
     multipath_test_nat,
     multipath_test_break1,
+    multipath_test_break2,
     multipath_test_back1,
     multipath_test_perf,
     multipath_test_abandon
@@ -443,7 +457,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
     else {
         int is_sat_test = (test_id == multipath_test_sat_plus);
-        if (is_sat_test || test_id == multipath_test_break1 || test_id == multipath_test_back1) {
+        if (is_sat_test || test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_back1) {
             /* Reduce the throughput of path #0 to 1 mbps.
              * This is used to simulate an asymmetric "satellite and landline" scenario,
              * or to simulate a long transfer and test broken path detection or repair */
@@ -547,7 +561,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
     if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
         test_id == multipath_test_renew || test_id == multipath_test_nat ||
-        test_id == multipath_test_break1 || test_id == multipath_test_back1 ||
+        test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_back1 ||
         test_id == multipath_test_abandon)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link */
@@ -575,7 +589,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 /* Client abandons the path, causes it to be demoted. Server should follow suit. */
                 picoquic_abandon_path(test_ctx->cnx_client, 0, 0, "test");
             }
-            else {
+            else if (test_id == multipath_test_break2) {
+                /* Trigger "destination unreachable" error on next socket call to link 1 */
+                multipath_test_set_unreachable(test_ctx, 1);
+            } else {
                 multipath_test_kill_links(test_ctx, (test_id == multipath_test_drop_first) ? 0 : 1);
             }
         }
@@ -642,7 +659,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
-    if (ret == 0 && (test_id == multipath_test_break1 || test_id == multipath_test_abandon)) {
+    if (ret == 0 && (test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_abandon)) {
         if (test_ctx->cnx_server->nb_paths != 1) {
             DBG_PRINTF("After break, %d paths on server connection.\n", test_ctx->cnx_server->nb_paths);
             ret = -1;
@@ -747,6 +764,15 @@ int multipath_break1_test()
     uint64_t max_completion_microsec = 10600000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break1, 0);
+}
+
+/* Test reaction to socket error on second path
+ */
+int multipath_socket_error_test()
+{
+    uint64_t max_completion_microsec = 10600000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_break2, 0);
 }
 
 /* Test that abandoned paths are removed after some time
@@ -1225,7 +1251,7 @@ int simple_multipath_drop_second_test()
 int simple_multipath_sat_plus_test()
 {
     /* Not to far from theoretical 10-12 sec! */
-    uint64_t max_completion_microsec = 10200000;
+    uint64_t max_completion_microsec = 10500000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 1);
 }
@@ -1257,6 +1283,14 @@ int simple_multipath_break1_test()
     uint64_t max_completion_microsec = 10500000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break1, 1);
+}
+
+int simple_multipath_socket_error_test()
+{
+    /* On par with 10.6 for full multipath */
+    uint64_t max_completion_microsec = 10500000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_break2, 1);
 }
 
 int simple_multipath_abandon_test()

@@ -82,14 +82,29 @@ int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
     return ret;
 }
 
+void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id)
+{
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+    if (stream != NULL) {
+        stream->app_stream_ctx = NULL;
+    }
+}
+
 int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready)
 {
+    int ret = 0;
     int was_ready = cnx->is_datagram_ready;
+
     cnx->is_datagram_ready = is_ready;
     if (!was_ready && is_ready) {
-        picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+        if (cnx->remote_parameters.max_datagram_frame_size == 0) {
+            ret = -1;
+        }
+        else {
+            picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+        }
     }
-    return 0;
+    return ret;
 }
 
 
@@ -123,8 +138,28 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     return ret;
 }
 
+void picoquic_set_default_priority(picoquic_quic_t* quic, uint8_t default_stream_priority)
+{
+    quic->default_stream_priority = default_stream_priority;
+}
+
+int picoquic_set_stream_priority(picoquic_cnx_t* cnx, uint64_t stream_id, uint8_t stream_priority)
+{
+    int ret = 0;
+    picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
+
+    if (ret == 0) {
+        stream->stream_priority = stream_priority;
+        /* TODO -- reset position of stream in output list */
+    }
+
+    return ret;
+}
+
 int picoquic_mark_high_priority_stream(picoquic_cnx_t * cnx, uint64_t stream_id, int is_high_priority)
 {
+    int ret;
+
     if (is_high_priority) {
         cnx->high_priority_stream_id = stream_id;
     }
@@ -132,7 +167,9 @@ int picoquic_mark_high_priority_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
         cnx->high_priority_stream_id = (uint64_t)((int64_t)-1);
     }
 
-    return 0;
+    ret = picoquic_set_stream_priority(cnx, stream_id, (is_high_priority) ? 0 : cnx->quic->default_stream_priority);
+
+    return ret;
 }
 
 int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
@@ -1808,12 +1845,24 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
         }
     }
     else if (cnx->is_simple_multipath_enabled && cnx->cnx_state == picoquic_state_ready) {
+        /* The per-path algorithm excludes the packets that were sent on
+         * a path now deleted. The path is set to NULL. */
+        picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
+        picoquic_packet_t* old_p = pkt_ctx->retransmit_oldest;
+        int continue_next = 1;
+
+        while (old_p != NULL && old_p->send_path == NULL && continue_next) {
+            picoquic_packet_t* p_next = old_p->previous_packet;
+            length = picoquic_retransmit_needed_packet(cnx, pkt_ctx, old_p, pc, path_x, current_time,
+                next_wake_time, packet, send_buffer_max, header_length, &continue_next);
+            old_p = p_next;
+        }
         /* Find the path with the lowest repeat wait? */
         for (int i_path = 0; i_path < cnx->nb_paths; i_path++) {
-            picoquic_packet_t* old_p = cnx->path[i_path]->path_packet_first;
+            old_p = cnx->path[i_path]->path_packet_first;
 
             if (length == 0) {
-                int continue_next = 1;
+                continue_next = 1;
 
                 /* Call the per packet routine in a loop */
                 while (old_p != 0 && continue_next) {
@@ -3715,6 +3764,31 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     return ret;
 }
 
+/* Try to send datagrams */
+static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max,
+    int* more_data, int* is_pure_ack, int* datagram_tried_and_failed, int* datagram_sent, int * ret)
+{
+    uint8_t* bytes0 = bytes_next;
+
+    if (cnx->first_datagram != NULL) {
+        bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, more_data, is_pure_ack);
+    }
+    else {
+        while (cnx->is_datagram_ready) {
+            uint8_t* dg_start = bytes_next;
+            bytes_next = picoquic_format_ready_datagram_frame(cnx, bytes_next, bytes_max,
+                more_data, is_pure_ack, ret);
+            if (bytes_next == NULL || bytes_next == dg_start) {
+                break;
+            }
+        }
+    }
+    *datagram_tried_and_failed = (bytes_next == bytes0);
+    *datagram_sent = !*datagram_tried_and_failed;
+
+    return bytes_next;
+}
+
 /*  Prepare the next packet to send when in the ready state */
 int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time,
@@ -3965,6 +4039,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                      * three values: not needed at all, optional, or required.
                      * If required, PMTU discovery takes priority over sending stream data.
                      */
+                    int datagram_first = (cnx->datagram_conflicts_max >= cnx->datagram_conflicts_count);
+                    int datagram_sent = 0;
                     int datagram_tried_and_failed = 0;
                     int stream_tried_and_failed = 0;
                     int preemptive_repeat = 0;
@@ -3986,23 +4062,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         /* Start of CC controlled frames */
-                        if (ret == 0) {
-                            uint8_t* bytes0 = bytes_next;
-
-                            if (cnx->first_datagram != NULL) {
-                                bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
-                            }
-                            else {
-                                while (cnx->is_datagram_ready) {
-                                    uint8_t * dg_start = bytes_next;
-                                    bytes_next = picoquic_format_ready_datagram_frame(cnx, bytes_next, bytes_max,
-                                        &more_data, &is_pure_ack, &ret);
-                                    if (bytes_next == NULL || bytes_next == dg_start) {
-                                        break;
-                                    }
-                                }
-                            }
-                            datagram_tried_and_failed = (bytes_next == bytes0);
+                        if (ret == 0 && datagram_first) {
+                            bytes_next = picoquic_prepare_datagram_ready(cnx, bytes_next, bytes_max,
+                                &more_data, &is_pure_ack, &datagram_tried_and_failed, &datagram_sent, &ret);
                         }
 
                         /* If present, send stream frames queued for retransmission */
@@ -4016,8 +4078,29 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         /* Encode the stream frame, or frames */
-                        if (ret == 0 && !split_repeat_queued && bytes_next + 8 < bytes_max) {
-                            bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
+                        if (ret == 0 && !split_repeat_queued){
+                            if (bytes_next + 8 < bytes_max) {
+                                bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
+                                cnx->datagram_conflicts_count = 0;
+                            }
+                            else {
+                                picoquic_stream_head_t* stream = picoquic_find_ready_stream(cnx);
+
+                                if (stream == NULL) {
+                                    cnx->datagram_conflicts_count = 0;
+                                }
+                                else {
+                                    if (datagram_sent) {
+                                        cnx->datagram_conflicts_count += 1;
+                                    }
+                                    more_data |= 1;
+                                }
+                            }
+                        }
+
+                        if (ret == 0 && !datagram_first) {
+                            bytes_next = picoquic_prepare_datagram_ready(cnx, bytes_next, bytes_max,
+                                &more_data, &is_pure_ack, &datagram_tried_and_failed, &datagram_sent, &ret);
                         }
 
                         /* TODO: replace this by scheduling of BDP frame when window has been estimated */
