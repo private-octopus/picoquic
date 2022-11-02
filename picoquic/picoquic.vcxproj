@@ -192,7 +192,11 @@
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picoquic_config.h" />
     <ClInclude Include="picoquic_internal.h" />
+    <ClInclude Include="picoquic_logger.h" />
     <ClInclude Include="picoquic_packet_loop.h" />
+    <ClInclude Include="picoquic_set_binlog.h" />
+    <ClInclude Include="picoquic_set_textlog.h" />
+    <ClInclude Include="picoquic_unified_log.h" />
     <ClInclude Include="picosocks.h" />
     <ClInclude Include="picosplay.h" />
     <ClInclude Include="picoquic.h" />

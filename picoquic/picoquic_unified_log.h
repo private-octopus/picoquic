@@ -103,10 +103,14 @@ typedef void (*picoquic_log_close_connection_fn)(picoquic_cnx_t* cnx);
 /* log congestion control parameters */
 typedef void (*picoquic_log_cc_dump_fn)(picoquic_cnx_t* cnx, uint64_t current_time);
 
+/* close resource allocated for logging in QUIC context */
+typedef void (*picoquic_log_quic_close)(picoquic_quic_t* quic);
+
 typedef struct st_picoquic_unified_logging_t {
     /* Per context log function */
     picoquic_log_quic_app_message_fn log_quic_app_message;
     picoquic_log_quic_pdu_fn log_quic_pdu;
+    picoquic_log_quic_close log_quic_close;
     /* Per connection functions */
     picoquic_log_app_message_fn log_app_message;
     picoquic_log_pdu_fn log_pdu;
@@ -129,6 +133,9 @@ void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic
 /* Log arrival or departure of an UDP datagram for an unknown connection */
 void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, uint64_t cid64,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length);
+
+/* Close the resource allocated for logs in quic context */
+void picoquic_log_close_logs(picoquic_quic_t* quic);
 
 /* Log an event relating to a specific connection */
 void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...);
