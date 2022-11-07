@@ -33,6 +33,9 @@ extern "C" {
  */
 int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);
 
+/* Close the text log, e.g., when closing the QUIC context */
+void picoquic_close_text_log(picoquic_quic_t* quic);
+
 /* Handling of packet logging */
 
 void picoquic_log_prefix_initial_cid64(FILE* F, uint64_t log_cnxid64);

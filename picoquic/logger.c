@@ -2310,10 +2310,22 @@ void textlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
     }
 }
 
+
+void textlog_close(picoquic_quic_t* quic)
+{
+    if (quic->F_log != NULL && quic->should_close_log) {
+        (void)picoquic_file_close(quic->F_log);
+    }
+
+    quic->F_log = NULL;
+    quic->should_close_log = 0;
+}
+
 struct st_picoquic_unified_logging_t textlog_functions = {
     /* Per context log function */
     txtlog_context_free_app_message,
     textlog_quic_pdu,
+    textlog_close,
     /* Per connection functions */
     textlog_app_message,
     textlog_pdu_ex,
@@ -2335,11 +2347,7 @@ int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
     int ret = 0;
     FILE* F_log;
 
-    if (quic->F_log != NULL && quic->should_close_log) {
-        (void)picoquic_file_close(quic->F_log);
-    }
-
-    quic->F_log = NULL;
+    textlog_close(quic);
 
     if (textlog_file != NULL) {
         if (strcmp(textlog_file, "-") == 0) {

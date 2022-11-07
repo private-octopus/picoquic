@@ -1223,10 +1223,19 @@ static void binlog_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list var
     }
 }
 
+/* Return from close with nothing, as this is per connection only */
+void binlog_close(picoquic_quic_t* quic)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+#endif
+}
+
 struct st_picoquic_unified_logging_t binlog_functions = {
     /* Per context log function */
     binlog_ignore_quic_app_message,
     binlog_ignore_quic_pdu,
+    binlog_close,
     /* Per connection functions */
     binlog_app_message,
     binlog_pdu_ex,
