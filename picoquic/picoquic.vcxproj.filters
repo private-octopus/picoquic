@@ -161,5 +161,17 @@
     <ClInclude Include="performance_log.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="picoquic_unified_log.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picoquic_logger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picoquic_set_binlog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picoquic_set_textlog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
