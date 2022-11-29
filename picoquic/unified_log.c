@@ -29,6 +29,18 @@
 #endif
 #include "picoquic_unified_log.h"
 
+/* Close the quic level resource associated with logs */
+void picoquic_log_close_logs(picoquic_quic_t* quic)
+{
+    if (quic->text_log_fns != NULL) {
+        quic->text_log_fns->log_quic_close(quic);
+    }
+
+    if (quic->bin_log_fns != NULL) {
+        quic->bin_log_fns->log_quic_close(quic);
+    }
+}
+
 /* Log arrival or departure of an UDP datagram for an unknown connection */
 void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, uint64_t cid64,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)

@@ -868,6 +868,8 @@ void picoquic_free(picoquic_quic_t* quic)
         }
 
         /* Close the logs */
+        picoquic_log_close_logs(quic);
+
         quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
         quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
 
