@@ -2,7 +2,7 @@
 #build last picotls master (for Travis)
 
 # Build at a known-good commit
-COMMIT_ID=dbe9a4916ea9d6e0ba1e806e9eb32ac2515dd36d
+COMMIT_ID=2bb3e454a7aae0f0542374973c9daf83bfef8ffe
 
 cd ..
 # git clone --branch master --single-branch --shallow-submodules --recurse-submodules --no-tags https://github.com/h2o/picotls
