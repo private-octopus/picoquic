@@ -1,5 +1,5 @@
 # Build at a known-good commit
-$COMMIT_ID="7e97d3e48e237b9a01227cf7f4b116325b356fc6"
+$COMMIT_ID="bb1eebb366b4b85ce6d17148d454182505c15052"
 
 # Match expectations of picotlsvs project.
 mkdir $dir\include\
