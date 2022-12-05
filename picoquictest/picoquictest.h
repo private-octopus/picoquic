@@ -317,6 +317,7 @@ int cert_verify_null_sni_test();
 int cert_verify_rsa_test();
 int cid_quiescence_test();
 int mediatest_video_test();
+int warptest_video_test();
 int mediatest_video_audio_test();
 int mediatest_video_data_audio_test();
 int mediatest_worst_test();

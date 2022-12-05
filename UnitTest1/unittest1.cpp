@@ -1789,6 +1789,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(warptest_video) {
+            int ret = warptest_video_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(migration_controlled) {
             int ret = migration_controlled_test();
 

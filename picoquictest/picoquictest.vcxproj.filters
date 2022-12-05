@@ -114,6 +114,9 @@
     <ClCompile Include="mediatest.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="warptest.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">
