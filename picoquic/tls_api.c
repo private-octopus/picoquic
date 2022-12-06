@@ -128,6 +128,9 @@ struct st_picoquic_log_event_t {
   * during the process exit.
   */
 static int openssl_is_init = 0;
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+static OSSL_PROVIDER* openssl_default_provider = NULL;
+#endif
 
 static void picoquic_init_openssl()
 {
@@ -136,7 +139,7 @@ static void picoquic_init_openssl()
         ERR_load_crypto_strings();
         OpenSSL_add_all_algorithms();
 #if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-    /* OSSL_PROVIDER *dflt = */(void) OSSL_PROVIDER_load(NULL, "default");
+        /* OSSL_PROVIDER *dflt = */(void) OSSL_PROVIDER_load(NULL, "default");
 #else
 #if !defined(OPENSSL_NO_ENGINE)
         /* Load all compiled-in ENGINEs */
@@ -151,6 +154,17 @@ static void picoquic_init_openssl()
 void picoquic_clear_openssl()
 {
     if (openssl_is_init) {
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+        if (openssl_default_provider != NULL) {
+            (void)OSSL_PROVIDER_unload(OSSL_PROVIDER * prov);
+            openssl_default_provider = NULL;
+        }
+#else
+#if !defined(OPENSSL_NO_ENGINE)
+        /* Free allocations from engines ENGINEs */
+        ENGINE_cleanup();
+#endif
+#endif
         EVP_cleanup();
         ERR_free_strings();
         openssl_is_init = 0;

@@ -28,10 +28,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#if 1
-int CRYPTO_set_mem_debug(int onoff);
-int CRYPTO_mem_leaks_fp(FILE* fp);
-#endif
 void picoquic_clear_openssl();
 
 typedef struct st_picoquic_test_def_t {
@@ -476,11 +472,6 @@ int main(int argc, char** argv)
 #endif
     char const* cnx_ddos_dir = NULL;
 
-#if 1
-    int crypto_debug = CRYPTO_set_mem_debug(1);
-    fprintf(stderr, "CRYPTO_set_mem_debug returns %d\n", crypto_debug);
-#endif
-
     debug_printf_push_stream(stderr);
 
     if (test_status == NULL)
@@ -786,11 +777,6 @@ int main(int argc, char** argv)
 
         free(test_status);
         picoquic_clear_openssl();
-#if 1
-        crypto_debug  = CRYPTO_mem_leaks_fp(stderr);
-        fprintf(stderr, "CRYPTO_mem_leaks_fp returns %d\n", crypto_debug);
-        crypto_debug = CRYPTO_set_mem_debug(0);
-#endif
     }
     return (ret);
 }
