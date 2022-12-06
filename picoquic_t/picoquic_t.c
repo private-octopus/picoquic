@@ -462,7 +462,7 @@ int main(int argc, char** argv)
     int cnx_ddos_packets = 0;
     int cnx_ddos_interval = 0;
 #if 1
-    int first_test = 150;
+    int first_test = 187;
     int last_test = 199;
 #else
     int first_test = 0;
