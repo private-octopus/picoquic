@@ -816,7 +816,6 @@ int warptest_step(warptest_ctx_t* mt_ctx, int* is_active)
     int departure_index = -1;
     int need_frame_departure = 0;
     uint64_t next_frame_time = UINT64_MAX;
-    int next_media_index = -1;
     uint64_t next_time = UINT64_MAX;
 
     /* Check earliest packet arrival */
@@ -853,7 +852,6 @@ int warptest_step(warptest_ctx_t* mt_ctx, int* is_active)
             }
             if (mt_ctx->next_frame_time[i] <= next_frame_time) {
                 next_frame_time = mt_ctx->next_frame_time[i];
-                next_media_index = i;
             }
         }
     }

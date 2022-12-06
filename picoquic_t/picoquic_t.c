@@ -463,10 +463,10 @@ int main(int argc, char** argv)
     int cnx_ddos_interval = 0;
 #if 1
     int first_test = 200;
-    int last_test = INT_MAX;
+    int last_test = 10000;
 #else
     int first_test = 0;
-    int last_test = INT_MAX;
+    int last_test = 10000;
 #endif
     char const* cnx_ddos_dir = NULL;
 
