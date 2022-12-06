@@ -28,6 +28,9 @@
 #include <string.h>
 #include <stdlib.h>
 
+
+void picoquic_clear_openssl();
+
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
     int (*test_fn)();
@@ -774,6 +777,7 @@ int main(int argc, char** argv)
         }
 
         free(test_status);
+        picoquic_clear_openssl();
     }
     return (ret);
 }

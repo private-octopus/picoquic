@@ -148,6 +148,15 @@ static void picoquic_init_openssl()
     }
 }
 
+void picoquic_clear_openssl()
+{
+    if (openssl_is_init) {
+        EVP_cleanup();
+        ERR_free_strings();
+        openssl_is_init = 0;
+    }
+}
+
 ptls_cipher_suite_t* picoquic_cipher_suites[] = {
     &ptls_openssl_aes128gcmsha256,
     &ptls_openssl_aes256gcmsha384,
