@@ -156,7 +156,7 @@ void picoquic_clear_openssl()
     if (openssl_is_init) {
 #if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
         if (openssl_default_provider != NULL) {
-            (void)OSSL_PROVIDER_unload(OSSL_PROVIDER * prov);
+            (void)OSSL_PROVIDER_unload(openssl_default_provider);
             openssl_default_provider = NULL;
         }
 #else
