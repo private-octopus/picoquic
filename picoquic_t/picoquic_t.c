@@ -412,6 +412,7 @@ int usage(char const * argv0)
     }
     fprintf(stderr, "Options: \n");
     fprintf(stderr, "  -x test           Do not run the specified test.\n");
+    fprintf(stderr, "  -o n1 n2          Only run test numbers in range [n1,n2]");
     fprintf(stderr, "  -s nnn            Run stress for nnn minutes.\n");
     fprintf(stderr, "  -f nnn            Run fuzz for nnn minutes.\n");
     fprintf(stderr, "  -c nnn ccc        Run connection stress for nnn minutes, ccc connections.\n");
@@ -460,6 +461,13 @@ int main(int argc, char** argv)
     int cnx_stress_nb_cnx = 0;
     int cnx_ddos_packets = 0;
     int cnx_ddos_interval = 0;
+#if 1
+    int first_test = 200;
+    int last_test = INT_MAX;
+#else
+    int first_test = 0;
+    int last_test = INT_MAX;
+#endif
     char const* cnx_ddos_dir = NULL;
 
     debug_printf_push_stream(stderr);
@@ -473,7 +481,7 @@ int main(int argc, char** argv)
     {
         memset(test_status, 0, nb_tests * sizeof(test_status_t));
 
-        while (ret == 0 && (opt = getopt(argc, argv, "c:d:f:F:s:S:x:nrh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "c:d:f:F:s:S:x:o:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 optind--;
@@ -497,6 +505,14 @@ int main(int argc, char** argv)
                 }
                 break;
             }
+            case 'o':
+                if (optind + 1 > argc) {
+                    fprintf(stderr, "option requires more arguments -- o\n");
+                    ret = usage(argv[0]);
+                }
+                first_test = atoi(optarg);
+                last_test = atoi(argv[optind++]);
+                break;
             case 'f':
                 do_fuzz = 1;
                 stress_minutes = atoi(optarg);
@@ -682,7 +698,7 @@ int main(int argc, char** argv)
             for (size_t i = 0; i < nb_tests; i++) {
                 if (test_status[i] == test_not_run) {
                     nb_test_tried++;
-                    if (do_one_test(i, stdout) != 0) {
+                    if (i >= first_test && i <= last_test && do_one_test(i, stdout) != 0) {
                         test_status[i] = test_failed;
                         nb_test_failed++;
                         ret = -1;
