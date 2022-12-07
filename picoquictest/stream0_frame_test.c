@@ -918,8 +918,8 @@ int hunt_memory_leak_test()
 {
     /* picoquic_init_openssl(); */
     ERR_load_crypto_strings();
-#if 0
     OpenSSL_add_all_algorithms();
+#if 0
 #if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
         /* OSSL_PROVIDER *dflt = */(void)OSSL_PROVIDER_load(NULL, "default");
 #else
@@ -944,8 +944,8 @@ int hunt_memory_leak_test()
         ENGINE_cleanup();
 #endif
 #endif
-        EVP_cleanup();
-#endif
+endif
+    EVP_cleanup();
     ERR_free_strings();
     return(0);
 }
