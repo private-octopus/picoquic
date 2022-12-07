@@ -164,11 +164,11 @@ void picoquic_clear_openssl()
             openssl_default_provider = NULL;
         }
 #else
-        ERR_free_strings();
 #if !defined(OPENSSL_NO_ENGINE)
         /* Free allocations from engines ENGINEs */
         ENGINE_cleanup();
 #endif
+        ERR_free_strings();
 #endif
         EVP_cleanup();
         openssl_is_init = 0;
