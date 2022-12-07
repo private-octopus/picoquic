@@ -898,23 +898,57 @@ int stream_rank_test()
     return ret;
 }
 #if 1
+#include "tls_api.h"
+#include <openssl/pem.h>
+#include <openssl/err.h>
+#include <openssl/engine.h>
+#include <openssl/conf.h>
+#include <openssl/ssl.h>
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/provider.h>
+#endif
+
+/* Searching an indirect leak caused by the sequence
+ * - picoquic_init_openssl();
+ * - picoquic_clear_openssl();
+ */
 void picoquic_init_openssl();
 
 int hunt_memory_leak_test()
 {
-    int ret = 0;
-
-    uint64_t current_time = 0;
-    picoquic_quic_t* quic = NULL;
 #if 1
-    picoquic_init_openssl();
+    /* picoquic_init_openssl(); */
+    ERR_load_crypto_strings();
+#if 0
+    OpenSSL_add_all_algorithms();
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+        /* OSSL_PROVIDER *dflt = */(void)OSSL_PROVIDER_load(NULL, "default");
 #else
-    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL, NULL, NULL, current_time,
-        &current_time, NULL, NULL, 0);
-
-    picoquic_free(quic);
+#if !defined(OPENSSL_NO_ENGINE)
+        /* Load all compiled-in ENGINEs */
+        ENGINE_load_builtin_engines();
+        ENGINE_register_all_ciphers();
+        ENGINE_register_all_digests();
 #endif
+#endif
+#endif
+    /* picoquic_clear_openssl(); */
+#if 0
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+        if (openssl_default_provider != NULL) {
+            (void)OSSL_PROVIDER_unload(openssl_default_provider);
+            openssl_default_provider = NULL;
+        }
+#else
+#if !defined(OPENSSL_NO_ENGINE)
+        /* Free allocations from engines ENGINEs */
+        ENGINE_cleanup();
+#endif
+#endif
+        EVP_cleanup();
+#endif
+        ERR_free_strings();
+        openssl_is_init = 0;
     return(0);
 }
 #endif
