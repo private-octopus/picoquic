@@ -916,7 +916,6 @@ void picoquic_init_openssl();
 
 int hunt_memory_leak_test()
 {
-#if 1
     /* picoquic_init_openssl(); */
     ERR_load_crypto_strings();
 #if 0
