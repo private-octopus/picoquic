@@ -463,8 +463,8 @@ int main(int argc, char** argv)
     int cnx_stress_nb_cnx = 0;
     int cnx_ddos_packets = 0;
     int cnx_ddos_interval = 0;
-    int first_test = 0;
-    int last_test = 10000;
+    size_t first_test = 0;
+    size_t last_test = 10000;
 
     char const* cnx_ddos_dir = NULL;
 
@@ -507,9 +507,17 @@ int main(int argc, char** argv)
                 if (optind + 1 > argc) {
                     fprintf(stderr, "option requires more arguments -- o\n");
                     ret = usage(argv[0]);
+                } else {
+                int i_first_test = atoi(optarg);
+                int i_last_test = atoi(argv[optind++]);
+                if (i_first_test < 0 || i_last_test < 0) {
+                    fprintf(stderr, "Incorrect first/last: %s %s\n", optarg, argv[optind-1]);
+                    ret = usage(argv[0]);
                 }
-                first_test = atoi(optarg);
-                last_test = atoi(argv[optind++]);
+                else {
+                    first_test = (size_t) i_first_test;
+                    last_test = (size_t) i_last_test;
+                }
                 break;
             case 'f':
                 do_fuzz = 1;
