@@ -947,8 +947,7 @@ int hunt_memory_leak_test()
 #endif
         EVP_cleanup();
 #endif
-        ERR_free_strings();
-        openssl_is_init = 0;
+    ERR_free_strings();
     return(0);
 }
 #endif
