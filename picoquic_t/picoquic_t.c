@@ -507,16 +507,18 @@ int main(int argc, char** argv)
                 if (optind + 1 > argc) {
                     fprintf(stderr, "option requires more arguments -- o\n");
                     ret = usage(argv[0]);
-                } else {
-                int i_first_test = atoi(optarg);
-                int i_last_test = atoi(argv[optind++]);
-                if (i_first_test < 0 || i_last_test < 0) {
-                    fprintf(stderr, "Incorrect first/last: %s %s\n", optarg, argv[optind-1]);
-                    ret = usage(argv[0]);
                 }
                 else {
-                    first_test = (size_t) i_first_test;
-                    last_test = (size_t) i_last_test;
+                    int i_first_test = atoi(optarg);
+                    int i_last_test = atoi(argv[optind++]);
+                    if (i_first_test < 0 || i_last_test < 0) {
+                        fprintf(stderr, "Incorrect first/last: %s %s\n", optarg, argv[optind - 1]);
+                        ret = usage(argv[0]);
+                    }
+                    else {
+                        first_test = (size_t)i_first_test;
+                        last_test = (size_t)i_last_test;
+                    }
                 }
                 break;
             case 'f':
