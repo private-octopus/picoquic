@@ -897,17 +897,8 @@ int stream_rank_test()
 
     return ret;
 }
-#if 1
-#include "tls_api.h"
-#include <openssl/pem.h>
-#include <openssl/err.h>
-#include <openssl/engine.h>
-#include <openssl/conf.h>
-#include <openssl/ssl.h>
-#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-#include <openssl/provider.h>
-#endif
 
+#if 1
 /* Searching an indirect leak caused by the sequence
  * - picoquic_init_openssl();
  * - picoquic_clear_openssl();
