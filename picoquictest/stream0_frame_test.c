@@ -896,17 +896,3 @@ int stream_rank_test()
 
     return ret;
 }
-
-#if 1
-/* Searching an indirect leak caused by the sequence
- * - picoquic_init_openssl();
- * - picoquic_clear_openssl();
- */
-void picoquic_init_openssl();
-
-int hunt_memory_leak_test()
-{
-    picoquic_init_openssl();
-    return(0);
-}
-#endif
