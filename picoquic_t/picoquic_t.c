@@ -43,6 +43,9 @@ typedef enum {
 } test_status_t;
 
 static const picoquic_test_def_t test_table[] = {
+#if 1
+    { "hunt_memory_leak", hunt_memory_leak_test},
+#endif
     { "connection_id_print", util_connection_id_print_test },
     { "connection_id_parse", util_connection_id_parse_test },
     { "sprintf", util_sprintf_test },
@@ -464,8 +467,8 @@ int main(int argc, char** argv)
     int cnx_ddos_packets = 0;
     int cnx_ddos_interval = 0;
 #if 1
-    int first_test = 45;
-    int last_test = 45;
+    int first_test = 0;
+    int last_test = 0;
 #else
     int first_test = 0;
     int last_test = 10000;

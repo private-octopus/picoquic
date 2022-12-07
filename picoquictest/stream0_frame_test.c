@@ -897,3 +897,19 @@ int stream_rank_test()
 
     return ret;
 }
+#if 1
+int hunt_memory_leak_test()
+{
+    int ret = 0;
+
+    uint64_t current_time = 0;
+    picoquic_quic_t* quic = NULL;
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, current_time,
+        &current_time, NULL, NULL, 0);
+
+    picoquic_free(quic);
+    return(0);
+}
+#endif
