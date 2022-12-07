@@ -898,18 +898,23 @@ int stream_rank_test()
     return ret;
 }
 #if 1
+void picoquic_init_openssl();
+
 int hunt_memory_leak_test()
 {
     int ret = 0;
 
     uint64_t current_time = 0;
     picoquic_quic_t* quic = NULL;
-
+#if 1
+    picoquic_init_openssl();
+#else
     quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, current_time,
         &current_time, NULL, NULL, 0);
 
     picoquic_free(quic);
+#endif
     return(0);
 }
 #endif

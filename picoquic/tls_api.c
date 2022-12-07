@@ -132,7 +132,11 @@ static int openssl_is_init = 0;
 static OSSL_PROVIDER* openssl_default_provider = NULL;
 #endif
 
+#if 1
+void picoquic_init_openssl()
+#else
 static void picoquic_init_openssl()
+#endif
 {
     if (openssl_is_init == 0) {
         openssl_is_init = 1;
