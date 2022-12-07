@@ -916,37 +916,7 @@ void picoquic_init_openssl();
 
 int hunt_memory_leak_test()
 {
-    /* picoquic_init_openssl(); */
-    ERR_load_crypto_strings();
-    OpenSSL_add_all_algorithms();
-#if 0
-#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-        /* OSSL_PROVIDER *dflt = */(void)OSSL_PROVIDER_load(NULL, "default");
-#else
-#if !defined(OPENSSL_NO_ENGINE)
-        /* Load all compiled-in ENGINEs */
-        ENGINE_load_builtin_engines();
-        ENGINE_register_all_ciphers();
-        ENGINE_register_all_digests();
-#endif
-#endif
-#endif
-    /* picoquic_clear_openssl(); */
-#if 0
-#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-        if (openssl_default_provider != NULL) {
-            (void)OSSL_PROVIDER_unload(openssl_default_provider);
-            openssl_default_provider = NULL;
-        }
-#else
-#if !defined(OPENSSL_NO_ENGINE)
-        /* Free allocations from engines ENGINEs */
-        ENGINE_cleanup();
-#endif
-#endif
-endif
-    EVP_cleanup();
-    ERR_free_strings();
+    picoquic_init_openssl();
     return(0);
 }
 #endif

@@ -779,9 +779,7 @@ int main(int argc, char** argv)
         }
 
         free(test_status);
-#if 0
         picoquic_clear_openssl();
-#endif
     }
     return (ret);
 }
