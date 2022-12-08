@@ -4017,7 +4017,7 @@ int zero_rtt_many_losses_test()
             }
         }
 #if 1
-        if (i < 25) {
+        if (i < 13) {
             continue;
         }
 #endif
