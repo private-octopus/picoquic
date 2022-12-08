@@ -464,7 +464,7 @@ int main(int argc, char** argv)
     int cnx_ddos_packets = 0;
     int cnx_ddos_interval = 0;
     size_t first_test = 150;
-    size_t last_test = 169;
+    size_t last_test = 159;
 
     char const* cnx_ddos_dir = NULL;
 
