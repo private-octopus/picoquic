@@ -4017,7 +4017,7 @@ int zero_rtt_many_losses_test()
             }
         }
 #if 1
-        if (i < 7) {
+        if (i >= 25 && i < 37) {
             continue;
         }
 #endif
