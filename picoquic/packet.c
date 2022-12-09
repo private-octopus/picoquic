@@ -2193,7 +2193,7 @@ int picoquic_incoming_segment(
     /* Store packet if received in advance of encryption keys */
     if (ret == PICOQUIC_ERROR_AEAD_NOT_READY &&
         cnx != NULL) {
-        is_buffered = picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length, addr_from, addr_to, if_index_to, received_ecn);
+        is_buffered = picoquic_incoming_not_decrypted(cnx, &ph, current_time, raw_bytes, length, addr_from, addr_to, if_index_to, received_ecn);
     }
 
     /* Find the path and if required log the incoming packet */

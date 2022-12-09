@@ -3753,6 +3753,10 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
             ret = tls_api_init_ctx(&test_ctx, 
                 (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 1,
                 (i == 0)?0:use_badcrypt);
+#if 0
+            picoquic_set_qlog(test_ctx->qserver, ".");
+            picoquic_set_qlog(test_ctx->qclient, ".");
+#endif
 
             if (ret == 0 && no_coal) {
                 test_ctx->qserver->dont_coalesce_init = 1;
