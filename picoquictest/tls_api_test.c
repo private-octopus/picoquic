@@ -3976,8 +3976,10 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
                 ret = -1;
             } else {
                 ret = picoquic_save_tickets(test_ctx->qclient->p_first_ticket, simulated_time, ticket_file_name);
-                DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), cnx %d, ticket save error (0x%x).\n",
-                    use_badcrypt, hardreset, i, ret);
+                if (ret != 0) {
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), cnx %d, ticket save error (0x%x).\n",
+                        use_badcrypt, hardreset, i, ret);
+                }
             }
         }
 
