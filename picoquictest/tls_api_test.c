@@ -1836,6 +1836,34 @@ static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, u
     return ret;
 }
 
+int tls_api_connect_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret != 0)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_INTERNAL_TEST_VERSION_1);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection loop returns %d\n", ret);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version,
     char const* sni, char const* alpn)
 {

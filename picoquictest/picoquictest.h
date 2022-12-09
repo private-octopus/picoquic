@@ -50,6 +50,9 @@ int intformattest();
 int sacktest();
 int StreamZeroFrameTest();
 int sendacktest();
+#if 1
+int tls_api_connect_test();
+#endif
 int tls_api_test();
 int tls_api_inject_hs_ack_test();
 int tls_api_silence_test();

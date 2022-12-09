@@ -46,5 +46,5 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y valgrind
             #TODO: reset the test before merging PR
-            valgrind -v --error-exitcode=1  --track-origins=yes build/picoquic_ct test_tls_api
+            valgrind -v --error-exitcode=1  --track-origins=yes build/picoquic_ct tls_api_connect
             #valgrind -v --error-exitcode=1  --track-origins=yes build/picoquic_ct zero_rtt_many_losses

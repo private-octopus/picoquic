@@ -353,7 +353,14 @@ namespace UnitTest1
 
 			Assert::AreEqual(ret, 0);
 		}
+#if 1
+        TEST_METHOD(tls_api_connect)
+        {
+            int ret = tls_api_connect_test();
 
+            Assert::AreEqual(ret, 0);
+        }
+#endif
         TEST_METHOD(tls_api_inject_hs_ack)
         {
             int ret = tls_api_inject_hs_ack_test();

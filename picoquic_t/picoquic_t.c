@@ -89,6 +89,9 @@ static const picoquic_test_def_t test_table[] = {
     { "new_cnxid_stash", cnxid_stash_test },
     { "new_cnxid", new_cnxid_test },
     { "pacing", pacing_test },
+#if 1
+    { "tls_api_connect", tls_api_connect_test },
+#endif
     { "tls_api", tls_api_test },
     { "tls_api_inject_hs_ack", tls_api_inject_hs_ack_test },
     { "null_sni", null_sni_test },
