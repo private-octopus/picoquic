@@ -1848,7 +1848,42 @@ int tls_api_connect_test()
     }
 
     if (ret == 0) {
-        ret = tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
+        int nb_trials = 0;
+        int nb_inactive = 0;
+
+        test_ctx->c_to_s_link->loss_mask = NULL;
+        test_ctx->s_to_c_link->loss_mask = NULL;
+
+        test_ctx->c_to_s_link->queue_delay_max = 0;
+        test_ctx->s_to_c_link->queue_delay_max = 0;
+
+        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (
+            !(test_ctx->cnx_client->cnx_state == picoquic_state_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start) ||
+            (test_ctx->cnx_server == NULL || 
+                !(test_ctx->cnx_server != NULL && (test_ctx->cnx_server->cnx_state >= picoquic_state_server_handshake))))) {
+            int was_active = 0;
+            nb_trials++;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+            if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected &&
+                (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state == picoquic_state_disconnected)) {
+                break;
+            }
+
+            if (nb_trials == 512) {
+                DBG_PRINTF("After %d trials, client state = %d, server state = %d",
+                    nb_trials, (int)test_ctx->cnx_client->cnx_state,
+                    (test_ctx->cnx_server == NULL) ? -1 : test_ctx->cnx_server->cnx_state);
+            }
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+        }
 
         if (ret != 0)
         {
