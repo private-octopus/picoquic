@@ -1343,6 +1343,12 @@ static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * ci
     if ((*v_aead = ptls_aead_new(cipher->aead, cipher->hash, is_enc, secret, prefix_label)) == NULL) {
         ret = PTLS_ERROR_NO_MEMORY;
     }
+#if 1
+    else if (cipher == &ptls_openssl_aes128gcmsha256) {
+        ptls_aead_context_t* o_aead = (ptls_aead_context_t*)*v_aead;
+        DBG_PRINTF("Key size: %d, field size: %d", o_aead->algo->key_size, PTLS_MAX_SECRET_SIZE);
+    }
+#endif
 
     return ret;
 }
