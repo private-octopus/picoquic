@@ -2481,7 +2481,7 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
 {
     int ret = 0;
     uint8_t temp_secret[256]; /* secret_max */
-    ptls_cipher_suite_t *cipher = picoquic_get_aes128gcm_sha256(1);
+    ptls_cipher_suite_t *cipher = picoquic_get_aes128gcm_sha256(0);
 
     if (cipher->hash->digest_size > sizeof(temp_secret)) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
