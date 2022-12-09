@@ -89,7 +89,8 @@ static const picoquic_test_def_t test_table[] = {
     { "new_cnxid_stash", cnxid_stash_test },
     { "new_cnxid", new_cnxid_test },
     { "pacing", pacing_test },
-#if 1
+#if 0
+    /* The TLS API connect test is only useful when debugging issues step by step */
     { "tls_api_connect", tls_api_connect_test },
 #endif
     { "tls_api", tls_api_test },

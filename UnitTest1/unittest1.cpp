@@ -353,7 +353,9 @@ namespace UnitTest1
 
 			Assert::AreEqual(ret, 0);
 		}
-#if 1
+
+#if 0
+        /* The TLS API connect test is only useful when debugging issues step by step */
         TEST_METHOD(tls_api_connect)
         {
             int ret = tls_api_connect_test();
