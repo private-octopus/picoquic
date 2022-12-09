@@ -4017,7 +4017,7 @@ int zero_rtt_many_losses_test()
             }
         }
 #if 1
-        if (i < 25 || i >= 28) {
+        if (i < 25 || i >= 26) {
             continue;
         }
 #endif
