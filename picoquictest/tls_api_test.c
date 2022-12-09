@@ -4020,7 +4020,7 @@ int zero_rtt_many_losses_test()
                 loss_mask |= 1;
             }
         }
-#if 1
+#if 0
         if (i < 25 || i >= 26) {
             continue;
         }

@@ -567,7 +567,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             
         /* Manage key rotation */
         if (ph->key_phase == cnx->key_phase_dec) {
-            /* AEAD Decrypt, in place */
+            /* AEAD Decrypt */
 
             if (cnx->is_multipath_enabled && ph->ptype) {
                 decoded = picoquic_aead_decrypt_mp(decoded_bytes + ph->offset,
@@ -674,6 +674,9 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
                     cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
             }
             else {
+#if 1
+                picoquic_log_app_message(cnx, "Decrypt, offset: %zu, pl-length: %zu ", ph->offset, ph->payload_length);
+#endif
                 decoded = picoquic_aead_decrypt_generic(decoded_bytes + ph->offset,
                     bytes + ph->offset, ph->payload_length, ph->pn64, decoded_bytes, ph->offset, cnx->crypto_context[ph->epoch].aead_decrypt);
             }
