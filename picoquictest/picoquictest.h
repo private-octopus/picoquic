@@ -50,6 +50,10 @@ int intformattest();
 int sacktest();
 int StreamZeroFrameTest();
 int sendacktest();
+#if 0
+/* The TLS API connect test is only useful when debugging issues step by step */
+int tls_api_connect_test();
+#endif
 int tls_api_test();
 int tls_api_inject_hs_ack_test();
 int tls_api_silence_test();
@@ -317,6 +321,7 @@ int cert_verify_null_sni_test();
 int cert_verify_rsa_test();
 int cid_quiescence_test();
 int mediatest_video_test();
+int warptest_video_test();
 int mediatest_video_audio_test();
 int mediatest_video_data_audio_test();
 int mediatest_worst_test();

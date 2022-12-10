@@ -128,16 +128,19 @@ struct st_picoquic_log_event_t {
   * during the process exit.
   */
 static int openssl_is_init = 0;
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+static OSSL_PROVIDER* openssl_default_provider = NULL;
+#endif
 
 static void picoquic_init_openssl()
 {
     if (openssl_is_init == 0) {
         openssl_is_init = 1;
-        ERR_load_crypto_strings();
         OpenSSL_add_all_algorithms();
 #if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-    /* OSSL_PROVIDER *dflt = */(void) OSSL_PROVIDER_load(NULL, "default");
+        openssl_default_provider = OSSL_PROVIDER_load(NULL, "default");
 #else
+        ERR_load_crypto_strings();
 #if !defined(OPENSSL_NO_ENGINE)
         /* Load all compiled-in ENGINEs */
         ENGINE_load_builtin_engines();
@@ -145,6 +148,26 @@ static void picoquic_init_openssl()
         ENGINE_register_all_digests();
 #endif
 #endif
+    }
+}
+
+void picoquic_clear_openssl()
+{
+    if (openssl_is_init) {
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+        if (openssl_default_provider != NULL) {
+            (void)OSSL_PROVIDER_unload(openssl_default_provider);
+            openssl_default_provider = NULL;
+        }
+#else
+#if !defined(OPENSSL_NO_ENGINE)
+        /* Free allocations from engines ENGINEs */
+        ENGINE_cleanup();
+#endif
+        ERR_free_strings();
+#endif
+        EVP_cleanup();
+        openssl_is_init = 0;
     }
 }
 
@@ -2458,7 +2481,7 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
 {
     int ret = 0;
     uint8_t temp_secret[256]; /* secret_max */
-    ptls_cipher_suite_t *cipher = picoquic_get_aes128gcm_sha256(1);
+    ptls_cipher_suite_t *cipher = picoquic_get_aes128gcm_sha256(0);
 
     if (cipher->hash->digest_size > sizeof(temp_secret)) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;

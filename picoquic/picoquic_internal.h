@@ -1471,11 +1471,6 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoq
     picoquic_packet_t* p, int should_free);
 void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx, picoquic_packet_t* p);
 
-#if 0
-/* Reset connection after receiving version negotiation */
-int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, uint64_t current_time);
-#endif
-
 /* Reset the connection context, e.g. after retry */
 int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time);
 

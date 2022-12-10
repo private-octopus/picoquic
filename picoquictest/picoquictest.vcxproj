@@ -179,6 +179,7 @@
     <ClCompile Include="tls_api_test.c" />
     <ClCompile Include="transport_param_test.c" />
     <ClCompile Include="util_test.c" />
+    <ClCompile Include="warptest.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h" />
