@@ -156,7 +156,8 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ticket_store_test.c
     picoquictest/tls_api_test.c
     picoquictest/transport_param_test.c
-    picoquictest/util_test.c)
+    picoquictest/util_test.c
+    picoquictest/warptest.c)
 
 set(PICOHTTP_LIBRARY_FILES
     picohttp/democlient.c

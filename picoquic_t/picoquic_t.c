@@ -28,6 +28,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+void picoquic_clear_openssl();
+
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
     int (*test_fn)();
@@ -86,6 +88,10 @@ static const picoquic_test_def_t test_table[] = {
     { "new_cnxid_stash", cnxid_stash_test },
     { "new_cnxid", new_cnxid_test },
     { "pacing", pacing_test },
+#if 0
+    /* The TLS API connect test is only useful when debugging issues step by step */
+    { "tls_api_connect", tls_api_connect_test },
+#endif
     { "tls_api", tls_api_test },
     { "tls_api_inject_hs_ack", tls_api_inject_hs_ack_test },
     { "null_sni", null_sni_test },
@@ -316,6 +322,7 @@ static const picoquic_test_def_t test_table[] = {
     { "mediatest_video_audio", mediatest_video_audio_test },
     { "mediatest_video_data_audio", mediatest_video_data_audio_test },
     { "mediatest_worst", mediatest_worst_test },
+    { "warptest_video", warptest_video_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
     { "monopath_basic", monopath_basic_test },
@@ -410,6 +417,7 @@ int usage(char const * argv0)
     }
     fprintf(stderr, "Options: \n");
     fprintf(stderr, "  -x test           Do not run the specified test.\n");
+    fprintf(stderr, "  -o n1 n2          Only run test numbers in range [n1,n2]");
     fprintf(stderr, "  -s nnn            Run stress for nnn minutes.\n");
     fprintf(stderr, "  -f nnn            Run fuzz for nnn minutes.\n");
     fprintf(stderr, "  -c nnn ccc        Run connection stress for nnn minutes, ccc connections.\n");
@@ -458,6 +466,9 @@ int main(int argc, char** argv)
     int cnx_stress_nb_cnx = 0;
     int cnx_ddos_packets = 0;
     int cnx_ddos_interval = 0;
+    size_t first_test = 0;
+    size_t last_test = 10000;
+
     char const* cnx_ddos_dir = NULL;
 
     debug_printf_push_stream(stderr);
@@ -471,7 +482,7 @@ int main(int argc, char** argv)
     {
         memset(test_status, 0, nb_tests * sizeof(test_status_t));
 
-        while (ret == 0 && (opt = getopt(argc, argv, "c:d:f:F:s:S:x:nrh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "c:d:f:F:s:S:x:o:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 optind--;
@@ -495,6 +506,24 @@ int main(int argc, char** argv)
                 }
                 break;
             }
+            case 'o':
+                if (optind + 1 > argc) {
+                    fprintf(stderr, "option requires more arguments -- o\n");
+                    ret = usage(argv[0]);
+                }
+                else {
+                    int i_first_test = atoi(optarg);
+                    int i_last_test = atoi(argv[optind++]);
+                    if (i_first_test < 0 || i_last_test < 0) {
+                        fprintf(stderr, "Incorrect first/last: %s %s\n", optarg, argv[optind - 1]);
+                        ret = usage(argv[0]);
+                    }
+                    else {
+                        first_test = (size_t)i_first_test;
+                        last_test = (size_t)i_last_test;
+                    }
+                }
+                break;
             case 'f':
                 do_fuzz = 1;
                 stress_minutes = atoi(optarg);
@@ -680,7 +709,7 @@ int main(int argc, char** argv)
             for (size_t i = 0; i < nb_tests; i++) {
                 if (test_status[i] == test_not_run) {
                     nb_test_tried++;
-                    if (do_one_test(i, stdout) != 0) {
+                    if (i >= first_test && i <= last_test && do_one_test(i, stdout) != 0) {
                         test_status[i] = test_failed;
                         nb_test_failed++;
                         ret = -1;
@@ -756,6 +785,7 @@ int main(int argc, char** argv)
         }
 
         free(test_status);
+        picoquic_clear_openssl();
     }
     return (ret);
 }

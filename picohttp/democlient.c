@@ -196,24 +196,8 @@ int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length
                 }
             }
             else {
-#if 0
-                int r = (74 - (*echo_sent % 74)) - 2;
-#endif
-
                 /* TODO: fill buffer with some text */
                 memset(buffer, 0x5A, available);
-#if 0
-                while (r < (int)available) {
-                    if (r >= 0) {
-                        buffer[r] = '\r';
-                    }
-                    r++;
-                    if (r >= 0 && (unsigned int)r < available) {
-                        buffer[r] = '\n';
-                    }
-                    r += 73;
-                }
-#endif
                 *echo_sent += (uint32_t)available;
                 ret = 0;
             }

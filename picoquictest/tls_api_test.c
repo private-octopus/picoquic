@@ -1836,6 +1836,69 @@ static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, u
     return ret;
 }
 
+int tls_api_connect_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret != 0)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_INTERNAL_TEST_VERSION_1);
+    }
+
+    if (ret == 0) {
+        int nb_trials = 0;
+        int nb_inactive = 0;
+
+        test_ctx->c_to_s_link->loss_mask = NULL;
+        test_ctx->s_to_c_link->loss_mask = NULL;
+
+        test_ctx->c_to_s_link->queue_delay_max = 0;
+        test_ctx->s_to_c_link->queue_delay_max = 0;
+
+        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (
+            !(test_ctx->cnx_client->cnx_state == picoquic_state_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start) ||
+            (test_ctx->cnx_server == NULL || 
+                !(test_ctx->cnx_server != NULL && (test_ctx->cnx_server->cnx_state >= picoquic_state_server_handshake))))) {
+            int was_active = 0;
+            nb_trials++;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+            if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected &&
+                (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state == picoquic_state_disconnected)) {
+                break;
+            }
+
+            if (nb_trials == 512) {
+                DBG_PRINTF("After %d trials, client state = %d, server state = %d",
+                    nb_trials, (int)test_ctx->cnx_client->cnx_state,
+                    (test_ctx->cnx_server == NULL) ? -1 : test_ctx->cnx_server->cnx_state);
+            }
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+        }
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection loop returns %d\n", ret);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version,
     char const* sni, char const* alpn)
 {
@@ -3753,6 +3816,10 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
             ret = tls_api_init_ctx(&test_ctx, 
                 (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 1,
                 (i == 0)?0:use_badcrypt);
+#if 0
+            picoquic_set_qlog(test_ctx->qserver, ".");
+            picoquic_set_qlog(test_ctx->qclient, ".");
+#endif
 
             if (ret == 0 && no_coal) {
                 test_ctx->qserver->dont_coalesce_init = 1;
@@ -3909,8 +3976,10 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
                 ret = -1;
             } else {
                 ret = picoquic_save_tickets(test_ctx->qclient->p_first_ticket, simulated_time, ticket_file_name);
-                DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), cnx %d, ticket save error (0x%x).\n",
-                    use_badcrypt, hardreset, i, ret);
+                if (ret != 0) {
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), cnx %d, ticket save error (0x%x).\n",
+                        use_badcrypt, hardreset, i, ret);
+                }
             }
         }
 
@@ -4007,6 +4076,7 @@ int zero_rtt_many_losses_test()
     for (int i = 0; ret == 0 && i < 50; i++)
     {
         uint64_t loss_mask = 0;
+
         for (int j = 0; j < 64; j++)
         {
             loss_mask <<= 1;

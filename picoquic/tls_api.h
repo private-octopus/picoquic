@@ -203,6 +203,8 @@ void picoquic_aes128_ecb_free(void* v_aesecb);
 
 void picoquic_aes128_ecb_encrypt(void* v_aesecb, uint8_t* output, const uint8_t* input, size_t len);
 
+void picoquic_clear_openssl();
+
 #ifdef __cplusplus
 }
 #endif

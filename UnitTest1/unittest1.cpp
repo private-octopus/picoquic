@@ -354,6 +354,15 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
+#if 0
+        /* The TLS API connect test is only useful when debugging issues step by step */
+        TEST_METHOD(tls_api_connect)
+        {
+            int ret = tls_api_connect_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+#endif
         TEST_METHOD(tls_api_inject_hs_ack)
         {
             int ret = tls_api_inject_hs_ack_test();
@@ -1785,6 +1794,12 @@ namespace UnitTest1
 
         TEST_METHOD(mediatest_worst) {
             int ret = mediatest_worst_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(warptest_video) {
+            int ret = warptest_video_test();
 
             Assert::AreEqual(ret, 0);
         }
