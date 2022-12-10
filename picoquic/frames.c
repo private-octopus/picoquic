@@ -3387,9 +3387,6 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
     uint64_t multipath_sequence, int is_opportunistic)
 {
     uint64_t num_block = 0;
-#if 0
-    picoquic_sack_item_t* next_sack = picoquic_sack_last_item(&ack_ctx->sack_list);
-#endif
     uint64_t ack_delay = 0;
     uint64_t ack_range = 0;
     uint64_t ack_gap = 0;
