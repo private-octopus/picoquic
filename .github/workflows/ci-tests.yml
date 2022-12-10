@@ -35,6 +35,7 @@ jobs:
             cd build
             make test && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
+            cat /home/runner/work/picoquic/picoquic/build/Testing/Temporary/LastTest.log
             exit 1
             
       - name: Run Valgrind

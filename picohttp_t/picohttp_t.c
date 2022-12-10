@@ -58,7 +58,6 @@ static const picoquic_test_def_t test_table[] = {
     { "h09_server", h09_server_test },
     { "h09_header", h09_header_test },
     { "generic_server", generic_server_test},
-    { "http_esni", http_esni_test },
     { "h3zero_post", h3zero_post_test},
     { "h09_post", h09_post_test},
     { "demo_alpn", demo_alpn_test},

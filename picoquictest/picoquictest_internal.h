@@ -267,8 +267,6 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     uint32_t proposed_version, uint64_t max_completion_microsec,
     picoquic_tp_t* client_params, picoquic_tp_t* server_params);
 
-uint64_t demo_server_test_time_from_esni_rr(char const* esni_rr_file);
-
 void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned);
 
 #ifdef __cplusplus

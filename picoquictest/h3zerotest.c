@@ -35,9 +35,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #endif
+#if 0
 /* Include picotls.h in order to support tests of ESNI */
 #include "picotls.h"
 #include "tls_api.h"
+#endif
 #include "autoqlog.h"
 #include "picoquic_binlog.h"
 
@@ -1392,7 +1394,7 @@ static size_t const demo_test_stream_length[] = {
 };
 
 static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn, void * server_param,
-    int do_esni, const picoquic_demo_stream_desc_t * demo_scenario, size_t nb_scenario, size_t const * demo_length,
+    const picoquic_demo_stream_desc_t * demo_scenario, size_t nb_scenario, size_t const * demo_length,
     int do_sat, uint64_t do_losses, uint64_t completion_target, int delay_fin, const char * out_dir, const char * client_bin,
     const char * server_bin, int do_preemptive_repeat)
 {
@@ -1404,23 +1406,8 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_demo_callback_ctx_t callback_ctx;
     int ret;
-    /* Locate the esni record and key files */
-    char test_server_esni_key_file[512];
-    char test_server_esni_rr_file[512];
     picoquic_tp_t client_parameters;
     picoquic_connection_id_t initial_cid = { {0xde, 0xc1, 3, 4, 5, 6, 7, 8}, 8 };
-
-    if (do_esni) {
-        ret = picoquic_get_input_path(test_server_esni_key_file, sizeof(test_server_esni_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_ESNI_KEY);
-
-        if (ret == 0) {
-            ret = picoquic_get_input_path(test_server_esni_rr_file, sizeof(test_server_esni_rr_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_ESNI_RR);
-        }
-
-        if (ret == 0) {
-            simulated_time = demo_server_test_time_from_esni_rr(test_server_esni_rr_file);
-        }
-    }
 
     ret = picoquic_demo_client_initialize_context(&callback_ctx, demo_scenario, nb_scenario, alpn, 0, delay_fin);
     callback_ctx.out_dir = out_dir;
@@ -1477,21 +1464,6 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
         picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, server_param);
         picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
-        if (do_esni) {
-            /* Add the esni parameters to the server */
-            if (ret == 0) {
-                ret = picoquic_esni_load_key(test_ctx->qserver, test_server_esni_key_file);
-            }
-
-            if (ret == 0) {
-                ret = picoquic_esni_server_setup(test_ctx->qserver, test_server_esni_rr_file);
-            }
-
-            /* Add the SNI parameters to the client */
-            if (ret == 0) {
-                ret = picoquic_esni_client_from_file(test_ctx->cnx_client, test_server_esni_rr_file);
-            }
-        }
         if (ret == 0) {
             ret = picoquic_start_client_cnx(test_ctx->cnx_client);
         }
@@ -1575,27 +1547,6 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         }
     }
 
-    /* Verify that ESNI was properly negotiated, ut only if ESNI is supported in local version of Picotls */
-#ifdef PTLS_ESNI_NONCE_SIZE
-    if (ret == 0 && do_esni) {
-        if (picoquic_esni_version(test_ctx->cnx_client) == 0) {
-            DBG_PRINTF("%s", "ESNI not negotiated for client connection.\n");
-            ret = -1;
-        } else if (picoquic_esni_version(test_ctx->cnx_server) == 0) {
-            DBG_PRINTF("%s", "ESNI not negotiated for server connection.\n");
-            ret = -1;
-        } else if(picoquic_esni_version(test_ctx->cnx_client) != picoquic_esni_version(test_ctx->cnx_server)) {
-            DBG_PRINTF("ESNI client version %d, server version %d.\n",
-                picoquic_esni_version(test_ctx->cnx_client), picoquic_esni_version(test_ctx->cnx_server));
-                ret = -1;
-        }
-        else if (memcmp(picoquic_esni_nonce(test_ctx->cnx_client), picoquic_esni_nonce(test_ctx->cnx_server), PTLS_ESNI_NONCE_SIZE) != 0) {
-            DBG_PRINTF("%s", "Client and server nonce do not match.\n");
-            ret = -1;
-        }
-    }
-#endif
-
     if (ret == 0 && completion_target != 0) {
         if (simulated_time > completion_target) {
             DBG_PRINTF("Test uses %llu microsec instead of %llu", simulated_time, completion_target);
@@ -1615,7 +1566,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
 int h3zero_server_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, 
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 
         demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
         0, 0, 0, 0, NULL, NULL, NULL, 0);
 }
@@ -1623,7 +1574,7 @@ int h3zero_server_test()
 int h09_server_test()
 {
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL,
-        0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
+        demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
         0, 0, 0, 0, NULL, NULL, NULL, 0);
 }
 
@@ -1831,21 +1782,21 @@ int generic_server_test()
 {
     char const* alpn_09 = PICOHTTP_ALPN_HQ_LATEST;
     char const* alpn_3 = PICOHTTP_ALPN_H3_LATEST;
-    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback, NULL, 0, demo_test_scenario,
+    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback, NULL, demo_test_scenario,
         nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 
     if (ret != 0) {
         DBG_PRINTF("Generic server test fails for %s\n", alpn_09);
     }
     else {
-        ret = demo_server_test(alpn_3, picoquic_demo_server_callback, NULL, 0, demo_test_scenario,
+        ret = demo_server_test(alpn_3, picoquic_demo_server_callback, NULL, demo_test_scenario,
             nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 
         if (ret != 0) {
             DBG_PRINTF("Generic server test fails for %s\n", alpn_3);
         }
         else {
-            ret = demo_server_test(NULL, picoquic_demo_server_callback, NULL, 0, demo_test_scenario,
+            ret = demo_server_test(NULL, picoquic_demo_server_callback, NULL, demo_test_scenario,
                 nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 
             if (ret != 0) {
@@ -1855,12 +1806,6 @@ int generic_server_test()
     }
 
     return ret;
-}
-
-int http_esni_test()
-{
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 1,
-        demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 }
 
 /* Test the server side post API */
@@ -1996,13 +1941,13 @@ static size_t const post_test_stream_length[] = { 2345 };
 
 int h3zero_post_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void*)&ping_test_param, 0, post_test_scenario, nb_post_test_scenario,
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void*)&ping_test_param, post_test_scenario, nb_post_test_scenario,
         post_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 }
 
 int h09_post_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&ping_test_param, 0, post_test_scenario, nb_post_test_scenario, 
+    return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&ping_test_param, post_test_scenario, nb_post_test_scenario, 
         post_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 }
 
@@ -2188,7 +2133,7 @@ int demo_server_file_test()
 
     ret = serve_file_test_set_param(&file_param, file_name_buffer, sizeof(file_name_buffer));
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void*)&file_param, 0, 
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void*)&file_param, 
         file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0)) != 0) {
         DBG_PRINTF("H3 server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_H3_LATEST, ret);
     }
@@ -2196,7 +2141,7 @@ int demo_server_file_test()
         ret = file_test_compare(&file_param, &file_test_scenario[0]);
     }
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&file_param, 0, 
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&file_param,
         file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0)) != 0) {
         DBG_PRINTF("H09 server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_HQ_LATEST, ret);
     }
@@ -2204,7 +2149,7 @@ int demo_server_file_test()
         ret = file_test_compare(&file_param, &file_test_scenario[0]);
     }
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, picoquic_demo_server_callback, (void*)&file_param, 0, 
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, picoquic_demo_server_callback, (void*)&file_param,
         file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0)) != 0) {
         DBG_PRINTF("Demo server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_H3_LATEST, ret);
     }
@@ -2212,7 +2157,7 @@ int demo_server_file_test()
         ret = file_test_compare(&file_param, &file_test_scenario[0]);
     }
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_demo_server_callback, (void*)&file_param, 0,
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_demo_server_callback, (void*)&file_param,
         file_test_scenario, nb_file_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0)) != 0) {
         DBG_PRINTF("Demo server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_HQ_LATEST, ret);
     }
@@ -2231,13 +2176,13 @@ static const size_t nb_satellite_test_scenario = sizeof(satellite_test_scenario)
 
 int h3zero_satellite_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, satellite_test_scenario, nb_satellite_test_scenario,
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, satellite_test_scenario, nb_satellite_test_scenario,
         demo_test_stream_length, 1, 0, 10750000, 0, NULL, NULL, NULL, 0);
 }
 
 int h09_satellite_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL, 0, satellite_test_scenario, nb_satellite_test_scenario, 
+    return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL, satellite_test_scenario, nb_satellite_test_scenario, 
         demo_test_stream_length, 1, 0, 10750000, 0, NULL, NULL, NULL, 0);
 }
 
@@ -2249,7 +2194,7 @@ int h09_lone_fin_test()
 
     ret = serve_file_test_set_param(&file_param, file_name_buffer, sizeof(file_name_buffer));
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&file_param, 0, 
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&file_param, 
         file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length, 0, 0, 0, 1, NULL, NULL, NULL, 0)) != 0) {
         DBG_PRINTF("H09 server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_HQ_LATEST, ret);
     }
@@ -2319,11 +2264,11 @@ int h3_long_file_name_test()
         scenario_line.f_name = file_name_var;
         scenario_line.post_size = 0;
 
-        ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, &scenario_line, 1,
+        ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, &scenario_line, 1,
             long_file_name_stream_length, 0, 0, 400000, 0, NULL, NULL, NULL, 0);
     }
 #else
-    ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, 
+    ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 
         long_file_name_scenario, nb_long_file_name_scenario, 
         long_file_name_stream_length, 0, 0, 400000, 0, NULL, NULL, NULL, 0);
 #endif
@@ -2542,7 +2487,7 @@ int http_multi_file_test_one(char const * alpn, picoquic_stream_data_cb_fn serve
     int ret = demo_test_multi_scenario_create(&scenario, &stream_length, random_seed, nb_files, name_length, file_length, dir_www, dir_download);
 
     if (ret == 0) {
-        ret = demo_server_test(alpn, server_callback_fn, (void*)&file_param, 0, scenario, nb_files,
+        ret = demo_server_test(alpn, server_callback_fn, (void*)&file_param, scenario, nb_files,
             stream_length, 0, do_loss, 5000000, 0, NULL, MULTI_FILE_CLIENT_BIN, MULTI_FILE_SERVER_BIN, do_preemptive_repeat);
     }
 

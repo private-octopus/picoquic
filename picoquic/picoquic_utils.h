@@ -307,15 +307,11 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
 #define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs\\badcert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_KEY "certs\\key.pem"
 #define PICOQUIC_TEST_FILE_CERT_STORE "certs\\test-ca.crt"
-#define PICOQUIC_TEST_FILE_ESNI_KEY "certs\\esni-secp256r1.key"
-#define PICOQUIC_TEST_FILE_ESNI_RR "certs\\esni-rr.bin"
 #else
 #define PICOQUIC_TEST_FILE_SERVER_CERT "certs/cert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs/badcert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_KEY "certs/key.pem"
 #define PICOQUIC_TEST_FILE_CERT_STORE "certs/test-ca.crt"
-#define PICOQUIC_TEST_FILE_ESNI_KEY "certs/esni-secp256r1.key"
-#define PICOQUIC_TEST_FILE_ESNI_RR "certs/esni-rr.bin"
 #endif
 
  /* To set the solution directory for tests */
