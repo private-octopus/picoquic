@@ -33,7 +33,6 @@ extern "C" {
 typedef enum {
     picoquic_option_CERT,
     picoquic_option_KEY,
-    picoquic_option_ESNI_KEY,
     picoquic_option_SERVER_PORT,
     picoquic_option_PROPOSED_VERSION,
     picoquic_option_OUTDIR,
@@ -50,7 +49,6 @@ typedef enum {
     picoquic_option_MULTIPATH,
     picoquic_option_DEST_IF,
     picoquic_option_CIPHER_SUITE,
-    picoquic_option_ESNI_RR_FILE,
     picoquic_option_INIT_CNXID,
     picoquic_option_LOG_FILE,
     picoquic_option_LONG_LOG,
@@ -80,8 +78,6 @@ typedef struct st_picoquic_quic_config_t {
     char const* solution_dir;
     char const* server_cert_file;
     char const* server_key_file;
-    char const* esni_key_file;
-    char const* esni_rr_file;
     char const* log_file;
     char const* bin_dir;
     char const* qlog_dir;

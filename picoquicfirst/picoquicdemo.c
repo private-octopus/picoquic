@@ -720,10 +720,6 @@ int quic_client(const char* ip_address_text, int server_port,
                 cnx_client->test_large_chello = 1;
             }
 
-            if (config->esni_rr_file != NULL) {
-                ret = picoquic_esni_client_from_file(cnx_client, config->esni_rr_file);
-            }
-
             if (config->desired_version != 0) {
                 picoquic_set_desired_version(cnx_client, config->desired_version);
             }

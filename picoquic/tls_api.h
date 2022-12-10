@@ -168,13 +168,6 @@ void picoquic_cid_decrypt_under_mask(void * cid_enc, const picoquic_connection_i
 
 void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc);
 
-int picoquic_esni_load_rr(char const * esni_rr_file_name, uint8_t *esnikeys, size_t esnikeys_max, size_t *esnikeys_len);
-void picoquic_esni_free_key_exchanges(picoquic_quic_t* quic);
-struct st_ptls_esni_secret_t * picoquic_esni_secret(picoquic_cnx_t * cnx);
-
-uint16_t picoquic_esni_version(picoquic_cnx_t * cnx);
-uint8_t * picoquic_esni_nonce(picoquic_cnx_t * cnx);
-
 /* Define hash functions here so applications don't need to directly interface picotls */
 #define PICOQUIC_HASH_SIZE_MAX 64
 void * picoquic_hash_create(char const * algorithm_name);
