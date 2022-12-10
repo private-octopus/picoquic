@@ -87,7 +87,8 @@ and OpenSSL. Please note that you will need a recent version of Picotls --
 the Picotls API has evolved recently to support the latest version of QUIC. The
 current code is tested against the Picotls version of Sat Dec 10 01:56:28 2022 +0900,
 after commit `7d294ab4f2e0ed749b4bcfaf533225a4e0c096f7`. (Note that these last
-commits changed the Picotls API; prior versions will not work with Picoquic.)
+commits changed the Picotls API by removing code for the now obsolete
+ESNI draft; prior versions will not work with Picoquic.)
 The code can use OpenSSL version 1.1.1 or OpenSSL version 3.0.
 
 ## Picoquic on Windows
