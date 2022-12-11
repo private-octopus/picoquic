@@ -701,7 +701,7 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
             }
         }
         /* Delete the stream explicitly */
-        picoquic_remove_output_stream(cnx, stream, NULL);
+        picoquic_remove_output_stream(cnx, stream);
         picoquic_delete_stream_if_closed(cnx, stream);
         /* Call ready stream to check availability after deletion  */
         ready_stream = picoquic_find_ready_stream(cnx);

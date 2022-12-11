@@ -80,7 +80,6 @@ picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uin
 int picoquic_is_stream_closed(picoquic_stream_head_t* stream, int client_mode)
 {
     int is_closed = 0;
-
     if (!stream->is_output_stream) {
         if (IS_BIDIR_STREAM_ID(stream->stream_id)) {
             is_closed = ((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) &&
@@ -1155,7 +1154,7 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
         }
         else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
             /* If stream is exhausted, remove from output list */
-            picoquic_remove_output_stream(cnx, stream, previous_stream);
+            picoquic_remove_output_stream(cnx, stream);
 
             picoquic_delete_stream_if_closed(cnx, stream);
         }
@@ -1495,6 +1494,9 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                         stream->is_active = 0;
                         stream->fin_requested = 1;
                         stream->fin_sent = 1;
+
+                        picoquic_remove_output_stream(cnx, stream);
+
                         picoquic_update_max_stream_ID_local(cnx, stream);
                         may_close = 1;
 

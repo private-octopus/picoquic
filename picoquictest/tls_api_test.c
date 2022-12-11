@@ -1280,18 +1280,9 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     if (next_action >= 1 && next_action <= 3) {
-#if 0
-        /* If there is something to send, do it now */
-        picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
-
-        if (packet == NULL || test_ctx->cnx_client == NULL) {
-            ret = -1;
-        }
-#else
         if (test_ctx->cnx_client == NULL) {
             ret = -1;
         }
-#endif
         else {
             struct sockaddr_storage addr_from;
             struct sockaddr_storage addr_to;
@@ -3816,10 +3807,6 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
             ret = tls_api_init_ctx(&test_ctx, 
                 (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 1,
                 (i == 0)?0:use_badcrypt);
-#if 0
-            picoquic_set_qlog(test_ctx->qserver, ".");
-            picoquic_set_qlog(test_ctx->qclient, ".");
-#endif
 
             if (ret == 0 && no_coal) {
                 test_ctx->qserver->dont_coalesce_init = 1;

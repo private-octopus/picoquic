@@ -2483,6 +2483,9 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
         free(next);
     }
     stream->send_queue = NULL;
+    if (stream->is_output_stream) {
+        picoquic_remove_output_stream(stream->cnx, stream);
+    }
     picosplay_empty_tree(&stream->stream_data_tree);
     picoquic_sack_list_free(&stream->sack_list);
 }
@@ -2552,7 +2555,7 @@ void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
             cnx->last_output_stream = stream;
             cnx->first_output_stream = stream;
         }
-        else if (picoquic_compare_stream_priority(stream, cnx->last_output_stream) > 0) {
+        else if (picoquic_compare_stream_priority(stream, cnx->last_output_stream) >= 0) {
             /* insert after last stream. Common case for most applications. */
             stream->previous_output_stream = cnx->last_output_stream;
             cnx->last_output_stream->next_output_stream = stream;
@@ -2597,7 +2600,7 @@ void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
     }
 }
 
-void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream, picoquic_stream_head_t * previous_stream)
+void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream)
 {
     if (stream->is_output_stream) {
         stream->is_output_stream = 0;
@@ -2615,26 +2618,27 @@ void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t *
         else {
             stream->next_output_stream->previous_output_stream = stream->previous_output_stream;
         }
+        stream->previous_output_stream = NULL;
+        stream->next_output_stream = NULL;
     }
 }
 
+/* Reorder streams by priorities and rank.
+ * A stream is deemed out of order if:
+ * - the previous stream in the list has a higher priority, or
+ * - the new stream has a lower priority.
+ */
 void picoquic_reorder_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
 {
-    int in_order = 0;
     if (stream->is_output_stream) {
-        if ((stream->previous_output_stream == NULL ||
-            picoquic_compare_stream_priority(stream, stream->previous_output_stream) > 0) &&
-            (stream->next_output_stream == NULL ||
-                picoquic_compare_stream_priority(stream, stream->next_output_stream) < 0)) {
-            in_order = 1;
-        }
-        else {
-            picoquic_remove_output_stream(cnx, stream, NULL);
+        if ((stream->previous_output_stream != NULL &&
+            picoquic_compare_stream_priority(stream, stream->previous_output_stream) < 0) ||
+            (stream->next_output_stream != NULL &&
+                picoquic_compare_stream_priority(stream, stream->next_output_stream) > 0)) {
+            picoquic_remove_output_stream(cnx, stream);
             stream->is_output_stream = 0;
+            picoquic_insert_output_stream(cnx, stream);
         }
-    }
-    if (!in_order) {
-        picoquic_insert_output_stream(cnx, stream);
     }
 }
 
@@ -2681,6 +2685,7 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
     if (stream != NULL){
         int is_output_stream = 0;
         stream->stream_id = stream_id;
+        stream->cnx = cnx;
 
         if (IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
             if (IS_BIDIR_STREAM_ID(stream_id)) {
@@ -2717,7 +2722,7 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
             picoquic_insert_output_stream(cnx, stream);
         }
         else {
-            picoquic_remove_output_stream(cnx, stream, NULL);
+            picoquic_remove_output_stream(cnx, stream);
             picoquic_delete_stream_if_closed(cnx, stream);
         }
 

@@ -80,16 +80,16 @@
 
 
 typedef enum {
-    media_test_data = 0,
-    media_test_audio,
-    media_test_video,
-    media_test_nb_types
-} media_test_type_enum;
+    warptest_data = 0,
+    warptest_audio,
+    warptest_video,
+    warptest_nb_types
+} warptest_type_enum;
 
 typedef struct st_warptest_message_buffer_t {
     size_t bytes_sent;
     size_t bytes_received;
-    media_test_type_enum message_type;
+    warptest_type_enum message_type;
     uint32_t message_size;
     uint64_t frame_number;
     uint64_t sent_time;
@@ -104,7 +104,7 @@ typedef struct st_warptest_uni_stream_ctx_t {
     /* stream identifier */
     uint64_t stream_id;
     /* Specify the type of stream */
-    media_test_type_enum stream_type;
+    warptest_type_enum stream_type;
     /* Specify the state of the stream: number of frames sent  or received */
     unsigned int is_sender : 1;
 
@@ -126,6 +126,9 @@ typedef struct st_warptest_cnx_ctx_t {
     struct sockaddr_storage addr;
     picoquic_cnx_t* cnx;
     int is_server;
+
+    struct st_warptest_stream_ctx_t* first_stream;
+    struct st_warptest_stream_ctx_t* last_stream;
 
     struct st_warptest_uni_stream_ctx_t* first_uni_stream;
     struct st_warptest_uni_stream_ctx_t* last_uni_stream;
@@ -149,10 +152,12 @@ typedef struct st_warptest_ctx_t {
     warptest_cnx_ctx_t* client_cnx; /* client connection context */
     struct st_warptest_cnx_ctx_t* first_cnx;
     struct st_warptest_cnx_ctx_t* last_cnx;
-    /* Management of media streams */
-    uint64_t frames_to_send[media_test_nb_types];
-    uint64_t frames_sent[media_test_nb_types];
-    uint64_t next_frame_time[media_test_nb_types];
+    /* Management of media streams.
+     * For the data stream, "frame to send" is expressed in bytes, just as "frames_sent"
+     */
+    uint64_t frames_to_send[warptest_nb_types];
+    uint64_t frames_sent[warptest_nb_types];
+    uint64_t next_frame_time[warptest_nb_types];
     /* managemenent of datagram load */
     size_t datagram_data_requested;
     size_t datagram_data_sent;
@@ -161,10 +166,10 @@ typedef struct st_warptest_ctx_t {
     int nb_datagrams_received;
 
     /* Statistics */
-    warptest_media_stats_t media_stats[media_test_nb_types];
+    warptest_media_stats_t media_stats[warptest_nb_types];
 } warptest_ctx_t;
 
-/* mediatest test specification */
+/* warptest test specification */
 typedef struct st_warptest_spec_t {
     picoquic_congestion_algorithm_t* ccalgo; 
     int do_audio;
@@ -186,6 +191,305 @@ static const uint8_t warptest_ticket_encrypt_key[32] = {
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
 };
 
+int warptest_format_message_header(warptest_message_buffer_t * message_sent, warptest_type_enum message_type)
+{
+    int ret = 0;
+    message_sent->header[0] = (uint8_t)message_type;
+    if (picoquic_frames_uint32_encode(message_sent->header + 1,
+        message_sent->header + WARPTEST_HEADER_SIZE, (uint32_t)message_sent->message_size) == NULL ||
+        picoquic_frames_uint64_encode(message_sent->header + 5,
+            message_sent->header + WARPTEST_HEADER_SIZE, message_sent->frame_number) == NULL ||
+        picoquic_frames_uint64_encode(message_sent->header + 13,
+            message_sent->header + WARPTEST_HEADER_SIZE, message_sent->sent_time) == NULL) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int warptest_fill_receive_buffer(warptest_message_buffer_t* message_received, uint8_t* bytes, size_t length,
+    size_t* msg_read, int* is_complete)
+{
+    int ret = 0;
+    size_t available = 0;
+    *msg_read = 0;
+    *is_complete = 0;
+
+    /* Receive the message buffer. If at least 2 bytes, compute the size. */
+    while (length > *msg_read && ret == 0 && message_received->bytes_received < WARPTEST_HEADER_SIZE) {
+        message_received->header[message_received->bytes_received++] = bytes[*msg_read];
+        *msg_read += 1;
+        if (message_received->bytes_received == WARPTEST_HEADER_SIZE) {
+            message_received->message_type = message_received->header[0];
+            if (picoquic_frames_uint32_decode(message_received->header + 1,
+                message_received->header + WARPTEST_HEADER_SIZE, &message_received->message_size) == NULL ||
+                picoquic_frames_uint64_decode(message_received->header + 5,
+                    message_received->header + WARPTEST_HEADER_SIZE, &message_received->sent_time) == NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (length > *msg_read && ret == 0) {
+        available = length - *msg_read;
+        if (message_received->bytes_received > message_received->message_size) {
+            ret = -1;
+        }
+        else {
+            size_t required = message_received->message_size - message_received->bytes_received;
+            if (required <= available) {
+                available = required;
+                *is_complete = 1;
+            }
+            message_received->bytes_received += available;
+            *msg_read += available;
+        }
+    }
+
+    return ret;
+}
+
+
+void warptest_record_stats(warptest_ctx_t* mt_ctx, warptest_message_buffer_t* message_received)
+{
+    uint64_t delay = mt_ctx->simulated_time - message_received->sent_time;
+
+    if (message_received->message_type >= 0 && message_received->message_type < warptest_nb_types) {
+        warptest_media_stats_t* stats = mt_ctx->media_stats + message_received->message_type;
+        stats->nb_frames++;
+        stats->sum_delays += delay;
+        stats->sum_square_delays += delay * delay;
+        if (stats->min_delay > delay) {
+            stats->min_delay = delay;
+        }
+        if (stats->max_delay < delay) {
+            stats->max_delay = delay;
+        }
+        /* TODO: add stats on order of packets */
+    }
+}
+
+/* Management of the stream context used for data.
+ */
+
+typedef struct st_warptest_stream_ctx_t {
+    /* Organize the streams as part of the connection */
+    struct st_warptest_stream_ctx_t* next_stream;
+    struct st_warptest_stream_ctx_t* previous_stream;
+    struct st_warptest_cnx_ctx_t* cnx_ctx;
+    /* stream identifier */
+    uint64_t stream_id;
+    /* Specify the state of the stream: number of frames sent  or received */
+    unsigned int is_sender : 1;
+    unsigned int finished_sending : 1;
+    unsigned int fin_received : 1;
+    unsigned int is_fin_sent : 1;
+
+    warptest_ctx_t* mt_ctx;
+    uint64_t frame_number;
+    warptest_message_buffer_t message_sent;
+    warptest_message_buffer_t message_received;
+} warptest_stream_ctx_t;
+
+int warptest_receive_stream_data(warptest_stream_ctx_t* stream_ctx, uint8_t* bytes, size_t length, int is_fin)
+{
+    int ret = 0;
+
+    if (stream_ctx->is_sender && length > 0) {
+        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "WARPTEST receive data on sending stream %" PRIu64, stream_ctx->stream_id);
+        DBG_PRINTF("WARPTEST receive data on sending stream %" PRIu64, stream_ctx->stream_id);
+        ret = -1;
+    }
+
+    while (length > 0 && ret == 0) {
+        size_t msg_read = 0;
+        int is_complete = 0;
+        /* Receive the message buffer */
+        ret = warptest_fill_receive_buffer(&stream_ctx->message_received, bytes, length, &msg_read, &is_complete);
+
+        if (ret == 0) {
+            if (is_complete) {
+                if (stream_ctx->message_received.message_type != warptest_data) {
+                    ret = -1;
+                }
+                else {
+                    /* Record statistics */
+                    warptest_record_stats(stream_ctx->cnx_ctx->mt_ctx, &stream_ctx->message_received);
+                    /* Prepare for next message */
+                    memset(&stream_ctx->message_received, 0, sizeof(warptest_message_buffer_t));
+                }
+            }
+            length -= msg_read;
+            bytes += msg_read;
+        }
+    }
+
+    if (is_fin && ret == 0) {
+        /* Check whether the stream should be marked finished. */
+        /* If both sides finished, delete stream? */
+        stream_ctx->fin_received = 1;
+        if (!stream_ctx->is_fin_sent) {
+            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+        }
+    }
+    return ret;
+}
+
+/* Send stream data.
+ * For sender, if message is sent and time has come, create a new frame.
+ * If frame data available, send it.
+ * If no more frame, mark FIN.
+ * For receiver, only send a FIN mark if FIN has been received.
+ */
+int warptest_prepare_to_send_on_stream(warptest_stream_ctx_t* stream_ctx, void* context, size_t space, uint64_t current_time)
+{
+    int ret = 0;
+
+    if (stream_ctx->is_sender) {
+        /* If no ongoing message, try prepare a new one. */
+        if (stream_ctx->message_sent.message_size == 0 && !stream_ctx->finished_sending) {
+            /* Should the data stream be activated? */
+            int64_t available = stream_ctx->mt_ctx->frames_to_send[warptest_data] - stream_ctx->mt_ctx->frames_sent[warptest_data];
+            if (available > 0) {
+                if (available > WARPTEST_DATA_FRAME_SIZE) {
+                    available = WARPTEST_DATA_FRAME_SIZE;
+                }
+                else if (available < WARPTEST_HEADER_SIZE) {
+                    available = WARPTEST_HEADER_SIZE;
+                }
+                stream_ctx->message_sent.message_size = (uint32_t)available;
+                stream_ctx->message_sent.message_type = warptest_data;
+                stream_ctx->message_sent.sent_time = current_time;
+                stream_ctx->message_sent.frame_number = stream_ctx->frame_number;
+                stream_ctx->frame_number += 1;
+                ret = warptest_format_message_header(&stream_ctx->message_sent, warptest_data);
+            }
+        }
+        if (ret == 0 && stream_ctx->message_sent.message_size > stream_ctx->message_sent.bytes_sent) {
+            uint8_t* buffer;
+            size_t header_bytes = 0;
+            int is_still_active = 0;
+            int is_fin = 0;
+            /* Compute bytes that need to be sent */
+            size_t available = stream_ctx->message_sent.message_size - stream_ctx->message_sent.bytes_sent;
+            if (available > space) {
+                available = space;
+                is_still_active = 1;
+            }
+            else {
+                stream_ctx->mt_ctx->frames_sent[warptest_data] += stream_ctx->message_sent.message_size;
+                is_fin = (stream_ctx->mt_ctx->frames_sent[warptest_data] >= stream_ctx->mt_ctx->frames_to_send[warptest_data]);
+                is_still_active = !is_fin;
+            }
+            buffer = (uint8_t*)picoquic_provide_stream_data_buffer(context, available, is_fin, is_still_active);
+            if (buffer == NULL) {
+                ret = -1;
+            }
+            else {
+                stream_ctx->is_fin_sent = is_fin;
+                stream_ctx->finished_sending |= is_fin;
+                /* fill the header bytes if needed */
+                if (stream_ctx->message_sent.bytes_sent < WARPTEST_HEADER_SIZE) {
+                    header_bytes = WARPTEST_HEADER_SIZE - stream_ctx->message_sent.bytes_sent;
+                    if (header_bytes > available) {
+                        header_bytes = available;
+                    }
+                    memcpy(buffer, stream_ctx->message_sent.header + stream_ctx->message_sent.bytes_sent, header_bytes);
+                }
+                /* fill the other bytes */
+                if (available > header_bytes) {
+                    memset(buffer + header_bytes, (uint8_t)stream_ctx->message_sent.message_type, available - header_bytes);
+                }
+                stream_ctx->message_sent.bytes_sent += available;
+                if (stream_ctx->message_sent.bytes_sent >= stream_ctx->message_sent.message_size) {
+                    memset(&stream_ctx->message_sent, 0, sizeof(warptest_message_buffer_t));
+                }
+            }
+        }
+        else {
+            (void)picoquic_provide_stream_data_buffer(context, 0, 0, 0);
+        }
+    }
+    else if (stream_ctx->fin_received && !stream_ctx->is_fin_sent) {
+        (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
+        stream_ctx->is_fin_sent = 1;
+    }
+    return ret;
+}
+
+void warptest_delete_stream_ctx(warptest_stream_ctx_t* stream_ctx)
+{
+    if (stream_ctx->previous_stream == NULL) {
+        stream_ctx->cnx_ctx->first_stream = stream_ctx->next_stream;
+    }
+    else {
+        stream_ctx->previous_stream->next_stream = stream_ctx->next_stream;
+    }
+
+    if (stream_ctx->next_stream == NULL) {
+        stream_ctx->cnx_ctx->last_stream = stream_ctx->previous_stream;
+    }
+    else {
+        stream_ctx->next_stream->previous_stream = stream_ctx->previous_stream;
+    }
+
+    if (stream_ctx->cnx_ctx->cnx != NULL) {
+        picoquic_unlink_app_stream_ctx(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id);
+    }
+
+    free(stream_ctx);
+}
+
+warptest_stream_ctx_t* warptest_create_stream_context(warptest_cnx_ctx_t* cnx_ctx, uint64_t stream_id)
+{
+    warptest_stream_ctx_t* stream_ctx = (warptest_stream_ctx_t*)malloc(sizeof(warptest_stream_ctx_t));
+    if (stream_ctx != NULL) {
+        memset(stream_ctx, 0, sizeof(warptest_stream_ctx_t));
+        stream_ctx->cnx_ctx = cnx_ctx;
+        stream_ctx->stream_id = stream_id;
+        if (cnx_ctx->last_stream == NULL) {
+            cnx_ctx->first_stream = stream_ctx;
+        }
+        else {
+            cnx_ctx->last_stream->next_stream = stream_ctx;
+        }
+        stream_ctx->previous_stream = cnx_ctx->last_stream;
+        cnx_ctx->last_stream = stream_ctx;
+        /* simplification: only clients are senders. */
+        stream_ctx->is_sender = !cnx_ctx->is_server;
+        stream_ctx->mt_ctx = cnx_ctx->mt_ctx;
+
+        if (cnx_ctx->cnx != NULL) {
+            (void)picoquic_set_app_stream_ctx(cnx_ctx->cnx, stream_id, stream_ctx);
+        }
+    }
+
+    return stream_ctx;
+}
+
+warptest_stream_ctx_t* warptest_find_or_create_stream(
+    uint64_t stream_id,
+    warptest_cnx_ctx_t* cnx_ctx,
+    int should_create)
+{
+    warptest_stream_ctx_t* stream_ctx = cnx_ctx->first_stream;
+
+    while (stream_ctx != NULL) {
+        if (stream_ctx->stream_id == stream_id) {
+            break;
+        }
+        stream_ctx = stream_ctx->next_stream;
+    }
+    if (stream_ctx == NULL && should_create) {
+        stream_ctx = warptest_create_stream_context(cnx_ctx, stream_id);
+    }
+
+    return stream_ctx;
+}
+
+
+/* Management of the unidir stream contexts used for audio and video
+ */
 void warptest_delete_uni_stream_ctx(warptest_uni_stream_ctx_t* stream_ctx)
 {
     if (stream_ctx->previous_uni_stream == NULL) {
@@ -262,6 +566,10 @@ void warptest_delete_cnx_context(warptest_cnx_ctx_t* cnx_ctx)
         warptest_delete_uni_stream_ctx(cnx_ctx->first_uni_stream);
     }
 
+    while (cnx_ctx->first_stream != NULL) {
+        warptest_delete_stream_ctx(cnx_ctx->first_stream);
+    }
+
     if (cnx_ctx->cnx != NULL) {
         picoquic_set_callback(cnx_ctx->cnx, NULL, NULL);
         /* Check whether this is right, versus just delete the context link. */
@@ -319,32 +627,14 @@ warptest_cnx_ctx_t* warptest_create_cnx_context(warptest_ctx_t* mt_ctx, picoquic
  * - If in sequence, compute size of sequence gaps, both as
  *   packet numbers and as time values.
  */
-void warptest_record_stats(warptest_ctx_t* mt_ctx, warptest_uni_stream_ctx_t* stream_ctx)
-{
-    uint64_t delay = mt_ctx->simulated_time - stream_ctx->message_received.sent_time;
 
-    if (stream_ctx->message_received.message_type >= 0 && stream_ctx->message_received.message_type < media_test_nb_types) {
-        warptest_media_stats_t* stats = mt_ctx->media_stats + stream_ctx->message_received.message_type;
-        stats->nb_frames++;
-        stats->sum_delays += delay;
-        stats->sum_square_delays += delay * delay;
-        if (stats->min_delay > delay) {
-            stats->min_delay = delay;
-        }
-        if (stats->max_delay < delay) {
-            stats->max_delay = delay;
-        }
-        /* TODO: add stats on order of packets */
-    }
-}
-
-int warptest_check_stats(warptest_ctx_t* mt_ctx, media_test_type_enum media_type)
+int warptest_check_stats(warptest_ctx_t* mt_ctx, warptest_type_enum media_type)
 {
     int ret = 0;
 
-    if (media_type >= 0 && media_type < media_test_nb_types) {
+    if (media_type >= 0 && media_type < warptest_nb_types) {
         warptest_media_stats_t* stats = mt_ctx->media_stats + media_type;
-        uint64_t period = (media_type == media_test_audio) ? WARPTEST_AUDIO_PERIOD : WARPTEST_VIDEO_PERIOD;
+        uint64_t period = (media_type == warptest_audio) ? WARPTEST_AUDIO_PERIOD : WARPTEST_VIDEO_PERIOD;
         uint64_t expected = WARPTEST_DURATION / period;
 
         if (stats->nb_frames != expected) {
@@ -373,8 +663,8 @@ int warptest_receive_uni_stream_data(warptest_uni_stream_ctx_t* stream_ctx, uint
     size_t available = 0;
 
     if (stream_ctx->is_sender) {
-        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "MEDIATEST receive data on sending stream %" PRIu64, stream_ctx->stream_id);
-        DBG_PRINTF("MEDIATEST receive data on sending stream %" PRIu64, stream_ctx->stream_id);
+        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "WARPTEST receive data on sending stream %" PRIu64, stream_ctx->stream_id);
+        DBG_PRINTF("WARPTEST receive data on sending stream %" PRIu64, stream_ctx->stream_id);
         ret = -1;
     } else {
         /* Receive the message buffer. If at least 2 bytes, compute the size. */
@@ -410,7 +700,7 @@ int warptest_receive_uni_stream_data(warptest_uni_stream_ctx_t* stream_ctx, uint
             
                 if (available == required){
                     /* Record statistics */
-                    warptest_record_stats(stream_ctx->cnx_ctx->mt_ctx, stream_ctx);
+                    warptest_record_stats(stream_ctx->cnx_ctx->mt_ctx, &stream_ctx->message_received);
                     memset(&stream_ctx->message_received, 0, sizeof(warptest_message_buffer_t));
                 }
             }
@@ -438,17 +728,27 @@ int warptest_receive_uni_stream_data(warptest_uni_stream_ctx_t* stream_ctx, uint
  *      - create a new sender unidirectional stream
  *      - prepare the message in uni stream context
  *      - mark the new unidir stream context as ready.
- * - Consider the number of frames or the time limit. If this is the
- *   last 
+ * - Consider the number of frames or the time limit. 
+ * Issue: queuing a "data" frame does not progress the time. This leads to 
+ * a loop, because there is no flow control applied, and eventually the tests
+ * fail. There are two plausible solutions:
+ * - Send the data stream as a single QUIC stream, instead of multiple streams.
+ * - Send the data stream one frame at a time, but implement a flow control
+ *   for that stream.
+ * The first solution is the most natural, so we implement it.
  */
 int warptest_prepare_new_frame(warptest_ctx_t* mt_ctx, uint64_t current_time)
 {
     int ret = 0;
-    int priority = 7;
-    /* Is this the right time? */
-    for (int i = 0; i < media_test_nb_types; i++) {
-        if (mt_ctx->next_frame_time[i] <= current_time) {
-            media_test_type_enum message_type = (media_test_type_enum)i;
+    int priority = 255;
+
+    /* Is this the right time for a real time stream?
+     * (Data streams are sent when data stream is ready)
+     */
+    for (int i = 0; i < warptest_nb_types; i++) {
+        warptest_type_enum message_type = (warptest_type_enum)i;
+        if (mt_ctx->next_frame_time[i] <= current_time &&
+            message_type != warptest_data) {
             warptest_uni_stream_ctx_t* stream_ctx = warptest_create_uni_stream_context(mt_ctx->client_cnx,
                 picoquic_get_next_local_stream_id(mt_ctx->client_cnx->cnx, 1));
             stream_ctx->is_sender = 1;
@@ -456,19 +756,15 @@ int warptest_prepare_new_frame(warptest_ctx_t* mt_ctx, uint64_t current_time)
             stream_ctx->message_sent.message_type = message_type;
             stream_ctx->message_sent.frame_number = mt_ctx->frames_sent[i];
             switch (message_type) {
-            case media_test_data:
-                stream_ctx->message_sent.message_size = WARPTEST_DATA_FRAME_SIZE;
-                mt_ctx->next_frame_time[i] = current_time;
-                break;
-            case media_test_audio:
+            case warptest_audio:
                 stream_ctx->message_sent.message_size = 32;
                 mt_ctx->next_frame_time[i] += WARPTEST_AUDIO_PERIOD;
-                priority = 2;
+                priority = 3;
                 break;
-            case media_test_video:
+            case warptest_video:
                 stream_ctx->message_sent.message_size = ((mt_ctx->frames_sent[i] % 100) == 0) ? 0x8000 : 0x800;
                 mt_ctx->next_frame_time[i] += WARPTEST_VIDEO_PERIOD;
-                priority = 4;
+                priority = 5;
                 break;
             default:
                 ret = -1;
@@ -620,7 +916,8 @@ int warptest_callback(picoquic_cnx_t* cnx,
 
     int ret = 0;
     warptest_cnx_ctx_t* cnx_ctx = (warptest_cnx_ctx_t*)callback_ctx;
-    warptest_uni_stream_ctx_t* stream_ctx = (warptest_uni_stream_ctx_t*)v_stream_ctx;
+    warptest_uni_stream_ctx_t* uni_stream_ctx = NULL;
+    warptest_stream_ctx_t* stream_ctx = NULL;
 
     /* If this is the first reference to the connection, the application context is set
     * to the default value defined for the server. This default value contains the pointer
@@ -650,30 +947,52 @@ int warptest_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_data:
         case picoquic_callback_stream_fin:
             /* Data arrival on stream #x, maybe with fin mark */
-            /* we only support unidir streams for now */
-            if (stream_ctx == NULL && !PICOQUIC_IS_BIDIR_STREAM_ID(stream_id)) {
-                /* Retrieve, or create and initialize stream context */
-                stream_ctx = warptest_find_or_create_uni_stream(stream_id, cnx_ctx, 1);
-            }
-            if (stream_ctx == NULL) {
-                /* Internal error */
-                (void)picoquic_reset_stream(cnx, stream_id, WARPTEST_ERROR_INTERNAL);
-                ret = -1;
+
+            if (!PICOQUIC_IS_BIDIR_STREAM_ID(stream_id)) {
+                uni_stream_ctx = (warptest_uni_stream_ctx_t*)v_stream_ctx;
+                if (uni_stream_ctx == NULL) {
+                    /* Retrieve, or create and initialize stream context */
+                    uni_stream_ctx = warptest_find_or_create_uni_stream(stream_id, cnx_ctx, 1);
+                }
+                if (uni_stream_ctx == NULL) {
+                    /* Internal error */
+                    (void)picoquic_reset_stream(cnx, stream_id, WARPTEST_ERROR_INTERNAL);
+                    ret = -1;
+                }
+                else {
+                    ret = warptest_receive_uni_stream_data(uni_stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
+                }
             }
             else {
-                ret = warptest_receive_uni_stream_data(stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
+                stream_ctx = (warptest_stream_ctx_t*)v_stream_ctx;
+                if (stream_ctx == NULL) {
+                    /* Retrieve, or create and initialize stream context */
+                    stream_ctx = warptest_find_or_create_stream(stream_id, cnx_ctx, 1);
+                }
+                if (stream_ctx == NULL) {
+                    /* Internal error */
+                    (void)picoquic_reset_stream(cnx, stream_id, WARPTEST_ERROR_INTERNAL);
+                    ret = -1;
+                }
+                else {
+                    ret = warptest_receive_stream_data(stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
+                }
             }
             break;
         case picoquic_callback_prepare_to_send:
             /* Active sending API */
-            if (stream_ctx == NULL) {
+            if (v_stream_ctx == NULL) {
                 /* This should never happen */
-                picoquic_log_app_message(cnx, "MEDIATEST callback returns %d, event %d", ret, fin_or_event);
-                DBG_PRINTF("Prepare to send on NULL context, steam: %" PRIu64, stream_id);
-                ret = -1;
+                picoquic_log_app_message(cnx, "WARPTEST callback returns %d, event %d", ret, fin_or_event);
+                    DBG_PRINTF("Prepare to send on NULL context, steam: %" PRIu64, stream_id);
+                    ret = -1;
+            } else if (!PICOQUIC_IS_BIDIR_STREAM_ID(stream_id)) {
+                uni_stream_ctx = (warptest_uni_stream_ctx_t*)v_stream_ctx;
+                ret = warptest_prepare_to_send_on_uni_stream(uni_stream_ctx, bytes, length, cnx_ctx->mt_ctx->simulated_time);
             }
             else {
-                ret = warptest_prepare_to_send_on_uni_stream(stream_ctx, bytes, length, cnx_ctx->mt_ctx->simulated_time);
+                stream_ctx = (warptest_stream_ctx_t*)v_stream_ctx;
+                ret = warptest_prepare_to_send_on_stream(stream_ctx, bytes, length, cnx_ctx->mt_ctx->simulated_time);
             }
             break;
         case picoquic_callback_datagram:
@@ -729,10 +1048,9 @@ int warptest_callback(picoquic_cnx_t* cnx,
     }
 
     if (ret != 0) {
-        picoquic_log_app_message(cnx, "MEDIATEST callback returns %d, event %d", ret, fin_or_event);
-        DBG_PRINTF("MEDIATEST callback returns %d, event %d", ret, fin_or_event);
+        picoquic_log_app_message(cnx, "WARPTEST callback returns %d, event %d", ret, fin_or_event);
+        DBG_PRINTF("WARPTEST callback returns %d, event %d", ret, fin_or_event);
     }
-
 
     return ret;
 }
@@ -846,7 +1164,10 @@ int warptest_step(warptest_ctx_t* mt_ctx, int* is_active)
      * but only do that if the client connection is ready.
      */
     if (mt_ctx->client_cnx->cnx != NULL && picoquic_get_cnx_state(mt_ctx->client_cnx->cnx) >= picoquic_state_client_ready_start) {
-        for (int i = 0; i < media_test_nb_types; i++) {
+        for (int i = 0; i < warptest_nb_types; i++) {
+            if (i == warptest_data) {
+                continue;
+            }
             if (mt_ctx->next_frame_time[i] == 0) {
                 mt_ctx->next_frame_time[i] = mt_ctx->simulated_time;
             }
@@ -907,9 +1228,14 @@ int warptest_is_finished(warptest_ctx_t* mt_ctx)
     /* If at least one connection is still up, verify that all frames
      * have been sent.
      */
-    for (int i = 0; is_finished && i < media_test_nb_types; i++) {
-        is_finished &= (mt_ctx->frames_sent[i] == mt_ctx->frames_to_send[i]) &&
-            (mt_ctx->frames_sent[i] == mt_ctx->media_stats[i].nb_frames);
+    for (int i = 0; is_finished && i < warptest_nb_types; i++) {
+        if (i == warptest_data) {
+            is_finished &= (mt_ctx->frames_sent[i] >= mt_ctx->frames_to_send[i]);
+        }
+        else {
+            is_finished &= (mt_ctx->frames_sent[i] == mt_ctx->frames_to_send[i]) &&
+                (mt_ctx->frames_sent[i] == mt_ctx->media_stats[i].nb_frames);
+        }
     }
     if (is_finished) {
         DBG_PRINTF("Media transmission finished at %" PRIu64, mt_ctx->simulated_time);
@@ -984,7 +1310,7 @@ void warptest_delete_ctx(warptest_ctx_t* mt_ctx)
     free(mt_ctx);
 }
 
-warptest_ctx_t * warptest_configure(int media_test_id,  warptest_spec_t * spec)
+warptest_ctx_t * warptest_configure(int warptest_id,  warptest_spec_t * spec)
 {
     int ret = 0;
     warptest_ctx_t* mt_ctx = NULL;
@@ -992,7 +1318,7 @@ warptest_ctx_t * warptest_configure(int media_test_id,  warptest_spec_t * spec)
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
     picoquic_connection_id_t icid = { { 0xed, 0x1a, 0x1d, 0x18, 0, 0, 0, 0}, 8 };
-    icid.id[4] = media_test_id;
+    icid.id[4] = warptest_id;
 
     ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
 
@@ -1075,24 +1401,38 @@ warptest_ctx_t * warptest_configure(int media_test_id,  warptest_spec_t * spec)
                 }
                 if (ret == 0) {
                     if (spec->data_size > 0) {
-                        mt_ctx->frames_to_send[media_test_data] = spec->data_size / WARPTEST_DATA_FRAME_SIZE;;
+                        /* Find the next available stream id */
+                        uint64_t stream_id = picoquic_get_next_local_stream_id(mt_ctx->client_cnx->cnx, 0);
+                        /* Create a stream context */
+                        warptest_stream_ctx_t* stream_ctx = warptest_create_stream_context(mt_ctx->client_cnx, stream_id);
+                        if (stream_ctx == NULL) {
+                            ret = -1;
+                        }
+                        else {
+                            /* Set the media generation parameters */
+                            mt_ctx->frames_to_send[warptest_data] = spec->data_size;
+                            /* Set priority to data level */
+                            picoquic_set_stream_priority(mt_ctx->client_cnx->cnx, stream_id, 7);
+                            /* Activate the stream for sending */
+                            ret = picoquic_mark_active_stream(mt_ctx->client_cnx->cnx, stream_id, 1, stream_ctx);
+                        }
                     }
                     else {
-                        mt_ctx->next_frame_time[media_test_data] = UINT64_MAX;
+                        mt_ctx->next_frame_time[warptest_data] = UINT64_MAX;
                     }
 
                     if (spec->do_audio) {
-                        mt_ctx->frames_to_send[media_test_audio] = WARPTEST_DURATION / WARPTEST_AUDIO_PERIOD;
+                        mt_ctx->frames_to_send[warptest_audio] = WARPTEST_DURATION / WARPTEST_AUDIO_PERIOD;
                     }
                     else {
-                        mt_ctx->next_frame_time[media_test_audio] = UINT64_MAX;
+                        mt_ctx->next_frame_time[warptest_audio] = UINT64_MAX;
                     }
 
                     if (spec->do_video) {
-                        mt_ctx->frames_to_send[media_test_video] = WARPTEST_DURATION / WARPTEST_VIDEO_PERIOD;
+                        mt_ctx->frames_to_send[warptest_video] = WARPTEST_DURATION / WARPTEST_VIDEO_PERIOD;
                     }
                     else {
-                        mt_ctx->next_frame_time[media_test_video] = UINT64_MAX;
+                        mt_ctx->next_frame_time[warptest_video] = UINT64_MAX;
                     }
                 }
 
@@ -1100,7 +1440,7 @@ warptest_ctx_t * warptest_configure(int media_test_id,  warptest_spec_t * spec)
                     mt_ctx->datagram_data_requested = spec->datagram_data_size;
                 }
             
-                for (int i = 0; i < media_test_nb_types; i++) {
+                for (int i = 0; i < warptest_nb_types; i++) {
                     mt_ctx->media_stats[i].min_delay = UINT64_MAX;
                 }
             }
@@ -1116,7 +1456,7 @@ warptest_ctx_t * warptest_configure(int media_test_id,  warptest_spec_t * spec)
 }
 
 /* One test */
-int warptest_one(int media_test_id, warptest_spec_t * spec)
+int warptest_one(int warptest_id, warptest_spec_t * spec)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -1124,7 +1464,7 @@ int warptest_one(int media_test_id, warptest_spec_t * spec)
     int is_finished = 0;
 
     /* set the configuration */
-    warptest_ctx_t* mt_ctx = warptest_configure(media_test_id, spec);
+    warptest_ctx_t* mt_ctx = warptest_configure(warptest_id, spec);
     if (mt_ctx == NULL) {
         ret = -1;
     }
@@ -1149,10 +1489,10 @@ int warptest_one(int media_test_id, warptest_spec_t * spec)
         }
         /* Check that the results are as expected. */
         if (ret == 0 && spec->do_audio) {
-            ret = warptest_check_stats(mt_ctx, media_test_audio);
+            ret = warptest_check_stats(mt_ctx, warptest_audio);
         }
         if (ret == 0 && spec->do_video) {
-            ret = warptest_check_stats(mt_ctx, media_test_video);
+            ret = warptest_check_stats(mt_ctx, warptest_video);
         }
         
     }

@@ -323,6 +323,8 @@ static const picoquic_test_def_t test_table[] = {
     { "mediatest_video_data_audio", mediatest_video_data_audio_test },
     { "mediatest_worst", mediatest_worst_test },
     { "warptest_video", warptest_video_test },
+    { "warptest_video_audio", warptest_video_audio_test },
+    { "warptest_video_data_audio", warptest_video_data_audio_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
     { "monopath_basic", monopath_basic_test },
