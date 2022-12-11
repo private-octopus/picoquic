@@ -325,6 +325,7 @@ static const picoquic_test_def_t test_table[] = {
     { "warptest_video", warptest_video_test },
     { "warptest_video_audio", warptest_video_audio_test },
     { "warptest_video_data_audio", warptest_video_data_audio_test },
+    { "warptest_worst", warptest_worst_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
     { "monopath_basic", monopath_basic_test },
