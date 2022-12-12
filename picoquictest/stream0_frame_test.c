@@ -851,7 +851,6 @@ int stream_output_test()
     return ret;
 }
 
-
 /* Test the STREAM ID and STREAM RANK macros
  */
 

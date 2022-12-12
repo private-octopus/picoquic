@@ -51,7 +51,6 @@ typedef struct st_option_table_line_t {
 static option_table_line_t option_table[] = {
     { picoquic_option_CERT, 'c', "cert", 1, "file", "cert file" },
     { picoquic_option_KEY, 'k', "key", 1, "file", "key file" },
-    { picoquic_option_ESNI_KEY, 'K', "esni_key", 1, "file", "ESNI private key file (default: don't use ESNI)" },
     { picoquic_option_SERVER_PORT, 'p', "port", 1, "number", "server port" },
     { picoquic_option_PROPOSED_VERSION, 'v', "proposed_version", 1, "", "Version proposed by client, e.g. -v ff000012" },
     { picoquic_option_OUTDIR, 'o', "outdir", 1, "folder", "Folder where client writes downloaded files, defaults to current directory." },
@@ -70,7 +69,6 @@ static option_table_line_t option_table[] = {
     { picoquic_option_MULTIPATH, 'M', "multipath", 1, "number", "Multipath option: none(0), full(1), simple(2), both(3)" },
     { picoquic_option_DEST_IF, 'e', "dest_if", 1, "if", "Send on interface (default: -1)" },
     { picoquic_option_CIPHER_SUITE, 'C', "cipher_suite", 1, "cipher_suite_id", "specify cipher suite (e.g. -C 20 = chacha20)" },
-    { picoquic_option_ESNI_RR_FILE, 'E', "esni_rr_file", 1, "file", "ESNI RR file (default: don't use ESNI)" },
     { picoquic_option_INIT_CNXID, 'i', "cnxid_params", 1, "per-text-lb-spec", "See documentation for LB compatible CID configuration" },
     { picoquic_option_LOG_FILE, 'l', "text_log", 1, "file", "Log file, Log to stdout if file = \"-\". No text logging if absent." },
     { picoquic_option_LONG_LOG, 'L', "long_log", 0, "", "Log all packets. If absent, log stops after 100 packets." },
@@ -317,9 +315,6 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_KEY:
         ret = config_set_string_param(&config->server_key_file, params, nb_params, 0);
         break;
-    case picoquic_option_ESNI_KEY:
-        ret = config_set_string_param(&config->esni_key_file, params, nb_params, 0);
-        break;
     case picoquic_option_SERVER_PORT:
         config->server_port = config_atoi(params, nb_params, 0, &ret);
         if (ret != 0) {
@@ -414,9 +409,6 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         break;
     case picoquic_option_CIPHER_SUITE:
         config->cipher_suite_id = config_atoi(params, nb_params, 0, &ret);
-        break;
-    case picoquic_option_ESNI_RR_FILE:
-        ret = config_set_string_param(&config->esni_rr_file, params, nb_params, 0);
         break;
     case picoquic_option_INIT_CNXID:
         ret = config_set_string_param(&config->cnx_id_cbdata, params, nb_params, 0);
@@ -848,13 +840,6 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         /* TODO: control whether to */
         /* picoquic_set_key_log_file_from_env(quic); */
 
-        if (config->esni_key_file != NULL && config->esni_rr_file != NULL) {
-            ret = picoquic_esni_load_key(quic, config->esni_key_file);
-            if (ret == 0) {
-                ret = picoquic_esni_server_setup(quic, config->esni_rr_file);
-            }
-        }
-
         picoquic_set_default_bdp_frame_option(quic, config->bdp_frame_option);
 
         if (ret != 0) {
@@ -889,14 +874,6 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     if (config->server_key_file != NULL)
     {
         free((void*)config->server_key_file);
-    }
-    if (config->esni_key_file != NULL)
-    {
-        free((void*)config->esni_key_file);
-    }
-    if (config->esni_rr_file != NULL)
-    {
-        free((void*)config->esni_rr_file);
     }
     if (config->log_file != NULL)
     {

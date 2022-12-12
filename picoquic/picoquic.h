@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.04b"
+#define PICOQUIC_VERSION "1.04c"
 
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
@@ -442,14 +442,6 @@ void picoquic_set_padding_policy(picoquic_quic_t* quic, uint32_t padding_min_siz
  * picosocks.h */
 void picoquic_set_key_log_file(picoquic_quic_t* quic, char const* keylog_filename);
 
-/* Set the ESNI key.
- * May be called several times to set several keys.
- */
-int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_name);
-
-/* Set the ESNI RR. Must be called after setting the ESNI key at least once. */
-int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file_name);
-
 /* Adjust maximum connections allowed to the specified value.
  * The maximum number cannot be set to a value higher than the limit set when the context was
  * created. Trying higher values has no effect.
@@ -711,9 +703,6 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx);
 
 void picoquic_set_desired_version(picoquic_cnx_t* cnx, uint32_t desired_version);
 void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_version);
-
-/* Support for encrypted SNI*/
-int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_file_name);
 
 /* Connection events.
  * The "probe new path" API attempts to validate a new path. If multipath is enabled,

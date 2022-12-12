@@ -567,7 +567,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             
         /* Manage key rotation */
         if (ph->key_phase == cnx->key_phase_dec) {
-            /* AEAD Decrypt, in place */
+            /* AEAD Decrypt */
 
             if (cnx->is_multipath_enabled && ph->ptype) {
                 decoded = picoquic_aead_decrypt_mp(decoded_bytes + ph->offset,
@@ -2193,7 +2193,7 @@ int picoquic_incoming_segment(
     /* Store packet if received in advance of encryption keys */
     if (ret == PICOQUIC_ERROR_AEAD_NOT_READY &&
         cnx != NULL) {
-        is_buffered = picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length, addr_from, addr_to, if_index_to, received_ecn);
+        is_buffered = picoquic_incoming_not_decrypted(cnx, &ph, current_time, raw_bytes, length, addr_from, addr_to, if_index_to, received_ecn);
     }
 
     /* Find the path and if required log the incoming packet */

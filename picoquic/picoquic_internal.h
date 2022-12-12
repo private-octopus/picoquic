@@ -199,7 +199,7 @@ typedef enum {
 #define PICOQUIC_TWENTYFIRST_INTEROP_VERSION 0xFF000021
 #define PICOQUIC_POST_IESG_VERSION 0xFF000022
 #define PICOQUIC_V1_VERSION 0x00000001
-#define PICOQUIC_V2_VERSION 0x709a50c4
+#define PICOQUIC_V2_VERSION 0x6b3343cf
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 #define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
@@ -587,7 +587,6 @@ typedef int (*picoquic_performance_log_fn)(picoquic_quic_t* quic, picoquic_cnx_t
  */
 typedef struct st_picoquic_quic_t {
     void* tls_master_ctx;
-    struct st_ptls_key_exchange_context_t * esni_key_exchange[16];
     picoquic_stream_data_cb_fn default_callback_fn;
     void* default_callback_ctx;
     char const* default_alpn;
@@ -1470,11 +1469,6 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
 picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
     picoquic_packet_t* p, int should_free);
 void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx, picoquic_packet_t* p);
-
-#if 0
-/* Reset connection after receiving version negotiation */
-int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, uint64_t current_time);
-#endif
 
 /* Reset the connection context, e.g. after retry */
 int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time);

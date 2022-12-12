@@ -79,13 +79,6 @@
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_V1 0x39
 #define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 2048
 
-#ifdef PTLS_ESNI_NONCE_SIZE
-#define PICOQUIC_ESNI_NONCE_SIZE PTLS_ESNI_NONCE_SIZE
-#else 
-#define PICOQUIC_ESNI_NONCE_SIZE 16
-#endif
-
-
 typedef struct st_picoquic_tls_ctx_t {
     ptls_t* tls;
     picoquic_cnx_t* cnx;
@@ -97,8 +90,6 @@ typedef struct st_picoquic_tls_ctx_t {
     size_t alpn_count;
     uint8_t* ext_data;
     size_t ext_data_size;
-    uint16_t esni_version;
-    uint8_t esni_nonce[PICOQUIC_ESNI_NONCE_SIZE];
     uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
     uint8_t app_secret_dec[PTLS_MAX_DIGEST_SIZE];
 } picoquic_tls_ctx_t;
@@ -128,16 +119,19 @@ struct st_picoquic_log_event_t {
   * during the process exit.
   */
 static int openssl_is_init = 0;
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+static OSSL_PROVIDER* openssl_default_provider = NULL;
+#endif
 
 static void picoquic_init_openssl()
 {
     if (openssl_is_init == 0) {
         openssl_is_init = 1;
-        ERR_load_crypto_strings();
         OpenSSL_add_all_algorithms();
 #if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-    /* OSSL_PROVIDER *dflt = */(void) OSSL_PROVIDER_load(NULL, "default");
+        openssl_default_provider = OSSL_PROVIDER_load(NULL, "default");
 #else
+        ERR_load_crypto_strings();
 #if !defined(OPENSSL_NO_ENGINE)
         /* Load all compiled-in ENGINEs */
         ENGINE_load_builtin_engines();
@@ -145,6 +139,26 @@ static void picoquic_init_openssl()
         ENGINE_register_all_digests();
 #endif
 #endif
+    }
+}
+
+void picoquic_clear_openssl()
+{
+    if (openssl_is_init) {
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+        if (openssl_default_provider != NULL) {
+            (void)OSSL_PROVIDER_unload(openssl_default_provider);
+            openssl_default_provider = NULL;
+        }
+#else
+#if !defined(OPENSSL_NO_ENGINE)
+        /* Free allocations from engines ENGINEs */
+        ENGINE_cleanup();
+#endif
+        ERR_free_strings();
+#endif
+        EVP_cleanup();
+        openssl_is_init = 0;
     }
 }
 
@@ -321,36 +335,6 @@ static int picoquic_openssl_set_key_exchange_in_ctx(ptls_context_t* ctx, int key
             break;
         }
     }
-    return ret;
-}
-
-/* This function is only used as part of the ESNI code. 
- * The purpose is to obtain an "exchange context" that matches the type of key found in the
- * file defining the ESNI key. It does not really belong in the basic "crypto provider"
- * API, but rather in the API that handles private keys, etc.
- * TODO: rewrite this as a function that uses generic APIs.
- */
-static int picoquic_openssl_exchange_context_from_file(char const* esni_key_file_name,
-    ptls_key_exchange_context_t** p_exchange_ctx)
-{
-    int ret = 0;
-    EVP_PKEY* pkey = NULL;
-    BIO* bio = BIO_new_file(esni_key_file_name, "rb");
-    pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
-    if (pkey == NULL) {
-        DBG_PRINTF("%s", "failed to load private key");
-        ret = PICOQUIC_ERROR_INVALID_FILE;
-    }
-    else {
-        *p_exchange_ctx = NULL;
-        if ((ret = ptls_openssl_create_key_exchange(p_exchange_ctx, pkey)) != 0) {
-            DBG_PRINTF("failed to load private key from file:%s:picotls-error:%d", esni_key_file_name, ret);
-            ret = PICOQUIC_ERROR_INVALID_FILE;
-            *p_exchange_ctx = NULL;
-        }
-        EVP_PKEY_free(pkey);
-    }
-    BIO_free(bio);
     return ret;
 }
 
@@ -593,16 +577,6 @@ static ptls_cipher_suite_t* picoquic_get_cipher_suite_by_id(int cipher_suite_id,
 static int picoquic_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchange_id)
 {
     return picoquic_openssl_set_key_exchange_in_ctx(ctx, key_exchange_id);
-}
-
-/* Set a key exchange from a file containing a private key.
- * This is used for the implementation of ESNI.
- * TODO: rewrite the ESNI code to use generic APIs.
- */
-int picoquic_exchange_context_from_file(char const* key_file_name,
-    ptls_key_exchange_context_t** p_exchange_ctx)
-{
-    return picoquic_openssl_exchange_context_from_file(key_file_name, p_exchange_ctx);
 }
 
 /* Obtain an AES128 ECB cipher, which is required for CID encryption
@@ -1057,18 +1031,6 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
 
     /* Save the server name */
     ptls_set_server_name(tls, (const char *)params->server_name.base, params->server_name.len);
-
-#ifdef PTLS_ESNI_NONCE_SIZE
-    if (params->esni && quic->cnx_in_progress != NULL) {
-        /* Find the ESNI secret if any, and copy key values to picoquic tls context */
-        picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)quic->cnx_in_progress->tls_ctx;
-        struct st_ptls_esni_secret_t * esni = ptls_get_esni_secret(tls_ctx->tls);
-        if (esni != NULL) {
-            tls_ctx->esni_version = esni->version;
-            memcpy(tls_ctx->esni_nonce, esni->nonce, PTLS_ESNI_NONCE_SIZE);
-        }
-    }
-#endif
 
     /* Check if the client is proposing the expected ALPN */
     if (quic->default_alpn != NULL) {
@@ -1889,22 +1851,6 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
             free((void*)ctx->cipher_suites);
         }
 
-        if (ctx->esni != NULL) {
-            int nb_esni_ctx = 0;
-
-            while (ctx->esni[nb_esni_ctx] != NULL) {
-                /* Relase the ESNI context data */
-                ptls_esni_dispose_context(ctx->esni[nb_esni_ctx]);
-                /* Free the allocated context */
-                free(ctx->esni[nb_esni_ctx]);
-                ctx->esni[nb_esni_ctx] = NULL;
-                /* next one */
-                nb_esni_ctx++;
-            }
-            free(ctx->esni);
-            ctx->esni = NULL;
-        }
-
         picoquic_free_log_event(quic);
     }
 }
@@ -2152,14 +2098,6 @@ void picoquic_tlscontext_free(void* vctx)
 {
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)vctx;
 
-    if (ctx->client_mode) {
-        if (ctx->handshake_properties.client.esni_keys.base != NULL) {
-            free(ctx->handshake_properties.client.esni_keys.base);
-            ctx->handshake_properties.client.esni_keys.base = NULL;
-            ctx->handshake_properties.client.esni_keys.len = 0;
-        }
-    }
-
     if (ctx->ext_data != NULL) {
         free(ctx->ext_data);
     }
@@ -2374,14 +2312,6 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
 
         /* assume that all the data goes to epoch 0, initial */
         if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS)) {
-#ifdef PTLS_ESNI_NONCE_SIZE
-            /* Find the ESNI secret if any, and copy key values to picoquic tls context */
-            struct st_ptls_esni_secret_t* esni = ptls_get_esni_secret(ctx->tls);
-            if (esni != NULL) {
-                ctx->esni_version = esni->version;
-                memcpy(ctx->esni_nonce, esni->nonce, PTLS_ESNI_NONCE_SIZE);
-            }
-#endif
             if (sendbuf.off > 0) {
                 ret = picoquic_add_to_tls_stream(cnx, sendbuf.base, sendbuf.off, 0);
             }
@@ -2458,7 +2388,7 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
 {
     int ret = 0;
     uint8_t temp_secret[256]; /* secret_max */
-    ptls_cipher_suite_t *cipher = picoquic_get_aes128gcm_sha256(1);
+    ptls_cipher_suite_t *cipher = picoquic_get_aes128gcm_sha256(0);
 
     if (cipher->hash->digest_size > sizeof(temp_secret)) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
@@ -3155,183 +3085,6 @@ void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc)
     }
 }
 #endif
-
-/* Support for encrypted SNI (ESNI).
- */
-
-/* Load the ESNI exchange keys. This function must be called at least once
- * before setting up ESNI for the server. 
- * esni_key_elements should be declared as an array of ptls_key_exchange_context_t*
- * of size less than *esni_key_count.
- * The last element in the array should be a NULL pointer.
- */
-
-int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_name)
-{
-    int ret = 0;
-    size_t esni_key_exchange_count = 0;
-    
-    while (esni_key_exchange_count < 15 &&
-        quic->esni_key_exchange[esni_key_exchange_count] != 0)
-        esni_key_exchange_count++;
-
-    if (quic->esni_key_exchange[esni_key_exchange_count] != 0) {
-        DBG_PRINTF("Too many ESNI private key file, %zu already\n", esni_key_exchange_count);
-        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-    } else {
-        ret = picoquic_exchange_context_from_file(esni_key_file_name, &quic->esni_key_exchange[esni_key_exchange_count]);
-    }
-
-    return ret;
-}
-
-int picoquic_esni_load_rr(char const * esni_rr_file_name, uint8_t *esnikeys, size_t esnikeys_max, size_t *esnikeys_len)
-{
-    FILE * fp = NULL;
-    int ret = 0;
-
-    *esnikeys_len = 0;
-
-    if ((fp = picoquic_file_open(esni_rr_file_name, "rb")) == NULL) {
-        fprintf(stderr, "failed to open file:%s\n", esni_rr_file_name);
-        ret = PICOQUIC_ERROR_INVALID_FILE;
-    }
-    else {
-        *esnikeys_len = fread(esnikeys, 1, esnikeys_max, fp);
-        if (*esnikeys_len == 0 || !feof(fp)) {
-            DBG_PRINTF("failed to load ESNI data from file:%s\n", esni_rr_file_name);
-        }
-        (void)picoquic_file_close(fp);
-    }
-
-    return ret;
-}
-
-void picoquic_esni_free_key_exchanges(picoquic_quic_t* quic)
-{
-    size_t esni_key_exchange_count = 0;
-
-    while (esni_key_exchange_count < 15 &&
-        quic->esni_key_exchange[esni_key_exchange_count] != 0)
-    {
-        quic->esni_key_exchange[esni_key_exchange_count]->on_exchange(&quic->esni_key_exchange[esni_key_exchange_count], 1, NULL, ptls_iovec_init(NULL, 0));
-        quic->esni_key_exchange[esni_key_exchange_count] = NULL;
-        esni_key_exchange_count++;
-    }
-}
-
-/* Setup ESNI by providing a set of RRDATA for the specified context.
- * The "esni_rr_file_name" file contains the RRDATA of _ESNI RR published for the service in the DNS.
- * The "esni_key_elements" contains a null terminated array of ptls_key_exchange_context_t* 
- * TODO: in theory, it should be possible to support multuple ESNI contexts in a single server.
- * This would require repeated calls to the "init context" API, and an esni vector
- * containing a longer null terminated list of esni pointers.
- */
-
-static const size_t picoquic_esnikeys_max_rr = 65536;
-
-int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file_name)
-{
-    uint8_t * esnikeys = malloc(picoquic_esnikeys_max_rr);
-    size_t esnikeys_len;
-    ptls_context_t *ctx = (ptls_context_t *)quic->tls_master_ctx;
-    int ret = 0;
-
-    if (esnikeys != NULL) {
-        /* read esnikeys */
-        ret = picoquic_esni_load_rr(esni_rr_file_name, esnikeys, picoquic_esnikeys_max_rr, &esnikeys_len);
-
-        /* Install the ESNI data in the server context */
-        if (ret == 0) {
-            ctx->esni = (ptls_esni_context_t**) malloc(sizeof(ptls_esni_context_t*) * 2);
-
-            if (ctx->esni == NULL) {
-                DBG_PRINTF("%s", "no memory for SNI allocation.\n");
-                ret = PICOQUIC_ERROR_MEMORY;
-            }
-            else {
-                ctx->esni[1] = NULL;
-                ctx->esni[0] = (ptls_esni_context_t*)malloc(sizeof(ptls_esni_context_t));
-                if (ctx->esni[0] == NULL) {
-                    DBG_PRINTF("%s", "no memory for SNI allocation.\n");
-                    ret = PICOQUIC_ERROR_MEMORY;
-                    free(ctx->esni);
-                    ctx->esni = NULL;
-                }
-                else {
-                    memset(ctx->esni[0], 0, sizeof(ptls_esni_context_t));
-                    if ((ret = ptls_esni_init_context(ctx, ctx->esni[0], ptls_iovec_init(esnikeys, esnikeys_len), quic->esni_key_exchange)) != 0) {
-                        DBG_PRINTF("failed to parse ESNI data of file:%s:error=%d\n", esni_rr_file_name, ret);
-                    }
-                }
-            }
-        }
-        /* The data in esnikeys is only used as input in the init process */
-        free(esnikeys);
-    }
-    else {
-        DBG_PRINTF("failed to allocate memory(%zu) for parsing esni record\n", picoquic_esnikeys_max_rr);
-        ret = PICOQUIC_ERROR_MEMORY;
-    }
-
-    return ret;
-}
-
-/* Setup the client side ESNI record, prior to using ESNI in a connection attempt. 
- */
-int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_file_name)
-{
-    int ret = 0;
-    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
-    uint8_t* esnikeys = malloc(picoquic_esnikeys_max_rr);
-    size_t esnikeys_len;
-
-    if (esnikeys != NULL) {
-        /* read esnikeys */
-        ret = picoquic_esni_load_rr(esni_rr_file_name, esnikeys, picoquic_esnikeys_max_rr, &esnikeys_len);
-
-        if (ret == 0 && esnikeys_len > 0 && esnikeys_len <= picoquic_esnikeys_max_rr){
-            ctx->handshake_properties.client.esni_keys.base = (uint8_t*)malloc(esnikeys_len);
-            if (ctx->handshake_properties.client.esni_keys.base == NULL) {
-                ctx->handshake_properties.client.esni_keys.len = 0;
-                DBG_PRINTF("%s", "no memory for SNI allocation.\n");
-                ret = PICOQUIC_ERROR_MEMORY;
-            }
-            else {
-                ctx->handshake_properties.client.esni_keys.len = esnikeys_len;
-                memcpy(ctx->handshake_properties.client.esni_keys.base, esnikeys, esnikeys_len);
-            }
-        }
-        else {
-            ctx->handshake_properties.client.esni_keys.len = 0;
-            ctx->handshake_properties.client.esni_keys.base = NULL;
-            if (ret != 0) {
-                ret = PICOQUIC_ERROR_INVALID_FILE;
-            }
-        }
-        free(esnikeys);
-    }
-    else {
-        DBG_PRINTF("failed to allocate memory(%zu) for parsing esni record\n", picoquic_esnikeys_max_rr);
-        ret = PICOQUIC_ERROR_MEMORY;
-    }
-
-    return ret;
-}
-
-/**
- * Access to ESNI data for tests
- */
-
-uint16_t picoquic_esni_version(picoquic_cnx_t * cnx)
-{
-    return(((picoquic_tls_ctx_t*)cnx->tls_ctx)->esni_version);
-}
-
-uint8_t * picoquic_esni_nonce(picoquic_cnx_t * cnx)
-{
-    return(((picoquic_tls_ctx_t*)cnx->tls_ctx)->esni_nonce);
-}
 
 /* Retry Packet Protection.
  * This is done by applying AES-GCM128 with a constant key and a NULL nonce,

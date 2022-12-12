@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:K:p:v:o:w:x:rR:s:XS:G:P:O:M:e:C:E:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:VU:0j:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:M:e:C:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:VU:0j:h";
 
 int config_option_letters_test()
 {
@@ -49,8 +49,6 @@ static picoquic_quic_config_t param1 = {
     "/data/github/picoquic", /* char const* solution_dir; */
     "/data/certs/cert.pem", /* char const* server_cert_file; */
     "/data/certs/key.pem", /* char const* server_key_file; */
-    "/data/certs/esni_key.pem", /* char const* esni_key_file; */
-    "/data/certs/esni_rr.txt", /* char const* esni_rr_file; */
     "/data/log.txt", /* char const* log_file; */
     "/data/log/", /* char const* bin_dir; */
     "/data/qlog/", /* char const* qlog_dir; */
@@ -100,8 +98,6 @@ static char const* config_argv1[] = {
     "-S", "/data/github/picoquic",
     "-c", "/data/certs/cert.pem",
     "-k", "/data/certs/key.pem",
-    "-K", "/data/certs/esni_key.pem",
-    "-E", "/data/certs/esni_rr.txt",
     "-x", "1024",
     "-l", "/data/log.txt",
     "-b", "/data/log/",
@@ -132,8 +128,6 @@ static picoquic_quic_config_t param2 = {
     NULL, /* char const* solution_dir; */
     NULL, /* char const* server_cert_file; */
     NULL, /* char const* server_key_file; */
-    NULL, /* char const* esni_key_file; */
-    NULL, /* char const* esni_rr_file; */
     NULL, /* char const* log_file; */
     NULL, /* char const* bin_dir; */
     NULL, /* char const* qlog_dir; */
@@ -250,8 +244,6 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_string("solution_dir", expected->solution_dir, actual->solution_dir);
     ret |= config_test_compare_string("server_cert_file", expected->server_cert_file, actual->server_cert_file);
     ret |= config_test_compare_string("server_key_file", expected->server_key_file, actual->server_key_file);
-    ret |= config_test_compare_string("esni_key_file", expected->esni_key_file, actual->esni_key_file);
-    ret |= config_test_compare_string("esni_rr_file", expected->esni_rr_file, actual->esni_rr_file);
     ret |= config_test_compare_string("log_file", expected->log_file, actual->log_file);
     ret |= config_test_compare_string("bin_dir", expected->bin_dir, actual->bin_dir);
     ret |= config_test_compare_string("qlog_dir", expected->qlog_dir, actual->qlog_dir);
