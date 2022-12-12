@@ -701,7 +701,7 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
             }
         }
         /* Delete the stream explicitly */
-        picoquic_remove_output_stream(cnx, stream, NULL);
+        picoquic_remove_output_stream(cnx, stream);
         picoquic_delete_stream_if_closed(cnx, stream);
         /* Call ready stream to check availability after deletion  */
         ready_stream = picoquic_find_ready_stream(cnx);
@@ -797,8 +797,9 @@ int stream_output_test()
 
             if (ret == 0) {
                 /* Relax the max stream id value and test order again */
-                picoquic_add_output_streams(cnx, cnx->max_stream_id_bidir_remote, 8, 1);
+                uint64_t old_limit = cnx->max_stream_id_bidir_remote;
                 cnx->max_stream_id_bidir_remote = 8;
+                picoquic_add_output_streams(cnx, old_limit, 8, 1);
                 ret = stream_output_test_list(cnx, sizeof(output2) / sizeof(uint64_t), output2);
             }
 

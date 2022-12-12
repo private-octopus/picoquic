@@ -150,7 +150,7 @@ int picoquic_set_stream_priority(picoquic_cnx_t* cnx, uint64_t stream_id, uint8_
 
     if (ret == 0) {
         stream->stream_priority = stream_priority;
-        /* TODO -- reset position of stream in output list */
+        picoquic_reorder_output_stream(cnx, stream);
     }
 
     return ret;
