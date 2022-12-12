@@ -1073,25 +1073,25 @@ int vn_tp_test_one(size_t len, const uint8_t* t, int mode, uint32_t envelop_vn, 
 }
 
 #define VN_TP_V1 0x0, 0x0, 0x0, 0x1
-#define VN_TP_V2_DRAFT 0x70, 0x9a, 0x50, 0xc4
+#define VN_TP_V2 0x6b, 0x33, 0x43, 0xcf
 
 uint8_t vn_tp_client_0[] = {
     VN_TP_V1,
-    VN_TP_V2_DRAFT,
+    VN_TP_V2,
     VN_TP_V1
 };
 
 uint8_t vn_tp_client_1[] = {
     VN_TP_V1,
     0x0a, 0x0a, 0x0a, 0x0a,
-    VN_TP_V2_DRAFT
+    VN_TP_V2
 };
 
 uint8_t vn_tp_client_2[] = {
     VN_TP_V1,
     0x0a, 0x0a, 0x0a, 0x0a,
     VN_TP_V1,
-    VN_TP_V2_DRAFT,
+    VN_TP_V2,
     0xfa, 0x0a, 0x0a, 0x0a
 };
 
@@ -1121,35 +1121,35 @@ uint8_t vn_tp_client_bad_4[] = {
 };
 
 uint8_t vn_tp_server_0[] = {
-    VN_TP_V2_DRAFT
+    VN_TP_V2
 };
 
 uint8_t vn_tp_server_1[] = {
-    VN_TP_V2_DRAFT,
+    VN_TP_V2,
     VN_TP_V1,
     0x0, 0x0, 0x0, 0x2,
     0x0, 0x0, 0x0, 0x3,
 };
 
 uint8_t vn_tp_server_bad_1[] = {
-    VN_TP_V2_DRAFT,
+    VN_TP_V2,
     VN_TP_V1,
-    VN_TP_V2_DRAFT,
+    VN_TP_V2,
     0x50, 0x43
 };
 
 uint8_t vn_tp_server_bad_2[] = {
-    VN_TP_V2_DRAFT,
+    VN_TP_V2,
     0x0, 
 };
 
 uint8_t vn_tp_server_bad_3[] = {
-    VN_TP_V2_DRAFT,
+    VN_TP_V2,
     0x0, 0x0
 };
 
 uint8_t vn_tp_server_bad_4[] = {
-    VN_TP_V2_DRAFT,
+    VN_TP_V2,
     0x0, 0x0, 0x0,
     VN_TP_V1
 };
