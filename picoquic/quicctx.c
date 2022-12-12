@@ -1146,13 +1146,8 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->initial_max_stream_data_bidi_remote = 65635;
     tp->initial_max_stream_data_uni = 65535;
     tp->initial_max_data = 0x100000;
-    if (client_mode) {
-        tp->initial_max_stream_id_bidir = 2049;
-        tp->initial_max_stream_id_unidir = 2051;
-    } else {
-        tp->initial_max_stream_id_bidir = 2048;
-        tp->initial_max_stream_id_unidir = 2050;
-    }
+    tp->initial_max_stream_id_bidir = 512;
+    tp->initial_max_stream_id_unidir = 512;
     tp->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000;
     tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
     tp->max_datagram_frame_size = 0;
@@ -2483,6 +2478,9 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
         free(next);
     }
     stream->send_queue = NULL;
+    if (stream->is_output_stream) {
+        picoquic_remove_output_stream(stream->cnx, stream);
+    }
     picosplay_empty_tree(&stream->stream_data_tree);
     picoquic_sack_list_free(&stream->sack_list);
 }
@@ -2546,13 +2544,20 @@ int picoquic_compare_stream_priority(picoquic_stream_head_t * stream, picoquic_s
  */
 void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
 {
-    if (stream->is_output_stream == 0) {
+    if (stream->is_output_stream == 0)  
+    {
+        if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
+            if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
+                return;
+            }
+        }
+
         if (cnx->last_output_stream == NULL) {
             /* insert first stream */
             cnx->last_output_stream = stream;
             cnx->first_output_stream = stream;
         }
-        else if (picoquic_compare_stream_priority(stream, cnx->last_output_stream) > 0) {
+        else if (picoquic_compare_stream_priority(stream, cnx->last_output_stream) >= 0) {
             /* insert after last stream. Common case for most applications. */
             stream->previous_output_stream = cnx->last_output_stream;
             cnx->last_output_stream->next_output_stream = stream;
@@ -2597,7 +2602,7 @@ void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
     }
 }
 
-void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream, picoquic_stream_head_t * previous_stream)
+void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream)
 {
     if (stream->is_output_stream) {
         stream->is_output_stream = 0;
@@ -2615,26 +2620,27 @@ void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t *
         else {
             stream->next_output_stream->previous_output_stream = stream->previous_output_stream;
         }
+        stream->previous_output_stream = NULL;
+        stream->next_output_stream = NULL;
     }
 }
 
+/* Reorder streams by priorities and rank.
+ * A stream is deemed out of order if:
+ * - the previous stream in the list has a higher priority, or
+ * - the new stream has a lower priority.
+ */
 void picoquic_reorder_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
 {
-    int in_order = 0;
     if (stream->is_output_stream) {
-        if ((stream->previous_output_stream == NULL ||
-            picoquic_compare_stream_priority(stream, stream->previous_output_stream) > 0) &&
-            (stream->next_output_stream == NULL ||
-                picoquic_compare_stream_priority(stream, stream->next_output_stream) < 0)) {
-            in_order = 1;
-        }
-        else {
-            picoquic_remove_output_stream(cnx, stream, NULL);
+        if ((stream->previous_output_stream != NULL &&
+            picoquic_compare_stream_priority(stream, stream->previous_output_stream) < 0) ||
+            (stream->next_output_stream != NULL &&
+                picoquic_compare_stream_priority(stream, stream->next_output_stream) > 0)) {
+            picoquic_remove_output_stream(cnx, stream);
             stream->is_output_stream = 0;
+            picoquic_insert_output_stream(cnx, stream);
         }
-    }
-    if (!in_order) {
-        picoquic_insert_output_stream(cnx, stream);
     }
 }
 
@@ -2681,6 +2687,7 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
     if (stream != NULL){
         int is_output_stream = 0;
         stream->stream_id = stream_id;
+        stream->cnx = cnx;
 
         if (IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
             if (IS_BIDIR_STREAM_ID(stream_id)) {
@@ -2717,7 +2724,7 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
             picoquic_insert_output_stream(cnx, stream);
         }
         else {
-            picoquic_remove_output_stream(cnx, stream, NULL);
+            picoquic_remove_output_stream(cnx, stream);
             picoquic_delete_stream_if_closed(cnx, stream);
         }
 
@@ -3125,10 +3132,12 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
  
         /* Initialize local flow control variables to advertised values */
         cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
-        cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
-        cnx->max_stream_id_bidir_local_computed = STREAM_TYPE_FROM_ID(cnx->local_parameters.initial_max_stream_id_bidir);
-        cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
-        cnx->max_stream_id_unidir_local_computed = STREAM_TYPE_FROM_ID(cnx->local_parameters.initial_max_stream_id_unidir);
+        cnx->max_stream_id_bidir_local = STREAM_ID_FROM_RANK(
+            cnx->local_parameters.initial_max_stream_id_bidir, cnx->client_mode, 0);
+        cnx->max_stream_id_bidir_local_computed = STREAM_TYPE_FROM_ID(cnx->max_stream_id_bidir_local);
+        cnx->max_stream_id_unidir_local = STREAM_ID_FROM_RANK(
+            cnx->local_parameters.initial_max_stream_id_unidir, cnx->client_mode, 1);
+        cnx->max_stream_id_unidir_local_computed = STREAM_TYPE_FROM_ID(cnx->max_stream_id_unidir_local);
        
         /* Initialize padding policy to default for context */
         cnx->padding_multiple = quic->padding_multiple_default;
@@ -3351,10 +3360,12 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
      * and remote parameters may have been initialized to the initial value
      * of the previous session. Apply these new parameters. */
     cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
-    cnx->max_stream_id_bidir_remote = cnx->remote_parameters.initial_max_stream_id_bidir;
-    cnx->max_stream_id_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
-    cnx->max_max_stream_data_remote = cnx->remote_parameters.initial_max_data;
-    cnx->max_max_stream_data_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
+    cnx->max_stream_id_bidir_remote =
+        STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_bidir, cnx->client_mode, 0);
+    cnx->max_stream_id_unidir_remote = 
+        STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_unidir, cnx->client_mode, 1);
+    cnx->max_stream_data_remote = cnx->remote_parameters.initial_max_data;
+    cnx->max_stream_data_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
@@ -3374,8 +3385,10 @@ void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const
     /* Initialize local flow control variables to advertised values */
 
     cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
-    cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
-    cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
+    cnx->max_stream_id_bidir_local = STREAM_ID_FROM_RANK(
+        cnx->local_parameters.initial_max_stream_id_bidir, cnx->client_mode, 0);
+    cnx->max_stream_id_unidir_local = STREAM_ID_FROM_RANK(
+        cnx->local_parameters.initial_max_stream_id_unidir, cnx->client_mode, 1);
 }
 
 picoquic_tp_t const* picoquic_get_transport_parameters(picoquic_cnx_t* cnx, int get_local)

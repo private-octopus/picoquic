@@ -523,13 +523,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_transport_param_stream_id)
-        {
-            int ret = transport_param_stream_id_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(vn_tp)
         {
             int ret = vn_tp_test();
@@ -547,13 +540,6 @@ namespace UnitTest1
         TEST_METHOD(stream_rank)
         {
             int ret = stream_rank_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(stream_id_to_rank)
-        {
-            int ret = stream_id_to_rank_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1821,6 +1807,30 @@ namespace UnitTest1
 
         TEST_METHOD(warptest_video) {
             int ret = warptest_video_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(warptest_video_audio) {
+            int ret = warptest_video_audio_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(warptest_video_data_audio) {
+            int ret = warptest_video_data_audio_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(warptest_worst) {
+            int ret = warptest_worst_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(warptest_param) {
+            int ret = warptest_param_test();
 
             Assert::AreEqual(ret, 0);
         }
