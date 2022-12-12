@@ -1146,13 +1146,8 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->initial_max_stream_data_bidi_remote = 65635;
     tp->initial_max_stream_data_uni = 65535;
     tp->initial_max_data = 0x100000;
-    if (client_mode) {
-        tp->initial_max_stream_id_bidir = 2049;
-        tp->initial_max_stream_id_unidir = 2051;
-    } else {
-        tp->initial_max_stream_id_bidir = 2048;
-        tp->initial_max_stream_id_unidir = 2050;
-    }
+    tp->initial_max_stream_id_bidir = 512;
+    tp->initial_max_stream_id_unidir = 512;
     tp->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000;
     tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
     tp->max_datagram_frame_size = 0;
@@ -2549,7 +2544,14 @@ int picoquic_compare_stream_priority(picoquic_stream_head_t * stream, picoquic_s
  */
 void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
 {
-    if (stream->is_output_stream == 0) {
+    if (stream->is_output_stream == 0)  
+    {
+        if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
+            if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
+                return;
+            }
+        }
+
         if (cnx->last_output_stream == NULL) {
             /* insert first stream */
             cnx->last_output_stream = stream;
@@ -3130,10 +3132,12 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
  
         /* Initialize local flow control variables to advertised values */
         cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
-        cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
-        cnx->max_stream_id_bidir_local_computed = STREAM_TYPE_FROM_ID(cnx->local_parameters.initial_max_stream_id_bidir);
-        cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
-        cnx->max_stream_id_unidir_local_computed = STREAM_TYPE_FROM_ID(cnx->local_parameters.initial_max_stream_id_unidir);
+        cnx->max_stream_id_bidir_local = STREAM_ID_FROM_RANK(
+            cnx->local_parameters.initial_max_stream_id_bidir, cnx->client_mode, 0);
+        cnx->max_stream_id_bidir_local_computed = STREAM_TYPE_FROM_ID(cnx->max_stream_id_bidir_local);
+        cnx->max_stream_id_unidir_local = STREAM_ID_FROM_RANK(
+            cnx->local_parameters.initial_max_stream_id_unidir, cnx->client_mode, 1);
+        cnx->max_stream_id_unidir_local_computed = STREAM_TYPE_FROM_ID(cnx->max_stream_id_unidir_local);
        
         /* Initialize padding policy to default for context */
         cnx->padding_multiple = quic->padding_multiple_default;
@@ -3356,10 +3360,12 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
      * and remote parameters may have been initialized to the initial value
      * of the previous session. Apply these new parameters. */
     cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
-    cnx->max_stream_id_bidir_remote = cnx->remote_parameters.initial_max_stream_id_bidir;
-    cnx->max_stream_id_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
-    cnx->max_max_stream_data_remote = cnx->remote_parameters.initial_max_data;
-    cnx->max_max_stream_data_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
+    cnx->max_stream_id_bidir_remote =
+        STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_bidir, cnx->client_mode, 0);
+    cnx->max_stream_id_unidir_remote = 
+        STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_unidir, cnx->client_mode, 1);
+    cnx->max_stream_data_remote = cnx->remote_parameters.initial_max_data;
+    cnx->max_stream_data_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
@@ -3379,8 +3385,10 @@ void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const
     /* Initialize local flow control variables to advertised values */
 
     cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
-    cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
-    cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
+    cnx->max_stream_id_bidir_local = STREAM_ID_FROM_RANK(
+        cnx->local_parameters.initial_max_stream_id_bidir, cnx->client_mode, 0);
+    cnx->max_stream_id_unidir_local = STREAM_ID_FROM_RANK(
+        cnx->local_parameters.initial_max_stream_id_unidir, cnx->client_mode, 1);
 }
 
 picoquic_tp_t const* picoquic_get_transport_parameters(picoquic_cnx_t* cnx, int get_local)

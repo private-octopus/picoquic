@@ -797,8 +797,9 @@ int stream_output_test()
 
             if (ret == 0) {
                 /* Relax the max stream id value and test order again */
-                picoquic_add_output_streams(cnx, cnx->max_stream_id_bidir_remote, 8, 1);
+                uint64_t old_limit = cnx->max_stream_id_bidir_remote;
                 cnx->max_stream_id_bidir_remote = 8;
+                picoquic_add_output_streams(cnx, old_limit, 8, 1);
                 ret = stream_output_test_list(cnx, sizeof(output2) / sizeof(uint64_t), output2);
             }
 

@@ -4861,7 +4861,7 @@ int tls_quant_params_test()
 
     test_parameters.initial_max_data = 0x4000;
     test_parameters.initial_max_stream_id_bidir = 0;
-    test_parameters.initial_max_stream_id_unidir = 65535;
+    test_parameters.initial_max_stream_id_unidir = 16384;
     test_parameters.initial_max_stream_data_bidi_local = 0x2000;
     test_parameters.initial_max_stream_data_bidi_remote = 0x2000;
     test_parameters.initial_max_stream_data_uni = 0x2000;

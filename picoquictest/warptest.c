@@ -1259,23 +1259,12 @@ void warptest_init_transport_parameters(picoquic_tp_t* tp, int client_mode, warp
         tp->initial_max_stream_data_uni = spec->max_stream_data;
     }
     tp->initial_max_data = 0x100000;
-    if (client_mode) {
-        tp->initial_max_stream_id_bidir = 2049;
-        if (spec->max_streams_client == 0) {
-            tp->initial_max_stream_id_unidir = 67;
-        }
-        else {
-            tp->initial_max_stream_id_unidir = spec->max_streams_client;
-        }
+    tp->initial_max_stream_id_bidir = 512;
+    if (spec->max_streams_client == 0) {
+        tp->initial_max_stream_id_unidir = 16;
     }
     else {
-        tp->initial_max_stream_id_bidir = 2048;
-        if (spec->max_streams_server == 0) {
-            tp->initial_max_stream_id_unidir = 66;
-        }
-        else {
-            tp->initial_max_stream_id_unidir = spec->max_streams_server;
-        }
+        tp->initial_max_stream_id_unidir = spec->max_streams_client;
     }
     tp->idle_timeout = 30000;
     tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE;
@@ -1354,8 +1343,12 @@ warptest_ctx_t * warptest_configure(int warptest_id,  warptest_spec_t * spec)
         
         if (spec->ccalgo != NULL) {
             for (int i = 0; i < 2 && ret == 0; i++) {
+                picoquic_tp_t server_parameters;
                 picoquic_set_default_congestion_algorithm(mt_ctx->quic[i], spec->ccalgo);
                 ret = picoquic_set_qlog(mt_ctx->quic[i], ".");
+                /* Init of transport parameters per quic context */
+                warptest_init_transport_parameters(&server_parameters, 0, spec);
+                ret = picoquic_set_default_tp(mt_ctx->quic[i], &server_parameters);
             }
         }
     }
@@ -1385,15 +1378,14 @@ warptest_ctx_t * warptest_configure(int warptest_id,  warptest_spec_t * spec)
             (struct sockaddr*)&mt_ctx->addr[1], mt_ctx->simulated_time, 0, PICOQUIC_TEST_SNI, WARPTEST_ALPN, 1);
         /* Start the connection and create the context */
         if (cnx != NULL) {
-            picoquic_tp_t client_parameters;
-            warptest_init_transport_parameters(&client_parameters, 1, spec);
-            picoquic_set_transport_parameters(cnx, &client_parameters);
-
             if (picoquic_start_client_cnx(cnx) != 0) {
                 picoquic_delete_cnx(cnx);
                 ret = -1;
             }
             if (cnx != NULL) {
+                picoquic_tp_t client_parameters;
+                warptest_init_transport_parameters(&client_parameters, 1, spec);
+                picoquic_set_transport_parameters(cnx, &client_parameters);
                 mt_ctx->client_cnx = warptest_create_cnx_context(mt_ctx, cnx);
                 if (mt_ctx->client_cnx == NULL) {
                     picoquic_delete_cnx(cnx);
@@ -1552,6 +1544,22 @@ int warptest_worst_test()
     spec.do_audio = 1;
     spec.datagram_data_size = 10000000;
     ret = warptest_one(4, &spec);
+
+    return ret;
+}
+
+int warptest_param_test()
+{
+    int ret;
+    warptest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.01;
+    spec.do_video = 1;
+    spec.do_audio = 1;
+    spec.max_streams_client = 4;
+    spec.max_streams_server = 4;
+
+    ret = warptest_one(5, &spec);
 
     return ret;
 }

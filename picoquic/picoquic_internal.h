@@ -762,7 +762,7 @@ typedef struct st_picoquic_stream_head_t {
     picosplay_node_t stream_node; /* splay of streams in connection context */
     struct st_picoquic_stream_head_t * next_output_stream; /* link in the list of output streams */
     struct st_picoquic_stream_head_t * previous_output_stream;
-    picoquic_cnx_t* cnx;
+    picoquic_cnx_t * cnx;
     uint64_t stream_id;
     uint64_t consumed_offset; /* amount of data consumed by the application */
     uint64_t fin_offset; /* If the fin mark is received, index of the byte after last */
@@ -1295,8 +1295,6 @@ typedef struct st_picoquic_cnx_t {
     uint64_t nb_spurious;
     uint64_t nb_crypto_key_rotations;
     uint64_t nb_packet_holes_inserted;
-    uint64_t max_max_stream_data_local;
-    uint64_t max_max_stream_data_remote;
     uint64_t max_ack_delay_remote;
     uint64_t max_ack_gap_remote;
     uint64_t max_ack_delay_local;
@@ -1322,6 +1320,8 @@ typedef struct st_picoquic_cnx_t {
     uint64_t maxdata_local; /* Highest value sent to the peer */
     uint64_t maxdata_local_acked; /* Highest value acked by the peer */
     uint64_t maxdata_remote; /* Highest value received from the peer */
+    uint64_t max_stream_data_local;
+    uint64_t max_stream_data_remote;
     uint64_t max_stream_id_bidir_local; /* Highest value sent to the peer */
     uint64_t max_stream_id_bidir_rank_acked; /* Highest rank value acked by the peer */
     uint64_t max_stream_id_bidir_local_computed; /* Value computed from stream FIN but not yet sent */
@@ -1793,9 +1793,6 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed
 const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max);
 
 int picoquic_decode_closing_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, int* closing_received);
-
-uint64_t picoquic_decode_transport_param_stream_id(uint64_t rank, int extension_mode, int stream_type);
-uint64_t picoquic_prepare_transport_param_stream_id(uint64_t stream_id);
 
 void picoquic_process_sooner_packets(picoquic_cnx_t* cnx, uint64_t current_time);
 void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx);
