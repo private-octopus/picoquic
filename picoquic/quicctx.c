@@ -90,6 +90,22 @@ uint8_t picoquic_retry_protection_v2[32] = {
     0xf3, 0x8f, 0xc7, 0x41, 0x62, 0x15, 0x5e, 0x9f
 };
 
+/* In this version, we still provide support for the QUIC V2 draft, whose
+ * codepoint is still declared as "provisional" in the IESG approved draft */
+
+static uint8_t picoquic_cleartext_v2_draft_salt[] = {
+    0xa7, 0x07, 0xc2, 0x03, 0xa5, 0x9b, 0x47, 0x18,
+    0x4a, 0x1d, 0x62, 0xca, 0x57, 0x04, 0x06, 0xea,
+    0x7a, 0xe3, 0xe5, 0xd3
+};
+
+uint8_t picoquic_retry_protection_v2_draft[32] = {
+    0x34, 0x25, 0xc2, 0x0c, 0xf8, 0x87, 0x79, 0xdf,
+    0x2f, 0xf7, 0x1e, 0x8a, 0xbf, 0xa7, 0x82, 0x49,
+    0x89, 0x1e, 0x76, 0x3b, 0xbe, 0xd2, 0xf1, 0x3c,
+    0x04, 0x83, 0x43, 0xd3, 0x48, 0xc0, 0x60, 0xe2
+};
+
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_V1_VERSION,
         sizeof(picoquic_cleartext_v1_salt),
@@ -104,6 +120,14 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_cleartext_v2_salt,
         sizeof(picoquic_retry_protection_v2),
         picoquic_retry_protection_v2,
+        PICOQUIC_LABEL_QUIC_V2_KEY_BASE,
+        PICOQUIC_LABEL_V2_TRAFFIC_UPDATE,
+        PICOQUIC_V2_VERSION},
+    { PICOQUIC_V2_VERSION_DRAFT,
+        sizeof(picoquic_cleartext_v2_draft_salt),
+        picoquic_cleartext_v2_draft_salt,
+        sizeof(picoquic_retry_protection_v2_draft),
+        picoquic_retry_protection_v2_draft,
         PICOQUIC_LABEL_QUIC_V2_KEY_BASE,
         PICOQUIC_LABEL_V2_TRAFFIC_UPDATE,
         PICOQUIC_V2_VERSION},
