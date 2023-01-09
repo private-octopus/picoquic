@@ -83,6 +83,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cid_for_lb", cid_for_lb_test },
     { "cid_for_lb_cli", cid_for_lb_cli_test },
     { "retry_protection_vector", retry_protection_vector_test },
+    { "retry_protection_v2", retry_protection_v2_test },
     { "draft17_vector", draft17_vector_test },
     { "pn_enc_1rtt", pn_enc_1rtt_test },
     { "new_cnxid_stash", cnxid_stash_test },
