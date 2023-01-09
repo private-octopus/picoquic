@@ -1352,6 +1352,8 @@ int retry_protection_v2_test()
             DBG_PRINTF("%s", "Wrong retry packet value");
             ret = -1;
         }
+
+        picoquic_aead_free(&v2_sample_retry);
     }
 
     return ret;
