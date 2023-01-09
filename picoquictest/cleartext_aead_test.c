@@ -1353,7 +1353,7 @@ int retry_protection_v2_test()
             ret = -1;
         }
 
-        picoquic_aead_free(&v2_sample_retry);
+        picoquic_aead_free(protection_ctx_v2);
     }
 
     return ret;
