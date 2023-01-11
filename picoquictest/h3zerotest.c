@@ -690,10 +690,8 @@ static uint8_t qpack_connect_webtransport[] = {
     0xC0 | 23, /* Scheme HTTPs, QPACK: 23 */
     0x50 | 0, /* Header: authority */
     CONNECT_TEST_AUTHORITY_LEN, CONNECT_TEST_AUTHORITY,
-#if 0
-    0x50 | 90, /* header: origin */
-    0x20 | CONNECT_TEST_ORIGIN_LEN, CONNECT_TEST_ORIGIN
-#endif
+    0x50 | 0x0F, 90 - 0x0F, /* header: origin */
+    CONNECT_TEST_ORIGIN_LEN, CONNECT_TEST_ORIGIN
 };
 
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
