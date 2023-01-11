@@ -658,11 +658,50 @@ static uint8_t qpack_get_long_file_name[] = {
      0x50, 0x10, 0x74, 0x65, 0x73, 0x74, 0x2e, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63, 0x6f, 0x6d
 };
 
+/* 
+* From RFC 8441 and draft-ietf-webtrans-http3-01.html :
+*   HEADERS + END_HEADERS
+*   :method = CONNECT
+*   : protocol = webtransport
+*   : scheme = https
+*   : path = /wtp
+*   : authority = example.com
+*   origin = http ://www.example.com
+*/
+
+#define CONNECT_TEST_PROTOCOL_PATH '/', 'w', 't', 'p'
+#define CONNECT_TEST_PROTOCOL_PATH_LEN 4
+#define CONNECT_TEST_PROTOCOL_PSH ':', 'p', 'r', 'o', 't', 'o', 'c', 'o', 'l'
+#define CONNECT_TEST_PROTOCOL_PSH_LEN 9
+#define CONNECT_TEST_PROTOCOL_WTP 'w', 'e', 'b', 't', 'r', 'a', 'n', 's', 'p', 'o', 'r', 't'
+#define CONNECT_TEST_PROTOCOL_WTP_LEN 12
+#define CONNECT_TEST_AUTHORITY 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'c', 'o', 'm'
+#define CONNECT_TEST_AUTHORITY_LEN 11
+#define CONNECT_TEST_ORIGIN 'h', 't', 't', 'p', 's', ':', '/', '/', CONNECT_TEST_AUTHORITY
+#define CONNECT_TEST_ORIGIN_LEN (8 + CONNECT_TEST_AUTHORITY_LEN)
+
+static uint8_t qpack_connect_webtransport[] = {
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 
+    0xC0 | 15, 
+    0x50 | 1,
+    CONNECT_TEST_PROTOCOL_PATH_LEN, CONNECT_TEST_PROTOCOL_PATH,
+    0x27, CONNECT_TEST_PROTOCOL_PSH_LEN - 7, CONNECT_TEST_PROTOCOL_PSH,
+    CONNECT_TEST_PROTOCOL_WTP_LEN, CONNECT_TEST_PROTOCOL_WTP,
+    0xC0 | 23, /* Scheme HTTPs, QPACK: 23 */
+    0x50 | 0, /* Header: authority */
+    CONNECT_TEST_AUTHORITY_LEN, CONNECT_TEST_AUTHORITY,
+#if 0
+    0x50 | 90, /* header: origin */
+    0x20 | CONNECT_TEST_ORIGIN_LEN, CONNECT_TEST_ORIGIN
+#endif
+};
+
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
 static uint8_t qpack_test_string_slash[] = { '/' };
 static uint8_t qpack_test_string_zzz[] = { 'Z', 'Z', 'Z' };
 static uint8_t qpack_test_string_1234[] = { '/', '1', '2', '3', '4' };
 static uint8_t qpack_test_string_long[] = { '/', FILE_NAME_LONG };
+static uint8_t qpack_test_string_wtp[] = { CONNECT_TEST_PROTOCOL_PATH };
 
 typedef struct st_qpack_test_case_t {
     uint8_t * bytes;
@@ -746,6 +785,10 @@ static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_get_long_file_name, sizeof(qpack_get_long_file_name),
         { h3zero_method_get, qpack_test_string_long, sizeof(qpack_test_string_long), 0, 0}
+    },
+    {
+        qpack_connect_webtransport, sizeof(qpack_connect_webtransport),
+        { h3zero_method_connect, qpack_test_string_wtp, sizeof(qpack_test_string_wtp), 0, 0}
     }
 };
 

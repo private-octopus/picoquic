@@ -461,7 +461,6 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                 bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
                     decoded_length, &parts->path, &parts->path_length);
                 break;
-                break;
             default:
                 break;
             }
@@ -581,6 +580,8 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
                         }
                     }
                     break;
+                case http_header_origin:
+                case http_pseudo_header_protocol:
                 default:
                     break;
                 }

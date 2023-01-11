@@ -164,13 +164,14 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/demoserver.c
     picohttp/h3zero.c
     picohttp/quicperf.c
-    picohttp/siduck.c)
+    picohttp/siduck.c
+    picohttp/webtransport.c)
 
 set(PICOHTTP_HEADERS
      picohttp/h3zero.h
      picohttp/democlient.h
-     picohttp/demoserver.h)
-
+     picohttp/demoserver.h
+     picohttp/pico_webtransport.h)
 
 set(PICOHTTP_TEST_LIBRARY_FILES picoquictest/h3zerotest.c)
 

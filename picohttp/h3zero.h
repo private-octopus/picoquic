@@ -85,6 +85,7 @@ typedef enum {
     http_pseudo_header_method,
     http_pseudo_header_scheme,
     http_pseudo_header_status,
+    http_pseudo_header_protocol,
     http_header_accept,
     http_header_accept_encoding,
     http_header_accept_ranges,
