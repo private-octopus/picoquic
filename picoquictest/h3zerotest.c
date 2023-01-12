@@ -550,6 +550,8 @@ int qpack_huffman_base_test()
 #define QPACK_TEST_HEADER_DEQPACK_PATH 'Z', 'Z', 'Z'
 #define QPACK_TEST_HEADER_HOST 0x50, 0x0b, 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'c', 'o', 'm'
 #define QPACK_TEST_HEADER_ALLOW_GET_POST 
+#define QPACK_TEST_ALLOWED_METHODS 'G', 'E', 'T', ',', ' ', 'P', 'O', 'S', 'T', ',', ' ', 'C', 'O', 'N', 'N', 'E', 'C', 'T'
+#define QPACK_TEST_ALLOWED_METHODS_LEN 18
 
 static uint8_t qpack_test_get_slash[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0|17, 0xC0 | 1 };
@@ -585,7 +587,7 @@ static uint8_t qpack_test_status_405_code[] = {
 static uint8_t qpack_test_status_405_null[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0x50 | 0x0F,  H3ZERO_QPACK_CODE_404 - 0x0F, 3, '4', '0', '5',
     0x50 | 0x0F, H3ZERO_QPACK_ALLOW_GET - 0x0F,
-    9, 'G', 'E', 'T', ',', ' ', 'P', 'O', 'S', 'T' };
+    QPACK_TEST_ALLOWED_METHODS_LEN, QPACK_TEST_ALLOWED_METHODS };
 
 static uint8_t qpack_test_get_zzz[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0x50 | 1,
@@ -923,7 +925,6 @@ int h3zero_prepare_qpack_test()
 #define QPACK_TEST_UA_STRING_LEN 10
 #define QPACK_TEST_UA_STRING_TEST 'T', 'e', 's', 't', '/', '1', '.', '0'
 #define QPACK_TEST_UA_STRING_TEST_LEN 8
-
 char const h3zero_test_ua_string[] = { QPACK_TEST_UA_STRING_TEST, 0 };
 char const h3zero_test_ua_post_path[] = { QPACK_TEST_HEADER_DEQPACK_PATH, 0 };
 
@@ -947,7 +948,7 @@ static uint8_t qpack_test_status_405_srv[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0x50 | 0x0F,  H3ZERO_QPACK_CODE_404 - 0x0F, 3, '4', '0', '5',
     0x5f, 92 - 0x0f, QPACK_TEST_UA_STRING_LEN, QPACK_TEST_UA_STRING,
     0x50 | 0x0F, H3ZERO_QPACK_ALLOW_GET - 0x0F,
-    9, 'G', 'E', 'T', ',', ' ', 'P', 'O', 'S', 'T' };
+    QPACK_TEST_ALLOWED_METHODS_LEN, QPACK_TEST_ALLOWED_METHODS };
 static uint8_t qpack_test_get_slash_ua2[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0xC0 | 23,
     0x51, 1, '/',
@@ -968,7 +969,7 @@ static uint8_t qpack_test_status_405_srv2[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0x50 | 0x0F, H3ZERO_QPACK_CODE_404 - 0x0F, 3, '4', '0', '5',
     0x5f, 92 - 0x0f, QPACK_TEST_UA_STRING_TEST_LEN, QPACK_TEST_UA_STRING_TEST,
     0x50 | 0x0F, H3ZERO_QPACK_ALLOW_GET - 0x0F,
-    9, 'G', 'E', 'T', ',', ' ', 'P', 'O', 'S', 'T' };
+    QPACK_TEST_ALLOWED_METHODS_LEN, QPACK_TEST_ALLOWED_METHODS };
 
 typedef struct st_h3zero_user_agent_case_t {
     uint8_t* data;

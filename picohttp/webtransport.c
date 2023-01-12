@@ -19,8 +19,29 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Web Transport API implementation for Picoquic.
+ * 
+ * Architecture:
+ * 
+ *    -- quic events generate picoquic callbacks.
+ *    -- web transport state established when processing CONNECT
+ *    -- web transport intercepts related callbacks:
+ *        -- incoming unidir streams starting with specified frame
+ *        -- incoming bidir streams starting with specified frame
+ *        -- datagrams starting with specified ID
+ *    -- mapping of picoquic callbacks to WT callbacks
+ * 
+ */
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <picoquic.h>
 #include "picoquic_internal.h"
 #include "pico_webtransport.h"
+
+void picowt_register(picoquic_quic_t* quic, const char* uri, picowt_ready_cb_fn wt_callback, void* wt_ctx)
+{
+    /* Add the uri to a registry list in the quic or w3 context. */
+}

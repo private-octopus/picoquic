@@ -824,7 +824,7 @@ uint8_t* h3zero_create_response_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     return h3zero_create_response_header_frame_ex(bytes, bytes_max, doc_type, H3ZERO_USER_AGENT_STRING);
 }
 
-uint8_t * h3zero_create_not_found_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max, char const* server_string)
+uint8_t* h3zero_create_error_frame(uint8_t* bytes, uint8_t* bytes_max, char const* error_code, char const* server_string)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -833,14 +833,34 @@ uint8_t * h3zero_create_not_found_header_frame_ex(uint8_t * bytes, uint8_t * byt
     *bytes++ = 0;
     *bytes++ = 0;
     /* Status = 404 */
-    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_404);
+    if (strcmp(error_code, "404") == 0) {
+        bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_404);
+    }
+    else {
+        bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x50, 0x0F, H3ZERO_QPACK_CODE_404);
+        if (bytes != NULL && bytes + 4 <= bytes_max) {
+            *bytes++ = 3;
+            *bytes++ = error_code[0];
+            *bytes++ = error_code[1];
+            *bytes++ = error_code[2];
+        }
+    }
 
     /* Server string */
     if (server_string != NULL) {
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_SERVER, (uint8_t const*)server_string, strlen(server_string));
     }
-
+    /* Allowed methods */
+    if (strcmp(error_code, "405") == 0 && bytes != NULL) {
+        char const* allowed = "GET, POST, CONNECT";
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_ALLOW_GET, (uint8_t*)allowed, strlen(allowed));
+    }
     return bytes;
+}
+
+uint8_t * h3zero_create_not_found_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max, char const* server_string)
+{
+    return h3zero_create_error_frame(bytes, bytes_max, "404", server_string);
 }
 
 uint8_t* h3zero_create_not_found_header_frame(uint8_t* bytes, uint8_t* bytes_max)
@@ -850,30 +870,7 @@ uint8_t* h3zero_create_not_found_header_frame(uint8_t* bytes, uint8_t* bytes_max
 
 uint8_t * h3zero_create_bad_method_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max, char const* server_string)
 {
-    if (bytes == NULL || bytes + 2 > bytes_max) {
-        return NULL;
-    }
-    /* Push 2 NULL bytes for request header: base, and delta */
-    *bytes++ = 0;
-    *bytes++ = 0;
-    /* Status = 405 -- use 404 code to get reference to 'status' header */
-    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x50, 0x0F, H3ZERO_QPACK_CODE_404);
-    if (bytes != NULL) {
-        *bytes++ = 3;
-        *bytes++ = '4';
-        *bytes++ = '0';
-        *bytes++ = '5';
-    }
-
-    /* Server string */
-    if (server_string != NULL) {
-        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_SERVER, (uint8_t const*)server_string, strlen(server_string));
-    }
-
-    /* Allow GET and POST */
-    bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_ALLOW_GET, (uint8_t *)"GET, POST", 9);
-
-    return bytes;
+    return h3zero_create_error_frame(bytes, bytes_max, "405", server_string);
 }
 
 uint8_t* h3zero_create_bad_method_header_frame(uint8_t* bytes, uint8_t* bytes_max)

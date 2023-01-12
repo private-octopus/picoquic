@@ -365,51 +365,55 @@ static int h3zero_server_process_request_frame(
     *o_bytes++ = h3zero_frame_header;
     o_bytes += 2; /* reserve two bytes for frame length */
 
-    if (stream_ctx->ps.stream_state.header.method != h3zero_method_get &&
-        stream_ctx->ps.stream_state.header.method != h3zero_method_post) {
-        /* No such method supported -- error 405, header include "allow GET. POST" */
-        o_bytes = h3zero_create_bad_method_header_frame(o_bytes, o_bytes_max);
-    }
-    else if (stream_ctx->ps.stream_state.header.method == h3zero_method_get &&
-        demo_server_parse_path(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length,
+    if (stream_ctx->ps.stream_state.header.method == h3zero_method_get) {
+        /* Manage GET */
+        if (demo_server_parse_path(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length,
             &stream_ctx->echo_length, &stream_ctx->file_path, app_ctx->web_folder, &file_error) != 0) {
-        char log_text[256];
-        picoquic_log_app_message(cnx, "Cannot find file for path: <%s> in folder <%s>, error: 0x%x", 
-            picoquic_uint8_to_str(log_text, 256, stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length),
-            (app_ctx->web_folder == NULL) ? "NULL" : app_ctx->web_folder, file_error);
-        /* If unknown, 404 */
-        o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
-        /* TODO: consider known-url?data construct */
-
-    }
-    else {
-        if (stream_ctx->ps.stream_state.header.method == h3zero_method_post) {
-            if (stream_ctx->path_callback == NULL && stream_ctx->post_received == 0) {
-                int path_item = picohttp_find_path_item(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, app_ctx->path_table, app_ctx->path_table_nb);
-                if (path_item >= 0) {
-                    /* TODO-POST: move this code to post-fin callback.*/
-                    stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
-                    stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx);
-                }
-            }
-
-            if (stream_ctx->path_callback != NULL) {
-                response_length = stream_ctx->path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx);
-            } else {
-                /* Prepare generic POST response */
-                (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &response_length, demo_server_post_response_page, (int)stream_ctx->post_received);
-            }
-            stream_ctx->echo_length = 0;
+            char log_text[256];
+            picoquic_log_app_message(cnx, "Cannot find file for path: <%s> in folder <%s>, error: 0x%x",
+                picoquic_uint8_to_str(log_text, 256, stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length),
+                (app_ctx->web_folder == NULL) ? "NULL" : app_ctx->web_folder, file_error);
+            /* If unknown, 404 */
+            o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
+            /* TODO: consider known-url?data construct */
         }
         else {
             response_length = (stream_ctx->echo_length == 0) ?
                 strlen(demo_server_default_page) : stream_ctx->echo_length;
+            o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max,
+                (stream_ctx->echo_length == 0) ? h3zero_content_type_text_html :
+                h3zero_content_type_text_plain);
         }
-        /* If known, create response header frame */
+    }
+    else if (stream_ctx->ps.stream_state.header.method == h3zero_method_post) {
+        /* Manage Post. */
+        if (stream_ctx->path_callback == NULL && stream_ctx->post_received == 0) {
+            int path_item = picohttp_find_path_item(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, app_ctx->path_table, app_ctx->path_table_nb);
+            if (path_item >= 0) {
+                /* TODO-POST: move this code to post-fin callback.*/
+                stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
+                stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx);
+            }
+        }
+
+        if (stream_ctx->path_callback != NULL) {
+            response_length = stream_ctx->path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx);
+        }
+        else {
+            /* Prepare generic POST response */
+            (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &response_length, demo_server_post_response_page, (int)stream_ctx->post_received);
+        }
+        stream_ctx->echo_length = 0;
         /* POST-TODO: provide content type of response as part of context */
-        o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max,
-            (stream_ctx->echo_length == 0) ? h3zero_content_type_text_html :
-            h3zero_content_type_text_plain);
+        o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max, h3zero_content_type_text_html);
+    }
+    else if (stream_ctx->ps.stream_state.header.method == h3zero_method_connect) {
+        /* TODO: implement connect */
+        o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
+    }
+    else {
+        /* No such method supported -- error 405, header include "allow GET, POST, CONNECT" */
+        o_bytes = h3zero_create_bad_method_header_frame(o_bytes, o_bytes_max);
     }
 
     if (o_bytes == NULL) {

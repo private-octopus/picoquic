@@ -29,37 +29,37 @@ extern "C" {
 
 /* Web socket callback API */
 typedef enum {
-    pico_webtransport_cb_ready, /* Data can be sent and received, connection migration can be initiated */
-    pico_webtransport_cb_close, /* Control socket closed. Stream=0, bytes=NULL, len=0 */
-    pico_webtransport_cb_stream_data, /* Data received from peer on stream N */
-    pico_webtransport_cb_stream_fin, /* Fin received from peer on stream N; data is optional */
-    pico_webtransport_cb_stream_reset, /* Reset Stream received from peer on stream N; bytes=NULL, len = 0  */
-    pico_webtransport_cb_stop_sending, /* Stop sending received from peer on stream N; bytes=NULL, len = 0 */
-    pico_webtransport_cb_prepare_to_send, /* Ask application to send data in frame, see picoquic_provide_stream_data_buffer for details */
-    pico_webtransport_cb_datagram, /* Datagram frame has been received */
-    pico_webtransport_cb_prepare_datagram, /* Prepare the next datagram */
-    pico_webtransport_cb_datagram_acked, /* Ack for packet carrying datagram-frame received from peer */
-    pico_webtransport_cb_datagram_lost, /* Packet carrying datagram-frame probably lost */
-    pico_webtransport_cb_datagram_spurious, /* Packet carrying datagram-frame was not really lost */
-    pico_webtransport_cb_pacing_changed /* Pacing rate for the connection changed */
-} pico_webtransport_event_t;
+    picowt_cb_ready, /* Data can be sent and received, connection migration can be initiated */
+    picowt_cb_close, /* Control socket closed. Stream=0, bytes=NULL, len=0 */
+    picowt_cb_stream_data, /* Data received from peer on stream N */
+    picowt_cb_stream_fin, /* Fin received from peer on stream N; data is optional */
+    picowt_cb_stream_reset, /* Reset Stream received from peer on stream N; bytes=NULL, len = 0  */
+    picowt_cb_stop_sending, /* Stop sending received from peer on stream N; bytes=NULL, len = 0 */
+    picowt_cb_prepare_to_send, /* Ask application to send data in frame, see picoquic_provide_stream_data_buffer for details */
+    picowt_cb_datagram, /* Datagram frame has been received */
+    picowt_cb_prepare_datagram, /* Prepare the next datagram */
+    picowt_cb_datagram_acked, /* Ack for packet carrying datagram-frame received from peer */
+    picowt_cb_datagram_lost, /* Packet carrying datagram-frame probably lost */
+    picowt_cb_datagram_spurious, /* Packet carrying datagram-frame was not really lost */
+    picowt_cb_pacing_changed /* Pacing rate for the connection changed */
+} picowt_event_t;
 
 /* Buffer request, similar to provide stream data. */
-uint8_t * pico_webtransport_provide_buffer(void* context, size_t nb_bytes, int is_fin, int is_still_active);
+uint8_t * picowt_provide_buffer(void* context, size_t nb_bytes, int is_fin, int is_still_active);
 
 /* TODO: Set API to match requirements */
-typedef int (*pico_webtransport_ready_cb_fn)(picoquic_cnx_t* cnx,
+typedef int (*picowt_ready_cb_fn)(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    pico_webtransport_event_t fin_or_event, void* callback_ctx, void* stream_ctx);
+    picowt_event_t fin_or_event, void* callback_ctx, void* stream_ctx);
 
 /* Server: web socket register: declare URI and associated callback function. */
-void pico_webtransport_register(picoquic_quic_t * quic, const char* uri, pico_webtransport_ready_cb_fn ws_callback, void * ws_ctx);
+void picowt_register(picoquic_quic_t * quic, const char* uri, picowt_ready_cb_fn wt_callback, void * wt_ctx);
 
 /* Web socket initiate, client side */
-void pico_webtransport_connect(picoquic_cnx_t* cnx, const char* uri, pico_webtransport_ready_cb_fn ws_callback, void* ws_ctx);
+void picowt_connect(picoquic_cnx_t* cnx, const char* uri, picowt_ready_cb_fn wt_callback, void* wt_ctx);
 
 /* Web socket terminate, either client or server */
-void pico_webtransport_close();
+void picowt_close();
 
 /* Private API for implementing web socket:
  * - process the register request.
@@ -70,7 +70,7 @@ void pico_webtransport_close();
 
 /* web socket stream context.
  */
-typedef struct st_pico_webtransport_stream_ctx_t {
+typedef struct st_picowt_stream_ctx_t {
     /* Pointer to connection context*/
     /* Chain stream context to pico_web_socket_ctx */
     uint64_t stream_id; /* stream ID */
@@ -78,16 +78,16 @@ typedef struct st_pico_webtransport_stream_ctx_t {
     int header_sent;  /* Outgoing streams: was the web socket header sent ?*/
     int fin_received;
     int fin_sent;
-} pico_webtransport_stream_ctx_t;
+} picowt_stream_ctx_t;
 
 /* Web socket context */
-typedef struct st_pico_webtransport_cnx_ctx_t {
+typedef struct st_picowt_cnx_ctx_t {
     /* Context ID is set to stream ID of the connect stream. */
     uint64_t context_id;
-} pico_webtransport_cnx_ctx_t;
+} picowt_cnx_ctx_t;
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* pico_webtransport_H */
+#endif /* PICO_WEBTRANSPORT_H */
