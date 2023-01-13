@@ -1031,12 +1031,19 @@ int quic_client(const char* ip_address_text, int server_port,
                 }
                 else {
                     double receive_rate_mbps = 8.0 * ((double)picoquic_get_data_received(cnx_client)) / duration_usec;
+                    double send_rate_mbps = 8.0* ((double)picoquic_get_data_sent(cnx_client)) / duration_usec;
                     fprintf(stdout, "Received %" PRIu64 " bytes in %f seconds, %f Mbps.\n",
                         picoquic_get_data_received(cnx_client),
                         duration_usec / 1000000.0, receive_rate_mbps);
                     picoquic_log_app_message(cnx_client, "Received %" PRIu64 " bytes in %f seconds, %f Mbps.",
                         picoquic_get_data_received(cnx_client),
                         duration_usec / 1000000.0, receive_rate_mbps);
+                    fprintf(stdout, "Sent %" PRIu64 " bytes in %f seconds, %f Mbps.\n",
+                        picoquic_get_data_sent(cnx_client),
+                        duration_usec / 1000000.0, send_rate_mbps);
+                    picoquic_log_app_message(cnx_client, "Sent %" PRIu64 " bytes in %f seconds, %f Mbps.",
+                        picoquic_get_data_sent(cnx_client),
+                        duration_usec / 1000000.0, send_rate_mbps);
                 }
                 /* Print those for debugging the effects of ack frequency and flow control */
                 printf("max_data_local: %" PRIu64 "\n", cnx_client->maxdata_local);
