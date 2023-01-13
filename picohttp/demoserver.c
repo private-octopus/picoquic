@@ -344,6 +344,24 @@ static int demo_server_prepare_to_send(void* context, size_t space, picohttp_ser
     return ret;
 }
 
+/* TODO:
+ * - Establish processing of CONNECT
+ * 
+ * Server side logic:
+ * - State = h3_receive_header: accumulate bytes until header is fully received.
+ *         when header is received, process it.
+ *         if CONNECT, may receive a connect data frame instead.
+ * - State = h3_receive_data:
+ *         receive incoming data after the header.
+ *         expect data frames. pass content of data frames to application.
+ *         generate an error if data is not expected (GET, CONNECT-control, server side).
+ * - State = h3_received_fin:
+ *         end of receiving data.
+ *         for POST: finalize the response
+ *         for CONNECT: close the context.
+ */
+
+
 /* Processing of the request frame.
  * This function is called after the client's stream is closed,
  * after verifying that a request was received */
@@ -979,7 +997,7 @@ int picoquic_h09_server_process_data_header(
 
             while (processed < length && crlf_present == 0) {
                 if (bytes[processed] == '\r') {
-                    /* Ignore \n, so end of header is either CRLF/CRLF, of just LF/LF, or maybe LF/CR/LF */
+                    /* Ignore \r, so end of header is either CRLF/CRLF, of just LF/LF, or maybe LF/CR/LF */
                 }
                 else if (bytes[processed] == '\n') {
                     crlf_present = 1;
