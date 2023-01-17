@@ -1278,7 +1278,13 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
     rto <<= (path_x->nb_retransmit < 3) ? path_x->nb_retransmit : 2;
 
     if (cnx->cnx_state < picoquic_state_client_ready_start) {
-        if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
+        if (PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000 < cnx->local_parameters.idle_timeout) {
+            /* Special case of very long delays */
+            rto = path_x->retransmit_timer << path_x->nb_retransmit;
+            if (rto > cnx->local_parameters.idle_timeout * 100) {
+                rto = cnx->local_parameters.idle_timeout * 100;
+            }
+        } else if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
             rto = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
         }
     }
