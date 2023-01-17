@@ -21,5 +21,10 @@
 
 /* Tests of the web transport API.
  * 1- Get a web transport context.
- * 
+ * 2- Validate each of the API with a test protocol.
  */
+
+int webtransport_ctx_test()
+{
+    return -1;
+}
