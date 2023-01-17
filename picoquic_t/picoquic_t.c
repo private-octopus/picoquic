@@ -85,6 +85,7 @@ static const picoquic_test_def_t test_table[] = {
     { "retry_protection_vector", retry_protection_vector_test },
     { "retry_protection_v2", retry_protection_v2_test },
     { "draft17_vector", draft17_vector_test },
+    { "dtn_basic", dtn_basic_test },
     { "pn_enc_1rtt", pn_enc_1rtt_test },
     { "new_cnxid_stash", cnxid_stash_test },
     { "new_cnxid", new_cnxid_test },
