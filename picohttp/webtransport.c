@@ -22,6 +22,14 @@
 /*
  * Web Transport API implementation for Picoquic.
  * 
+ * Expected usage:
+ *  - quic server is multipurpose, serves H3 pages, posts, etc., in addition to web socket.
+ *  - WT acting as client learns of a connection to the intended server. TBD: generic
+ *    connection also used for something else, or specialized connection?
+ *  - WT client issues CONNECT on connection, which creates a WT context.
+ *  - Server side, WT responder is notified of connect, which creates a WT context.
+ *  - Both client and server could open streams
+ * 
  * Architecture:
  * 
  *    -- quic events generate picoquic callbacks.
@@ -31,6 +39,7 @@
  *        -- incoming bidir streams starting with specified frame
  *        -- datagrams starting with specified ID
  *    -- mapping of picoquic callbacks to WT callbacks
+ * 
  * 
  */
 
