@@ -1,0 +1,4 @@
+[submodule "deps/picotls"]
+	path = deps/picotls
+	url = git@github.com:Quicr/picotls.git
+	branch = main
