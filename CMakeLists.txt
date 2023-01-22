@@ -1,11 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-# Building tests by default depends on whether this is a subproject
-if(DEFINED PROJECT_NAME)
-    option(picoquic_BUILD_TESTS "Build Tests for picoquic" OFF)
-else()
-    option(picoquic_BUILD_TESTS "Build Tests for picoquic" ON)
-endif()
+ option(picoquic_BUILD_TESTS "Build Tests for picoquic" OFF)
 
 project(picoquic
         VERSION 1.1.12.2
@@ -198,18 +193,11 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zero_uri_test.c
     picoquictest/webtransport_test.c)
 
-OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
-if(PICOQUIC_FETCH_PTLS)
-    include(FetchContent)
-    FetchContent_Declare(picotls
-        GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             7d294ab4f2e0ed749b4bcfaf533225a4e0c096f7)
-    FetchContent_MakeAvailable(picotls)
-endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-#find_package(PTLS REQUIRED)
-add_subdirectory( deps/picotls )
+add_subdirectory( deps/picotls  )
+set( PTLS_INCLUDE_DIRS deps/picotls/include )
+set( PTLS_LIBRARIES picotls-openssl )
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
 message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
 
