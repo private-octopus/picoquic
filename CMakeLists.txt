@@ -208,7 +208,8 @@ if(PICOQUIC_FETCH_PTLS)
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-find_package(PTLS REQUIRED)
+#find_package(PTLS REQUIRED)
+add_subdirectory( deps/picotls )
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
 message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
 
