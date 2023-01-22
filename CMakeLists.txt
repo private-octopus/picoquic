@@ -184,7 +184,8 @@ if(PICOQUIC_FETCH_PTLS)
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-find_package(PTLS REQUIRED)
+#find_package(PTLS REQUIRED)
+add_subdirectory( deps/picotls )
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
 message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
 
@@ -196,7 +197,7 @@ else()
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_FUSION)
 endif()
 
-find_package(OpenSSL REQUIRED)
+find_package(OpenSSL REQUIRED  )
 message(STATUS "root: ${OPENSSL_ROOT_DIR}")
 message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
 message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
