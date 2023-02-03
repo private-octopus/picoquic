@@ -30,8 +30,8 @@
     "frame_type": "stream_data_blocked", "stream_id": 65536, "limit": 131072}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 3, "packet_number": 12, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "streams_blocked", "stream_type": "bidirectional", "limit": 256}]}],
-[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 5, "packet_number": 13, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "streams_blocked", "stream_type": "unidirectional", "limit": 16909060}]}],
+[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 3, "packet_number": 13, "dcid": "01020304" }, "frames": [{ 
+    "frame_type": "streams_blocked", "stream_type": "unidirectional", "limit": 512}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 28, "packet_number": 14, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "new_connection_id", "sequence_number": 7, "retire_before": 0, "connection_id": "0102030405060708", "reset_token": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 3, "packet_number": 15, "dcid": "01020304" }, "frames": [{ 

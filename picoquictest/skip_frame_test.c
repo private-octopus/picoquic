@@ -103,12 +103,12 @@ static uint8_t test_frame_type_stream_blocked[] = {
 
 static uint8_t test_frame_type_streams_blocked_bidir[] = {
     picoquic_frame_type_streams_blocked_bidir,
-    0x41, 0
+    0x41, 0x00
 };
 
 static uint8_t test_frame_type_streams_blocked_unidir[] = {
     picoquic_frame_type_streams_blocked_unidir,
-    0x81, 2, 3, 4
+    0x42, 0x00
 };
 
 static uint8_t test_frame_type_new_connection_id[] = {
