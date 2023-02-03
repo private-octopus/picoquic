@@ -25,7 +25,7 @@
 static char* skip_blank(char* line)
 {
     char* x = line;
-    while (*x != 0 && (*x == ' ' || *x == '/t')) {
+    while (*x != 0 && (*x == ' ' || *x == '\t')) {
         x++;
     }
     return(x);
