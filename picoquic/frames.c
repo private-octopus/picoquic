@@ -4290,7 +4290,7 @@ const uint8_t* picoquic_decode_streams_blocked_frame(picoquic_cnx_t* cnx, const 
             cnx->max_stream_id_unidir_local : cnx->max_stream_id_bidir_local;
         uint64_t local_limit = STREAM_RANK_FROM_ID(max_stream_id);
         if (stream_limit > local_limit) {
-            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, frame_id);
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR, frame_id);
         }
     }
     return bytes;
