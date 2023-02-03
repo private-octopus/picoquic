@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <string.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
 
@@ -35,7 +36,6 @@ static int starts_with(char* line, const char* text, size_t text_len, size_t* of
 {
     int ret = -1;
     char* x = skip_blank(line);
-    const char* y = text;
 
     if (x != NULL && strlen(x) >= text_len && memcmp(x, text, text_len) == 0) {
         ret = 0;
