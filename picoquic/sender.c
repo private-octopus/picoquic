@@ -2566,13 +2566,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     picoquic_packet_type_enum packet_type = picoquic_packet_initial;
     picoquic_packet_context_enum pc = picoquic_packet_context_initial;
 
-#if 0
-    if (*next_wake_time > cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
-        *next_wake_time = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
-        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-    }
-#endif
-
     cnx->initial_validated = 1; /* always validated on client */
 
     if (cnx->tls_stream[0].send_queue == NULL) {
