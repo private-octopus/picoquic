@@ -97,6 +97,7 @@ static const picoquic_test_def_t test_table[] = {
     { "tls_api_inject_hs_ack", tls_api_inject_hs_ack_test },
     { "null_sni", null_sni_test },
     { "silence_test", tls_api_silence_test },
+    { "code_version", code_version_test },
     { "version_negotiation", tls_api_version_negotiation_test },
     { "version_invariant", tls_api_version_invariant_test },
     { "version_negotiation_spoof", test_version_negotiation_spoof },
