@@ -927,7 +927,7 @@ int quic_client(const char* ip_address_text, int server_port,
                 printf("max_data_local: %" PRIu64 "\n", cnx_client->maxdata_local);
                 printf("max_stream_data_local: %" PRIu64 "\n", cnx_client->max_stream_data_local);
                 printf("max_data_remote: %" PRIu64 "\n", cnx_client->maxdata_remote);
-                printf("max_stream_data_remote: % " PRIu64 "\n", cnx_client->max_stream_data_remote);
+                printf("max_stream_data_remote: %" PRIu64 "\n", cnx_client->max_stream_data_remote);
                 printf("ack_delay_remote: %" PRIu64 " ... %" PRIu64 "\n",
                     cnx_client->min_ack_delay_remote, cnx_client->max_ack_delay_remote);
                 printf("max_ack_gap_remote: %" PRIu64 "\n", cnx_client->max_ack_gap_remote);

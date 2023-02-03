@@ -8283,6 +8283,106 @@ int qlog_trace_ecn_test()
 #define PERF_TRACE_CLIENT "perf_trace_client.csv"
 #define PERF_TRACE_SERVER "perf_trace_server.csv"
 
+static int perflog_set_version(char const * buffer2, char * buffer3, size_t buffer3_len)
+{
+    size_t i2 = 0;
+    size_t i3 = 0;
+    int ret = 0;
+
+    while (ret == 0 && buffer2[i2] != 0) {
+        if (buffer2[i2] == '$' && buffer2[i2 + 1] == 'V') {
+            char const* v = PICOQUIC_VERSION;
+            size_t v_len = strlen(v);
+            i2 += 2;
+            if (i3 + v_len < buffer3_len) {
+                memcpy(buffer3 + i3, v, v_len);
+                i3 += v_len;
+            }
+            else {
+                ret = -1;
+            }
+        }
+        else {
+            if (i3 < buffer3_len) {
+                buffer3[i3] = buffer2[i2];
+                i3++;
+                i2++;
+            }
+            else {
+                ret = -1;
+            }
+        }
+    }
+    if (ret == 0) {
+        if (i3 < buffer3_len) {
+            buffer3[i3] = 0;
+        }
+        else {
+            buffer3[buffer3_len - 1] = 0;
+            ret = -1;
+        }
+    }
+    return(ret);
+}
+
+static int perflog_compare(const char* fname1, const char* fname2)
+{
+    int ret = 0;
+    int nb_line = 0;
+    FILE* F1 = picoquic_file_open(fname1, "r");
+    FILE* F2 = picoquic_file_open(fname2, "r");
+
+    if (F1 == NULL || F2 == NULL) {
+        ret = -1;
+    }
+    else {
+        char buffer1[512];
+        char buffer2[512];
+        char buffer3[512];
+
+        while (ret == 0 && fgets(buffer1, sizeof(buffer1), F1) != NULL) {
+            nb_line++;
+            if (fgets(buffer2, sizeof(buffer2), F2) == NULL) {
+                /* F2 is too short */
+                DBG_PRINTF("File %s is shorter than %s\n", fname2, fname1);
+                DBG_PRINTF("    Missing line %d: %s", nb_line, buffer1);
+                ret = -1;
+            }
+            else {
+                /* Replace $V in buffer2 by actual version */
+                ret = perflog_set_version(buffer2, buffer3, sizeof(buffer3));
+
+                if (ret == 0) {
+                    ret = picoquic_compare_lines(buffer1, buffer3);
+                }
+                if (ret != 0)
+                {
+                    DBG_PRINTF("File %s differs %s at line %d\n", fname2, fname1, nb_line);
+                    DBG_PRINTF("    Got: %s", buffer1);
+                    DBG_PRINTF("    Vs:  %s", buffer3);
+                }
+            }
+        }
+
+        if (ret == 0 && fgets(buffer2, sizeof(buffer2), F2) != NULL) {
+            /* F2 is too long */
+            DBG_PRINTF("File %s is longer than %s\n", fname2, fname1);
+            DBG_PRINTF("    Extra line %d: %s", nb_line + 1, buffer2);
+            ret = -1;
+        }
+    }
+
+    if (F1 != NULL) {
+        (void)picoquic_file_close(F1);
+    }
+
+    if (F2 != NULL) {
+        (void)picoquic_file_close(F2);
+    }
+
+    return ret;
+}
+
 int perflog_test()
 {
     uint64_t simulated_time = 0;
@@ -8356,7 +8456,7 @@ int perflog_test()
                 (i)?"client":"server");
         }
         else {
-            ret = picoquic_test_compare_text_files((i)?PERF_TRACE_CLIENT: PERF_TRACE_SERVER, perf_trace_test_ref);
+            ret = perflog_compare((i)?PERF_TRACE_CLIENT: PERF_TRACE_SERVER, perf_trace_test_ref);
         }
     }
 
