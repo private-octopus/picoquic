@@ -1278,7 +1278,13 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
     rto <<= (path_x->nb_retransmit < 3) ? path_x->nb_retransmit : 2;
 
     if (cnx->cnx_state < picoquic_state_client_ready_start) {
-        if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
+        if (PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000 < cnx->local_parameters.idle_timeout) {
+            /* Special case of very long delays */
+            rto = path_x->retransmit_timer << path_x->nb_retransmit;
+            if (rto > cnx->local_parameters.idle_timeout * 100) {
+                rto = cnx->local_parameters.idle_timeout * 100;
+            }
+        } else if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
             rto = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
         }
     }
@@ -2559,11 +2565,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     int epoch = picoquic_epoch_initial;
     picoquic_packet_type_enum packet_type = picoquic_packet_initial;
     picoquic_packet_context_enum pc = picoquic_packet_context_initial;
-
-    if (*next_wake_time > cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
-        *next_wake_time = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
-        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-    }
 
     cnx->initial_validated = 1; /* always validated on client */
 
@@ -4283,6 +4284,9 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
             idle_timer = UINT64_MAX;
         }
     }
+    else if (cnx->local_parameters.idle_timeout > (PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000)) {
+        idle_timer = cnx->start_time + cnx->local_parameters.idle_timeout*1000;
+    }
     else {
         idle_timer = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
     }
@@ -4644,6 +4648,11 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     struct sockaddr_storage addr_from_log;
     uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
     uint64_t initial_next_time;
+
+    if (cnx->cnx_state < picoquic_state_ready &&
+        cnx->local_parameters.idle_timeout >(PICOQUIC_MICROSEC_SILENCE_MAX / 500)) {
+        next_wake_time = cnx->latest_progress_time + cnx->local_parameters.idle_timeout * 1000;
+    }
 
     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 

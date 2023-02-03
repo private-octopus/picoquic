@@ -160,6 +160,7 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
 int splay_test();
 int TlsStreamFrameTest();
 int draft17_vector_test();
+int dtn_basic_test();
 int fuzz_test();
 int random_tester_test();
 int random_gauss_test();
