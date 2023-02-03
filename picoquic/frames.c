@@ -1119,7 +1119,6 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
     picoquic_stream_head_t* first_stream = cnx->first_output_stream;
     picoquic_stream_head_t* stream = first_stream;
     picoquic_stream_head_t* found_stream = NULL;
-    picoquic_stream_head_t* previous_stream = NULL;
 
 
     /* Look for a ready stream */
@@ -1178,7 +1177,6 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
                     cnx->flow_blocked = 1;
                 }
             }
-            previous_stream = stream;
         }
         stream = next_stream;
     }

@@ -62,6 +62,7 @@ int tls_api_client_first_loss_test();
 int tls_api_client_second_loss_test();
 int tls_api_server_first_loss_test();
 int tls_api_many_losses();
+int code_version_test();
 int tls_api_version_negotiation_test();
 int tls_api_version_invariant_test();
 int test_version_negotiation_spoof();
