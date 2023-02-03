@@ -13,7 +13,7 @@
     BLOCKED: offset 65536.
     STREAM BLOCKED: 65536.
     streams_blocked_bidir: 256
-    streams_blocked_unidir: 16909060
+    streams_blocked_unidir: 512
     NEW CONNECTION ID[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf
     STOP SENDING Stream 17 (0x11), Error 0x17.
     path_challenge: 0102030405060708
