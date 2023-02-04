@@ -218,6 +218,7 @@ typedef struct st_picoquic_version_parameters_t {
     char* tls_prefix_label;
     char* tls_traffic_update_label;
     uint32_t packet_type_version;
+    uint32_t* upgrade_from;
 } picoquic_version_parameters_t;
 
 extern const picoquic_version_parameters_t picoquic_supported_versions[];

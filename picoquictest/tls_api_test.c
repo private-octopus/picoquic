@@ -2438,26 +2438,26 @@ int test_version_negotiation_spoof()
 }
 
 /* Test the compatible VN setup.
- * This will start a connection with version 1, and verify that it gets established with version 2.
- * TODO: define the transport parameters that require the upgrade.
+ * This will start a connection with version 1, and verify that it gets established with version 2,
+ * or to version 2 draft.
  */
-int vn_compat_test()
+int vn_compat_test_one(uint32_t current, uint32_t target)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_V1_VERSION, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    int ret = tls_api_init_ctx(&test_ctx, current, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
 
 
     if (ret == 0) {
         /* Set the desired version */
-        picoquic_set_desired_version(test_ctx->cnx_client, PICOQUIC_V2_VERSION);
+        picoquic_set_desired_version(test_ctx->cnx_client, target);
         /* Start the client connection */
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
 
     if (ret != 0)
     {
-        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_V1_VERSION);
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", current);
     }
 
     if (ret == 0) {
@@ -2466,13 +2466,13 @@ int vn_compat_test()
 
 
     if (ret == 0) {
-        if (picoquic_supported_versions[test_ctx->cnx_client->version_index].version != PICOQUIC_V2_VERSION) {
-            DBG_PRINTF("Client remained to version 0x%8x",
+        if (picoquic_supported_versions[test_ctx->cnx_client->version_index].version != target) {
+            DBG_PRINTF("Client remained to version 0x%08x",
                 picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
             ret = -1;
         }
-        else if (picoquic_supported_versions[test_ctx->cnx_server->version_index].version != PICOQUIC_V2_VERSION) {
-            DBG_PRINTF("Server remained to version 0x%8x",
+        else if (picoquic_supported_versions[test_ctx->cnx_server->version_index].version != target) {
+            DBG_PRINTF("Server remained to version 0x%08x",
                 picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
             ret = -1;
         }
@@ -2481,6 +2481,23 @@ int vn_compat_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int vn_compat_test()
+{
+    int ret = 0;
+
+    if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION) != 0) {
+        ret = -1;
+    }
+    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION_DRAFT) != 0) {
+        ret = -1;
+    }
+    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_INTERNAL_TEST_VERSION_1) == 0) {
+        ret = -1;
     }
 
     return ret;
