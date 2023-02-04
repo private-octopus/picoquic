@@ -61,6 +61,7 @@ typedef struct st_dtn_test_spec_t {
     size_t sizeof_scenario;
     uint64_t mbps_up;
     uint64_t mbps_down;
+    uint64_t initial_flow_control_credit;
     int has_loss;
 } dtn_test_spec_t;
 
@@ -81,6 +82,15 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
     picoquic_init_transport_parameters(&client_parameters, 1);
     client_parameters.enable_time_stamp = 3;
     client_parameters.idle_timeout = (uint32_t)((spec->latency * 5)/1000);
+    if (spec->initial_flow_control_credit > client_parameters.initial_max_data) {
+        client_parameters.initial_max_data = spec->initial_flow_control_credit;
+    }
+    if (spec->initial_flow_control_credit > client_parameters.initial_max_stream_data_bidi_local ) {
+        client_parameters.initial_max_stream_data_bidi_local = spec->initial_flow_control_credit;
+    }
+    if (spec->initial_flow_control_credit > client_parameters.initial_max_stream_data_bidi_remote ) {
+        client_parameters.initial_max_stream_data_bidi_remote = spec->initial_flow_control_credit;
+    }
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&server_parameters, 0);
     server_parameters.enable_time_stamp = 3;
@@ -160,4 +170,21 @@ int dtn_basic_test()
     dtn_set_basic_test_spec(&spec);
 
     return dtn_test_one(0xba, &spec);
+}
+
+static test_api_stream_desc_t dtn_scenario_data[] = {
+    { 4, 0, 257, 100000000 }
+};
+
+
+int dtn_data_test()
+{
+    /* Simple test. */
+    dtn_test_spec_t spec;
+    dtn_set_basic_test_spec(&spec);
+    spec.scenario = dtn_scenario_data;
+    spec.sizeof_scenario = sizeof(dtn_scenario_data);
+    spec.initial_flow_control_credit = 100000000; /* 100 MB, same as data size in scenario */
+    spec.max_completion_time = 500000000; /* 8 minutes and 20 sec, including 2 minutes handshae, 2 minutes req/resp, 2 minutes chirp... */
+    return dtn_test_one(0xda, &spec);
 }
