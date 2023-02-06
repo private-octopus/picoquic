@@ -113,10 +113,10 @@ int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic
 int h3zero_client_init(picoquic_cnx_t* cnx);
 int demo_client_prepare_to_send(void * context, size_t space, uint64_t echo_length, uint64_t * echo_sent, FILE * F);
 int h3zero_client_create_stream_request(
-    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, size_t post_size, const char * host, size_t * consumed);
+    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed);
 
 int h09_demo_client_prepare_stream_open_command(
-    uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, size_t post_size, const char * host, size_t * consumed);
+    uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed);
 
 int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx, uint64_t fin_stream_id);
