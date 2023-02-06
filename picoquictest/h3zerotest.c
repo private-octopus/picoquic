@@ -1991,7 +1991,7 @@ int demo_file_access_test()
     char const* path = "/x1234x5678.zzz";
     char const* bad_path = "/../etc/passwd";
     size_t f_size = 0;
-    size_t echo_size = 0;
+    uint64_t echo_size = 0;
     char buf[128];
     char* file_path;
     const int nb_blocks = 16;
