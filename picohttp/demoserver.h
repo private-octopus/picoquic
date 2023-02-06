@@ -105,10 +105,10 @@ typedef struct st_picohttp_server_stream_ctx_t {
         } hq; /* h09 only */
     } ps; /* Protocol specific state */
     uint64_t stream_id;
-    size_t response_length;
-    size_t echo_length;
-    size_t echo_sent;
-    size_t post_received;
+    uint64_t response_length;
+    uint64_t echo_length;
+    uint64_t echo_sent;
+    uint64_t post_received;
     uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
     int method;
     picohttp_post_data_cb_fn path_callback;
@@ -159,7 +159,7 @@ size_t picoquic_demo_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iov
 
 int demo_server_is_path_sane(const uint8_t* path, size_t path_length);
 
-int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size, 
+int demo_server_try_file_path(const uint8_t* path, size_t path_length, uint64_t* echo_size, 
     char ** file_path,char const* web_folder, int* file_error);
 
 #ifdef __cplusplus

@@ -233,7 +233,7 @@ int demo_server_is_path_sane(const uint8_t* path, size_t path_length)
     return ret;
 }
 
-int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size,
+int demo_server_try_file_path(const uint8_t* path, size_t path_length, uint64_t* echo_size,
     char** file_path, char const* web_folder, int * file_error)
 {
     int ret = -1;
@@ -283,7 +283,7 @@ int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* e
     return ret;
 }
 
-static int demo_server_parse_path(const uint8_t * path, size_t path_length, size_t * echo_size, 
+static int demo_server_parse_path(const uint8_t * path, size_t path_length, uint64_t * echo_size, 
     char ** file_path, char const * web_folder, int * file_error)
 {
     int ret = 0;
@@ -305,7 +305,7 @@ static int demo_server_parse_path(const uint8_t * path, size_t path_length, size
         ret = 0;
     }
     else if (path_length > 1 && (path_length != 11 || memcmp(path, "/index.html", 11) != 0)) {
-        uint32_t x = 0;
+        uint64_t x = 0;
         for (size_t i = 1; i < path_length; i++) {
             if (path[i] < '0' || path[i] > '9') {
                 ret = -1;
@@ -313,6 +313,11 @@ static int demo_server_parse_path(const uint8_t * path, size_t path_length, size
             }
             x *= 10;
             x += path[i] - '0';
+            if (x > (UINT64_MAX >> 2)) {
+                /* required length is more than 62 bits */
+                ret = -1;
+                break;
+            }
         }
 
         if (ret == 0) {
@@ -358,7 +363,7 @@ static int h3zero_server_process_request_frame(
     uint8_t post_response[512];
     uint8_t * o_bytes = &buffer[0];
     uint8_t * o_bytes_max = o_bytes + sizeof(buffer);
-    size_t response_length = 0;
+    uint64_t response_length = 0;
     int ret = 0;
     int file_error = 0;
 
@@ -397,7 +402,9 @@ static int h3zero_server_process_request_frame(
                 response_length = stream_ctx->path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx);
             } else {
                 /* Prepare generic POST response */
-                (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &response_length, demo_server_post_response_page, (int)stream_ctx->post_received);
+                size_t message_length = 0;
+                (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &message_length, demo_server_post_response_page, (int)stream_ctx->post_received);
+                response_length = message_length;
             }
             stream_ctx->echo_length = 0;
         }
@@ -437,9 +444,9 @@ static int h3zero_server_process_request_frame(
                 
                 if (stream_ctx->echo_length == 0) {
                     if (response_length <= sizeof(post_response)) {
-                        if (o_bytes + response_length <= o_bytes_max) {
-                            memcpy(o_bytes, (stream_ctx->ps.stream_state.header.method == h3zero_method_post) ? post_response : (uint8_t*)demo_server_default_page, response_length);
-                            o_bytes += response_length;
+                        if (o_bytes + (size_t)response_length <= o_bytes_max) {
+                            memcpy(o_bytes, (stream_ctx->ps.stream_state.header.method == h3zero_method_post) ? post_response : (uint8_t*)demo_server_default_page, (size_t)response_length);
+                            o_bytes += (size_t)response_length;
                         }
                         else {
                             o_bytes = NULL;
@@ -1110,7 +1117,9 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                 }
                 else {
                     /* Prepare generic POST response */
-                    (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &stream_ctx->response_length, demo_server_post_response_page, (int)stream_ctx->post_received);
+                    size_t message_length = 0;
+                    (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &message_length, demo_server_post_response_page, (int)stream_ctx->post_received);
+                    stream_ctx->response_length = message_length;
                 }
                 stream_ctx->echo_length = 0;
             }
@@ -1133,7 +1142,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
 
                 stream_ctx->response_length = strlen(bad_request_message);
                 (void)picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, (const uint8_t*)bad_request_message,
-                    stream_ctx->response_length, 1, (void*)stream_ctx);
+                    (size_t)stream_ctx->response_length, 1, (void*)stream_ctx);
             }
             else {
                 /* If this is HTTP1, send an HTTP1 OK message, with the appropriate content type */
@@ -1149,14 +1158,14 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                     /* Send the canned index.html response */
                     stream_ctx->response_length = strlen(demo_server_default_page);
                     picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t*)demo_server_default_page,
-                        stream_ctx->response_length, 1, (void*)stream_ctx);
+                        (size_t)stream_ctx->response_length, 1, (void*)stream_ctx);
                 }
                 else if (stream_ctx->echo_length == 0 && stream_ctx->response_length < sizeof(post_response)) {
                     /* For short responses, post directly.
                      * TODO-POST: for long responses, we expect that the application
                      * will have set a data provision shortcut. Verify that! */
                     picoquic_add_to_stream_with_ctx(cnx, stream_id, post_response,
-                        stream_ctx->response_length, 1, (void*)stream_ctx);
+                        (size_t)stream_ctx->response_length, 1, (void*)stream_ctx);
                 }
                 else {
                     picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
