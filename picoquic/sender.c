@@ -3113,7 +3113,6 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         length = bytes_next - bytes;
         cnx->last_close_sent = current_time;
         cnx->cnx_state = picoquic_state_draining;
-        cnx->latest_progress_time = current_time;
         *next_wake_time = exit_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
     } else if (ret == 0 && cnx->cnx_state == picoquic_state_closing) {
@@ -3834,7 +3833,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         path_x->challenge_verified &&
         !path_x->path_cid_rotated &&
         path_x->latest_sent_time + PICOQUIC_CID_REFRESH_DELAY < current_time &&
-        path_x->latest_sent_time + 3*path_x->smoothed_rtt < current_time)
+        path_x->latest_sent_time + 3*path_x->rtt_min < current_time)
     {
         /* Ignore renewal failure mode, since this is an optional feature */
         (void)picoquic_renew_path_connection_id(cnx, path_x);
@@ -4643,23 +4642,6 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
     return path_id;
 }
 
-static uint64_t picoquic_set_default_wake_time(picoquic_cnx_t* cnx)
-{
-    uint64_t next_wake_time;
-
-    if (cnx->cnx_state < picoquic_state_ready &&
-        cnx->local_parameters.idle_timeout >(PICOQUIC_MICROSEC_SILENCE_MAX / 500)) {
-        next_wake_time = cnx->latest_progress_time + ((uint64_t)cnx->local_parameters.idle_timeout) * 1000ull;
-    }
-    else if (cnx->cnx_state >= picoquic_state_ready && PICOQUIC_MICROSEC_SILENCE_MAX > 2 * cnx->path[0]->smoothed_rtt) {
-        next_wake_time = cnx->latest_progress_time + 2 * PICOQUIC_MICROSEC_SILENCE_MAX;
-    }
-    else {
-        next_wake_time = cnx->latest_progress_time +  4 * cnx->path[0]->smoothed_rtt;
-    }
-    return next_wake_time;
-}
-
 /* Prepare next packet to send, or nothing.. */
 int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
@@ -4671,16 +4653,11 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     struct sockaddr_storage addr_to_log;
     struct sockaddr_storage addr_from_log;
     uint64_t initial_next_time;
-#if 1
-    uint64_t next_wake_time = picoquic_set_default_wake_time(cnx);
-#else
     uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
 
-    if (cnx->cnx_state < picoquic_state_ready &&
-        cnx->local_parameters.idle_timeout >(PICOQUIC_MICROSEC_SILENCE_MAX / 500)) {
+    if (cnx->local_parameters.idle_timeout >(PICOQUIC_MICROSEC_SILENCE_MAX / 500)) {
         next_wake_time = cnx->latest_progress_time + ((uint64_t)cnx->local_parameters.idle_timeout) * 1000ull;
     }
-#endif
 
     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
@@ -4904,7 +4881,6 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code)
         ret = -1;
     }
     cnx->offending_frame_type = 0;
-    cnx->latest_progress_time = current_time;
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
 
     return ret;

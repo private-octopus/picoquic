@@ -296,7 +296,7 @@ static test_api_stream_desc_t hilat_scenario_100mb[] = {
 int high_latency_bbr_test()
 {
     uint64_t latency = 5000000;
-    uint64_t expected_completion = 141000000;
+    uint64_t expected_completion = 145000000;
 
     return high_latency_one(0xbb, picoquic_bbr_algorithm,
         hilat_scenario_100mb, sizeof(hilat_scenario_100mb),
@@ -323,7 +323,7 @@ int high_latency_probeRTT_test()
 {
     /* Simple test. */
     uint64_t latency = 5000000;
-    uint64_t expected_completion = 836000000;
+    uint64_t expected_completion = 839000000;
 
     return high_latency_one(0xf1, picoquic_bbr_algorithm,
         hilat_scenario_100mb, sizeof(hilat_scenario_100mb),

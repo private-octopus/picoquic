@@ -2706,7 +2706,7 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
         {
             DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n",
                 (unsigned long long)completion_time, (unsigned long long)max_completion_microsec);
-            ret = -1;
+             ret = -1;
         }
     }
 
