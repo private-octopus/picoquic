@@ -87,6 +87,8 @@ static const picoquic_test_def_t test_table[] = {
     { "draft17_vector", draft17_vector_test },
     { "dtn_basic", dtn_basic_test },
     { "dtn_data", dtn_data_test },
+    { "dtn_silence", dtn_silence_test },
+    { "dtn_twenty", dtn_twenty_test },
     { "pn_enc_1rtt", pn_enc_1rtt_test },
     { "new_cnxid_stash", cnxid_stash_test },
     { "new_cnxid", new_cnxid_test },

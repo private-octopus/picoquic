@@ -62,6 +62,7 @@ typedef struct st_dtn_test_spec_t {
     uint64_t mbps_up;
     uint64_t mbps_down;
     uint64_t initial_flow_control_credit;
+    uint64_t max_number_of_packets;
     int has_loss;
 } dtn_test_spec_t;
 
@@ -75,6 +76,7 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
     picoquic_connection_id_t initial_cid = { {0xde, 0x40, 0, 0, 0, 0, 0, 0}, 8 };
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = 0;
+    uint64_t total_packets = UINT64_MAX;
 
     initial_cid.id[2] = test_id;
 
@@ -135,6 +137,21 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
      */
 
     if (test_ctx != NULL) {
+        if (spec->max_number_of_packets != 0 && ret == 0) {
+            if (test_ctx->cnx_client != NULL) {
+                uint64_t number_of_packets = test_ctx->cnx_client->nb_packets_sent + test_ctx->cnx_client->nb_packets_received;
+
+                if (number_of_packets > spec->max_number_of_packets) {
+                    DBG_PRINTF("Expected at most %" PRIu64 "packets, got %" PRIu64,
+                        spec->max_number_of_packets, number_of_packets);
+                    ret = -1;
+                }
+            }
+            else {
+                DBG_PRINTF("%s", "Cannot estimate number of packets");
+                ret = -1;
+            }
+        }
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
     }
@@ -168,6 +185,7 @@ int dtn_basic_test()
     /* Simple test. */
     dtn_test_spec_t spec;
     dtn_set_basic_test_spec(&spec);
+    spec.max_number_of_packets = 84;
 
     return dtn_test_one(0xba, &spec);
 }
@@ -187,4 +205,36 @@ int dtn_data_test()
     spec.initial_flow_control_credit = 100000000; /* 100 MB, same as data size in scenario */
     spec.max_completion_time = 500000000; /* 8 minutes and 20 sec, including 2 minutes handshae, 2 minutes req/resp, 2 minutes chirp... */
     return dtn_test_one(0xda, &spec);
+}
+
+
+static test_api_stream_desc_t dtn_scenario_silence[] = {
+    { 4, 0, 257, 257 },
+    { 8, 4, 257, 257 },
+    { 12, 8, 257, 257 }
+};
+
+int dtn_silence_test()
+{
+    /* Simple test. */
+    dtn_test_spec_t spec;
+    dtn_set_basic_test_spec(&spec);
+    spec.scenario = dtn_scenario_silence;
+    spec.sizeof_scenario = sizeof(dtn_scenario_silence);
+    spec.max_number_of_packets = 95; /* Check that the number of packets does not increase wildly */
+    spec.max_completion_time = 481000000; /* 8 minutes: 2 for handshake, plus 2 per transaction */
+    return dtn_test_one(0x51, &spec);
+}
+
+int dtn_twenty_test()
+{
+    /* Simple test. */
+    dtn_test_spec_t spec;
+    dtn_set_basic_test_spec(&spec);
+    spec.latency = 20 * 60000000;
+    spec.max_completion_time = 8* spec.latency;
+
+    spec.max_number_of_packets = 96;
+
+    return dtn_test_one(0x20, &spec);
 }

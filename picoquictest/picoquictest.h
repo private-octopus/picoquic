@@ -162,6 +162,8 @@ int TlsStreamFrameTest();
 int draft17_vector_test();
 int dtn_basic_test();
 int dtn_data_test();
+int dtn_silence_test();
+int dtn_twenty_test();
 int fuzz_test();
 int random_tester_test();
 int random_gauss_test();

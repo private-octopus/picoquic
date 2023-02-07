@@ -1340,6 +1340,11 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     picoquic_public_random(&test_ctx->send_buffer[hl], 21);
                     coalesced_length = hl + 21;
                 }
+#if 1
+                if (*simulated_time >= 1705032704) {
+                    DBG_PRINTF("%s", "Bug");
+                }
+#endif
                 ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, *simulated_time,
                     test_ctx->send_buffer + coalesced_length, send_buffer_size - coalesced_length, &send_length,
                     &addr_to, &addr_from, NULL, p_segment_size);
@@ -1575,6 +1580,11 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
             nb_inactive = 0;
         } else {
             nb_inactive++;
+#if 1
+            if (nb_inactive == 128) {
+                DBG_PRINTF("Inactive at %" PRIu64, *simulated_time);
+            }
+#endif
         }
 
         if (test_ctx->test_finished) {
@@ -1780,20 +1790,11 @@ static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, u
 {
     int ret = 0;
 
-    if (ret == 0) {
-        ret = tls_api_attempt_to_close(test_ctx, simulated_time);
-
+    if (ret == 0 && test_ctx->cnx_server != NULL) {
+        ret = verify_transport_extension(test_ctx->cnx_client, test_ctx->cnx_server);
         if (ret != 0)
         {
-            DBG_PRINTF("Connection close returns %d\n", ret);
-        }
-
-        if (ret == 0) {
-            ret = verify_transport_extension(test_ctx->cnx_client, test_ctx->cnx_server);
-            if (ret != 0)
-            {
-                DBG_PRINTF("%s", "Transport extensions do no match\n");
-            }
+            DBG_PRINTF("%s", "Transport extensions do no match\n");
         }
 
         if (ret == 0) {
@@ -1821,6 +1822,15 @@ static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, u
             {
                 DBG_PRINTF("%s", "Negotiated versions do not match\n");
             }
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection close returns %d\n", ret);
         }
     }
 
@@ -2713,7 +2723,7 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
         {
             DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n",
                 (unsigned long long)completion_time, (unsigned long long)max_completion_microsec);
-            ret = -1;
+             ret = -1;
         }
     }
 
