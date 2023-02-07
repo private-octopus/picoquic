@@ -1304,6 +1304,14 @@ static picoquic_demo_stream_desc_t const parse_demo_scenario_desc5[] = {
     { 0, 4, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/33", "_33", 0 }
 };
 
+static picoquic_demo_stream_desc_t const parse_demo_scenario_desc6[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/200000000000", "_200000000000", 0 }
+};
+
+static picoquic_demo_stream_desc_t const parse_demo_scenario_desc7[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 100000000000 }
+};
+
 typedef struct st_demo_scenario_test_case_t {
     char const* text;
     const picoquic_demo_stream_desc_t* desc;
@@ -1315,7 +1323,9 @@ static const demo_scenario_test_case_t demo_scenario_test_cases[] = {
     { "/;main.jpg;test.html;", parse_demo_scenario_desc2, sizeof(parse_demo_scenario_desc2) / sizeof(picoquic_demo_stream_desc_t) },
     { "*1000:/", parse_demo_scenario_desc3, sizeof(parse_demo_scenario_desc3) / sizeof(picoquic_demo_stream_desc_t) },
     { "/cgi-sink:1000000;4:/", parse_demo_scenario_desc4, sizeof(parse_demo_scenario_desc4) / sizeof(picoquic_demo_stream_desc_t) },
-    { "-:/32;-:/33", parse_demo_scenario_desc5, sizeof(parse_demo_scenario_desc5) / sizeof(picoquic_demo_stream_desc_t) }
+    { "-:/32;-:/33", parse_demo_scenario_desc5, sizeof(parse_demo_scenario_desc5) / sizeof(picoquic_demo_stream_desc_t) },
+    { "-:/200000000000", parse_demo_scenario_desc6, sizeof(parse_demo_scenario_desc6) / sizeof(picoquic_demo_stream_desc_t) },
+    { "/cgi-sink:100000000000", parse_demo_scenario_desc7, sizeof(parse_demo_scenario_desc7) / sizeof(picoquic_demo_stream_desc_t) }
 };
 
 static size_t nb_demo_scenario_test_cases = sizeof(demo_scenario_test_cases) / sizeof(demo_scenario_test_case_t);
@@ -1335,7 +1345,8 @@ int parse_demo_scenario_test_one(const char * text, picoquic_demo_stream_desc_t 
             for (size_t i = 0; ret == 0 && i < nb_streams; i++) {
                 if (desc[i].stream_id != desc_ref[i].stream_id) {
                     ret = -1;
-                } else if (desc[i].previous_stream_id != desc_ref[i].previous_stream_id) {
+                }
+                else if (desc[i].previous_stream_id != desc_ref[i].previous_stream_id) {
                     ret = -1;
                 }
                 else if (strcmp(desc[i].doc_name, desc_ref[i].doc_name) != 0) {
@@ -1991,7 +2002,7 @@ int demo_file_access_test()
     char const* path = "/x1234x5678.zzz";
     char const* bad_path = "/../etc/passwd";
     size_t f_size = 0;
-    size_t echo_size = 0;
+    uint64_t echo_size = 0;
     char buf[128];
     char* file_path;
     const int nb_blocks = 16;
