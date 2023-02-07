@@ -1790,20 +1790,11 @@ static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, u
 {
     int ret = 0;
 
-    if (ret == 0) {
-        ret = tls_api_attempt_to_close(test_ctx, simulated_time);
-
+    if (ret == 0 && test_ctx->cnx_server != NULL) {
+        ret = verify_transport_extension(test_ctx->cnx_client, test_ctx->cnx_server);
         if (ret != 0)
         {
-            DBG_PRINTF("Connection close returns %d\n", ret);
-        }
-
-        if (ret == 0) {
-            ret = verify_transport_extension(test_ctx->cnx_client, test_ctx->cnx_server);
-            if (ret != 0)
-            {
-                DBG_PRINTF("%s", "Transport extensions do no match\n");
-            }
+            DBG_PRINTF("%s", "Transport extensions do no match\n");
         }
 
         if (ret == 0) {
@@ -1831,6 +1822,15 @@ static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, u
             {
                 DBG_PRINTF("%s", "Negotiated versions do not match\n");
             }
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection close returns %d\n", ret);
         }
     }
 
