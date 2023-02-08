@@ -509,6 +509,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(code_version) {
+            int ret = code_version_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(version_negotiation)
 		{
 			int ret = tls_api_version_negotiation_test();
@@ -950,7 +956,35 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(dtn_basic)
+        {
+            int ret = dtn_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(dtn_data)
+        {
+            int ret = dtn_data_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         
+        TEST_METHOD(dtn_silence)
+        {
+            int ret = dtn_silence_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(dtn_twenty)
+        {
+            int ret = dtn_twenty_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_transport_param_log)
         {
             int ret = transport_param_log_test();

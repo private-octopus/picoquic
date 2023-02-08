@@ -106,6 +106,17 @@ uint8_t picoquic_retry_protection_v2_draft[32] = {
     0x04, 0x83, 0x43, 0xd3, 0x48, 0xc0, 0x60, 0xe2
 };
 
+/* The update from field is populated with a zero terminated
+ * array of version numbers from which update to the specified
+ * version is allowed.
+ */
+
+uint32_t picoquic_version_upgrade_from_v1[] = { PICOQUIC_V1_VERSION, 0 };
+
+/* The table of supported version is used for version negotiation,
+ * and for documenting version specific parameters.
+ */
+
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_V1_VERSION,
         sizeof(picoquic_cleartext_v1_salt),
@@ -114,7 +125,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_v1,
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION},
+        PICOQUIC_V1_VERSION,
+        NULL },
     { PICOQUIC_V2_VERSION,
         sizeof(picoquic_cleartext_v2_salt),
         picoquic_cleartext_v2_salt,
@@ -122,7 +134,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_v2,
         PICOQUIC_LABEL_QUIC_V2_KEY_BASE,
         PICOQUIC_LABEL_V2_TRAFFIC_UPDATE,
-        PICOQUIC_V2_VERSION},
+        PICOQUIC_V2_VERSION,
+        picoquic_version_upgrade_from_v1 },
     { PICOQUIC_V2_VERSION_DRAFT,
         sizeof(picoquic_cleartext_v2_draft_salt),
         picoquic_cleartext_v2_draft_salt,
@@ -130,7 +143,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_v2_draft,
         PICOQUIC_LABEL_QUIC_V2_KEY_BASE,
         PICOQUIC_LABEL_V2_TRAFFIC_UPDATE,
-        PICOQUIC_V2_VERSION},
+        PICOQUIC_V2_VERSION,
+        picoquic_version_upgrade_from_v1 },
     { PICOQUIC_POST_IESG_VERSION,
         sizeof(picoquic_cleartext_v1_salt),
         picoquic_cleartext_v1_salt,
@@ -138,7 +152,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_v1,
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION},
+        PICOQUIC_V1_VERSION,
+        NULL },
     { PICOQUIC_TWENTYFIRST_INTEROP_VERSION,
         sizeof(picoquic_cleartext_v1_salt),
         picoquic_cleartext_v1_salt,
@@ -146,7 +161,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_v1,
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION },
+        PICOQUIC_V1_VERSION,
+        NULL },
     { PICOQUIC_TWENTIETH_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_29_salt),
         picoquic_cleartext_draft_29_salt,
@@ -154,7 +170,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_key_29,
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION },
+        PICOQUIC_V1_VERSION,
+        NULL },
     { PICOQUIC_TWENTIETH_PRE_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_29_salt),
         picoquic_cleartext_draft_29_salt,
@@ -162,7 +179,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_key_29,
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION },
+        PICOQUIC_V1_VERSION,
+        NULL },
     { PICOQUIC_NINETEENTH_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_29_salt),
         picoquic_cleartext_draft_29_salt,
@@ -170,7 +188,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_key_29,
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION },
+        PICOQUIC_V1_VERSION,
+        NULL },
     { PICOQUIC_NINETEENTH_BIS_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_29_salt),
         picoquic_cleartext_draft_29_salt,
@@ -178,7 +197,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_key_29,
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION },
+        PICOQUIC_V1_VERSION,
+        NULL },
     { PICOQUIC_EIGHTEENTH_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_23_salt),
         picoquic_cleartext_draft_23_salt,
@@ -186,7 +206,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_key_25,
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION },
+        PICOQUIC_V1_VERSION,
+        NULL },
     { PICOQUIC_SEVENTEENTH_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_23_salt),
         picoquic_cleartext_draft_23_salt,
@@ -194,7 +215,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_key_25,
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION },
+        PICOQUIC_V1_VERSION,
+        NULL },
     { PICOQUIC_INTERNAL_TEST_VERSION_2,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt,
@@ -202,7 +224,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_key_25,
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION },
+        PICOQUIC_V1_VERSION,
+        NULL },
     { PICOQUIC_INTERNAL_TEST_VERSION_1,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt,
@@ -210,7 +233,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_retry_protection_key_25,
         PICOQUIC_LABEL_QUIC_V1_KEY_BASE,
         PICOQUIC_LABEL_V1_TRAFFIC_UPDATE,
-        PICOQUIC_V1_VERSION },
+        PICOQUIC_V1_VERSION,
+        NULL },
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);
@@ -741,6 +765,14 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
     quic->default_multipath_option = multipath_option;
     if (quic->default_tp != NULL) {
         quic->default_tp->enable_multipath = multipath_option;
+    }
+}
+
+void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout)
+{
+    quic->default_idle_timeout = idle_timeout;
+    if (quic->default_tp != NULL) {
+        quic->default_tp->idle_timeout = idle_timeout;
     }
 }
 
@@ -3115,6 +3147,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
             cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
             cnx->local_parameters.enable_multipath = quic->default_multipath_option;
+            if (quic->default_idle_timeout != 0) {
+                cnx->local_parameters.idle_timeout = quic->default_idle_timeout;
+            }
             /* Apply the defined MTU MAX instead of default, if specified */
             if (cnx->quic->mtu_max > 0)
             {
@@ -4383,15 +4418,21 @@ int picoquic_process_version_upgrade(picoquic_cnx_t* cnx, int old_version_index,
     if (new_version_index == old_version_index) {
         /* not an upgrade, nothing to do. */
         ret = 0;
-    } else if (picoquic_supported_versions[new_version_index].version == PICOQUIC_V2_VERSION) {
-        if (picoquic_supported_versions[old_version_index].version == PICOQUIC_V1_VERSION) {
-            /* Supported */
-            ret = 0;
-            if (cnx != NULL) {
-                /* Install the new keys */
-                cnx->version_index = new_version_index;
-                picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
-                ret = picoquic_setup_initial_traffic_keys(cnx);
+    } else if (picoquic_supported_versions[new_version_index].upgrade_from != NULL) {
+        int i = 0;
+
+        while (picoquic_supported_versions[new_version_index].upgrade_from[i] != 0) {
+            if (picoquic_supported_versions[new_version_index].upgrade_from[i] ==
+                picoquic_supported_versions[old_version_index].version) {
+                /* Supported */
+                ret = 0;
+                if (cnx != NULL) {
+                    /* Install the new keys */
+                    cnx->version_index = new_version_index;
+                    picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
+                    ret = picoquic_setup_initial_traffic_keys(cnx);
+                    break;
+                }
             }
         }
     }

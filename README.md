@@ -136,7 +136,7 @@ Instead of building picotls separately, you can use an integrated option
 
  * Clone and compile Picoquic and Picotls in a single command:
 ~~~
-   cmake -DPICOQUIC_FETCH_PTLS .
+   cmake -DPICOQUIC_FETCH_PTLS=Y .
    make
 ~~~
 

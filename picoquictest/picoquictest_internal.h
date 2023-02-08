@@ -258,6 +258,7 @@ void picoquic_set_test_address(struct sockaddr_in * addr, uint32_t addr_val, uin
 
 int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, void * pn_dec, uint8_t * sample);
 
+int picoquic_compare_lines(char const* b1, char const* b2);
 int picoquic_test_compare_text_files(char const* fname1, char const* fname2);
 int picoquic_test_compare_binary_files(char const* fname1, char const* fname2);
 

@@ -40,8 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.0.1"
-
+#define PICOQUIC_VERSION "1.1.1.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -267,7 +266,7 @@ typedef struct st_picoquic_tp_t {
     uint64_t initial_max_data;
     uint64_t initial_max_stream_id_bidir;
     uint64_t initial_max_stream_id_unidir;
-    uint32_t idle_timeout;
+    uint64_t idle_timeout;
     uint32_t max_packet_size;
     uint32_t max_ack_delay; /* stored in in microseconds for convenience */
     uint32_t active_connection_id_limit;
@@ -581,6 +580,9 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 
 /* Set the multipath option for the context */
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option);
+
+/* Set the idle timeout parameter for the context. Value is in milliseconds. */
+void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout);
 
 /* Set the length of a crypto epoch -- force rotation after that many packets sent */
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max);

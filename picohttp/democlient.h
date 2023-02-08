@@ -62,11 +62,11 @@ typedef struct st_picoquic_demo_stream_ctx_t picoquic_demo_client_stream_ctx_t;
 typedef struct st_picoquic_demo_stream_ctx_t {
     picoquic_demo_client_stream_ctx_t* next_stream;
     h3zero_data_stream_state_t stream_state;
-    size_t received_length;
+    uint64_t received_length;
     size_t scenario_index;
     uint64_t stream_id;
-    size_t post_size;
-    size_t post_sent;
+    uint64_t post_size;
+    uint64_t post_sent;
     char* f_name;
     FILE* F; /* NULL if stream is closed or no_disk. */
     int is_open : 1;
@@ -111,12 +111,12 @@ int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic
     char const** ticket_alpn, uint32_t* ticket_version);
 
 int h3zero_client_init(picoquic_cnx_t* cnx);
-int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length, size_t * echo_sent, FILE * F);
+int demo_client_prepare_to_send(void * context, size_t space, uint64_t echo_length, uint64_t * echo_sent, FILE * F);
 int h3zero_client_create_stream_request(
-    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, size_t post_size, const char * host, size_t * consumed);
+    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed);
 
 int h09_demo_client_prepare_stream_open_command(
-    uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, size_t post_size, const char * host, size_t * consumed);
+    uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed);
 
 int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx, uint64_t fin_stream_id);

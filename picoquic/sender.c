@@ -1278,7 +1278,13 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
     rto <<= (path_x->nb_retransmit < 3) ? path_x->nb_retransmit : 2;
 
     if (cnx->cnx_state < picoquic_state_client_ready_start) {
-        if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
+        if (PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000 < cnx->local_parameters.idle_timeout) {
+            /* Special case of very long delays */
+            rto = path_x->retransmit_timer << path_x->nb_retransmit;
+            if (rto > cnx->local_parameters.idle_timeout * 100) {
+                rto = cnx->local_parameters.idle_timeout * 100;
+            }
+        } else if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
             rto = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
         }
     }
@@ -1679,7 +1685,8 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
                     old_path->lost++;
                 }
                 if (old_path != NULL &&
-                    (old_p->length + old_p->checksum_overhead) == old_path->send_mtu) {
+                    (old_p->length + old_p->checksum_overhead) == old_path->send_mtu &&
+                    cnx->cnx_state >= picoquic_state_ready) {
                     old_path->nb_mtu_losses++;
                     if (old_path->nb_mtu_losses > PICOQUIC_MTU_LOSS_THRESHOLD) {
                         picoquic_reset_path_mtu(old_path);
@@ -1698,7 +1705,8 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
                         old_p->send_time > old_path->last_loss_event_detected) {
                         old_path->nb_retransmit++;
                         old_path->last_loss_event_detected = current_time;
-                        if (old_path->nb_retransmit > 7) {
+                        if (old_path->nb_retransmit > 7 &&
+                            cnx->cnx_state >= picoquic_state_ready) {
                             /* Max retransmission reached for this path */
                             DBG_PRINTF("%s\n", "Too many data retransmits, abandon path");
                             picoquic_log_app_message(cnx, "%s", "Too many data retransmits, abandon path");
@@ -2559,11 +2567,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     int epoch = picoquic_epoch_initial;
     picoquic_packet_type_enum packet_type = picoquic_packet_initial;
     picoquic_packet_context_enum pc = picoquic_packet_context_initial;
-
-    if (*next_wake_time > cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
-        *next_wake_time = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
-        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-    }
 
     cnx->initial_validated = 1; /* always validated on client */
 
@@ -3818,7 +3821,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
     /* If there was no packet sent on this path for a long time, rotate the
      * CID prior to sending a new packet. The point is to make it harder for
-     * casual observers to track traffic, especially across NAT resets */
+     * casual observers to track traffic, especially across NAT resets.
+     * Long time is defined by either a 5 second refresh delay or 3 RTTs,
+     * whichever is longer.
+     */
     /* TODO: this functionality is disabled if multipath is enabled. This is a
      * stop gap, waiting to manage packets queued for retransmission in the
      * packet context associated with the connection ID */
@@ -3826,7 +3832,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         !cnx->is_multipath_enabled &&
         path_x->challenge_verified &&
         !path_x->path_cid_rotated &&
-        path_x->latest_sent_time + PICOQUIC_CID_REFRESH_DELAY < current_time)
+        path_x->latest_sent_time + PICOQUIC_CID_REFRESH_DELAY < current_time &&
+        path_x->latest_sent_time + 3*path_x->rtt_min < current_time)
     {
         /* Ignore renewal failure mode, since this is an optional feature */
         (void)picoquic_renew_path_connection_id(cnx, path_x);
@@ -4283,6 +4290,9 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
             idle_timer = UINT64_MAX;
         }
     }
+    else if (cnx->local_parameters.idle_timeout > (PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000)) {
+        idle_timer = cnx->start_time + cnx->local_parameters.idle_timeout*1000ull;
+    }
     else {
         idle_timer = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
     }
@@ -4642,8 +4652,12 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     picoquic_packet_t * packet = NULL;
     struct sockaddr_storage addr_to_log;
     struct sockaddr_storage addr_from_log;
-    uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
     uint64_t initial_next_time;
+    uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
+
+    if (cnx->local_parameters.idle_timeout >(PICOQUIC_MICROSEC_SILENCE_MAX / 500)) {
+        next_wake_time = cnx->latest_progress_time + cnx->local_parameters.idle_timeout * 1000ull;
+    }
 
     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
@@ -4853,6 +4867,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code)
 {
     int ret = 0;
+    uint64_t current_time = picoquic_get_quic_time(cnx->quic);
 
     if (cnx->cnx_state == picoquic_state_ready ||
         cnx->cnx_state == picoquic_state_server_false_start || cnx->cnx_state == picoquic_state_client_ready_start) {
@@ -4866,8 +4881,7 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code)
         ret = -1;
     }
     cnx->offending_frame_type = 0;
-
-    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
 
     return ret;
 }

@@ -1340,6 +1340,11 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     picoquic_public_random(&test_ctx->send_buffer[hl], 21);
                     coalesced_length = hl + 21;
                 }
+#if 1
+                if (*simulated_time >= 1705032704) {
+                    DBG_PRINTF("%s", "Bug");
+                }
+#endif
                 ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, *simulated_time,
                     test_ctx->send_buffer + coalesced_length, send_buffer_size - coalesced_length, &send_length,
                     &addr_to, &addr_from, NULL, p_segment_size);
@@ -1575,6 +1580,11 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
             nb_inactive = 0;
         } else {
             nb_inactive++;
+#if 1
+            if (nb_inactive == 128) {
+                DBG_PRINTF("Inactive at %" PRIu64, *simulated_time);
+            }
+#endif
         }
 
         if (test_ctx->test_finished) {
@@ -1780,20 +1790,11 @@ static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, u
 {
     int ret = 0;
 
-    if (ret == 0) {
-        ret = tls_api_attempt_to_close(test_ctx, simulated_time);
-
+    if (ret == 0 && test_ctx->cnx_server != NULL) {
+        ret = verify_transport_extension(test_ctx->cnx_client, test_ctx->cnx_server);
         if (ret != 0)
         {
-            DBG_PRINTF("Connection close returns %d\n", ret);
-        }
-
-        if (ret == 0) {
-            ret = verify_transport_extension(test_ctx->cnx_client, test_ctx->cnx_server);
-            if (ret != 0)
-            {
-                DBG_PRINTF("%s", "Transport extensions do no match\n");
-            }
+            DBG_PRINTF("%s", "Transport extensions do no match\n");
         }
 
         if (ret == 0) {
@@ -1821,6 +1822,15 @@ static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, u
             {
                 DBG_PRINTF("%s", "Negotiated versions do not match\n");
             }
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection close returns %d\n", ret);
         }
     }
 
@@ -2438,26 +2448,26 @@ int test_version_negotiation_spoof()
 }
 
 /* Test the compatible VN setup.
- * This will start a connection with version 1, and verify that it gets established with version 2.
- * TODO: define the transport parameters that require the upgrade.
+ * This will start a connection with version 1, and verify that it gets established with version 2,
+ * or to version 2 draft.
  */
-int vn_compat_test()
+int vn_compat_test_one(uint32_t current, uint32_t target)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_V1_VERSION, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    int ret = tls_api_init_ctx(&test_ctx, current, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
 
 
     if (ret == 0) {
         /* Set the desired version */
-        picoquic_set_desired_version(test_ctx->cnx_client, PICOQUIC_V2_VERSION);
+        picoquic_set_desired_version(test_ctx->cnx_client, target);
         /* Start the client connection */
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
 
     if (ret != 0)
     {
-        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_V1_VERSION);
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", current);
     }
 
     if (ret == 0) {
@@ -2466,13 +2476,13 @@ int vn_compat_test()
 
 
     if (ret == 0) {
-        if (picoquic_supported_versions[test_ctx->cnx_client->version_index].version != PICOQUIC_V2_VERSION) {
-            DBG_PRINTF("Client remained to version 0x%8x",
+        if (picoquic_supported_versions[test_ctx->cnx_client->version_index].version != target) {
+            DBG_PRINTF("Client remained to version 0x%08x",
                 picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
             ret = -1;
         }
-        else if (picoquic_supported_versions[test_ctx->cnx_server->version_index].version != PICOQUIC_V2_VERSION) {
-            DBG_PRINTF("Server remained to version 0x%8x",
+        else if (picoquic_supported_versions[test_ctx->cnx_server->version_index].version != target) {
+            DBG_PRINTF("Server remained to version 0x%08x",
                 picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
             ret = -1;
         }
@@ -2481,6 +2491,23 @@ int vn_compat_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int vn_compat_test()
+{
+    int ret = 0;
+
+    if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION) != 0) {
+        ret = -1;
+    }
+    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION_DRAFT) != 0) {
+        ret = -1;
+    }
+    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_INTERNAL_TEST_VERSION_1) == 0) {
+        ret = -1;
     }
 
     return ret;
@@ -2696,7 +2723,7 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
         {
             DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n",
                 (unsigned long long)completion_time, (unsigned long long)max_completion_microsec);
-            ret = -1;
+             ret = -1;
         }
     }
 
@@ -8283,6 +8310,106 @@ int qlog_trace_ecn_test()
 #define PERF_TRACE_CLIENT "perf_trace_client.csv"
 #define PERF_TRACE_SERVER "perf_trace_server.csv"
 
+static int perflog_set_version(char const * buffer2, char * buffer3, size_t buffer3_len)
+{
+    size_t i2 = 0;
+    size_t i3 = 0;
+    int ret = 0;
+
+    while (ret == 0 && buffer2[i2] != 0) {
+        if (buffer2[i2] == '$' && buffer2[i2 + 1] == 'V') {
+            char const* v = PICOQUIC_VERSION;
+            size_t v_len = strlen(v);
+            i2 += 2;
+            if (i3 + v_len < buffer3_len) {
+                memcpy(buffer3 + i3, v, v_len);
+                i3 += v_len;
+            }
+            else {
+                ret = -1;
+            }
+        }
+        else {
+            if (i3 < buffer3_len) {
+                buffer3[i3] = buffer2[i2];
+                i3++;
+                i2++;
+            }
+            else {
+                ret = -1;
+            }
+        }
+    }
+    if (ret == 0) {
+        if (i3 < buffer3_len) {
+            buffer3[i3] = 0;
+        }
+        else {
+            buffer3[buffer3_len - 1] = 0;
+            ret = -1;
+        }
+    }
+    return(ret);
+}
+
+static int perflog_compare(const char* fname1, const char* fname2)
+{
+    int ret = 0;
+    int nb_line = 0;
+    FILE* F1 = picoquic_file_open(fname1, "r");
+    FILE* F2 = picoquic_file_open(fname2, "r");
+
+    if (F1 == NULL || F2 == NULL) {
+        ret = -1;
+    }
+    else {
+        char buffer1[512];
+        char buffer2[512];
+        char buffer3[512];
+
+        while (ret == 0 && fgets(buffer1, sizeof(buffer1), F1) != NULL) {
+            nb_line++;
+            if (fgets(buffer2, sizeof(buffer2), F2) == NULL) {
+                /* F2 is too short */
+                DBG_PRINTF("File %s is shorter than %s\n", fname2, fname1);
+                DBG_PRINTF("    Missing line %d: %s", nb_line, buffer1);
+                ret = -1;
+            }
+            else {
+                /* Replace $V in buffer2 by actual version */
+                ret = perflog_set_version(buffer2, buffer3, sizeof(buffer3));
+
+                if (ret == 0) {
+                    ret = picoquic_compare_lines(buffer1, buffer3);
+                }
+                if (ret != 0)
+                {
+                    DBG_PRINTF("File %s differs %s at line %d\n", fname2, fname1, nb_line);
+                    DBG_PRINTF("    Got: %s", buffer1);
+                    DBG_PRINTF("    Vs:  %s", buffer3);
+                }
+            }
+        }
+
+        if (ret == 0 && fgets(buffer2, sizeof(buffer2), F2) != NULL) {
+            /* F2 is too long */
+            DBG_PRINTF("File %s is longer than %s\n", fname2, fname1);
+            DBG_PRINTF("    Extra line %d: %s", nb_line + 1, buffer2);
+            ret = -1;
+        }
+    }
+
+    if (F1 != NULL) {
+        (void)picoquic_file_close(F1);
+    }
+
+    if (F2 != NULL) {
+        (void)picoquic_file_close(F2);
+    }
+
+    return ret;
+}
+
 int perflog_test()
 {
     uint64_t simulated_time = 0;
@@ -8356,7 +8483,7 @@ int perflog_test()
                 (i)?"client":"server");
         }
         else {
-            ret = picoquic_test_compare_text_files((i)?PERF_TRACE_CLIENT: PERF_TRACE_SERVER, perf_trace_test_ref);
+            ret = perflog_compare((i)?PERF_TRACE_CLIENT: PERF_TRACE_SERVER, perf_trace_test_ref);
         }
     }
 

@@ -81,6 +81,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_ROOT_TRUST_FILE, 't', "root_trust_file", 1, "file", "root trust file" },
     { picoquic_option_FORCE_ZERO_SHARE, 'z', "force_zero_share", 0, "", "Set TLS zero share behavior on client, to force HRR" },
     { picoquic_option_CNXID_LENGTH, 'I', "cnxid_length", 1, "length", "Length of CNX_ID used by the client, default=8" },
+    { picoquic_option_Idle_Timeout, 'd', "idle_timeout", 1, "ms", "Duration of idle timeout in milliseconds" },
     { picoquic_option_NO_DISK, 'D', "no_disk", 0, "", "no disk: do not save received files on disk" },
     { picoquic_option_LARGE_CLIENT_HELLO, 'Q', "large_client_hello", 0, "",
     "send a large client hello in order to test post quantum readiness" },
@@ -451,6 +452,13 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
             ret = -1;
         }
         break;
+    case picoquic_option_Idle_Timeout:
+        config->idle_timeout = config_atoi(params, nb_params, 0, &ret);
+        if (config->idle_timeout < 0) {
+            fprintf(stderr, "Invalid idle timer: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = -1;
+        }
+        break;
     case picoquic_option_NO_DISK:
         config->no_disk = 1;
         break;
@@ -778,6 +786,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_default_lossbit_policy(quic, config->lossbit_policy);
 
         picoquic_set_default_multipath_option(quic, config->multipath_option);
+        picoquic_set_default_idle_timeout(quic, (uint64_t)config->idle_timeout);
 
         if (config->token_file_name) {
             if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {

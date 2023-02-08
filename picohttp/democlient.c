@@ -168,13 +168,13 @@ static picoquic_demo_client_stream_ctx_t* picoquic_demo_client_find_stream(
 }
 
 
-int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length, size_t * echo_sent, FILE * F)
+int demo_client_prepare_to_send(void * context, size_t space, uint64_t echo_length, uint64_t * echo_sent, FILE * F)
 {
     int ret = 0;
 
     if (*echo_sent < echo_length) {
         uint8_t * buffer;
-        size_t available = echo_length - *echo_sent;
+        uint64_t available = echo_length - *echo_sent;
         int is_fin = 1;
 
         if (available > space) {
@@ -182,23 +182,23 @@ int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length
             is_fin = 0;
         }
 
-        buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, !is_fin);
+        buffer = picoquic_provide_stream_data_buffer(context, (size_t)available, is_fin, !is_fin);
         if (buffer != NULL) {
             if (F) {
-                size_t nb_read = fread(buffer, 1, available, F);
+                size_t nb_read = fread(buffer, 1, (size_t)available, F);
 
                 if (nb_read != available) {
                     ret = -1;
                 }
                 else {
-                    *echo_sent += (uint32_t)available;
+                    *echo_sent += available;
                     ret = 0;
                 }
             }
             else {
                 /* TODO: fill buffer with some text */
-                memset(buffer, 0x5A, available);
-                *echo_sent += (uint32_t)available;
+                memset(buffer, 0x5A, (size_t)available);
+                *echo_sent += available;
                 ret = 0;
             }
         }
@@ -216,7 +216,7 @@ int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length
  */
 
 int h3zero_client_create_stream_request(
-    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, size_t post_size, const char * host, size_t * consumed)
+    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed)
 {
     int ret = 0;
     uint8_t * o_bytes = buffer;
@@ -323,7 +323,7 @@ int h3zero_client_init(picoquic_cnx_t* cnx)
  */
 
 int h09_demo_client_prepare_stream_open_command(
-    uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, size_t post_size, char const * host, size_t * consumed)
+    uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, uint64_t post_size, char const * host, size_t * consumed)
 {
 
     if (post_size == 0) {
@@ -378,7 +378,7 @@ int h09_demo_client_prepare_stream_open_command(
 
 static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx,
-    uint64_t stream_id, char const* doc_name, char const* fname, size_t post_size, uint64_t nb_repeat)
+    uint64_t stream_id, char const* doc_name, char const* fname, uint64_t post_size, uint64_t nb_repeat)
 {
     int ret = 0;
     uint8_t buffer[1024];
@@ -672,12 +672,12 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                 if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
                     fin_stream_id = stream_id;
                     if (stream_id <= 64 && !ctx->no_print) {
-                        fprintf(stdout, "Stream %d ended after %d bytes\n",
-                            (int)stream_id, (int)stream_ctx->received_length);
+                        fprintf(stdout, "Stream %" PRIu64 " ended after %" PRIu64 " bytes\n",
+                            stream_id, stream_ctx->received_length);
                     }
                     if (stream_ctx->received_length == 0) {
-                        picoquic_log_app_message(cnx, "Stream %d ended after %d bytes, ret=0x%x",
-                            (int)stream_id, (int)stream_ctx->received_length, ret);
+                        picoquic_log_app_message(cnx, "Stream %" PRIu64 " ended after %" PRIu64 " bytes, ret=0x%x",
+                            stream_id, stream_ctx->received_length, ret);
                     }
                 }
             }
@@ -692,7 +692,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
             fin_stream_id = stream_id;
             if (!ctx->no_print) {
-                fprintf(stdout, "Stream %" PRIu64 " reset after %zu bytes\n",
+                fprintf(stdout, "Stream %" PRIu64 " reset after %" PRIu64 " bytes\n",
                     stream_id, stream_ctx->received_length);
             }
         }
@@ -999,9 +999,15 @@ char const * demo_client_parse_post_size(char const * text, uint64_t * post_size
     else {
         *post_size = 0;
         do {
-            int delta = *text++ - '0';
+            int delta = *text - '0';
             *post_size *= 10;
             *post_size += delta;
+            if (*post_size > (UINT64_MAX >> 4)) {
+                break;
+            }
+            else {
+                text++;
+            }
         } while (text[0] >= '0' && text[0] <= '9');
 
         text = demo_client_parse_stream_spaces(text);

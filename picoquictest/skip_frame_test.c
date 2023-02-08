@@ -103,12 +103,12 @@ static uint8_t test_frame_type_stream_blocked[] = {
 
 static uint8_t test_frame_type_streams_blocked_bidir[] = {
     picoquic_frame_type_streams_blocked_bidir,
-    0x41, 0
+    0x41, 0x00
 };
 
 static uint8_t test_frame_type_streams_blocked_unidir[] = {
     picoquic_frame_type_streams_blocked_unidir,
-    0x81, 2, 3, 4
+    0x42, 0x00
 };
 
 static uint8_t test_frame_type_new_connection_id[] = {
@@ -937,7 +937,7 @@ static char const* qlog_test_file = "01020304.qlog";
 #define BINLOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "binlog_ref.log"
 #define QLOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "binlog_ref.qlog"
 
-static int compare_lines(char const* b1, char const* b2)
+int picoquic_compare_lines(char const* b1, char const* b2)
 {
     while (*b1 != 0 && *b2 != 0) {
         if (*b1 != *b2) {
@@ -974,7 +974,7 @@ int picoquic_compare_text_files(char const * fname1, char const * fname2, FILE *
             DBG_PRINTF("    Missing line %d: %s", nb_line, buffer1);
             ret = -1;
         } else {
-            ret = compare_lines(buffer1, buffer2);
+            ret = picoquic_compare_lines(buffer1, buffer2);
             if (ret != 0)
             {
                 DBG_PRINTF("File %s differs %s at line %d\n", fname2, fname1, nb_line);

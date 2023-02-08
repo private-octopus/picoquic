@@ -218,6 +218,7 @@ typedef struct st_picoquic_version_parameters_t {
     char* tls_prefix_label;
     char* tls_traffic_update_label;
     uint32_t packet_type_version;
+    uint32_t* upgrade_from;
 } picoquic_version_parameters_t;
 
 extern const picoquic_version_parameters_t picoquic_supported_versions[];
@@ -611,6 +612,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_spinbit_version_enum default_spin_policy;
     picoquic_lossbit_version_enum default_lossbit_policy;
     uint32_t default_multipath_option;
+    uint64_t default_idle_timeout;
     uint64_t crypto_epoch_length_max; /* Default packet interval between key rotations */
     uint32_t max_simultaneous_logs;
     uint32_t current_number_of_open_logs;

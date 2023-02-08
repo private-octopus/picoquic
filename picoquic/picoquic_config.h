@@ -61,6 +61,7 @@ typedef enum {
     picoquic_option_FORCE_ZERO_SHARE,
     picoquic_option_CNXID_LENGTH,
     picoquic_option_NO_DISK,
+    picoquic_option_Idle_Timeout,
     picoquic_option_LARGE_CLIENT_HELLO,
     picoquic_option_Ticket_File_Name,
     picoquic_option_Token_File_Name,
@@ -86,6 +87,7 @@ typedef struct st_picoquic_quic_config_t {
     int dest_if;
     int mtu_max;
     int cnx_id_length;
+    int idle_timeout;
     int socket_buffer_size;
     char const* cc_algo_id;
     char const * cnx_id_cbdata;

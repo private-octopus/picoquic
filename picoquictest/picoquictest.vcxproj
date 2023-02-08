@@ -153,8 +153,10 @@
     <ClCompile Include="cleartext_aead_test.c" />
     <ClCompile Include="cnxstress.c" />
     <ClCompile Include="cnx_creation_test.c" />
+    <ClCompile Include="code_version_test.c" />
     <ClCompile Include="config_test.c" />
     <ClCompile Include="datagram_tests.c" />
+    <ClCompile Include="delay_tolerant_test.c" />
     <ClCompile Include="edge_cases.c" />
     <ClCompile Include="h3zerotest.c" />
     <ClCompile Include="hashtest.c" />

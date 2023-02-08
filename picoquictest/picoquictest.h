@@ -62,6 +62,7 @@ int tls_api_client_first_loss_test();
 int tls_api_client_second_loss_test();
 int tls_api_server_first_loss_test();
 int tls_api_many_losses();
+int code_version_test();
 int tls_api_version_negotiation_test();
 int tls_api_version_invariant_test();
 int test_version_negotiation_spoof();
@@ -159,6 +160,10 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
 int splay_test();
 int TlsStreamFrameTest();
 int draft17_vector_test();
+int dtn_basic_test();
+int dtn_data_test();
+int dtn_silence_test();
+int dtn_twenty_test();
 int fuzz_test();
 int random_tester_test();
 int random_gauss_test();
