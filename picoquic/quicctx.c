@@ -3147,7 +3147,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
             cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
             cnx->local_parameters.enable_multipath = quic->default_multipath_option;
-            cnx->local_parameters.idle_timeout = quic->default_idle_timeout;
+            if (quic->default_idle_timeout != 0) {
+                cnx->local_parameters.idle_timeout = quic->default_idle_timeout;
+            }
             /* Apply the defined MTU MAX instead of default, if specified */
             if (cnx->quic->mtu_max > 0)
             {
