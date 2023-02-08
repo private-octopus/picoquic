@@ -140,6 +140,7 @@
     <ClCompile Include="democlient.c" />
     <ClCompile Include="demoserver.c" />
     <ClCompile Include="h3zero.c" />
+    <ClCompile Include="h3zero_server.c" />
     <ClCompile Include="quicperf.c" />
     <ClCompile Include="siduck.c" />
     <ClCompile Include="webtransport.c" />

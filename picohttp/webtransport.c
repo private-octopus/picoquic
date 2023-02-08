@@ -50,6 +50,17 @@
 #include "picoquic_internal.h"
 #include "pico_webtransport.h"
 
+/* Registration.
+ * We want to register a web transport context, to receive and serve web
+ * transport connections over H3.
+ * 
+ * TODO: should we first define an H3 server context, or maybe an HTTP server
+ * context? The HTTP server context would keep a set of reserved path ID,
+ * and associate them with a service API. In the demo server, this could
+ * be a set of reserved path names, e.g., "_wt".
+ */
+
+
 void picowt_register(picoquic_quic_t* quic, const char* uri, picowt_ready_cb_fn wt_callback, void* wt_ctx)
 {
     /* Add the uri to a registry list in the quic or w3 context. */
