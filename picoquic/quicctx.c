@@ -768,6 +768,14 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
     }
 }
 
+void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout)
+{
+    quic->default_idle_timeout = idle_timeout;
+    if (quic->default_tp != NULL) {
+        quic->default_tp->idle_timeout = idle_timeout;
+    }
+}
+
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max)
 {
     quic->crypto_epoch_length_max = (crypto_epoch_length_max == 0) ?
@@ -3139,6 +3147,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
             cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
             cnx->local_parameters.enable_multipath = quic->default_multipath_option;
+            cnx->local_parameters.idle_timeout = quic->default_idle_timeout;
             /* Apply the defined MTU MAX instead of default, if specified */
             if (cnx->quic->mtu_max > 0)
             {

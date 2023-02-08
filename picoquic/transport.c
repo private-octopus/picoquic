@@ -690,7 +690,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     break;
                 }
                 case picoquic_tp_idle_timeout:
-                    cnx->remote_parameters.idle_timeout = (uint32_t)
+                    cnx->remote_parameters.idle_timeout = 
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     break;
 

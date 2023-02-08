@@ -4291,7 +4291,7 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
         }
     }
     else if (cnx->local_parameters.idle_timeout > (PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000)) {
-        idle_timer = cnx->start_time + ((uint64_t)cnx->local_parameters.idle_timeout)*1000ull;
+        idle_timer = cnx->start_time + cnx->local_parameters.idle_timeout*1000ull;
     }
     else {
         idle_timer = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
@@ -4656,7 +4656,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
 
     if (cnx->local_parameters.idle_timeout >(PICOQUIC_MICROSEC_SILENCE_MAX / 500)) {
-        next_wake_time = cnx->latest_progress_time + ((uint64_t)cnx->local_parameters.idle_timeout) * 1000ull;
+        next_wake_time = cnx->latest_progress_time + cnx->local_parameters.idle_timeout * 1000ull;
     }
 
     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
