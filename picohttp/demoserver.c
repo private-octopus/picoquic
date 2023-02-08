@@ -419,20 +419,23 @@ static int h3zero_server_process_request_frame(
             }
         }
 
-            if (stream_ctx->path_callback != NULL) {
-                response_length = stream_ctx->path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx);
-            } else {
-                /* Prepare generic POST response */
-                size_t message_length = 0;
-                (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &message_length, demo_server_post_response_page, (int)stream_ctx->post_received);
-                response_length = message_length;
-            }
-            stream_ctx->echo_length = 0;
+        if (stream_ctx->path_callback != NULL) {
+            response_length = stream_ctx->path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx);
         }
+        else {
+            /* Prepare generic POST response */
+            size_t message_length = 0;
+            (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &message_length, demo_server_post_response_page, (int)stream_ctx->post_received);
+            response_length = message_length;
+        }
+#if 0
+        stream_ctx->echo_length = 0;
+    }
         else {
             response_length = (stream_ctx->echo_length == 0) ?
                 strlen(demo_server_default_page) : stream_ctx->echo_length;
         }
+#endif
         /* If known, create response header frame */
         /* POST-TODO: provide content type of response as part of context */
         o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max,
