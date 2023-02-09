@@ -39,10 +39,18 @@ extern "C" {
 #define H3ZERO_REQUEST_REJECTED 0x010B /* Request not processed */
 #define H3ZERO_REQUEST_CANCELLED 0x010C /* Data no longer needed */
 #define H3ZERO_REQUEST_INCOMPLETE 0x010D /* Stream terminated early */
-#define H3ZERO_EARLY_RESPONSE 0x010E /* Remainder of request not needed */
+#define H3_MESSAGE_ERROR 0x010E /* HTTP message was malformed and cannot be processed */
 #define H3ZERO_CONNECT_ERROR 0x010F /* TCP reset or error on CONNECT request */
 #define H3ZERO_VERSION_FALLBACK 0x0110 /* Retry over  H3ZERO/1.1 */
+#define H3ZERO_QPACK_DECOMPRESSION_FAILED 0x0200 /* Decoding of a field section failed. */
+#define H3ZERO_QPACK_ENCODER_STREAM_ERROR 0x0201 /* Error on the encoder stream */
+#define H3ZERO_QPACK_DECODER_STREAM_ERROR 0x0202 /* Error on the decoder stream */
+#define H3ZERO_WEBTRANSPORT_BUFFERED_STREAM_REJECTED 0x3994bd84 /* Stream arrived before webtransport session established */
+#define H3ZERO_WEBTRANSPORT_SESSION_GONE 0x170d7b68 /* Stream arrived after web transport session closed */
+#define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR(code) (0x52e4a40fa8dbull + code) /* see spec for skipping grease points when mapping codes */
 #define H3ZERO_USER_AGENT_STRING "H3Zero/1.0"
+
+#define H3ZERO_CAPSULE_CLOSE_WEBTRANSPORT_SESSION 0x2843
 
 typedef enum {
 	h3zero_frame_data = 0,
@@ -53,7 +61,8 @@ typedef enum {
     h3zero_frame_goaway = 7,
     h3zero_frame_max_push_id = 0xd,
     h3zero_frame_reserved_base = 0xb,
-    h3zero_frame_reserved_delta = 0x1f
+    h3zero_frame_reserved_delta = 0x1f,
+    h3zero_frame_webtransport_stream = 0x41
 } h3zero_frame_type_enum_t;
 
 typedef enum {
@@ -62,8 +71,19 @@ typedef enum {
     h3zero_setting_max_header_list_size = 0x6,
 	h3zero_qpack_blocked_streams = 0x07,
 	h3zero_setting_grease_signature =0x0a0a,
-    h3zero_setting_grease_mask = 0x0f0f
+    h3zero_setting_grease_mask = 0x0f0f,
+    h3zero_settings_enable_web_transport = 0x2b603742,
+    h3zero_settings_webtransport_max_sessions = 0x2b603743
 } h3zero_settings_enum_t;
+
+typedef enum {
+    h3zero_stream_type_control = 0,
+    h3zero_stream_type_push = 1, /* Push type not supported in h3zero settings */
+    h3zero_stream_type_qpack_encoder = 2, /* not required since not using dynamic table */
+    h3zero_stream_type_qpack_decoder = 3, /* not required since not using dynamic table */
+    h3zero_unidirectional_stream_type_webtransport = 0x54,
+    h3zero_stream_type_webtransport = 0x41
+} h3zero_stream_type_enum;
 
 typedef enum {
     http_header_unknown = 0,
@@ -180,6 +200,8 @@ typedef struct st_h3zero_header_parts_t {
     size_t path_length;
     int status;
     h3zero_content_type_enum content_type;
+    uint8_t const * protocol;
+    size_t protocol_length;
     unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
 

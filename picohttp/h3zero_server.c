@@ -441,6 +441,13 @@ static int h3zero_server_process_request_frame(
             (stream_ctx->echo_length == 0) ? h3zero_content_type_text_html :
             h3zero_content_type_text_plain);
     }
+    else if (stream_ctx->ps.stream_state.header.method == h3zero_method_connect) {
+        /* The connect handling depends on the requested protocol */
+    }
+    else
+    {
+        /* unsupported method */
+    }
 
     if (o_bytes == NULL) {
         ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_INTERNAL_ERROR);
@@ -530,6 +537,7 @@ static int h3zero_server_callback_data(
     if (IS_BIDIR_STREAM_ID(stream_id)) {
         /* If client bidir stream, absorb data until end, then
          * parse the header */
+        /* TODO: add an exception for bidir streams set by Webtransport */
         if (!IS_CLIENT_STREAM_ID(stream_id)) {
             /* Should never happen */
             ret = picoquic_stop_sending(cnx, stream_id, H3ZERO_GENERAL_PROTOCOL_ERROR);
@@ -549,6 +557,7 @@ static int h3zero_server_callback_data(
                 }
             }
             else {
+                /* TODO: move this to common code with unidir, after parsing beginning of unidir? */
                 uint16_t error_found = 0;
                 size_t available_data = 0;
                 uint8_t * bytes_max = bytes + length;
@@ -578,6 +587,8 @@ static int h3zero_server_callback_data(
                         bytes += available_data;
                     }
                 }
+                /* TODO:are there cases when the request header shall be processed before the FIN is received?
+                 */
                 
                 if (ret == 0 && fin_or_event == picoquic_callback_stream_fin) {
                     /* Process the request header. */
@@ -597,10 +608,10 @@ static int h3zero_server_callback_data(
         /* TODO: If this is a control stream, and setting is not received yet,
          * wait for the setting frame, then process it and move the
          * state to absorbing.*/
-         /* TODO: Beside control stream, we also absorb the push streams and
-          * the reserved streams (*1F). In fact, we implement that by
-          * just switching the state to absorbing. */
-          /* For now, do nothing, just ignore the data */
+        /* TODO: Beside control stream, we also absorb the push streams and
+         * the reserved streams (*1F). In fact, we implement that by
+         * just switching the state to absorbing. */
+        /* TODO: consider web transport */
     }
 
     return ret;
@@ -625,6 +636,7 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
             /* Get data from callback context of specific URL */
             ret = stream_ctx->path_callback(cnx, context, space, picohttp_callback_provide_data, stream_ctx);
         }
+        /* TODO: add case for web transport */
         else {
             /* default reply for known URL */
             ret = h3zero_server_prepare_to_send(context, space, stream_ctx);

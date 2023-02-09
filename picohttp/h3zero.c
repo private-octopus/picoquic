@@ -461,6 +461,10 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                 bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
                     decoded_length, &parts->path, &parts->path_length);
                 break;
+            case http_pseudo_header_protocol:
+                bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                    decoded_length, &parts->protocol, &parts->protocol_length);
+                break;
             default:
                 break;
             }
@@ -477,10 +481,12 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
 int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int is_huffman)
 {
     char const  * interesting_header_name[] = {
-     ":method", ":path", ":status", "content-type", NULL };
+     ":method", ":path", ":status", "content-type", ":protocol", "origin", NULL};
     const http_header_enum_t interesting_header[] = {
         http_pseudo_header_method, http_pseudo_header_path,
-        http_pseudo_header_status, http_header_content_type };
+        http_pseudo_header_status, http_header_content_type,
+        http_pseudo_header_protocol, http_header_origin
+    };
     http_header_enum_t val = http_header_unknown;
     uint8_t deHuff[256];
 
@@ -581,7 +587,9 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
                     }
                     break;
                 case http_header_origin:
+                    /* TODO: parse origin value? */
                 case http_pseudo_header_protocol:
+                    /* TODO: parse protocol value? */
                 default:
                     break;
                 }
@@ -1029,6 +1037,7 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
                 stream_state->data_found = 1;
             }
         }
+        /* TODO: parse webtransport frame */
         else {
             /* Unknown frame type, should just be ignored */
             stream_state->current_frame_read += available;
@@ -1074,6 +1083,7 @@ static uint8_t const h3zero_default_setting_frame_val[] = {
     4, /* Length of setting frame content */
     (uint8_t)h3zero_setting_header_table_size, 0, /* var int type ( < 64), then var int value (0) */
     (uint8_t)h3zero_qpack_blocked_streams, 0 /* var int type ( < 64),  then var int value (0) Control*/
+
 };
 
 uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;
