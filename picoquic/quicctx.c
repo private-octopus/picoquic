@@ -1285,7 +1285,11 @@ static void* picoquic_wake_list_node_value(picosplay_node_t* cnx_wake_node)
 }
 
 static int64_t picoquic_wake_list_compare(void* l, void* r) {
-    return (int64_t)((picoquic_cnx_t*)l)->next_wake_time - ((picoquic_cnx_t*)r)->next_wake_time;
+    const uint64_t ltime = ((picoquic_cnx_t*)l)->next_wake_time;
+    const uint64_t rtime = ((picoquic_cnx_t*)r)->next_wake_time;
+    if (ltime < rtime) return -1;
+    if (ltime > rtime) return 1;
+    return 0;
 }
 
 static picosplay_node_t* picoquic_wake_list_create_node(void* v_cnx)
