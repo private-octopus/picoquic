@@ -26,7 +26,8 @@ jobs:
       - name: Building picoquic
         run: |
           brew reinstall openssl
-          export PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig"
+          brew install pkg-config
+          #export PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig"
           ./ci/build_picotls.sh
           cmake -S . -B build
           cmake --build build
