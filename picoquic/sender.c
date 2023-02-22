@@ -164,7 +164,7 @@ int picoquic_mark_high_priority_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
         cnx->high_priority_stream_id = stream_id;
     }
     else if (cnx->high_priority_stream_id == stream_id) {
-        cnx->high_priority_stream_id = (uint64_t)((int64_t)-1);
+        cnx->high_priority_stream_id = UINT64_MAX;
     }
 
     ret = picoquic_set_stream_priority(cnx, stream_id, (is_high_priority) ? 0 : cnx->quic->default_stream_priority);

@@ -1340,11 +1340,6 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     picoquic_public_random(&test_ctx->send_buffer[hl], 21);
                     coalesced_length = hl + 21;
                 }
-#if 1
-                if (*simulated_time >= 1705032704) {
-                    DBG_PRINTF("%s", "Bug");
-                }
-#endif
                 ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, *simulated_time,
                     test_ctx->send_buffer + coalesced_length, send_buffer_size - coalesced_length, &send_length,
                     &addr_to, &addr_from, NULL, p_segment_size);
@@ -1580,11 +1575,6 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
             nb_inactive = 0;
         } else {
             nb_inactive++;
-#if 1
-            if (nb_inactive == 128) {
-                DBG_PRINTF("Inactive at %" PRIu64, *simulated_time);
-            }
-#endif
         }
 
         if (test_ctx->test_finished) {

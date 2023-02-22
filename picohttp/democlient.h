@@ -44,7 +44,7 @@ typedef enum {
     picoquic_alpn_quicperf
 } picoquic_alpn_enum;
 
-#define PICOQUIC_DEMO_STREAM_ID_INITIAL (uint64_t)((int64_t)-1)
+#define PICOQUIC_DEMO_STREAM_ID_INITIAL UINT64_MAX
 
 typedef struct st_picoquic_demo_stream_desc_t {
     int repeat_count;

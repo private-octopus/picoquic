@@ -1301,7 +1301,7 @@ uint8_t * picoquic_format_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, ui
     picoquic_stream_head_t* hi_pri_stream = NULL;
 
     /* Check whether there is a high priority stream declared */
-    if (cnx->high_priority_stream_id != (uint64_t)((int64_t)-1)) {
+    if (cnx->high_priority_stream_id != UINT64_MAX) {
         hi_pri_stream = picoquic_find_stream(cnx, cnx->high_priority_stream_id);
     }
 
@@ -3785,7 +3785,7 @@ const uint8_t* picoquic_decode_application_close_frame(picoquic_cnx_t* cnx, cons
  * Max data frame
  */
 
-#define PICOQUIC_MAX_MAXDATA ((uint64_t)((int64_t)-1))
+#define PICOQUIC_MAX_MAXDATA UINT64_MAX
 #define PICOQUIC_MAX_MAXDATA_1K (PICOQUIC_MAX_MAXDATA >> 10)
 #define PICOQUIC_MAX_MAXDATA_1K_MASK (PICOQUIC_MAX_MAXDATA << 10)
 

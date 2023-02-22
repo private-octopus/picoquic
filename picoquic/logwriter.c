@@ -1091,7 +1091,7 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 
         bytewrite_vint(ps_msg, pkt_ctx->send_sequence);
 
-        if (pkt_ctx->highest_acknowledged != (uint64_t)(int64_t)-1) {
+        if (pkt_ctx->highest_acknowledged != UINT64_MAX) {
             bytewrite_vint(ps_msg, 1);
             bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged);
             bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged_time - cnx->start_time);

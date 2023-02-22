@@ -1265,7 +1265,7 @@ int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     int ret = 0;
     uint64_t sequence = 0;
     uint64_t packet_rcvd = 0;
-    uint64_t highest_ack = (uint64_t)(int64_t)-1;
+    uint64_t highest_ack = UINT64_MAX;
     uint64_t high_ack_time = 0;
     uint64_t last_time_ack = 0;
     uint64_t cwin = 0;

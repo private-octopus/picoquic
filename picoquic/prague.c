@@ -116,7 +116,7 @@ typedef struct st_picoquic_prague_state_t {
 static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
 {
     pr_state->alg_state = picoquic_prague_alg_slow_start;
-    pr_state->ssthresh = (uint64_t)((int64_t)-1);
+    pr_state->ssthresh = UINT64_MAX;
     pr_state->alpha = 0;
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
 }

@@ -1162,7 +1162,7 @@ uint64_t picoquic_test_uniform_random(uint64_t* random_context, uint64_t rnd_max
     uint64_t rnd = 0;
 
     if (rnd_max > 0) {
-        uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
+        uint64_t rnd_min = UINT64_MAX % rnd_max;
 
         do {
             rnd = picoquic_test_random(random_context);
