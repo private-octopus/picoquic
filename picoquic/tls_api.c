@@ -795,7 +795,7 @@ void picoquic_crypto_random(picoquic_quic_t* quic, void* buf, size_t len)
 uint64_t picoquic_crypto_uniform_random(picoquic_quic_t* quic, uint64_t rnd_max)
 {
     uint64_t rnd;
-    uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
+    uint64_t rnd_min = UINT64_MAX % rnd_max;
 
     do {
         picoquic_crypto_random(quic, &rnd, sizeof(rnd));

@@ -232,7 +232,7 @@ int sim_link_one_test(uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t nb
 
         while (ret == 0) {
             if (queued >= nb_packets) {
-                departure_time = (uint64_t)((int64_t)-1);
+                departure_time = UINT64_MAX;
             }
 
             current_time = picoquictest_sim_link_next_arrival(link, departure_time);
