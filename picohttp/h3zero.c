@@ -458,12 +458,24 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                 }
                 break;
             case http_pseudo_header_path:
-                bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                    decoded_length, &parts->path, &parts->path_length);
+                if (parts->path != NULL) {
+                    /* Duplicate content type! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->path, &parts->path_length);
+                }
                 break;
             case http_pseudo_header_protocol:
-                bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                    decoded_length, &parts->protocol, &parts->protocol_length);
+                if (parts->protocol != NULL) {
+                    /* Duplicate content type! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->protocol, &parts->protocol_length);
+                }
                 break;
             default:
                 break;
