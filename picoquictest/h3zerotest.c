@@ -856,10 +856,7 @@ static int h3zero_parse_qpack_test_one(size_t i, uint8_t * data, size_t data_len
         ret = -1;
     }
 
-    if (parts.path != NULL) {
-        free((uint8_t *)parts.path);
-        *((uint8_t **)&parts.path) = NULL;
-    }
+    h3zero_release_header_parts(&parts);
 
     return ret;
 }

@@ -1052,16 +1052,28 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
     return bytes;
 }
 
+void h3zero_release_header_parts(h3zero_header_parts_t* header)
+{
+    if (header->path != NULL) {
+        free((uint8_t*)header->path);
+        *((uint8_t**)header->path) = NULL;
+        header->path_length = 0;
+    }
+    if (header->protocol != NULL) {
+        free((uint8_t*)header->protocol);
+        *((uint8_t**)header->protocol) = NULL;
+        header->protocol_length = 0;
+    }
+}
+
 void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 {
-    if (stream_state->header_found && stream_state->header.path != NULL) {
-        free((uint8_t*)stream_state->header.path);
-        *((uint8_t**)&stream_state->header.path) = NULL;
+    if (stream_state->header_found){
+        h3zero_release_header_parts(&stream_state->header);
     }
 
-    if (stream_state->trailer_found && stream_state->trailer.path != NULL) {
-        free((uint8_t*)stream_state->trailer.path);
-        *((uint8_t**)&stream_state->trailer.path) = NULL;
+    if (stream_state->trailer_found){
+        h3zero_release_header_parts(&stream_state->trailer);
     }
 
     if (stream_state->current_frame != NULL) {

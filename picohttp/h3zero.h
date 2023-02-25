@@ -266,6 +266,8 @@ typedef struct st_h3zero_data_stream_state_t {
 uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_data_stream_state_t * stream_state, size_t * available_data, uint16_t * error_found);
 
+void h3zero_release_header_parts(h3zero_header_parts_t* header);
+
 void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state);
 
 int hzero_qpack_huffman_decode(uint8_t * bytes, uint8_t * bytes_max,
