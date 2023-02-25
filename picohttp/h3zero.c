@@ -579,6 +579,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
                         if (parts->path == NULL) {
                             /* internal error */
                             bytes = NULL;
+                            parts->path_length = 0;
                         }
                         else {
                             memcpy((uint8_t *)parts->path, qpack_static[s_index].content, parts->path_length);
@@ -1056,12 +1057,12 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
 {
     if (header->path != NULL) {
         free((uint8_t*)header->path);
-        *((uint8_t**)header->path) = NULL;
+        *((uint8_t**)&header->path) = NULL;
         header->path_length = 0;
     }
     if (header->protocol != NULL) {
         free((uint8_t*)header->protocol);
-        *((uint8_t**)header->protocol) = NULL;
+        *((uint8_t**)&header->protocol) = NULL;
         header->protocol_length = 0;
     }
 }
