@@ -1138,10 +1138,7 @@ int h3zero_qpack_fuzz_test()
                  * the test succeeds if that does not cause a crash */
                 memset(&parts, 0, sizeof(parts));
                 parsed = h3zero_parse_qpack_header_frame(parsed, bytes_max, &parts);
-                if (parts.path != NULL) {
-                    free((void*)parts.path);
-                    parts.path = NULL;
-                }
+                h3zero_release_header_parts(&parts);
                 n_good += (parsed != NULL) ? 1 : 0;
                 n_trials++;
             }
