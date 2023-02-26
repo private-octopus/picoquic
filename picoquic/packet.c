@@ -1231,6 +1231,7 @@ int picoquic_incoming_client_initial(
      */
     if ((*pcnx)->cnx_state == picoquic_state_server_init &&
         !(*pcnx)->quic->server_busy) {
+        int is_address_blocked = !(*pcnx)->quic->is_port_blocking_disabled && picoquic_check_addr_blocked(addr_from);
         int is_new_token = 0;
         int is_wrong_token = 0;
         if (ph->token_length > 0) {
@@ -1247,7 +1248,7 @@ int picoquic_incoming_client_initial(
             (void)picoquic_connection_error(*pcnx, PICOQUIC_TRANSPORT_INVALID_TOKEN, 0);
             ret = PICOQUIC_ERROR_INVALID_TOKEN;
         }
-        else if ((*pcnx)->quic->check_token && (ph->token_length == 0 || is_wrong_token)){
+        else if (((*pcnx)->quic->check_token || is_address_blocked) && (ph->token_length == 0 || is_wrong_token)){
             uint8_t token_buffer[256];
             size_t token_size;
 
@@ -1853,8 +1854,9 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             }
         }
 
-        if (cnx->nb_paths < PICOQUIC_NB_PATH_TARGET
-            && picoquic_create_path(cnx, current_time, addr_to, addr_from) > 0) {
+        if (cnx->nb_paths < PICOQUIC_NB_PATH_TARGET &&
+            (cnx->quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from)) &&
+            picoquic_create_path(cnx, current_time, addr_to, addr_from) > 0) {
             /* The peer is probing for a new path, or there was a path rebinding */
             path_id = cnx->nb_paths - 1;
 
@@ -2225,14 +2227,18 @@ int picoquic_incoming_segment(
     }
 
     if (ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED) {
-        if (packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU) {
-            /* use the result of parsing to consider version negotiation */
-            picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph, raw_bytes);
+        /* use the result of parsing to consider version negotiation,
+         * but block reflection attacks towards protected ports. */
+        if (packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU){
+            if (quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from)) {
+                picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph, raw_bytes);
+            }
         }
     } else if (ret == 0) {
         if (cnx == NULL) {
             /* Unexpected packet. Reject, drop and log. */
-            if (!picoquic_is_connection_id_null(&ph.dest_cnx_id)) {
+            if (!picoquic_is_connection_id_null(&ph.dest_cnx_id) &&
+                (quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from))) {
                 picoquic_process_unexpected_cnxid(quic, length, addr_from, addr_to, if_index_to, &ph, current_time);
             }
             ret = PICOQUIC_ERROR_DETECTED;
@@ -2425,12 +2431,6 @@ int picoquic_incoming_packet_ex(
     size_t consumed_index = 0;
     int ret = 0;
     picoquic_connection_id_t previous_destid = picoquic_null_connection_id;
-
-    if (!quic->is_port_blocking_disabled && picoquic_check_addr_blocked(addr_from)) {
-        /* if the port is blocked, do not process the packet */
-        return 0;
-    }
-
 
     while (consumed_index < packet_length) {
         size_t consumed = 0;
