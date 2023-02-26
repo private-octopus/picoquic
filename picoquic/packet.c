@@ -1854,8 +1854,9 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             }
         }
 
-        if (cnx->nb_paths < PICOQUIC_NB_PATH_TARGET
-            && picoquic_create_path(cnx, current_time, addr_to, addr_from) > 0) {
+        if (cnx->nb_paths < PICOQUIC_NB_PATH_TARGET &&
+            (cnx->quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from)) &&
+            picoquic_create_path(cnx, current_time, addr_to, addr_from) > 0) {
             /* The peer is probing for a new path, or there was a path rebinding */
             path_id = cnx->nb_paths - 1;
 

@@ -2491,8 +2491,7 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
 {
     int ret = 0;
 
-    if (cnx->remote_parameters.prefered_address.is_defined)
-    {
+    if (cnx->remote_parameters.prefered_address.is_defined) {
         int ipv4_received = cnx->remote_parameters.prefered_address.ipv4Port != 0;
         int ipv6_received = cnx->remote_parameters.prefered_address.ipv6Port != 0;
 
@@ -2531,8 +2530,11 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
                 memcpy(&d4->sin_addr, cnx->remote_parameters.prefered_address.ipv4Address, 4);
             }
 
-            /* Only send a probe if not already using that address */
-            if (picoquic_compare_addr((struct sockaddr *)&dest_addr, (struct sockaddr *)&cnx->path[0]->peer_addr) != 0) {
+            /* Only send a probe if not already using that address
+             * and the target address is not using a protected port number
+             */
+            if (picoquic_compare_addr((struct sockaddr *)&dest_addr, (struct sockaddr *)&cnx->path[0]->peer_addr) != 0 &&
+                (cnx->quic->is_port_blocking_disabled || !picoquic_check_addr_blocked((struct sockaddr *)&dest_addr))) {
                 struct sockaddr* local_addr = NULL;
                 if (cnx->path[0]->local_addr.ss_family != 0 && cnx->path[0]->local_addr.ss_family == dest_addr.ss_family) {
                     local_addr = (struct sockaddr*) & cnx->path[0]->local_addr;
