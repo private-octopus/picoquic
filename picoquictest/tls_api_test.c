@@ -12062,7 +12062,7 @@ int error_reason_test()
 int port_blocked_test_one(picoquic_quic_t * quic,
     uint8_t* packet, size_t packet_length, 
     struct sockaddr* addr_from, struct sockaddr* addr_to,
-    int expect_blocked, uint64_t current_time)
+    int expect_blocked, int retry_accepted, uint64_t current_time)
 {
     uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
     struct sockaddr_storage s_to;
@@ -12082,7 +12082,24 @@ int port_blocked_test_one(picoquic_quic_t * quic,
 
     if (ret == 0) {
         if (send_length > 0 && expect_blocked) {
+            /* TODO: check whether the "blocked" packet is a stateless retry */
+            uint8_t flags;
+            uint32_t vn;
+            const uint8_t* bytes;
+            int version_index;
+
             ret = -1;
+
+            if (retry_accepted) {
+                if ((bytes = picoquic_frames_uint8_decode(send_buffer, &send_buffer[send_length], &flags)) != NULL &&
+                    (bytes = picoquic_frames_uint32_decode(bytes, &send_buffer[send_length], &vn)) != NULL &&
+                    (version_index = picoquic_get_version_index(vn)) >= 0) {
+                    picoquic_packet_type_enum p_type = picoquic_parse_long_packet_type(flags, version_index);
+                    if (p_type == picoquic_packet_retry) {
+                        ret = 0;
+                    }
+                }
+            }
         }
         else if (send_length == 0 && !expect_blocked) {
             ret = -1;
@@ -12107,12 +12124,11 @@ int port_blocked_test_address(
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_V1_VERSION, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
-    /* Delete the default connection */
     if (ret == 0) {
+        /* Delete the default connection */
         picoquic_delete_cnx(test_ctx->cnx_client);
-        if (do_disable) {
-            picoquic_disable_port_blocking(test_ctx->qserver, 1);
-        }
+        /* Set prot blocking to expected value */
+        picoquic_disable_port_blocking(test_ctx->qserver, do_disable);
     }
     /* Perform the VN test */
     if (ret == 0) {
@@ -12125,7 +12141,7 @@ int port_blocked_test_address(
         send_buffer[14] = 8;
         send_length = PICOQUIC_ENFORCED_INITIAL_MTU;
         simulated_time += 1000;
-        ret = port_blocked_test_one(test_ctx->qserver, send_buffer, send_length, addr_from, addr_to, expect_blocked, simulated_time);
+        ret = port_blocked_test_one(test_ctx->qserver, send_buffer, send_length, addr_from, addr_to, expect_blocked, 0, simulated_time);
         if (ret != 0) {
             DBG_PRINTF("VN blocked test fails, ret = %d", ret);
         }
@@ -12136,7 +12152,7 @@ int port_blocked_test_address(
         send_buffer[0] = 0x7f;
         send_length = PICOQUIC_ENFORCED_INITIAL_MTU;
         simulated_time += 1000;
-        ret = port_blocked_test_one(test_ctx->qserver, send_buffer, send_length, addr_from, addr_to, expect_blocked, simulated_time);
+        ret = port_blocked_test_one(test_ctx->qserver, send_buffer, send_length, addr_from, addr_to, expect_blocked, 0, simulated_time);
         if (ret != 0) {
             DBG_PRINTF("Stateless blocked test fails, ret = %d", ret);
         }
@@ -12163,7 +12179,7 @@ int port_blocked_test_address(
                     ret = -1;
                 }
                 if (ret == 0) {
-                    ret = port_blocked_test_one(test_ctx->qserver, send_buffer, send_length, addr_from, addr_to, expect_blocked, simulated_time);
+                    ret = port_blocked_test_one(test_ctx->qserver, send_buffer, send_length, addr_from, addr_to, expect_blocked, 1, simulated_time);
                     if (ret != 0) {
                         DBG_PRINTF("Initial blocked test fails, ret = %d", ret);
                     }
