@@ -1530,6 +1530,8 @@ size_t picoquic_decode_varint_length(uint8_t byte);
 
 /* Packet parsing */
 
+picoquic_packet_type_enum picoquic_parse_long_packet_type(uint8_t flags, int version_index);
+
 int picoquic_parse_packet_header(
     picoquic_quic_t* quic,
     const uint8_t* bytes,
