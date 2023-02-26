@@ -2432,13 +2432,6 @@ int picoquic_incoming_packet_ex(
     int ret = 0;
     picoquic_connection_id_t previous_destid = picoquic_null_connection_id;
 
-#if 0
-    if (!quic->is_port_blocking_disabled && picoquic_check_addr_blocked(addr_from)) {
-        /* if the port is blocked, do not process the packet */
-        return 0;
-    }
-#endif
-
     while (consumed_index < packet_length) {
         size_t consumed = 0;
 
