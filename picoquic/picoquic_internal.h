@@ -989,7 +989,6 @@ typedef struct st_picoquic_path_t {
     unsigned int path_cid_rotated : 1;
     unsigned int path_is_preferred_path : 1;
     unsigned int is_nat_challenge : 1;
-    unsigned int got_long_packet : 1;
     unsigned int is_cc_data_updated : 1;
     unsigned int is_multipath_probe_needed : 1;
     unsigned int was_local_cnxid_retired : 1;
@@ -1057,6 +1056,7 @@ typedef struct st_picoquic_path_t {
     uint64_t max_sample_delivered; /* Delivered value at time of max sample */
     uint64_t max_bandwidth_estimate; /* In bytes per second */
 
+    uint64_t bytes_sent; /* Total amount of bytes sent on the path */
     uint64_t received; /* Total amount of bytes received from the path */
     uint64_t receive_rate_epoch; /* Time of last receive rate measurement */
     uint64_t received_prior; /* Total amount received at start of epoch */
@@ -1767,6 +1767,7 @@ picoquic_local_cnxid_t* picoquic_find_local_cnxid_by_number(picoquic_cnx_t* cnx,
 picoquic_remote_cnxid_t* picoquic_find_remote_cnxid_by_number(picoquic_cnx_t* cnx, uint64_t sequence);
 uint8_t* picoquic_format_path_challenge_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t challenge);
 uint8_t* picoquic_format_path_response_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t challenge);
+int picoquic_should_repeat_path_response_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_max);
 uint8_t* picoquic_format_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_local_cnxid_t* l_cid);
 uint8_t* picoquic_format_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t sequence);

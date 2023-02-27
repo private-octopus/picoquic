@@ -2023,7 +2023,6 @@ int picoquic_incoming_1rtt(
         else if (ret == 0) {
             picoquic_path_t* path_x = cnx->path[path_id];
 
-            path_x->got_long_packet |= ((ph->offset + ph->payload_length) >= PICOQUIC_ENFORCED_INITIAL_MTU);
             path_x->if_index_dest = if_index_to;
             cnx->is_1rtt_received = 1;
             picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
