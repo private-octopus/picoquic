@@ -2950,6 +2950,17 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
             /* Path challenge repeat follows its own logic. */
             *no_need_to_repeat = 1;
             break;
+        case picoquic_frame_type_path_response:
+            /* On the client side, challenge responses generally ought to be repeated in order to maximise
+             * chances of handshake success. However, doing so on the server side may create a "blowback"
+             * in case of attacks, if the initial challenge was set from an unreachable address, or if the
+             * source address of the path challenge was forged.
+             * If the node has sent several path responses, only the last one ought to be repeated.
+             * If the path on which the response was sent is abandoned, there is no need to repeat
+             * this frame. If the path is validated, then the response should always be repeated.
+             */
+            *no_need_to_repeat = picoquic_should_repeat_path_response_frame(cnx, bytes, bytes_max);
+            break;
         case picoquic_frame_type_datagram:
         case picoquic_frame_type_datagram_l:
             /* Datagrams are never repeated. */
@@ -4252,6 +4263,46 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
     return bytes;
 }
 
+int picoquic_should_repeat_path_response_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max)
+{
+    /* On the client side, challenge responses generally ought to be repeated in order to maximise
+    * chances of handshake success. However, doing so on the server side may create a "blowback"
+    * in case of attacks, if the initial challenge was set from an unreachable address, or if the
+    * source address of the path challenge was forged.
+    * If the node has sent several path responses, only the last one ought to be repeated.
+    * If the path on which the response was sent is abandoned, there is no need to repeat
+    * this frame. If the path is validated, then the response should always be repeated.
+    */
+    int should_repeat = 0;
+    uint64_t response;
+    if (picoquic_frames_uint64_decode(bytes + 1, bytes + bytes_max, &response) != NULL) {
+        /* malformed frames will not be repeated */
+        /* find the path on which the challenge was sent. */
+        int path_index = -1;
+
+        for (int i = 0; i < cnx->nb_paths; i++) {
+            if (cnx->path[i]->challenge_response == response) {
+                path_index = i;
+                break;
+            }
+        }
+
+        if (path_index >= 0 &&
+            (cnx->path[path_index]->challenge_verified ||
+                (cnx->client_mode && !cnx->path[path_index]->challenge_failed))) {
+            should_repeat = 1;
+        }
+        else {
+            should_repeat = 0;
+        }
+    }
+
+    return should_repeat;
+}
+
+/* Handling of blocked frames.
+ */
 
 const uint8_t* picoquic_decode_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max)
 {
