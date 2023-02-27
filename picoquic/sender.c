@@ -3414,6 +3414,7 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
 {
     if (path_x->challenge_verified == 0 && path_x->challenge_failed == 0) {
         uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x);
+
         if (next_challenge_time <= current_time || path_x->challenge_repeat_count == 0) {
             if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
                 int ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
@@ -3425,7 +3426,24 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
                 if (bytes_next > bytes_challenge) {
                     path_x->challenge_time = current_time;
                     path_x->challenge_repeat_count++;
-                    *is_challenge_padding_needed = (path_x->is_nat_challenge == 0);
+                    if (path_x->is_nat_challenge == 0){
+                        if (cnx->client_mode || ((path_x->bytes_sent + PICOQUIC_ENFORCED_INITIAL_MTU) <= path_x->received)) {
+                            *is_challenge_padding_needed = 1;
+                        }
+                        else {
+                            /* Sending a full size packet would defeat the amplification limits, so we take
+                             * advantage of the escape clause in RFC 9000, "An endpoint MUST expand datagrams
+                             * that contain a PATH_CHALLENGE frame to at least the smallest allowed maximum
+                             * datagram size of 1200 bytes, unless the anti-amplification limit for the path
+                             * does not permit sending a datagram of this size."
+                             */
+                            *is_challenge_padding_needed = 0;
+                        }
+                    }
+                    else {
+                        /* never pad the packets sent in response to NAT rebinding. */
+                        *is_challenge_padding_needed = 0;
+                    }
                 }
 
                 /* add an ACK just to be nice */
@@ -3473,11 +3491,7 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
         if ((bytes_next = picoquic_format_path_response_frame(bytes_response, bytes_max,
             more_data, is_pure_ack, path_x->challenge_response)) > bytes_response) {
             path_x->response_required = 0;
-#if 1
             *is_challenge_padding_needed |= cnx->client_mode || ((path_x->bytes_sent + PICOQUIC_ENFORCED_INITIAL_MTU) <= path_x->received);
-#else
-            *is_challenge_padding_needed = path_x->got_long_packet;
-#endif
         }
     }
 
