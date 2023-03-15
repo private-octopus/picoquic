@@ -160,6 +160,10 @@ behavior on other architecture, e.g. M1. Thanks to @defermelowie  for testing on
 Same build steps as Linux. Picoquic probably also works on other BSD variants, but only FreeBSD
 has been tested so far.
 
+## Using Picoquic in CLI mode
+
+See [Usage](doc/usage.md) for how to use various commands from shell.
+
 ## Developing applications
 
 Sorry, not all that much documentation yet. This will come as we populate the wiki. Your

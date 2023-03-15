@@ -4,10 +4,10 @@ On Linux after building, the following executables are available in the project 
 * picohttp_ct: runs various HTTP tests
 * picoquic_ct: runs various QUIC tests
 	* with no arguments, runs all tests.
-* picoquicdemo: QUIC/HTTP demo client and server
+* picoquicdemo: QUIC/HTTP demo client and server for HTTP/3, HTTP/0.9, QUIC performance tests and Siduck(simple ping-pong)
 * picoquic_sample: QUIC/HTTP demo client and server. See sample/README.md for detailed usage
 
-## HTTP CLI
+## HTTP Client and Server Usage
 * client: ./picoquicdemo servername serverportnumber HTTPpath
   * downloaded files will be in current directory. use -o for another folder 
   * exemple: ./picoquicdemo -o ../received 192.0.2.1 4433 index.html
