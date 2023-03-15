@@ -5,7 +5,7 @@ On Linux after building, the following executables are available in the project 
 * picoquic_ct: runs various QUIC tests
 	* with no arguments, runs all tests.
 * picoquicdemo: QUIC/HTTP demo client and server for HTTP/3, HTTP/0.9, QUIC performance tests and Siduck(simple ping-pong)
-* picoquic_sample: QUIC/HTTP demo client and server. See sample/README.md for detailed usage
+* picoquic_sample: QUIC/HTTP sample demonstrating how to write an application using the picoquic stack. It is not meant to be actually used. See sample/README.md for detailed usage
 
 ## HTTP Client and Server Usage
 * client: ./picoquicdemo servername serverportnumber HTTPpath
