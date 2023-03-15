@@ -16,6 +16,10 @@ On Linux after building, the following executables are available in the project 
   * HTML root folder is current directory by default. use -w for another folder
   * keys and certs are specified by -k and -c. See -h for more details.
   * exemple: ./picoquicdemo -w ../htmlroot -p 4433
+* additional useful information for HTTP usage is available at:
+  * [Without DNS Names Or Certs](https://github.com/private-octopus/picoquic/wiki/Testing-without-DNS-names-or-Certificates)
+  * [Certs Using Lets Encrypt] (https://github.com/private-octopus/picoquic/wiki/Import-key-and-cert-on-server-from-Let's-encrypt)
+  * [Absolute Path] (https://github.com/private-octopus/picoquic/wiki/Running-picoquicdemo-with-absolute-path)
 
 # QUIC Logging
 * add -q $folder to cli commands so that QUIC logs are generated in that folder 
