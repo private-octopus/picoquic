@@ -14,6 +14,7 @@ On Linux after building, the following executables are available in the project 
 * server: ./picoquicdemo -p portnumber
   * -p argument tells the program that it is acting as a server
   * HTML root folder is current directory by default. use -w for another folder
+  * keys and certs are specified by -k and -c. See -h for more details.
   * exemple: ./picoquicdemo -w ../htmlroot -p 4433
 
 # QUIC Logging
