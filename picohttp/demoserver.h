@@ -49,6 +49,7 @@ extern "C" {
 typedef enum {
     picohttp_callback_get, /* Received a get command */
     picohttp_callback_post, /* Received a post command */
+    picohttp_callback_connect, /* Received a connect command */
     picohttp_callback_post_data, /* Data received from peer on stream N */
     picohttp_callback_post_fin, /* All posted data have been received */
     picohttp_callback_provide_data, /* Stack is ready to send chunk of response */
@@ -59,7 +60,9 @@ struct st_picohttp_server_stream_ctx_t;
 
 typedef int (*picohttp_post_data_cb_fn)(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t fin_or_event, struct st_picohttp_server_stream_ctx_t* stream_ctx);
+    picohttp_call_back_event_t fin_or_event,
+    struct st_picohttp_server_stream_ctx_t* stream_ctx,
+    void * path_app_ctx);
 
 /* Define the table of special-purpose paths used for POST, REST, or connect queries */
 /* TODO: is there a need for path context? */
@@ -67,6 +70,7 @@ typedef struct st_picohttp_server_path_item_t {
     char* path;
     size_t path_length;
     picohttp_post_data_cb_fn path_callback;
+    void* path_app_ctx;
 } picohttp_server_path_item_t;
 
 typedef struct st_picohttp_server_parameters_t {

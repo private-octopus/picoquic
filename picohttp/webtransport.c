@@ -50,6 +50,8 @@
 #include "picoquic_internal.h"
 #include "pico_webtransport.h"
 
+/* Web transport callback */
+
 /* Registration.
  * We want to register a web transport context, to receive and serve web
  * transport connections over H3.
@@ -59,3 +61,6 @@ void picowt_register(picoquic_quic_t* quic, const char* uri, picowt_ready_cb_fn 
 {
     /* Add the uri to a registry list in the quic or w3 context. */
 }
+
+/* Create 
+ */

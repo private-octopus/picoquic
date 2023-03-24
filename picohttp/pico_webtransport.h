@@ -26,8 +26,7 @@
 extern "C" {
 #endif
 
-
-/* Web socket callback API */
+/* Web transport callback API */
 typedef enum {
     picowt_cb_ready, /* Data can be sent and received, connection migration can be initiated */
     picowt_cb_close, /* Control socket closed. Stream=0, bytes=NULL, len=0 */
@@ -44,47 +43,59 @@ typedef enum {
     picowt_cb_pacing_changed /* Pacing rate for the connection changed */
 } picowt_event_t;
 
-/* Buffer request, similar to provide stream data. */
-uint8_t * picowt_provide_buffer(void* context, size_t nb_bytes, int is_fin, int is_still_active);
 
 /* TODO: Set API to match requirements */
 typedef int (*picowt_ready_cb_fn)(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picowt_event_t fin_or_event, void* callback_ctx, void* stream_ctx);
 
-/* Server: web socket register: declare URI and associated callback function. */
+/* Server: web transport register: declare URI and associated callback function. */
 void picowt_register(picoquic_quic_t * quic, const char* uri, picowt_ready_cb_fn wt_callback, void * wt_ctx);
 
-/* Web socket initiate, client side */
+/* Web transport initiate, client side
+ * cnx: an established QUIC connection, set to ALPN=H3.
+ * wt_callback: callback function to use in the web transport connection.
+ * wt_ctx: application level context for that connection.
+ */
 void picowt_connect(picoquic_cnx_t* cnx, const char* uri, picowt_ready_cb_fn wt_callback, void* wt_ctx);
 
-/* Web socket terminate, either client or server */
+/* Web transport terminate, either client or server.
+ */
 void picowt_close();
 
-/* Private API for implementing web socket:
+/* Buffer request, similar to provide stream data, used in the picowt_cb_prepare_to_send callback. */
+uint8_t * picowt_provide_buffer(void* context, size_t nb_bytes, int is_fin, int is_still_active);
+
+
+/* Private API for implementing web transport:
  * - process the register request.
- * - process the incoming streams, associate them with websocket context.
+ * - process the incoming streams, associate them with webtransport context.
  * - maintain state on streams, to check whether they are 
  * - process the incoming datagrams.
  */
 
-/* web socket stream context.
+/* web transport stream context.
  */
 typedef struct st_picowt_stream_ctx_t {
     /* Pointer to connection context*/
-    /* Chain stream context to pico_web_socket_ctx */
+    /* Chain stream context to pico_web_transport_ctx */
     uint64_t stream_id; /* stream ID */
-    int header_received; /* Incoming streams: was the web socket header processed ?*/
-    int header_sent;  /* Outgoing streams: was the web socket header sent ?*/
+    int header_received; /* Incoming streams: was the web transport header processed ?*/
+    int header_sent;  /* Outgoing streams: was the web transport header sent ?*/
     int fin_received;
     int fin_sent;
 } picowt_stream_ctx_t;
 
-/* Web socket context */
+/* Web transport connection context */
 typedef struct st_picowt_cnx_ctx_t {
     /* Context ID is set to stream ID of the connect stream. */
     uint64_t context_id;
 } picowt_cnx_ctx_t;
+
+/* Web transport server context */
+
+/* Open web transport context */
+
 
 #ifdef __cplusplus
 }

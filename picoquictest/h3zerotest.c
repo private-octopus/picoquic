@@ -1888,7 +1888,8 @@ typedef struct st_hzero_post_echo_ctx_t {
 
 int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t event, picohttp_server_stream_ctx_t* stream_ctx)
+    picohttp_call_back_event_t event, picohttp_server_stream_ctx_t* stream_ctx,
+    void * callback_ctx)
 {
     int ret = 0;
     hzero_post_echo_ctx_t* ctx = (hzero_post_echo_ctx_t*)stream_ctx->path_callback_ctx;
@@ -1989,7 +1990,8 @@ static const picoquic_demo_stream_desc_t post_test_scenario[] = {
 picohttp_server_path_item_t ping_test_item = {
     "/ping",
     5,
-    h3zero_test_ping_callback
+    h3zero_test_ping_callback,
+    NULL
 };
 
 picohttp_server_parameters_t ping_test_param = {

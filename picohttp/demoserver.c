@@ -338,7 +338,8 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                 int path_item = picohttp_find_path_item(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, app_ctx->path_table, app_ctx->path_table_nb);
                 if (path_item >= 0) {
                     stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
-                    stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx);
+                    stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx, 
+                        app_ctx->path_table[path_item].path_app_ctx);
                 }
                 stream_ctx->post_received += available;
                 (void)picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
@@ -346,7 +347,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
 
             if (stream_ctx->path_callback != NULL) {
                 /* pass data to selected API */
-                ret = stream_ctx->path_callback(cnx, bytes + processed, available, picohttp_callback_post_data, stream_ctx);
+                ret = stream_ctx->path_callback(cnx, bytes + processed, available, picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
                 /* TODO-POST: how to handle errors ?*/
             }
             stream_ctx->post_received += available;
@@ -389,12 +390,14 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                     if (path_item >= 0) {
                         /* TODO-POST: move this code to post-fin callback.*/
                         stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
-                        stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx);
+                        stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, 
+                            stream_ctx, app_ctx->path_table[path_item].path_app_ctx);
                     }
                 }
 
                 if (stream_ctx->path_callback != NULL) {
-                    stream_ctx->response_length = stream_ctx->path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx);
+                    stream_ctx->response_length = stream_ctx->path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx,
+                        stream_ctx->path_callback_ctx);
                     if (stream_ctx->response_length == 0) {
                         is_bad_request = 1;
                     }
@@ -554,7 +557,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
             }
             else {
                 if (stream_ctx->path_callback != NULL) {
-                    return stream_ctx->path_callback(cnx, bytes, length, picohttp_callback_provide_data, stream_ctx);
+                    return stream_ctx->path_callback(cnx, bytes, length, picohttp_callback_provide_data, stream_ctx, stream_ctx->path_callback_ctx);
                 }
                 else {
                     /* TODO-POST: notify callback. */

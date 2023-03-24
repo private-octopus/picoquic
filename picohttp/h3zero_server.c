@@ -61,7 +61,7 @@ static void picohttp_clear_stream_ctx(picohttp_server_stream_ctx_t* stream_ctx)
     }
 
     if (stream_ctx->path_callback != NULL) {
-        (void)stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_reset, stream_ctx);
+        (void)stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_reset, stream_ctx, stream_ctx->path_callback_ctx);
     }
 
     if (stream_ctx->is_h3) {
@@ -421,12 +421,13 @@ static int h3zero_server_process_request_frame(
             if (path_item >= 0) {
                 /* TODO-POST: move this code to post-fin callback.*/
                 stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
-                stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx);
+                stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post,
+                    stream_ctx, stream_ctx->path_callback_ctx);
             }
         }
 
         if (stream_ctx->path_callback != NULL) {
-            response_length = stream_ctx->path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx);
+            response_length = stream_ctx->path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
         }
         else {
             /* Prepare generic POST response */
@@ -572,7 +573,8 @@ static int h3zero_server_callback_data(
                             int path_item = picohttp_find_path_item(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, ctx->path_table, ctx->path_table_nb);
                             if (path_item >= 0) {
                                 stream_ctx->path_callback = ctx->path_table[path_item].path_callback;
-                                stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx);
+                                stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post,
+                                    stream_ctx, ctx->path_table[path_item].path_app_ctx);
                             }
 
                             (void)picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
@@ -581,7 +583,7 @@ static int h3zero_server_callback_data(
                         /* Received data for a POST command. */
                         if (stream_ctx->path_callback != NULL) {
                             /* if known URL, pass the data to URL specific callback. */
-                            ret = stream_ctx->path_callback(cnx, bytes, available_data, picohttp_callback_post_data, stream_ctx);
+                            ret = stream_ctx->path_callback(cnx, bytes, available_data, picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
                         }
                         stream_ctx->post_received += available_data;
                         bytes += available_data;
@@ -634,7 +636,7 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
     else {
         if (stream_ctx->path_callback != NULL) {
             /* Get data from callback context of specific URL */
-            ret = stream_ctx->path_callback(cnx, context, space, picohttp_callback_provide_data, stream_ctx);
+            ret = stream_ctx->path_callback(cnx, context, space, picohttp_callback_provide_data, stream_ctx, stream_ctx->path_callback_ctx);
         }
         /* TODO: add case for web transport */
         else {
@@ -735,7 +737,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
             if (stream_ctx != NULL) {
                 /* reset post callback. */
                 if (stream_ctx->path_callback != NULL) {
-                    ret = stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_reset, stream_ctx);
+                    ret = stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_reset, stream_ctx, stream_ctx->path_callback_ctx);
                 }
 
                 if (stream_ctx->F != NULL) {
@@ -759,7 +761,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
             }
             if (stream_ctx != NULL) {
                 if (stream_ctx->path_callback != NULL) {
-                    ret = stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_reset, stream_ctx);
+                    ret = stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_reset, stream_ctx, stream_ctx->path_callback_ctx);
                 }
                 stream_ctx->ps.hq.status = picohttp_server_stream_status_finished;
             }
