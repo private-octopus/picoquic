@@ -335,7 +335,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     target_include_directories(picohttp_ct PRIVATE picohttp)
     set_picoquic_compile_settings(picohttp_ct)
 
-    add_executable(pico_bacon bacon_app/bacon_app.c)
+    add_executable(pico_baton baton_app/baton_app.c)
     target_link_libraries(pico_bacon PRIVATE picoquic-log picoquic-core picohttp-core)
     target_include_directories(pico_bacon PRIVATE loglib picoquic picohttp)
     set_picoquic_compile_settings(pico_bacon)
