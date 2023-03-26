@@ -165,16 +165,20 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/democlient.c
     picohttp/demoserver.c
     picohttp/h3zero.c
+    picohttp/h3zero_common.c
     picohttp/h3zero_server.c
     picohttp/quicperf.c
     picohttp/siduck.c
-    picohttp/webtransport.c)
+    picohttp/webtransport.c
+    picohttp/wt_baton.c)
 
 set(PICOHTTP_HEADERS
      picohttp/h3zero.h
+     picohttp/h3zero_common.h
      picohttp/democlient.h
      picohttp/demoserver.h
-     picohttp/pico_webtransport.h)
+     picohttp/pico_webtransport.h
+     picohttp/wt_baton.h)
 
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
@@ -330,6 +334,11 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     target_link_libraries(picohttp_ct PRIVATE picohttp-core picoquic-test)
     target_include_directories(picohttp_ct PRIVATE picohttp)
     set_picoquic_compile_settings(picohttp_ct)
+
+    add_executable(pico_bacon bacon_app/bacon_app.c)
+    target_link_libraries(pico_bacon PRIVATE picoquic-log picoquic-core picohttp-core)
+    target_include_directories(pico_bacon PRIVATE loglib picoquic picohttp)
+    set_picoquic_compile_settings(pico_bacon)
 
     add_executable(picoquic_sample
         sample/sample.c

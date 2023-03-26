@@ -40,49 +40,6 @@
 #include "picoquic_unified_log.h"
 #include "pico_webtransport.h"
 
-/**
-* The relay game:
-*
-* A client opens a WT session to the server
-*
-* The server:
-*   1. picks a random number [0-255] (called the baton)
-*   2. opens a UNI stream
-*   3. sends the baton + FIN.
-*
-* If either peer receives a UNI stream, it:
-*   1. decodes the baton
-*   2. adds 1
-*   3. opens a BIDI stream
-*   4. sends the new baton + FIN
-*
-* If either peer receives a BIDI stream, it:
-*   1. decodes the baton
-*   2. adds 1
-*   3. replies with the new baton + FIN on the BIDI stream
-*
-* If either peer receives a BIDI reply, it:
-*   1. decodes the baton
-*   2. adds 1
-*   3. opens a UNI stream
-*   4. sends the new baton + FIN
-*
-* If either peer receives a baton == 0 at any point, ignore the above and close
-* the session.
-*
-* Example:
-*
-* C->S: open
-* S->C: U(250)
-* C->S: Breq(251)
-* S->C: Bresp(252)
-* C->S: U(253)
-* S->C: Breq(254)
-* C->S: Bresp(255)
-* S->C: U(0)
-* C->S: FIN 
-*/
-
 /* Web transport tests:
 * basic: declare context on server, create h3 connection,
 * establish WT connection, clear everything.

@@ -227,6 +227,7 @@ uint8_t* h3zero_create_post_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
     uint8_t const* path, size_t path_length, char const* host, h3zero_content_type_enum content_type, char const* ua_string);
 uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_content_type_enum doc_type);
+uint8_t* h3zero_create_error_frame(uint8_t* bytes, uint8_t* bytes_max, char const* error_code, char const* server_string);
 uint8_t* h3zero_create_response_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
     h3zero_content_type_enum doc_type, char const* server_string);
 uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max);

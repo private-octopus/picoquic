@@ -197,10 +197,10 @@ static int picohttp_server_parse_commandline(uint8_t* command, size_t command_le
     command_length -= consumed;
 
     /* parse the method */
-    stream_ctx->method = picoquic_h09_server_parse_method(command, command_length, &consumed);
+    stream_ctx->ps.hq.method = picoquic_h09_server_parse_method(command, command_length, &consumed);
 
     /* Skip white spaces between method and path, and copy path if present */
-    if (stream_ctx->method < 0) {
+    if (stream_ctx->ps.hq.method < 0) {
         ret = -1;
     }
     else {
@@ -276,7 +276,7 @@ int picoquic_h09_server_process_data_header(
                 }
                 else {
                     /* Too much data */
-                    stream_ctx->method = -1;
+                    stream_ctx->ps.hq.method = -1;
                     ret = -1;
                     break;
                 }
@@ -361,7 +361,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
 
     /* if FIN present, process request through http 0.9 */
     if (ret == 0 && stream_ctx->ps.hq.status != picohttp_server_stream_status_finished) {
-        if (fin_or_event == picoquic_callback_stream_fin || (stream_ctx->method == 0 && stream_ctx->ps.hq.status == picohttp_server_stream_status_crlf)) {
+        if (fin_or_event == picoquic_callback_stream_fin || (stream_ctx->ps.hq.method == 0 && stream_ctx->ps.hq.status == picohttp_server_stream_status_crlf)) {
             char buf[1024];
             uint8_t post_response[512];
             int is_bad_request = 0;
@@ -373,7 +373,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
             picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
                 stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
 
-            if (stream_ctx->method == 0) {
+            if (stream_ctx->ps.hq.method == 0) {
                 int file_error = 0;
                 if (h3zero_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length,
                     &stream_ctx->echo_length, &stream_ctx->file_path, app_ctx->web_folder, &file_error)) {
@@ -384,7 +384,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                     is_not_found = 1;
                 }
             }
-            else if (stream_ctx->method == 1) {
+            else if (stream_ctx->ps.hq.method == 1) {
                 if (stream_ctx->post_received == 0) {
                     int path_item = picohttp_find_path_item(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, app_ctx->path_table, app_ctx->path_table_nb);
                     if (path_item >= 0) {
@@ -437,7 +437,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                     size_t header_length = 0;
 
                     picoquic_sprintf(buf, sizeof(buf), &header_length, "200 OK\r\nContent-Type:%s\r\n\r\n",
-                        (stream_ctx->echo_length == 0 || stream_ctx->method == 1) ? "text/plain" : "test/html");
+                        (stream_ctx->echo_length == 0 || stream_ctx->ps.hq.method == 1) ? "text/plain" : "test/html");
                     picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t*)buf, header_length, 0, (void*)stream_ctx);
                 }
 
@@ -459,7 +459,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                 }
             }
         }
-        else if (stream_ctx->response_length == 0 && stream_ctx->echo_length == 0 && stream_ctx->method == 0) {
+        else if (stream_ctx->response_length == 0 && stream_ctx->echo_length == 0 && stream_ctx->ps.hq.method == 0) {
             char buf[256];
             if (stream_ctx->ps.hq.command_length < sizeof(stream_ctx->frame)){
                 stream_ctx->frame[stream_ctx->ps.hq.command_length] = 0;

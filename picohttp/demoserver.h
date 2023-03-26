@@ -22,6 +22,8 @@
 #ifndef DEMO_SERVER_H
 #define DEMO_SERVER_H
 
+#include "h3zero_common.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -41,28 +43,6 @@ extern "C" {
 
 #define PICOHTTP_ALPN_H3_LATEST "h3-32"
 #define PICOHTTP_ALPN_HQ_LATEST "hq-32"
-
-  /* Define the per URL callback used to implement POST and other
-   * REST-like interactions
-   */
-
-typedef enum {
-    picohttp_callback_get, /* Received a get command */
-    picohttp_callback_post, /* Received a post command */
-    picohttp_callback_connect, /* Received a connect command */
-    picohttp_callback_post_data, /* Data received from peer on stream N */
-    picohttp_callback_post_fin, /* All posted data have been received */
-    picohttp_callback_provide_data, /* Stack is ready to send chunk of response */
-    picohttp_callback_reset /* Stream has been abandoned. */
-} picohttp_call_back_event_t;
-
-struct st_picohttp_server_stream_ctx_t;
-
-typedef int (*picohttp_post_data_cb_fn)(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t fin_or_event,
-    struct st_picohttp_server_stream_ctx_t* stream_ctx,
-    void * path_app_ctx);
 
 /* Define the table of special-purpose paths used for POST, REST, or connect queries */
 /* TODO: is there a need for path context? */
@@ -107,6 +87,7 @@ typedef struct st_picohttp_server_stream_ctx_t {
             uint8_t* path; 
             size_t path_length;
             size_t command_length;
+            int method;
         } hq; /* h09 only */
     } ps; /* Protocol specific state */
     uint64_t stream_id;
@@ -115,11 +96,11 @@ typedef struct st_picohttp_server_stream_ctx_t {
     uint64_t echo_sent;
     uint64_t post_received;
     uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
-    int method;
-    picohttp_post_data_cb_fn path_callback;
-    void* path_callback_ctx;
     char* file_path;
     FILE* F;
+    /* Callback processing -- handling of POST and of Web Transport */
+    picohttp_post_data_cb_fn path_callback;
+    void* path_callback_ctx;
 } picohttp_server_stream_ctx_t;
 
 
@@ -130,6 +111,8 @@ typedef struct st_h3zero_server_callback_ctx_t {
     picohttp_server_path_item_t * path_table;
     size_t path_table_nb;
     char const* web_folder;
+    /* connection wide tracking of stream prefixes */
+    h3zero_stream_prefixes_t stream_prefixes;
 } h3zero_server_callback_ctx_t;
 
 int h3zero_server_callback(picoquic_cnx_t* cnx,

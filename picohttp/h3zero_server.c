@@ -27,6 +27,7 @@
 #include "picoquic_internal.h"
 #include "tls_api.h"
 #include "h3zero.h"
+#include "h3zero_common.h"
 #include "democlient.h"
 #include "demoserver.h"
 #include "siduck.h"
@@ -373,6 +374,7 @@ int h3zero_server_prepare_to_send(void* context, size_t space, picohttp_server_s
  */
 
 
+
 /* Processing of the request frame.
  * This function is called after the client's stream is closed,
  * after verifying that a request was received */
@@ -390,6 +392,7 @@ static int h3zero_server_process_request_frame(
     uint64_t response_length = 0;
     int ret = 0;
     int file_error = 0;
+    int do_not_close = 0;
 
     *o_bytes++ = h3zero_frame_header;
     o_bytes += 2; /* reserve two bytes for frame length */
@@ -444,10 +447,36 @@ static int h3zero_server_process_request_frame(
     }
     else if (stream_ctx->ps.stream_state.header.method == h3zero_method_connect) {
         /* The connect handling depends on the requested protocol */
+
+        if (stream_ctx->path_callback == NULL) {
+            int path_item = picohttp_find_path_item(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, app_ctx->path_table, app_ctx->path_table_nb);
+            if (path_item >= 0) {
+                stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
+                if (stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_connect,
+                    stream_ctx, stream_ctx->path_callback_ctx) != 0) {
+                    /* This callback is not supported */
+                    o_bytes = h3zero_create_error_frame(o_bytes, o_bytes_max, "501", H3ZERO_USER_AGENT_STRING);
+                }
+                else {
+                    /* Create a connect accept frame */
+                    o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max, h3zero_content_type_none);
+                    do_not_close = 1;
+                }
+            }
+            else {
+                /* No such connect path */
+                o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
+            }
+        }
+        else {
+            /* Duplicate request? Bytes after connect? Should they just be sent to the app? */
+            ret = -1;
+        }
     }
     else
     {
         /* unsupported method */
+        o_bytes = h3zero_create_error_frame(o_bytes, o_bytes_max, "501", H3ZERO_USER_AGENT_STRING);
     }
 
     if (o_bytes == NULL) {
@@ -455,7 +484,7 @@ static int h3zero_server_process_request_frame(
     }
     else {
         size_t header_length = o_bytes - &buffer[3];
-        int is_fin_stream = (stream_ctx->echo_length == 0) ? 1 : 0;
+        int is_fin_stream = (stream_ctx->echo_length == 0) ? (1 - do_not_close) : 0;
         buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
         buffer[2] = (uint8_t)(header_length & 0xFF);
 
@@ -540,9 +569,16 @@ static int h3zero_server_callback_data(
          * parse the header */
         /* TODO: add an exception for bidir streams set by Webtransport */
         if (!IS_CLIENT_STREAM_ID(stream_id)) {
-            /* Should never happen */
-            ret = picoquic_stop_sending(cnx, stream_id, H3ZERO_GENERAL_PROTOCOL_ERROR);
-            picoquic_reset_stream(cnx, stream_id, H3ZERO_GENERAL_PROTOCOL_ERROR);
+            /* TODO: Web Transport may use server initiated streams. But then, these
+             * streams should have a context declared.
+             */
+            if (stream_ctx != NULL && stream_ctx->path_callback != NULL) {
+                /* Should never happen */
+            }
+            else {
+                ret = picoquic_stop_sending(cnx, stream_id, H3ZERO_GENERAL_PROTOCOL_ERROR);
+                picoquic_reset_stream(cnx, stream_id, H3ZERO_GENERAL_PROTOCOL_ERROR);
+            }
         }
         else {
             /* Find or create stream context */
@@ -607,6 +643,9 @@ static int h3zero_server_callback_data(
     }
     else {
         /* TODO: If unidir stream, check what type of stream */
+        if (stream_ctx == NULL) {
+
+        }
         /* TODO: If this is a control stream, and setting is not received yet,
          * wait for the setting frame, then process it and move the
          * state to absorbing.*/

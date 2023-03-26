@@ -26,6 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
 #include "h3zero.h"
+#include "h3zero_common.h"
 #include "democlient.h"
 #include "demoserver.h"
 #ifdef _WINDOWS
@@ -1728,8 +1729,8 @@ int h09_header_split_test(const uint8_t* bytes, size_t length, size_t split, h09
                 DBG_PRINTF("Expected status %d, got %d", expected->expected_status, stream_ctx->ps.hq.status);
                 ret = -1;
             }
-            else if (stream_ctx->method != expected->expected_method) {
-                DBG_PRINTF("Expected method %d, got %d", expected->expected_method, stream_ctx->method);
+            else if (stream_ctx->ps.hq.method != expected->expected_method) {
+                DBG_PRINTF("Expected method %d, got %d", expected->expected_method, stream_ctx->ps.hq.method);
                 ret = -1;
             }
             else if (stream_ctx->ps.hq.proto != expected->expected_proto) {

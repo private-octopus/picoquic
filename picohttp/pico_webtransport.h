@@ -47,24 +47,15 @@ typedef enum {
 /* TODO: Set API to match requirements */
 typedef int (*picowt_ready_cb_fn)(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picowt_event_t fin_or_event, void* callback_ctx, void* stream_ctx);
-
-/* Server: web transport register: declare URI and associated callback function. */
-void picowt_register(picoquic_quic_t * quic, const char* uri, picowt_ready_cb_fn wt_callback, void * wt_ctx);
+    picowt_event_t event, void* callback_ctx, void* stream_ctx);
 
 /* Web transport initiate, client side
  * cnx: an established QUIC connection, set to ALPN=H3.
  * wt_callback: callback function to use in the web transport connection.
  * wt_ctx: application level context for that connection.
  */
-void picowt_connect(picoquic_cnx_t* cnx, const char* uri, picowt_ready_cb_fn wt_callback, void* wt_ctx);
 
-/* Web transport terminate, either client or server.
- */
-void picowt_close();
-
-/* Buffer request, similar to provide stream data, used in the picowt_cb_prepare_to_send callback. */
-uint8_t * picowt_provide_buffer(void* context, size_t nb_bytes, int is_fin, int is_still_active);
+void picowt_connect(picoquic_cnx_t* cnx, h3zero_stream_prefixes_t stream_prefixes, const char* uri, picowt_ready_cb_fn wt_callback, void* wt_ctx);
 
 
 /* Private API for implementing web transport:

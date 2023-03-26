@@ -47,20 +47,83 @@
 #include <string.h>
 #include <stdio.h>
 #include <picoquic.h>
-#include "picoquic_internal.h"
+#include "h3zero_common.h"
 #include "pico_webtransport.h"
 
-/* Web transport callback */
+/* Web transport commands */
 
-/* Registration.
- * We want to register a web transport context, to receive and serve web
- * transport connections over H3.
- */
-
-void picowt_register(picoquic_quic_t* quic, const char* uri, picowt_ready_cb_fn wt_callback, void* wt_ctx)
+/* Web transport initiate, client side
+* cnx: an established QUIC connection, set to ALPN=H3.
+* wt_callback: callback function to use in the web transport connection.
+* wt_ctx: application level context for that connection.
+* 
+* This will reserve a bidir stream, and send a "connect" frame on that
+* stream. The client will receive a WT event when the response comes
+* back. 
+* 
+* This should create a WT connection context, which will be associated with
+* the stream ID. This is associated with the connection itself. Do we have
+* an H3 context for the connection?
+*/
+void picowt_connect(picoquic_cnx_t* cnx, h3zero_stream_prefixes_t stream_prefixes, const char* uri, picowt_ready_cb_fn wt_callback, void* wt_ctx)
 {
-    /* Add the uri to a registry list in the quic or w3 context. */
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(stream_prefixes);
+    UNREFERENCED_PARAMETER(uri);
+    UNREFERENCED_PARAMETER(wt_callback);
+    UNREFERENCED_PARAMETER(wt_ctx);
+#endif
+    /* find a new bidir stream */
+    /* register the stream ID as session ID */
 }
 
-/* Create 
+#if 0
+/* Web transport callback. This will be called from the web server
+ * when the path points to a web transport callback
  */
+
+int picowt_h3zero_callback(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length,
+    picohttp_call_back_event_t fin_or_event,
+    struct st_picohttp_server_stream_ctx_t* stream_ctx,
+    void* path_app_ctx)
+{
+    switch (fin_or_event) {
+    case picohttp_callback_connect:
+        /* A connect has been received on this stream, and could be accepted.
+         */
+        /* The web transport should create a web transport connection context,
+         * and also register the stream ID as identifying this context.
+         * Then, callback the application. That means the WT app context
+         * should be obtained from the path app context, etc.
+         */
+        break;
+    case picohttp_callback_post_data:
+        /* Data received on a bidirectional stream. 
+         * To do: check the processing of the webtransport data frame. 
+         */
+        break;
+    case picohttp_callback_post_data_unidir:
+        /* Data received from peer on unidir stream N */
+        /* Todo: depend on stream state? */
+        break;
+    case picohttp_callback_post_fin: /* All posted data have been received */
+        /* Todo: check whether this is data stream or control stream. If control
+        * stream, then the whole WT connection needs to go */
+        break;
+    case picohttp_callback_provide_data: /* Stack is ready to send chunk of response */
+        /* Behavior depends on the state of the stream: 
+         * - Bidir stream created locally: need to send first the WT Data frame.
+         * - Bidir stream created remotely: let the application send data.
+         */
+        break;
+    case picohttp_callback_reset: /* Stream has been abandoned. */
+        /* If control stream: abandon the whole connection. */
+        /* Pass that to the application. */
+    default:
+        /* protocol error */
+        return -1;
+    }
+}
+#endif
