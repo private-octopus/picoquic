@@ -147,7 +147,7 @@ int wt_baton_relay(picoquic_cnx_t* cnx,
     }
 
     if (ret == 0 && stream_ctx != NULL) {
-        picoquic_log_app_message(cnx, "Relaying the baton on data stream: %"PRIu64 "after %d turns", stream_ctx->stream_id, baton_ctx->nb_turns);
+        picoquic_log_app_message(cnx, "Relaying the baton on data stream: %"PRIu64 " after %d turns", stream_ctx->stream_id, baton_ctx->nb_turns);
         baton_ctx->nb_turns += 1;
         baton_ctx->baton_state = wt_baton_state_sent;
         baton_ctx->nb_baton_bytes_received = 0;
@@ -171,7 +171,7 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
         }
     }
     if (baton_is_zeroes) {
-        picoquic_log_app_message(cnx, "All ZERO baton on stream: %"PRIu64 "after %d turns", stream_ctx->stream_id, baton_ctx->nb_turns);
+        picoquic_log_app_message(cnx, "All ZERO baton on stream: %"PRIu64 " after %d turns", stream_ctx->stream_id, baton_ctx->nb_turns);
         baton_ctx->baton_state = wt_baton_state_done;
         /* Close the control stream, which will close the session */
         if (IS_BIDIR_STREAM_ID(stream_ctx->stream_id) && !IS_LOCAL_STREAM_ID(stream_ctx->stream_id, baton_ctx->is_client)) {
@@ -196,7 +196,7 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
         }
         if (is_wrong_baton) {
             baton_ctx->baton_state = wt_baton_state_error;
-            picoquic_log_app_message(cnx, "Wrong baton on stream: %"PRIu64 "after %d turns", stream_ctx->stream_id, baton_ctx->nb_turns);
+            picoquic_log_app_message(cnx, "Wrong baton on stream: %"PRIu64 " after %d turns", stream_ctx->stream_id, baton_ctx->nb_turns);
             ret = -1;
         }
         else {
