@@ -589,22 +589,23 @@ static int h3zero_server_callback_data(
                         bytes += available_data;
                     }
                 }
-                /* TODO:are there cases when the request header shall be processed before the FIN is received?
-                 */
+                /* Process the header if necessary */
                 if (ret == 0) {
-                    if (!stream_ctx->ps.stream_state.is_web_transport &&
-                        (fin_or_event == picoquic_callback_stream_fin || stream_ctx->ps.stream_state.header.method == h3zero_method_connect)) {
-                        /* Process the request header. */
-                        if (stream_ctx->ps.stream_state.header_found) {
-                            ret = h3zero_server_process_request_frame(cnx, stream_ctx, ctx);
+                    if (stream_ctx->ps.stream_state.is_web_transport) {
+                        if (fin_or_event == picoquic_callback_stream_fin && stream_ctx->path_callback != NULL) {
+                            ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
                         }
-                        else {
-                            /* Unexpected end of stream before the header is received */
-                            ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_FRAME_ERROR);
+                    } else {
+                        if (fin_or_event == picoquic_callback_stream_fin || stream_ctx->ps.stream_state.header.method == h3zero_method_connect) {
+                            /* Process the request header. */
+                            if (stream_ctx->ps.stream_state.header_found) {
+                                ret = h3zero_server_process_request_frame(cnx, stream_ctx, ctx);
+                            }
+                            else {
+                                /* Unexpected end of stream before the header is received */
+                                ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_FRAME_ERROR);
+                            }
                         }
-                    }
-                    if (ret ==0 && fin_or_event == picoquic_callback_stream_fin && stream_ctx->path_callback != NULL) {
-                        ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
                     }
                 }
             }

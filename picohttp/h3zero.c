@@ -1219,8 +1219,18 @@ static uint8_t const h3zero_default_setting_frame_val[] = {
     (uint8_t)h3zero_frame_settings, /* var int frame type ( < 64) */
     4, /* Length of setting frame content */
     (uint8_t)h3zero_setting_header_table_size, 0, /* var int type ( < 64), then var int value (0) */
-    (uint8_t)h3zero_qpack_blocked_streams, 0 /* var int type ( < 64),  then var int value (0) Control*/
-
+    (uint8_t)h3zero_qpack_blocked_streams, 0, /* var int type ( < 64),  then var int value (0) Control*/
+    0xc0, 0, 0, 0, /* Declare support for web transport */
+    (uint8_t)((h3zero_settings_enable_web_transport >> 24)&0xff),
+    (uint8_t)((h3zero_settings_enable_web_transport >> 16)&0xff),
+    (uint8_t)((h3zero_settings_enable_web_transport >> 8)&0xff),
+    (uint8_t)((h3zero_settings_enable_web_transport)&0xff), 1,
+    0xc0, 0, 0, 0, /* Declate max 1 web transport session */
+    (uint8_t)((h3zero_settings_webtransport_max_sessions >> 24)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions >> 16)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions >> 8)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions)&0xff), 1
+    /* TO DO: add datagrams when supported */
 };
 
 uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;
