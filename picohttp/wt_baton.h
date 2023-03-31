@@ -104,10 +104,16 @@ extern "C" {
         struct st_picohttp_server_stream_ctx_t* stream_ctx,
         void* path_app_ctx);
 
-    /* Client call back -- limited implementation of H3. */
+    /* Client call back -- limited implementation of H3.
+    * Expected behavior:
+    * 
+    * wt_baton_ctx_t* ctx = (wt_baton_ctx_t*)callback_ctx;
+    * picohttp_server_stream_ctx_t* stream_ctx = (picohttp_server_stream_ctx_t*)v_stream_ctx;
+    */
     int wt_baton_client_callback(picoquic_cnx_t* cnx,
         uint64_t stream_id, uint8_t* bytes, size_t length,
         picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
+
 #ifdef __cplusplus
 }
 #endif

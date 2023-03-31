@@ -299,6 +299,7 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
     if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
         /* Closing the control stream implies closing the baton context. 
          */
+        baton_ctx->baton_state = wt_baton_state_closed;
         if (baton_ctx->is_client) {
             picoquic_log_app_message(cnx, "FIN on control stream. Closing the connection.\n");
             ret = picoquic_close(cnx, 0);
