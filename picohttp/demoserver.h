@@ -37,21 +37,11 @@ extern "C" {
  /* Defining first the Http 3.0 variant of the server 
   */
 
-#define PICOHTTP_SERVER_FRAME_MAX 1024
 #define PICOHTTP_FIRST_COMMAND_MAX 256
 #define PICOHTTP_RESPONSE_MAX (1 << 20)
 
 #define PICOHTTP_ALPN_H3_LATEST "h3-32"
 #define PICOHTTP_ALPN_HQ_LATEST "hq-32"
-
-/* Define the table of special-purpose paths used for POST, REST, or connect queries */
-/* TODO: is there a need for path context? */
-typedef struct st_picohttp_server_path_item_t {
-    char* path;
-    size_t path_length;
-    picohttp_post_data_cb_fn path_callback;
-    void* path_app_ctx;
-} picohttp_server_path_item_t;
 
 typedef struct st_picohttp_server_parameters_t {
     char const* web_folder;
@@ -63,58 +53,7 @@ typedef struct st_picohttp_server_parameters_t {
 
 int picohttp_find_path_item(const uint8_t* path, size_t path_length, const picohttp_server_path_item_t* path_table, size_t path_table_nb);
 
-/* Define stream context common to http 3 and http 09 callbacks
- */
-typedef enum {
-    picohttp_server_stream_status_none = 0,
-    picohttp_server_stream_status_header,
-    picohttp_server_stream_status_crlf,
-    picohttp_server_stream_status_receiving,
-    picohttp_server_stream_status_finished
-} picohttp_server_stream_status_t;
-
-typedef struct st_picohttp_server_stream_ctx_t {
-    /* TODO-POST: identification of URL to process POST or GET? */
-    /* TODO-POST: provide content-type */
-    picosplay_node_t http_stream_node;
-    struct st_picohttp_server_stream_ctx_t* next_stream;
-    int is_h3;
-    union {
-        h3zero_data_stream_state_t stream_state; /* h3 only */
-        struct {
-            picohttp_server_stream_status_t status; 
-            int proto; 
-            uint8_t* path; 
-            size_t path_length;
-            size_t command_length;
-            int method;
-        } hq; /* h09 only */
-    } ps; /* Protocol specific state */
-    uint64_t stream_id;
-    uint64_t response_length;
-    uint64_t echo_length;
-    uint64_t echo_sent;
-    uint64_t post_received;
-    uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
-    char* file_path;
-    FILE* F;
-    /* Callback processing -- handling of POST and of Web Transport */
-    picohttp_post_data_cb_fn path_callback;
-    void* path_callback_ctx;
-} picohttp_server_stream_ctx_t;
-
-
-/* Define the H3Zero server callback */
-
-typedef struct st_h3zero_server_callback_ctx_t {
-    picosplay_tree_t h3_stream_tree;
-    picohttp_server_path_item_t * path_table;
-    size_t path_table_nb;
-    char const* web_folder;
-    /* connection wide tracking of stream prefixes */
-    h3zero_stream_prefixes_t stream_prefixes;
-} h3zero_server_callback_ctx_t;
-
+/* Define the H3Zero server callback function */
 int h3zero_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);

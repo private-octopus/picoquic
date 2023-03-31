@@ -20,6 +20,10 @@
 */
 #ifndef H3ZERO_COMMON_H
 #define H3ZERO_COMMON_H
+
+#include "picosplay.h"
+#include "h3zero.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -30,6 +34,7 @@ extern "C" {
     typedef enum {
         picohttp_callback_get, /* Received a get command */
         picohttp_callback_post, /* Received a post command */
+        picohttp_callback_connecting, /* Sending out a connect command */
         picohttp_callback_connect, /* Received a connect command */
         picohttp_callback_connect_refused, /* Connection request was refused by peer */
         picohttp_callback_connect_accepted, /* Connection request was accepted by peer */
@@ -37,6 +42,7 @@ extern "C" {
         picohttp_callback_post_data, /* Data received from peer on stream N */
         picohttp_callback_post_data_unidir, /* Data received from peer on unidir stream N */
         picohttp_callback_post_fin, /* All posted data have been received on this stream */
+        picohttp_callback_session_fin, /* Control stream has been closed */
         picohttp_callback_provide_data, /* Stack is ready to send chunk of data on stream N */
         picohttp_callback_reset /* Stream has been abandoned. */
     } picohttp_call_back_event_t;
@@ -49,13 +55,76 @@ extern "C" {
         struct st_picohttp_server_stream_ctx_t* stream_ctx,
         void * path_app_ctx);
 
+    /* Define the table of special-purpose paths used for POST, REST, or connect queries */
+    /* TODO: is there a need for path context? */
+    typedef struct st_picohttp_server_path_item_t {
+        char* path;
+        size_t path_length;
+        picohttp_post_data_cb_fn path_callback;
+        void* path_app_ctx;
+    } picohttp_server_path_item_t;
+
+    /* Define stream context common to http 3 and http 09 callbacks
+    */
+#define PICOHTTP_SERVER_FRAME_MAX 1024
+
+    typedef enum {
+        picohttp_server_stream_status_none = 0,
+        picohttp_server_stream_status_header,
+        picohttp_server_stream_status_crlf,
+        picohttp_server_stream_status_receiving,
+        picohttp_server_stream_status_finished
+    } picohttp_server_stream_status_t;
+
+    typedef struct st_picohttp_server_stream_ctx_t {
+        /* TODO-POST: identification of URL to process POST or GET? */
+        /* TODO-POST: provide content-type */
+        picosplay_node_t http_stream_node;
+        struct st_picohttp_server_stream_ctx_t* next_stream;
+        int is_h3;
+        union {
+            h3zero_data_stream_state_t stream_state; /* h3 only */
+            struct {
+                picohttp_server_stream_status_t status; 
+                int proto; 
+                uint8_t* path; 
+                size_t path_length;
+                size_t command_length;
+                int method;
+            } hq; /* h09 only */
+        } ps; /* Protocol specific state */
+        uint64_t stream_id;
+        uint64_t response_length;
+        uint64_t echo_length;
+        uint64_t echo_sent;
+        uint64_t post_received;
+        uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
+        char* file_path;
+        FILE* F;
+        /* Callback processing -- handling of POST and of Web Transport */
+        uint64_t control_stream_id;
+        picohttp_post_data_cb_fn path_callback;
+        void* path_callback_ctx;
+    } picohttp_server_stream_ctx_t;
+
+    void* picohttp_stream_node_value(picosplay_node_t* node);
+    void h3zero_delete_stream(picosplay_tree_t* http_stream_tree, picohttp_server_stream_ctx_t* stream_ctx);
+    picohttp_server_stream_ctx_t* picohttp_find_stream(picosplay_tree_t* stream_tree, uint64_t stream_id);
+    picohttp_server_stream_ctx_t* h3zero_find_or_create_stream(
+        picoquic_cnx_t* cnx,
+        uint64_t stream_id,
+        picosplay_tree_t* stream_tree,
+        int should_create,
+        int is_h3);
+    void h3zero_init_stream_tree(picosplay_tree_t* h3_stream_tree);
+
     /* Handling of stream prefixes, for applications that use it.
      */
     typedef struct st_h3zero_stream_prefix_t {
         struct st_h3zero_stream_prefix_t* next;
         struct st_h3zero_stream_prefix_t* previous;
         uint64_t prefix;
-        void* function_call;
+        picohttp_post_data_cb_fn function_call;
         void* function_ctx;
     } h3zero_stream_prefix_t;
 
@@ -64,10 +133,28 @@ extern "C" {
         struct st_h3zero_stream_prefix_t* last;
     } h3zero_stream_prefixes_t;
 
-    int h3zero_declare_stream_prefix(h3zero_stream_prefixes_t * prefixes, uint64_t prefix, void* function_call, void* function_ctx);
+    h3zero_stream_prefix_t* h3zero_find_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t prefix);
+    int h3zero_declare_stream_prefix(h3zero_stream_prefixes_t * prefixes, uint64_t prefix, picohttp_post_data_cb_fn function_call, void* function_ctx);
+    void h3zero_delete_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t prefix);
 
-    /* Callback management
-     */
+    int h3zero_client_init(picoquic_cnx_t* cnx);
+
+    /* Define the H3Zero server callback */
+
+    typedef struct st_h3zero_server_callback_ctx_t {
+        picosplay_tree_t h3_stream_tree;
+        picohttp_server_path_item_t * path_table;
+        size_t path_table_nb;
+        char const* web_folder;
+        /* connection wide tracking of stream prefixes */
+        h3zero_stream_prefixes_t stream_prefixes;
+    } h3zero_server_callback_ctx_t;
+
+    /* Callback management */
+    uint8_t* h3zero_parse_incoming_remote_stream(
+        uint8_t* bytes, uint8_t* bytes_max,
+        picohttp_server_stream_ctx_t* stream_ctx,
+        picosplay_tree_t* stream_tree, h3zero_stream_prefixes_t* prefixes);
 
 #ifdef __cplusplus
 }

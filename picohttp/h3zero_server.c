@@ -32,114 +32,10 @@
 #include "demoserver.h"
 #include "siduck.h"
 #include "quicperf.h"
-
-/* Stream context splay management */
-
-static int64_t picohttp_stream_node_compare(void *l, void *r)
-{
-    /* Stream values are from 0 to 2^62-1, which means we are not worried with rollover */
-    return ((picohttp_server_stream_ctx_t*)l)->stream_id - ((picohttp_server_stream_ctx_t*)r)->stream_id;
-}
-
-static picosplay_node_t * picohttp_stream_node_create(void * value)
-{
-    return &((picohttp_server_stream_ctx_t *)value)->http_stream_node;
-}
-
-static void * picohttp_stream_node_value(picosplay_node_t * node)
-{
-    return (void*)((char*)node - offsetof(struct st_picohttp_server_stream_ctx_t, http_stream_node));
-}
-
-static void picohttp_clear_stream_ctx(picohttp_server_stream_ctx_t* stream_ctx)
-{
-    if (stream_ctx->file_path != NULL) {
-        free(stream_ctx->file_path);
-        stream_ctx->file_path = NULL;
-    }
-    if (stream_ctx->F != NULL) {
-        stream_ctx->F = picoquic_file_close(stream_ctx->F);
-    }
-
-    if (stream_ctx->path_callback != NULL) {
-        (void)stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_reset, stream_ctx, stream_ctx->path_callback_ctx);
-    }
-
-    if (stream_ctx->is_h3) {
-        h3zero_delete_data_stream_state(&stream_ctx->ps.stream_state);
-    }
-    else {
-        if (stream_ctx->ps.hq.path != NULL) {
-            free(stream_ctx->ps.hq.path);
-        }
-    }
-}
-
-static void picohttp_stream_node_delete(void * tree, picosplay_node_t * node)
-{
-    picohttp_server_stream_ctx_t * stream_ctx = picohttp_stream_node_value(node);
-
-    picohttp_clear_stream_ctx(stream_ctx);
-
-    free(stream_ctx);
-}
-
-void h3zero_delete_stream(picosplay_tree_t * http_stream_tree, picohttp_server_stream_ctx_t* stream_ctx)
-{
-    picosplay_delete(http_stream_tree, &stream_ctx->http_stream_node);
-}
-
-static picohttp_server_stream_ctx_t* picohttp_find_stream(picosplay_tree_t * stream_tree, uint64_t stream_id)
-{
-    picohttp_server_stream_ctx_t * ret = NULL;
-    picohttp_server_stream_ctx_t target;
-    target.stream_id = stream_id;
-    picosplay_node_t * node = picosplay_find(stream_tree, (void*)&target);
-    
-    if (node != NULL) {
-        ret = (picohttp_server_stream_ctx_t *)picohttp_stream_node_value(node);
-    }
-
-    return ret;
-}
-
-picohttp_server_stream_ctx_t * h3zero_find_or_create_stream(
-    picoquic_cnx_t* cnx,
-    uint64_t stream_id,
-    picosplay_tree_t * stream_tree,
-    int should_create,
-    int is_h3)
-{
-    picohttp_server_stream_ctx_t * stream_ctx = picohttp_find_stream(stream_tree, stream_id);
-
-    /* if stream is already present, check its state. New bytes? */
-
-    if (stream_ctx == NULL && should_create) {
-        stream_ctx = (picohttp_server_stream_ctx_t*)
-            malloc(sizeof(picohttp_server_stream_ctx_t));
-        if (stream_ctx == NULL) {
-            /* Could not handle this stream */
-            picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
-        }
-        else {
-            memset(stream_ctx, 0, sizeof(picohttp_server_stream_ctx_t));
-            stream_ctx->stream_id = stream_id;
-            stream_ctx->is_h3 = is_h3;
-            picosplay_insert(stream_tree, stream_ctx);
-        }
-    }
-
-    return stream_ctx;
-}
-
 /*
  * Create and delete server side connection context
  */
 
-void h3zero_init_stream_tree(picosplay_tree_t * h3_stream_tree)
-{
-    picosplay_init_tree(h3_stream_tree, picohttp_stream_node_compare, picohttp_stream_node_create, picohttp_stream_node_delete, picohttp_stream_node_value);
-}
 
 static h3zero_server_callback_ctx_t* h3zero_server_callback_create_context(picohttp_server_parameters_t* param)
 {
@@ -453,33 +349,41 @@ static int h3zero_server_process_request_frame(
             if (path_item >= 0) {
                 stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
                 if (stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_connect,
-                    stream_ctx, stream_ctx->path_callback_ctx) != 0) {
+                    stream_ctx, app_ctx->path_table[path_item].path_app_ctx) != 0) {
                     /* This callback is not supported */
+                    picoquic_log_app_message(cnx, "Unsupported callback on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, app_ctx->path_table[path_item].path);
                     o_bytes = h3zero_create_error_frame(o_bytes, o_bytes_max, "501", H3ZERO_USER_AGENT_STRING);
                 }
                 else {
                     /* Create a connect accept frame */
+                    picoquic_log_app_message(cnx, "Connect accepted on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, app_ctx->path_table[path_item].path);
                     o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max, h3zero_content_type_none);
                     do_not_close = 1;
                 }
             }
             else {
                 /* No such connect path */
+                char log_text[256];
+                picoquic_log_app_message(cnx, "cannot find path context on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id,
+                    picoquic_uint8_to_str(log_text, 256, stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length));
                 o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
             }
         }
         else {
             /* Duplicate request? Bytes after connect? Should they just be sent to the app? */
+            picoquic_log_app_message(cnx, "Duplicate request on stream: %"PRIu64, stream_ctx->stream_id);
             ret = -1;
         }
     }
     else
     {
         /* unsupported method */
+        picoquic_log_app_message(cnx, "Unsupported method on stream: %"PRIu64, stream_ctx->stream_id);
         o_bytes = h3zero_create_error_frame(o_bytes, o_bytes_max, "501", H3ZERO_USER_AGENT_STRING);
     }
 
     if (o_bytes == NULL) {
+        picoquic_log_app_message(cnx, "Error, resetting stream: %"PRIu64, stream_ctx->stream_id);
         ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_INTERNAL_ERROR);
     }
     else {
@@ -521,6 +425,9 @@ static int h3zero_server_process_request_frame(
         }
 
         if (o_bytes != NULL) {
+            if (is_fin_stream && stream_ctx->ps.stream_state.header.method == h3zero_method_connect) {
+                picoquic_log_app_message(cnx, "Setting FIN in connect response on stream: %"PRIu64, stream_ctx->stream_id);
+            }
             ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id,
                 buffer, o_bytes - buffer, is_fin_stream, stream_ctx);
             if (ret != 0) {
@@ -536,6 +443,49 @@ static int h3zero_server_process_request_frame(
         }
     }
 
+    return ret;
+}
+
+/* There are some streams, like unidir or server initiated bidir, that
+ * require extra processing, such as tying to web transport
+ * application.
+ */
+
+
+int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t event,
+    picohttp_server_stream_ctx_t* stream_ctx,
+    h3zero_server_callback_ctx_t* ctx)
+{
+    int ret = 0;
+
+    if (stream_ctx == NULL) {
+        stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, 1, 1);
+        picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
+    }
+    if (stream_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        uint8_t* bytes_max = bytes + length;
+
+        bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx,
+            &ctx->h3_stream_tree, &ctx->stream_prefixes);
+        if (bytes == NULL) {
+            picoquic_log_app_message(cnx, "Cannot parse incoming stream: %"PRIu64, stream_id);
+            ret = -1;
+        }
+        else if (stream_ctx->path_callback != NULL){
+            if (bytes < bytes_max) {
+                stream_ctx->path_callback(cnx, bytes, bytes_max - bytes, picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
+            }
+            if (event == picoquic_callback_stream_fin) {
+                /* FIN of the control stream is FIN of the whole session */
+                stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
+            }
+        }
+    }
     return ret;
 }
 
@@ -569,15 +519,16 @@ static int h3zero_server_callback_data(
          * parse the header */
         /* TODO: add an exception for bidir streams set by Webtransport */
         if (!IS_CLIENT_STREAM_ID(stream_id)) {
-            /* TODO: Web Transport may use server initiated streams. But then, these
-             * streams should have a context declared.
-             */
-            if (stream_ctx != NULL && stream_ctx->path_callback != NULL) {
-                /* Should never happen */
-            }
-            else {
-                ret = picoquic_stop_sending(cnx, stream_id, H3ZERO_GENERAL_PROTOCOL_ERROR);
-                picoquic_reset_stream(cnx, stream_id, H3ZERO_GENERAL_PROTOCOL_ERROR);
+            /* This is the client writing back on a server created stream.
+             * Call to selected callback, or ignore */
+            if (stream_ctx->path_callback != NULL){
+                if (length > 0) {
+                    stream_ctx->path_callback(cnx, bytes, length, picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
+                }
+                if (fin_or_event == picoquic_callback_stream_fin) {
+                    /* FIN of the control stream is FIN of the whole session */
+                    stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
+                }
             }
         }
         else {
@@ -605,14 +556,27 @@ static int h3zero_server_callback_data(
                         break;
                     }
                     else if (available_data > 0) {
-                        if (stream_ctx->ps.stream_state.header_found && stream_ctx->post_received == 0) {
+                        if (stream_ctx->ps.stream_state.is_web_transport) {
+                            if (stream_ctx->path_callback == NULL) {
+                                h3zero_stream_prefix_t* stream_prefix;
+                                stream_prefix = h3zero_find_stream_prefix(&ctx->stream_prefixes, stream_ctx->ps.stream_state.control_stream_id);
+                                if (stream_prefix == NULL) {
+                                    ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
+                                }
+                                else {
+                                    stream_ctx->path_callback = stream_prefix->function_call;
+                                    stream_ctx->path_callback_ctx = stream_prefix->function_ctx;
+                                    (void)picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
+                                }
+                            }
+
+                        } else if (stream_ctx->ps.stream_state.header_found && stream_ctx->post_received == 0) {
                             int path_item = picohttp_find_path_item(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, ctx->path_table, ctx->path_table_nb);
                             if (path_item >= 0) {
                                 stream_ctx->path_callback = ctx->path_table[path_item].path_callback;
                                 stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post,
                                     stream_ctx, ctx->path_table[path_item].path_app_ctx);
                             }
-
                             (void)picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
                         }
 
@@ -627,32 +591,29 @@ static int h3zero_server_callback_data(
                 }
                 /* TODO:are there cases when the request header shall be processed before the FIN is received?
                  */
-                
-                if (ret == 0 && fin_or_event == picoquic_callback_stream_fin) {
-                    /* Process the request header. */
-                    if (stream_ctx->ps.stream_state.header_found) {
-                        ret = h3zero_server_process_request_frame(cnx, stream_ctx, ctx);
+                if (ret == 0) {
+                    if (!stream_ctx->ps.stream_state.is_web_transport &&
+                        (fin_or_event == picoquic_callback_stream_fin || stream_ctx->ps.stream_state.header.method == h3zero_method_connect)) {
+                        /* Process the request header. */
+                        if (stream_ctx->ps.stream_state.header_found) {
+                            ret = h3zero_server_process_request_frame(cnx, stream_ctx, ctx);
+                        }
+                        else {
+                            /* Unexpected end of stream before the header is received */
+                            ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_FRAME_ERROR);
+                        }
                     }
-                    else {
-                        /* Unexpected end of stream before the header is received */
-                        ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_FRAME_ERROR);
+                    if (ret ==0 && fin_or_event == picoquic_callback_stream_fin && stream_ctx->path_callback != NULL) {
+                        ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
                     }
                 }
             }
         }
     }
     else {
-        /* TODO: If unidir stream, check what type of stream */
-        if (stream_ctx == NULL) {
-
-        }
-        /* TODO: If this is a control stream, and setting is not received yet,
-         * wait for the setting frame, then process it and move the
-         * state to absorbing.*/
-        /* TODO: Beside control stream, we also absorb the push streams and
-         * the reserved streams (*1F). In fact, we implement that by
-         * just switching the state to absorbing. */
-        /* TODO: consider web transport */
+        /* process the unidir streams. */
+        ret = h3zero_process_remote_stream(cnx, stream_id, bytes, length,
+            fin_or_event, stream_ctx, ctx);
     }
 
     return ret;

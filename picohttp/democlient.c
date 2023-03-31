@@ -283,37 +283,6 @@ int h3zero_client_create_stream_request(
     return ret;
 }
 
-int h3zero_client_init(picoquic_cnx_t* cnx)
-{
-    uint8_t decoder_stream_head = 0x03;
-    uint8_t encoder_stream_head = 0x02;
-    int ret = picoquic_add_to_stream(cnx, 2, h3zero_default_setting_frame, h3zero_default_setting_frame_size, 0);
-
-    if (ret == 0) {
-		/* set the stream #2 to be the next stream to write! */
-        ret = picoquic_set_stream_priority(cnx, 2, 0);
-    }
-
-    if (ret == 0) {
-        /* set the stream 6 as the encoder stream, although we do not actually create dynamic codes. */
-        ret = picoquic_add_to_stream(cnx, 6, &encoder_stream_head, 1, 0);
-        if (ret == 0) {
-            ret = picoquic_set_stream_priority(cnx, 6, 1);
-        }
-    }
-
-    if (ret == 0) {
-        /* set the stream 10 as the decoder stream, although we do not actually create dynamic codes. */
-        ret = picoquic_add_to_stream(cnx, 10, &decoder_stream_head, 1, 0);
-        if (ret == 0) {
-            ret = picoquic_set_stream_priority(cnx, 10, 1);
-        }
-    }
-
-
-    return ret;
-}
-
 /* HTTP 0.9 client. 
  * This is the client that was used for QUIC interop testing prior
  * to availability of HTTP 3.0. It allows for testing transport

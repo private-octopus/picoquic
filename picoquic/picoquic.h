@@ -1020,7 +1020,7 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t * cnx, uint64_t stream_id, co
 /* Reset a stream, indicating that no more data will be sent on 
  * that stream and that any data currently queued can be abandoned. */
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint16_t local_stream_error);
+    uint64_t stream_id, uint64_t local_stream_error);
 
 /* Open the flow control for receiving the expected data on a stream */
 int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t expected_data_size);

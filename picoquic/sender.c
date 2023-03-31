@@ -286,7 +286,7 @@ void picoquic_reset_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id)
 }
 
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint16_t local_stream_error)
+    uint64_t stream_id, uint64_t local_stream_error)
 {
     int ret = 0;
     picoquic_stream_head_t* stream = NULL;

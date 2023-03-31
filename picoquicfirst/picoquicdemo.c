@@ -68,6 +68,9 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "picoquic_utils.h"
 #include "autoqlog.h"
 #include "h3zero.h"
+#include "h3zero_common.h"
+#include "pico_webtransport.h"
+#include "wt_baton.h"
 #include "democlient.h"
 #include "demoserver.h"
 #include "siduck.h"
@@ -257,11 +260,24 @@ int demoserver_post_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-picohttp_server_path_item_t post_test_item = {
-    "/post",
-    5,
-    demoserver_post_callback
+picohttp_server_path_item_t path_item_list[2] =
+{
+    {
+        "/post",
+        5,
+        demoserver_post_callback,
+        NULL
+    },
+    {
+        "/baton",
+        6,
+        picowt_h3zero_callback,
+        NULL
+    }
 };
+
+
+
 
 int quic_server(const char* server_name, picoquic_quic_config_t * config, int just_once)
 {
@@ -274,8 +290,8 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
 
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
     picoquic_file_param.web_folder = config->www_dir;
-    picoquic_file_param.path_table = &post_test_item;
-    picoquic_file_param.path_table_nb = 1;
+    picoquic_file_param.path_table = path_item_list;
+    picoquic_file_param.path_table_nb = 2;
 
     memset(&loop_cb_ctx, 0, sizeof(server_loop_cb_t));
     loop_cb_ctx.just_once = just_once;

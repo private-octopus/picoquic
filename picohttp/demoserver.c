@@ -23,7 +23,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <picotls.h>
-#include "picosplay.h"
 #include "picoquic_internal.h"
 #include "tls_api.h"
 #include "h3zero.h"

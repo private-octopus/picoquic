@@ -54,6 +54,7 @@
 
 /* Web transport initiate, client side
 * cnx: an established QUIC connection, set to ALPN=H3.
+* stream_ctx: a new stream, created for the purpose of sending the connect request
 * wt_callback: callback function to use in the web transport connection.
 * wt_ctx: application level context for that connection.
 * 
@@ -65,17 +66,52 @@
 * the stream ID. This is associated with the connection itself. Do we have
 * an H3 context for the connection?
 */
-void picowt_connect(picoquic_cnx_t* cnx, h3zero_stream_prefixes_t stream_prefixes, const char* uri, picowt_ready_cb_fn wt_callback, void* wt_ctx)
+int picowt_connect(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx, h3zero_stream_prefixes_t * stream_prefixes, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(cnx);
-    UNREFERENCED_PARAMETER(stream_prefixes);
-    UNREFERENCED_PARAMETER(uri);
-    UNREFERENCED_PARAMETER(wt_callback);
-    UNREFERENCED_PARAMETER(wt_ctx);
-#endif
-    /* find a new bidir stream */
     /* register the stream ID as session ID */
+    int ret = h3zero_declare_stream_prefix(stream_prefixes, stream_ctx->stream_id, wt_callback, wt_ctx);
+
+    ret = wt_callback(cnx, NULL, 0, picohttp_callback_connecting, stream_ctx, wt_ctx);
+
+    if (ret == 0) {
+        /* Format and send the connect frame. */
+        uint8_t buffer[1024];
+        uint8_t* bytes = buffer;
+        uint8_t* bytes_max = bytes + 1024;
+
+        *bytes++ = h3zero_frame_header;
+        bytes += 2; /* reserve two bytes for frame length */
+
+        bytes = h3zero_create_connect_header_frame(bytes, bytes_max, (const uint8_t*)path, strlen(path), "webtransport", NULL,
+            H3ZERO_USER_AGENT_STRING);
+
+        if (bytes == NULL) {
+            ret = -1;
+        }
+        else {
+            /* Encode the header length */
+            size_t header_length = bytes - &buffer[3];
+            if (header_length < 64) {
+                buffer[1] = (uint8_t)(header_length);
+                memmove(&buffer[2], &buffer[3], header_length);
+                bytes--;
+            }
+            else {
+                buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
+                buffer[2] = (uint8_t)(header_length & 0xFF);
+            }
+            size_t connect_length = bytes - buffer;
+
+            ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, buffer, connect_length,
+                    0, stream_ctx);
+        }
+
+        if (ret != 0) {
+            /* remove the stream prefix */
+            h3zero_delete_stream_prefix(stream_prefixes, stream_ctx->stream_id);
+        }
+    }
+    return ret;
 }
 
 #if 0

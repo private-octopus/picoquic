@@ -38,35 +38,46 @@ extern "C" {
      */
     typedef enum {
         wt_baton_state_none = 0,
-        wt_baton_state_connect_received,
-        wt_baton_state_unidir_sent,
-        wt_baton_state_unidir_received,
-        wt_baton_state_bidir_sent,
-        wt_baton_state_bidir_received,
+        wt_baton_state_ready,
+        wt_baton_state_sent,
         wt_baton_state_done,
+        wt_baton_state_error,
         wt_baton_state_closed
     } wt_baton_state_enum;
 
-    typedef struct st_wt_baton_stream_ctx_t {
-        struct st_wt_baton_stream_ctx_t* next;
-        struct st_wt_baton_stream_ctx_t* previous;
-        h3zero_data_stream_state_t stream_state;
-        uint8_t baton[256];
-        size_t nb_received;
-        size_t nb_sent;
-        int connection_closed;
-    } wt_baton_stream_ctx_t;
-
     typedef struct st_wt_baton_ctx_t {
-        uint8_t baton[256];
-        int nb_turns;
-        int is_disconnected;
-        int nb_turns_required;
-        wt_baton_state_enum baton_state;
-        struct st_wt_baton_stream_ctx_t* first;
-        struct st_wt_baton_stream_ctx_t* last;
+        /* the streams are managed though a splay.
+         * on the server, we just reuse the local server tree.
+         * on the native client, we need to manage a local tree,
+         * and set the tree pointer to that.
+         */
+        picosplay_tree_t * h3_stream_tree;
+        picosplay_tree_t local_h3_tree; 
+        picohttp_server_path_item_t * path_table;
+        size_t path_table_nb;
+        char const* web_folder;
+        char const* server_path;
+        /* connection wide tracking of stream prefixes.
+         * on the server, we use the global tracker.
+         * on the client, we manage a placeholder.
+         */
+        h3zero_stream_prefixes_t * stream_prefixes;
+        h3zero_stream_prefixes_t local_stream_prefixes;
+        /* control stream context, will need to remain open as long 
+         */
+        uint64_t control_stream_id;
+        /* Connection state */
+        int is_client;
         int connection_ready;
         int connection_closed;
+        /* Baton protocol data */
+        uint8_t baton[256];
+        uint8_t baton_received[256];
+        uint64_t nb_baton_bytes_received;
+        struct st_picohttp_server_stream_ctx_t* last_received_stream_ctx;
+        int nb_turns;
+        int nb_turns_required;
+        wt_baton_state_enum baton_state;
     } wt_baton_ctx_t;
 
     typedef struct st_wt_baton_app_ctx_t {
@@ -78,9 +89,10 @@ extern "C" {
         struct st_picohttp_server_stream_ctx_t* stream_ctx,
         void* path_app_ctx);
 
-    int wt_baton_create_stream(picoquic_cnx_t* cnx, int is_bidir, wt_baton_ctx_t* baton_ctx);
+    picohttp_server_stream_ctx_t* wt_baton_create_stream(picoquic_cnx_t* cnx, int is_bidir, wt_baton_ctx_t* baton_ctx);
 
     void wt_baton_ctx_release(wt_baton_ctx_t* ctx);
+    int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_server_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t* app_ctx, picohttp_server_stream_ctx_t* stream_ctx);
 
     /* Web transport callback. This will be called from the web server
     * when the path points to a web transport callback

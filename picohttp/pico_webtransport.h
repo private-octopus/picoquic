@@ -43,20 +43,19 @@ typedef enum {
     picowt_cb_pacing_changed /* Pacing rate for the connection changed */
 } picowt_event_t;
 
-
+#if 0
 /* TODO: Set API to match requirements */
 typedef int (*picowt_ready_cb_fn)(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picowt_event_t event, void* callback_ctx, void* stream_ctx);
+#endif
 
 /* Web transport initiate, client side
  * cnx: an established QUIC connection, set to ALPN=H3.
  * wt_callback: callback function to use in the web transport connection.
  * wt_ctx: application level context for that connection.
  */
-
-void picowt_connect(picoquic_cnx_t* cnx, h3zero_stream_prefixes_t stream_prefixes, const char* uri, picowt_ready_cb_fn wt_callback, void* wt_ctx);
-
+int picowt_connect(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx, h3zero_stream_prefixes_t* stream_prefixes, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
 
 /* Private API for implementing web transport:
  * - process the register request.

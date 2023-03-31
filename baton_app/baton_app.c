@@ -36,7 +36,7 @@
 #include <autoqlog.h>
 #include "wt_baton.h"
 
-int wt_baton_client(char const* server_name, int server_port, char const path, int nb_rounds);
+int wt_baton_client(char const* server_name, int server_port, char const* path, int nb_rounds);
 int baton_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
     void* callback_ctx, void* callback_arg);
 
@@ -60,7 +60,7 @@ int get_port(char const* sample_name, char const* port_arg)
 
 int main(int argc, char** argv)
 {
-    int exit_code = 0;
+    int ret = 0;
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
@@ -70,13 +70,18 @@ int main(int argc, char** argv)
         usage(argv[0]);
     }
     else {
-        char const* server = argv[1];
-        int port = get_port(argv[0], argv[2]);
+        char const* server_name = argv[1];
+        int server_port = get_port(argv[0], argv[2]);
         char const * path = argv[3];
         int nb_rounds = 4;
 
-    }
+        ret = wt_baton_client(server_name, server_port, path, nb_rounds);
 
+        if (ret != 0) {
+            fprintf(stderr, "Baton dropped, ret=%d\n", ret);
+        }
+    }
+    exit(ret);
 }
 
 /* Client:
@@ -97,7 +102,7 @@ int main(int argc, char** argv)
 #define PICOQUIC_BATON_CLIENT_TOKEN_STORE "baton_token_store.bin";
 #define PICOQUIC_BATON_CLIENT_QLOG_DIR ".";
 
-int wt_baton_client(char const * server_name, int server_port, char const path, int nb_rounds)
+int wt_baton_client(char const * server_name, int server_port, char const * path, int nb_rounds)
 {
     int ret = 0;
     struct sockaddr_storage server_address;
@@ -172,15 +177,15 @@ int wt_baton_client(char const * server_name, int server_port, char const path, 
         /* Create a client connection */
         cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
             (struct sockaddr*) & server_address, current_time, 0, sni, "h3", 1);
-
         if (cnx == NULL) {
             fprintf(stderr, "Could not create connection context\n");
             ret = -1;
         }
         else {
+            /* Initialize the callback context. First, create a bidir stream */
+            wt_baton_ctx_init(&client_ctx, NULL, NULL, NULL);
+            client_ctx.server_path = path;
             /* Set the client callback context */
-            wt_baton_ctx_t client_ctx = { 0 };
-
             picoquic_set_callback(cnx, wt_baton_client_callback, &client_ctx);
             /* Client connection parameters could be set here, before starting the connection. */
             ret = picoquic_start_client_cnx(cnx);
@@ -194,6 +199,10 @@ int wt_baton_client(char const * server_name, int server_port, char const path, 
                     printf("%02x", icid.id[i]);
                 }
                 printf("\n");
+                /* Perform the initialization, settings and QPACK streams
+                 * TODO: record the streams as part of H3 context?
+                 */
+                ret = h3zero_client_init(cnx);
             }
         }
     }
@@ -246,9 +255,12 @@ int baton_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_
             fprintf(stdout, "Waiting for packets.\n");
             break;
         case picoquic_packet_loop_after_receive:
+            if (cb_ctx->connection_closed) {
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+            }
             break;
         case picoquic_packet_loop_after_send:
-            if (cb_ctx->is_disconnected) {
+            if (cb_ctx->connection_closed) {
                 ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
             }
             break;
