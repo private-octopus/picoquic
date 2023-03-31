@@ -229,7 +229,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
-    size_t expected = 256 - baton_ctx->nb_baton_bytes_received;
+    size_t expected = 256 - (size_t)baton_ctx->nb_baton_bytes_received;
 
     if (baton_ctx->baton_state != wt_baton_state_ready && baton_ctx->baton_state != wt_baton_state_sent) {
         /* Unexpected data at this stage */
