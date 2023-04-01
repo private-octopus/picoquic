@@ -64,7 +64,7 @@ static void picohttp_clear_stream_ctx(picohttp_server_stream_ctx_t* stream_ctx)
 	}
 
 	if (stream_ctx->path_callback != NULL) {
-		(void)stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_resetting, stream_ctx, stream_ctx->path_callback_ctx);
+		(void)stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_free, stream_ctx, stream_ctx->path_callback_ctx);
 	}
 
 	if (stream_ctx->is_h3) {

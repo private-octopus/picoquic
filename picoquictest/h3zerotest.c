@@ -1968,7 +1968,7 @@ int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
             }
         }
         break;
-    case picohttp_callback_reset: /* stream is abandoned */
+    case picohttp_callback_free: /* stream is abandoned */
         stream_ctx->path_callback = NULL;
         stream_ctx->path_callback_ctx = NULL;
        

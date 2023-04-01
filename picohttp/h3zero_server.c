@@ -727,6 +727,11 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
         switch (fin_or_event) {
         case picoquic_callback_stream_data:
         case picoquic_callback_stream_fin:
+#if 1
+            if (fin_or_event == picoquic_callback_stream_fin) {
+                DBG_PRINTF("%s", "Bug");
+            }
+#endif
             /* Data arrival on stream #x, maybe with fin mark */
             ret = h3zero_server_callback_data(cnx, stream_ctx, stream_id, bytes, length, fin_or_event, ctx);
             break;
