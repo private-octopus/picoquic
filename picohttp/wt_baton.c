@@ -154,6 +154,12 @@ int wt_baton_relay(picoquic_cnx_t* cnx,
         stream_ctx->path_callback = picowt_h3zero_callback;
         stream_ctx->path_callback_ctx = baton_ctx;
         ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, baton_ctx->baton, 256, 1, stream_ctx);
+
+        stream_ctx->ps.stream_state.is_fin_sent = 1;
+        if (stream_ctx->ps.stream_state.is_fin_received == 1) {
+            picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
+            h3zero_delete_stream(baton_ctx->h3_stream_tree, stream_ctx);
+        }
     }
 
     return ret;
@@ -176,7 +182,7 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
         /* Close the control stream, which will close the session */
         if (IS_BIDIR_STREAM_ID(stream_ctx->stream_id) && !IS_LOCAL_STREAM_ID(stream_ctx->stream_id, baton_ctx->is_client)) {
             /* before closing the session, close this stream.*/
-            ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, NULL, 0, 1, stream_ctx);
+            ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, NULL, 0, 1, NULL);
         }
         ret = wt_baton_close_session(cnx, baton_ctx);
     }
@@ -301,12 +307,20 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
          */
         baton_ctx->baton_state = wt_baton_state_closed;
         if (baton_ctx->is_client) {
+            wt_baton_ctx_release(baton_ctx);
             picoquic_log_app_message(cnx, "FIN on control stream. Closing the connection.\n");
             ret = picoquic_close(cnx, 0);
         }
+        else {
+            wt_baton_ctx_release(baton_ctx);
+        }
     }
     else {
-        /* TODO: mark context as closed. */
+        stream_ctx->ps.stream_state.is_fin_received = 1;
+        if (stream_ctx->ps.stream_state.is_fin_sent == 1) {
+            picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
+            h3zero_delete_stream(baton_ctx->h3_stream_tree, stream_ctx);
+        }
     }
     return ret;
 }
@@ -414,11 +428,6 @@ picohttp_server_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* ctx, uint64_t
 {
     picohttp_server_stream_ctx_t* stream_ctx = picohttp_find_stream(ctx->h3_stream_tree, stream_id);
     return stream_ctx;
-}
-
-void wt_baton_stream_free(wt_baton_ctx_t* ctx, picohttp_server_stream_ctx_t* stream_ctx)
-{
-    h3zero_delete_stream(ctx->h3_stream_tree, stream_ctx);
 }
 
 void wt_baton_ctx_release(wt_baton_ctx_t* ctx)

@@ -268,6 +268,9 @@ typedef struct st_h3zero_data_stream_state_t {
     unsigned int header_found : 1;
     unsigned int data_found : 1;
     unsigned int trailer_found : 1;
+    /* Keeping track of FIN sent and FIN received, so applications can delete stream contexts that are not useful */
+    unsigned int is_fin_received : 1; 
+    unsigned int is_fin_sent : 1;
 } h3zero_data_stream_state_t;
 
 uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,

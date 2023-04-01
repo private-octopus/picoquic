@@ -127,6 +127,15 @@ picohttp_server_stream_ctx_t * h3zero_find_or_create_stream(
 			memset(stream_ctx, 0, sizeof(picohttp_server_stream_ctx_t));
 			stream_ctx->stream_id = stream_id;
 			stream_ctx->is_h3 = is_h3;
+			if (!IS_BIDIR_STREAM_ID(stream_id)) {
+				if (IS_LOCAL_STREAM_ID(stream_id, picoquic_is_client(cnx))) {
+					stream_ctx->ps.stream_state.is_fin_received = 1;
+				}
+				else {
+					stream_ctx->ps.stream_state.is_fin_sent = 1;
+				}
+			}
+			
 			picosplay_insert(stream_tree, stream_ctx);
 		}
 	}
