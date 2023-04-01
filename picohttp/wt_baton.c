@@ -275,6 +275,7 @@ int wt_baton_accept(picoquic_cnx_t* cnx,
     wt_baton_app_ctx_t* app_ctx = (wt_baton_app_ctx_t*)path_app_ctx;
     h3zero_server_callback_ctx_t* h3_ctx = (h3zero_server_callback_ctx_t*)picoquic_get_callback_context(cnx);
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)malloc(sizeof(wt_baton_ctx_t));
+    picoquic_log_app_message(cnx, "allocated baton context size(%zu)", sizeof(wt_baton_ctx_t));
     if (baton_ctx == NULL) {
         ret = -1;
     }
@@ -312,7 +313,7 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
             ret = picoquic_close(cnx, 0);
         }
         else {
-            wt_baton_ctx_release(cnx, baton_ctx);
+            wt_baton_ctx_free(cnx, baton_ctx);
         }
     }
     else {
@@ -457,9 +458,9 @@ void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx)
     }
 }
 
-void wt_baton_ctx_free(wt_baton_ctx_t* ctx)
+void wt_baton_ctx_free(picoquic_cnx_t * cnx, wt_baton_ctx_t* ctx)
 {
-    wt_baton_ctx_release(NULL, ctx);
+    wt_baton_ctx_release(cnx, ctx);
     free(ctx);
 }
 
