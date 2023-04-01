@@ -307,12 +307,12 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
          */
         baton_ctx->baton_state = wt_baton_state_closed;
         if (baton_ctx->is_client) {
-            wt_baton_ctx_release(baton_ctx);
+            wt_baton_ctx_release(cnx, baton_ctx);
             picoquic_log_app_message(cnx, "FIN on control stream. Closing the connection.\n");
             ret = picoquic_close(cnx, 0);
         }
         else {
-            wt_baton_ctx_release(baton_ctx);
+            wt_baton_ctx_release(cnx, baton_ctx);
         }
     }
     else {
@@ -430,33 +430,28 @@ picohttp_server_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* ctx, uint64_t
     return stream_ctx;
 }
 
-void wt_baton_ctx_release(wt_baton_ctx_t* ctx)
+void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx)
 {
+    picosplay_node_t* previous = NULL;
     /* dereference the control stream ID */
     h3zero_delete_stream_prefix(ctx->stream_prefixes, ctx->control_stream_id);
     /* Free the streams created for this session */
-    if (ctx->h3_stream_tree == &ctx->local_h3_tree) {
-        /* Free all the streams registered locally */
-        picosplay_empty_tree(ctx->h3_stream_tree);
-    }
-    else {
-        /* TODO: Only free the streams that are related to this context */
-        picosplay_node_t* previous = NULL;
-
-        while(1){
-            picosplay_node_t* next = (previous == NULL) ? picosplay_first(ctx->h3_stream_tree) : picosplay_next(previous);
-            if (next == NULL) {
-                break;
+    while (1) {
+        picosplay_node_t* next = (previous == NULL) ? picosplay_first(ctx->h3_stream_tree) : picosplay_next(previous);
+        if (next == NULL) {
+            break;
+        }
+        else {
+            picohttp_server_stream_ctx_t* stream_ctx =
+                (picohttp_server_stream_ctx_t*)picohttp_stream_node_value(next);
+            if (stream_ctx->control_stream_id == stream_ctx->control_stream_id) {
+                if (cnx != NULL) {
+                    picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
+                }
+                picosplay_delete(ctx->h3_stream_tree, next);
             }
             else {
-                picohttp_server_stream_ctx_t* stream_ctx =
-                    (picohttp_server_stream_ctx_t*) picohttp_stream_node_value(next);
-                if (stream_ctx->control_stream_id == stream_ctx->control_stream_id) {
-                    picosplay_delete(ctx->h3_stream_tree, next);
-                }
-                else {
-                    previous = next;
-                }
+                previous = next;
             }
         }
     }
@@ -464,7 +459,7 @@ void wt_baton_ctx_release(wt_baton_ctx_t* ctx)
 
 void wt_baton_ctx_free(wt_baton_ctx_t* ctx)
 {
-    wt_baton_ctx_release(ctx);
+    wt_baton_ctx_release(NULL, ctx);
     free(ctx);
 }
 

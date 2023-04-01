@@ -373,12 +373,12 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
         }
     }
 
-    wt_baton_ctx_release(&baton_ctx);
-
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
     }
+
+    wt_baton_ctx_release(NULL, &baton_ctx);
 
     return ret;
 }

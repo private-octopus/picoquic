@@ -213,6 +213,9 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
     /* Done. At this stage, we could print out statistics, etc. */
     /* baton_client_report(&client_ctx); */
 
+    /* Free the Client context */
+    wt_baton_ctx_release(cnx, &client_ctx);
+
     /* Save tickets and tokens, and free the QUIC context */
     if (quic != NULL) {
         if (picoquic_save_session_tickets(quic, ticket_store_filename) != 0) {
@@ -224,8 +227,6 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
         picoquic_free(quic);
     }
 
-    /* Free the Client context */
-    wt_baton_ctx_release(&client_ctx);
 
     return ret;
 }
