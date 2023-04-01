@@ -57,8 +57,9 @@ static h3zero_server_callback_ctx_t* h3zero_server_callback_create_context(picoh
     return ctx;
 }
 
-static void h3zero_server_callback_delete_context(h3zero_server_callback_ctx_t* ctx)
+static void h3zero_server_callback_delete_context(picoquic_cnx_t* cnx, h3zero_server_callback_ctx_t* ctx)
 {
+    h3zero_delete_all_stream_prefixes(cnx, &ctx->stream_prefixes);
     picosplay_empty_tree(&ctx->h3_stream_tree);
 
     free(ctx);
@@ -750,7 +751,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stateless_reset:
         case picoquic_callback_close: /* Received connection close */
         case picoquic_callback_application_close: /* Received application close */
-            h3zero_server_callback_delete_context(ctx);
+            h3zero_server_callback_delete_context(cnx, ctx);
             picoquic_set_callback(cnx, NULL, NULL);
             break;
         case picoquic_callback_version_negotiation:

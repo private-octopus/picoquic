@@ -217,6 +217,23 @@ void h3zero_delete_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t pr
 	}
 }
 
+void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_stream_prefixes_t* prefixes)
+{
+	h3zero_stream_prefix_t* next;
+
+	while ((next = prefixes->first) != NULL) {
+		/* Request the app to clean up its memory */
+		if (next->function_call != NULL) {
+			(void)next->function_call(cnx, NULL, 0, picohttp_callback_free,
+				NULL, next->function_ctx);
+		}
+		if (prefixes->first == next){
+			/* the prefix was not deleted as part of app cleanup */
+			h3zero_delete_stream_prefix(prefixes, next->prefix);
+		}
+	}
+}
+
 uint64_t h3zero_parse_stream_prefix(uint8_t* buffer_8, size_t* nb_in_buffer, uint8_t* data, size_t data_length, size_t * nb_read)
 {
 	uint64_t prefix = UINT64_MAX;

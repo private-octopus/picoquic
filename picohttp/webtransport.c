@@ -45,8 +45,10 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <picoquic.h>
+#include "picoquic_utils.h"
 #include "h3zero_common.h"
 #include "pico_webtransport.h"
 
@@ -70,6 +72,9 @@ int picowt_connect(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
 {
     /* register the stream ID as session ID */
     int ret = h3zero_declare_stream_prefix(stream_prefixes, stream_ctx->stream_id, wt_callback, wt_ctx);
+    if (cnx != NULL) {
+        picoquic_log_app_message(cnx, "Allocated prefix for control stream %" PRIu64, stream_ctx->stream_id);
+    }
 
     ret = wt_callback(cnx, NULL, 0, picohttp_callback_connecting, stream_ctx, wt_ctx);
 

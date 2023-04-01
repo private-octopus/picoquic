@@ -44,7 +44,8 @@ extern "C" {
         picohttp_callback_post_fin, /* All posted data have been received on this stream */
         picohttp_callback_session_fin, /* Control stream has been closed */
         picohttp_callback_provide_data, /* Stack is ready to send chunk of data on stream N */
-        picohttp_callback_reset /* Stream has been abandoned. */
+        picohttp_callback_reset, /* Stream has been abandoned. */
+        picohttp_callback_free
     } picohttp_call_back_event_t;
 
     struct st_picohttp_server_stream_ctx_t;
@@ -136,6 +137,7 @@ extern "C" {
     h3zero_stream_prefix_t* h3zero_find_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t prefix);
     int h3zero_declare_stream_prefix(h3zero_stream_prefixes_t * prefixes, uint64_t prefix, picohttp_post_data_cb_fn function_call, void* function_ctx);
     void h3zero_delete_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t prefix);
+    void h3zero_delete_all_stream_prefixes(picoquic_cnx_t* cnx, h3zero_stream_prefixes_t* prefixes);
 
     int h3zero_client_init(picoquic_cnx_t* cnx);
 
