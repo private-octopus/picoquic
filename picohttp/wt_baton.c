@@ -381,8 +381,8 @@ int picowt_h3zero_callback(picoquic_cnx_t* cnx,
     case picohttp_callback_post_fin: /* All posted data have been received */
         /* Close the stream. If it is the WT control stream, close the 
          * entire WT connection */
-        ret = wt_baton_stream_fin(cnx, stream_ctx, path_app_ctx);
         picoquic_log_app_message(cnx, "FIN received on data stream: %"PRIu64, stream_ctx->stream_id);
+        ret = wt_baton_stream_fin(cnx, stream_ctx, path_app_ctx);
         break;
     case picohttp_callback_session_fin: /*  Control stream has been closed. */
         picoquic_log_app_message(cnx, "FIN received on control stream: %"PRIu64, stream_ctx->stream_id);
