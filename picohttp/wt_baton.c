@@ -397,7 +397,7 @@ int picowt_h3zero_callback(picoquic_cnx_t* cnx,
         /* If control stream: abandon the whole connection. */
         break;
     case picohttp_callback_free: /* Used during clean up. Ask to free all data from context */
-        
+        wt_baton_callback_free(cnx, path_app_ctx);
         break;
     default:
         /* protocol error */

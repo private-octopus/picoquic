@@ -93,6 +93,7 @@ extern "C" {
 
     void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx);
     void wt_baton_ctx_free(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx);
+    void wt_baton_callback_free(picoquic_cnx_t* cnx, void* v_ctx);
     int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_server_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t* app_ctx, picohttp_server_stream_ctx_t* stream_ctx);
 
     /* Web transport callback. This will be called from the web server

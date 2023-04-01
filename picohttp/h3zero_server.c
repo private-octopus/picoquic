@@ -751,6 +751,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stateless_reset:
         case picoquic_callback_close: /* Received connection close */
         case picoquic_callback_application_close: /* Received application close */
+            picoquic_log_app_message(cnx, "Clearing context on connection close (%d)", fin_or_event);
             h3zero_server_callback_delete_context(cnx, ctx);
             picoquic_set_callback(cnx, NULL, NULL);
             break;
