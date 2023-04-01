@@ -87,7 +87,14 @@
 /* Close the session. */
 int wt_baton_close_session(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx)
 {
-    int ret = picoquic_add_to_stream(cnx, baton_ctx->control_stream_id, NULL, 0, 1);
+    int ret = 0;
+    picohttp_server_stream_ctx_t* stream_ctx = wt_baton_find_stream(baton_ctx, baton_ctx->control_stream_id);
+
+    if (stream_ctx != NULL && !stream_ctx->ps.stream_state.is_fin_sent) {
+        ret = picoquic_add_to_stream(cnx, baton_ctx->control_stream_id, NULL, 0, 1);
+        stream_ctx->ps.stream_state.is_fin_sent = 1;
+    }
+
     return(ret);
 }
 
@@ -283,6 +290,9 @@ int wt_baton_accept(picoquic_cnx_t* cnx,
         /* register the incoming stream ID */
         ret = wt_baton_ctx_init(baton_ctx, h3_ctx, app_ctx, stream_ctx);
         if (ret == 0) {
+            stream_ctx->ps.stream_state.is_web_transport = 1;
+            stream_ctx->path_callback = picowt_h3zero_callback;
+            stream_ctx->path_callback_ctx = baton_ctx;
             baton_ctx->connection_ready = 1;
             /* fill the baton with random data */
             picoquic_public_random(baton_ctx->baton, 256);
@@ -302,9 +312,11 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
     int ret = 0;
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
 
+    stream_ctx->ps.stream_state.is_fin_received = 1;
     if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
         /* Closing the control stream implies closing the baton context. 
          */
+        ret = wt_baton_close_session(cnx, baton_ctx);
         baton_ctx->baton_state = wt_baton_state_closed;
         if (baton_ctx->is_client) {
             wt_baton_ctx_release(cnx, baton_ctx);
@@ -312,11 +324,11 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
             ret = picoquic_close(cnx, 0);
         }
         else {
+            picoquic_log_app_message(cnx, "FIN on control stream. Closing the session.\n");
             wt_baton_ctx_free(cnx, baton_ctx);
         }
     }
     else {
-        stream_ctx->ps.stream_state.is_fin_received = 1;
         if (stream_ctx->ps.stream_state.is_fin_sent == 1) {
             picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
             h3zero_delete_stream(baton_ctx->h3_stream_tree, stream_ctx);
@@ -324,6 +336,32 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
     }
     return ret;
 }
+
+int wt_baton_stream_reset(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx,
+    void* path_app_ctx)
+{
+    int ret = 0;
+    wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
+
+    picoquic_log_app_message(cnx, "Received reset on stream %" PRIu64 ", closing the session", stream_ctx->stream_id);
+
+    if (baton_ctx != NULL) {
+        ret = wt_baton_close_session(cnx, baton_ctx);
+
+        /* Any reset results in the abandon of the context */
+        baton_ctx->baton_state = wt_baton_state_closed;
+        if (baton_ctx->is_client) {
+            wt_baton_ctx_release(cnx, baton_ctx);
+            ret = picoquic_close(cnx, 0);
+        }
+        else {
+            wt_baton_ctx_free(cnx, baton_ctx);
+        }
+    }
+
+    return ret;
+}
+
 
 /* Web transport/baton callback. This will be called from the web server
 * when the path points to a web transport callback.
@@ -393,8 +431,12 @@ int picowt_h3zero_callback(picoquic_cnx_t* cnx,
         * and that the stream context is already set. Just send the data.
         */
         break;
+    case picohttp_callback_resetting: /* Stream wants to reset this stream. */
+        /* TODO! */
+        break;
     case picohttp_callback_reset: /* Stream has been abandoned. */
         /* If control stream: abandon the whole connection. */
+        ret = wt_baton_stream_reset(cnx, stream_ctx, path_app_ctx);
         break;
     case picohttp_callback_free: /* Used during clean up. Ask to free all data from context */
         wt_baton_callback_free(cnx, path_app_ctx);
@@ -653,6 +695,10 @@ int wt_baton_client_callback(picoquic_cnx_t* cnx,
         break;
     case picoquic_callback_stream_reset:
         /* TODO: call the "post reset" event. */
+        if (stream_ctx == NULL) {
+            stream_ctx = wt_baton_find_stream(ctx, stream_id);
+        }
+        picowt_h3zero_callback(cnx, NULL, 0, picohttp_callback_reset, stream_ctx, ctx);
         break;
     case picoquic_callback_stop_sending:
         /* TODO: stop sending event */

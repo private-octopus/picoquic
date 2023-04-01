@@ -42,7 +42,8 @@ extern "C" {
         wt_baton_state_sent,
         wt_baton_state_done,
         wt_baton_state_error,
-        wt_baton_state_closed
+        wt_baton_state_closed,
+        wt_baton_state_reset
     } wt_baton_state_enum;
 
     typedef struct st_wt_baton_ctx_t {
@@ -90,6 +91,7 @@ extern "C" {
         void* path_app_ctx);
 
     picohttp_server_stream_ctx_t* wt_baton_create_stream(picoquic_cnx_t* cnx, int is_bidir, wt_baton_ctx_t* baton_ctx);
+    picohttp_server_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* ctx, uint64_t stream_id);
 
     void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx);
     void wt_baton_ctx_free(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx);
