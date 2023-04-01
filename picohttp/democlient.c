@@ -573,11 +573,6 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     switch (fin_or_event) {
     case picoquic_callback_stream_data:
     case picoquic_callback_stream_fin:
-#if 1
-        if (fin_or_event == picoquic_callback_stream_fin) {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
         /* Data arrival on stream #x, maybe with fin mark */
         if (stream_ctx == NULL) {
             stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
