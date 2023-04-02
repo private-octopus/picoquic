@@ -39,10 +39,18 @@ extern "C" {
 #define H3ZERO_REQUEST_REJECTED 0x010B /* Request not processed */
 #define H3ZERO_REQUEST_CANCELLED 0x010C /* Data no longer needed */
 #define H3ZERO_REQUEST_INCOMPLETE 0x010D /* Stream terminated early */
-#define H3ZERO_EARLY_RESPONSE 0x010E /* Remainder of request not needed */
+#define H3_MESSAGE_ERROR 0x010E /* HTTP message was malformed and cannot be processed */
 #define H3ZERO_CONNECT_ERROR 0x010F /* TCP reset or error on CONNECT request */
 #define H3ZERO_VERSION_FALLBACK 0x0110 /* Retry over  H3ZERO/1.1 */
+#define H3ZERO_QPACK_DECOMPRESSION_FAILED 0x0200 /* Decoding of a field section failed. */
+#define H3ZERO_QPACK_ENCODER_STREAM_ERROR 0x0201 /* Error on the encoder stream */
+#define H3ZERO_QPACK_DECODER_STREAM_ERROR 0x0202 /* Error on the decoder stream */
+#define H3ZERO_WEBTRANSPORT_BUFFERED_STREAM_REJECTED 0x3994bd84 /* Stream arrived before webtransport session established */
+#define H3ZERO_WEBTRANSPORT_SESSION_GONE 0x170d7b68 /* Stream arrived after web transport session closed */
+#define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR(code) (0x52e4a40fa8dbull + code) /* see spec for skipping grease points when mapping codes */
 #define H3ZERO_USER_AGENT_STRING "H3Zero/1.0"
+
+#define H3ZERO_CAPSULE_CLOSE_WEBTRANSPORT_SESSION 0x2843
 
 typedef enum {
 	h3zero_frame_data = 0,
@@ -53,7 +61,8 @@ typedef enum {
     h3zero_frame_goaway = 7,
     h3zero_frame_max_push_id = 0xd,
     h3zero_frame_reserved_base = 0xb,
-    h3zero_frame_reserved_delta = 0x1f
+    h3zero_frame_reserved_delta = 0x1f,
+    h3zero_frame_webtransport_stream = 0x41
 } h3zero_frame_type_enum_t;
 
 typedef enum {
@@ -62,8 +71,18 @@ typedef enum {
     h3zero_setting_max_header_list_size = 0x6,
 	h3zero_qpack_blocked_streams = 0x07,
 	h3zero_setting_grease_signature =0x0a0a,
-    h3zero_setting_grease_mask = 0x0f0f
+    h3zero_setting_grease_mask = 0x0f0f,
+    h3zero_settings_enable_web_transport = 0x2b603742,
+    h3zero_settings_webtransport_max_sessions = 0x2b603743
 } h3zero_settings_enum_t;
+
+typedef enum {
+    h3zero_stream_type_control = 0,
+    h3zero_stream_type_push = 1, /* Push type not supported in h3zero settings */
+    h3zero_stream_type_qpack_encoder = 2, /* not required since not using dynamic table */
+    h3zero_stream_type_qpack_decoder = 3, /* not required since not using dynamic table */
+    h3zero_stream_type_webtransport = 0x54 /* unidir stream is used as specified in web transport */
+} h3zero_stream_type_enum;
 
 typedef enum {
     http_header_unknown = 0,
@@ -85,6 +104,7 @@ typedef enum {
     http_pseudo_header_method,
     http_pseudo_header_scheme,
     http_pseudo_header_status,
+    http_pseudo_header_protocol,
     http_header_accept,
     http_header_accept_encoding,
     http_header_accept_ranges,
@@ -122,6 +142,7 @@ typedef enum {
 	http_header_max
 } http_header_enum_t;
 
+#define H3ZERO_QPACK_CODE_CONNECT 15
 #define H3ZERO_QPACK_CODE_GET 17
 #define H3ZERO_QPACK_CODE_POST 20
 #define H3ZERO_QPACK_CODE_PATH 1
@@ -132,6 +153,7 @@ typedef enum {
 #define H3ZERO_QPACK_SCHEME_HTTPS 23
 #define H3ZERO_QPACK_TEXT_PLAIN 53
 #define H3ZERO_QPACK_USER_AGENT 95
+#define H3ZERO_QPACK_ORIGIN 90
 #define H3ZERO_QPACK_SERVER 92
 
 typedef struct st_h3zero_qpack_static_t {
@@ -179,6 +201,8 @@ typedef struct st_h3zero_header_parts_t {
     size_t path_length;
     int status;
     h3zero_content_type_enum content_type;
+    uint8_t const * protocol;
+    size_t protocol_length;
     unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
 
@@ -200,10 +224,14 @@ uint8_t* h3zero_create_request_header_frame_ex(uint8_t* bytes, uint8_t* bytes_ma
 uint8_t * h3zero_create_post_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t const * path, size_t path_length, char const * host,
     h3zero_content_type_enum content_type);
+uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
+    uint8_t const* path, size_t path_length, char const* protocol, char const* origin,
+    char const* ua_string);
 uint8_t* h3zero_create_post_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
     uint8_t const* path, size_t path_length, char const* host, h3zero_content_type_enum content_type, char const* ua_string);
 uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_content_type_enum doc_type);
+uint8_t* h3zero_create_error_frame(uint8_t* bytes, uint8_t* bytes_max, char const* error_code, char const* server_string);
 uint8_t* h3zero_create_response_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
     h3zero_content_type_enum doc_type, char const* server_string);
 uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max);
@@ -232,22 +260,28 @@ typedef struct st_h3zero_data_stream_state_t {
     uint64_t current_frame_type;
     uint64_t current_frame_length;
     uint64_t current_frame_read;
+    uint64_t control_stream_id;
     uint8_t frame_header[16];
     size_t frame_header_read;
+    unsigned int is_web_transport : 1;
     unsigned int frame_header_parsed : 1;
     unsigned int header_found : 1;
     unsigned int data_found : 1;
     unsigned int trailer_found : 1;
+    /* Keeping track of FIN sent and FIN received, so applications can delete stream contexts that are not useful */
+    unsigned int is_fin_received : 1; 
+    unsigned int is_fin_sent : 1;
 } h3zero_data_stream_state_t;
 
 uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_data_stream_state_t * stream_state, size_t * available_data, uint16_t * error_found);
 
+void h3zero_release_header_parts(h3zero_header_parts_t* header);
+
 void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state);
 
 int hzero_qpack_huffman_decode(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t * decoded, size_t max_decoded, size_t * nb_decoded);
-
 
 #ifdef __cplusplus
 }

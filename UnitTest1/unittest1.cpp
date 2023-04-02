@@ -2263,6 +2263,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_baton_basic) {
+            int ret = picowt_baton_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_error) {
+            int ret = picowt_baton_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_long) {
+            int ret = picowt_baton_long_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_wrong) {
+            int ret = picowt_baton_wrong_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(grease_quic_bit_one_way) {
             int ret = grease_quic_bit_one_way_test();
 

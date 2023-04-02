@@ -123,6 +123,18 @@
     <ClCompile Include="delay_tolerant_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+        <ClCompile Include="webtransport_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="code_version_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="delay_tolerant_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="webtransport_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">
