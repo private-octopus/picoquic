@@ -160,7 +160,7 @@ int wt_baton_relay(picoquic_cnx_t* cnx,
         baton_ctx->nb_baton_bytes_received = 0;
         stream_ctx->path_callback = picowt_h3zero_callback;
         stream_ctx->path_callback_ctx = baton_ctx;
-        ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, baton_ctx->baton, 256, 1, stream_ctx);
+        ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, &baton_ctx->baton, 1, 1, stream_ctx);
 
         stream_ctx->ps.stream_state.is_fin_sent = 1;
         if (stream_ctx->ps.stream_state.is_fin_received == 1) {
@@ -176,14 +176,7 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
 {
     int ret = 0;
     /* if the baton is all zeroes, then the exchange is done */
-    int baton_is_zeroes = 1;
-    for (int i = 0; i < 256; i++) {
-        if (baton_ctx->baton_received[i] != 0) {
-            baton_is_zeroes = 0;
-            break;
-        }
-    }
-    if (baton_is_zeroes) {
+    if (baton_ctx->baton_received == 0) {
         picoquic_log_app_message(cnx, "All ZERO baton on stream: %"PRIu64 " after %d turns", stream_ctx->stream_id, baton_ctx->nb_turns);
         baton_ctx->baton_state = wt_baton_state_done;
         /* Close the control stream, which will close the session */
@@ -195,18 +188,8 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
     }
     else {
         /* else the baton must be equal to baton sent + 1 */
-        uint8_t remainder = 1;
-        int is_wrong_baton = 0;
-        if (baton_ctx->baton_state == wt_baton_state_sent) {
-            for (int i = 255; i >= 0; i--) {
-                uint8_t next = baton_ctx->baton[i] + remainder;
-                if (next != baton_ctx->baton_received[i]) {
-                    is_wrong_baton = 1;
-                    break;
-                }
-                remainder &= (next == 0);
-            }
-        }
+        int is_wrong_baton = (baton_ctx->baton_state == wt_baton_state_sent &&
+            baton_ctx->baton_received != (baton_ctx->baton + 1));
         if (is_wrong_baton) {
             baton_ctx->baton_state = wt_baton_state_error;
             picoquic_log_app_message(cnx, "Wrong baton on stream: %"PRIu64 " after %d turns", stream_ctx->stream_id, baton_ctx->nb_turns);
@@ -217,21 +200,18 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
             if (baton_ctx->nb_turns >= baton_ctx->nb_turns_required) {
                 picoquic_log_app_message(cnx, "Final baton turn after %d turns", baton_ctx->nb_turns);
                 baton_ctx->baton_state = wt_baton_state_done;
-                memset(baton_ctx->baton, 0, 256);
+                baton_ctx->baton = 0;
             }
             else if (baton_ctx->nb_turns >= 4 && baton_ctx->nb_turns_required == 257) {
                 picoquic_log_app_message(cnx, "Error injection after %d turns (key: %d)", baton_ctx->nb_turns, baton_ctx->nb_turns_required);
-                memset(baton_ctx->baton, 0xaa, 256);
+                baton_ctx->baton += 31;
+                if (baton_ctx->baton == 0) {
+                    baton_ctx->baton = 1;
+                }
             }
             else {
-                remainder = 1;
-
                 baton_ctx->baton_state = wt_baton_state_sent;
-                for (int i = 255; i >= 0; i--) {
-                    uint8_t next = baton_ctx->baton_received[i] + remainder;
-                    remainder &= (next == 0);
-                    baton_ctx->baton[i] = next;
-                }
+                baton_ctx->baton = baton_ctx->baton_received + 1;
             }
             ret = wt_baton_relay(cnx, stream_ctx, baton_ctx);
         }
@@ -246,7 +226,6 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
-    size_t expected = 256 - (size_t)baton_ctx->nb_baton_bytes_received;
 
     if (baton_ctx->baton_state != wt_baton_state_ready && baton_ctx->baton_state != wt_baton_state_sent) {
         /* Unexpected data at this stage */
@@ -255,20 +234,16 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         ret = -1;
     }
     else {
-        if (length > expected) {
+        if (length > 1) {
             /* Protocol error */
             picoquic_log_app_message(cnx, "Received %zu baton bytes on stream %" PRIu64 ", %zu expected",
-                length, stream_ctx->stream_id, 256 - baton_ctx->nb_baton_bytes_received);
+                length, stream_ctx->stream_id, 1);
             ret = -1;
         }
         else {
-            memcpy(baton_ctx->baton_received + baton_ctx->nb_baton_bytes_received, bytes, length);
-            baton_ctx->nb_baton_bytes_received += length;
-
-            if (baton_ctx->nb_baton_bytes_received >= 256) {
-                baton_ctx->last_received_stream_ctx = stream_ctx;
-                ret = wt_baton_check(cnx, stream_ctx, baton_ctx);
-            }
+            baton_ctx->baton_received = *bytes;
+            baton_ctx->last_received_stream_ctx = stream_ctx;
+            ret = wt_baton_check(cnx, stream_ctx, baton_ctx);
         }
     }
     
@@ -299,7 +274,7 @@ int wt_baton_accept(picoquic_cnx_t* cnx,
             stream_ctx->path_callback_ctx = baton_ctx;
             baton_ctx->connection_ready = 1;
             /* fill the baton with random data */
-            picoquic_public_random(baton_ctx->baton, 256);
+            baton_ctx->baton = (uint8_t)picoquic_public_uniform_random(128) + 1;
             /* Get the relaying started */
             ret = wt_baton_relay(cnx, NULL, baton_ctx);
         }

@@ -72,8 +72,8 @@ extern "C" {
         int connection_ready;
         int connection_closed;
         /* Baton protocol data */
-        uint8_t baton[256];
-        uint8_t baton_received[256];
+        uint8_t baton;
+        uint8_t baton_received;
         uint64_t nb_baton_bytes_received;
         struct st_picohttp_server_stream_ctx_t* last_received_stream_ctx;
         int nb_turns;
