@@ -210,7 +210,7 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
         if (is_wrong_baton) {
             baton_ctx->baton_state = wt_baton_state_error;
             picoquic_log_app_message(cnx, "Wrong baton on stream: %"PRIu64 " after %d turns", stream_ctx->stream_id, baton_ctx->nb_turns);
-            ret = -1;
+            ret = wt_baton_close_session(cnx, baton_ctx);
         }
         else {
             baton_ctx->nb_turns += 1;  /* add a turn for the peer sending this */
@@ -218,6 +218,10 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
                 picoquic_log_app_message(cnx, "Final baton turn after %d turns", baton_ctx->nb_turns);
                 baton_ctx->baton_state = wt_baton_state_done;
                 memset(baton_ctx->baton, 0, 256);
+            }
+            else if (baton_ctx->nb_turns >= 4 && baton_ctx->nb_turns_required == 257) {
+                picoquic_log_app_message(cnx, "Error injection after %d turns (key: %d)", baton_ctx->nb_turns, baton_ctx->nb_turns_required);
+                memset(baton_ctx->baton, 0xaa, 256);
             }
             else {
                 remainder = 1;
@@ -402,14 +406,6 @@ int picowt_h3zero_callback(picoquic_cnx_t* cnx,
          * The application can start sending data.
          */
         break;
-    case picohttp_callback_first_data: /* First data received from peer on stream N */
-        /* This is the first data because the callback context for the stream has not
-         * been set. Instead, the stack is providing the connection context, associated
-         * with the prefix. The application needs to set that context before processing
-         * the data. If it fails to do so, the stack will close the connection with
-         * prejudice.
-         */
-        break;
     case picohttp_callback_post_data:
         /* Data received on a stream for which the per-app stream context is known.
         * the app just has to process the data.
@@ -422,17 +418,10 @@ int picowt_h3zero_callback(picoquic_cnx_t* cnx,
         picoquic_log_app_message(cnx, "FIN received on data stream: %"PRIu64, stream_ctx->stream_id);
         ret = wt_baton_stream_fin(cnx, stream_ctx, path_app_ctx);
         break;
-    case picohttp_callback_session_fin: /*  Control stream has been closed. */
-        picoquic_log_app_message(cnx, "FIN received on control stream: %"PRIu64, stream_ctx->stream_id);
-        ret = wt_baton_stream_fin(cnx, stream_ctx, path_app_ctx);
-        break;
     case picohttp_callback_provide_data: /* Stack is ready to send chunk of response */
         /* We assume that the required stream headers have already been pushed,
         * and that the stream context is already set. Just send the data.
         */
-        break;
-    case picohttp_callback_resetting: /* Stream wants to reset this stream. */
-        /* TODO! */
         break;
     case picohttp_callback_reset: /* Stream has been abandoned. */
         /* If control stream: abandon the whole connection. */

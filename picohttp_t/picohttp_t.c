@@ -79,7 +79,9 @@ static const picoquic_test_def_t test_table[] = {
     { "http_corrupt_rdpn", http_corrupt_rdpn_test},
     { "http_drop", http_drop_test},
     { "picowt_baton_basic", picowt_baton_basic_test },
-    { "picowt_baton_long", picowt_baton_long_test }
+    { "picowt_baton_error", picowt_baton_error_test },
+    { "picowt_baton_long", picowt_baton_long_test },
+    { "picowt_baton_wrong", picowt_baton_wrong_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

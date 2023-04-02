@@ -38,13 +38,9 @@ extern "C" {
         picohttp_callback_connect, /* Received a connect command */
         picohttp_callback_connect_refused, /* Connection request was refused by peer */
         picohttp_callback_connect_accepted, /* Connection request was accepted by peer */
-        picohttp_callback_first_data, /* First data received from peer on stream N */
         picohttp_callback_post_data, /* Data received from peer on stream N */
-        picohttp_callback_post_data_unidir, /* Data received from peer on unidir stream N */
         picohttp_callback_post_fin, /* All posted data have been received on this stream */
-        picohttp_callback_session_fin, /* Control stream has been closed */
         picohttp_callback_provide_data, /* Stack is ready to send chunk of data on stream N */
-        picohttp_callback_resetting, /* Stack wants to reset this stream */
         picohttp_callback_reset, /* Stream has been abandoned by peer. */
         picohttp_callback_free
     } picohttp_call_back_event_t;

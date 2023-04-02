@@ -524,11 +524,11 @@ static int h3zero_server_callback_data(
              * Call to selected callback, or ignore */
             if (stream_ctx->path_callback != NULL){
                 if (length > 0) {
-                    stream_ctx->path_callback(cnx, bytes, length, picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
+                    ret = stream_ctx->path_callback(cnx, bytes, length, picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
                 }
                 if (fin_or_event == picoquic_callback_stream_fin) {
                     /* FIN of the control stream is FIN of the whole session */
-                    stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
+                    ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
                 }
             }
         }

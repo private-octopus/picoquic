@@ -64,9 +64,9 @@ picohttp_server_path_item_t path_item_list[1] =
 
 
 static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
-    uint8_t test_id, int nb_turns_required, const char * baton_path,
-    uint64_t do_losses, uint64_t completion_target, const char * client_qlog_dir,
-    const char * server_qlog_dir)
+    uint8_t test_id, int nb_turns_required, const char* baton_path,
+    uint64_t do_losses, uint64_t completion_target, const char* client_qlog_dir,
+    const char* server_qlog_dir)
 {
     char const* alpn = "h3";
     uint64_t simulated_time = 0;
@@ -81,9 +81,9 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
     picoquic_connection_id_t initial_cid = { {0x77, 0x74, 0xba, 0, 0, 0, 0, 0}, 8 };
 
     initial_cid.id[3] = test_id;
-    /* 
+    /*
     * Should instead initialize the baton context, or maybe the baton app context:
-    * 
+    *
     * int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_server_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t * app_ctx, picohttp_server_stream_ctx_t* stream_ctx)
 
     ret = picoquic_demo_client_initialize_context(&callback_ctx, demo_scenario, nb_scenario, alpn, 0, 0);
@@ -163,17 +163,18 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
     }
 
     /* Verify that the web transport scenarios were properly executed  */
-    if (ret == 0 &&
-        (baton_ctx.baton_state == wt_baton_state_done || baton_ctx.baton_state == wt_baton_state_closed) &&
-        (baton_ctx.nb_turns >= nb_turns_required ||  (baton_ctx.nb_turns >= 8 && nb_turns_required > 8))) {
-        DBG_PRINTF("Baton test succeeds after %d turns", baton_ctx.nb_turns);
+    if (ret == 0) {
+        if (test_id == 3 || test_id == 4 ||
+            ((baton_ctx.baton_state == wt_baton_state_done || baton_ctx.baton_state == wt_baton_state_closed) &&
+                (baton_ctx.nb_turns >= nb_turns_required || (baton_ctx.nb_turns >= 8 && nb_turns_required > 8)))) {
+            DBG_PRINTF("Baton test succeeds after %d turns", baton_ctx.nb_turns);
+        }
+        else {
+            DBG_PRINTF("Baton test fails after %d turns, state %d",
+                baton_ctx.nb_turns, baton_ctx.baton_state);
+            ret = -1;
+        }
     }
-    else {
-        DBG_PRINTF("Baton test fails after %d turns, state %d", 
-            baton_ctx.nb_turns, baton_ctx.baton_state);
-        ret = -1;
-    }
-
     /* verify that the execution time is as expected */
     if (ret == 0 && completion_target != 0) {
         if (simulated_time > completion_target) {
@@ -199,9 +200,23 @@ int picowt_baton_basic_test()
     return ret;
 }
 
+int picowt_baton_error_test()
+{
+    int ret = picowt_baton_test_one(h3zero_server_callback, 4, 257, "/baton", 0, 2000000, ".", ".");
+
+    return ret;
+}
+
 int picowt_baton_long_test()
 {
     int ret = picowt_baton_test_one(h3zero_server_callback, 2, 10, "/baton", 0, 2000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_wrong_test()
+{
+    int ret = picowt_baton_test_one(h3zero_server_callback, 3, 7, "/wrong_baton", 0, 2000000, ".", ".");
 
     return ret;
 }
