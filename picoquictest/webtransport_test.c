@@ -57,7 +57,7 @@ picohttp_server_path_item_t path_item_list[1] =
     {
         "/baton",
         6,
-        picowt_h3zero_callback,
+        wt_baton_callback,
         NULL
     }
 };

@@ -54,9 +54,6 @@ extern "C" {
          */
         picosplay_tree_t * h3_stream_tree;
         picosplay_tree_t local_h3_tree; 
-        picohttp_server_path_item_t * path_table;
-        size_t path_table_nb;
-        char const* web_folder;
         char const* server_path;
         /* connection wide tracking of stream prefixes.
          * on the server, we use the global tracker.
@@ -102,7 +99,7 @@ extern "C" {
     * when the path points to a web transport callback
     */
 
-    int picowt_h3zero_callback(picoquic_cnx_t* cnx,
+    int wt_baton_callback(picoquic_cnx_t* cnx,
         uint8_t* bytes, size_t length,
         picohttp_call_back_event_t fin_or_event,
         struct st_picohttp_server_stream_ctx_t* stream_ctx,
