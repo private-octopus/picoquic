@@ -435,7 +435,7 @@ picohttp_server_stream_ctx_t* wt_baton_create_stream(picoquic_cnx_t* cnx, int is
 
 picohttp_server_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* ctx, uint64_t stream_id)
 {
-    picohttp_server_stream_ctx_t* stream_ctx = picohttp_find_stream(ctx->h3_stream_tree, stream_id);
+    picohttp_server_stream_ctx_t* stream_ctx = h3zero_find_stream(ctx->h3_stream_tree, stream_id);
     return stream_ctx;
 }
 

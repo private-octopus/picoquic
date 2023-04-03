@@ -26,6 +26,7 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="wt_baton.c" />
+    <ClCompile Include="h3zero_client.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h">

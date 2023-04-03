@@ -25,19 +25,10 @@
 #include "picoquic_internal.h"
 #include "h3zero.h"
 #include "h3zero_common.h"
-#include "quicperf.h"
-#include "democlient.h"
 
+#if 0
 /* List of supported protocols 
  */
-#if 1
-#else
-typedef struct st_picoquic_alpn_list_t {
-    picoquic_alpn_enum alpn_code;
-    char const* alpn_val;
-    size_t len;
-} picoquic_alpn_list_t;
-#endif
 
 static picoquic_alpn_list_t alpn_list[] = {
     { picoquic_alpn_http_3, "h3", 2 },
@@ -65,7 +56,7 @@ static picoquic_alpn_list_t alpn_list[] = {
 
 static size_t nb_alpn_list = sizeof(alpn_list) / sizeof(picoquic_alpn_list_t);
 
-void picoquic_demo_client_set_alpn_list(void* tls_context)
+void h3zero_client_set_alpn_list(void* tls_context)
 {
     int ret = 0;
 
@@ -114,7 +105,7 @@ picoquic_alpn_enum picoquic_parse_alpn_nz(char const* alpn, size_t len)
     return code;
 }
 
-int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic,
+int h3zero_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic,
     char const* sni, char const* alpn, uint32_t proposed_version, uint64_t current_time, 
     char const ** ticket_alpn, uint32_t * ticket_version)
 {
@@ -153,15 +144,17 @@ int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic
     }
     return ret;
 }
+#endif
 
+#if 0
 /*
  * Code common to H3 and H09 clients
  */
 
-static picoquic_demo_client_stream_ctx_t* picoquic_demo_client_find_stream(
+static h3zero_client_stream_ctx_t* h3zero_client_find_stream(
     picoquic_demo_callback_ctx_t* ctx, uint64_t stream_id)
 {
-    picoquic_demo_client_stream_ctx_t * stream_ctx = ctx->first_stream;
+    h3zero_client_stream_ctx_t * stream_ctx = ctx->first_stream;
 
     while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
         stream_ctx = stream_ctx->next_stream;
@@ -213,7 +206,8 @@ int demo_client_prepare_to_send(void * context, size_t space, uint64_t echo_leng
     return ret;
 }
 
-#if 0
+#endif
+
 /*
  * H3Zero client. This is a simple client that conforms to HTTP 3.0,
  * but the client implementation is barebone.
@@ -286,78 +280,20 @@ int h3zero_client_create_stream_request(
 
     return ret;
 }
-#endif
 
-/* HTTP 0.9 client. 
- * This is the client that was used for QUIC interop testing prior
- * to availability of HTTP 3.0. It allows for testing transport
- * functions without dependencies on the HTTP layer. Instead, it
- * uses the simplistic HTTP 0.9 definition, in which a command
- * would simply be "GET /document.html\n\r\n\r".
- */
-
-int h09_demo_client_prepare_stream_open_command(
-    uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, uint64_t post_size, char const * host, size_t * consumed)
-{
-
-    if (post_size == 0) {
-        if (path_len + 6 >= max_size) {
-            return -1;
-        }
-
-        command[0] = 'G';
-        command[1] = 'E';
-        command[2] = 'T';
-        command[3] = ' ';
-        if (path_len > 0) {
-            memcpy(&command[4], path, path_len);
-        }
-        command[path_len + 4] = '\r';
-        command[path_len + 5] = '\n';
-        command[path_len + 6] = 0;
-
-        *consumed = path_len + 6;
-    }
-    else {
-        size_t byte_index = 0;
-        char const * post_head = "POST ";
-        char const * post_middle = " HTTP/1.0\r\nHost: ";
-        char const * post_trail = "\r\nContent-Type: text/plain\r\n\r\n";
-        size_t host_len = (host == NULL) ? 0 : strlen(host);
-        if (path_len + host_len + strlen(post_head) + strlen(post_middle) + strlen(post_trail) >= max_size) {
-            return -1;
-        }
-        memcpy(command, post_head, strlen(post_head));
-        byte_index = strlen(post_head);
-        memcpy(command + byte_index, path, path_len);
-        byte_index += path_len;
-        memcpy(command + byte_index, post_middle, strlen(post_middle));
-        byte_index += strlen(post_middle);
-        if (host != NULL) {
-            memcpy(command + byte_index, host, host_len);
-        }
-        byte_index += host_len;
-        memcpy(command + byte_index, post_trail, strlen(post_trail));
-        byte_index += strlen(post_trail);
-        command[byte_index] = 0;
-        *consumed = byte_index;
-    }
-
-    return 0;
-}
-
+#if 0
 /*
  * Unified procedures used for H3 and H09 clients
  */
 
-static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
+static int h3zero_client_open_stream(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx,
     uint64_t stream_id, char const* doc_name, char const* fname, uint64_t post_size, uint64_t nb_repeat)
 {
     int ret = 0;
     uint8_t buffer[1024];
-    picoquic_demo_client_stream_ctx_t* stream_ctx = (picoquic_demo_client_stream_ctx_t*)
-        malloc(sizeof(picoquic_demo_client_stream_ctx_t));
+    h3zero_client_stream_ctx_t* stream_ctx = (h3zero_client_stream_ctx_t*)
+        malloc(sizeof(h3zero_client_stream_ctx_t));
 
     if (stream_ctx == NULL) {
 		fprintf(stdout, "Memory Error, cannot create stream context %d\n", (int)stream_id);
@@ -366,7 +302,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     else {
         ctx->nb_open_streams++;
         ctx->nb_client_streams++;
-        memset(stream_ctx, 0, sizeof(picoquic_demo_client_stream_ctx_t));
+        memset(stream_ctx, 0, sizeof(h3zero_client_stream_ctx_t));
         stream_ctx->next_stream = ctx->first_stream;
         ctx->first_stream = stream_ctx;
         stream_ctx->stream_id = stream_id + nb_repeat*4u;
@@ -475,8 +411,8 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     return ret;
 }
 
-static int picoquic_demo_client_close_stream(picoquic_cnx_t * cnx,
-    picoquic_demo_callback_ctx_t* ctx, picoquic_demo_client_stream_ctx_t* stream_ctx)
+static int h3zero_client_close_stream(picoquic_cnx_t * cnx,
+    picoquic_demo_callback_ctx_t* ctx, h3zero_client_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
     if (stream_ctx != NULL && stream_ctx->is_open) {
@@ -497,7 +433,7 @@ static int picoquic_demo_client_close_stream(picoquic_cnx_t * cnx,
     return ret;
 }
 
-int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
+int h3zero_client_start_streams(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx, uint64_t fin_stream_id)
 {
     int ret = 0;
@@ -507,7 +443,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
     if (fin_stream_id == PICOQUIC_DEMO_STREAM_ID_INITIAL) {
         switch (ctx->alpn) {
         case picoquic_alpn_http_3:
-            ret = h3zero_protocol_init(cnx);
+            ret = h3zero_client_init(cnx);
             break;
         default:
             break;
@@ -520,7 +456,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
         if (ctx->demo_stream[i].previous_stream_id == fin_stream_id) {
             uint64_t repeat_nb = 0;
             do {
-                ret = picoquic_demo_client_open_stream(cnx, ctx, ctx->demo_stream[i].stream_id,
+                ret = h3zero_client_open_stream(cnx, ctx, ctx->demo_stream[i].stream_id,
                     ctx->demo_stream[i].doc_name,
                     ctx->demo_stream[i].f_name,
                     (size_t)ctx->demo_stream[i].post_size,
@@ -541,7 +477,8 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int picoquic_demo_client_open_stream_file(picoquic_cnx_t* cnx, picoquic_demo_callback_ctx_t* ctx, picoquic_demo_client_stream_ctx_t* stream_ctx)
+/* TODO: isolate file handling, etc., in demo specific callback */
+int h3zero_client_open_stream_file(picoquic_cnx_t* cnx, picoquic_demo_callback_ctx_t* ctx, h3zero_client_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
 
@@ -562,15 +499,19 @@ int picoquic_demo_client_open_stream_file(picoquic_cnx_t* cnx, picoquic_demo_cal
 
     return ret;
 }
+#endif
 
-int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
+
+#if 0
+/* TODO: merge with server callback, make that part of h3zero common */
+int h3zero_client_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
     uint64_t fin_stream_id = PICOQUIC_DEMO_STREAM_ID_INITIAL;
     picoquic_demo_callback_ctx_t* ctx = (picoquic_demo_callback_ctx_t*)callback_ctx;
-    picoquic_demo_client_stream_ctx_t* stream_ctx = (picoquic_demo_client_stream_ctx_t *)v_stream_ctx;
+    h3zero_client_stream_ctx_t* stream_ctx = (h3zero_client_stream_ctx_t *)v_stream_ctx;
 
     ctx->last_interaction_time = picoquic_get_quic_time(cnx->quic);
     ctx->progress_observed = 1;
@@ -580,11 +521,11 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_stream_fin:
         /* Data arrival on stream #x, maybe with fin mark */
         if (stream_ctx == NULL) {
-            stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
+            stream_ctx = h3zero_client_find_stream(ctx, stream_id);
         }
         if (stream_ctx != NULL && stream_ctx->is_open) {
             if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
-                ret = picoquic_demo_client_open_stream_file(cnx, ctx, stream_ctx);
+                ret = h3zero_client_open_stream_file(cnx, ctx, stream_ctx);
             }
             if (ret == 0 && length > 0) {
                 switch (ctx->alpn) {
@@ -643,7 +584,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             }
 
             if (fin_or_event == picoquic_callback_stream_fin) {
-                if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
+                if (h3zero_client_close_stream(cnx, ctx, stream_ctx)) {
                     fin_stream_id = stream_id;
                     if (stream_id <= 64 && !ctx->no_print) {
                         fprintf(stdout, "Stream %" PRIu64 " ended after %" PRIu64 " bytes\n",
@@ -661,9 +602,9 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_stop_sending: /* Server asks client to reset stream #x */
         /* TODO: special case for uni streams. */
         if (stream_ctx == NULL) {
-            stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
+            stream_ctx = h3zero_client_find_stream(ctx, stream_id);
         }
-        if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
+        if (h3zero_client_close_stream(cnx, ctx, stream_ctx)) {
             fin_stream_id = stream_id;
             if (!ctx->no_print) {
                 fprintf(stdout, "Stream %" PRIu64 " reset after %" PRIu64 " bytes\n",
@@ -704,9 +645,9 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         /* Gap indication, when unreliable streams are supported */
         fprintf(stdout, "Received a gap indication.\n");
         if (stream_ctx == NULL) {
-            stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
+            stream_ctx = h3zero_client_find_stream(ctx, stream_id);
         }
-        if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
+        if (h3zero_client_close_stream(cnx, ctx, stream_ctx)) {
             fin_stream_id = stream_id;
             fprintf(stdout, "Stream %d reset after %d bytes\n",
                 (int)stream_id, (int)stream_ctx->received_length);
@@ -730,7 +671,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         ctx->connection_ready = 1;
         break;
     case picoquic_callback_request_alpn_list:
-        picoquic_demo_client_set_alpn_list((void*)bytes);
+        h3zero_client_set_alpn_list((void*)bytes);
         break;
     case picoquic_callback_set_alpn:
         ctx->alpn = picoquic_parse_alpn((const char*)bytes);
@@ -742,14 +683,16 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
 
     if (ret == 0 && fin_stream_id != PICOQUIC_DEMO_STREAM_ID_INITIAL) {
          /* start next batch of streams! */
-		 ret = picoquic_demo_client_start_streams(cnx, ctx, fin_stream_id);
+		 ret = h3zero_client_start_streams(cnx, ctx, fin_stream_id);
     }
 
     /* that's it */
     return ret;
 }
+#endif
 
-int picoquic_demo_client_initialize_context(
+#if 0
+int h3zero_client_initialize_context(
     picoquic_demo_callback_ctx_t* ctx,
     picoquic_demo_stream_desc_t const * demo_stream,
 	size_t nb_demo_streams,
@@ -767,8 +710,8 @@ int picoquic_demo_client_initialize_context(
 }
 
 
-static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
-    picoquic_demo_client_stream_ctx_t * stream_ctx)
+static void h3zero_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
+    h3zero_client_stream_ctx_t * stream_ctx)
 {
     int removed_from_context = 0;
 
@@ -789,7 +732,7 @@ static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ct
         removed_from_context = 1;
     }
     else {
-        picoquic_demo_client_stream_ctx_t * previous = ctx->first_stream;
+        h3zero_client_stream_ctx_t * previous = ctx->first_stream;
 
         while (previous != NULL) {
             if (previous->next_stream == stream_ctx) {
@@ -810,15 +753,18 @@ static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ct
     free(stream_ctx);
 }
 
-void picoquic_demo_client_delete_context(picoquic_demo_callback_ctx_t* ctx)
+void h3zero_client_delete_context(picoquic_demo_callback_ctx_t* ctx)
 {
-    picoquic_demo_client_stream_ctx_t * stream_ctx;
+    h3zero_client_stream_ctx_t * stream_ctx;
 
     while ((stream_ctx = ctx->first_stream) != NULL) {
-        picoquic_demo_client_delete_stream_context(ctx, stream_ctx);
+        h3zero_client_delete_stream_context(ctx, stream_ctx);
     }
 }
+#endif
 
+#if 0
+/* TODO: move to "utils" definition */
 char const * demo_client_parse_stream_spaces(char const * text) {
     while (*text == ' ' || *text == '\t' || *text == '\n' || *text == '\r') {
         text++;
@@ -997,7 +943,6 @@ char const * demo_client_parse_post_size(char const * text, uint64_t * post_size
     return text;
 }
 
-
 char const * demo_client_parse_stream_desc(char const * text, uint64_t default_stream, uint64_t default_previous,
     picoquic_demo_stream_desc_t * desc)
 {
@@ -1108,3 +1053,4 @@ int demo_client_parse_scenario_desc(char const * text, size_t * nb_streams, pico
 
     return ret;
 }
+#endif

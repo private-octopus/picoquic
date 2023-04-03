@@ -43,11 +43,13 @@ extern "C" {
 #define PICOHTTP_ALPN_H3_LATEST "h3-32"
 #define PICOHTTP_ALPN_HQ_LATEST "hq-32"
 
+#if 0
 typedef struct st_picohttp_server_parameters_t {
     char const* web_folder;
     picohttp_server_path_item_t* path_table;
     size_t path_table_nb;
 } picohttp_server_parameters_t;
+#endif
 
 /* Identify the path item based on the incoming path in GET or POST */
 

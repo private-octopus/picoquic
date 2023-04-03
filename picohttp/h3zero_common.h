@@ -92,10 +92,20 @@ extern "C" {
             } hq; /* h09 only */
         } ps; /* Protocol specific state */
         uint64_t stream_id;
+        /* Server state file management */
         uint64_t response_length;
         uint64_t echo_length;
         uint64_t echo_sent;
         uint64_t post_received;
+        /* Client state file management */
+        unsigned int is_open : 1;
+        unsigned int is_file_open : 1;
+        unsigned int flow_opened : 1;
+        uint64_t received_length;
+        uint64_t post_size;
+        uint64_t post_sent;
+        char* f_name;
+        /* Global state variables */
         uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
         char* file_path;
         FILE* F;
@@ -107,7 +117,7 @@ extern "C" {
 
     void* picohttp_stream_node_value(picosplay_node_t* node);
     void h3zero_delete_stream(picosplay_tree_t* http_stream_tree, picohttp_server_stream_ctx_t* stream_ctx);
-    picohttp_server_stream_ctx_t* picohttp_find_stream(picosplay_tree_t* stream_tree, uint64_t stream_id);
+    picohttp_server_stream_ctx_t* h3zero_find_stream(picosplay_tree_t* stream_tree, uint64_t stream_id);
     picohttp_server_stream_ctx_t* h3zero_find_or_create_stream(
         picoquic_cnx_t* cnx,
         uint64_t stream_id,
@@ -136,17 +146,18 @@ extern "C" {
     void h3zero_delete_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t prefix);
     void h3zero_delete_all_stream_prefixes(picoquic_cnx_t* cnx, h3zero_stream_prefixes_t* prefixes);
 
-    int h3zero_client_init(picoquic_cnx_t* cnx);
+    int h3zero_protocol_init(picoquic_cnx_t* cnx);
 
     /* Define the H3Zero server callback */
 
     typedef struct st_h3zero_server_callback_ctx_t {
         picosplay_tree_t h3_stream_tree;
+        /* connection wide tracking of stream prefixes */
+        h3zero_stream_prefixes_t stream_prefixes;
+        /* path table for call back contexts */
         picohttp_server_path_item_t * path_table;
         size_t path_table_nb;
         char const* web_folder;
-        /* connection wide tracking of stream prefixes */
-        h3zero_stream_prefixes_t stream_prefixes;
     } h3zero_server_callback_ctx_t;
 
     /* Callback management */
@@ -154,6 +165,36 @@ extern "C" {
         uint8_t* bytes, uint8_t* bytes_max,
         picohttp_server_stream_ctx_t* stream_ctx,
         picosplay_tree_t* stream_tree, h3zero_stream_prefixes_t* prefixes);
+
+    /* CLIENT DEFINITIONS 
+     */
+#if 1
+    int h3zero_client_create_stream_request(
+        uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed);
+#endif
+
+    /* Common callback definitions */
+    typedef struct st_picohttp_server_parameters_t {
+        char const* web_folder;
+        picohttp_server_path_item_t* path_table;
+        size_t path_table_nb;
+    } picohttp_server_parameters_t;
+
+    typedef struct st_h3zero_callback_ctx_t {
+        picosplay_tree_t h3_stream_tree;
+        picohttp_server_path_item_t * path_table;
+        size_t path_table_nb;
+        char const* web_folder;
+        /* connection wide tracking of stream prefixes */
+        h3zero_stream_prefixes_t stream_prefixes;
+        /* Flag  and variables used by clients*/
+        unsigned int no_disk : 1;
+        unsigned int no_print : 1;
+        unsigned int connection_closed : 1;
+        int nb_open_streams;
+        int nb_open_files;
+        uint32_t nb_client_streams;
+    } h3zero_callback_ctx_t;
 
 #ifdef __cplusplus
 }

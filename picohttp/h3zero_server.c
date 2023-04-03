@@ -33,9 +33,8 @@
 #include "siduck.h"
 #include "quicperf.h"
 /*
- * Create and delete server side connection context
- */
-
+* Create and delete server side connection context
+*/
 
 static h3zero_server_callback_ctx_t* h3zero_server_callback_create_context(picohttp_server_parameters_t* param)
 {
@@ -64,34 +63,14 @@ static void h3zero_server_callback_delete_context(picoquic_cnx_t* cnx, h3zero_se
 
     free(ctx);
 }
-
-
 /*
  * Incoming data call back.
  * Create context if not yet present.
  * Create stream context if not yet present.
  * Different behavior for unidir and bidir.
  */
-
-char const * h3zero_server_default_page = "\
-<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n<HTML>\r\n<HEAD>\r\n<TITLE>\
-Picoquic HTTP 3 service\
-</TITLE>\r\n</HEAD><BODY>\r\n\
-<h1>Simple HTTP 3 Responder</h1>\r\n\
-<p>GET / or GET /index.html returns this text</p>\r\n\
-<p>Get /NNNNN returns txt document of length NNNNN bytes(decimal)</p>\r\n\
-<p>Any other command will result in an error, and an empty response.</p>\r\n\
-<h1>Enjoy!</h1>\r\n\
-</BODY></HTML>\r\n";
-
-char const * h3zero_server_post_response_page = "\
-<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n<HTML>\r\n<HEAD>\r\n<TITLE>\
-Picoquic POST Response\
-</TITLE>\r\n</HEAD><BODY>\r\n\
-<h1>POST successful</h1>\r\n\
-<p>Received %d bytes.\r\n\
-</BODY></HTML>\r\n";
-
+extern char const* h3zero_server_default_page;
+extern char const* h3zero_server_post_response_page;
 
 /* Sanity check of path name to prevent directory traversal.
  * We use a simple command that check for file names mae of alpha,
@@ -447,13 +426,8 @@ static int h3zero_server_process_request_frame(
     return ret;
 }
 
-/* There are some streams, like unidir or server initiated bidir, that
- * require extra processing, such as tying to web transport
- * application.
- */
-
-
-int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
+/* TODO: remove this once merging with common is complete */
+static int h3zero_process_remote_stream_old(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t event,
     picohttp_server_stream_ctx_t* stream_ctx,
@@ -489,6 +463,7 @@ int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
     }
     return ret;
 }
+
 
 /* Server call back, data processing.
  * The bidir client streams can support either a GET or a POST command.
@@ -614,7 +589,7 @@ static int h3zero_server_callback_data(
     }
     else {
         /* process the unidir streams. */
-        ret = h3zero_process_remote_stream(cnx, stream_id, bytes, length,
+        ret = h3zero_process_remote_stream_old(cnx, stream_id, bytes, length,
             fin_or_event, stream_ctx, ctx);
     }
 

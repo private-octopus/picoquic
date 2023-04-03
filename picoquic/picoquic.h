@@ -1184,6 +1184,24 @@ uint64_t picoquic_get_rtt(picoquic_cnx_t* cnx);
 int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
         const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address);
 
+/* List of ALPN types used in session negotiation */
+
+#if 1
+typedef enum {
+    picoquic_alpn_undef = 0,
+    picoquic_alpn_http_0_9,
+    picoquic_alpn_http_3,
+    picoquic_alpn_siduck,
+    picoquic_alpn_quicperf
+} picoquic_alpn_enum;
+
+typedef struct st_picoquic_alpn_list_t {
+    picoquic_alpn_enum alpn_code;
+    char const* alpn_val;
+    size_t len;
+} picoquic_alpn_list_t;
+#endif
+
 #ifdef __cplusplus
 }
 #endif

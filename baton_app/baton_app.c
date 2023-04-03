@@ -202,7 +202,7 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
                 /* Perform the initialization, settings and QPACK streams
                  * TODO: record the streams as part of H3 context?
                  */
-                ret = h3zero_client_init(cnx);
+                ret = h3zero_protocol_init(cnx);
             }
         }
     }
