@@ -126,6 +126,7 @@ picohttp_server_stream_ctx_t * h3zero_find_or_create_stream(
 		else {
 			memset(stream_ctx, 0, sizeof(picohttp_server_stream_ctx_t));
 			stream_ctx->stream_id = stream_id;
+			stream_ctx->control_stream_id = UINT64_MAX;
 			stream_ctx->is_h3 = is_h3;
 			if (!IS_BIDIR_STREAM_ID(stream_id)) {
 				if (IS_LOCAL_STREAM_ID(stream_id, picoquic_is_client(cnx))) {
@@ -868,60 +869,82 @@ int h3zero_callback_client_data(picoquic_cnx_t* cnx,
 	if (stream_ctx == NULL) {
 		stream_ctx = h3zero_find_stream(&ctx->h3_stream_tree, stream_id);
 	}
-	if (stream_ctx != NULL && stream_ctx->is_open) {
-		if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
-			ret = h3zero_client_open_stream_file(cnx, ctx, stream_ctx);
+	if (IS_BIDIR_STREAM_ID(stream_id) && IS_LOCAL_STREAM_ID(stream_id, 1)) {
+		if (stream_ctx == NULL) {
+			fprintf(stdout, "unexpected data on local stream context: %" PRIu64 ".\n", stream_id);
+			ret = -1;
 		}
-		if (ret == 0 && length > 0) {
-			uint16_t error_found = 0;
-			size_t available_data = 0;
-			uint8_t* bytes_max = bytes + length;
-			while (bytes < bytes_max) {
-				bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->ps.stream_state, &available_data, &error_found);
-				if (bytes == NULL) {
-					ret = picoquic_close(cnx, error_found);
-					if (ret != 0) {
-						picoquic_log_app_message(cnx,
-							"Could not parse incoming data from stream %" PRIu64 ", error 0x%x", stream_id, error_found);
-					}
-					break;
-				}
-				else if (available_data > 0) {
-					if (!stream_ctx->flow_opened) {
-						if (stream_ctx->ps.stream_state.current_frame_length < 0x100000) {
-							stream_ctx->flow_opened = 1;
-						}
-						else if (cnx->cnx_state == picoquic_state_ready) {
-							stream_ctx->flow_opened = 1;
-							ret = picoquic_open_flow_control(cnx, stream_id, stream_ctx->ps.stream_state.current_frame_length);
-						}
-					}
-					if (ret == 0 && ctx->no_disk == 0) {
-						ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
+		else if (stream_ctx->is_open) {
+			if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
+				ret = h3zero_client_open_stream_file(cnx, ctx, stream_ctx);
+			}
+			if (ret == 0 && length > 0) {
+				uint16_t error_found = 0;
+				size_t available_data = 0;
+				uint8_t* bytes_max = bytes + length;
+				while (bytes < bytes_max) {
+					bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->ps.stream_state, &available_data, &error_found);
+					if (bytes == NULL) {
+						ret = picoquic_close(cnx, error_found);
 						if (ret != 0) {
 							picoquic_log_app_message(cnx,
-								"Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+								"Could not parse incoming data from stream %" PRIu64 ", error 0x%x", stream_id, error_found);
+						}
+						break;
+					}
+					else if (available_data > 0) {
+						if (!stream_ctx->flow_opened) {
+							if (stream_ctx->ps.stream_state.current_frame_length < 0x100000) {
+								stream_ctx->flow_opened = 1;
+							}
+							else if (cnx->cnx_state == picoquic_state_ready) {
+								stream_ctx->flow_opened = 1;
+								ret = picoquic_open_flow_control(cnx, stream_id, stream_ctx->ps.stream_state.current_frame_length);
+							}
+						}
+						if (ret == 0 && ctx->no_disk == 0) {
+							ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
+							if (ret != 0) {
+								picoquic_log_app_message(cnx,
+									"Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+							}
+						}
+						stream_ctx->received_length += available_data;
+						bytes += available_data;
+					}
+				}
+			}
+
+			if (fin_or_event == picoquic_callback_stream_fin) {
+				if (stream_ctx->path_callback != NULL) {
+					stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
+				}
+				else {
+					if (h3zero_client_close_stream(cnx, ctx, stream_ctx)) {
+						*fin_stream_id = stream_id;
+						if (stream_id <= 64 && !ctx->no_print) {
+							fprintf(stdout, "Stream %" PRIu64 " ended after %" PRIu64 " bytes\n",
+								stream_id, stream_ctx->received_length);
+						}
+						if (stream_ctx->received_length == 0) {
+							picoquic_log_app_message(cnx, "Stream %" PRIu64 " ended after %" PRIu64 " bytes, ret=0x%x",
+								stream_id, stream_ctx->received_length, ret);
 						}
 					}
-					stream_ctx->received_length += available_data;
-					bytes += available_data;
 				}
 			}
 		}
-
-		if (fin_or_event == picoquic_callback_stream_fin) {
-			if (h3zero_client_close_stream(cnx, ctx, stream_ctx)) {
-				*fin_stream_id = stream_id;
-				if (stream_id <= 64 && !ctx->no_print) {
-					fprintf(stdout, "Stream %" PRIu64 " ended after %" PRIu64 " bytes\n",
-						stream_id, stream_ctx->received_length);
-				}
-				if (stream_ctx->received_length == 0) {
-					picoquic_log_app_message(cnx, "Stream %" PRIu64 " ended after %" PRIu64 " bytes, ret=0x%x",
-						stream_id, stream_ctx->received_length, ret);
-				}
+		else if (stream_ctx->path_callback != NULL) {
+			stream_ctx->path_callback(cnx, bytes, length, picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
+			if (fin_or_event == picoquic_callback_stream_fin) {
+				/* FIN of the control stream is FIN of the whole session */
+				stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
 			}
 		}
+	}
+	else {
+		ret = h3zero_process_remote_stream(cnx, stream_id, bytes, length,
+			fin_or_event, stream_ctx, ctx);
 	}
 
 	return ret;

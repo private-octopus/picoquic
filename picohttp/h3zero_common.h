@@ -168,10 +168,8 @@ extern "C" {
 
     /* CLIENT DEFINITIONS 
      */
-#if 1
     int h3zero_client_create_stream_request(
         uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed);
-#endif
 
     /* Common callback definitions */
     typedef struct st_picohttp_server_parameters_t {
@@ -195,6 +193,13 @@ extern "C" {
         int nb_open_files;
         uint32_t nb_client_streams;
     } h3zero_callback_ctx_t;
+
+    h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters_t* param);
+    void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
+
+    int h3zero_callback(picoquic_cnx_t* cnx,
+        uint64_t stream_id, uint8_t* bytes, size_t length,
+        picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
 #ifdef __cplusplus
 }

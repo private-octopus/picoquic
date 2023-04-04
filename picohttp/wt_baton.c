@@ -457,12 +457,15 @@ void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx)
         else {
             picohttp_server_stream_ctx_t* stream_ctx =
                 (picohttp_server_stream_ctx_t*)picohttp_stream_node_value(next);
-            if (stream_ctx->control_stream_id == ctx->control_stream_id &&
-                stream_ctx->stream_id != ctx->control_stream_id) {
-                if (cnx != NULL) {
-                    picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
+            if (stream_ctx->control_stream_id == ctx->control_stream_id){
+                if (stream_ctx->stream_id == ctx->control_stream_id) {
+                    control_stream_ctx = stream_ctx;
+                } else {
+                    if (cnx != NULL) {
+                        picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
+                    }
+                    picosplay_delete(ctx->h3_stream_tree, next);
                 }
-                picosplay_delete(ctx->h3_stream_tree, next);
             }
             else {
                 previous = next;
@@ -470,7 +473,6 @@ void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx)
         }
     }
     /* Then free the control stream */
-    control_stream_ctx = wt_baton_find_stream(ctx, ctx->control_stream_id);
     if (control_stream_ctx != NULL) {
         picoquic_set_app_stream_ctx(cnx, ctx->control_stream_id, NULL);
         control_stream_ctx->path_callback = NULL;
@@ -513,6 +515,54 @@ void wt_baton_callback_free(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* s
  */
 
 int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_server_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t * app_ctx, picohttp_server_stream_ctx_t* stream_ctx)
+{
+    int ret = 0;
+
+    memset(ctx, 0, sizeof(wt_baton_ctx_t));
+    /* Init the stream tree */
+    /* Do we use the path table for the client? or the web folder? */
+    /* connection wide tracking of stream prefixes */
+    if (h3_ctx == NULL) {
+        /* init of stream splay */
+        ctx->h3_stream_tree = &ctx->local_h3_tree;
+        h3zero_init_stream_tree(ctx->h3_stream_tree);
+        /* init of local prefix table. */
+        ctx->stream_prefixes = &ctx->local_stream_prefixes;
+    }
+    else {
+        /* set references to existing objects */
+        ctx->h3_stream_tree = &h3_ctx->h3_stream_tree;
+        ctx->stream_prefixes = &h3_ctx->stream_prefixes;
+    }
+
+    /* Connection flags connection_ready and connection_closed are left
+    * to zero by default. */
+    /* init the baton protocol will be done in the "accept" call for server */
+    /* init the global parameters */
+    if (app_ctx != NULL) {
+        ctx->nb_turns_required = app_ctx->nb_turns_required;
+    }
+    else {
+        ctx->nb_turns_required = 7;
+    }
+
+    if (stream_ctx != NULL) {
+        /* Register the control stream and the stream id */
+        ctx->control_stream_id = stream_ctx->stream_id;
+        ret = h3zero_declare_stream_prefix(ctx->stream_prefixes, stream_ctx->stream_id, wt_baton_callback, ctx);
+    }
+    else {
+        /* Poison the control stream ID field so errors can be detected. */
+        ctx->control_stream_id = UINT64_MAX;
+    }
+
+    if (ret != 0) {
+        /* Todo: undo init. */
+    }
+    return ret;
+}
+
+int wt_baton_ctx_init_new(wt_baton_ctx_t* ctx, h3zero_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t * app_ctx, picohttp_server_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
 

@@ -33,6 +33,7 @@
 #include "h3zero.h"
 #include "h3zero_common.h"
 #include "demoserver.h"
+#include "pico_webtransport.h"
 #include "wt_baton.h"
 
 #ifdef _WINDOWS
@@ -79,17 +80,10 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
     int ret = 0;
     picohttp_server_parameters_t server_param = { 0 };
     picoquic_connection_id_t initial_cid = { {0x77, 0x74, 0xba, 0, 0, 0, 0, 0}, 8 };
+    picohttp_server_stream_ctx_t* stream_ctx = NULL;
+    h3zero_callback_ctx_t* h3zero_cb = NULL;
 
     initial_cid.id[3] = test_id;
-    /*
-    * Should instead initialize the baton context, or maybe the baton app context:
-    *
-    * int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_server_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t * app_ctx, picohttp_server_stream_ctx_t* stream_ctx)
-
-    ret = picoquic_demo_client_initialize_context(&callback_ctx, demo_scenario, nb_scenario, alpn, 0, 0);
-    callback_ctx.out_dir = out_dir;
-    callback_ctx.no_print = 1;
-    */
 
     if (ret == 0) {
         ret = tls_api_init_ctx_ex(&test_ctx,
@@ -118,12 +112,35 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
     * We want to replace that by the demo client callback */
 
     if (ret == 0) {
-        /* Initialize the callback context. First, create a bidir stream */
-        wt_baton_ctx_init(&baton_ctx, NULL, NULL, NULL);
-        baton_ctx.server_path = baton_path;
-        baton_ctx.nb_turns_required = nb_turns_required;
+        /* use the generic H3 callback */
         /* Set the client callback context */
-        picoquic_set_callback(test_ctx->cnx_client, wt_baton_client_callback, &baton_ctx);
+        h3zero_cb = h3zero_callback_create_context(NULL);
+        if (h3zero_cb == NULL) {
+            ret = 1;
+        }
+        else {
+            picoquic_set_callback(test_ctx->cnx_client, h3zero_callback, h3zero_cb);
+            /* Initialize the callback context. First, create a bidir stream */
+            wt_baton_ctx_init_new(&baton_ctx, h3zero_cb, NULL, NULL);
+            baton_ctx.is_client = 1;
+            baton_ctx.server_path = baton_path;
+            baton_ctx.nb_turns_required = nb_turns_required;
+            /* Create a stream context for the connect call. */
+            stream_ctx = wt_baton_create_stream(test_ctx->cnx_client, 1, &baton_ctx);
+            if (stream_ctx == NULL) {
+                ret = -1;
+            }
+            else {
+                baton_ctx.connection_ready = 1;
+                baton_ctx.is_client = 1;
+                stream_ctx->is_open = 1;
+                stream_ctx->path_callback = wt_baton_callback;
+                stream_ctx->path_callback_ctx = &baton_ctx;
+                /* send the WT CONNECT */
+                ret = picowt_connect(test_ctx->cnx_client, stream_ctx, &h3zero_cb->stream_prefixes, baton_ctx.server_path, wt_baton_callback, &baton_ctx);
+            }
+        }
+
         /* Initialize the server -- should include the path setup for connect action */
         memset(&server_param, 0, sizeof(picohttp_server_parameters_t));
         server_param.web_folder = NULL;
@@ -183,12 +200,12 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
         }
     }
 
+    wt_baton_ctx_release(NULL, &baton_ctx);
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
     }
-
-    wt_baton_ctx_release(NULL, &baton_ctx);
 
     return ret;
 }
