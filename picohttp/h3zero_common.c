@@ -875,7 +875,7 @@ int h3zero_callback_client_data(picoquic_cnx_t* cnx,
 			ret = -1;
 		}
 		else if (stream_ctx->is_open) {
-			if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
+			if (!stream_ctx->is_file_open && ctx->no_disk == 0 && stream_ctx->file_path != NULL) {
 				ret = h3zero_client_open_stream_file(cnx, ctx, stream_ctx);
 			}
 			if (ret == 0 && length > 0) {
