@@ -354,7 +354,7 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
     void* path_app_ctx)
 {
     int ret = 0;
-    printf("wt_baton_callback: %d\n", (int)event);
+    DBG_PRINTF("wt_baton_callback: %d, %" PRIu64 "\n", (int)event);
     switch (event) {
     case picohttp_callback_connecting:
         ret = wt_baton_connecting(cnx, stream_ctx, path_app_ctx);
@@ -457,15 +457,15 @@ void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx)
         else {
             picohttp_server_stream_ctx_t* stream_ctx =
                 (picohttp_server_stream_ctx_t*)picohttp_stream_node_value(next);
-            if (stream_ctx->control_stream_id == ctx->control_stream_id){
-                if (stream_ctx->stream_id == ctx->control_stream_id) {
-                    control_stream_ctx = stream_ctx;
-                } else {
-                    if (cnx != NULL) {
-                        picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
-                    }
-                    picosplay_delete(ctx->h3_stream_tree, next);
+            if (stream_ctx->stream_id == ctx->control_stream_id) {
+                control_stream_ctx = stream_ctx;
+                previous = next;
+            }
+            else if (stream_ctx->control_stream_id == ctx->control_stream_id) {
+                if (cnx != NULL) {
+                    picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
                 }
+                picosplay_delete_hint(ctx->h3_stream_tree, next);
             }
             else {
                 previous = next;
@@ -474,7 +474,9 @@ void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx)
     }
     /* Then free the control stream */
     if (control_stream_ctx != NULL) {
-        picoquic_set_app_stream_ctx(cnx, ctx->control_stream_id, NULL);
+        if (cnx != NULL) {
+            picoquic_set_app_stream_ctx(cnx, ctx->control_stream_id, NULL);
+        }
         control_stream_ctx->path_callback = NULL;
         control_stream_ctx->path_callback_ctx = NULL;
         h3zero_delete_stream(ctx->h3_stream_tree, control_stream_ctx);
