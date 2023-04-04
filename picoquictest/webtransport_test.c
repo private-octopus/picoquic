@@ -202,6 +202,11 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
 
     wt_baton_ctx_release(test_ctx->cnx_client, &baton_ctx);
 
+    if (h3zero_cb != NULL)
+    {
+        h3zero_callback_delete_context(test_ctx->cnx_client, h3zero_cb);
+    }
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
