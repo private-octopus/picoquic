@@ -308,7 +308,6 @@ uint8_t* h3zero_parse_incoming_remote_stream(
 		}
 		if (stream_state->frame_header_read >= frame_type_length) {
 			int is_wt_context_id_required = 0;
-			int is_error = 0;
 
 			(void)picoquic_frames_varint_decode(stream_state->frame_header, stream_state->frame_header + frame_type_length,
 				&stream_state->current_frame_type);
@@ -319,7 +318,7 @@ uint8_t* h3zero_parse_incoming_remote_stream(
 					is_wt_context_id_required = 1;
 					break;
 				default:
-					is_error = 1;
+					bytes = NULL;
 					break;
 				}
 			}
@@ -328,7 +327,7 @@ uint8_t* h3zero_parse_incoming_remote_stream(
 				case h3zero_stream_type_control: /* used to send/receive setting frame and other control frames. Ignored for now. */
 					break;
 				case h3zero_stream_type_push: /* Push type not supported in h3zero settings */
-					is_error = 1;
+					bytes = NULL;
 					break;
 				case h3zero_stream_type_qpack_encoder: /* not required since not using dynamic table */
 					break;
@@ -343,31 +342,34 @@ uint8_t* h3zero_parse_incoming_remote_stream(
 				}
 			}
 
-			if (!is_wt_context_id_required) {
-				stream_state->frame_header_parsed = 1;
-			} else {
-				size_t context_id_length = 1;
-				while (stream_state->frame_header_read < frame_type_length + 1 && bytes < bytes_max) {
-					stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
-				}
-				context_id_length = VARINT_LEN_T((stream_state->frame_header + frame_type_length), size_t);
-				while (stream_state->frame_header_read < frame_type_length + context_id_length && bytes < bytes_max) {
-					stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
-				}
-				if (stream_state->frame_header_read >= frame_type_length  + context_id_length) {
-					h3zero_stream_prefix_t* stream_prefix;
-
-					(void)picoquic_frames_varint_decode(stream_state->frame_header + frame_type_length, 
-						stream_state->frame_header + frame_type_length + context_id_length, &stream_ctx->control_stream_id);
-					stream_prefix = h3zero_find_stream_prefix(prefixes, stream_ctx->control_stream_id);
-					if (stream_prefix == NULL) {
-						bytes = NULL;
-					}
-					else {
-						stream_ctx->path_callback = stream_prefix->function_call;
-						stream_ctx->path_callback_ctx = stream_prefix->function_ctx;
-					}
+			if (bytes != NULL) {
+				if (!is_wt_context_id_required) {
 					stream_state->frame_header_parsed = 1;
+				}
+				else {
+					size_t context_id_length = 1;
+					while (stream_state->frame_header_read < frame_type_length + 1 && bytes < bytes_max) {
+						stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
+					}
+					context_id_length = VARINT_LEN_T((stream_state->frame_header + frame_type_length), size_t);
+					while (stream_state->frame_header_read < frame_type_length + context_id_length && bytes < bytes_max) {
+						stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
+					}
+					if (stream_state->frame_header_read >= frame_type_length + context_id_length) {
+						h3zero_stream_prefix_t* stream_prefix;
+
+						(void)picoquic_frames_varint_decode(stream_state->frame_header + frame_type_length,
+							stream_state->frame_header + frame_type_length + context_id_length, &stream_ctx->control_stream_id);
+						stream_prefix = h3zero_find_stream_prefix(prefixes, stream_ctx->control_stream_id);
+						if (stream_prefix == NULL) {
+							bytes = NULL;
+						}
+						else {
+							stream_ctx->path_callback = stream_prefix->function_call;
+							stream_ctx->path_callback_ctx = stream_prefix->function_ctx;
+						}
+						stream_state->frame_header_parsed = 1;
+					}
 				}
 			}
 		}
@@ -386,10 +388,10 @@ uint8_t* h3zero_parse_incoming_remote_stream(
 h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters_t* param)
 {
 	h3zero_callback_ctx_t* ctx = (h3zero_callback_ctx_t*)
-		malloc(sizeof(h3zero_server_callback_ctx_t));
+		malloc(sizeof(h3zero_callback_ctx_t));
 
 	if (ctx != NULL) {
-		memset(ctx, 0, sizeof(h3zero_server_callback_ctx_t));
+		memset(ctx, 0, sizeof(h3zero_callback_ctx_t));
 
 		h3zero_init_stream_tree(&ctx->h3_stream_tree);
 
@@ -408,38 +410,6 @@ void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* 
 	h3zero_delete_all_stream_prefixes(cnx, &ctx->stream_prefixes);
 	picosplay_empty_tree(&ctx->h3_stream_tree);
 	free(ctx);
-}
-
-
-static int h3zero_init_connection(picoquic_cnx_t* cnx)
-{
-	uint8_t decoder_stream_head = 0x03;
-	uint8_t encoder_stream_head = 0x02;
-
-	int ret = picoquic_add_to_stream(cnx, 3, h3zero_default_setting_frame, h3zero_default_setting_frame_size, 0);
-
-	if (ret == 0) {
-		/* set the stream #3 to be the next stream to write! */
-		ret = picoquic_set_stream_priority(cnx, 3, 0);
-	}
-
-	if (ret == 0) {
-		/* set the stream 7 as the encoder stream, although we do not actually create dynamic codes. */
-		ret = picoquic_add_to_stream(cnx, 7, &encoder_stream_head, 1, 0);
-		if (ret == 0) {
-			ret = picoquic_set_stream_priority(cnx, 7, 1);
-		}
-	}
-
-	if (ret == 0) {
-		/* set the stream 11 as the decoder stream, although we do not actually create dynamic codes. */
-		ret = picoquic_add_to_stream(cnx, 11, &decoder_stream_head, 1, 0);
-		if (ret == 0) {
-			ret = picoquic_set_stream_priority(cnx, 11, 1);
-		}
-	}
-
-	return ret;
 }
 
 /* There are some streams, like unidir or server initiated bidir, that

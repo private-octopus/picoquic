@@ -118,4 +118,4 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
-#endif WT_BATON_H
+#endif /* WT_BATON_H */
