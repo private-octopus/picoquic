@@ -305,15 +305,14 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
     if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
         /* Closing the control stream implies closing the baton context. 
          */
+        picoquic_log_app_message(cnx, "FIN on control stream. Closing the connection.\n");
         ret = wt_baton_close_session(cnx, baton_ctx);
         baton_ctx->baton_state = wt_baton_state_closed;
         if (baton_ctx->is_client) {
             wt_baton_ctx_release(cnx, baton_ctx);
-            picoquic_log_app_message(cnx, "FIN on control stream. Closing the connection.\n");
             ret = picoquic_close(cnx, 0);
         }
         else {
-            picoquic_log_app_message(cnx, "FIN on control stream. Closing the session.\n");
             wt_baton_ctx_free(cnx, baton_ctx);
         }
     }
@@ -413,7 +412,28 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
         ret = wt_baton_stream_reset(cnx, stream_ctx, path_app_ctx);
         break;
     case picohttp_callback_free: /* Used during clean up the stream. Only cause the freeing of memory. */
-        wt_baton_callback_free(cnx, stream_ctx, path_app_ctx);
+        if (stream_ctx == NULL) {
+            wt_baton_ctx_t* bacon_ctx = (wt_baton_ctx_t*)path_app_ctx;
+            /* Need to find the control stream context. A bit of weirdness as we have not unified the callbacks yet. */
+            if (cnx->client_mode) {
+                h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
+                if (h3_ctx != NULL) {
+                    stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, bacon_ctx->control_stream_id);
+                }
+            }
+            else
+            {
+                h3zero_server_callback_ctx_t* h3_ctx = (h3zero_server_callback_ctx_t*)picoquic_get_callback_context(cnx);
+                if (h3_ctx != NULL) {
+                    stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, bacon_ctx->control_stream_id);
+                }
+            }
+        }
+        if (stream_ctx != NULL) {
+            stream_ctx->path_callback = NULL;
+            stream_ctx->path_callback_ctx = NULL;
+            wt_baton_callback_free(cnx, stream_ctx, path_app_ctx);
+        }
         break;
     default:
         /* protocol error */
@@ -463,7 +483,7 @@ void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx)
     if (cnx != NULL) {
         picoquic_log_app_message(cnx, "Freeing prefix for control stream %"PRIu64, ctx->control_stream_id);
     }
-    h3zero_delete_stream_prefix(ctx->stream_prefixes, ctx->control_stream_id);
+    h3zero_delete_stream_prefix(cnx, ctx->stream_prefixes, ctx->control_stream_id);
     /* Free the streams created for this session */
     while (1) {
         picosplay_node_t* next = (previous == NULL) ? picosplay_first(ctx->h3_stream_tree) : picosplay_next(previous);
@@ -512,18 +532,25 @@ void wt_baton_callback_free(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* s
 {
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)v_ctx;
 
+    if (stream_ctx != NULL && stream_ctx->stream_id == stream_ctx->control_stream_id && stream_ctx->stream_id == baton_ctx->control_stream_id) {
 #if 1
-    if (baton_ctx->control_stream_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
-    if (stream_ctx != NULL && stream_ctx->stream_id == baton_ctx->control_stream_id) {
-        if (cnx != NULL) {
-            picoquic_log_app_message(cnx, "Callback free(%" PRIu64 "): clearing the baton context.\n",
-                stream_ctx->stream_id);
+        if (baton_ctx->control_stream_id != 0) {
+            DBG_PRINTF("%s", "Bug");
         }
-        if (baton_ctx->is_client) {
+#endif
+        
+        if (!baton_ctx->is_client) {
+            if (cnx != NULL) {
+                picoquic_log_app_message(cnx, "Callback free(%" PRIu64 "): clearing the baton context.\n",
+                    stream_ctx->stream_id);
+            }
             wt_baton_ctx_free(cnx, baton_ctx);
+        }
+        else {
+            if (cnx != NULL) {
+                picoquic_log_app_message(cnx, "Callback free(%" PRIu64 "): do nothing as this the client.\n",
+                    stream_ctx->stream_id);
+            }
         }
     }
 }

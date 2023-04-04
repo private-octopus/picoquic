@@ -143,7 +143,7 @@ extern "C" {
 
     h3zero_stream_prefix_t* h3zero_find_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t prefix);
     int h3zero_declare_stream_prefix(h3zero_stream_prefixes_t * prefixes, uint64_t prefix, picohttp_post_data_cb_fn function_call, void* function_ctx);
-    void h3zero_delete_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t prefix);
+    void h3zero_delete_stream_prefix(picoquic_cnx_t * cnx, h3zero_stream_prefixes_t* prefixes, uint64_t prefix);
     void h3zero_delete_all_stream_prefixes(picoquic_cnx_t* cnx, h3zero_stream_prefixes_t* prefixes);
 
     int h3zero_protocol_init(picoquic_cnx_t* cnx);

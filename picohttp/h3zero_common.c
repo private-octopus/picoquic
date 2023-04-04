@@ -198,7 +198,7 @@ int h3zero_declare_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t pr
 	return ret;
 }
 
-void h3zero_delete_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t prefix)
+void h3zero_delete_stream_prefix(picoquic_cnx_t * cnx, h3zero_stream_prefixes_t* prefixes, uint64_t prefix)
 {
 	h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(prefixes, prefix);
 	if (prefix_ctx != NULL) {
@@ -214,6 +214,11 @@ void h3zero_delete_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t pr
 		else {
 			prefix_ctx->next->previous = prefix_ctx->previous;
 		}
+		/* find stream context */
+		if (prefix_ctx->function_call != NULL) {
+			prefix_ctx->function_call(cnx, NULL, 0, picohttp_callback_free, NULL, prefix_ctx->function_ctx);
+		}
+
 		free(prefix_ctx);
 	}
 }
@@ -225,7 +230,7 @@ void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_stream_prefi
 	while ((next = prefixes->first) != NULL) {
 		if (prefixes->first == next){
 			/* the prefix was not deleted as part of app cleanup */
-			h3zero_delete_stream_prefix(prefixes, next->prefix);
+			h3zero_delete_stream_prefix(cnx, prefixes, next->prefix);
 		}
 	}
 }

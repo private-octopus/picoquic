@@ -114,7 +114,7 @@ int picowt_connect(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
 
         if (ret != 0) {
             /* remove the stream prefix */
-            h3zero_delete_stream_prefix(stream_prefixes, stream_ctx->stream_id);
+            h3zero_delete_stream_prefix(cnx, stream_prefixes, stream_ctx->stream_id);
         }
     }
     return ret;
