@@ -223,11 +223,6 @@ void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_stream_prefi
 	h3zero_stream_prefix_t* next;
 
 	while ((next = prefixes->first) != NULL) {
-		/* Request the app to clean up its memory */
-		if (next->function_call != NULL) {
-			(void)next->function_call(cnx, NULL, 0, picohttp_callback_free,
-				NULL, next->function_ctx);
-		}
 		if (prefixes->first == next){
 			/* the prefix was not deleted as part of app cleanup */
 			h3zero_delete_stream_prefix(prefixes, next->prefix);

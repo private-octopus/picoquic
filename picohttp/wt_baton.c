@@ -412,7 +412,7 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
         /* If control stream: abandon the whole connection. */
         ret = wt_baton_stream_reset(cnx, stream_ctx, path_app_ctx);
         break;
-    case picohttp_callback_free: /* Used during clean up the stream. If control stream, will free all data from context */
+    case picohttp_callback_free: /* Used during clean up the stream. Only cause the freeing of memory. */
         wt_baton_callback_free(cnx, stream_ctx, path_app_ctx);
         break;
     default:
@@ -523,9 +523,6 @@ void wt_baton_callback_free(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* s
                 stream_ctx->stream_id);
         }
         if (baton_ctx->is_client) {
-            wt_baton_ctx_release(cnx, baton_ctx);
-        }
-        else {
             wt_baton_ctx_free(cnx, baton_ctx);
         }
     }
