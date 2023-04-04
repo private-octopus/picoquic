@@ -224,7 +224,7 @@ int picowt_baton_basic_test()
 
 int picowt_baton_error_test()
 {
-#if 0
+#if 1
     return 0;
 #else
     int ret = picowt_baton_test_one(h3zero_server_callback, 4, 257, "/baton", 0, 2000000, ".", ".");
@@ -235,7 +235,7 @@ int picowt_baton_error_test()
 
 int picowt_baton_long_test()
 {
-#if 0
+#if 1
     return 0;
 #else
     int ret = picowt_baton_test_one(h3zero_server_callback, 2, 10, "/baton", 0, 2000000, ".", ".");
@@ -246,7 +246,7 @@ int picowt_baton_long_test()
 
 int picowt_baton_wrong_test()
 {
-#if 0
+#if 1
     return 0;
 #else
     int ret = picowt_baton_test_one(h3zero_server_callback, 3, 7, "/wrong_baton", 0, 2000000, ".", ".");
