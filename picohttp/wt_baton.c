@@ -88,6 +88,11 @@
 int wt_baton_close_session(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx)
 {
     int ret = 0;
+#if 1
+    if (baton_ctx->control_stream_id != 0) {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
     picohttp_server_stream_ctx_t* stream_ctx = wt_baton_find_stream(baton_ctx, baton_ctx->control_stream_id);
 
     if (stream_ctx != NULL && !stream_ctx->ps.stream_state.is_fin_sent) {
@@ -292,6 +297,11 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
 
     stream_ctx->ps.stream_state.is_fin_received = 1;
+#if 1
+    if (baton_ctx->control_stream_id != 0) {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
     if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
         /* Closing the control stream implies closing the baton context. 
          */
@@ -354,7 +364,7 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
     void* path_app_ctx)
 {
     int ret = 0;
-    DBG_PRINTF("wt_baton_callback: %d, %" PRIu64 "\n", (int)event);
+    DBG_PRINTF("wt_baton_callback: %d, %" PRIi64 "\n", (int)event, (stream_ctx == NULL)?(int64_t)-1:(int64_t)stream_ctx->stream_id);
     switch (event) {
     case picohttp_callback_connecting:
         ret = wt_baton_connecting(cnx, stream_ctx, path_app_ctx);
@@ -443,6 +453,12 @@ void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx)
 {
     picohttp_server_stream_ctx_t* control_stream_ctx = NULL;
     picosplay_node_t* previous = NULL;
+
+#if 1
+    if (ctx->control_stream_id != 0) {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
     /* dereference the control stream ID */
     if (cnx != NULL) {
         picoquic_log_app_message(cnx, "Freeing prefix for control stream %"PRIu64, ctx->control_stream_id);
@@ -496,6 +512,11 @@ void wt_baton_callback_free(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* s
 {
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)v_ctx;
 
+#if 1
+    if (baton_ctx->control_stream_id != 0) {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
     if (stream_ctx != NULL && stream_ctx->stream_id == baton_ctx->control_stream_id) {
         if (cnx != NULL) {
             picoquic_log_app_message(cnx, "Callback free(%" PRIu64 "): clearing the baton context.\n",
