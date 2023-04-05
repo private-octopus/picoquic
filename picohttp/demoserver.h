@@ -55,10 +55,12 @@ typedef struct st_picohttp_server_parameters_t {
 
 int picohttp_find_path_item(const uint8_t* path, size_t path_length, const picohttp_server_path_item_t* path_table, size_t path_table_nb);
 
+#if 0
 /* Define the H3Zero server callback function */
 int h3zero_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
+#endif
 
 /* Define value for default pages */
 

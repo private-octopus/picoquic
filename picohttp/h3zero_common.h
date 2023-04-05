@@ -148,18 +148,6 @@ extern "C" {
 
     int h3zero_protocol_init(picoquic_cnx_t* cnx);
 
-    /* Define the H3Zero server callback */
-
-    typedef struct st_h3zero_server_callback_ctx_t {
-        picosplay_tree_t h3_stream_tree;
-        /* connection wide tracking of stream prefixes */
-        h3zero_stream_prefixes_t stream_prefixes;
-        /* path table for call back contexts */
-        picohttp_server_path_item_t * path_table;
-        size_t path_table_nb;
-        char const* web_folder;
-    } h3zero_server_callback_ctx_t;
-
     /* Callback management */
     uint8_t* h3zero_parse_incoming_remote_stream(
         uint8_t* bytes, uint8_t* bytes_max,

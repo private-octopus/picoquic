@@ -264,15 +264,15 @@ int wt_baton_accept(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     wt_baton_app_ctx_t* app_ctx = (wt_baton_app_ctx_t*)path_app_ctx;
-    h3zero_server_callback_ctx_t* h3_ctx = (h3zero_server_callback_ctx_t*)picoquic_get_callback_context(cnx);
+    h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)malloc(sizeof(wt_baton_ctx_t));
-    picoquic_log_app_message(cnx, "allocated baton context size(%zu), control stream %" PRIu64, sizeof(wt_baton_ctx_t), stream_ctx->stream_id);
     if (baton_ctx == NULL) {
         ret = -1;
     }
     else {
+        picoquic_log_app_message(cnx, "allocated baton context size(%zu), control stream %" PRIu64, sizeof(wt_baton_ctx_t), stream_ctx->stream_id);
         /* register the incoming stream ID */
-        ret = wt_baton_ctx_init(baton_ctx, h3_ctx, app_ctx, stream_ctx);
+        ret = wt_baton_ctx_init_new(baton_ctx, h3_ctx, app_ctx, stream_ctx);
         if (ret == 0) {
             stream_ctx->ps.stream_state.is_web_transport = 1;
             stream_ctx->path_callback = wt_baton_callback;
@@ -310,6 +310,7 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
         baton_ctx->baton_state = wt_baton_state_closed;
         if (baton_ctx->is_client) {
             wt_baton_ctx_release(cnx, baton_ctx);
+            baton_ctx->connection_closed = 1;
             ret = picoquic_close(cnx, 0);
         }
         else {
@@ -414,6 +415,12 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
     case picohttp_callback_free: /* Used during clean up the stream. Only cause the freeing of memory. */
         if (stream_ctx == NULL) {
             wt_baton_ctx_t* bacon_ctx = (wt_baton_ctx_t*)path_app_ctx;
+#if 1
+            h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
+            if (h3_ctx != NULL) {
+                stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, bacon_ctx->control_stream_id);
+            }
+#else
             /* Need to find the control stream context. A bit of weirdness as we have not unified the callbacks yet. */
             if (cnx->client_mode) {
                 h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
@@ -428,10 +435,12 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
                     stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, bacon_ctx->control_stream_id);
                 }
             }
+#endif
+            if (stream_ctx == NULL) {
+                picoquic_log_app_message(cnx, "cannot find context for freeing stream %" PRIu64, bacon_ctx->control_stream_id);
+            }
         }
         if (stream_ctx != NULL) {
-            stream_ctx->path_callback = NULL;
-            stream_ctx->path_callback_ctx = NULL;
             wt_baton_callback_free(cnx, stream_ctx, path_app_ctx);
         }
         break;
@@ -483,6 +492,7 @@ void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx)
     if (cnx != NULL) {
         picoquic_log_app_message(cnx, "Freeing prefix for control stream %"PRIu64, ctx->control_stream_id);
     }
+    /* TODO: removing the stream prefix removes visibility of the associated memory */
     h3zero_delete_stream_prefix(cnx, ctx->stream_prefixes, ctx->control_stream_id);
     /* Free the streams created for this session */
     while (1) {
@@ -513,8 +523,9 @@ void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx)
         if (cnx != NULL) {
             picoquic_set_app_stream_ctx(cnx, ctx->control_stream_id, NULL);
         }
-        control_stream_ctx->path_callback = NULL;
-        control_stream_ctx->path_callback_ctx = NULL;
+        else {
+            DBG_PRINTF("Deleting context without updating stream %" PRIu64, ctx->control_stream_id);
+        }
         h3zero_delete_stream(ctx->h3_stream_tree, control_stream_ctx);
     }
 }
@@ -523,6 +534,9 @@ void wt_baton_ctx_free(picoquic_cnx_t * cnx, wt_baton_ctx_t* ctx)
 {
     if (cnx != NULL) {
         picoquic_log_app_message(cnx, "Freeing baton context, %zu bytes", sizeof(wt_baton_ctx_t));
+    }
+    else {
+        DBG_PRINTF("%s", "calling wt_baton_ctx_free with NULL cnx");
     }
     wt_baton_ctx_release(cnx, ctx);
     free(ctx);
@@ -556,59 +570,8 @@ void wt_baton_callback_free(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* s
 }
 
 /* Initialize the content of a wt_baton context.
-* We need a nuanced behavior, depending on whether this is a native baton client,
-* or piggybacking on an HTTP server. In the latter case, we reuse the H3
-* stream tree already managed in the H3 server context.
- */
-
-int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_server_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t * app_ctx, picohttp_server_stream_ctx_t* stream_ctx)
-{
-    int ret = 0;
-
-    memset(ctx, 0, sizeof(wt_baton_ctx_t));
-    /* Init the stream tree */
-    /* Do we use the path table for the client? or the web folder? */
-    /* connection wide tracking of stream prefixes */
-    if (h3_ctx == NULL) {
-        /* init of stream splay */
-        ctx->h3_stream_tree = &ctx->local_h3_tree;
-        h3zero_init_stream_tree(ctx->h3_stream_tree);
-        /* init of local prefix table. */
-        ctx->stream_prefixes = &ctx->local_stream_prefixes;
-    }
-    else {
-        /* set references to existing objects */
-        ctx->h3_stream_tree = &h3_ctx->h3_stream_tree;
-        ctx->stream_prefixes = &h3_ctx->stream_prefixes;
-    }
-
-    /* Connection flags connection_ready and connection_closed are left
-    * to zero by default. */
-    /* init the baton protocol will be done in the "accept" call for server */
-    /* init the global parameters */
-    if (app_ctx != NULL) {
-        ctx->nb_turns_required = app_ctx->nb_turns_required;
-    }
-    else {
-        ctx->nb_turns_required = 7;
-    }
-
-    if (stream_ctx != NULL) {
-        /* Register the control stream and the stream id */
-        ctx->control_stream_id = stream_ctx->stream_id;
-        ret = h3zero_declare_stream_prefix(ctx->stream_prefixes, stream_ctx->stream_id, wt_baton_callback, ctx);
-    }
-    else {
-        /* Poison the control stream ID field so errors can be detected. */
-        ctx->control_stream_id = UINT64_MAX;
-    }
-
-    if (ret != 0) {
-        /* Todo: undo init. */
-    }
-    return ret;
-}
-
+* TODO: replace internal pointers by pointer to h3zero context
+*/
 int wt_baton_ctx_init_new(wt_baton_ctx_t* ctx, h3zero_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t * app_ctx, picohttp_server_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
@@ -618,11 +581,7 @@ int wt_baton_ctx_init_new(wt_baton_ctx_t* ctx, h3zero_callback_ctx_t* h3_ctx, wt
     /* Do we use the path table for the client? or the web folder? */
     /* connection wide tracking of stream prefixes */
     if (h3_ctx == NULL) {
-        /* init of stream splay */
-        ctx->h3_stream_tree = &ctx->local_h3_tree;
-        h3zero_init_stream_tree(ctx->h3_stream_tree);
-        /* init of local prefix table. */
-        ctx->stream_prefixes = &ctx->local_stream_prefixes;
+        ret = -1;
     }
     else {
         /* set references to existing objects */
@@ -694,151 +653,3 @@ int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
     return ret;
 }
 
-/* Implementation of the baton client. 
-* This is an H3 client, specialized to only use WT+baton.
-*/
-int wt_baton_client_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t event, void* callback_ctx, void* v_stream_ctx)
-{
-    int ret = 0;
-    /* TODO: add reference to the baton connection context */
-    wt_baton_ctx_t* ctx = (wt_baton_ctx_t*)callback_ctx;
-    picohttp_server_stream_ctx_t* stream_ctx = (picohttp_server_stream_ctx_t*)v_stream_ctx;
-
-    switch (event) {
-    case picoquic_callback_stream_data:
-    case picoquic_callback_stream_fin:
-        /* TODO: blocked here -- data is received, but does nothing.. */
-        fprintf(stdout, "Received data on the connection.\n");
-        /* Data arrival on stream #x, maybe with fin mark */
-        if (stream_ctx == NULL) {
-            stream_ctx = wt_baton_find_stream(ctx, stream_id);
-        }
-        if (IS_BIDIR_STREAM_ID(stream_id)) {
-            if (IS_LOCAL_STREAM_ID(stream_id, 1)) {
-                if (stream_ctx == NULL) {
-                    fprintf(stdout, "unexpected data on local stream context: %" PRIu64 ".\n", stream_id);
-                    ret = -1;
-                }
-                else if (stream_id == ctx->control_stream_id) {
-                    if (length > 0) {
-                        uint16_t error_found = 0;
-                        size_t available_data = 0;
-                        uint8_t* bytes_max = bytes + length;
-                        while (bytes < bytes_max) {
-                            bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->ps.stream_state, &available_data, &error_found);
-                            if (bytes == NULL) {
-                                picoquic_log_app_message(cnx,
-                                    "Could not parse incoming data from stream %" PRIu64 ", error 0x%x", stream_id, error_found);
-                                ret = picoquic_close(cnx, error_found);
-                                break;
-                            }
-                            else if (available_data > 0) {
-                                /* Issue: the server call uses the "server stream ctx" data type. What to do on the client? */
-                                wt_baton_callback(cnx, bytes, available_data, picohttp_callback_post_data, stream_ctx, ctx);
-                            }
-                        }
-                    }
-                    if (event == picoquic_callback_stream_fin) {
-                        /* FIN of the control stream is FIN of the whole session */
-                        wt_baton_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, ctx);
-                    }
-                }
-                else {
-                    /* NOT the control stream -- this was a stream created locally, on which
-                     * the peer is replying. */
-                    if (length > 0) {
-                        wt_baton_callback(cnx, bytes, length, picohttp_callback_post_data, stream_ctx, ctx);
-                    }
-                    if (event == picoquic_callback_stream_fin) {
-                        /* FIN of the data stream -- maybe remove the associated resource */
-                        wt_baton_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, ctx);
-                    }
-                }
-            }
-            else {
-                /* process incoming bidir */
-                ret = wt_baton_process_remote_stream(cnx, stream_id, bytes, length,
-                    event, stream_ctx, ctx);
-            }
-        }
-        else {
-            /* process the unidir streams. */
-            ret = wt_baton_process_remote_stream(cnx, stream_id, bytes, length,
-                event, stream_ctx, ctx);
-        }
-        break;
-    case picoquic_callback_stream_reset:
-        /* TODO: call the "post reset" event. */
-        if (stream_ctx == NULL) {
-            stream_ctx = wt_baton_find_stream(ctx, stream_id);
-        }
-        wt_baton_callback(cnx, NULL, 0, picohttp_callback_reset, stream_ctx, ctx);
-        break;
-    case picoquic_callback_stop_sending:
-        /* TODO: stop sending event */
-        break;
-    case picoquic_callback_stateless_reset:
-        fprintf(stdout, "Received a stateless reset.\n");
-        ctx->connection_closed = 1;
-        break;
-    case picoquic_callback_close: /* Received connection close */
-        fprintf(stdout, "Received a request to close the connection.\n");
-        ctx->connection_closed = 1;
-        break;
-    case picoquic_callback_application_close: /* Received application close */
-        fprintf(stdout, "Received a request to close the application.\n");
-        ctx->connection_closed = 1;
-        break;
-    case picoquic_callback_version_negotiation:
-        fprintf(stdout, "Received a version negotiation request:");
-        for (size_t byte_index = 0; byte_index + 4 <= length; byte_index += 4) {
-            uint32_t vn = PICOPARSE_32(bytes + byte_index);
-            fprintf(stdout, "%s%08x", (byte_index == 0) ? " " : ", ", vn);
-        }
-        fprintf(stdout, "\n");
-        break;
-    case picoquic_callback_prepare_to_send:
-        /* Used on client when posting data */
-        /* Used for active streams */
-        if (stream_ctx == NULL) {
-            /* Unexpected */
-            picoquic_reset_stream(cnx, stream_id, 0);
-            ret = 0;
-        }
-        else {
-            /* call prepare to send event */
-        }
-        break;
-    case picoquic_callback_almost_ready:
-        break;
-    case picoquic_callback_ready:
-        /* Create a stream context for the connect call. */
-        stream_ctx = wt_baton_create_stream(cnx, 1, ctx);
-        if (stream_ctx == NULL) {
-            ret = -1;
-        }
-        else {
-            ctx->connection_ready = 1;
-            ctx->is_client = 1;
-            /* send the WT CONNECT */
-            ret = picowt_connect(cnx, stream_ctx, ctx->stream_prefixes, ctx->server_path, wt_baton_callback, ctx);
-        }
-        break;
-    case picoquic_callback_request_alpn_list:
-        /* TODO: set alpn list */
-        /* picoquic_demo_client_set_alpn_list((void*)bytes); */
-        picoquic_add_proposed_alpn((void*)bytes, "h3");
-        break;
-    case picoquic_callback_set_alpn:
-        /* ctx->alpn = picoquic_parse_alpn((const char*)bytes); */
-        break;
-    default:
-        /* unexpected */
-        break;
-    }
-
-    /* TODO: if disconnected, something... */
-    return ret;
-}

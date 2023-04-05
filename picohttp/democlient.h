@@ -36,16 +36,6 @@
 extern "C" {
 #endif
 
-#if 0
-typedef enum {
-    picoquic_alpn_undef = 0,
-	picoquic_alpn_http_0_9,
-	picoquic_alpn_http_3,
-    picoquic_alpn_siduck,
-    picoquic_alpn_quicperf
-} picoquic_alpn_enum;
-#endif
-
 #define PICOQUIC_DEMO_STREAM_ID_INITIAL UINT64_MAX
 
 typedef struct st_picoquic_demo_stream_desc_t {

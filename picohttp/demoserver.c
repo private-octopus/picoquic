@@ -614,7 +614,7 @@ int picoquic_demo_server_callback(picoquic_cnx_t* cnx,
 
     switch (alpn_code) {
     case picoquic_alpn_http_3:
-        ret = h3zero_server_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);
+        ret = h3zero_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);
         break;
     case picoquic_alpn_siduck:
         ret = siduck_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);

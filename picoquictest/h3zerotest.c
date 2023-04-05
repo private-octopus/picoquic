@@ -1631,7 +1631,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
 int h3zero_server_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, 
         demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
         0, 0, 0, 0, NULL, NULL, NULL, 0);
 }
@@ -2008,7 +2008,7 @@ static size_t const post_test_stream_length[] = { 2345 };
 
 int h3zero_post_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void*)&ping_test_param, post_test_scenario, nb_post_test_scenario,
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, (void*)&ping_test_param, post_test_scenario, nb_post_test_scenario,
         post_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 }
 
@@ -2200,7 +2200,7 @@ int demo_server_file_test()
 
     ret = serve_file_test_set_param(&file_param, file_name_buffer, sizeof(file_name_buffer));
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void*)&file_param, 
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, (void*)&file_param, 
         file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0)) != 0) {
         DBG_PRINTF("H3 server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_H3_LATEST, ret);
     }
@@ -2243,7 +2243,7 @@ static const size_t nb_satellite_test_scenario = sizeof(satellite_test_scenario)
 
 int h3zero_satellite_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, satellite_test_scenario, nb_satellite_test_scenario,
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, satellite_test_scenario, nb_satellite_test_scenario,
         demo_test_stream_length, 1, 0, 10750000, 0, NULL, NULL, NULL, 0);
 }
 
@@ -2331,11 +2331,11 @@ int h3_long_file_name_test()
         scenario_line.f_name = file_name_var;
         scenario_line.post_size = 0;
 
-        ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, &scenario_line, 1,
+        ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, &scenario_line, 1,
             long_file_name_stream_length, 0, 0, 400000, 0, NULL, NULL, NULL, 0);
     }
 #else
-    ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 
+    ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, 
         long_file_name_scenario, nb_long_file_name_scenario, 
         long_file_name_stream_length, 0, 0, 400000, 0, NULL, NULL, NULL, 0);
 #endif
@@ -2569,19 +2569,19 @@ int http_multi_file_test_one(char const * alpn, picoquic_stream_data_cb_fn serve
 
 int h3_multi_file_test()
 {
-    return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, 0, 0);
+    return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, 0, 0);
 }
 
 int h3_multi_file_loss_test()
 {
     uint64_t loss_pattern = 0xa243FFB700000ull;
-    return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, loss_pattern, 0);
+    return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, loss_pattern, 0);
 }
 
 int h3_multi_file_preemptive_test()
 {
     uint64_t loss_pattern = 0xa243FFB700000ull;
-    return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, loss_pattern, 1);
+    return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, loss_pattern, 1);
 }
 
 int h09_multi_file_test()

@@ -221,6 +221,11 @@ void h3zero_delete_stream_prefix(picoquic_cnx_t * cnx, h3zero_stream_prefixes_t*
 
 		free(prefix_ctx);
 	}
+	else {
+		if (cnx != NULL) {
+			picoquic_log_app_message(cnx, "Cannot find stream prefix %" PRIu64 " in table", prefix);
+		}
+	}
 }
 
 void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_stream_prefixes_t* prefixes)
@@ -230,6 +235,9 @@ void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_stream_prefi
 	while ((next = prefixes->first) != NULL) {
 		if (prefixes->first == next){
 			/* the prefix was not deleted as part of app cleanup */
+			if (cnx != NULL) {
+				picoquic_log_app_message(cnx, "Clearing stream prefix %" PRIu64, next->prefix);
+			}
 			h3zero_delete_stream_prefix(cnx, prefixes, next->prefix);
 		}
 	}
@@ -1052,6 +1060,11 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 		switch (fin_or_event) {
 		case picoquic_callback_stream_data:
 		case picoquic_callback_stream_fin:
+#if 1
+			if (cnx->client_mode && stream_id == 0 && fin_or_event == picoquic_callback_stream_fin ) {
+				DBG_PRINTF("%s", "Bug");
+			}
+#endif
 			/* Data arrival on stream #x, maybe with fin mark */
 			if (picoquic_is_client(cnx)) {
 				ret = h3zero_callback_client_data(cnx, stream_id, bytes, length,

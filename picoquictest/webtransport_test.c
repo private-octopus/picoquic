@@ -64,7 +64,7 @@ picohttp_server_path_item_t path_item_list[1] =
 };
 
 
-static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
+static int picowt_baton_test_one(
     uint8_t test_id, int nb_turns_required, const char* baton_path,
     uint64_t do_losses, uint64_t completion_target, const char* client_qlog_dir,
     const char* server_qlog_dir)
@@ -148,7 +148,7 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
         server_param.path_table_nb = 1;
 
         picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
-        picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, &server_param);
+        picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
 
         if (ret == 0) {
             ret = picoquic_start_client_cnx(test_ctx->cnx_client);
@@ -217,17 +217,17 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
 
 int picowt_baton_basic_test()
 {
-    int ret = picowt_baton_test_one(h3zero_server_callback, 1, 7, "/baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(1, 7, "/baton", 0, 2000000, ".", ".");
 
     return ret;
 }
 
 int picowt_baton_error_test()
 {
-#if 1
+#if 0
     return 0;
 #else
-    int ret = picowt_baton_test_one(h3zero_server_callback, 4, 257, "/baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(4, 257, "/baton", 0, 2000000, ".", ".");
 
     return ret;
 #endif
@@ -235,10 +235,10 @@ int picowt_baton_error_test()
 
 int picowt_baton_long_test()
 {
-#if 1
+#if 0
     return 0;
 #else
-    int ret = picowt_baton_test_one(h3zero_server_callback, 2, 10, "/baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(2, 10, "/baton", 0, 2000000, ".", ".");
 
     return ret;
 #endif
@@ -246,10 +246,10 @@ int picowt_baton_long_test()
 
 int picowt_baton_wrong_test()
 {
-#if 1
+#if 0
     return 0;
 #else
-    int ret = picowt_baton_test_one(h3zero_server_callback, 3, 7, "/wrong_baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(3, 7, "/wrong_baton", 0, 2000000, ".", ".");
 
     return ret;
 #endif
