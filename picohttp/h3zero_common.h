@@ -42,6 +42,7 @@ extern "C" {
         picohttp_callback_post_fin, /* All posted data have been received on this stream */
         picohttp_callback_provide_data, /* Stack is ready to send chunk of data on stream N */
         picohttp_callback_reset, /* Stream has been abandoned by peer. */
+        picohttp_callback_deregister, /* Context has been deregistered */
         picohttp_callback_free
     } picohttp_call_back_event_t;
 
@@ -78,7 +79,7 @@ extern "C" {
         /* TODO-POST: identification of URL to process POST or GET? */
         /* TODO-POST: provide content-type */
         picosplay_node_t http_stream_node;
-        struct st_picohttp_server_stream_ctx_t* next_stream;
+        picoquic_cnx_t* cnx;
         int is_h3;
         union {
             h3zero_data_stream_state_t stream_state; /* h3 only */

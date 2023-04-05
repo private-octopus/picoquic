@@ -199,8 +199,9 @@ static int picowt_baton_test_one(
             ret = -1;
         }
     }
-
+#if 0
     wt_baton_ctx_release(test_ctx->cnx_client, &baton_ctx);
+#endif
 
     if (h3zero_cb != NULL)
     {

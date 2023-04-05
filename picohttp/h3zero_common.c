@@ -64,7 +64,7 @@ static void picohttp_clear_stream_ctx(picohttp_server_stream_ctx_t* stream_ctx)
 	}
 
 	if (stream_ctx->path_callback != NULL) {
-		(void)stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_free, stream_ctx, stream_ctx->path_callback_ctx);
+		(void)stream_ctx->path_callback(stream_ctx->cnx, NULL, 0, picohttp_callback_free, stream_ctx, stream_ctx->path_callback_ctx);
 	}
 
 	if (stream_ctx->is_h3) {
@@ -128,6 +128,7 @@ picohttp_server_stream_ctx_t * h3zero_find_or_create_stream(
 			stream_ctx->stream_id = stream_id;
 			stream_ctx->control_stream_id = UINT64_MAX;
 			stream_ctx->is_h3 = is_h3;
+			stream_ctx->cnx = cnx;
 			if (!IS_BIDIR_STREAM_ID(stream_id)) {
 				if (IS_LOCAL_STREAM_ID(stream_id, picoquic_is_client(cnx))) {
 					stream_ctx->ps.stream_state.is_fin_received = 1;
@@ -216,9 +217,16 @@ void h3zero_delete_stream_prefix(picoquic_cnx_t * cnx, h3zero_stream_prefixes_t*
 		}
 		/* find stream context */
 		if (prefix_ctx->function_call != NULL) {
-			prefix_ctx->function_call(cnx, NULL, 0, picohttp_callback_free, NULL, prefix_ctx->function_ctx);
+			/* Find the control stream context */
+			picohttp_server_stream_ctx_t* stream_ctx = NULL;
+		    h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
+			if (h3_ctx != NULL) {
+				stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, prefix_ctx->prefix);
+			}
+			if (stream_ctx != NULL) {
+				prefix_ctx->function_call(cnx, NULL, 0, picohttp_callback_deregister, stream_ctx, prefix_ctx->function_ctx);
+			}
 		}
-
 		free(prefix_ctx);
 	}
 	else {

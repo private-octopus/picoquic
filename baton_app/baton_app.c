@@ -243,9 +243,10 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
 
     /* Done. At this stage, we could print out statistics, etc. */
     /* baton_client_report(&baton_ctx); */
-
+#if 0
     /* Free the Client context */
     wt_baton_ctx_release(cnx, &baton_ctx);
+#endif
 
     if (h3zero_cb != NULL)
     {
