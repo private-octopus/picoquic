@@ -53,17 +53,12 @@ extern "C" {
          * and set the tree pointer to that.
          */
         picosplay_tree_t * h3_stream_tree;
-        picosplay_tree_t local_h3_tree; 
-        picohttp_server_path_item_t * path_table;
-        size_t path_table_nb;
-        char const* web_folder;
         char const* server_path;
         /* connection wide tracking of stream prefixes.
          * on the server, we use the global tracker.
          * on the client, we manage a placeholder.
          */
         h3zero_stream_prefixes_t * stream_prefixes;
-        h3zero_stream_prefixes_t local_stream_prefixes;
         /* control stream context, will need to remain open as long 
          */
         uint64_t control_stream_id;
@@ -93,32 +88,18 @@ extern "C" {
     picohttp_server_stream_ctx_t* wt_baton_create_stream(picoquic_cnx_t* cnx, int is_bidir, wt_baton_ctx_t* baton_ctx);
     picohttp_server_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* ctx, uint64_t stream_id);
 
-    void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx);
-    void wt_baton_ctx_free(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx);
-    void wt_baton_callback_free(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx, void* v_ctx);
-    int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_server_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t* app_ctx, picohttp_server_stream_ctx_t* stream_ctx);
-
+    int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t* app_ctx, picohttp_server_stream_ctx_t* stream_ctx);
     /* Web transport callback. This will be called from the web server
     * when the path points to a web transport callback
     */
 
-    int picowt_h3zero_callback(picoquic_cnx_t* cnx,
+    int wt_baton_callback(picoquic_cnx_t* cnx,
         uint8_t* bytes, size_t length,
         picohttp_call_back_event_t fin_or_event,
         struct st_picohttp_server_stream_ctx_t* stream_ctx,
         void* path_app_ctx);
 
-    /* Client call back -- limited implementation of H3.
-    * Expected behavior:
-    * 
-    * wt_baton_ctx_t* ctx = (wt_baton_ctx_t*)callback_ctx;
-    * picohttp_server_stream_ctx_t* stream_ctx = (picohttp_server_stream_ctx_t*)v_stream_ctx;
-    */
-    int wt_baton_client_callback(picoquic_cnx_t* cnx,
-        uint64_t stream_id, uint8_t* bytes, size_t length,
-        picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
-
 #ifdef __cplusplus
 }
 #endif
-#endif WT_BATON_H
+#endif /* WT_BATON_H */

@@ -24,17 +24,12 @@
 #include <stdio.h>
 #include "picoquic_internal.h"
 #include "h3zero.h"
+#include "h3zero_common.h"
 #include "quicperf.h"
 #include "democlient.h"
 
 /* List of supported protocols 
  */
-
-typedef struct st_picoquic_alpn_list_t {
-    picoquic_alpn_enum alpn_code;
-    char const* alpn_val;
-    size_t len;
-} picoquic_alpn_list_t;
 
 static picoquic_alpn_list_t alpn_list[] = {
     { picoquic_alpn_http_3, "h3", 2 },
@@ -204,79 +199,6 @@ int demo_client_prepare_to_send(void * context, size_t space, uint64_t echo_leng
         }
         else {
             ret = -1;
-        }
-    }
-
-    return ret;
-}
-
-/*
- * H3Zero client. This is a simple client that conforms to HTTP 3.0,
- * but the client implementation is barebone.
- */
-
-int h3zero_client_create_stream_request(
-    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed)
-{
-    int ret = 0;
-    uint8_t * o_bytes = buffer;
-    uint8_t * o_bytes_max = o_bytes + max_bytes;
-
-    *consumed = 0;
-
-    if (max_bytes < 3) {
-        o_bytes = NULL;
-    }
-    else if (host == NULL) {
-        o_bytes = NULL;
-    }
-    else {
-        /* Create the request frame for the specified document */
-        *o_bytes++ = h3zero_frame_header;
-        o_bytes += 2; /* reserve two bytes for frame length */
-        if (post_size == 0) {
-            o_bytes = h3zero_create_request_header_frame(o_bytes, o_bytes_max,
-                (const uint8_t *)path, path_len, host);
-        }
-        else {
-            o_bytes = h3zero_create_post_header_frame(o_bytes, o_bytes_max,
-                (const uint8_t *)path, path_len, host, h3zero_content_type_text_plain);
-        }
-    }
-
-    if (o_bytes == NULL) {
-        ret = -1;
-    }
-    else {
-        size_t header_length = o_bytes - &buffer[3];
-        if (header_length < 64) {
-            buffer[1] = (uint8_t)(header_length);
-            memmove(&buffer[2], &buffer[3], header_length);
-            o_bytes--;
-        }
-        else {
-            buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
-            buffer[2] = (uint8_t)(header_length & 0xFF);
-        }
-
-        if (post_size > 0) {
-            /* Add initial DATA frame for POST */
-            size_t ll = 0;
-
-            if (o_bytes < o_bytes_max) {
-                *o_bytes++ = h3zero_frame_data;
-                ll = picoquic_varint_encode(o_bytes, o_bytes_max - o_bytes, post_size);
-                o_bytes += ll;
-            }
-            if (ll == 0) {
-                ret = -1;
-            }
-            else {
-                *consumed = o_bytes - buffer;
-            }
-        }
-        else {
-            *consumed = o_bytes - buffer;
         }
     }
 
@@ -502,7 +424,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
     if (fin_stream_id == PICOQUIC_DEMO_STREAM_ID_INITIAL) {
         switch (ctx->alpn) {
         case picoquic_alpn_http_3:
-            ret = h3zero_client_init(cnx);
+            ret = h3zero_protocol_init(cnx);
             break;
         default:
             break;

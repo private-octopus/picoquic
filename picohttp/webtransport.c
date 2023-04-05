@@ -68,6 +68,7 @@
 * the stream ID. This is associated with the connection itself. Do we have
 * an H3 context for the connection?
 */
+
 int picowt_connect(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx, h3zero_stream_prefixes_t * stream_prefixes, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
 {
     /* register the stream ID as session ID */
@@ -75,7 +76,7 @@ int picowt_connect(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
     if (cnx != NULL) {
         picoquic_log_app_message(cnx, "Allocated prefix for control stream %" PRIu64, stream_ctx->stream_id);
     }
-
+    /* Declare the outgoing connection through the callback, so it can update its own state */
     ret = wt_callback(cnx, NULL, 0, picohttp_callback_connecting, stream_ctx, wt_ctx);
 
     if (ret == 0) {
@@ -113,7 +114,7 @@ int picowt_connect(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
 
         if (ret != 0) {
             /* remove the stream prefix */
-            h3zero_delete_stream_prefix(stream_prefixes, stream_ctx->stream_id);
+            h3zero_delete_stream_prefix(cnx, stream_prefixes, stream_ctx->stream_id);
         }
     }
     return ret;

@@ -15,6 +15,7 @@
 #include <ws2tcpip.h>
 #include "picoquic.h"
 #include "h3zero.h"
+#include "h3zero_common.h"
 #include "democlient.h"
 #include "quicwind.h"
 #include "autoqlog.h"
@@ -497,7 +498,7 @@ int quicwind_start_connection(picoquic_quic_t * qclient,
                 if (ret == 0) {
                     switch (ctx->alpn) {
                     case picoquic_alpn_http_3:
-                        ret = h3zero_client_init(cnx_client);
+                        ret = h3zero_protocol_init(cnx_client);
                         break;
                     default:
                         break;

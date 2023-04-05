@@ -35,6 +35,7 @@
 #include <picoquic_packet_loop.h>
 #include <autoqlog.h>
 #include "wt_baton.h"
+#include "pico_webtransport.h"
 
 int wt_baton_client(char const* server_name, int server_port, char const* path, int nb_rounds);
 int baton_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
@@ -102,7 +103,7 @@ int main(int argc, char** argv)
 #define PICOQUIC_BATON_CLIENT_TOKEN_STORE "baton_token_store.bin";
 #define PICOQUIC_BATON_CLIENT_QLOG_DIR ".";
 
-int wt_baton_client(char const * server_name, int server_port, char const * path, int nb_rounds)
+int wt_baton_client(char const * server_name, int server_port, char const * path, int nb_turns_required)
 {
     int ret = 0;
     struct sockaddr_storage server_address;
@@ -113,8 +114,9 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
     char const* qlog_dir = PICOQUIC_BATON_CLIENT_QLOG_DIR;
     picoquic_cnx_t* cnx = NULL;
     uint64_t current_time = picoquic_current_time();
-    wt_baton_ctx_t client_ctx = { 0 };
-
+    wt_baton_ctx_t baton_ctx = { 0 };
+        picohttp_server_stream_ctx_t* stream_ctx = NULL;
+    h3zero_callback_ctx_t* h3zero_cb = NULL;
 
     /* Get the server's address */
     if (ret == 0) {
@@ -172,6 +174,14 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
     */
 
     if (ret == 0) {
+        /* use the generic H3 callback */
+        /* Set the client callback context */
+        h3zero_cb = h3zero_callback_create_context(NULL);
+        if (h3zero_cb == NULL) {
+            ret = 1;
+        }
+    }
+    if (ret == 0) {
         printf("Starting connection to %s, port %d\n", server_name, server_port);
 
         /* Create a client connection */
@@ -182,13 +192,32 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
             ret = -1;
         }
         else {
+            picoquic_set_callback(cnx, h3zero_callback, h3zero_cb);
             /* Initialize the callback context. First, create a bidir stream */
-            wt_baton_ctx_init(&client_ctx, NULL, NULL, NULL);
-            client_ctx.server_path = path;
-            /* Set the client callback context */
-            picoquic_set_callback(cnx, wt_baton_client_callback, &client_ctx);
+            wt_baton_ctx_init(&baton_ctx, h3zero_cb, NULL, NULL);
+            baton_ctx.is_client = 1;
+            baton_ctx.server_path = path;
+            baton_ctx.nb_turns_required = nb_turns_required;
+
+            /* Create a stream context for the connect call. */
+            stream_ctx = wt_baton_create_stream(cnx, 1, &baton_ctx);
+            if (stream_ctx == NULL) {
+                ret = -1;
+            }
+            else {
+                baton_ctx.connection_ready = 1;
+                baton_ctx.is_client = 1;
+                stream_ctx->is_open = 1;
+                stream_ctx->path_callback = wt_baton_callback;
+                stream_ctx->path_callback_ctx = &baton_ctx;
+                /* send the WT CONNECT */
+                ret = picowt_connect(cnx, stream_ctx, &h3zero_cb->stream_prefixes, baton_ctx.server_path, wt_baton_callback, &baton_ctx);
+            }
+
             /* Client connection parameters could be set here, before starting the connection. */
-            ret = picoquic_start_client_cnx(cnx);
+            if (ret == 0) {
+                ret = picoquic_start_client_cnx(cnx);
+            }
             if (ret < 0) {
                 fprintf(stderr, "Could not activate connection\n");
             } else {
@@ -200,21 +229,22 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
                 }
                 printf("\n");
                 /* Perform the initialization, settings and QPACK streams
-                 * TODO: record the streams as part of H3 context?
                  */
-                ret = h3zero_client_init(cnx);
+                ret = h3zero_protocol_init(cnx);
             }
         }
     }
 
     /* Wait for packets */
-    ret = picoquic_packet_loop(quic, 0, server_address.ss_family, 0, 0, 0, baton_client_loop_cb, &client_ctx);
+    ret = picoquic_packet_loop(quic, 0, server_address.ss_family, 0, 0, 0, baton_client_loop_cb, &baton_ctx);
 
     /* Done. At this stage, we could print out statistics, etc. */
-    /* baton_client_report(&client_ctx); */
+    /* baton_client_report(&baton_ctx); */
 
-    /* Free the Client context */
-    wt_baton_ctx_release(cnx, &client_ctx);
+    if (h3zero_cb != NULL)
+    {
+        h3zero_callback_delete_context(cnx, h3zero_cb);
+    }
 
     /* Save tickets and tokens, and free the QUIC context */
     if (quic != NULL) {
@@ -226,7 +256,6 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
         }
         picoquic_free(quic);
     }
-
 
     return ret;
 }
