@@ -194,7 +194,7 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
         else {
             picoquic_set_callback(cnx, h3zero_callback, h3zero_cb);
             /* Initialize the callback context. First, create a bidir stream */
-            wt_baton_ctx_init_new(&baton_ctx, h3zero_cb, NULL, NULL);
+            wt_baton_ctx_init(&baton_ctx, h3zero_cb, NULL, NULL);
             baton_ctx.is_client = 1;
             baton_ctx.server_path = path;
             baton_ctx.nb_turns_required = nb_turns_required;
@@ -228,12 +228,9 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
                     printf("%02x", icid.id[i]);
                 }
                 printf("\n");
-#if 1
                 /* Perform the initialization, settings and QPACK streams
-                 * TODO: record the streams as part of H3 context?
                  */
                 ret = h3zero_protocol_init(cnx);
-#endif
             }
         }
     }
@@ -243,10 +240,6 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
 
     /* Done. At this stage, we could print out statistics, etc. */
     /* baton_client_report(&baton_ctx); */
-#if 0
-    /* Free the Client context */
-    wt_baton_ctx_release(cnx, &baton_ctx);
-#endif
 
     if (h3zero_cb != NULL)
     {

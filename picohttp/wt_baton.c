@@ -88,11 +88,7 @@
 int wt_baton_close_session(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx)
 {
     int ret = 0;
-#if 1
-    if (baton_ctx->control_stream_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
+
     picohttp_server_stream_ctx_t* stream_ctx = wt_baton_find_stream(baton_ctx, baton_ctx->control_stream_id);
 
     picoquic_log_app_message(cnx, "Closing session, closing and unlinking control stream %" PRIu64, baton_ctx->control_stream_id);
@@ -274,7 +270,7 @@ int wt_baton_accept(picoquic_cnx_t* cnx,
     else {
         picoquic_log_app_message(cnx, "allocated baton context size(%zu), control stream %" PRIu64, sizeof(wt_baton_ctx_t), stream_ctx->stream_id);
         /* register the incoming stream ID */
-        ret = wt_baton_ctx_init_new(baton_ctx, h3_ctx, app_ctx, stream_ctx);
+        ret = wt_baton_ctx_init(baton_ctx, h3_ctx, app_ctx, stream_ctx);
         if (ret == 0) {
             stream_ctx->ps.stream_state.is_web_transport = 1;
             stream_ctx->path_callback = wt_baton_callback;
@@ -299,11 +295,7 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
 
     stream_ctx->ps.stream_state.is_fin_received = 1;
-#if 1
-    if (baton_ctx->control_stream_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
+
     if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
         /* Closing the control stream implies closing the baton context. 
          */
@@ -369,10 +361,8 @@ void wt_baton_unlink_context(picoquic_cnx_t* cnx,
 
             if (control_stream_ctx->stream_id == stream_ctx->control_stream_id &&
                 control_stream_ctx->stream_id != stream_ctx->stream_id) {
-                stream_ctx->control_stream_id = UINT64_MAX;
-                picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
+                h3zero_forget_stream(cnx, stream_ctx);
                 picosplay_delete_hint(baton_ctx->h3_stream_tree, next);
-                /* TODO: close the stream if not already closed. */
             }
             else {
                 previous = next;
@@ -384,7 +374,6 @@ void wt_baton_unlink_context(picoquic_cnx_t* cnx,
     if (!cnx->client_mode) {
         free(baton_ctx);
     }
-    /* TODO: close the stream if not already closed. */
 }
 
 
@@ -457,41 +446,7 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
          * Its references should be removed from streams belonging to this session.
          * On the client, the memory should be freed.
          */
-#if 1
         wt_baton_unlink_context(cnx, stream_ctx, path_app_ctx);
-#else
-        if (stream_ctx == NULL) {
-            wt_baton_ctx_t* bacon_ctx = (wt_baton_ctx_t*)path_app_ctx;
-#if 1
-            h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
-            if (h3_ctx != NULL) {
-                stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, bacon_ctx->control_stream_id);
-            }
-#else
-            /* Need to find the control stream context. A bit of weirdness as we have not unified the callbacks yet. */
-            if (cnx->client_mode) {
-                h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
-                if (h3_ctx != NULL) {
-                    stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, bacon_ctx->control_stream_id);
-                }
-            }
-            else
-            {
-                h3zero_server_callback_ctx_t* h3_ctx = (h3zero_server_callback_ctx_t*)picoquic_get_callback_context(cnx);
-                if (h3_ctx != NULL) {
-                    stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, bacon_ctx->control_stream_id);
-                }
-            }
-#endif
-            if (stream_ctx == NULL) {
-                picoquic_log_app_message(cnx, "cannot find context for freeing stream %" PRIu64, bacon_ctx->control_stream_id);
-            }
-        }
-        if (stream_ctx != NULL) {
-            wt_baton_callback_free(cnx, stream_ctx, path_app_ctx);
-        }
-#endif
-
         break;
     default:
         /* protocol error */
@@ -527,107 +482,10 @@ picohttp_server_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* ctx, uint64_t
     return stream_ctx;
 }
 
-#if 0
-void wt_baton_ctx_release(picoquic_cnx_t* cnx, wt_baton_ctx_t* ctx)
-{
-    picohttp_server_stream_ctx_t* control_stream_ctx = NULL;
-    picosplay_node_t* previous = NULL;
-
-#if 1
-    if (ctx->control_stream_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
-    /* dereference the control stream ID */
-    if (cnx != NULL) {
-        picoquic_log_app_message(cnx, "Freeing prefix for control stream %"PRIu64, ctx->control_stream_id);
-    }
-    /* TODO: removing the stream prefix removes visibility of the associated memory */
-    h3zero_delete_stream_prefix(cnx, ctx->stream_prefixes, ctx->control_stream_id);
-    /* Free the streams created for this session */
-    while (1) {
-        picosplay_node_t* next = (previous == NULL) ? picosplay_first(ctx->h3_stream_tree) : picosplay_next(previous);
-        if (next == NULL) {
-            break;
-        }
-        else {
-            picohttp_server_stream_ctx_t* stream_ctx =
-                (picohttp_server_stream_ctx_t*)picohttp_stream_node_value(next);
-            if (stream_ctx->stream_id == ctx->control_stream_id) {
-                control_stream_ctx = stream_ctx;
-                previous = next;
-            }
-            else if (stream_ctx->control_stream_id == ctx->control_stream_id) {
-                if (cnx != NULL) {
-                    picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
-                }
-                picosplay_delete_hint(ctx->h3_stream_tree, next);
-            }
-            else {
-                previous = next;
-            }
-        }
-    }
-    /* Then free the control stream */
-    if (control_stream_ctx != NULL) {
-        if (cnx != NULL) {
-            picoquic_set_app_stream_ctx(cnx, ctx->control_stream_id, NULL);
-        }
-        else {
-            DBG_PRINTF("Deleting context without updating stream %" PRIu64, ctx->control_stream_id);
-        }
-        h3zero_delete_stream(ctx->h3_stream_tree, control_stream_ctx);
-    }
-}
-#endif
-
-#if 0
-void wt_baton_ctx_free(picoquic_cnx_t * cnx, wt_baton_ctx_t* ctx)
-{
-    if (cnx != NULL) {
-        picoquic_log_app_message(cnx, "Freeing baton context, %zu bytes", sizeof(wt_baton_ctx_t));
-    }
-    else {
-        DBG_PRINTF("%s", "calling wt_baton_ctx_free with NULL cnx");
-    }
-    wt_baton_ctx_release(cnx, ctx);
-    free(ctx);
-}
-#endif
-
-#if 0
-void wt_baton_callback_free(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx, void* v_ctx)
-{
-    wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)v_ctx;
-
-    if (stream_ctx != NULL && stream_ctx->stream_id == stream_ctx->control_stream_id && stream_ctx->stream_id == baton_ctx->control_stream_id) {
-#if 1
-        if (baton_ctx->control_stream_id != 0) {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
-        
-        if (!baton_ctx->is_client) {
-            if (cnx != NULL) {
-                picoquic_log_app_message(cnx, "Callback free(%" PRIu64 "): clearing the baton context.\n",
-                    stream_ctx->stream_id);
-            }
-            wt_baton_ctx_free(cnx, baton_ctx);
-        }
-        else {
-            if (cnx != NULL) {
-                picoquic_log_app_message(cnx, "Callback free(%" PRIu64 "): do nothing as this the client.\n",
-                    stream_ctx->stream_id);
-            }
-        }
-    }
-}
-#endif
-
 /* Initialize the content of a wt_baton context.
 * TODO: replace internal pointers by pointer to h3zero context
 */
-int wt_baton_ctx_init_new(wt_baton_ctx_t* ctx, h3zero_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t * app_ctx, picohttp_server_stream_ctx_t* stream_ctx)
+int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t * app_ctx, picohttp_server_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
 

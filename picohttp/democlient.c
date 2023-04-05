@@ -30,14 +30,6 @@
 
 /* List of supported protocols 
  */
-#if 1
-#else
-typedef struct st_picoquic_alpn_list_t {
-    picoquic_alpn_enum alpn_code;
-    char const* alpn_val;
-    size_t len;
-} picoquic_alpn_list_t;
-#endif
 
 static picoquic_alpn_list_t alpn_list[] = {
     { picoquic_alpn_http_3, "h3", 2 },

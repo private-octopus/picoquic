@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.2.0"
+#define PICOQUIC_VERSION "1.1.2.1"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1186,7 +1186,6 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
 
 /* List of ALPN types used in session negotiation */
 
-#if 1
 typedef enum {
     picoquic_alpn_undef = 0,
     picoquic_alpn_http_0_9,
@@ -1200,7 +1199,6 @@ typedef struct st_picoquic_alpn_list_t {
     char const* alpn_val;
     size_t len;
 } picoquic_alpn_list_t;
-#endif
 
 #ifdef __cplusplus
 }

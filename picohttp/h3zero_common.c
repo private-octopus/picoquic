@@ -470,6 +470,19 @@ int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
 	return ret;
 }
 
+/* Forget stream: terminate the stream if necessary, 
+ * remove its references, and dispose of the context.
+ */
+void h3zero_forget_stream(picoquic_cnx_t* cnx,
+	picohttp_server_stream_ctx_t* stream_ctx)
+{
+	if (stream_ctx != NULL && !stream_ctx->ps.stream_state.is_fin_sent) {
+		stream_ctx->ps.stream_state.is_fin_sent = 1;
+		picoquic_reset_stream(cnx, stream_ctx->stream_id, 0);
+		picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
+	}
+}
+
 char const * h3zero_server_default_page = "\
 <!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n<HTML>\r\n<HEAD>\r\n<TITLE>\
 Picoquic HTTP 3 service\
@@ -1068,11 +1081,6 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 		switch (fin_or_event) {
 		case picoquic_callback_stream_data:
 		case picoquic_callback_stream_fin:
-#if 1
-			if (cnx->client_mode && stream_id == 0 && fin_or_event == picoquic_callback_stream_fin ) {
-				DBG_PRINTF("%s", "Bug");
-			}
-#endif
 			/* Data arrival on stream #x, maybe with fin mark */
 			if (picoquic_is_client(cnx)) {
 				ret = h3zero_callback_client_data(cnx, stream_id, bytes, length,
@@ -1147,13 +1155,9 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 		}
 	}
 
-#if 0
-	/* TODO: this is the plug-in for demo scenario manager */
-	if (ret == 0 && fin_stream_id != UINT64_MAX) {
-		/* start next batch of streams! */
-		ret = picoquic_demo_client_start_streams(cnx, ctx, fin_stream_id);
-	}
-#endif
+	/* TODO: this is the plug-in for demo scenario manager.
+	 * Add code here so scenarios can play out.
+	 */
 
 	return ret;
 }

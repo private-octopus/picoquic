@@ -121,7 +121,7 @@ static int picowt_baton_test_one(
         else {
             picoquic_set_callback(test_ctx->cnx_client, h3zero_callback, h3zero_cb);
             /* Initialize the callback context. First, create a bidir stream */
-            wt_baton_ctx_init_new(&baton_ctx, h3zero_cb, NULL, NULL);
+            wt_baton_ctx_init(&baton_ctx, h3zero_cb, NULL, NULL);
             baton_ctx.is_client = 1;
             baton_ctx.server_path = baton_path;
             baton_ctx.nb_turns_required = nb_turns_required;
@@ -199,9 +199,6 @@ static int picowt_baton_test_one(
             ret = -1;
         }
     }
-#if 0
-    wt_baton_ctx_release(test_ctx->cnx_client, &baton_ctx);
-#endif
 
     if (h3zero_cb != NULL)
     {
@@ -225,33 +222,21 @@ int picowt_baton_basic_test()
 
 int picowt_baton_error_test()
 {
-#if 0
-    return 0;
-#else
     int ret = picowt_baton_test_one(4, 257, "/baton", 0, 2000000, ".", ".");
 
     return ret;
-#endif
 }
 
 int picowt_baton_long_test()
 {
-#if 0
-    return 0;
-#else
     int ret = picowt_baton_test_one(2, 10, "/baton", 0, 2000000, ".", ".");
 
     return ret;
-#endif
 }
 
 int picowt_baton_wrong_test()
 {
-#if 0
-    return 0;
-#else
     int ret = picowt_baton_test_one(3, 7, "/wrong_baton", 0, 2000000, ".", ".");
 
     return ret;
-#endif
 }
