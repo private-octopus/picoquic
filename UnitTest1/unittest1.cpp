@@ -2251,6 +2251,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_settings) {
+            int ret = h3zero_settings_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(http_drop) {
             int ret = http_drop_test();
 

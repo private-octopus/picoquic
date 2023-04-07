@@ -24,6 +24,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <picotls.h>
 #include "picosplay.h"
@@ -1160,4 +1161,100 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 	 */
 
 	return ret;
+}
+
+/* Parse the settings frame.
+ * Since this is done by reading a stream, the parsing state is
+ * included in the setting frames, as follow:
+ * 
+ * - as long as the stream header length is not read, the header size is zero
+ * - if the header length is read, the reader accumulates all the required
+ *   bytes in a buffer, then does a regular decoding.
+ */
+
+uint8_t* h3zero_settings_component_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t setting_key, uint64_t setting_value, const uint64_t default_value)
+{
+	if (setting_value != default_value) {
+		if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, setting_key)) != NULL) {
+			bytes = picoquic_frames_varint_encode(bytes, bytes_max, setting_value);
+		}
+	}
+	return bytes;
+}
+
+uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const h3zero_settings_t* settings)
+{
+	/* reserve enough bytes for the encoding length */
+	size_t length_max = bytes_max - bytes;
+
+	if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, h3zero_frame_settings)) != NULL) {
+		uint8_t* bytes_of_length = bytes;
+		if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, length_max)) != NULL) {
+			/* remember how many bytes were used to encode the length */
+			uint8_t* bytes_after_length = bytes;
+			/* encode the various components, as needed */
+			if ((bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_setting_header_table_size, settings->table_size, UINT64_MAX)) != NULL &&
+				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_qpack_blocked_streams, settings->blocked_streams, UINT64_MAX)) != NULL &&
+				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_enable_web_transport, settings->is_web_transport_enabled, 0)) != NULL &&
+				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_webtransport_max_sessions, settings->webtransport_max_sessions, 0)) != NULL) {
+				size_t actual_length = bytes - bytes_after_length;
+				uint8_t* bytes_final_length = picoquic_frames_varint_encode(bytes_of_length, bytes_after_length, actual_length);
+				if (bytes_final_length == NULL) {
+					/* Final length is longer than buffer size, which should be impossible */
+					bytes = NULL;
+				}
+				else if (bytes_final_length != bytes_after_length) {
+					/* Final length is shorter than predicted length */
+					memmove(bytes_final_length, bytes_after_length, actual_length);
+					bytes = bytes_final_length + actual_length;
+				}
+			}
+		}
+	}
+	return bytes;
+}
+
+const uint8_t* h3zero_settings_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings)
+{
+	size_t header_length = 0;
+	memset(settings, 0, sizeof(h3zero_settings_t));
+	if (*bytes != 0x04) {
+		/* not a settings frame */
+		bytes = NULL;
+	} else {
+		bytes++;
+		/* get the decoding length */
+		if ((bytes = picoquic_frames_varlen_decode(bytes, bytes_max, &header_length)) != NULL) {
+			const uint8_t* settings_end = bytes + header_length;
+			if (settings_end > bytes_max) {
+				bytes = NULL;
+			}
+			else {
+				uint64_t component_key;
+				uint64_t component_value;
+				while (bytes != NULL &&
+					bytes < settings_end &&
+					(bytes = picoquic_frames_varint_decode(bytes, settings_end, &component_key)) != NULL &&
+					(bytes = picoquic_frames_varint_decode(bytes, settings_end, &component_value)) != NULL) {
+					switch (component_key) {
+					case h3zero_setting_header_table_size:
+						settings->table_size = component_value;
+						break;
+					case h3zero_qpack_blocked_streams:
+						settings->blocked_streams = component_value;
+						break;
+					case h3zero_settings_enable_web_transport:
+						settings->is_web_transport_enabled = (unsigned int)component_value;
+						break;
+					case h3zero_settings_webtransport_max_sessions:
+						settings->webtransport_max_sessions = component_value;
+						break;
+					default:
+						break;
+					}
+				}
+			}
+		}
+	}
+	return bytes;
 }
