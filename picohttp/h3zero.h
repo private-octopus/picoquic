@@ -163,11 +163,6 @@ typedef struct st_h3zero_qpack_static_t {
     int enum_as_int; /* Documented for some interesting values */
 } h3zero_qpack_static_t;
 
-typedef struct st_h3zero_settings_t {
-    unsigned int header_size;
-    unsigned int blocked_streams;
-} h3zero_settings_t;
-
 typedef enum {
     h3zero_content_type_none = 0,
     h3zero_content_type_not_supported,
@@ -205,6 +200,14 @@ typedef struct st_h3zero_header_parts_t {
     size_t protocol_length;
     unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
+
+typedef struct st_h3zero_settings_t {
+    uint64_t table_size;
+    uint64_t max_header_list_size;
+    uint64_t blocked_streams;
+    uint64_t webtransport_max_sessions;
+    unsigned int is_web_transport_enabled : 1;
+} h3zero_settings_t;
 
 extern uint8_t const * h3zero_default_setting_frame;
 

@@ -3115,3 +3115,64 @@ int demo_alpn_test()
 
     return ret;
 }
+
+/* Test encode and decode of settings frame
+ */
+
+int h3zero_settings_encode_test(const uint8_t* ref, size_t ref_length, h3zero_settings_t* test)
+{
+    int ret = -1;
+    uint8_t buffer[1024];
+    uint8_t* bytes = buffer;
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+
+    if ((bytes = h3zero_settings_encode(bytes, bytes_max, test)) != NULL &&
+        (bytes - buffer) == ref_length &&
+        memcmp(buffer, ref, ref_length) == 0) {
+        ret = 0;
+    }
+    return ret;
+}
+
+int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_settings_t* ref, int check_length)
+{
+    int ret = 0;
+    h3zero_settings_t decoded;
+    const uint8_t * bytes_max = bytes + length;
+
+    bytes = h3zero_settings_decode(bytes, bytes_max, &decoded);
+    if (bytes == NULL) {
+        ret = -1;
+    }
+    else if (check_length && bytes != bytes_max) {
+        ret = -1;
+    }
+    else if (decoded.table_size != ref->table_size) {
+        ret = -1;
+    }
+    else if (decoded.blocked_streams != ref->blocked_streams) {
+        ret = -1;
+    }
+    else if (decoded.is_web_transport_enabled != ref->is_web_transport_enabled){
+        ret = -1;
+    }
+    else if (decoded.webtransport_max_sessions != ref->webtransport_max_sessions) {
+        ret = -1;
+    }
+    return ret;
+}
+
+h3zero_settings_t default_setting_expected = {
+    0, 0, 0, 1, 1
+};
+
+int h3zero_settings_test()
+{
+    int ret = h3zero_settings_decode_test(h3zero_default_setting_frame + 1, h3zero_default_setting_frame_size - 1, &default_setting_expected, 1);
+
+    if (ret == 0) {
+        ret = h3zero_settings_encode_test(h3zero_default_setting_frame + 1, h3zero_default_setting_frame_size - 1, &default_setting_expected);
+    }
+
+    return ret;
+}

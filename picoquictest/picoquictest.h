@@ -402,6 +402,7 @@ int h3_multi_file_preemptive_test();
 int h09_multi_file_test();
 int h09_multi_file_loss_test();
 int h09_multi_file_preemptive_test();
+int h3zero_settings_test();
 int picowt_baton_basic_test();
 int picowt_baton_error_test();
 int picowt_baton_long_test();

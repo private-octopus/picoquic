@@ -74,6 +74,7 @@ static const picoquic_test_def_t test_table[] = {
     { "h09_multi_file", h09_multi_file_test },
     { "h09_multi_file_loss", h09_multi_file_loss_test },
     { "h09_multi_file_preemptive", h09_multi_file_preemptive_test },
+    { "h3zero_settings", h3zero_settings_test },
     { "http_stress", http_stress_test },
     { "http_corrupt", http_corrupt_test},
     { "http_corrupt_rdpn", http_corrupt_rdpn_test},

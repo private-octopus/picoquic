@@ -127,6 +127,10 @@ extern "C" {
         int is_h3);
     void h3zero_init_stream_tree(picosplay_tree_t* h3_stream_tree);
 
+    /* handling of setting frames */
+    uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const h3zero_settings_t* settings);
+    const uint8_t* h3zero_settings_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings);
+
     /* Handling of stream prefixes, for applications that use it.
      */
     typedef struct st_h3zero_stream_prefix_t {
