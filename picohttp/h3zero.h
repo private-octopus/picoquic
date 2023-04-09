@@ -72,6 +72,7 @@ typedef enum {
 	h3zero_qpack_blocked_streams = 0x07,
 	h3zero_setting_grease_signature =0x0a0a,
     h3zero_setting_grease_mask = 0x0f0f,
+    h3zero_settings_enable_connect_protocol = 0x8,
     h3zero_settings_enable_web_transport = 0x2b603742,
     h3zero_settings_webtransport_max_sessions = 0x2b603743
 } h3zero_settings_enum_t;
@@ -205,6 +206,7 @@ typedef struct st_h3zero_settings_t {
     uint64_t table_size;
     uint64_t max_header_list_size;
     uint64_t blocked_streams;
+    unsigned int enable_connect_protocol : 1;
     uint64_t webtransport_max_sessions;
     unsigned int is_web_transport_enabled : 1;
 } h3zero_settings_t;
