@@ -66,18 +66,6 @@ typedef enum {
 } h3zero_frame_type_enum_t;
 
 typedef enum {
-    h3zero_setting_reserved = 0x0,
-	h3zero_setting_header_table_size = 0x1,
-    h3zero_setting_max_header_list_size = 0x6,
-	h3zero_qpack_blocked_streams = 0x07,
-	h3zero_setting_grease_signature =0x0a0a,
-    h3zero_setting_grease_mask = 0x0f0f,
-    h3zero_settings_enable_connect_protocol = 0x8,
-    h3zero_settings_enable_web_transport = 0x2b603742,
-    h3zero_settings_webtransport_max_sessions = 0x2b603743
-} h3zero_settings_enum_t;
-
-typedef enum {
     h3zero_stream_type_control = 0,
     h3zero_stream_type_push = 1, /* Push type not supported in h3zero settings */
     h3zero_stream_type_qpack_encoder = 2, /* not required since not using dynamic table */
@@ -202,11 +190,25 @@ typedef struct st_h3zero_header_parts_t {
     unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
 
+typedef enum {
+    h3zero_setting_reserved = 0x0,
+    h3zero_setting_header_table_size = 0x1,
+    h3zero_setting_max_header_list_size = 0x6,
+    h3zero_qpack_blocked_streams = 0x07,
+    h3zero_setting_grease_signature =0x0a0a,
+    h3zero_setting_grease_mask = 0x0f0f,
+    h3zero_settings_enable_connect_protocol = 0x8,
+    h3zero_setting_h3_datagram = 0x33,
+    h3zero_settings_enable_web_transport = 0x2b603742,
+    h3zero_settings_webtransport_max_sessions = 0x2b603743
+} h3zero_settings_enum_t;
+
 typedef struct st_h3zero_settings_t {
     uint64_t table_size;
     uint64_t max_header_list_size;
     uint64_t blocked_streams;
     unsigned int enable_connect_protocol : 1;
+    unsigned int h3_datagram : 1;
     uint64_t webtransport_max_sessions;
     unsigned int is_web_transport_enabled : 1;
 } h3zero_settings_t;
