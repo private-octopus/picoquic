@@ -752,6 +752,11 @@ int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp)
     return ret;
 }
 
+picoquic_tp_t const* picoquic_get_default_tp(picoquic_quic_t* quic)
+{
+    return quic->default_tp;
+}
+
 void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize)
 {
     quic->padding_minsize_default = padding_minsize;

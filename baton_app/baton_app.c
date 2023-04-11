@@ -182,6 +182,9 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
         }
     }
     if (ret == 0) {
+        ret = 0;
+    }
+    if (ret == 0) {
         printf("Starting connection to %s, port %d\n", server_name, server_port);
 
         /* Create a client connection */
@@ -192,6 +195,7 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
             ret = -1;
         }
         else {
+            picowt_set_transport_parameters(cnx);
             picoquic_set_callback(cnx, h3zero_callback, h3zero_cb);
             /* Initialize the callback context. First, create a bidir stream */
             wt_baton_ctx_init(&baton_ctx, h3zero_cb, NULL, NULL);

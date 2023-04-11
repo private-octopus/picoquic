@@ -270,7 +270,7 @@ picohttp_server_path_item_t path_item_list[2] =
     },
     {
         "/baton",
-        6,
+        10,
         wt_baton_callback,
         NULL
     }

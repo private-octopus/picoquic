@@ -70,10 +70,17 @@ extern "C" {
         uint8_t baton;
         uint8_t baton_received;
         uint64_t nb_baton_bytes_received;
-        struct st_picohttp_server_stream_ctx_t* last_received_stream_ctx;
         int nb_turns;
         int nb_turns_required;
         wt_baton_state_enum baton_state;
+        /* Datagram management */
+        int nb_datagrams_received;
+        size_t nb_datagram_bytes_received;
+        uint8_t baton_datagram_received;
+        int nb_datagrams_sent;
+        size_t nb_datagram_bytes_sent;
+        int is_datagram_ready;
+        uint8_t baton_datagram_send_next;
     } wt_baton_ctx_t;
 
     typedef struct st_wt_baton_app_ctx_t {

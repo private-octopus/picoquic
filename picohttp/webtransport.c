@@ -52,6 +52,51 @@
 #include "h3zero_common.h"
 #include "pico_webtransport.h"
 
+/* web transport set parameters
+* Set the parameters adequate for web transport, including:
+* - initial number of bidir and unidir streams to 63
+* - initial max data per stream to 0x3FFF (16K -1)
+* - datagram length to PICOQUIC_MAX_PACKET_SIZE
+*/
+static void picowt_set_transport_parameters_values(const picoquic_tp_t* tp_current, picoquic_tp_t* tp_new)
+{
+    if (tp_current != NULL) {
+        memcpy(tp_new, tp_current, sizeof(picoquic_tp_t));
+    }
+    else {
+        memset(tp_new, 0, sizeof(picoquic_tp_t));
+    }
+    if (tp_new->initial_max_data < 0x3FFF) {
+        tp_new->initial_max_data = 0x3FFF;
+    }
+    if (tp_new->initial_max_stream_data_bidi_local < 0x3FFF) {
+        tp_new->initial_max_stream_data_bidi_local = 0x3FFF;
+    }
+    if (tp_new->initial_max_stream_data_bidi_remote < 0x3FFF) {
+        tp_new->initial_max_stream_data_bidi_remote = 0x3FFF;
+    }
+    if (tp_new->initial_max_stream_data_uni < 0x3FFF) {
+        tp_new->initial_max_stream_data_uni = 0x3FFF;
+    }
+    if (tp_new->initial_max_stream_id_bidir < 0x3F) {
+        tp_new->initial_max_stream_id_bidir = 0x3F;
+    }
+    if (tp_new->initial_max_stream_id_unidir < 0x3F) {
+        tp_new->initial_max_stream_id_unidir = 0x3F;
+    }
+    if (tp_new->max_datagram_frame_size == 0) {
+        tp_new->max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+    }
+}
+
+void picowt_set_transport_parameters(picoquic_cnx_t* cnx)
+{
+    const picoquic_tp_t* tp_current = picoquic_get_transport_parameters(cnx, 1);
+    picoquic_tp_t tp_new;
+    picowt_set_transport_parameters_values(tp_current, &tp_new);
+    picoquic_set_transport_parameters(cnx, &tp_new);
+}
+
 /* Web transport commands */
 
 /* Web transport initiate, client side

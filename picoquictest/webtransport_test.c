@@ -98,6 +98,10 @@ static int picowt_baton_test_one(
         if (ret == 0 && client_qlog_dir != NULL) {
             picoquic_set_qlog(test_ctx->qclient, client_qlog_dir);
         }
+
+        if (ret == 0) {
+            picowt_set_transport_parameters(test_ctx->cnx_client);
+        }
     }
 
     if (ret != 0) {
@@ -183,8 +187,10 @@ static int picowt_baton_test_one(
     if (ret == 0) {
         if (test_id == 3 || test_id == 4 ||
             ((baton_ctx.baton_state == wt_baton_state_done || baton_ctx.baton_state == wt_baton_state_closed) &&
-                (baton_ctx.nb_turns >= nb_turns_required || (baton_ctx.nb_turns >= 8 && nb_turns_required > 8)))) {
-            DBG_PRINTF("Baton test succeeds after %d turns", baton_ctx.nb_turns);
+                (baton_ctx.nb_turns >= nb_turns_required || (baton_ctx.nb_turns >= 10 && nb_turns_required > 10)) &&
+                baton_ctx.nb_datagrams_sent > 0 && baton_ctx.nb_datagrams_received > 0)) {
+            DBG_PRINTF("Baton test succeeds after %d turns, %d datagrams sent, %d received",
+                baton_ctx.nb_turns, baton_ctx.nb_datagrams_sent, baton_ctx.nb_datagrams_received);
         }
         else {
             DBG_PRINTF("Baton test fails after %d turns, state %d",
@@ -215,7 +221,7 @@ static int picowt_baton_test_one(
 
 int picowt_baton_basic_test()
 {
-    int ret = picowt_baton_test_one(1, 7, "/baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(1, 15, "/baton", 0, 2000000, ".", ".");
 
     return ret;
 }
@@ -229,7 +235,7 @@ int picowt_baton_error_test()
 
 int picowt_baton_long_test()
 {
-    int ret = picowt_baton_test_one(2, 10, "/baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(2, 22, "/baton", 0, 2000000, ".", ".");
 
     return ret;
 }

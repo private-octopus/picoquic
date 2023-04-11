@@ -41,6 +41,8 @@ extern "C" {
         picohttp_callback_post_data, /* Data received from peer on stream N */
         picohttp_callback_post_fin, /* All posted data have been received on this stream */
         picohttp_callback_provide_data, /* Stack is ready to send chunk of data on stream N */
+        picohttp_callback_post_datagram, /* Datagram received on this context */
+        picohttp_callback_provide_datagram, /* Ready to send datagram in this context */
         picohttp_callback_reset, /* Stream has been abandoned by peer. */
         picohttp_callback_deregister, /* Context has been deregistered */
         picohttp_callback_free
@@ -137,6 +139,7 @@ extern "C" {
         struct st_h3zero_stream_prefix_t* next;
         struct st_h3zero_stream_prefix_t* previous;
         uint64_t prefix;
+        unsigned int ready_to_send_datagrams : 1;
         picohttp_post_data_cb_fn function_call;
         void* function_ctx;
     } h3zero_stream_prefix_t;
@@ -178,6 +181,7 @@ extern "C" {
         char const* web_folder;
         /* connection wide tracking of stream prefixes */
         h3zero_stream_prefixes_t stream_prefixes;
+        uint64_t last_datagram_prefix;
         /* Flag  and variables used by clients*/
         unsigned int no_disk : 1;
         unsigned int no_print : 1;
@@ -191,6 +195,9 @@ extern "C" {
     void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
     void h3zero_forget_stream(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx);
+
+    int h3zero_set_datagram_ready(picoquic_cnx_t* cnx, uint64_t stream_id);
+    uint8_t* h3zero_provide_datagram_buffer(void* context, size_t length, int ready_to_send);
 
     int h3zero_callback(picoquic_cnx_t* cnx,
         uint64_t stream_id, uint8_t* bytes, size_t length,

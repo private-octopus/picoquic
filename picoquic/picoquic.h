@@ -533,6 +533,8 @@ int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id);
 
 /* Init of transport parameters per quic context */
 int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t* tp);
+/* Read default parameters per quic context */
+picoquic_tp_t const* picoquic_get_default_tp(picoquic_quic_t* quic);
 /* Set the transport parameters per connection */
 void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const * tp);
 /* Get the transport parameters per connection */

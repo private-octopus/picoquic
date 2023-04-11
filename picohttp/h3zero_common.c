@@ -1054,6 +1054,184 @@ int h3zero_callback_prepare_to_send(picoquic_cnx_t* cnx,
 	return ret;
 }
 
+/* Handling of HTTP3 Datagrams. Per RFC 9297 the Datagram Data field of QUIC DATAGRAM
+*  frames uses the following format:
+*
+*   HTTP/3 Datagram {
+*     Quarter Stream ID (i),
+*     HTTP Datagram Payload (..),
+*   }
+*
+*  The "quarter stream ID" is a variable-length integer that contains the value
+*  of the client-initiated bidirectional stream that this datagram is
+*  associated with divided by four. The implementation searchs for the stream-ID
+*  in the table of stream prefixes. If it finds a prefix, if tries to execute
+*  the corresponding callback. If that callback fail, or if the prefix is not
+*  registered, it returns an error.
+* 
+*  Sending of callback is by polling the prefixes that are marked active for
+*  datagrams, in round robin fashion. If the datagram can be sent, the code
+*  automatically include the quarter stream ID corresponding to the context.
+*/
+
+int h3zero_callback_datagram(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, h3zero_callback_ctx_t* h3_ctx)
+{
+	int ret = 0;
+	uint64_t quarter_stream_id = UINT64_MAX;
+	const uint8_t* bytes_max = bytes + length;
+
+	/* Find the control stream identifier */
+	bytes = (uint8_t*)picoquic_frames_varint_decode(bytes, bytes_max, &quarter_stream_id);
+	if (bytes != NULL) {
+		/* find the control stream context, using the full stream ID */
+		h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(&h3_ctx->stream_prefixes, quarter_stream_id*4);
+
+		if (prefix_ctx->function_call == NULL) {
+			/* Should signal the error HTTP_DATAGRAM_ERROR */
+		} else {
+			picohttp_server_stream_ctx_t* stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, prefix_ctx->prefix);
+			if (stream_ctx == NULL) {
+				/* Application is not yet ready -- just ignore the datagram */
+			} else {
+				prefix_ctx->function_call(cnx, bytes, bytes_max - bytes, picohttp_callback_post_datagram, stream_ctx, prefix_ctx->function_ctx);
+			}
+		}
+	}
+	return ret;
+}
+
+typedef struct st_h3zero_prepare_datagram_ctx_t {
+	void* picoquic_context;
+	size_t picoquic_space;
+	uint64_t quarter_stream_id;
+	size_t stream_id_encoding_length;
+	uint8_t buffer[8];
+	size_t application_length;
+	int application_ready;
+} h3zero_prepare_datagram_ctx_t;
+
+uint8_t* h3zero_provide_datagram_buffer(void* context, size_t length, int ready_to_send)
+{
+	uint8_t* ret_buffer = NULL;
+	h3zero_prepare_datagram_ctx_t* pdg_ctx = (h3zero_prepare_datagram_ctx_t*)context;
+	pdg_ctx->application_length = length;
+	pdg_ctx->application_ready = ready_to_send;
+	if (length > 0) {
+		if (length + pdg_ctx->stream_id_encoding_length <= pdg_ctx->picoquic_space) {
+			uint8_t* buffer = picoquic_provide_datagram_buffer(pdg_ctx->picoquic_context, length + pdg_ctx->stream_id_encoding_length);
+			if (buffer != NULL) {
+				ret_buffer = (uint8_t*)picoquic_frames_varint_encode(buffer, buffer + pdg_ctx->stream_id_encoding_length, pdg_ctx->quarter_stream_id);
+			}
+		}
+	}
+	return ret_buffer;
+}
+
+static int h3zero_callback_prepare_datagram_in_context(picoquic_cnx_t* cnx, void* context, size_t space, h3zero_callback_ctx_t* h3_ctx, h3zero_stream_prefix_t* prefix_ctx)
+{
+	/* Poll this prefix. Intercept the data writing callback so the quarter stream ID can be inserted.
+	 * Remember how many bytes were actually posted. Complete the call to picoquic.
+	 * The call to picoquic is: 
+	 * buffer = picoquic_provide_datagram_buffer(context, length);
+	 */
+	int data_sent = 0;
+	if (prefix_ctx->ready_to_send_datagrams && prefix_ctx->function_call != NULL) {
+		h3zero_prepare_datagram_ctx_t pdg_ctx = { 0 };
+		uint8_t* next_byte;
+		prefix_ctx->ready_to_send_datagrams = 0;
+		pdg_ctx.picoquic_context = context;
+		pdg_ctx.picoquic_space = space;
+		pdg_ctx.quarter_stream_id = (prefix_ctx->prefix) >> 2;
+		if ((next_byte = picoquic_frames_varint_encode(pdg_ctx.buffer, pdg_ctx.buffer + 8, pdg_ctx.quarter_stream_id)) == NULL) {
+			/* error !*/
+		}
+		else {
+			picohttp_server_stream_ctx_t* stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, prefix_ctx->prefix);
+			pdg_ctx.stream_id_encoding_length = next_byte - pdg_ctx.buffer;
+			if (space > pdg_ctx.stream_id_encoding_length) {
+				/* Call the application */
+				prefix_ctx->function_call(cnx, (uint8_t *)&pdg_ctx, space - pdg_ctx.stream_id_encoding_length, picohttp_callback_provide_datagram, stream_ctx, prefix_ctx->function_ctx);
+				/* the application might have called the mark active API, so we use an OR here */
+				prefix_ctx->ready_to_send_datagrams |= pdg_ctx.application_ready;
+				if (pdg_ctx.application_length > 0) {
+					h3_ctx->last_datagram_prefix = prefix_ctx->prefix;
+					data_sent = 1;
+				}
+			}
+		}
+	}
+	return data_sent;
+}
+
+int h3zero_callback_prepare_datagram(picoquic_cnx_t* cnx, void* context, size_t space, h3zero_callback_ctx_t* h3_ctx)
+{
+	/* First pass will start just after the last datagram prefix polled, then next pass until that prefix  */
+	h3zero_stream_prefix_t * previous_prefix_ctx = h3zero_find_stream_prefix(&h3_ctx->stream_prefixes, h3_ctx->last_datagram_prefix);
+	h3zero_stream_prefix_t * prefix_ctx = (previous_prefix_ctx == NULL) ? NULL : previous_prefix_ctx->next;
+	int data_sent = 0;
+	int still_active = 0;
+	int all_checked = 0;
+	/* checked the prefixes after the last sent one. */
+	while (prefix_ctx != NULL) {
+		data_sent = h3zero_callback_prepare_datagram_in_context(cnx, context, space, h3_ctx, prefix_ctx);
+		still_active |= prefix_ctx->ready_to_send_datagrams;
+		if (data_sent) {
+			break;
+		}
+		else {
+			prefix_ctx = prefix_ctx->next;
+		}
+	}
+	if (!data_sent) {
+		/* The previous loop only checked the prefixes after the last sent one. Now test the other ones. */
+		prefix_ctx = h3_ctx->stream_prefixes.first;
+		while (prefix_ctx != NULL) {
+			data_sent = h3zero_callback_prepare_datagram_in_context(cnx, context, space, h3_ctx, prefix_ctx);
+			still_active |= prefix_ctx->ready_to_send_datagrams;
+			if (data_sent) {
+				break;
+			}
+			else if (prefix_ctx == previous_prefix_ctx) {
+				all_checked = 1;
+				break;
+			} else {
+				prefix_ctx = prefix_ctx->next;
+			}
+		}
+	}
+	if (!all_checked) {
+		/* The previous loops concluded without checking all prefixes, so recheck */
+		prefix_ctx = h3_ctx->stream_prefixes.first;
+		while (prefix_ctx != NULL && !still_active) {
+			still_active |= prefix_ctx->ready_to_send_datagrams;
+			prefix_ctx = prefix_ctx->next;
+		}
+	}
+	picoquic_mark_datagram_ready(cnx, still_active);
+	return 0;
+}
+
+int h3zero_set_datagram_ready(picoquic_cnx_t* cnx, uint64_t stream_id)
+{
+	int ret = -1;
+	h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
+
+	if (h3_ctx != NULL) {
+		/* Find the control stream. */
+		h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(&h3_ctx->stream_prefixes, stream_id);
+		if (prefix_ctx != NULL) {
+			/* mark this control stream as ready for sending datagrams. */
+			prefix_ctx->ready_to_send_datagrams = 1;
+			/* declare readiness to picoquic. */
+			ret = picoquic_mark_datagram_ready(cnx, 1);
+		}
+	}
+
+	return ret;
+}
+
+/* Picoquic callback for H3 connections.
+ */
 int h3zero_callback(picoquic_cnx_t* cnx,
 	uint64_t stream_id, uint8_t* bytes, size_t length,
 	picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
@@ -1146,12 +1324,23 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 		case picoquic_callback_prepare_to_send:
 			ret = h3zero_callback_prepare_to_send(cnx, stream_id, stream_ctx, (void*)bytes, length, ctx);
 			break;
+		case picoquic_callback_datagram: /* Datagram frame has been received */
+			ret = h3zero_callback_datagram(cnx, bytes, length, ctx);
+			break;
+		case picoquic_callback_prepare_datagram: /* Prepare the next datagram */
+			ret = h3zero_callback_prepare_datagram(cnx, bytes, length, ctx);
+			break;
+		case picoquic_callback_datagram_acked: /* Ack for packet carrying datagram-frame received from peer */
+		case picoquic_callback_datagram_lost: /* Packet carrying datagram-frame probably lost */
+		case picoquic_callback_datagram_spurious: /* Packet carrying datagram-frame was not really lost */
+			/* datagram acknowledgements are not visible for now at the H3 layer, just ignore. */
+			break;
 		case picoquic_callback_almost_ready:
 		case picoquic_callback_ready:
-			/* Check that the transport parameters are what Http3 expects */
+			/* TODO: Check that the transport parameters are what Http3 expects */
 			break;
 		default:
-			/* unexpected */
+			/* unexpected -- just ignore. */
 			break;
 		}
 	}

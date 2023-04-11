@@ -199,6 +199,14 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
             ret = wt_baton_close_session(cnx, baton_ctx);
         }
         else {
+            int baton_7 = baton_ctx->baton_received % 7;
+
+            if (baton_7 == picoquic_is_client(cnx) && baton_ctx->baton_received != 0) {
+                baton_ctx->is_datagram_ready = 1;
+                baton_ctx->baton_datagram_send_next = baton_ctx->baton_received;
+                h3zero_set_datagram_ready(cnx, baton_ctx->control_stream_id);
+            }
+
             baton_ctx->nb_turns += 1;  /* add a turn for the peer sending this */
             if (baton_ctx->nb_turns >= baton_ctx->nb_turns_required) {
                 picoquic_log_app_message(cnx, "Final baton turn after %d turns", baton_ctx->nb_turns);
@@ -245,7 +253,6 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         }
         else {
             baton_ctx->baton_received = *bytes;
-            baton_ctx->last_received_stream_ctx = stream_ctx;
             ret = wt_baton_check(cnx, stream_ctx, baton_ctx);
         }
     }
@@ -370,13 +377,81 @@ void wt_baton_unlink_context(picoquic_cnx_t* cnx,
         }
     }
     /* Then free the baton context, if this is not a client */
-    picoquic_set_app_stream_ctx(cnx, control_stream_ctx->control_stream_id, NULL);
+    picoquic_set_app_stream_ctx(cnx, control_stream_ctx->stream_id, NULL);
     if (!cnx->client_mode) {
         free(baton_ctx);
     }
 }
 
+/* Management of datagrams
+ */
+int wt_baton_receive_datagram(picoquic_cnx_t* cnx,
+    const uint8_t* bytes, size_t length,
+    struct st_picohttp_server_stream_ctx_t* stream_ctx,
+    void* path_app_ctx)
+{
+    int ret = 0;
+    wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
+    const uint8_t* bytes_max = bytes + length;
+    uint64_t padding_length;
+    uint8_t next_baton = 0;
 
+    /* Parse the padding length  */
+    if (stream_ctx != NULL && stream_ctx->stream_id != baton_ctx->control_stream_id) {
+        /* error, unexpected datagram on this stream */
+    }
+    else if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &padding_length)) != NULL &&
+            (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, padding_length)) != NULL &&
+            (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &next_baton)) != NULL &&
+            bytes == bytes_max){
+        baton_ctx->baton_datagram_received = next_baton;
+        baton_ctx->nb_datagrams_received += 1;
+        baton_ctx->nb_datagram_bytes_received += 1;
+    }
+    else {
+        /* error, badly coded datagram */
+    }
+    return ret;
+}
+
+int wt_baton_provide_datagram(picoquic_cnx_t* cnx,
+    void* context, size_t space,
+    struct st_picohttp_server_stream_ctx_t* stream_ctx,
+    void* path_app_ctx)
+{
+    int ret = 0;
+    wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
+
+    if (baton_ctx->is_datagram_ready) {
+        if (space > 1536) {
+            space = 1536;
+        }
+        if (space < 3) {
+            /* Not enough space to send anything */
+        }
+        else {
+            uint8_t* buffer = h3zero_provide_datagram_buffer(context, space, 0);
+            if (buffer == NULL) {
+                ret = -1;
+            }
+            else {
+                size_t padding_length = space - 3;
+                uint8_t* bytes = buffer;
+                *bytes++ = 0x40 | (uint8_t)((padding_length >> 8) & 0x3F);
+                *bytes++ = (uint8_t)(padding_length & 0xFF);
+                memset(bytes, 0, padding_length);
+                bytes += padding_length;
+                *bytes = baton_ctx->baton_datagram_send_next;
+                baton_ctx->is_datagram_ready = 0;
+                baton_ctx->baton_datagram_send_next = 0;
+                baton_ctx->nb_datagrams_sent += 1;
+                baton_ctx->nb_datagram_bytes_sent += space;
+            }
+        }
+    }
+
+    return ret;
+}
 
 /* Web transport/baton callback. This will be called from the web server
 * when the path points to a web transport callback.
@@ -433,6 +508,15 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
         /* We assume that the required stream headers have already been pushed,
         * and that the stream context is already set. Just send the data.
         */
+        break;
+    case picohttp_callback_post_datagram:
+        /* Data received on a stream for which the per-app stream context is known.
+        * the app just has to process the data.
+        */
+        ret = wt_baton_receive_datagram(cnx, bytes, length, stream_ctx, path_app_ctx);
+        break;
+    case picohttp_callback_provide_datagram: /* Stack is ready to send a datagram */
+        ret = wt_baton_provide_datagram(cnx, bytes, length, stream_ctx, path_app_ctx);
         break;
     case picohttp_callback_reset: /* Stream has been abandoned. */
         /* If control stream: abandon the whole connection. */
@@ -510,7 +594,7 @@ int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_callback_ctx_t* h3_ctx, wt_bat
         ctx->nb_turns_required = app_ctx->nb_turns_required;
     }
     else {
-        ctx->nb_turns_required = 7;
+        ctx->nb_turns_required = 17;
     }
 
     if (stream_ctx != NULL) {
