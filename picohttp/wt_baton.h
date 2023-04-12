@@ -52,7 +52,7 @@ extern "C" {
          * on the native client, we need to manage a local tree,
          * and set the tree pointer to that.
          */
-        picosplay_tree_t * h3_stream_tree;
+        h3zero_callback_ctx_t* h3_ctx;
         char const* server_path;
         /* connection wide tracking of stream prefixes.
          * on the server, we use the global tracker.
@@ -70,9 +70,21 @@ extern "C" {
         uint8_t baton;
         uint8_t baton_received;
         uint64_t nb_baton_bytes_received;
+        uint64_t nb_baton_bytes_sent;
         int nb_turns;
         int nb_turns_required;
         wt_baton_state_enum baton_state;
+        /* Stream management */
+        int is_sending;
+        uint64_t sending_stream_id; /* UINT64_MAX if unknown */
+        uint64_t padding_required;  /* UINT64_MAX if unknown */
+        uint64_t padding_sent;
+        int is_receiving;
+        uint64_t receiving_stream_id; /* UINT64_MAX if unknown */
+        uint64_t padding_expected;  /* UINT64_MAX if unknown */
+        uint64_t padding_received; 
+        uint8_t receive_buffer[8];
+        uint8_t nb_receive_buffer_bytes;
         /* Datagram management */
         int nb_datagrams_received;
         size_t nb_datagram_bytes_received;
@@ -86,6 +98,8 @@ extern "C" {
     typedef struct st_wt_baton_app_ctx_t {
         int nb_turns_required;
     } wt_baton_app_ctx_t;
+
+    int wt_baton_connect(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx);
 
     int wt_baton_accept(picoquic_cnx_t* cnx,
         uint8_t* bytes, size_t length,

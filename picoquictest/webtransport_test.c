@@ -130,21 +130,8 @@ static int picowt_baton_test_one(
             baton_ctx.server_path = baton_path;
             baton_ctx.nb_turns_required = nb_turns_required;
             /* Create a stream context for the connect call. */
-            stream_ctx = wt_baton_create_stream(test_ctx->cnx_client, 1, &baton_ctx);
-            if (stream_ctx == NULL) {
-                ret = -1;
-            }
-            else {
-                baton_ctx.connection_ready = 1;
-                baton_ctx.is_client = 1;
-                stream_ctx->is_open = 1;
-                stream_ctx->path_callback = wt_baton_callback;
-                stream_ctx->path_callback_ctx = &baton_ctx;
-                /* send the WT CONNECT */
-                ret = picowt_connect(test_ctx->cnx_client, stream_ctx, &h3zero_cb->stream_prefixes, baton_ctx.server_path, wt_baton_callback, &baton_ctx);
-            }
+            ret = wt_baton_connect(test_ctx->cnx_client, &baton_ctx, h3zero_cb);
         }
-
         /* Initialize the server -- should include the path setup for connect action */
         memset(&server_param, 0, sizeof(picohttp_server_parameters_t));
         server_param.web_folder = NULL;
