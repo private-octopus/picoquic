@@ -114,10 +114,10 @@ void picowt_set_transport_parameters(picoquic_cnx_t* cnx)
 * an H3 context for the connection?
 */
 
-int picowt_connect(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx, h3zero_stream_prefixes_t * stream_prefixes, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
+int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  picohttp_server_stream_ctx_t* stream_ctx, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
 {
     /* register the stream ID as session ID */
-    int ret = h3zero_declare_stream_prefix(stream_prefixes, stream_ctx->stream_id, wt_callback, wt_ctx);
+    int ret = h3zero_declare_stream_prefix(ctx, stream_ctx->stream_id, wt_callback, wt_ctx);
     if (cnx != NULL) {
         picoquic_log_app_message(cnx, "Allocated prefix for control stream %" PRIu64, stream_ctx->stream_id);
     }
@@ -159,7 +159,7 @@ int picowt_connect(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
 
         if (ret != 0) {
             /* remove the stream prefix */
-            h3zero_delete_stream_prefix(cnx, stream_prefixes, stream_ctx->stream_id);
+            h3zero_delete_stream_prefix(cnx, ctx, stream_ctx->stream_id);
         }
     }
     return ret;

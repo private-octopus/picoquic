@@ -115,8 +115,7 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
     picoquic_cnx_t* cnx = NULL;
     uint64_t current_time = picoquic_current_time();
     wt_baton_ctx_t baton_ctx = { 0 };
-        picohttp_server_stream_ctx_t* stream_ctx = NULL;
-    h3zero_callback_ctx_t* h3zero_cb = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
 
     /* Get the server's address */
     if (ret == 0) {
@@ -176,8 +175,8 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
     if (ret == 0) {
         /* use the generic H3 callback */
         /* Set the client callback context */
-        h3zero_cb = h3zero_callback_create_context(NULL);
-        if (h3zero_cb == NULL) {
+        h3_ctx = h3zero_callback_create_context(NULL);
+        if (h3_ctx == NULL) {
             ret = 1;
         }
     }
@@ -196,27 +195,15 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
         }
         else {
             picowt_set_transport_parameters(cnx);
-            picoquic_set_callback(cnx, h3zero_callback, h3zero_cb);
+            picoquic_set_callback(cnx, h3zero_callback, h3_ctx);
             /* Initialize the callback context. First, create a bidir stream */
-            wt_baton_ctx_init(&baton_ctx, h3zero_cb, NULL, NULL);
+            wt_baton_ctx_init(&baton_ctx, h3_ctx, NULL, NULL);
             baton_ctx.is_client = 1;
             baton_ctx.server_path = path;
             baton_ctx.nb_turns_required = nb_turns_required;
 
             /* Create a stream context for the connect call. */
-            stream_ctx = wt_baton_create_stream(cnx, 1, &baton_ctx);
-            if (stream_ctx == NULL) {
-                ret = -1;
-            }
-            else {
-                baton_ctx.connection_ready = 1;
-                baton_ctx.is_client = 1;
-                stream_ctx->is_open = 1;
-                stream_ctx->path_callback = wt_baton_callback;
-                stream_ctx->path_callback_ctx = &baton_ctx;
-                /* send the WT CONNECT */
-                ret = picowt_connect(cnx, stream_ctx, &h3zero_cb->stream_prefixes, baton_ctx.server_path, wt_baton_callback, &baton_ctx);
-            }
+            ret = wt_baton_connect(cnx, &baton_ctx, h3_ctx);
 
             /* Client connection parameters could be set here, before starting the connection. */
             if (ret == 0) {
@@ -245,9 +232,9 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
     /* Done. At this stage, we could print out statistics, etc. */
     /* baton_client_report(&baton_ctx); */
 
-    if (h3zero_cb != NULL)
+    if (h3_ctx != NULL)
     {
-        h3zero_callback_delete_context(cnx, h3zero_cb);
+        h3zero_callback_delete_context(cnx, h3_ctx);
     }
 
     /* Save tickets and tokens, and free the QUIC context */

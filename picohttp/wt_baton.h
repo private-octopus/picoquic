@@ -58,7 +58,7 @@ extern "C" {
          * on the server, we use the global tracker.
          * on the client, we manage a placeholder.
          */
-        h3zero_stream_prefixes_t * stream_prefixes;
+        //h3zero_stream_prefixes_t * stream_prefixes;
         /* control stream context, will need to remain open as long 
          */
         uint64_t control_stream_id;

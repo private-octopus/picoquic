@@ -87,17 +87,17 @@ static void picohttp_stream_node_delete(void * tree, picosplay_node_t * node)
 	free(stream_ctx);
 }
 
-void h3zero_delete_stream(picosplay_tree_t * http_stream_tree, picohttp_server_stream_ctx_t* stream_ctx)
+void h3zero_delete_stream(h3zero_callback_ctx_t* ctx, picohttp_server_stream_ctx_t* stream_ctx)
 {
-	picosplay_delete(http_stream_tree, &stream_ctx->http_stream_node);
+	picosplay_delete(&ctx->h3_stream_tree, &stream_ctx->http_stream_node);
 }
 
-picohttp_server_stream_ctx_t* h3zero_find_stream(picosplay_tree_t * stream_tree, uint64_t stream_id)
+picohttp_server_stream_ctx_t* h3zero_find_stream(h3zero_callback_ctx_t* ctx, uint64_t stream_id)
 {
 	picohttp_server_stream_ctx_t * ret = NULL;
 	picohttp_server_stream_ctx_t target;
 	target.stream_id = stream_id;
-	picosplay_node_t * node = picosplay_find(stream_tree, (void*)&target);
+	picosplay_node_t * node = picosplay_find(&ctx->h3_stream_tree, (void*)&target);
 
 	if (node != NULL) {
 		ret = (picohttp_server_stream_ctx_t *)picohttp_stream_node_value(node);
@@ -109,11 +109,11 @@ picohttp_server_stream_ctx_t* h3zero_find_stream(picosplay_tree_t * stream_tree,
 picohttp_server_stream_ctx_t * h3zero_find_or_create_stream(
 	picoquic_cnx_t* cnx,
 	uint64_t stream_id,
-	picosplay_tree_t * stream_tree,
+	h3zero_callback_ctx_t* ctx,
 	int should_create,
 	int is_h3)
 {
-	picohttp_server_stream_ctx_t * stream_ctx = h3zero_find_stream(stream_tree, stream_id);
+	picohttp_server_stream_ctx_t * stream_ctx = h3zero_find_stream(ctx, stream_id);
 
 	/* if stream is already present, check its state. New bytes? */
 
@@ -139,7 +139,7 @@ picohttp_server_stream_ctx_t * h3zero_find_or_create_stream(
 				}
 			}
 			
-			picosplay_insert(stream_tree, stream_ctx);
+			picosplay_insert(&ctx->h3_stream_tree, stream_ctx);
 		}
 	}
 
@@ -155,9 +155,9 @@ void h3zero_init_stream_tree(picosplay_tree_t * h3_stream_tree)
 /* Declare a stream prefix, such as used by webtransport or masque
  */
 
-h3zero_stream_prefix_t* h3zero_find_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t prefix)
+h3zero_stream_prefix_t* h3zero_find_stream_prefix(h3zero_callback_ctx_t* ctx, uint64_t prefix)
 {
-	h3zero_stream_prefix_t* prefix_ctx = prefixes->first;
+	h3zero_stream_prefix_t* prefix_ctx = ctx->stream_prefixes.first;
 
 	while (prefix_ctx != NULL) {
 		if (prefix_ctx->prefix == prefix) {
@@ -169,10 +169,10 @@ h3zero_stream_prefix_t* h3zero_find_stream_prefix(h3zero_stream_prefixes_t* pref
 	return prefix_ctx;
 }
 
-int h3zero_declare_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t prefix, picohttp_post_data_cb_fn function_call, void* function_ctx)
+int h3zero_declare_stream_prefix(h3zero_callback_ctx_t* ctx, uint64_t prefix, picohttp_post_data_cb_fn function_call, void* function_ctx)
 {
 	int ret = 0;
-	h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(prefixes, prefix);
+	h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(ctx, prefix);
 
 	if (prefix_ctx == NULL) {
 		prefix_ctx = (h3zero_stream_prefix_t*)malloc(sizeof(h3zero_stream_prefix_t));
@@ -184,14 +184,14 @@ int h3zero_declare_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t pr
 			prefix_ctx->prefix = prefix;
 			prefix_ctx->function_call = function_call;
 			prefix_ctx->function_ctx = function_ctx;
-			if (prefixes->last == NULL) {
-				prefixes->first = prefix_ctx;
+			if (ctx->stream_prefixes.last == NULL) {
+				ctx->stream_prefixes.first = prefix_ctx;
 			}
 			else {
-				prefixes->last->next = prefix_ctx;
+				ctx->stream_prefixes.last->next = prefix_ctx;
 			}
-			prefix_ctx->previous = prefixes->last;
-			prefixes->last = prefix_ctx;
+			prefix_ctx->previous = ctx->stream_prefixes.last;
+			ctx->stream_prefixes.last = prefix_ctx;
 		}
 	}
 	else {
@@ -200,18 +200,18 @@ int h3zero_declare_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t pr
 	return ret;
 }
 
-void h3zero_delete_stream_prefix(picoquic_cnx_t * cnx, h3zero_stream_prefixes_t* prefixes, uint64_t prefix)
+void h3zero_delete_stream_prefix(picoquic_cnx_t * cnx, h3zero_callback_ctx_t* ctx, uint64_t prefix)
 {
-	h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(prefixes, prefix);
+	h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(ctx, prefix);
 	if (prefix_ctx != NULL) {
 		if (prefix_ctx->previous == NULL) {
-			prefixes->first = prefix_ctx->next;
+			ctx->stream_prefixes.first = prefix_ctx->next;
 		}
 		else {
 			prefix_ctx->previous->next = prefix_ctx->next;
 		}
 		if (prefix_ctx->next == NULL) {
-			prefixes->last = prefix_ctx->previous;
+			ctx->stream_prefixes.last = prefix_ctx->previous;
 		}
 		else {
 			prefix_ctx->next->previous = prefix_ctx->previous;
@@ -222,7 +222,7 @@ void h3zero_delete_stream_prefix(picoquic_cnx_t * cnx, h3zero_stream_prefixes_t*
 			picohttp_server_stream_ctx_t* stream_ctx = NULL;
 		    h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
 			if (h3_ctx != NULL) {
-				stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, prefix_ctx->prefix);
+				stream_ctx = h3zero_find_stream(h3_ctx, prefix_ctx->prefix);
 			}
 			if (stream_ctx != NULL) {
 				prefix_ctx->function_call(cnx, NULL, 0, picohttp_callback_deregister, stream_ctx, prefix_ctx->function_ctx);
@@ -237,17 +237,17 @@ void h3zero_delete_stream_prefix(picoquic_cnx_t * cnx, h3zero_stream_prefixes_t*
 	}
 }
 
-void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_stream_prefixes_t* prefixes)
+void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_callback_ctx_t* ctx)
 {
 	h3zero_stream_prefix_t* next;
 
-	while ((next = prefixes->first) != NULL) {
-		if (prefixes->first == next){
+	while ((next = ctx->stream_prefixes.first) != NULL) {
+		if (ctx->stream_prefixes.first == next){
 			/* the prefix was not deleted as part of app cleanup */
 			if (cnx != NULL) {
 				picoquic_log_app_message(cnx, "Clearing stream prefix %" PRIu64, next->prefix);
 			}
-			h3zero_delete_stream_prefix(cnx, prefixes, next->prefix);
+			h3zero_delete_stream_prefix(cnx, ctx, next->prefix);
 		}
 	}
 }
@@ -310,7 +310,7 @@ int h3zero_protocol_init(picoquic_cnx_t* cnx)
 uint8_t* h3zero_parse_incoming_remote_stream(
 	uint8_t* bytes, uint8_t* bytes_max,
 	picohttp_server_stream_ctx_t* stream_ctx,
-	picosplay_tree_t* stream_tree, h3zero_stream_prefixes_t* prefixes)
+	h3zero_callback_ctx_t* ctx)
 {
 	h3zero_data_stream_state_t* stream_state = &stream_ctx->ps.stream_state;
 	size_t frame_type_length = 0;
@@ -377,7 +377,7 @@ uint8_t* h3zero_parse_incoming_remote_stream(
 
 						(void)picoquic_frames_varint_decode(stream_state->frame_header + frame_type_length,
 							stream_state->frame_header + frame_type_length + context_id_length, &stream_ctx->control_stream_id);
-						stream_prefix = h3zero_find_stream_prefix(prefixes, stream_ctx->control_stream_id);
+						stream_prefix = h3zero_find_stream_prefix(ctx, stream_ctx->control_stream_id);
 						if (stream_prefix == NULL) {
 							bytes = NULL;
 						}
@@ -424,7 +424,7 @@ h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters
 
 void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
 {
-	h3zero_delete_all_stream_prefixes(cnx, &ctx->stream_prefixes);
+	h3zero_delete_all_stream_prefixes(cnx, ctx);
 	picosplay_empty_tree(&ctx->h3_stream_tree);
 	free(ctx);
 }
@@ -443,7 +443,7 @@ int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
 	int ret = 0;
 
 	if (stream_ctx == NULL) {
-		stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, 1, 1);
+		stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, ctx, 1, 1);
 		picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
 	}
 	if (stream_ctx == NULL) {
@@ -452,8 +452,7 @@ int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
 	else {
 		uint8_t* bytes_max = bytes + length;
 
-		bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx,
-			&ctx->h3_stream_tree, &ctx->stream_prefixes);
+		bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, ctx);
 		if (bytes == NULL) {
 			picoquic_log_app_message(cnx, "Cannot parse incoming stream: %"PRIu64, stream_id);
 			ret = -1;
@@ -725,7 +724,7 @@ int h3zero_callback_server_data(
 		else {
 			/* Find or create stream context */
 			if (stream_ctx == NULL) {
-				stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, 1, 1);
+				stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, ctx, 1, 1);
 			}
 
 			if (stream_ctx == NULL) {
@@ -750,7 +749,7 @@ int h3zero_callback_server_data(
 						if (stream_ctx->ps.stream_state.is_web_transport) {
 							if (stream_ctx->path_callback == NULL) {
 								h3zero_stream_prefix_t* stream_prefix;
-								stream_prefix = h3zero_find_stream_prefix(&ctx->stream_prefixes, stream_ctx->ps.stream_state.control_stream_id);
+								stream_prefix = h3zero_find_stream_prefix(ctx, stream_ctx->ps.stream_state.control_stream_id);
 								if (stream_prefix == NULL) {
 									ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
 								}
@@ -867,7 +866,7 @@ int h3zero_callback_client_data(picoquic_cnx_t* cnx,
 
 	/* Data arrival on stream #x, maybe with fin mark */
 	if (stream_ctx == NULL) {
-		stream_ctx = h3zero_find_stream(&ctx->h3_stream_tree, stream_id);
+		stream_ctx = h3zero_find_stream(ctx, stream_id);
 	}
 	if (IS_BIDIR_STREAM_ID(stream_id) && IS_LOCAL_STREAM_ID(stream_id, 1)) {
 		if (stream_ctx == NULL) {
@@ -1026,7 +1025,7 @@ int h3zero_callback_prepare_to_send(picoquic_cnx_t* cnx,
 	int ret = -1;
 
 	if (stream_ctx == NULL) {
-		stream_ctx = h3zero_find_stream(&ctx->h3_stream_tree, stream_id);
+		stream_ctx = h3zero_find_stream(ctx, stream_id);
 	}
 
 	if (stream_ctx == NULL) {
@@ -1044,7 +1043,7 @@ int h3zero_callback_prepare_to_send(picoquic_cnx_t* cnx,
 			/* if finished sending on server, delete stream */
 			if (!cnx->client_mode) {
 				if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
-					h3zero_delete_stream(&ctx->h3_stream_tree, stream_ctx);
+					h3zero_delete_stream(ctx, stream_ctx);
 					picoquic_unlink_app_stream_ctx(cnx, stream_id);
 				}
 			}
@@ -1084,12 +1083,12 @@ int h3zero_callback_datagram(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length,
 	bytes = (uint8_t*)picoquic_frames_varint_decode(bytes, bytes_max, &quarter_stream_id);
 	if (bytes != NULL) {
 		/* find the control stream context, using the full stream ID */
-		h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(&h3_ctx->stream_prefixes, quarter_stream_id*4);
+		h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(h3_ctx, quarter_stream_id*4);
 
 		if (prefix_ctx->function_call == NULL) {
 			/* Should signal the error HTTP_DATAGRAM_ERROR */
 		} else {
-			picohttp_server_stream_ctx_t* stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, prefix_ctx->prefix);
+			picohttp_server_stream_ctx_t* stream_ctx = h3zero_find_stream(h3_ctx, prefix_ctx->prefix);
 			if (stream_ctx == NULL) {
 				/* Application is not yet ready -- just ignore the datagram */
 			} else {
@@ -1146,7 +1145,7 @@ static int h3zero_callback_prepare_datagram_in_context(picoquic_cnx_t* cnx, void
 			/* error !*/
 		}
 		else {
-			picohttp_server_stream_ctx_t* stream_ctx = h3zero_find_stream(&h3_ctx->h3_stream_tree, prefix_ctx->prefix);
+			picohttp_server_stream_ctx_t* stream_ctx = h3zero_find_stream(h3_ctx, prefix_ctx->prefix);
 			pdg_ctx.stream_id_encoding_length = next_byte - pdg_ctx.buffer;
 			if (space > pdg_ctx.stream_id_encoding_length) {
 				/* Call the application */
@@ -1166,7 +1165,7 @@ static int h3zero_callback_prepare_datagram_in_context(picoquic_cnx_t* cnx, void
 int h3zero_callback_prepare_datagram(picoquic_cnx_t* cnx, void* context, size_t space, h3zero_callback_ctx_t* h3_ctx)
 {
 	/* First pass will start just after the last datagram prefix polled, then next pass until that prefix  */
-	h3zero_stream_prefix_t * previous_prefix_ctx = h3zero_find_stream_prefix(&h3_ctx->stream_prefixes, h3_ctx->last_datagram_prefix);
+	h3zero_stream_prefix_t * previous_prefix_ctx = h3zero_find_stream_prefix(h3_ctx, h3_ctx->last_datagram_prefix);
 	h3zero_stream_prefix_t * prefix_ctx = (previous_prefix_ctx == NULL) ? NULL : previous_prefix_ctx->next;
 	int data_sent = 0;
 	int still_active = 0;
@@ -1218,7 +1217,7 @@ int h3zero_set_datagram_ready(picoquic_cnx_t* cnx, uint64_t stream_id)
 
 	if (h3_ctx != NULL) {
 		/* Find the control stream. */
-		h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(&h3_ctx->stream_prefixes, stream_id);
+		h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(h3_ctx, stream_id);
 		if (prefix_ctx != NULL) {
 			/* mark this control stream as ready for sending datagrams. */
 			prefix_ctx->ready_to_send_datagrams = 1;
@@ -1272,7 +1271,7 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 		case picoquic_callback_stop_sending: /* Peer asks server to reset stream #x */
 											 /* TODO: special case for uni streams. */
 			if (stream_ctx == NULL) {
-				stream_ctx = h3zero_find_stream(&ctx->h3_stream_tree, stream_id);
+				stream_ctx = h3zero_find_stream(ctx, stream_id);
 			}
 			if (stream_ctx != NULL) {
 				/* reset post callback. */

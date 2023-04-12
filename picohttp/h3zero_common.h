@@ -119,14 +119,6 @@ extern "C" {
     } picohttp_server_stream_ctx_t;
 
     void* picohttp_stream_node_value(picosplay_node_t* node);
-    void h3zero_delete_stream(picosplay_tree_t* http_stream_tree, picohttp_server_stream_ctx_t* stream_ctx);
-    picohttp_server_stream_ctx_t* h3zero_find_stream(picosplay_tree_t* stream_tree, uint64_t stream_id);
-    picohttp_server_stream_ctx_t* h3zero_find_or_create_stream(
-        picoquic_cnx_t* cnx,
-        uint64_t stream_id,
-        picosplay_tree_t* stream_tree,
-        int should_create,
-        int is_h3);
     void h3zero_init_stream_tree(picosplay_tree_t* h3_stream_tree);
 
     /* handling of setting frames */
@@ -149,18 +141,7 @@ extern "C" {
         struct st_h3zero_stream_prefix_t* last;
     } h3zero_stream_prefixes_t;
 
-    h3zero_stream_prefix_t* h3zero_find_stream_prefix(h3zero_stream_prefixes_t* prefixes, uint64_t prefix);
-    int h3zero_declare_stream_prefix(h3zero_stream_prefixes_t * prefixes, uint64_t prefix, picohttp_post_data_cb_fn function_call, void* function_ctx);
-    void h3zero_delete_stream_prefix(picoquic_cnx_t * cnx, h3zero_stream_prefixes_t* prefixes, uint64_t prefix);
-    void h3zero_delete_all_stream_prefixes(picoquic_cnx_t* cnx, h3zero_stream_prefixes_t* prefixes);
-
     int h3zero_protocol_init(picoquic_cnx_t* cnx);
-
-    /* Callback management */
-    uint8_t* h3zero_parse_incoming_remote_stream(
-        uint8_t* bytes, uint8_t* bytes_max,
-        picohttp_server_stream_ctx_t* stream_ctx,
-        picosplay_tree_t* stream_tree, h3zero_stream_prefixes_t* prefixes);
 
     /* CLIENT DEFINITIONS 
      */
@@ -194,6 +175,23 @@ extern "C" {
     h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters_t* param);
     void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
+    void h3zero_delete_stream(h3zero_callback_ctx_t* ctx, picohttp_server_stream_ctx_t* stream_ctx);
+    
+    picohttp_server_stream_ctx_t* h3zero_find_stream(h3zero_callback_ctx_t* ctx, 
+        uint64_t stream_id);
+    
+    picohttp_server_stream_ctx_t* h3zero_find_or_create_stream(
+        picoquic_cnx_t* cnx,
+        uint64_t stream_id,
+        h3zero_callback_ctx_t* ctx,
+        int should_create,
+        int is_h3);
+
+    uint8_t* h3zero_parse_incoming_remote_stream(
+        uint8_t* bytes, uint8_t* bytes_max,
+        picohttp_server_stream_ctx_t* stream_ctx,
+        h3zero_callback_ctx_t* ctx);
+
     void h3zero_forget_stream(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx);
 
     int h3zero_set_datagram_ready(picoquic_cnx_t* cnx, uint64_t stream_id);
@@ -202,6 +200,12 @@ extern "C" {
     int h3zero_callback(picoquic_cnx_t* cnx,
         uint64_t stream_id, uint8_t* bytes, size_t length,
         picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
+
+    h3zero_stream_prefix_t* h3zero_find_stream_prefix(h3zero_callback_ctx_t* ctx, uint64_t prefix);
+    int h3zero_declare_stream_prefix(h3zero_callback_ctx_t* ctx, uint64_t prefix, picohttp_post_data_cb_fn function_call, void* function_ctx);
+    void h3zero_delete_stream_prefix(picoquic_cnx_t * cnx, h3zero_callback_ctx_t* ctx, uint64_t prefix);
+    void h3zero_delete_all_stream_prefixes(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
+
 
 #ifdef __cplusplus
 }

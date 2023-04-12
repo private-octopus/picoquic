@@ -34,7 +34,7 @@ extern "C" {
  * wt_ctx: application level context for that connection.
  */
     void picowt_set_transport_parameters(picoquic_cnx_t* cnx);
-    int picowt_connect(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx, h3zero_stream_prefixes_t* stream_prefixes, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
+    int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, picohttp_server_stream_ctx_t* stream_ctx, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
 
 #ifdef __cplusplus
 }
