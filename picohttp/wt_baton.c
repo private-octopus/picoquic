@@ -285,7 +285,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             if (baton_ctx->padding_expected > baton_ctx->padding_received) {
                 size_t available = length - processed;
                 if (available + baton_ctx->padding_received > baton_ctx->padding_expected) {
-                    available = baton_ctx->padding_expected - baton_ctx->padding_received;
+                    available = (size_t)(baton_ctx->padding_expected - baton_ctx->padding_received);
                 }
                 baton_ctx->padding_received += available;
                 processed += available;
@@ -348,13 +348,13 @@ int wt_baton_provide_data(picoquic_cnx_t* cnx,
                 padding_length_length = 2;
             }
         }
-        useful = padding_length_length + baton_ctx->padding_required - baton_ctx->padding_sent + 1;
+        useful = padding_length_length + (size_t)(baton_ctx->padding_required - baton_ctx->padding_sent) + 1;
         if (useful > space) {
             useful = space;
             pad_length = space - padding_length_length;
         }
         else {
-            pad_length = baton_ctx->padding_required - baton_ctx->padding_sent;
+            pad_length = (size_t)(baton_ctx->padding_required - baton_ctx->padding_sent);
             baton_ctx->is_sending = 0;
         }
         buffer = picoquic_provide_stream_data_buffer(context, useful, !baton_ctx->is_sending, baton_ctx->is_sending);
