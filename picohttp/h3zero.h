@@ -246,20 +246,6 @@ uint8_t* h3zero_create_not_found_header_frame_ex(uint8_t* bytes, uint8_t* bytes_
 uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes_max);
 uint8_t* h3zero_create_bad_method_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max, char const* server_string);
 
-/* Parsing of a data stream. This is implemented as a filter, with a set of states:
- *
- * - Reading frame length: obtaining the length and type of the next frame.
- * - Reading header frame: obtaining the bytes of the data frame.
- *   When all bytes are obtained, the header is parsed and the header
- *   structure is documented. State moves back to initial, with header-read
- *   flag set. Having two frame headers before a data frame is a bug.
- * - Reading data frame: the frame header indicated a data frame of
- *   length N. Treat the following N bytes as data.
- *
- * There may be several data frames in a stream. The application will pick
- * the bytes and treat them as data.
- */
-
 typedef struct st_h3zero_data_stream_state_t {
     h3zero_header_parts_t header;
     h3zero_header_parts_t trailer;
@@ -270,6 +256,7 @@ typedef struct st_h3zero_data_stream_state_t {
     uint64_t control_stream_id;
     uint8_t frame_header[16];
     size_t frame_header_read;
+    unsigned int is_upgrade_requested:1;
     unsigned int is_web_transport : 1;
     unsigned int frame_header_parsed : 1;
     unsigned int header_found : 1;
@@ -279,6 +266,20 @@ typedef struct st_h3zero_data_stream_state_t {
     unsigned int is_fin_received : 1; 
     unsigned int is_fin_sent : 1;
 } h3zero_data_stream_state_t;
+
+/* Parsing of a data stream. This is implemented as a filter, with a set of states:
+*
+* - Reading frame length: obtaining the length and type of the next frame.
+* - Reading header frame: obtaining the bytes of the data frame.
+*   When all bytes are obtained, the header is parsed and the header
+*   structure is documented. State moves back to initial, with header-read
+*   flag set. Having two frame headers before a data frame is a bug.
+* - Reading data frame: the frame header indicated a data frame of
+*   length N. Treat the following N bytes as data.
+*
+* There may be several data frames in a stream. The application will pick
+* the bytes and treat them as data.
+*/
 
 uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_data_stream_state_t * stream_state, size_t * available_data, uint16_t * error_found);
@@ -290,6 +291,8 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state);
 int hzero_qpack_huffman_decode(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t * decoded, size_t max_decoded, size_t * nb_decoded);
 
+/* TLV_Buffer_accumulator 
+*/
 #ifdef __cplusplus
 }
 #endif

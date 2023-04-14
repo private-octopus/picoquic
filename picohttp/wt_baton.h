@@ -30,9 +30,23 @@
 #ifndef WT_BATON_H
 #define WT_BATON_H
 
+#include "h3zero.h"
+#include "h3zero_common.h"
+#include "pico_webtransport.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+    /* error codes */
+#define WT_BATON_STREAM_ERR_IDC 0x01 /* I don't care about this stream */
+#define WT_BATON_STREAM_ERR_WHATEVER 0x02 /* The peer asked for this */
+#define WT_BATON_STREAM_ERR_I_LIED 0x03 /* Spontaneous reset */
+
+#define WT_BATON_SESSION_ERR_DA_YAMN 0x01 /* There is insufficient stream credit to continue the protocol */
+#define WT_BATON_SESSION_ERR_BRUH 0x02 /* Received a malformed Baton message */
+#define WT_BATON_SESSION_ERR_GAME_OVER 0x03 /* All baton streams have been reset */
+#define WT_BATON_SESSION_ERR_BORED 0x04 /* Got tired of waiting for the next message */
+
     /* Wt_baton context:
      *
      */
@@ -62,6 +76,8 @@ extern "C" {
         /* control stream context, will need to remain open as long 
          */
         uint64_t control_stream_id;
+        /* Capsule state */
+        picowt_capsule_t capsule;
         /* Connection state */
         int is_client;
         int connection_ready;
@@ -110,6 +126,7 @@ extern "C" {
     picohttp_server_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* ctx, uint64_t stream_id);
 
     int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t* app_ctx, picohttp_server_stream_ctx_t* stream_ctx);
+    
     /* Web transport callback. This will be called from the web server
     * when the path points to a web transport callback
     */

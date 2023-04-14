@@ -85,7 +85,7 @@
 
 
 /* Close the session. */
-int wt_baton_close_session(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx)
+int wt_baton_close_session(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx, uint32_t err, char const * err_msg)
 {
     int ret = 0;
 
@@ -94,8 +94,29 @@ int wt_baton_close_session(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx)
     picoquic_log_app_message(cnx, "Closing session, closing and unlinking control stream %" PRIu64, baton_ctx->control_stream_id);
 
     if (stream_ctx != NULL && !stream_ctx->ps.stream_state.is_fin_sent) {
-        ret = picoquic_add_to_stream_with_ctx(cnx, baton_ctx->control_stream_id, NULL, 0, 1, NULL);
-        stream_ctx->ps.stream_state.is_fin_sent = 1;
+        if (err_msg == NULL) {
+            switch (err) {
+            case 0:
+                err_msg = "Have a nice day";
+                break;
+            case WT_BATON_SESSION_ERR_DA_YAMN:
+                err_msg = "There is insufficient stream credit to continue the protocol";
+                break;
+            case  WT_BATON_SESSION_ERR_BRUH:
+                err_msg = "Received a malformed Baton message";
+                break;
+            case WT_BATON_SESSION_ERR_GAME_OVER:
+                err_msg = "All baton streams have been reset";
+                break;
+            case WT_BATON_SESSION_ERR_BORED:
+                err_msg = "Got tired of waiting for the next message";
+                break;
+            default:
+                break;
+            }
+        }
+        ret = picowt_send_close_session_message(cnx, stream_ctx, err, err_msg);
+        baton_ctx->baton_state = wt_baton_state_closed;
     }
 
     return(ret);
@@ -144,7 +165,7 @@ int wt_baton_relay(picoquic_cnx_t* cnx,
             ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, unidir_header, bytes - unidir_header, 0, stream_ctx);
         }
         else {
-            ret = 0;
+            ret = -1;
         }
     }
     else if (!IS_BIDIR_STREAM_ID(stream_ctx->stream_id)) {
@@ -159,7 +180,7 @@ int wt_baton_relay(picoquic_cnx_t* cnx,
             ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, bidir_header, bytes - bidir_header, 0, stream_ctx);
         }
         else {
-            ret = 0;
+            ret = -1;
         }
     }
     else {
@@ -196,7 +217,7 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
             /* before closing the session, close this stream.*/
             ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, NULL, 0, 1, NULL);
         }
-        ret = wt_baton_close_session(cnx, baton_ctx);
+        ret = wt_baton_close_session(cnx, baton_ctx, 0, NULL);
     }
     else {
         /* else the baton must be equal to baton sent + 1 */
@@ -205,7 +226,7 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
         if (is_wrong_baton) {
             baton_ctx->baton_state = wt_baton_state_error;
             picoquic_log_app_message(cnx, "Wrong baton on stream: %"PRIu64 " after %d turns", stream_ctx->stream_id, baton_ctx->nb_turns);
-            ret = wt_baton_close_session(cnx, baton_ctx);
+            ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, NULL);
         }
         else {
             int baton_7 = baton_ctx->baton_received % 7;
@@ -252,7 +273,18 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         /* Unexpected data at this stage */
         picoquic_log_app_message(cnx, "Received baton data on stream %" PRIu64 ", when not ready",
             stream_ctx->stream_id);
-        ret = -1;
+        ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Too much data on stream!");
+    }
+    else if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
+        /* TODO: process capsule data */
+        ret = picowt_receive_capsule(cnx, bytes, bytes + length, &baton_ctx->capsule);
+        if (ret == 0 && baton_ctx->capsule.h3_capsule.is_stored) {
+            char log_text[256];
+            picoquic_log_app_message(cnx, "Baton session closed, err: %lu: %s",
+                (unsigned long)baton_ctx->capsule.error_code,
+                picoquic_uint8_to_str(log_text, sizeof(log_text), baton_ctx->capsule.error_msg,
+                    baton_ctx->capsule.error_msg_len));
+        }
     }
     else {
         /* Check that this is the right stream */
@@ -262,7 +294,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         else if (baton_ctx->receiving_stream_id != stream_ctx->stream_id) {
             picoquic_log_app_message(cnx, "Received baton data on wrong stream %" PRIu64 ", expected %" PRIu64,
                 stream_ctx->stream_id);
-            ret = -1;
+            ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Data on wrong stream!");
         }
         /* Padding length has not been received yet */
         while (processed < length && baton_ctx->padding_expected == UINT64_MAX) {
@@ -298,7 +330,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                 /* Protocol error */
                 picoquic_log_app_message(cnx, "Received %zu baton bytes on stream %" PRIu64 ", %zu expected",
                     length, length - processed, 1);
-                ret = -1;
+                ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Too much data on stream!");
             } else if (baton_ctx->is_receiving) {
                 baton_ctx->baton_received = bytes[processed];
                 processed++;
@@ -328,7 +360,7 @@ int wt_baton_provide_data(picoquic_cnx_t* cnx,
     else if (baton_ctx->sending_stream_id != stream_ctx->stream_id) {
         picoquic_log_app_message(cnx, "Providing baton data on wrong stream %" PRIu64 ", expected %" PRIu64,
             stream_ctx->stream_id);
-        ret = -1;
+        ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Sending on wrong stream!");
     }
 
     if (ret == 0 && baton_ctx->is_sending) {
@@ -435,20 +467,21 @@ int wt_baton_stream_fin(picoquic_cnx_t* cnx,
         /* Closing the control stream implies closing the baton context. 
          */
         picoquic_log_app_message(cnx, "FIN on control stream. Closing the connection.\n");
-        ret = wt_baton_close_session(cnx, baton_ctx);
         baton_ctx->baton_state = wt_baton_state_closed;
+        ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_GAME_OVER, "Control stream was closed");
+        h3zero_delete_stream_prefix(cnx, baton_ctx->h3_ctx, baton_ctx->control_stream_id);
+
         if (cnx->client_mode) {
             baton_ctx->connection_closed = 1;
             /* Close the connection */
             picoquic_close(cnx, 0);
         }
-        h3zero_delete_stream_prefix(cnx, baton_ctx->h3_ctx, baton_ctx->control_stream_id);
     }
     else {
         if (baton_ctx->is_receiving && stream_ctx->stream_id == baton_ctx->receiving_stream_id) {
             picoquic_log_app_message(cnx, "Error: FIN before baton on data stream %" PRIu64 "\n",
                 stream_ctx->stream_id);
-            ret = -1;
+            ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Fin stream before baton");
         }
         if (stream_ctx->ps.stream_state.is_fin_sent == 1) {
             h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
@@ -470,7 +503,7 @@ int wt_baton_stream_reset(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* str
     picoquic_log_app_message(cnx, "Received reset on stream %" PRIu64 ", closing the session", stream_ctx->stream_id);
 
     if (baton_ctx != NULL) {
-        ret = wt_baton_close_session(cnx, baton_ctx);
+        ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_GAME_OVER, NULL);
 
         /* Any reset results in the abandon of the context */
         baton_ctx->baton_state = wt_baton_state_closed;
@@ -515,6 +548,7 @@ void wt_baton_unlink_context(picoquic_cnx_t* cnx,
     }
     /* Then free the baton context, if this is not a client */
     picoquic_set_app_stream_ctx(cnx, control_stream_ctx->stream_id, NULL);
+    picowt_release_capsule(&baton_ctx->capsule);
     if (!cnx->client_mode) {
         free(baton_ctx);
     }
@@ -628,6 +662,9 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
         /* The response from the server has arrived and it is positive.
          * The application can start sending data.
          */
+        if (stream_ctx != NULL) {
+            stream_ctx->is_upgraded = 1;
+        }
         break;
     case picohttp_callback_post_data:
         /* Data received on a stream for which the per-app stream context is known.
@@ -754,7 +791,7 @@ int wt_baton_ctx_init(wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx, 
 
 int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t event,
+    picoquic_call_back_event_t fin_or_event,
     picohttp_server_stream_ctx_t* stream_ctx,
     wt_baton_ctx_t* baton_ctx)
 {
@@ -776,14 +813,8 @@ int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
             picoquic_log_app_message(cnx, "Cannot parse incoming stream: %"PRIu64, stream_id);
             ret = -1;
         }
-        else if (stream_ctx->path_callback != NULL){
-            if (bytes < bytes_max) {
-                stream_ctx->path_callback(cnx, bytes, bytes_max - bytes, picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
-            }
-            if (event == picoquic_callback_stream_fin) {
-                /* FIN of the control stream is FIN of the whole session */
-                stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, baton_ctx);
-            }
+        else {
+            ret = h3zero_post_data_or_fin(cnx, bytes, length, fin_or_event, stream_ctx);
         }
     }
     return ret;

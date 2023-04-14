@@ -22,22 +22,38 @@
 #ifndef pico_webtransport_H
 #define pico_webtransport_H
 
+#include "h3zero_common.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Web transport callback API */
-
-/* Web transport initiate, client side
- * cnx: an established QUIC connection, set to ALPN=H3.
- * wt_callback: callback function to use in the web transport connection.
- * wt_ctx: application level context for that connection.
- */
+    /* Set required transport parameters for web transport  */
     void picowt_set_transport_parameters(picoquic_cnx_t* cnx);
+    /* Web transport initiate, client side
+     * cnx: an established QUIC connection, set to ALPN=H3.
+     * wt_callback: callback function to use in the web transport connection.
+     * wt_ctx: application level context for that connection.
+     */
     int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, picohttp_server_stream_ctx_t* stream_ctx, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
+    /* Send capsule to close web transport session,
+     * and close web transport control stream.
+     */
+    int picowt_send_close_session_message(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* control_stream_ctx, uint32_t picowt_err, const char* err_msg);
 
+    /* accumulate data for the web transport capsule in
+     * specified context.
+     */
+    typedef struct st_picowt_capsule_t {
+        h3zero_capsule_t h3_capsule;
+        uint32_t error_code;
+        const uint8_t* error_msg;
+        size_t error_msg_len;
+    } picowt_capsule_t;
+
+    int picowt_receive_capsule(picoquic_cnx_t *cnx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t* capsule);
+    void picowt_release_capsule(picowt_capsule_t* capsule);
 #ifdef __cplusplus
 }
 #endif
-
 #endif /* PICO_WEBTRANSPORT_H */

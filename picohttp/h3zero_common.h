@@ -82,7 +82,8 @@ extern "C" {
         /* TODO-POST: provide content-type */
         picosplay_node_t http_stream_node;
         picoquic_cnx_t* cnx;
-        int is_h3;
+        unsigned int is_h3:1;
+        unsigned int is_upgraded:1;
         union {
             h3zero_data_stream_state_t stream_state; /* h3 only */
             struct {
@@ -120,6 +121,25 @@ extern "C" {
 
     void* picohttp_stream_node_value(picosplay_node_t* node);
     void h3zero_init_stream_tree(picosplay_tree_t* h3_stream_tree);
+
+    /* Handling of capsules */
+#define H3ZERO_CAPSULE_HEADER_SIZE_MAX 16
+    typedef struct st_h3zero_capsule_t {
+        uint8_t header_buffer[H3ZERO_CAPSULE_HEADER_SIZE_MAX];
+        size_t header_length;
+        size_t header_read;
+        size_t value_read;
+        size_t capsule_buffer_size;
+        uint64_t capsule_type;
+        size_t capsule_length;
+        uint8_t* capsule;
+        unsigned int is_length_known:1;
+        unsigned int is_stored;
+    } h3zero_capsule_t;
+
+    void h3zero_release_capsule(h3zero_capsule_t* capsule);
+
+    const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_capsule_t* capsule);
 
     /* handling of setting frames */
     uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const h3zero_settings_t* settings);
@@ -175,6 +195,8 @@ extern "C" {
     h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters_t* param);
     void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
+    int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, picohttp_server_stream_ctx_t* stream_ctx);
+
     void h3zero_delete_stream(h3zero_callback_ctx_t* ctx, picohttp_server_stream_ctx_t* stream_ctx);
     
     picohttp_server_stream_ctx_t* h3zero_find_stream(h3zero_callback_ctx_t* ctx, 
@@ -205,7 +227,6 @@ extern "C" {
     int h3zero_declare_stream_prefix(h3zero_callback_ctx_t* ctx, uint64_t prefix, picohttp_post_data_cb_fn function_call, void* function_ctx);
     void h3zero_delete_stream_prefix(picoquic_cnx_t * cnx, h3zero_callback_ctx_t* ctx, uint64_t prefix);
     void h3zero_delete_all_stream_prefixes(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
-
 
 #ifdef __cplusplus
 }

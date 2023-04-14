@@ -59,16 +59,7 @@ int h3zero_server_prepare_to_send(void* context, size_t space, picohttp_server_s
 
 /* Defining then the Http 0.9 variant of the server
  */
-#if 1
 #define picoquic_h09_server_callback_ctx_t h3zero_callback_ctx_t
-#else
-typedef struct st_picoquic_h09_server_callback_ctx_t {
-    picosplay_tree_t h09_stream_tree;
-    picohttp_server_path_item_t * path_table;
-    size_t path_table_nb;
-    char const* web_folder;
-} picoquic_h09_server_callback_ctx_t;
-#endif
 
 int picoquic_h09_server_process_data_header(const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, picohttp_server_stream_ctx_t* stream_ctx, size_t* r_processed);
 
