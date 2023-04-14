@@ -53,27 +53,13 @@ extern char const* h3zero_server_default_page;
 extern char const* h3zero_server_post_response_page;
 
 void h3zero_init_stream_tree(picosplay_tree_t* h3_stream_tree);
-void h3zero_delete_stream(picosplay_tree_t* http_stream_tree, picohttp_server_stream_ctx_t* stream_ctx);
 int h3zero_server_parse_path(const uint8_t* path, size_t path_length, uint64_t* echo_size,
     char** file_path, char const* web_folder, int* file_error);
 int h3zero_server_prepare_to_send(void* context, size_t space, picohttp_server_stream_ctx_t* stream_ctx);
 
 /* Defining then the Http 0.9 variant of the server
  */
-
-typedef struct st_picoquic_h09_server_callback_ctx_t {
-    picosplay_tree_t h09_stream_tree;
-    picohttp_server_path_item_t * path_table;
-    size_t path_table_nb;
-    char const* web_folder;
-} picoquic_h09_server_callback_ctx_t;
-
-picohttp_server_stream_ctx_t* h3zero_find_or_create_stream(
-    picoquic_cnx_t* cnx,
-    uint64_t stream_id,
-    picosplay_tree_t* stream_tree,
-    int should_create,
-    int is_h3);
+#define picoquic_h09_server_callback_ctx_t h3zero_callback_ctx_t
 
 int picoquic_h09_server_process_data_header(const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, picohttp_server_stream_ctx_t* stream_ctx, size_t* r_processed);
 

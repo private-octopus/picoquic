@@ -3153,6 +3153,12 @@ int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_sett
     else if (decoded.blocked_streams != ref->blocked_streams) {
         ret = -1;
     }
+    else if (decoded.enable_connect_protocol != ref->enable_connect_protocol){
+        ret = -1;
+    }
+    else if (decoded.h3_datagram != ref->h3_datagram){
+        ret = -1;
+    }
     else if (decoded.is_web_transport_enabled != ref->is_web_transport_enabled){
         ret = -1;
     }
@@ -3163,7 +3169,7 @@ int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_sett
 }
 
 h3zero_settings_t default_setting_expected = {
-    0, 0, 0, 1, 1
+    0, 0, 0, 1, 1, 1, 1
 };
 
 int h3zero_settings_test()
