@@ -1537,7 +1537,7 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 							capsule->header_buffer[capsule->header_read++] = *bytes++;
 						}
 						if (capsule->header_read >= capsule->header_length) {
-							(void)picoquic_frames_varint_decode(capsule->header_buffer + length_of_type,
+							(void)picoquic_frames_varlen_decode(capsule->header_buffer + length_of_type,
 								capsule->header_buffer + length_of_type + length_of_length,
 								&capsule->capsule_length);
 							capsule->is_length_known = 1;
