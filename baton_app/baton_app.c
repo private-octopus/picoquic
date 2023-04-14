@@ -229,8 +229,27 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
     /* Wait for packets */
     ret = picoquic_packet_loop(quic, 0, server_address.ss_family, 0, 0, 0, baton_client_loop_cb, &baton_ctx);
 
-    /* Done. At this stage, we could print out statistics, etc. */
-    /* baton_client_report(&baton_ctx); */
+    /* Done. At this stage, we print out statistics, etc. */
+    printf("Final baton state: %d\n", baton_ctx.baton_state);
+    printf("Nb turns: %d\n", baton_ctx.nb_turns);
+    printf("Final baton: 0x%02x\n", baton_ctx.baton);
+    printf("Last received baton: 0x%02x\n", baton_ctx.baton_received);
+    printf("Baton bytes received: %" PRIu64 "\n", baton_ctx.nb_baton_bytes_received);
+    printf("Baton bytes sent: %" PRIu64 "\n", baton_ctx.nb_baton_bytes_sent);
+    printf("datagrams sent: %d\n", baton_ctx.nb_datagrams_sent);
+    printf("datagrams received: %d\n", baton_ctx.nb_datagrams_received);
+    printf("datagrams bytes sent: %zu\n", baton_ctx.nb_datagrams_sent);
+    printf("datagrams bytes received: %zu\n", baton_ctx.nb_datagram_bytes_received);
+    printf("Final datagram baton: 0x%02x\n", baton_ctx.baton_datagram_send_next);
+    printf("Last received datagram baton: 0x%02x\n", baton_ctx.baton_datagram_received);
+    if (baton_ctx.capsule.h3_capsule.is_stored) {
+        char log_text[256];
+        printf("Capsule received.\n");
+        printf("Error code: %lu\n", (unsigned long)baton_ctx.capsule.error_code);
+        printf("Error message: %s\n",
+            picoquic_uint8_to_str(log_text, sizeof(log_text), baton_ctx.capsule.error_msg,
+                baton_ctx.capsule.error_msg_len));
+    }
 
     if (h3_ctx != NULL)
     {
