@@ -80,7 +80,6 @@ static int picowt_baton_test_one(
     int ret = 0;
     picohttp_server_parameters_t server_param = { 0 };
     picoquic_connection_id_t initial_cid = { {0x77, 0x74, 0xba, 0, 0, 0, 0, 0}, 8 };
-    picohttp_server_stream_ctx_t* stream_ctx = NULL;
     h3zero_callback_ctx_t* h3zero_cb = NULL;
 
     initial_cid.id[3] = test_id;

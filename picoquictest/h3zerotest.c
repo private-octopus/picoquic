@@ -792,7 +792,7 @@ static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_connect_webtransport, sizeof(qpack_connect_webtransport),
         { h3zero_method_connect, qpack_test_string_wtp, sizeof(qpack_test_string_wtp), 0, 0,
-        web_transport_str, CONNECT_TEST_PROTOCOL_WTP_LEN}
+        (uint8_t *)web_transport_str, CONNECT_TEST_PROTOCOL_WTP_LEN}
     }
 };
 
