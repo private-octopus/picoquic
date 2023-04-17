@@ -52,6 +52,9 @@
 * sending datagrams. Consider extensions!
 */
 
+wt_baton_app_ctx_t baton_test_ctx = {
+    15
+};
 
 picohttp_server_path_item_t path_item_list[1] =
 {
@@ -59,7 +62,7 @@ picohttp_server_path_item_t path_item_list[1] =
         "/baton",
         6,
         wt_baton_callback,
-        NULL
+        &baton_test_ctx
     }
 };
 
