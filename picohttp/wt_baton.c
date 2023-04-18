@@ -302,20 +302,16 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
 
     if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
-        if (!is_fin) {
-            DBG_PRINTF("%s", "bug");
+        stream_ctx->ps.stream_state.is_fin_received = 1;
+        baton_ctx->baton_state = wt_baton_state_closed;
+        if (baton_ctx->is_client) {
+            ret = picoquic_close(cnx, 0);
         }
         else {
-            stream_ctx->ps.stream_state.is_fin_received = 1;
-            baton_ctx->baton_state = wt_baton_state_closed;
-            if (baton_ctx->is_client) {
-                ret = picoquic_close(cnx, 0);
-            } else {
-                if (!stream_ctx->ps.stream_state.is_fin_sent) {
-                    picoquic_add_to_stream(cnx, stream_ctx->stream_id, NULL, 0, 1);
-                }
-                h3zero_delete_stream_prefix(cnx, baton_ctx->h3_ctx, stream_ctx->stream_id);
+            if (!stream_ctx->ps.stream_state.is_fin_sent) {
+                picoquic_add_to_stream(cnx, stream_ctx->stream_id, NULL, 0, 1);
             }
+            h3zero_delete_stream_prefix(cnx, baton_ctx->h3_ctx, stream_ctx->stream_id);
         }
     }
     else if (stream_ctx->control_stream_id == UINT64_MAX) {
@@ -707,11 +703,6 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
 
     case picohttp_callback_post_fin:
     case picohttp_callback_post_data:
-#if 1
-        if (stream_ctx != NULL && stream_ctx->stream_id == 4) {
-            DBG_PRINTF("%s", "bug");
-        }
-#endif
         /* Data received on a stream for which the per-app stream context is known.
         * the app just has to process the data, and process the fin bit if present.
         */
