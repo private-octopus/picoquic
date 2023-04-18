@@ -771,9 +771,14 @@ int h3zero_callback_server_data(
 
 						/* Received data for a POST or CONNECT command. */
 						if (stream_ctx->path_callback != NULL) {
-							/* if known URL, pass the data to URL specific callback. */
+							/* if known URL, pass the data to URL specific callback.
+							* Little oddity there. For the 'connect" method, we need to pass the data and the FIN mark.
+							* For the "post" method, the "fin" call is supposed to come from within the
+							* `h3zero_process_request_frame` call, and return the size of the post response.
+							*/
 							ret = stream_ctx->path_callback(cnx, bytes, available_data,
-								(fin_or_event == picoquic_callback_stream_fin)?picohttp_callback_post_fin:picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
+								(fin_or_event == picoquic_callback_stream_fin && stream_ctx->ps.stream_state.header.method == h3zero_method_connect)?
+								picohttp_callback_post_fin:picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
 						}
 						stream_ctx->post_received += available_data;
 						bytes += available_data;

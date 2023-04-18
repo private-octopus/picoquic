@@ -250,7 +250,7 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
     printf("Baton bytes sent: %" PRIu64 "\n", baton_ctx.nb_baton_bytes_sent);
     printf("datagrams sent: %d\n", baton_ctx.nb_datagrams_sent);
     printf("datagrams received: %d\n", baton_ctx.nb_datagrams_received);
-    printf("datagrams bytes sent: %d\n", baton_ctx.nb_datagram_bytes_sent);
+    printf("datagrams bytes sent: %zu\n", baton_ctx.nb_datagram_bytes_sent);
     printf("datagrams bytes received: %zu\n", baton_ctx.nb_datagram_bytes_received);
     printf("Final datagram baton: 0x%02x\n", baton_ctx.baton_datagram_send_next);
     printf("Last received datagram baton: 0x%02x\n", baton_ctx.baton_datagram_received);

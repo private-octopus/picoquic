@@ -191,30 +191,31 @@ int demoserver_post_callback(picoquic_cnx_t* cnx,
         }
         break;
     case picohttp_callback_post_data: /* Data received from peer on stream N */
+    case picohttp_callback_post_fin: /* All posted data have been received, prepare the response now. */
         /* Add data to echo size */
         if (ctx == NULL) {
             ret = -1;
         }
         else {
             ctx->nb_received += length;
-        }
-        break;
-    case picohttp_callback_post_fin: /* All posted data have been received, prepare the response now. */
-        if (ctx != NULL) {
-            size_t nb_chars = 0;
-            if (picoquic_sprintf(ctx->posted, sizeof(ctx->posted), &nb_chars, "Received %zu bytes.\n", ctx->nb_received) >= 0) {
-                ctx->response_length = nb_chars;
-                ret = (int)nb_chars;
-                if (ctx->response_length <= length) {
-                    memcpy(bytes, ctx->posted, ctx->response_length);
+            if (event == picohttp_callback_post_fin) {
+                if (ctx != NULL) {
+                    size_t nb_chars = 0;
+                    if (picoquic_sprintf(ctx->posted, sizeof(ctx->posted), &nb_chars, "Received %zu bytes.\n", ctx->nb_received) >= 0) {
+                        ctx->response_length = nb_chars;
+                        ret = (int)nb_chars;
+                        if (ctx->response_length <= length) {
+                            memcpy(bytes, ctx->posted, ctx->response_length);
+                        }
+                    }
+                    else {
+                        ret = -1;
+                    }
+                }
+                else {
+                    ret = -1;
                 }
             }
-            else {
-                ret = -1;
-            }
-        }
-        else {
-            ret = -1;
         }
         break;
     case picohttp_callback_provide_data:
