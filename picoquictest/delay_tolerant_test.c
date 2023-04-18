@@ -76,7 +76,6 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
     picoquic_connection_id_t initial_cid = { {0xde, 0x40, 0, 0, 0, 0, 0, 0}, 8 };
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = 0;
-    uint64_t total_packets = UINT64_MAX;
 
     initial_cid.id[2] = test_id;
 

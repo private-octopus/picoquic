@@ -61,20 +61,9 @@ extern "C" {
     } wt_baton_state_enum;
 
     typedef struct st_wt_baton_ctx_t {
-        /* the streams are managed though a splay.
-         * on the server, we just reuse the local server tree.
-         * on the native client, we need to manage a local tree,
-         * and set the tree pointer to that.
-         */
+        picoquic_cnx_t* cnx;
         h3zero_callback_ctx_t* h3_ctx;
         char const* server_path;
-        /* connection wide tracking of stream prefixes.
-         * on the server, we use the global tracker.
-         * on the client, we manage a placeholder.
-         */
-        //h3zero_stream_prefixes_t * stream_prefixes;
-        /* control stream context, will need to remain open as long 
-         */
         uint64_t control_stream_id;
         /* Capsule state */
         picowt_capsule_t capsule;
@@ -84,6 +73,7 @@ extern "C" {
         int connection_closed;
         /* Baton protocol data */
         uint8_t baton;
+        uint8_t first_baton;
         uint8_t baton_received;
         uint64_t nb_baton_bytes_received;
         uint64_t nb_baton_bytes_sent;

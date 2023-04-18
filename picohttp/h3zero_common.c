@@ -244,9 +244,6 @@ void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_callback_ctx
 	while ((next = ctx->stream_prefixes.first) != NULL) {
 		if (ctx->stream_prefixes.first == next){
 			/* the prefix was not deleted as part of app cleanup */
-			if (cnx != NULL) {
-				picoquic_log_app_message(cnx, "Clearing stream prefix %" PRIu64, next->prefix);
-			}
 			h3zero_delete_stream_prefix(cnx, ctx, next->prefix);
 		}
 	}
@@ -429,23 +426,21 @@ void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* 
 	free(ctx);
 }
 
-/* The picoquic callback bundles DATA and FIN. These translates into two separate
-* callbacks to the application.
+/* The picoquic callback bundles DATA and FIN. 
+* We maintain this bundling, so the application has complete control on
+* the stream context.
 */
 int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length,
 	picoquic_call_back_event_t fin_or_event,
 	picohttp_server_stream_ctx_t* stream_ctx)
 {
 	int ret = 0;
-	if (stream_ctx->path_callback != NULL){
-		if (length > 0) {
-			ret = stream_ctx->path_callback(cnx, bytes, length, picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
-		}
-		if (fin_or_event == picoquic_callback_stream_fin) {
-			/* FIN of the control stream is FIN of the whole session */
-			ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
-		}
+
+	if (stream_ctx != NULL && stream_ctx->path_callback != NULL) {
+		ret = stream_ctx->path_callback(cnx, bytes, length, (fin_or_event == picoquic_callback_stream_fin) ?
+			picohttp_callback_post_fin : picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
 	}
+
 	return ret;
 }
 
@@ -714,6 +709,7 @@ int h3zero_callback_server_data(
 	h3zero_callback_ctx_t* ctx)
 {
 	int ret = 0;
+	size_t available_data = 0;
 
 	/* Find whether this is bidir or unidir stream */
 	if (IS_BIDIR_STREAM_ID(stream_id)) {
@@ -741,7 +737,6 @@ int h3zero_callback_server_data(
 			else {
 				/* TODO: move this to common code with unidir, after parsing beginning of unidir? */
 				uint16_t error_found = 0;
-				size_t available_data = 0;
 				uint8_t * bytes_max = bytes + length;
 				while (bytes < bytes_max) {
 					bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->ps.stream_state, &available_data, &error_found);
@@ -760,10 +755,10 @@ int h3zero_callback_server_data(
 								else {
 									stream_ctx->path_callback = stream_prefix->function_call;
 									stream_ctx->path_callback_ctx = stream_prefix->function_ctx;
+									stream_ctx->control_stream_id = stream_ctx->ps.stream_state.control_stream_id;
 									(void)picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
 								}
 							}
-
 						} else if (stream_ctx->ps.stream_state.header_found && stream_ctx->post_received == 0) {
 							int path_item = h3zero_find_path_item(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, ctx->path_table, ctx->path_table_nb);
 							if (path_item >= 0) {
@@ -774,10 +769,16 @@ int h3zero_callback_server_data(
 							(void)picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
 						}
 
-						/* Received data for a POST command. */
+						/* Received data for a POST or CONNECT command. */
 						if (stream_ctx->path_callback != NULL) {
-							/* if known URL, pass the data to URL specific callback. */
-							ret = stream_ctx->path_callback(cnx, bytes, available_data, picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
+							/* if known URL, pass the data to URL specific callback.
+							* Little oddity there. For the 'connect" method, we need to pass the data and the FIN mark.
+							* For the "post" method, the "fin" call is supposed to come from within the
+							* `h3zero_process_request_frame` call, and return the size of the post response.
+							*/
+							ret = stream_ctx->path_callback(cnx, bytes, available_data,
+								(fin_or_event == picoquic_callback_stream_fin && stream_ctx->ps.stream_state.header.method != h3zero_method_post)?
+								picohttp_callback_post_fin:picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
 						}
 						stream_ctx->post_received += available_data;
 						bytes += available_data;
@@ -786,7 +787,7 @@ int h3zero_callback_server_data(
 				/* Process the header if necessary */
 				if (ret == 0) {
 					if (stream_ctx->ps.stream_state.is_web_transport) {
-						if (fin_or_event == picoquic_callback_stream_fin && stream_ctx->path_callback != NULL) {
+						if (fin_or_event == picoquic_callback_stream_fin && available_data == 0 && stream_ctx->path_callback != NULL) {
 							ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
 						}
 					} else {
