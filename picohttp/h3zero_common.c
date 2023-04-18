@@ -777,7 +777,7 @@ int h3zero_callback_server_data(
 							* `h3zero_process_request_frame` call, and return the size of the post response.
 							*/
 							ret = stream_ctx->path_callback(cnx, bytes, available_data,
-								(fin_or_event == picoquic_callback_stream_fin && stream_ctx->ps.stream_state.header.method == h3zero_method_connect)?
+								(fin_or_event == picoquic_callback_stream_fin && stream_ctx->ps.stream_state.header.method != h3zero_method_post)?
 								picohttp_callback_post_fin:picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
 						}
 						stream_ctx->post_received += available_data;

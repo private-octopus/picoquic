@@ -707,6 +707,11 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
 
     case picohttp_callback_post_fin:
     case picohttp_callback_post_data:
+#if 1
+        if (stream_ctx != NULL && stream_ctx->stream_id == 4) {
+            DBG_PRINTF("%s", "bug");
+        }
+#endif
         /* Data received on a stream for which the per-app stream context is known.
         * the app just has to process the data, and process the fin bit if present.
         */
