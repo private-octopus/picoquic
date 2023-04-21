@@ -168,6 +168,7 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_client.c
     picohttp/h3zero_common.c
     picohttp/h3zero_server.c
+     picohttp/h3zero_uri.c
     picohttp/quicperf.c
     picohttp/siduck.c
     picohttp/webtransport.c
@@ -176,6 +177,7 @@ set(PICOHTTP_LIBRARY_FILES
 set(PICOHTTP_HEADERS
      picohttp/h3zero.h
      picohttp/h3zero_common.h
+     picohttp/h3zero_uri.h
      picohttp/democlient.h
      picohttp/demoserver.h
      picohttp/pico_webtransport.h

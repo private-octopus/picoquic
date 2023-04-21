@@ -186,6 +186,11 @@ static int picowt_baton_test_one(
                 baton_ctx.nb_turns, baton_ctx.baton_state);
             ret = -1;
         }
+        if (ret == 0 && test_id == 5 && baton_ctx.first_baton != 33) {
+            DBG_PRINTF("On URI test, first baton was %d instead of 33",
+                baton_ctx.first_baton);
+            ret = -1;
+        }
     }
     /* verify that the execution time is as expected */
     if (ret == 0 && completion_target != 0) {
@@ -232,6 +237,13 @@ int picowt_baton_long_test()
 int picowt_baton_wrong_test()
 {
     int ret = picowt_baton_test_one(3, 7, "/wrong_baton", 0, 2000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_uri_test()
+{
+    int ret = picowt_baton_test_one(5, 15, "/baton?baton=33", 0, 2000000, ".", ".");
 
     return ret;
 }

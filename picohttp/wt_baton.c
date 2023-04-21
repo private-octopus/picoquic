@@ -79,6 +79,7 @@
 #include <tls_api.h>
 #include "h3zero.h"
 #include "h3zero_common.h"
+#include "h3zero_uri.h"
 #include "pico_webtransport.h"
 #include "demoserver.h"
 #include "wt_baton.h"
@@ -492,7 +493,7 @@ int wt_baton_provide_data(picoquic_cnx_t* cnx,
 /* Accept an incoming connection */
 
 int wt_baton_accept(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length,
+    uint8_t* path, size_t path_length,
     struct st_picohttp_server_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
@@ -511,8 +512,31 @@ int wt_baton_accept(picoquic_cnx_t* cnx,
             stream_ctx->path_callback = wt_baton_callback;
             stream_ctx->path_callback_ctx = baton_ctx;
             baton_ctx->connection_ready = 1;
+
+            /* init the global parameters */
+            if (app_ctx != NULL) {
+                baton_ctx->nb_turns_required = app_ctx->nb_turns_required;
+            }
+            else {
+                baton_ctx->nb_turns_required = 127;
+            }
+            if (path != NULL && path_length > 0) {
+                size_t query_offset = h3zero_query_offset(path, path_length);
+                if (query_offset < path_length) {
+                    const uint8_t* queries = path + query_offset;
+                    size_t queries_length = path_length - query_offset;
+                    uint64_t b_val = 0;
+
+                    if (h3zero_query_parameter_number(queries, queries_length, "baton", 5, &b_val, 0) == 0 &&
+                        b_val < 256) {
+                        baton_ctx->baton = (uint8_t)b_val;
+                    }
+                }
+            }
             /* fill the baton with random data */
-            baton_ctx->baton = (uint8_t)picoquic_public_uniform_random(128) + 1;
+            if (baton_ctx->baton == 0) {
+                baton_ctx->baton = (uint8_t)picoquic_public_uniform_random(128) + 1;
+            }
             baton_ctx->first_baton = baton_ctx->baton;
             /* Get the relaying started */
             ret = wt_baton_relay(cnx, NULL, baton_ctx);
@@ -793,13 +817,6 @@ int wt_baton_ctx_init(wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx, 
         /* Connection flags connection_ready and connection_closed are left
         * to zero by default. */
         /* init the baton protocol will be done in the "accept" call for server */
-        /* init the global parameters */
-        if (app_ctx != NULL) {
-            baton_ctx->nb_turns_required = app_ctx->nb_turns_required;
-        }
-        else {
-            baton_ctx->nb_turns_required = 127;
-        }
 
         if (stream_ctx != NULL) {
             /* Register the control stream and the stream id */

@@ -407,6 +407,7 @@ int picowt_baton_basic_test();
 int picowt_baton_error_test();
 int picowt_baton_long_test();
 int picowt_baton_wrong_test();
+int picowt_baton_uri_test();
 
 int cplusplustest();
 
