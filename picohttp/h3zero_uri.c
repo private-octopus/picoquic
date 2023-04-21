@@ -116,6 +116,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stddef.h>
 #include "h3zero_uri.h"
 
 size_t h3zero_pathabempty_length(const uint8_t* path, size_t path_length)
