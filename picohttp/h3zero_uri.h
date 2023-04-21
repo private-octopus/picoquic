@@ -24,6 +24,7 @@
 /* Set of simple functions for parsing URI.
 */
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
