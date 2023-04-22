@@ -252,20 +252,28 @@ int h3zero_query_bytes_to_uint64(const uint8_t* bytes, size_t length, uint64_t* 
     int ret = 0;
     uint64_t x = 0;
 
-    while (next_char_index < length) {
+    while (next_char_index < length && ret == 0) {
         uint8_t v;
         next_char_index = h3zero_query_parameter_pchar(bytes, length, next_char_index, &v, &ret);
 
         if (ret == 0) {
             if (v >= (uint8_t)'0' && v <= (uint8_t)'9') {
-                uint64_t previous = x;
-
-                x = x * 10 + (v - (uint8_t)'0');
-
-                if (x < previous) {
-                    /* integer overflow */
+                if (x >= (UINT64_MAX / 10)) {
                     ret = -1;
+                } else {
+                    uint64_t dv = v - (uint8_t)'0';
+                    x = x * 10;
+                    if (x > UINT64_MAX - dv) {
+                        ret = -1;
+                    }
+                    else {
+                        x += dv;
+                    }
                 }
+            }
+            else {
+                /* improper character */
+                ret = -1;
             }
         }
     }
@@ -280,7 +288,7 @@ int h3zero_query_parameter_string(const uint8_t* queries, size_t queries_length,
     int ret = 0;
     size_t parameter_position = h3zero_query_parameter_position(queries, queries_length, parameter_id, parameter_id_length);
 
-    if (parameter_position < queries_length) {
+    if (parameter_position != 0) {
         size_t parameter_length = h3zero_query_parameter_length(queries + parameter_position, queries_length - parameter_position);
         ret = h3zero_query_bytes_to_string(queries + parameter_position, parameter_length, buffer, buffer_size, parsed_length);
     }
@@ -296,7 +304,7 @@ int h3zero_query_parameter_number(const uint8_t* queries, size_t queries_length,
     size_t parameter_position = h3zero_query_parameter_position(queries, queries_length, parameter_id, parameter_id_length);
 
 
-    if (parameter_position < queries_length) {
+    if (parameter_position != 0) {
         parameter_length = h3zero_query_parameter_length(queries + parameter_position, queries_length - parameter_position);
         ret = h3zero_query_bytes_to_uint64(queries + parameter_position, parameter_length, number);
     }

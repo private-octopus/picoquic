@@ -185,6 +185,7 @@ set(PICOHTTP_HEADERS
 
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
+    picoquictest/h3zero_uri_test.c
     picoquictest/webtransport_test.c)
 
 OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
