@@ -520,7 +520,8 @@ int h3zero_find_path_item(const uint8_t * path, size_t path_length, const picoht
 
 	while (i < path_table_nb) {
 		if (path_length >= path_table[i].path_length && memcmp(path, path_table[i].path, path_table[i].path_length) == 0){
-			return (int)i;
+			if (path_length == path_table[i].path_length || path[path_table[i].path_length] == (uint8_t)'?')
+				return (int)i;
 		}
 		i++;
 	}
