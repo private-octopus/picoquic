@@ -147,11 +147,6 @@ int h3zero_uri_test()
 {
     int ret = 0;
     for (size_t i = 0; i < nb_test_cases; i++) {
-#if 1
-        if (i == 14) {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
         if ((ret = h3zero_uri_test_one(&uri_test_cases[i])) != 0) {
             DBG_PRINTF("Failure for uri test case %zu", i);
             break;
