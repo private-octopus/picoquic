@@ -123,7 +123,7 @@
     <ClCompile Include="delay_tolerant_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-        <ClCompile Include="webtransport_test.c">
+    <ClCompile Include="webtransport_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="code_version_test.c">
@@ -133,6 +133,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="webtransport_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="h3zero_uri_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
