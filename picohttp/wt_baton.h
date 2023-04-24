@@ -47,6 +47,9 @@ extern "C" {
 #define WT_BATON_SESSION_ERR_GAME_OVER 0x03 /* All baton streams have been reset */
 #define WT_BATON_SESSION_ERR_BORED 0x04 /* Got tired of waiting for the next message */
 
+#define WT_BATON_VERSION 0
+#define WT_BATON_MAX_COUNT 256
+
     /* Wt_baton context:
      *
      */
@@ -54,11 +57,34 @@ extern "C" {
         wt_baton_state_none = 0,
         wt_baton_state_ready,
         wt_baton_state_sent,
+        wt_baton_state_sending,
         wt_baton_state_done,
         wt_baton_state_error,
         wt_baton_state_closed,
         wt_baton_state_reset
     } wt_baton_state_enum;
+
+    typedef struct st_wt_baton_lane_t {
+        uint8_t baton;
+        uint8_t first_baton;
+        uint8_t baton_received;
+        wt_baton_state_enum baton_state;
+        int nb_turns;
+        /* Stream management */
+        uint64_t sending_stream_id; /* UINT64_MAX if unknown */
+        uint64_t padding_required;  /* UINT64_MAX if unknown */
+        uint64_t padding_sent;
+    } wt_baton_lane_t;
+
+    typedef struct st_wt_baton_incoming_t {
+        int is_receiving;
+        uint64_t receiving_stream_id; /* UINT64_MAX if unknown */
+        uint64_t padding_expected;  /* UINT64_MAX if unknown */
+        uint64_t padding_received; 
+        uint8_t receive_buffer[8];
+        uint8_t nb_receive_buffer_bytes;
+        uint8_t baton_received;
+    } wt_baton_incoming_t;
 
     typedef struct st_wt_baton_ctx_t {
         picoquic_cnx_t* cnx;
@@ -72,25 +98,15 @@ extern "C" {
         int connection_ready;
         int connection_closed;
         /* Baton protocol data */
-        uint8_t baton;
-        uint8_t first_baton;
-        uint8_t baton_received;
-        uint64_t nb_baton_bytes_received;
-        uint64_t nb_baton_bytes_sent;
+        uint64_t version;
+        uint64_t initial_baton;
+        uint64_t count;
+        uint64_t count_completed;
+        uint64_t inject_error;
         int nb_turns;
-        int nb_turns_required;
         wt_baton_state_enum baton_state;
-        /* Stream management */
-        int is_sending;
-        uint64_t sending_stream_id; /* UINT64_MAX if unknown */
-        uint64_t padding_required;  /* UINT64_MAX if unknown */
-        uint64_t padding_sent;
-        int is_receiving;
-        uint64_t receiving_stream_id; /* UINT64_MAX if unknown */
-        uint64_t padding_expected;  /* UINT64_MAX if unknown */
-        uint64_t padding_received; 
-        uint8_t receive_buffer[8];
-        uint8_t nb_receive_buffer_bytes;
+        wt_baton_lane_t lanes[256];
+        wt_baton_incoming_t incoming[256];
         /* Datagram management */
         int nb_datagrams_received;
         size_t nb_datagram_bytes_received;
@@ -99,6 +115,8 @@ extern "C" {
         size_t nb_datagram_bytes_sent;
         int is_datagram_ready;
         uint8_t baton_datagram_send_next;
+        uint64_t nb_baton_bytes_received;
+        uint64_t nb_baton_bytes_sent;
     } wt_baton_ctx_t;
 
     typedef struct st_wt_baton_app_ctx_t {
@@ -106,6 +124,8 @@ extern "C" {
     } wt_baton_app_ctx_t;
 
     int wt_baton_connect(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx);
+
+    int wt_baton_ctx_path_params(wt_baton_ctx_t* baton_ctx, const uint8_t* path, size_t path_length);
 
     int wt_baton_accept(picoquic_cnx_t* cnx,
         uint8_t* bytes, size_t length,

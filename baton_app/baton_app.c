@@ -112,7 +112,7 @@ int main(int argc, char** argv)
 #define PICOQUIC_BATON_CLIENT_TOKEN_STORE "baton_token_store.bin";
 #define PICOQUIC_BATON_CLIENT_QLOG_DIR ".";
 
-int wt_baton_client(char const * server_name, int server_port, char const * path, int nb_turns_required)
+int wt_baton_client(char const * server_name, int server_port, char const * path)
 {
     int ret = 0;
     struct sockaddr_storage server_address;
@@ -210,7 +210,6 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
             baton_ctx.cnx = cnx;
             baton_ctx.is_client = 1;
             baton_ctx.server_path = path;
-            baton_ctx.nb_turns_required = nb_turns_required;
 
             /* Create a stream context for the connect call. */
             ret = wt_baton_connect(cnx, &baton_ctx, h3_ctx);
@@ -242,17 +241,18 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
     /* Done. At this stage, we print out statistics, etc. */
     printf("Final baton state: %d\n", baton_ctx.baton_state);
     printf("Nb turns: %d\n", baton_ctx.nb_turns);
-    printf("Nb turns required: %d\n", baton_ctx.nb_turns_required);
-    printf("First baton: 0x%02x\n", baton_ctx.first_baton);
-    printf("Final baton: 0x%02x\n", baton_ctx.baton);
-    printf("Last received baton: 0x%02x\n", baton_ctx.baton_received);
+    /* print statistics per lane */
+    for (size_t i = 0; i < baton_ctx.count; i++) {
+        printf("Lane %zu, first baton: 0x%02x, last sent: 0x%02x, last received: 0x%02x\n", i,
+            baton_ctx.lanes[i].first_baton, baton_ctx.lanes[i].baton, baton_ctx.lanes[i].baton_received);
+    }
     printf("Baton bytes received: %" PRIu64 "\n", baton_ctx.nb_baton_bytes_received);
     printf("Baton bytes sent: %" PRIu64 "\n", baton_ctx.nb_baton_bytes_sent);
     printf("datagrams sent: %d\n", baton_ctx.nb_datagrams_sent);
     printf("datagrams received: %d\n", baton_ctx.nb_datagrams_received);
     printf("datagrams bytes sent: %zu\n", baton_ctx.nb_datagram_bytes_sent);
     printf("datagrams bytes received: %zu\n", baton_ctx.nb_datagram_bytes_received);
-    printf("Final datagram baton: 0x%02x\n", baton_ctx.baton_datagram_send_next);
+    printf("Last sent datagram baton: 0x%02x\n", baton_ctx.baton_datagram_send_next);
     printf("Last received datagram baton: 0x%02x\n", baton_ctx.baton_datagram_received);
     if (baton_ctx.capsule.h3_capsule.is_stored) {
         char log_text[256];

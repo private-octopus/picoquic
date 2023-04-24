@@ -562,8 +562,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                     /* TODO-POST: notify callback. */
                     int ret = h3zero_server_prepare_to_send((void*)bytes, length, stream_ctx);
                     if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
-                        h3zero_delete_stream(ctx, stream_ctx);
-                        picoquic_unlink_app_stream_ctx(cnx, stream_id);
+                        h3zero_delete_stream(cnx, ctx, stream_ctx);
                     }
                     return ret;
                 }
