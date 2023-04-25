@@ -81,14 +81,16 @@ static void picohttp_clear_stream_ctx(picohttp_server_stream_ctx_t* stream_ctx)
 static void picohttp_stream_node_delete(void * tree, picosplay_node_t * node)
 {
 	picohttp_server_stream_ctx_t * stream_ctx = picohttp_stream_node_value(node);
-
 	picohttp_clear_stream_ctx(stream_ctx);
 
 	free(stream_ctx);
 }
 
-void h3zero_delete_stream(h3zero_callback_ctx_t* ctx, picohttp_server_stream_ctx_t* stream_ctx)
+void h3zero_delete_stream(picoquic_cnx_t * cnx, h3zero_callback_ctx_t* ctx, picohttp_server_stream_ctx_t* stream_ctx)
 {
+	if (cnx != NULL) {
+		picoquic_unlink_app_stream_ctx(cnx, stream_ctx->stream_id);
+	}
 	picosplay_delete(&ctx->h3_stream_tree, &stream_ctx->http_stream_node);
 }
 
@@ -710,6 +712,7 @@ int h3zero_callback_server_data(
 	h3zero_callback_ctx_t* ctx)
 {
 	int ret = 0;
+	int process_complete = 0;
 	size_t available_data = 0;
 
 	/* Find whether this is bidir or unidir stream */
@@ -776,17 +779,33 @@ int h3zero_callback_server_data(
 							* Little oddity there. For the 'connect" method, we need to pass the data and the FIN mark.
 							* For the "post" method, the "fin" call is supposed to come from within the
 							* `h3zero_process_request_frame` call, and return the size of the post response.
+							* 
+							* The web transport callbacks may result in the stream context being deleted. That
+							* means we really should not reuse the pointer "stream_ctx" after that. But the "post"
+							* usage relies on the stack maintaining a "post_received" variable, so we need
+							* to handle that. The "process complete" flag is used to bypass the processing of
+							* the FIN bit in the following code block, because the FIN bit is already handled in this call.
 							*/
+							int is_post = stream_ctx->ps.stream_state.header.method == h3zero_method_post;
+
 							ret = stream_ctx->path_callback(cnx, bytes, available_data,
-								(fin_or_event == picoquic_callback_stream_fin && stream_ctx->ps.stream_state.header.method != h3zero_method_post)?
+								(fin_or_event == picoquic_callback_stream_fin && !is_post)?
 								picohttp_callback_post_fin:picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
+							if (is_post) {
+								stream_ctx->post_received += available_data;
+							}
+							else {
+								process_complete = 1;
+							}
 						}
-						stream_ctx->post_received += available_data;
+						else {
+							stream_ctx->post_received += available_data;
+						}
 						bytes += available_data;
 					}
 				}
 				/* Process the header if necessary */
-				if (ret == 0) {
+				if (ret == 0 && !process_complete) {
 					if (stream_ctx->ps.stream_state.is_web_transport) {
 						if (fin_or_event == picoquic_callback_stream_fin && available_data == 0 && stream_ctx->path_callback != NULL) {
 							ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
@@ -1060,8 +1079,7 @@ int h3zero_callback_prepare_to_send(picoquic_cnx_t* cnx,
 			/* if finished sending on server, delete stream */
 			if (!cnx->client_mode) {
 				if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
-					h3zero_delete_stream(ctx, stream_ctx);
-					picoquic_unlink_app_stream_ctx(cnx, stream_id);
+					h3zero_delete_stream(cnx, ctx, stream_ctx);
 				}
 			}
 		}

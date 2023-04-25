@@ -1371,8 +1371,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     &addr_to, &addr_from, NULL, p_segment_size);
                 if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                     ret = 0;
-                } else if (ret != 0)
-                {
+                } else if (ret != 0) {
                     /* useless test, but makes it easier to add a breakpoint under debugger */
                     ret = -1;
                 }

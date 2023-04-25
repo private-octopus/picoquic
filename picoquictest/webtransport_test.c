@@ -66,9 +66,8 @@ picohttp_server_path_item_t path_item_list[1] =
     }
 };
 
-
 static int picowt_baton_test_one(
-    uint8_t test_id, int nb_turns_required, const char* baton_path,
+    uint8_t test_id, const char* baton_path,
     uint64_t do_losses, uint64_t completion_target, const char* client_qlog_dir,
     const char* server_qlog_dir)
 {
@@ -130,7 +129,6 @@ static int picowt_baton_test_one(
             wt_baton_ctx_init(&baton_ctx, h3zero_cb, NULL, NULL);
             baton_ctx.is_client = 1;
             baton_ctx.server_path = baton_path;
-            baton_ctx.nb_turns_required = nb_turns_required;
             /* Create a stream context for the connect call. */
             ret = wt_baton_connect(test_ctx->cnx_client, &baton_ctx, h3zero_cb);
         }
@@ -176,7 +174,8 @@ static int picowt_baton_test_one(
     if (ret == 0) {
         if (test_id == 3 || test_id == 4 ||
             ((baton_ctx.baton_state == wt_baton_state_done || baton_ctx.baton_state == wt_baton_state_closed) &&
-                (baton_ctx.nb_turns >= nb_turns_required || (baton_ctx.nb_turns >= 10 && nb_turns_required > 10)) &&
+                baton_ctx.nb_turns >= 8 &&
+                baton_ctx.count_completed == baton_ctx.count &&
                 baton_ctx.nb_datagrams_sent > 0 && baton_ctx.nb_datagrams_received > 0)) {
             DBG_PRINTF("Baton test succeeds after %d turns, %d datagrams sent, %d received",
                 baton_ctx.nb_turns, baton_ctx.nb_datagrams_sent, baton_ctx.nb_datagrams_received);
@@ -186,9 +185,9 @@ static int picowt_baton_test_one(
                 baton_ctx.nb_turns, baton_ctx.baton_state);
             ret = -1;
         }
-        if (ret == 0 && test_id == 5 && baton_ctx.first_baton != 33) {
+        if (ret == 0 && test_id == 5 && baton_ctx.lanes[0].first_baton != 33) {
             DBG_PRINTF("On URI test, first baton was %d instead of 33",
-                baton_ctx.first_baton);
+                baton_ctx.lanes[0].first_baton);
             ret = -1;
         }
     }
@@ -215,35 +214,49 @@ static int picowt_baton_test_one(
 
 int picowt_baton_basic_test()
 {
-    int ret = picowt_baton_test_one(1, 15, "/baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(1, "/baton?baton=240", 0, 2000000, ".", ".");
 
     return ret;
 }
 
 int picowt_baton_error_test()
 {
-    int ret = picowt_baton_test_one(4, 257, "/baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(4, "/baton?inject=1", 0, 2000000, ".", ".");
 
     return ret;
 }
 
 int picowt_baton_long_test()
 {
-    int ret = picowt_baton_test_one(2, 22, "/baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(2, "/baton", 0, 5000000, ".", ".");
 
     return ret;
 }
 
 int picowt_baton_wrong_test()
 {
-    int ret = picowt_baton_test_one(3, 7, "/wrong_baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(3, "/wrong_baton", 0, 2000000, ".", ".");
 
     return ret;
 }
 
 int picowt_baton_uri_test()
 {
-    int ret = picowt_baton_test_one(5, 15, "/baton?baton=33", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(5, "/baton?baton=33", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_multi_test()
+{
+    int ret = picowt_baton_test_one(6, "/baton?baton=240&count=4", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_random_test()
+{
+    int ret = picowt_baton_test_one(7, "/baton?count=4", 0, 5000000, ".", ".");
 
     return ret;
 }

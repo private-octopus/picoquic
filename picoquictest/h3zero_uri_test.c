@@ -82,9 +82,9 @@ typedef struct st_h3zero_uri_path_test_case_t {
 
 h3zero_uri_path_test_case_t uri_test_cases[] = {
     { NULL, 0, 0, NULL, 0 },
-    { path01, sizeof(path01), 0, NULL, 0, 0 },
-    { path02, sizeof(path02), 0, NULL, 0, 0 },
-    { path03, sizeof(path03), 1, NULL, 0, 0 },
+    { (const uint8_t*)path01, sizeof(path01), 0, NULL, 0, 0 },
+    { (const uint8_t*)path02, sizeof(path02), 0, NULL, 0, 0 },
+    { (const uint8_t*)path03, sizeof(path03), 1, NULL, 0, 0 },
     URI_PATH_TEST(path04, 0, str_1, 0),
     URI_PATH_TEST(path05, 1, str_1, 0),
     URI_PATH_TEST(path06, 1, str_1, 0),

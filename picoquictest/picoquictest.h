@@ -407,6 +407,8 @@ int h3zero_settings_test();
 int picowt_baton_basic_test();
 int picowt_baton_error_test();
 int picowt_baton_long_test();
+int picowt_baton_multi_test();
+int picowt_baton_random_test();
 int picowt_baton_wrong_test();
 int picowt_baton_uri_test();
 
