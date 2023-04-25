@@ -779,11 +779,19 @@ int h3zero_callback_server_data(
 							* Little oddity there. For the 'connect" method, we need to pass the data and the FIN mark.
 							* For the "post" method, the "fin" call is supposed to come from within the
 							* `h3zero_process_request_frame` call, and return the size of the post response.
+							* 
+							* The web transport callbacks may result in the stream context being deleted. That
+							* means we really should not reuse the pointer "stream_ctx" after that. But the "post"
+							* usage relies on the stack maintaining a "post_received" variable, so we need
+							* to handle that. The "process complete" flag is used to bypass the processing of
+							* the FIN bit in the following code block, because the FIN bit is already handled in this call.
 							*/
+							int is_post = stream_ctx->ps.stream_state.header.method == h3zero_method_post;
+
 							ret = stream_ctx->path_callback(cnx, bytes, available_data,
-								(fin_or_event == picoquic_callback_stream_fin && stream_ctx->ps.stream_state.header.method != h3zero_method_post)?
+								(fin_or_event == picoquic_callback_stream_fin && !is_post)?
 								picohttp_callback_post_fin:picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
-							if (stream_ctx->ps.stream_state.header.method == h3zero_method_post) {
+							if (is_post) {
 								stream_ctx->post_received += available_data;
 							}
 							else {
