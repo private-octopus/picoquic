@@ -218,9 +218,10 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
         if (baton_ctx->lanes[i].baton_state == wt_baton_state_sent) {
             if ((uint8_t)(baton_ctx->lanes[i].baton + 1) == baton_received) {
                 /* matches expected echo of last sent baton */
+                baton_ctx->lanes[i].baton_state = wt_baton_state_sending;
                 lane_id = i;
+                break;
             }
-            break;
         }
         else if (available_lane == SIZE_MAX &&
             ( baton_ctx->lanes[i].baton_state == wt_baton_state_ready ||
@@ -232,6 +233,7 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
     if (lane_id == SIZE_MAX) {
         if (available_lane < SIZE_MAX) {
             lane_id = available_lane;
+            baton_ctx->lanes[lane_id].baton_state = wt_baton_state_sending;
         } else {
             /* baton does not match anything here */
             baton_ctx->baton_state = wt_baton_state_error;
@@ -283,13 +285,73 @@ int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx
     return ret;
 }
 
+int wt_baton_incoming_data(picoquic_cnx_t * cnx, wt_baton_ctx_t* baton_ctx,
+    wt_baton_incoming_t* incoming_ctx, const uint8_t * bytes, size_t length)
+{
+    int ret = 0;
+    size_t processed = 0;
+
+    baton_ctx->nb_baton_bytes_received += length;
+    /* Padding length has not been received yet */
+    while (processed < length && incoming_ctx->padding_expected == UINT64_MAX) {
+        if (incoming_ctx->nb_receive_buffer_bytes > 0) {
+            size_t expected_length_of_length = VARINT_LEN_T(incoming_ctx->receive_buffer, size_t);
+
+            if (incoming_ctx->nb_receive_buffer_bytes >= expected_length_of_length) {
+                /* decode the expected length */
+                (void)picoquic_frames_varint_decode(
+                    incoming_ctx->receive_buffer, incoming_ctx->receive_buffer + expected_length_of_length, 
+                    &incoming_ctx->padding_expected);
+                break;
+            }
+        }
+        incoming_ctx->receive_buffer[incoming_ctx->nb_receive_buffer_bytes] = bytes[processed];
+        incoming_ctx->nb_receive_buffer_bytes++;
+        processed++;
+    }
+
+    if (incoming_ctx->padding_expected != UINT64_MAX && processed < length) {
+        if (incoming_ctx->padding_expected > incoming_ctx->padding_received) {
+            size_t available = length - processed;
+            if (available + incoming_ctx->padding_received > incoming_ctx->padding_expected) {
+                available = (size_t)(incoming_ctx->padding_expected - incoming_ctx->padding_received);
+            }
+            incoming_ctx->padding_received += available;
+            processed += available;
+        }
+    }
+
+    if (incoming_ctx->padding_expected != UINT64_MAX &&
+        incoming_ctx->padding_expected == incoming_ctx->padding_received && processed < length)
+    {
+        if (!incoming_ctx->is_receiving || processed + 1 < length) {
+            /* Protocol error */
+            picoquic_log_app_message(cnx, "Received %zu baton bytes on stream %" PRIu64 ", %zu expected",
+                length, length - processed, 1);
+            ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Too much data on stream!");
+        }
+        else if (incoming_ctx->is_receiving) {
+            /* Done receiving, will pass the baton to the checker. But first, null
+            * the current data. */
+            incoming_ctx->baton_received = bytes[processed];
+            processed++;
+            incoming_ctx->is_receiving = 0;
+            incoming_ctx->padding_expected = UINT64_MAX;
+            incoming_ctx->padding_received = 0;
+            incoming_ctx->nb_receive_buffer_bytes = 0;
+        }
+    }
+
+    return ret;
+}
+
 int wt_baton_stream_data(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length, int is_fin,
     struct st_picohttp_server_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
     int ret = 0;
-    size_t processed = 0;
+
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
     size_t receive_id = SIZE_MAX;
     size_t receive_available = SIZE_MAX;
@@ -357,65 +419,26 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         /* Process to receive the stream */
         if (ret == 0){
             wt_baton_incoming_t* incoming_ctx = &baton_ctx->incoming[receive_id];
+
             if (length > 0) {
-                baton_ctx->nb_baton_bytes_received += length;
-                /* Padding length has not been received yet */
-                while (processed < length && incoming_ctx->padding_expected == UINT64_MAX) {
-                    if (incoming_ctx->nb_receive_buffer_bytes > 0) {
-                        size_t expected_length_of_length = VARINT_LEN_T(incoming_ctx->receive_buffer, size_t);
-
-                        if (incoming_ctx->nb_receive_buffer_bytes >= expected_length_of_length) {
-                            /* decode the expected length */
-                            (void)picoquic_frames_varint_decode(
-                                incoming_ctx->receive_buffer, incoming_ctx->receive_buffer + expected_length_of_length, 
-                                &incoming_ctx->padding_expected);
-                            break;
-                        }
-                    }
-                    incoming_ctx->receive_buffer[incoming_ctx->nb_receive_buffer_bytes] = bytes[processed];
-                    incoming_ctx->nb_receive_buffer_bytes++;
-                    processed++;
-                }
-
-                if (incoming_ctx->padding_expected != UINT64_MAX && processed < length) {
-                    if (incoming_ctx->padding_expected > incoming_ctx->padding_received) {
-                        size_t available = length - processed;
-                        if (available + incoming_ctx->padding_received > incoming_ctx->padding_expected) {
-                            available = (size_t)(incoming_ctx->padding_expected - incoming_ctx->padding_received);
-                        }
-                        incoming_ctx->padding_received += available;
-                        processed += available;
-                    }
-                }
-
-                if (incoming_ctx->padding_expected != UINT64_MAX &&
-                    incoming_ctx->padding_expected == incoming_ctx->padding_received && processed < length)
-                {
-                    if (!incoming_ctx->is_receiving || processed + 1 < length) {
-                        /* Protocol error */
-                        picoquic_log_app_message(cnx, "Received %zu baton bytes on stream %" PRIu64 ", %zu expected",
-                            length, length - processed, 1);
-                        ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Too much data on stream!");
-                    }
-                    else if (incoming_ctx->is_receiving) {
-                        /* Done receiving, will pass the baton to the checker. But first, null
-                        * the current data. */
-
-                        incoming_ctx->baton_received = bytes[processed];
-                        processed++;
-                        incoming_ctx->is_receiving = 0;
-                        incoming_ctx->padding_expected = UINT64_MAX;
-                        incoming_ctx->padding_received = 0;
-                    }
-                }
+                ret = wt_baton_incoming_data(cnx, baton_ctx, incoming_ctx, bytes, length);
             }
-            /* process FIN, including doing the baton check here */
+            /* process FIN, including doing the baton check */
             if (is_fin) {
                 if (baton_ctx->baton_state != wt_baton_state_closed) {
+
                     if (incoming_ctx->is_receiving) {
-                        picoquic_log_app_message(cnx, "Error: FIN before baton on data stream %" PRIu64 "\n",
-                            stream_ctx->stream_id);
-                        ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Fin stream before baton");
+                        if (IS_BIDIR_STREAM_ID(stream_ctx->stream_id) &&
+                            IS_LOCAL_STREAM_ID(stream_ctx->stream_id, baton_ctx->is_client) &&
+                            length == 0 &&
+                            baton_ctx->count_fin_wait > 0){
+                            baton_ctx->count_fin_wait--;
+                        }
+                        else {
+                            picoquic_log_app_message(cnx, "Error: FIN before baton on data stream %" PRIu64 "\n",
+                                stream_ctx->stream_id);
+                            ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Fin stream before baton");
+                        }
                     }
                     else if (ret == 0) {
                         ret = wt_baton_check(cnx, stream_ctx, baton_ctx, incoming_ctx->baton_received);
@@ -525,6 +548,11 @@ int wt_baton_provide_data(picoquic_cnx_t* cnx,
             !more_to_send) {
             /* Everything was sent! */
             buffer[consumed] = baton_ctx->lanes[lane_id].baton;
+            if (IS_BIDIR_STREAM_ID(stream_ctx->stream_id) &&
+                IS_LOCAL_STREAM_ID(stream_ctx->stream_id, baton_ctx->is_client) &&
+                baton_ctx->lanes[lane_id].baton == 0) {
+                baton_ctx->count_fin_wait++;
+            }
             baton_ctx->lanes[lane_id].baton_state = wt_baton_state_sent;
             stream_ctx->ps.stream_state.is_fin_sent = 1;
             if (stream_ctx->ps.stream_state.is_fin_received == 1) {
@@ -597,7 +625,7 @@ int wt_baton_accept(picoquic_cnx_t* cnx,
             stream_ctx->path_callback_ctx = baton_ctx;
             baton_ctx->connection_ready = 1;
             if (baton_ctx->initial_baton == 0) {
-                baton_ctx->initial_baton = (uint8_t)picoquic_public_uniform_random(128) + 1;
+                baton_ctx->initial_baton = (uint8_t)picoquic_public_uniform_random(32) + 128;
             }
 
             for (size_t lane_id = 0; ret == 0 && lane_id < baton_ctx->count; lane_id++) {

@@ -102,6 +102,7 @@ extern "C" {
         uint64_t initial_baton;
         uint64_t count;
         uint64_t count_completed;
+        uint64_t count_fin_wait;
         uint64_t inject_error;
         int nb_turns;
         wt_baton_state_enum baton_state;

@@ -37,7 +37,7 @@
 #include "wt_baton.h"
 #include "pico_webtransport.h"
 
-int wt_baton_client(char const* server_name, int server_port, char const* path, int nb_rounds);
+int wt_baton_client(char const* server_name, int server_port, char const* path);
 int baton_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
     void* callback_ctx, void* callback_arg);
 
@@ -85,7 +85,7 @@ int main(int argc, char** argv)
             }
         }
 
-        ret = wt_baton_client(server_name, server_port, path, nb_rounds);
+        ret = wt_baton_client(server_name, server_port, path);
 
         if (ret != 0) {
             fprintf(stderr, "Baton dropped, ret=%d\n", ret);

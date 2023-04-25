@@ -2293,6 +2293,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_baton_multi) {
+            int ret = picowt_baton_multi_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_random) {
+            int ret = picowt_baton_random_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_baton_uri) {
             int ret = picowt_baton_uri_test();
 

@@ -66,7 +66,6 @@ picohttp_server_path_item_t path_item_list[1] =
     }
 };
 
-
 static int picowt_baton_test_one(
     uint8_t test_id, const char* baton_path,
     uint64_t do_losses, uint64_t completion_target, const char* client_qlog_dir,
@@ -244,6 +243,20 @@ int picowt_baton_wrong_test()
 int picowt_baton_uri_test()
 {
     int ret = picowt_baton_test_one(5, "/baton?baton=33", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_multi_test()
+{
+    int ret = picowt_baton_test_one(6, "/baton?baton=240&count=4", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_random_test()
+{
+    int ret = picowt_baton_test_one(7, "/baton?count=4", 0, 5000000, ".", ".");
 
     return ret;
 }
