@@ -139,7 +139,7 @@ int wt_baton_connecting(picoquic_cnx_t* cnx,
 /* Ready to receive */
 void wt_baton_set_receive_ready(wt_baton_ctx_t* baton_ctx)
 {
-    for (size_t i = 0; i < baton_ctx->nb_turns; i++) {
+    for (size_t i = 0; i < baton_ctx->count; i++) {
         baton_ctx->incoming[i].is_receiving = 0;
         baton_ctx->incoming[i].receiving_stream_id = UINT64_MAX;
         baton_ctx->incoming[i].padding_expected = UINT64_MAX;
