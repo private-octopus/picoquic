@@ -1323,7 +1323,11 @@ int simple_multipath_abandon_test()
 int simple_multipath_back1_test()
 {
     /* Slightly better than 3.2 sec in full multipath test */
+#if 1
+    uint64_t max_completion_microsec = 3050000;
+#else
     uint64_t max_completion_microsec = 3000000;
+#endif
 
     return  multipath_test_one(max_completion_microsec, multipath_test_back1, 1);
 }

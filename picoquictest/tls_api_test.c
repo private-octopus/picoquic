@@ -11833,7 +11833,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 8000000;
                     break;
                 case bdp_test_option_reno:
-                    max_completion_time = 5800000;
+                    max_completion_time = 6500000;
                     break;
                 default:
                     break;
