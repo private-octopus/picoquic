@@ -1097,7 +1097,10 @@ static void picoquic_bbr_notify(
                 min_win = max_win /= 2;
 
                 if (path_x->cwin < min_win) {
-                    path_x->cwin =min_win;
+                    path_x->cwin = min_win;
+                }
+                else if (path_x->smoothed_rtt > PICOQUIC_TARGET_RENO_RTT) {
+                    path_x->pacing_bandwidth_pause = 1;
                 }
 
                 picoquic_update_pacing_data(cnx, path_x, 1);

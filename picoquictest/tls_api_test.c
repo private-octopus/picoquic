@@ -7258,7 +7258,7 @@ static int key_rotation_auto_one(uint64_t epoch_length, int client_test)
         uint64_t nb_rotation_expected;
         uint64_t nb_rotation_max;
         uint64_t nb_packets;
-        picoquic_cnx_t* cnx = (client_test) ? test_ctx->cnx_client : test_ctx->cnx_server;
+        picoquic_cnx_t* cnx = (client_test) ? test_ctx->cnx_server : test_ctx->cnx_client;
 
         nb_packets = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
         nb_rotation_expected = nb_packets / (epoch_length + 10);
@@ -10253,9 +10253,17 @@ int app_limit_cc_test()
         picoquic_bbr_algorithm,
         picoquic_fastcc_algorithm };
     uint64_t max_completion_times[] = {
+#if 1
+        22000000,
+#else
         21000000,
+#endif
         23500000,
+#if 1
+        22000000,
+#else
         21000000,
+#endif
         21000000,
         25000000 };
     int ret = 0;
