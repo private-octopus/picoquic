@@ -156,11 +156,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
             else {
                 uint64_t bdp = mbps_up * latency * 2;
                 uint64_t bdp_p = bdp / (8 * test_ctx->cnx_client->path[0]->send_mtu);
-#if 1
                 uint64_t bdp_p_plus = bdp_p + (bdp_p / 2);
-#else
-                uint64_t bdp_p_plus = bdp_p + (bdp_p / 8);
-#endif
 
                 if (test_ctx->cnx_client->nb_preemptive_repeat > bdp_p_plus) {
                     DBG_PRINTF("Preemptive repeats > BDP(packets): %" PRIu64 " vs %" PRIu64, 
@@ -185,11 +181,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 int satellite_basic_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-#if 1
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6700000, 250, 3, 0, 0, 0, 0, 0);
-#else
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6300000, 250, 3, 0, 0, 0, 0, 0);
-#endif
 }
 
 int satellite_seeded_test()
@@ -208,31 +200,19 @@ int satellite_preemptive_test()
 {
     /* Variation of the loss test, using preemptive repeat*/
     /* Should be less than 10 sec per draft etosat.  */
-#if 1
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 7100000, 250, 3, 0, 1, 1, 0, 0);
-#else
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 7000000, 250, 3, 0, 1, 1, 0, 0);
-#endif
 }
 
 int satellite_jitter_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-#if 1
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6700000, 250, 3, 3000, 0, 0, 0, 0);
-#else
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6200000, 250, 3, 3000, 0, 0, 0, 0);
-#endif
 }
 
 int satellite_medium_test()
 {
     /* Should be less than 20 sec per draft etosat. */
-#if 1
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18200000, 50, 10, 0, 0, 0, 0, 0);
-#else
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18000000, 50, 10, 0, 0, 0, 0, 0);
-#endif
 }
 
 int satellite_small_test()

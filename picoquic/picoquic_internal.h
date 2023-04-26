@@ -1022,13 +1022,6 @@ typedef struct st_picoquic_path_t {
     uint64_t max_ack_delay;
     uint64_t rtt_sample;
     uint64_t one_way_delay_sample;
-    uint64_t one_way_delay_avg;
-    uint64_t one_way_delay_var;
-    uint64_t one_way_delay_min;
-    uint64_t one_way_return_avg;
-    uint64_t one_way_return_var;
-    uint64_t one_way_return_min;
-
     uint64_t smoothed_rtt;
     uint64_t rtt_variant;
     uint64_t retransmit_timer;

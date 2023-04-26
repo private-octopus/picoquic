@@ -10253,17 +10253,9 @@ int app_limit_cc_test()
         picoquic_bbr_algorithm,
         picoquic_fastcc_algorithm };
     uint64_t max_completion_times[] = {
-#if 1
         22000000,
-#else
-        21000000,
-#endif
         23500000,
-#if 1
         22000000,
-#else
-        21000000,
-#endif
         21000000,
         25000000 };
     int ret = 0;
