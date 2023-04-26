@@ -2457,7 +2457,7 @@ void picoquic_update_path_rtt_one_way(picoquic_cnx_t* cnx, picoquic_path_t* old_
         * This cannot happen, of course, which means that either the ack delay or
         * the phase estimate is wrong.
         */
-        if (time_stamp_local < 0 || (uint64_t)time_stamp_local < send_time){
+        if (time_stamp_local < 0 || (uint64_t)time_stamp_local < send_time) {
             int64_t min_phase = send_time - time_stamp + ack_delay - cnx->start_time;
             time_stamp_local = time_stamp - ack_delay + cnx->start_time + min_phase;
             if (time_stamp_local > 0 && (uint64_t)time_stamp_local <= current_time) {
@@ -2482,9 +2482,9 @@ void picoquic_update_path_rtt_one_way(picoquic_cnx_t* cnx, picoquic_path_t* old_
         if (is_time_stamp_valid) {
             old_path->one_way_delay_sample = time_stamp_local - send_time;
         }
-    }
-    else {
-        old_path->nb_delay_outliers++;
+        else {
+            old_path->nb_delay_outliers++;
+        }
     }
 }
 
