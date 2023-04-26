@@ -1022,13 +1022,6 @@ typedef struct st_picoquic_path_t {
     uint64_t max_ack_delay;
     uint64_t rtt_sample;
     uint64_t one_way_delay_sample;
-    uint64_t one_way_delay_avg;
-    uint64_t one_way_delay_var;
-    uint64_t one_way_delay_min;
-    uint64_t one_way_return_avg;
-    uint64_t one_way_return_var;
-    uint64_t one_way_return_min;
-
     uint64_t smoothed_rtt;
     uint64_t rtt_variant;
     uint64_t retransmit_timer;
@@ -1037,6 +1030,14 @@ typedef struct st_picoquic_path_t {
     uint64_t max_reorder_delay;
     uint64_t max_reorder_gap;
     uint64_t latest_sent_time;
+
+    uint64_t path_packet_previous_period;
+    uint64_t path_rtt_last_period_time;
+    uint64_t nb_rtt_estimate_in_period;
+    uint64_t sum_rtt_estimate_in_period;
+    uint64_t max_rtt_estimate_in_period;
+    uint64_t min_rtt_estimate_in_period;
+
 
     /* MTU */
     size_t send_mtu;
@@ -1088,6 +1089,7 @@ typedef struct st_picoquic_path_t {
     uint64_t pacing_packet_time_microsec;
     uint64_t pacing_quantum_max;
     uint64_t pacing_rate_max;
+    int pacing_bandwidth_pause;
 
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;

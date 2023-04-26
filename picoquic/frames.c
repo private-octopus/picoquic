@@ -2374,7 +2374,7 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
     }
 }
 
-/* In a multipath environment, a packet can accry acknowledgements for multiple paths.
+/* In a multipath environment, a packet can carry acknowledgements for multiple paths.
  * The packet_data context collects information about updates received for each of
  * these paths. */
 void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet)
@@ -2409,163 +2409,191 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
     }
 }
 
-/* In a multipath environment, the acknowledgement packets will not always travel on the
- * same path (path_x) as the original packets (old_path). When a time stamp is present,
- * the one way delay in each direction can be computed. When there is no time stamp,
- * if the average variations are known, we use a "likelihood" heuristic to allocate
- * delays to the two paths. If only one path is known, all the variations are allocated to
- * the other path. If no path is known, we split the RTT, but we only use the result 
- * if the two paths are the same.
+/* The BDP seed is validated upon receiving the first RTT measurement */
+void picoquic_validate_bdp_seed(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t rtt_sample, uint64_t current_time)
+{
+    if (path_x == cnx->path[0] && cnx->seed_cwin != 0 &&
+        !cnx->cwin_notified_from_seed &&
+        cnx->seed_rtt_min <= rtt_sample &&
+        (rtt_sample - cnx->seed_rtt_min) < cnx->seed_rtt_min / 4) {
+        uint8_t* ip_addr;
+        uint8_t ip_addr_length;
+        picoquic_get_ip_addr((struct sockaddr*)&path_x->peer_addr, &ip_addr, &ip_addr_length);
+
+        if (ip_addr_length == cnx->seed_ip_addr_length &&
+            memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
+            cnx->cwin_notified_from_seed = 1;
+            cnx->congestion_alg->alg_notify(cnx, path_x,
+                picoquic_congestion_notification_seed_cwin,
+                0, 0,
+                (uint64_t)cnx->seed_cwin,
+                0, current_time);
+        }
+    }
+}
+
+/* Update one way delays, which can be used for example to properly exit
+ * slow start in high-start mode. The code assume that path and samples are set properly,
+ * and that the ack delay has been validated
  */
-static void picoquic_update_delay_avg_and_var(uint64_t* delay_avg, uint64_t* delay_var, 
-    uint64_t* delay_min, int64_t sample)
+void picoquic_update_path_rtt_one_way(picoquic_cnx_t* cnx, picoquic_path_t* old_path, picoquic_path_t* path_x,
+    uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp)
 {
-    /* TODO: compute min one way delay */
-    /* TODO: lower bound of variation based on min one way delay */
-    if (*delay_var == 0) {
-        *delay_avg = sample;
-        *delay_var = sample / 2;
-        *delay_min = sample;
-    }
-    else {
-        int64_t delta = sample - *delay_avg;
-        *delay_avg += delta / 8;
-        if (delta < 0) {
-            delta = -delta;
+    if (time_stamp != 0) {
+        /* If the phase is not yet known, it should be set. */
+        if (cnx->phase_delay == INT64_MAX) {
+            cnx->phase_delay = old_path->rtt_sample / 2;
+
+            if (!cnx->client_mode) {
+                cnx->phase_delay = -cnx->phase_delay;
+            }
         }
-        int64_t delta_var = delta - *delay_var;
-        *delay_var += delta_var / 4;
-        if (*delay_min > (uint64_t)sample) {
-            *delay_min = sample;
+        /* TODO: some check on the validity of the one way delay */
+        int64_t time_stamp_local = time_stamp - ack_delay + cnx->start_time + cnx->phase_delay;
+        int is_time_stamp_valid = 1;
+
+        /* The computation may indicate that the "local" value of the ack-stamping time
+        * was earlier than the send time of the packet, or later than the current time.
+        * This cannot happen, of course, which means that either the ack delay or
+        * the phase estimate is wrong.
+        */
+        if (time_stamp_local < 0 || (uint64_t)time_stamp_local < send_time) {
+            int64_t min_phase = send_time - time_stamp + ack_delay - cnx->start_time;
+            time_stamp_local = time_stamp - ack_delay + cnx->start_time + min_phase;
+            if (time_stamp_local > 0 && (uint64_t)time_stamp_local <= current_time) {
+                /* looks plausible -- the computed stamp is earlier than now. */
+                cnx->phase_delay = min_phase;
+            }
+            else {
+                is_time_stamp_valid = 0;
+            }
+        }
+        else if ((uint64_t)time_stamp_local > current_time) {
+            int64_t max_phase = current_time - time_stamp + ack_delay - cnx->start_time;
+            time_stamp_local = time_stamp - ack_delay + cnx->start_time + max_phase;
+            if (time_stamp_local > 0 && (uint64_t)time_stamp_local >= send_time) {
+                /* looks plausible -- the computed stamp is earlier than now. */
+                cnx->phase_delay = max_phase;
+            }
+            else {
+                is_time_stamp_valid = 0;
+            }
+        }
+        if (is_time_stamp_valid) {
+            old_path->one_way_delay_sample = time_stamp_local - send_time;
+        }
+        else {
+            old_path->nb_delay_outliers++;
         }
     }
 }
 
-static void picoquic_update_rtt_from_one_way(picoquic_cnx_t * cnx, picoquic_path_t* old_path,
-    uint64_t rtt_estimate, uint64_t one_way_delay_estimate, uint64_t current_time)
-{
-    uint64_t alt_timer;
-
-    old_path->smoothed_rtt = old_path->one_way_delay_avg + old_path->one_way_return_avg;
-    old_path->rtt_variant = old_path->one_way_delay_var + old_path->one_way_return_var;
-    old_path->rtt_min = old_path->one_way_delay_min + old_path->one_way_return_min;
-
-    if (4 * old_path->rtt_variant < old_path->rtt_min &&
-        old_path->rtt_min < PICOQUIC_TARGET_SATELLITE_RTT) {
-        old_path->rtt_variant = old_path->rtt_min / 4;
-    }
-
-    old_path->retransmit_timer = old_path->smoothed_rtt + 4 * old_path->rtt_variant +
-        cnx->remote_parameters.max_ack_delay;
-    alt_timer = ((5 * old_path->smoothed_rtt) >> 2) + cnx->remote_parameters.max_ack_delay;
-    if (old_path->retransmit_timer < alt_timer) {
-        old_path->retransmit_timer = alt_timer;
-    }
-
-    if (PICOQUIC_MIN_RETRANSMIT_TIMER > old_path->retransmit_timer) {
-        old_path->retransmit_timer = PICOQUIC_MIN_RETRANSMIT_TIMER;
-    }
-
-    old_path->rtt_sample = rtt_estimate;
-
-    if (cnx->congestion_alg != NULL) {
-        cnx->congestion_alg->alg_notify(cnx, old_path,
-            picoquic_congestion_notification_rtt_measurement,
-            rtt_estimate, (cnx->is_time_stamp_enabled)?one_way_delay_estimate:0,
-            0, 0, current_time);
-    }
-}
-
+/* The RTT computation algorithm separates RTT computation from one way delay computations,
+* using a straightforward averaging method even in multipath scenarios. It also tries to
+* pace computation of averages and variants, so that average delays and variations are
+* computed just a few times per round trip.
+ */
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, picoquic_path_t* path_x,
     uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp)
 {
-    uint64_t acknowledged_time = current_time - ack_delay;
-    int64_t rtt_estimate = acknowledged_time - send_time;
+    if (old_path != NULL) {
+        uint64_t rtt_estimate = 0;
+        int is_first = (old_path->path_packet_previous_period == 0) || 
+            (old_path == cnx->path[0] && old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT);
 
-    if (rtt_estimate > 0 && old_path != NULL && path_x != NULL) {
-        int64_t one_way_delay_sample = 0;
-        int64_t one_way_return_sample = 0;
-        int is_old_path_valid = 1;
-        int is_path_x_valid = 1;
-        int is_first = (old_path == cnx->path[0] && old_path == path_x && path_x->smoothed_rtt == PICOQUIC_INITIAL_RTT);
-
-        if (time_stamp != 0) {
-            /* If the phase is not yet known, it should be set. */
-            if (cnx->phase_delay == INT64_MAX) {
-                cnx->phase_delay = rtt_estimate / 2;
-
-                if (!cnx->client_mode) {
-                    cnx->phase_delay = -cnx->phase_delay;
+        if (current_time > send_time) {
+            rtt_estimate = current_time - send_time;
+            /* We cannot blindly trus the ack delay.. */
+            if (ack_delay > 0 && cnx->cnx_state >= picoquic_state_ready) {
+                if (ack_delay > cnx->local_parameters.max_ack_delay) {
+                    ack_delay = cnx->local_parameters.max_ack_delay;
+                }
+                if (old_path->rtt_min + ack_delay < rtt_estimate) {
+                    rtt_estimate -= ack_delay;
                 }
             }
-            /* TODO: some check on the validity of the time stamp. Ignore if the value is not
-             * plausible. */
-            int64_t time_stamp_local = time_stamp - ack_delay + cnx->start_time + cnx->phase_delay;
-            one_way_delay_sample = time_stamp_local - send_time;
-            /* One way delays should be positive, but clock drift may cause the phase to be wrong.
-             * TODO: If that happens, we need to perform a correction. 
-             */
         }
-        else if (old_path->one_way_delay_var != 0) {
-            if (path_x->one_way_return_var != 0) {
-                int64_t delta = rtt_estimate - old_path->one_way_delay_min - path_x->one_way_return_min;
+        old_path->rtt_sample = rtt_estimate;
 
-                delta = (((int64_t)old_path->one_way_delay_var) * delta) /
-                    (int64_t)(old_path->one_way_delay_var + path_x->one_way_return_var);
-                one_way_delay_sample = old_path->one_way_delay_min + delta;
-            }
-            else {
-                is_old_path_valid = 0;
-                one_way_delay_sample = old_path->one_way_delay_avg;
-            }
-        }
-        else if (path_x->one_way_return_var != 0) {
-            one_way_delay_sample = rtt_estimate - path_x->one_way_return_avg;
-            is_path_x_valid = 0;
-        }
-        else if (path_x == old_path) {
-            one_way_delay_sample = rtt_estimate / 2;
+        /* During a measurement period, accumulate data:
+         * - number of estimates since update
+         * - sum of all estimates since update
+         * - min estimate
+         * - max estimate
+         * If the PTO is lower than the max estimate, increase it.
+         * If the min RTT is lower than the current low, lower it.
+         */
+        old_path->nb_rtt_estimate_in_period += 1;
+        old_path->sum_rtt_estimate_in_period += rtt_estimate;
+        if (old_path->nb_rtt_estimate_in_period == 1) {
+            old_path->min_rtt_estimate_in_period = rtt_estimate;
+            old_path->max_rtt_estimate_in_period = rtt_estimate;
         }
         else {
-            is_old_path_valid = 0;
-            is_path_x_valid = 0;
+            if (rtt_estimate > old_path->max_rtt_estimate_in_period) {
+                old_path->max_rtt_estimate_in_period = rtt_estimate;
+            }
+            if (rtt_estimate < old_path->min_rtt_estimate_in_period) {
+                old_path->min_rtt_estimate_in_period = rtt_estimate;
+            }
+        }
+        if (old_path->retransmit_timer < rtt_estimate) {
+            old_path->retransmit_timer = rtt_estimate;
+        }
+        if (old_path->rtt_min > rtt_estimate) {
+            old_path->rtt_min = rtt_estimate;
         }
 
-        /* Avoid outliers, only update the delays if the samples are reasonable */
-        if (one_way_delay_sample > 0 && one_way_delay_sample < rtt_estimate) {
-            /* Update delay average and variation based on computations */
-            if (is_old_path_valid) {
-                picoquic_update_delay_avg_and_var(&old_path->one_way_delay_avg, &old_path->one_way_delay_var,
-                    &old_path->one_way_delay_min, one_way_delay_sample);
-                old_path->one_way_delay_sample = one_way_delay_sample;
+        /* if one way delay measured, use it */
+        if (time_stamp > 0) {
+            picoquic_update_path_rtt_one_way(cnx, old_path, path_x, send_time, current_time,ack_delay, time_stamp);
+        }
+
+        /* At the end of the period, update the smoothed and variants statistics.
+         */
+#if 0
+        {
+#else
+        if (old_path->path_packet_acked_number >= old_path->path_packet_previous_period ||
+            old_path->path_rtt_last_period_time + (rtt_estimate/4) > current_time) {
+#endif
+            old_path->path_rtt_last_period_time = current_time;
+           
+            if (old_path->nb_rtt_estimate_in_period > 1) {
+                rtt_estimate = old_path->sum_rtt_estimate_in_period / old_path->nb_rtt_estimate_in_period;
             }
 
-            if (is_path_x_valid) {
-                /* TODO: should this be updated multiple time per a single ACK? */
-                one_way_return_sample = rtt_estimate - one_way_delay_sample;
-
-                picoquic_update_delay_avg_and_var(&path_x->one_way_return_avg, &path_x->one_way_return_var,
-                    &path_x->one_way_return_min, one_way_return_sample);
+            if (is_first) {
+                old_path->smoothed_rtt = rtt_estimate;
+                old_path->rtt_variant = rtt_estimate / 2;
+                old_path->rtt_min = old_path->min_rtt_estimate_in_period;
             }
+            else {
+                /* use the average of all samples to adjust the average */
+                /* use the lowest and highest samples in the period to adjust the variant */
+                uint64_t rtt_var_sample = 0;
 
-            /* Compute retransmission delays and update congestion control for updated paths */
-            if (path_x == old_path) {
-                if (is_old_path_valid || is_path_x_valid) {
-                    picoquic_update_rtt_from_one_way(cnx, old_path, rtt_estimate, one_way_delay_sample, current_time);
+                old_path->smoothed_rtt = (7 * old_path->smoothed_rtt + rtt_estimate) / 8;
+                if (old_path->smoothed_rtt > old_path->max_rtt_estimate_in_period) {
+                    rtt_var_sample = old_path->smoothed_rtt - old_path->min_rtt_estimate_in_period;
                 }
-            }
-            else if (is_old_path_valid) {
-                /* Correct the "estimate" to reflect average of forward path */
-                picoquic_update_rtt_from_one_way(cnx, old_path, one_way_delay_sample + old_path->one_way_return_avg,
-                    one_way_delay_sample, current_time);
-            }
-            else if (is_path_x_valid) {
-                /* Correct the "estimate" to reflect average of return path */
-                picoquic_update_rtt_from_one_way(cnx, path_x, one_way_return_sample + path_x->one_way_delay_avg,
-                    one_way_return_sample, current_time);
+                else if (old_path->smoothed_rtt < old_path->min_rtt_estimate_in_period) {
+                    rtt_var_sample = old_path->max_rtt_estimate_in_period - old_path->smoothed_rtt;
+                }
+                else {
+                    uint64_t rtt_var_sample_min = old_path->smoothed_rtt - old_path->min_rtt_estimate_in_period ;
+                    
+                    rtt_var_sample = old_path->max_rtt_estimate_in_period - old_path->smoothed_rtt;
+                    if (rtt_var_sample_min > rtt_var_sample) {
+                        rtt_var_sample = rtt_var_sample_min;
+                    }
+                }
+                old_path->rtt_variant = (3 * old_path->rtt_variant + rtt_var_sample) / 4;
+                old_path->retransmit_timer = old_path->smoothed_rtt + 4 * old_path->rtt_variant +
+                    cnx->remote_parameters.max_ack_delay;
             }
 
-            /* TODO: if RTT updated, reset delayed ACK parameters */
+            /* if RTT updated, reset delayed ACK parameters */
             if (old_path == cnx->path[0]) {
                 cnx->is_ack_frequency_updated = cnx->is_ack_frequency_negotiated;
                 if (!cnx->is_ack_frequency_negotiated || cnx->cnx_state != picoquic_state_ready) {
@@ -2573,32 +2601,30 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
                         cnx->path[0]->receive_rate_max, &cnx->ack_gap_remote, &cnx->ack_delay_remote);
                 }
             }
-        }
-        else {
-            old_path->nb_delay_outliers++;
+
+            /* reset the period counters */
+            old_path->path_packet_previous_period = old_path->path_packet_number;
+            old_path->nb_rtt_estimate_in_period = 0;
+            old_path->sum_rtt_estimate_in_period = 0;
+            old_path->max_rtt_estimate_in_period = 0;
+            old_path->min_rtt_estimate_in_period = UINT64_MAX;
         }
 
-        /* On first update, validate seeed data */
-        if (is_first && cnx->seed_cwin != 0 /* && cnx->quic->default_send_receive_bdp_frame */){
-            if (cnx->seed_rtt_min <= path_x->smoothed_rtt &&
-                (path_x->smoothed_rtt - cnx->seed_rtt_min) < cnx->seed_rtt_min / 4) {
-                uint8_t* ip_addr;
-                uint8_t ip_addr_length;
-                picoquic_get_ip_addr((struct sockaddr*) & path_x->peer_addr, &ip_addr, &ip_addr_length);
+        /* Pass the new values to the congestion algorithm */
+        if (cnx->congestion_alg != NULL) {
+            cnx->congestion_alg->alg_notify(cnx, old_path,
+                picoquic_congestion_notification_rtt_measurement,
+                rtt_estimate, (cnx->is_time_stamp_enabled)?old_path->one_way_delay_sample:0,
+                0, 0, current_time);
+        }
 
-                if (ip_addr_length == cnx->seed_ip_addr_length &&
-                    memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
-                    cnx->cwin_notified_from_seed = 1;
-                    cnx->congestion_alg->alg_notify(cnx, path_x,
-                        picoquic_congestion_notification_seed_cwin,
-                        0, 0,
-                        (uint64_t)cnx->seed_cwin,
-                        0, current_time);
-                }
-            }
+        /* On very first sample, apply the saved BDP */
+        if (is_first) {
+            picoquic_validate_bdp_seed(cnx, old_path, rtt_estimate, current_time);
         }
     }
 }
+
 
 /* Once all frames in a packet have been received, update the delays and congestion
  * control varaibles for the path for which data was acknowledged.
