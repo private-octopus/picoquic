@@ -3668,6 +3668,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         /* Start of CC controlled frames */
                         if (ret == 0 && length <= header_length && cnx->first_datagram != NULL) {
                             bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+                            more_data |= (cnx->first_datagram != NULL);
                         }
 
                         if (ret == 0){
@@ -3816,6 +3817,7 @@ static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, uint8_t* by
 
     if (cnx->first_datagram != NULL) {
         bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, more_data, is_pure_ack);
+        *more_data |= (cnx->first_datagram != NULL);
     }
     else {
         while (cnx->is_datagram_ready) {
