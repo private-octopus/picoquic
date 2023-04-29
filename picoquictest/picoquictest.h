@@ -303,6 +303,7 @@ int large_client_hello_test();
 int fast_nat_rebinding_test();
 int datagram_test();
 int datagram_rt_test();
+int datagram_rt_skip_test();
 int datagram_loss_test();
 int datagram_size_test();
 int datagram_small_test();

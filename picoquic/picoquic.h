@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.4.0"
+#define PICOQUIC_VERSION "1.1.4.1"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1055,6 +1055,17 @@ int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready);
  * a NULL pointer in case of error. The application then copies the specified
  * number of bytes at the provided address, and provide a return code 0 from
  * the callback in case of success, or non zero in case of error.
+ * 
+ * There may be case when the application marked the context ready for
+ * datagrams, but cannot provide data when polled, for example because the
+ * length of memory announced in the callback is not long enough for
+ * the next application datagram. In that case, if the application either
+ * doesn't request a buffer or requests a buffer of length 0, the application
+ * will be called again when the next packet is ready to be sent. If the
+ * application realizes that it has no more data to send, it MUST call
+ * " picoquic_mark_datagram_ready(cnx, 0);" to tell the stack to not call
+ * it again. Failure to do that would result in a "hot loop", with picoquic
+ * constantly asking for data to fill the next packet.
  */
 uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length);
 

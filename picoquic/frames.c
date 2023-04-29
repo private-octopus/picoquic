@@ -4663,6 +4663,7 @@ uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byte
             if (bytes > bytes0) {
                 *is_pure_ack = 0;
             }
+            *more_data |= cnx->is_datagram_ready;
         }
     }
 

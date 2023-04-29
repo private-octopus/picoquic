@@ -113,6 +113,7 @@ static const picoquic_test_def_t test_table[] = {
     { "many_losses", tls_api_many_losses },
     { "datagram", datagram_test },
     { "datagram_rt", datagram_rt_test },
+    { "datagram_rt_skip", datagram_rt_skip_test },
     { "datagram_loss", datagram_loss_test },
     { "datagram_size", datagram_size_test },
     { "datagram_small", datagram_small_test },
