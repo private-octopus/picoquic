@@ -446,6 +446,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(datagram_rt_skip)
+        {
+            int ret = datagram_rt_skip_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(datagram_loss)
         {
             int ret = datagram_loss_test();
