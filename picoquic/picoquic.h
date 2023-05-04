@@ -1087,7 +1087,7 @@ int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready);
  * the "is_active" parameter.
  */
 uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length);
-uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, int more_data);
+uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, int is_active);
 
 /* 
  * Set the optimistic ack policy. The holes will be inserted at random locations,
