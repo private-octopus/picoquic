@@ -4607,7 +4607,7 @@ uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, int i
         data_ctx->cnx->is_datagram_ready = is_active;
     }
 
-    if (length <= data_ctx->allowed_space && length > 0) {
+    if (length > 0 && length <= data_ctx->allowed_space) {
         /* Compute the length of header and length field */
         uint8_t* after_length = picoquic_frames_varint_encode(
             data_ctx->bytes, data_ctx->bytes_max, length);

@@ -1068,7 +1068,7 @@ int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready);
  * 
  * - if the application does have data to send but the available
  *   length indicated in the callback is too small, it should set the "length"
- *   argument to 0, and the "is_active" argument to 0. The stack will try to
+ *   argument to 0, and the "is_active" argument to 1. The stack will try to
  *   immediately reissue the callback in the next packet, hopefully with
  *   more space available.
  * 
