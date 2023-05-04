@@ -69,6 +69,7 @@ typedef struct st_test_datagram_send_recv_ctx_t {
     int is_ready[2];
     int max_packets_received;
 
+    unsigned int use_extended_provider_api;
     unsigned int do_skip_test[2];
     unsigned int is_skipping[2];
 
@@ -102,6 +103,7 @@ int test_datagram_send(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     int skipping = 0;
+    int is_active = 1;
     size_t available = 0;
     test_datagram_send_recv_ctx_t* dg_ctx = datagram_ctx;
     uint64_t current_time = picoquic_get_quic_time(picoquic_get_quic_ctx(cnx));
@@ -115,8 +117,19 @@ int test_datagram_send(picoquic_cnx_t* cnx,
     else if (dg_ctx->do_skip_test[cnx->client_mode] && !dg_ctx->is_skipping[cnx->client_mode]){
         dg_ctx->is_skipping[cnx->client_mode] = 1;
         skipping = 1;
+        if (dg_ctx->use_extended_provider_api) {
+            is_active = test_datagram_check_ready(dg_ctx, cnx->client_mode, current_time);
+            (void)picoquic_provide_datagram_buffer_ex(bytes, 0, is_active);
+        }
     }
-    else if (dg_ctx->is_ready[cnx->client_mode]) {
+    else if (!dg_ctx->is_ready[cnx->client_mode]) {
+        /* Datagram callback when the client was not ready. */
+        is_active = 0;
+        if (dg_ctx->use_extended_provider_api) {
+            (void)picoquic_provide_datagram_buffer_ex(bytes, 0, is_active);
+        }
+    }
+    else {
         uint8_t* buffer = NULL;
 
         dg_ctx->is_skipping[cnx->client_mode] = 0;
@@ -130,13 +143,17 @@ int test_datagram_send(picoquic_cnx_t* cnx,
                 available = 0;
             }
         }
-
-        buffer = picoquic_provide_datagram_buffer(bytes, available);
+        if (dg_ctx->use_extended_provider_api) {
+            buffer = picoquic_provide_datagram_buffer_ex(bytes, available, 1);
+        }
+        else {
+            buffer = picoquic_provide_datagram_buffer(bytes, available);
+        }
         if (buffer != NULL) {
             uint8_t* buffer_bytes;
             uint64_t send_time = (dg_ctx->dg_sent[cnx->client_mode] == 0) ? current_time : dg_ctx->dg_time_ready[cnx->client_mode];
             dg_ctx->dg_sent[cnx->client_mode]++;
-            
+
             if ((buffer_bytes = picoquic_frames_uint64_encode(buffer, buffer + available,
                 dg_ctx->dg_sent[cnx->client_mode])) == NULL ||
                 (buffer_bytes = picoquic_frames_uint64_encode(buffer_bytes, buffer + available,
@@ -157,7 +174,7 @@ int test_datagram_send(picoquic_cnx_t* cnx,
         }
     }
 
-    if (ret == 0 && !skipping){
+    if (ret == 0 && !skipping && !dg_ctx->use_extended_provider_api) {
         (void)test_datagram_check_ready(dg_ctx, cnx->client_mode, current_time);
         picoquic_mark_datagram_ready(cnx, dg_ctx->is_ready[cnx->client_mode]);
     }
@@ -464,6 +481,24 @@ int datagram_rt_skip_test()
     return datagram_test_one(3, &dg_ctx, 0);
 }
 
+int datagram_rtnew_skip_test()
+{
+    test_datagram_send_recv_ctx_t dg_ctx = { 0 };
+    dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
+    dg_ctx.dg_target[0] = 100;
+    dg_ctx.dg_target[1] = 10;
+    dg_ctx.send_delay = 20000;
+    dg_ctx.next_gen_time[0] = 100000;
+    dg_ctx.next_gen_time[1] = 100000;
+    dg_ctx.dg_latency_target[0] = 13000;
+    dg_ctx.dg_latency_target[1] = 13000;
+    dg_ctx.do_skip_test[0] = 1;
+    dg_ctx.do_skip_test[1] = 1;
+    dg_ctx.use_extended_provider_api = 1;
+
+    return datagram_test_one(7, &dg_ctx, 0);
+}
+
 
 int datagram_loss_test()
 {
@@ -503,6 +538,24 @@ int datagram_small_test()
     dg_ctx.next_gen_time[0] = 50000;
     dg_ctx.next_gen_time[1] = 50000;
     dg_ctx.max_packets_received = 55;
+
+    return datagram_test_one(6, &dg_ctx, 0);
+}
+
+int datagram_small_new_test()
+{
+    test_datagram_send_recv_ctx_t dg_ctx = { 0 };
+    dg_ctx.dg_max_size = 512;
+    dg_ctx.dg_small_size = 64;
+    dg_ctx.batch_size[0] = 4;
+    dg_ctx.batch_size[1] = 4;
+    dg_ctx.dg_target[0] = 100;
+    dg_ctx.dg_target[1] = 100;
+    dg_ctx.send_delay = 5000;
+    dg_ctx.next_gen_time[0] = 50000;
+    dg_ctx.next_gen_time[1] = 50000;
+    dg_ctx.max_packets_received = 55;
+    dg_ctx.use_extended_provider_api = 1;
 
     return datagram_test_one(6, &dg_ctx, 0);
 }
