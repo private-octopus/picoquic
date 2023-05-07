@@ -2048,9 +2048,12 @@ int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_fro
     return picoquic_probe_new_path_ex(cnx, addr_from, addr_to, 0, current_time, 0);
 }
 
-int picoquic_abandon_path(picoquic_cnx_t* cnx, int path_id, uint64_t reason, char const * phrase)
+/* TODO: the "unique_path_id" should really be a unique ID, managed by the stack.
+ */
+int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason, char const * phrase)
 {
     int ret = 0;
+    int path_id = (int)unique_path_id;
 
     if (path_id < 0 || path_id >= cnx->nb_paths || cnx->nb_paths == 1 ||
         (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled)) {

@@ -1438,6 +1438,7 @@ int picoquic_register_net_secret(picoquic_cnx_t* cnx);
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     const struct sockaddr* local_addr, const struct sockaddr* peer_addr);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
+int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 void picoquic_enqueue_packet_with_path(picoquic_packet_t* p);
 void picoquic_dequeue_packet_from_path(picoquic_packet_t* p);
 void picoquic_empty_path_packet_queue(picoquic_path_t* path_x);

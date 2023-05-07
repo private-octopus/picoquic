@@ -237,7 +237,11 @@ typedef enum {
     picoquic_callback_prepare_datagram, /* Prepare the next datagram */
     picoquic_callback_datagram_acked, /* Ack for packet carrying datagram-frame received from peer */
     picoquic_callback_datagram_lost, /* Packet carrying datagram-frame probably lost */
-    picoquic_callback_datagram_spurious /* Packet carrying datagram-frame was not really lost */
+    picoquic_callback_datagram_spurious, /* Packet carrying datagram-frame was not really lost */
+    picoquic_callback_path_available, /* A new path is available, or a suspended path is available again */
+    picoquic_callback_path_suspended, /* An available path is suspended */
+    picoquic_callback_path_deleted, /* An existing path has been deleted */
+    picoquic_callback_path_quality_changed /* Some path quality parameters have changed */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -708,7 +712,8 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx);
 void picoquic_set_desired_version(picoquic_cnx_t* cnx, uint32_t desired_version);
 void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_version);
 
-/* Connection events.
+/* Path management events and API
+ * 
  * The "probe new path" API attempts to validate a new path. If multipath is enabled,
  * the new path will come in addition to the set of existing paths; if not,
  * the new path when validated will replace the default path.
@@ -716,15 +721,79 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * one path is available -- otherwise, just close the connection. If the command
  * is accepted, the peer will be informed of the need to close the path, and the
  * path will be demoted after a short delay.
+ * 
+ * Path events are signalled by callbacks:
+ * 
+ *  - picoquic_callback_path_available: 
+ *        A new path is available. On the client, this happens as soon as the 
+ *        continuity has been verified. On the server, this happens when the
+ *        continuity is verified and the client has started using the path
+ *        (see section 8.2 of RFC 9000, path validation.)
+ *        The same callback is used if a path was suspended, but becomes
+ *        available again. 
+ *  - picoquic_callback_path_suspended:
+ *        A path that was available has been suspended. This happens for
+ *        example if repeated transmission errors cause the scheduler to
+ *        stop using that path for sending packets. 
+ *  - picoquic_callback_path_deleted:
+ *        An existing path has been deleted. The application should delete
+ *        all references to that path.
+ *  - picoquic_callback_path_quality_changed:
+ *        Path parameters like RTT, data rate or packet loss rate have
+ *        changed.
+ * 
+ * The "path" callback events use the same calling signature as the other 
+ * callback events, but the definition of some fields changes:
+ *  - the "stream_id" field is used to carry a "unique_path id"
+ *  - the "bytes" and "length" fields are not used
+ *  - the "stream_ctx" field carries the application specified "app_path_ctx"
+ * The same "unique_path_id" is used to identify the path in the API calls.
+ * 
+ * The logical flow is that the application learns the path ID in a callback,
+ * typically "picoquic_callback_path_available". If the application wants to
+ * maintain path data in an app specific context, it will use a call to
+ * "picoquic_set_app_path_ctx" to document it. The path created during
+ * the connection setup has the unique_path_id 0.
+ * 
+ * The calls to picoquic_get_path_quality takes as argument a structure 
+ * with the folowing members:
+ *  - pacing_rate: bytes per second.
+ *  - cwin: number of bytes
+ *  - rtt: roundtrip time in micros seconds
+ *  - loss_rate: fixed precision evaluation of packet losses per 2^9 packets.
+ * If an error occurs, such as reference to an obsolete 
+ * 
+ * The call to "refresh the connection ID" will trigger a renewal of the connection
+ * ID used for sending packets on that path. This API is mostly used in test
+ * programs. By default, picoquic will attempt to renew a path connection ID 
+ * if that path was silent for some time, and then transmission resumes: using
+ * a new connection ID in these conditions 
  */
+
+typedef struct st_picoquic_path_quality_t {
+    uint64_t pacing_rate;
+    uint64_t cwin;
+    uint64_t rtt;
+    uint64_t loss_rate;
+} picoquic_path_quality_t;
+
 int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
     const struct sockaddr* addr_to, uint64_t current_time);
-int picoquic_abandon_path(picoquic_cnx_t* cnx, int path_id, uint64_t reason, char const* phrase);
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
+    const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address);
+int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
+int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason, char const* phrase);
+int picoquic_get_path_quality(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_quality_t * quality);
+int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 
-int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
-
+/* Connection management API.
+ * TODO: many of these API should be deprecated. They were created when we
+ * envisaged that applications would directly manipulate which connection
+ * should be awaken when. The code in picoquicdemo only uses
+ * "picoquic_get_next_wake_delay" and then let the quic context poll the 
+ * right connection by calling picoquic_prepare_next_packet_ex.
+ */
 int picoquic_start_key_rotation(picoquic_cnx_t * cnx);
-
 picoquic_quic_t* picoquic_get_quic_ctx(picoquic_cnx_t* cnx);
 picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic);
 picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx);
@@ -1212,10 +1281,6 @@ void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrea
 uint64_t picoquic_get_pacing_rate(picoquic_cnx_t* cnx);
 uint64_t picoquic_get_cwin(picoquic_cnx_t* cnx);
 uint64_t picoquic_get_rtt(picoquic_cnx_t* cnx);
-
-/* Probing new path for multipath scenarios.*/
-int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-        const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address);
 
 /* List of ALPN types used in session negotiation */
 
