@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.4.1"
+#define PICOQUIC_VERSION "1.1.4.2"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1056,18 +1056,38 @@ int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready);
  * number of bytes at the provided address, and provide a return code 0 from
  * the callback in case of success, or non zero in case of error.
  * 
- * There may be case when the application marked the context ready for
- * datagrams, but cannot provide data when polled, for example because the
- * length of memory announced in the callback is not long enough for
- * the next application datagram. In that case, if the application either
- * doesn't request a buffer or requests a buffer of length 0, the application
- * will be called again when the next packet is ready to be sent. If the
- * application realizes that it has no more data to send, it MUST call
+ * There are two variants of "picoquic_callback_prepare_datagram", the old one
+ * and the new one, ""picoquic_callback_prepare_datagram_ex", which adds
+ * an "is_active" parameter. This parameter helps handling some cases:
+ * 
+ * - if the application marked the context ready by mistake, it 
+ *   should set the "length" argument to 0, and the "is_active" argument
+ *   to 0. This is a way of saying "oops". The stack will stop
+ *   polling for datagrams, until there is a new call to
+ *   "picoquic_mark_datagram_ready"
+ * 
+ * - if the application does have data to send but the available
+ *   length indicated in the callback is too small, it should set the "length"
+ *   argument to 0, and the "is_active" argument to 1. The stack will try to
+ *   immediately reissue the callback in the next packet, hopefully with
+ *   more space available.
+ * 
+ * - if the application can send data, it should set the "length"
+ *   argument to the desired value, and the "is_active" argument to
+ *   either 0 if there is no datagram data immediately ready to send
+ *   after that, or 1 if there is some. The stack will send the requested
+ *   datagram, and then do the equivalent of a call to "picoquic_mark_datagram_ready"
+ *   with the value of is_active parameter.
+ * 
+ * The old API will not treat those scenarios as reliably. If the application
+ * is polled and has nothing to send, it MUST call
  * " picoquic_mark_datagram_ready(cnx, 0);" to tell the stack to not call
- * it again. Failure to do that would result in a "hot loop", with picoquic
- * constantly asking for data to fill the next packet.
+ * it again, otherwise there will be a hot loop consuming a lot of CPU. If you
+ * see that, you should really switch to using the new "extended" API and set
+ * the "is_active" parameter.
  */
 uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length);
+uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, int is_active);
 
 /* 
  * Set the optimistic ack policy. The holes will be inserted at random locations,

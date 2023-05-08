@@ -4579,19 +4579,35 @@ uint8_t * picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byt
  */
 
 typedef struct st_picoquic_datagram_buffer_argument_t {
+    picoquic_cnx_t* cnx;
     uint8_t* bytes0; /* Points to the beginning of the encoding of the datagram frame */
     uint8_t* bytes; /* Position after encoding the datagram frame type */
     uint8_t* bytes_max; /* Pointer to the end of the packet */
     uint8_t* after_data; /* Pointer to end of data written by app */
     size_t allowed_space; /* Data size from bytes to end of packet */
+    int is_active; /* Whether the application has more datagrams ready to send or not. */
+    int is_old_api; /* Whether the old buffer API was called. */
+    int was_called; /* Whether the API was called. */
 } picoquic_datagram_buffer_argument_t;
 
-uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length)
+uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, int is_active)
 {
     picoquic_datagram_buffer_argument_t* data_ctx = (picoquic_datagram_buffer_argument_t*)context;
     uint8_t* buffer = NULL;
 
-    if (length <= data_ctx->allowed_space) {
+    data_ctx->is_active = is_active;
+    data_ctx->was_called = 1;
+
+    if (!data_ctx->is_old_api) {
+        /* We apply the state change at this point, rather than after the return of the
+        * callback, so as to minimize "developer surprise". If the  application calls
+        * "picoquic_mark_datagram_ready" after this call, the vlaue set by the
+        * application will stick.
+        */
+        data_ctx->cnx->is_datagram_ready = is_active;
+    }
+
+    if (length > 0 && length <= data_ctx->allowed_space) {
         /* Compute the length of header and length field */
         uint8_t* after_length = picoquic_frames_varint_encode(
             data_ctx->bytes, data_ctx->bytes_max, length);
@@ -4616,6 +4632,11 @@ uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length)
     }
 
     return buffer;
+}
+
+uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length)
+{
+    return picoquic_provide_datagram_buffer_ex(context, length, 0);
 }
 
 /* Ready for datagram callback.
@@ -4645,11 +4666,15 @@ uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byte
             allowed_space = cnx->remote_parameters.max_datagram_frame_size;
         }
 
+        datagram_data_context.cnx = cnx;
         datagram_data_context.bytes0 = bytes0;
         datagram_data_context.bytes = bytes;
         datagram_data_context.bytes_max = bytes_max;
         datagram_data_context.allowed_space = allowed_space;
         datagram_data_context.after_data = bytes0;
+        datagram_data_context.is_active = 0;
+        datagram_data_context.is_old_api = 0;
+        datagram_data_context.was_called = 0;
 
         if ((cnx->callback_fn)(cnx, 0, (uint8_t*)&datagram_data_context, allowed_space,
             picoquic_callback_prepare_datagram, cnx->callback_ctx, NULL) != 0) {
@@ -4663,7 +4688,13 @@ uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byte
             if (bytes > bytes0) {
                 *is_pure_ack = 0;
             }
-            *more_data |= cnx->is_datagram_ready;
+
+            if (datagram_data_context.is_old_api || !datagram_data_context.was_called) {
+                *more_data |= cnx->is_datagram_ready;
+            }
+            else {
+                *more_data |= datagram_data_context.is_active;
+            }
         }
     }
 
