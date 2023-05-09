@@ -4412,6 +4412,16 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
  * the change in "picoquic_select_next_path_mp" below, without affecting the
  * reminder of the protocol code. This could be enabled for example by
  * a "multipath_simple" option.
+ * 
+ * The path affinity implementation introduces a degree of complexity. The algorithm
+ * as defined above will wake up the first path that has CWIN available, but
+ * we should really choose a path that both has CWIN available and has something
+ * to send, which can be either:
+ *  - there is high priority activity pending on any path,
+ *  - there are datagram ready to be sent on this path, or,
+ *  - there are datagram ready to be sent on any path, or,
+ *  - there is an active stream on that path, 
+ *  - there is an active stream on any path.
  */
 
 static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time)
