@@ -702,6 +702,31 @@ int test_api_callback(picoquic_cnx_t* cnx,
         }
         return ret;
     }
+    else if (fin_or_event == picoquic_callback_path_available ||
+        fin_or_event == picoquic_callback_path_suspended ||
+        fin_or_event == picoquic_callback_path_deleted ||
+        fin_or_event == picoquic_callback_path_quality_changed) {
+        int ret = 0;
+        if (ctx->path_events != NULL) {
+            if (fin_or_event == picoquic_callback_path_quality_changed) {
+                uint64_t unique_path_id = stream_id;
+                picoquic_path_quality_t quality;
+
+                ret = picoquic_get_path_quality(cnx, unique_path_id, &quality);
+                if (ret == 0) {
+                    fprintf(ctx->path_events,
+                        "%" PRIu64 ", %" PRIu64 ", %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
+                        picoquic_get_quic_time(cnx->quic), stream_id, (int)fin_or_event,
+                        quality.pacing_rate, quality.cwin, quality.rtt);
+                }
+            }
+            else {
+                fprintf(ctx->path_events, "%" PRIu64 ", %" PRIu64 ", %d,\n",
+                    picoquic_get_quic_time(cnx->quic), stream_id, (int)fin_or_event);
+            }
+        }
+        return ret;
+    }
 
     if (bytes != NULL) {
         if (cb_ctx->client_mode) {
@@ -711,11 +736,12 @@ int test_api_callback(picoquic_cnx_t* cnx,
         }
     }
 
-    if (stream_id == 0 && cb_ctx->client_mode == 0 && 
+    if (stream_id == 0 && cb_ctx->client_mode == 0 &&
         (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin)) {
         if (bytes == NULL && length != 0) {
             cb_ctx->error_detected = test_api_bad_stream0_data;
-        } else {
+        }
+        else {
             for (size_t i = 0; i < length; i++) {
                 if (bytes[i] != 0xA5) {
                     cb_ctx->error_detected = test_api_bad_stream0_data;
@@ -981,10 +1007,6 @@ static int verify_version(picoquic_cnx_t* cnx_client, picoquic_cnx_t* cnx_server
 
 void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
 {
-    if (test_ctx->bw_update != NULL) {
-        (void)picoquic_file_close(test_ctx->bw_update);
-    }
-
     if (test_ctx->qclient != NULL) {
         picoquic_free(test_ctx->qclient);
     }
@@ -1016,6 +1038,15 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
     if (test_ctx->send_buffer != NULL) {
         free(test_ctx->send_buffer);
     }
+
+    if (test_ctx->bw_update != NULL) {
+        (void)picoquic_file_close(test_ctx->bw_update);
+    }
+
+    if (test_ctx->path_events != NULL) {
+        (void)picoquic_file_close(test_ctx->path_events);
+    }
+
 
     free(test_ctx);
 }

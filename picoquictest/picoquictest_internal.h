@@ -155,6 +155,8 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
 
     /* File used to test bandwidth notification */
     FILE* bw_update;
+    /* File used to test path notifications */
+    FILE* path_events;
 
     /* Datagram test functions */
     void* datagram_ctx;

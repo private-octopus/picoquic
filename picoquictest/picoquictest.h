@@ -357,6 +357,8 @@ int multipath_socket_error_test();
 int multipath_abandon_test();
 int multipath_back1_test();
 int multipath_perf_test();
+int multipath_callback_test();
+int multipath_quality_test();
 int multipath_qlog_test();
 int simple_multipath_basic_test();
 int simple_multipath_drop_first_test();
