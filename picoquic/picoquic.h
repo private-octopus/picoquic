@@ -722,7 +722,10 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * is accepted, the peer will be informed of the need to close the path, and the
  * path will be demoted after a short delay.
  * 
- * Path events are signalled by callbacks:
+ * Path event callbacks can be enabled by calling "picoquic_enable_path_callbacks".
+ * This can be set as the default for new connections by calling
+ * "picoquic_enable_path_callbacks_default". If enabled, the folling events
+ * will be signalled by callbacks:
  * 
  *  - picoquic_callback_path_available: 
  *        A new path is available. On the client, this happens as soon as the 
@@ -756,35 +759,66 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * the connection setup has the unique_path_id 0.
  * 
  * The calls to picoquic_get_path_quality takes as argument a structure 
- * with the folowing members:
+ * with the following members:
  *  - pacing_rate: bytes per second.
  *  - cwin: number of bytes
- *  - rtt: roundtrip time in micros seconds
- *  - loss_rate: fixed precision evaluation of packet losses per 2^9 packets.
- * If an error occurs, such as reference to an obsolete 
+ *  - rtt: smoothed estimate of roundtrip time in micros seconds
+ *  - rtt_min: minimum value of RTT, computed since path creation
+ *  - rtt_variant: estimate of RTT variability
+ *  - sent: number of packets sent on the path
+ *  - lost: number of packets considered lost among those sent.
+ *  - bytes_in_transit: number of bytes currently in transit.
+ * The same structure is documented in the "bytes" and "length"
+ * parameter of the picoquic_callback_path_quality_changed callbacks,
+ * with the bytes parameter pointing to the structure, and the length
+ * indicating the structure length.
+ * 
+ * The quality changed callback only happens if the application
+ * subscribes to it using "picoquic_subscribe_to_quality_update" API
+ * for the path or for the connection, setting the "change" thresholds
+ * for the datarate and the rtt. The call applies to the specified
+ * path if the unique_path_id is valid, and to the whole connection
+ * if the unique_path_id is set to UINT64_MAX.
+ * The function call "picoquic_default_quality_update"
+ * can be used to set the default values of these parameters in
+ * the quic context.
+ * 
+ * If an error occurs, such as reference to an obsolete unique path id,
+ * all the functions return -1.
  * 
  * The call to "refresh the connection ID" will trigger a renewal of the connection
  * ID used for sending packets on that path. This API is mostly used in test
  * programs. By default, picoquic will attempt to renew a path connection ID 
- * if that path was silent for some time, and then transmission resumes: using
- * a new connection ID in these conditions 
+ * if that path resumes after a long silence: using
+ * a new connection ID in these conditions makes correlation of old and new
+ * connection data harder in case of NAT traversal.
  */
 
 typedef struct st_picoquic_path_quality_t {
     uint64_t pacing_rate;
     uint64_t cwin;
     uint64_t rtt;
-    uint64_t loss_rate;
+    uint64_t rtt_variant;
+    uint64_t rtt_min;
+    uint64_t sent;
+    uint64_t lost;
+    uint64_t bytes_in_transit;
 } picoquic_path_quality_t;
 
 int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
     const struct sockaddr* addr_to, uint64_t current_time);
 int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
     const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address);
+void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
+void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
 int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
 int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason, char const* phrase);
 int picoquic_get_path_quality(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_quality_t * quality);
+int picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t unique_path_id,
+    uint64_t pacing_rate_delta, uint64_t rtt_delta);
+void picoquic_default_quality_update(picoquic_quic_t* quic, uint64_t pacing_rate_delta, uint64_t rtt_delta);
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
+int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 
 /* Connection management API.
  * TODO: many of these API should be deprecated. They were created when we
@@ -1110,15 +1144,22 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
 int picoquic_discard_stream(picoquic_cnx_t* cnx, uint64_t stream_id, uint16_t local_stream_error);
 
 /* The function picoquic_set_datagram_ready indicates to the stack
- * whether the application is ready to send datagrams. */
+ * whether the application is ready to send datagrams. 
+ * The extended variant also specifies a unique path identifier,
+ * indicating that datagrams are ready on that path. The callback
+ * "picoquic_callback_prepare_datagram" will be issued if either
+ * the current path or the whole connection is marked ready for datagrams.
+ */
 int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready);
+int picoquic_mark_datagram_ready_ex(picoquic_cnx_t* cnx, uint64_t unique_path_id, int is_ready);
 
 /* If a datagram is marked active, the application will receive a callback with
  * event type "picoquic_callback_prepare_datagram" when the transport is ready to
  * send data on a stream. The "length" argument in the call back indicates the
  * largest amount of data that can be sent, and the "bytes" argument points
- * to an opaque context structure. In order to prepare data, the application
- * needs to call "picoquic_provide_datagram_buffer" with that context
+ * to an opaque context structure. The "stream_id" argument is repurposed to
+ * indicate the unique path identifier of the current path. In order to prepare data, 
+ * the application needs to call "picoquic_provide_datagram_buffer" with the context
  * pointer, and with the number of bytes that it wants to write. The function
  * returns the pointer to a memory address where to write the bytes -- or
  * a NULL pointer in case of error. The application then copies the specified
@@ -1126,7 +1167,7 @@ int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready);
  * the callback in case of success, or non zero in case of error.
  * 
  * There are two variants of "picoquic_callback_prepare_datagram", the old one
- * and the new one, ""picoquic_callback_prepare_datagram_ex", which adds
+ * and the new one, "picoquic_callback_prepare_datagram_ex", which adds
  * an "is_active" parameter. This parameter helps handling some cases:
  * 
  * - if the application marked the context ready by mistake, it 

@@ -1450,7 +1450,6 @@ int picoquic_get_version_index(uint32_t proposed_version)
     return ret;
 }
 
-
 static void picoquic_create_random_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id, uint8_t id_length)
 {
     if (id_length > 0) {
@@ -1497,8 +1496,8 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
         {
             memset(path_x, 0, sizeof(picoquic_path_t));
             /* Register the sequence number */
-            path_x->path_sequence = cnx->path_sequence_next;
-            cnx->path_sequence_next++;
+            path_x->unique_path_id = cnx->unique_path_id_next;
+            cnx->unique_path_id_next++;
 
             /* Set the addresses */
             picoquic_store_addr(&path_x->peer_addr, peer_addr);
@@ -1529,6 +1528,11 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
 
             /* Initialize the MTU */
             path_x->send_mtu = (peer_addr == NULL || peer_addr->sa_family == AF_INET) ? PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
+
+            /* initialize the quality reporting thresholds */
+            path_x->rtt_update_delta = cnx->rtt_update_delta;
+            path_x->pacing_rate_update_delta = cnx->pacing_rate_update_delta;
+            picoquic_refresh_path_quality_thresholds(cnx, path_x);
 
             /* Record the path */
             cnx->path[cnx->nb_paths] = path_x;
@@ -1652,6 +1656,16 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     if (cnx->quic->F_log != NULL) {
         fflush(cnx->quic->F_log);
     }
+
+    /* Signal to the application */
+    if (cnx->are_path_callbacks_enabled &&
+        cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_deleted,
+        cnx->callback_ctx, path_x->app_path_ctx) != 0) {
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0, "Path deleted callback failed.");
+    }
+
+    /* TODO: if there are references to path in streams, remove them */
+
 
     /* Remove old path data from retransmit queue */
     picoquic_empty_path_packet_queue(path_x);
@@ -1822,6 +1836,12 @@ void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t curr
             }
             else {
                 cnx->path[path_id]->challenge[ichal] = picoquic_public_random_64();
+            }
+        }
+        if (cnx->path[path_id]->challenge_verified && cnx->are_path_callbacks_enabled) {
+            if (cnx->callback_fn(cnx, cnx->path[path_id]->unique_path_id, NULL, 0, picoquic_callback_path_suspended,
+                cnx->callback_ctx, cnx->path[path_id]->app_path_ctx) != 0) {
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_path_challenge);
             }
         }
         cnx->path[path_id]->challenge_verified = 0;
@@ -2042,6 +2062,42 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
     return ret;
 }
 
+void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled)
+{
+    cnx->are_path_callbacks_enabled = are_enabled;
+}
+
+void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled)
+{
+    quic->are_path_callbacks_enabled = are_enabled;
+}
+
+int picoquic_get_path_id_from_unique(picoquic_cnx_t* cnx, uint64_t unique_path_id)
+{
+    int ret = -1;
+
+    for (int i = 0; i < cnx->nb_paths; i++) {
+        if (cnx->path[i]->unique_path_id == unique_path_id) {
+            ret = i;
+            break;
+        }
+    }
+
+    return ret;
+}
+
+int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void* app_path_ctx)
+{
+    int ret = 0;
+    int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
+    if (path_id >= 0) {
+        cnx->path[path_id]->app_path_ctx = app_path_ctx;
+    } else {
+        ret = -1;
+    }
+    return ret;
+}
+
 int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
     const struct sockaddr* addr_to, uint64_t current_time)
 {
@@ -2094,6 +2150,108 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t
     }
 
     return 0;
+}
+
+
+/* Management of "path_quality" feedback.
+ */
+void picoquic_refresh_path_quality_thresholds(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
+{
+    if (path_x->rtt_update_delta > 0) {
+        if (path_x->smoothed_rtt > path_x->rtt_update_delta) {
+            path_x->rtt_threshold_low = path_x->smoothed_rtt - path_x->rtt_update_delta;
+        }
+        else {
+            path_x->rtt_threshold_low = 0;
+        }
+        path_x->rtt_threshold_high = path_x->smoothed_rtt + path_x->rtt_update_delta;
+    }
+
+    if (path_x->pacing_rate_update_delta > 0) {
+        if (path_x->pacing_rate > path_x->pacing_rate_update_delta) {
+            path_x->pacing_rate_threshold_low = path_x->pacing_rate - path_x->pacing_rate_update_delta;
+        }
+        else {
+            path_x->pacing_rate_threshold_low = 0;
+        }
+        path_x->pacing_rate_threshold_high = path_x->pacing_rate + path_x->pacing_rate_update_delta;
+    }
+}
+
+int picoquic_issue_path_quality_update(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
+{
+    int ret = 0;
+
+    if ((path_x->rtt_update_delta > 0 && (
+        path_x->smoothed_rtt < path_x->rtt_threshold_low || 
+        path_x->smoothed_rtt > path_x->rtt_threshold_high)) ||
+        (path_x->pacing_rate_update_delta > 0 && (
+            path_x->pacing_rate < path_x->pacing_rate_threshold_low ||
+            path_x->pacing_rate > path_x->pacing_rate_threshold_high))) {
+        picoquic_refresh_path_quality_thresholds(cnx, path_x);
+        ret = cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_quality_changed, cnx->callback_ctx, NULL);
+    }
+    return ret;
+}
+
+int picoquic_get_path_quality(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_quality_t* quality)
+{
+    int ret = -1;
+    int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
+    if (path_id >= 0) {
+        picoquic_path_t* path_x = cnx->path[path_id];
+        picoquic_refresh_path_quality_thresholds(cnx, path_x);
+        quality->cwin = path_x->cwin;
+        quality->rtt = path_x->smoothed_rtt;
+        quality->rtt_min = path_x->rtt_min;
+        quality->rtt_variant = path_x->rtt_variant;
+        quality->pacing_rate = path_x->pacing_rate;
+        quality->sent = path_x->path_packet_number;
+        quality->lost = path_x->lost;
+        quality->bytes_in_transit = path_x->bytes_in_transit;
+        ret = 0;
+    }
+    return ret;
+}
+
+int picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t unique_path_id,
+    uint64_t pacing_rate_delta, uint64_t rtt_delta)
+{
+    int ret = 0;
+
+    if (unique_path_id == UINT64_MAX) {
+        cnx->pacing_rate_update_delta = pacing_rate_delta;
+        cnx->rtt_update_delta = rtt_delta;
+    }
+    else {
+        int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
+        if (path_id >= 0) {
+            picoquic_path_t* path_x = cnx->path[path_id];
+            path_x->pacing_rate_update_delta = pacing_rate_delta;
+            path_x->rtt_update_delta = rtt_delta;
+            picoquic_refresh_path_quality_thresholds(cnx, path_x);
+        }
+        else {
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
+void picoquic_default_quality_update(picoquic_quic_t* quic, uint64_t pacing_rate_delta, uint64_t rtt_delta)
+{
+    quic->pacing_rate_update_delta = pacing_rate_delta;
+    quic->rtt_update_delta = rtt_delta;
+}
+
+int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id)
+{
+    int ret = -1;
+    int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
+    if (path_id >= 0) {
+        ret = picoquic_renew_path_connection_id(cnx, cnx->path[path_id]);
+    }
+    return ret;
 }
 
 /* Reset the path MTU, for example if too many packet losses are detected */
@@ -3157,6 +3315,11 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnxid0 = picoquic_create_local_cnxid(cnx, NULL, start_time);
         cnx->local_cnxid_oldest_created = start_time;
 
+        /* Initialize path updates and quality updates before creating the first path */
+        cnx->are_path_callbacks_enabled = quic->are_path_callbacks_enabled;
+        cnx->rtt_update_delta = quic->rtt_update_delta;
+        cnx->pacing_rate_update_delta = quic->pacing_rate_update_delta;
+
         /* Initialize the connection ID stash */
         ret = picoquic_create_path(cnx, start_time, NULL, addr_to);
         if (ret == 0) {
@@ -3226,7 +3389,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         if (!cnx->client_mode && quic->local_cnxid_length == 0) {
             cnx->local_parameters.migration_disabled = 1;
         }
-
 
         /* Initialize BDP transport parameter */
         if (quic->default_send_receive_bdp_frame) {

@@ -2622,6 +2622,8 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         if (is_first) {
             picoquic_validate_bdp_seed(cnx, old_path, rtt_estimate, current_time);
         }
+        /* Perform a quality changed callback if needed */
+        (void)picoquic_issue_path_quality_update(cnx, old_path);
     }
 }
 
@@ -4281,6 +4283,13 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                     && path_x->rtt_variant == 0) {
                     /* We received a first packet from the peer! */
                     picoquic_update_path_rtt(cnx, path_x, path_x, path_x->challenge_time_first, current_time, 0, 0);
+                }
+
+                if (cnx->are_path_callbacks_enabled &&
+                    cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_available,
+                    cnx->callback_ctx, path_x->app_path_ctx) != 0) {
+                    picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_path_response);
+                    bytes = NULL;
                 }
             }
         }

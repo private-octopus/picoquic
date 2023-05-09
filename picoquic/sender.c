@@ -946,6 +946,12 @@ void picoquic_update_pacing_rate(picoquic_cnx_t * cnx, picoquic_path_t* path_x, 
             cnx->pacing_rate_signalled = path_x->pacing_rate;
         }
     }
+    if (cnx->is_path_quality_update_requested &&
+        cnx->callback_fn != NULL) {
+        /* TODO: add a function "export path quality" */
+        /* TODO: remember previous signalled value for change tests */
+        (void)cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_quality_changed, cnx->callback_ctx, path_x->app_path_ctx);
+    }
 }
 
 /*
