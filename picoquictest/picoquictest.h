@@ -373,6 +373,7 @@ int simple_multipath_abandon_test();
 int simple_multipath_back1_test();
 int simple_multipath_perf_test();
 int simple_multipath_qlog_test();
+int simple_multipath_quality_test();
 int token_reuse_api_test();
 int grease_quic_bit_test();
 int grease_quic_bit_one_way_test();

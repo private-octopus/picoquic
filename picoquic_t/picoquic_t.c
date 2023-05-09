@@ -372,6 +372,7 @@ static const picoquic_test_def_t test_table[] = {
     { "simple_multipath_nat", simple_multipath_nat_test },
     { "simple_multipath_perf", simple_multipath_perf_test },
     { "simple_multipath_qlog", simple_multipath_qlog_test },
+    { "simple_multipath_quality", simple_multipath_quality_test },
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },
     { "pn_random", pn_random_test },
