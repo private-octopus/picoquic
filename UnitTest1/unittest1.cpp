@@ -2008,6 +2008,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_stream_af) {
+            int ret = multipath_stream_af_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_qlog) {
             int ret = multipath_qlog_test();
 

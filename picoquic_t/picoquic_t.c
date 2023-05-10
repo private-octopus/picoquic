@@ -356,6 +356,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_perf", multipath_perf_test },
     { "multipath_callback", multipath_callback_test },
     { "multipath_quality", multipath_quality_test },
+    { "multipath_stream_af", multipath_stream_af_test },
     { "multipath_qlog", multipath_qlog_test },
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },

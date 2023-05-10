@@ -2254,6 +2254,28 @@ int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_pat
     return ret;
 }
 
+int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id)
+{
+    int ret = 0;
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+
+    if (stream == NULL) {
+        ret = -1;
+    } else if (unique_path_id == UINT64_MAX) {
+        stream->affinity_path = NULL;
+    }
+    else {
+        int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
+        if (path_id >= 0) {
+            stream->affinity_path = cnx->path[path_id];
+        }
+        else {
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
 /* Reset the path MTU, for example if too many packet losses are detected */
 void picoquic_reset_path_mtu(picoquic_path_t* path_x)
 {

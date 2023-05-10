@@ -428,6 +428,7 @@ typedef enum {
     multipath_test_callback,
     multipath_test_quality,
     multipath_test_quality_server,
+    multipath_test_stream_af,
     multipath_test_abandon
 } multipath_test_enum_t;
 
@@ -450,28 +451,33 @@ int multipath_init_callbacks(picoquic_test_tls_api_ctx_t* test_ctx, multipath_te
     char const* filename = (test_id == multipath_test_callback) ? PATH_CALLBACK_CSV : 
         ((test_id == multipath_test_quality)?PATH_QUALITY_CSV:PATH_QUALITY_SERVER);
     /* Open a file to log bandwidth updates and document it in context */
-    test_ctx->path_events = picoquic_file_open(filename, "w");
-    if (test_ctx->path_events == NULL) {
-        DBG_PRINTF("Could not write file <%s>", filename);
-        ret = -1;
+    if (test_id == multipath_test_stream_af) {
+        picoquic_enable_path_callbacks_default(test_ctx->qserver, 1);
     }
     else {
-        if (test_id == multipath_test_quality_server) {
-            picoquic_enable_path_callbacks_default(test_ctx->qserver, 1);
-            picoquic_default_quality_update(test_ctx->qserver, 50000, 5000);
+        test_ctx->path_events = picoquic_file_open(filename, "w");
+        if (test_ctx->path_events == NULL) {
+            DBG_PRINTF("Could not write file <%s>", filename);
+            ret = -1;
         }
         else {
-            picoquic_enable_path_callbacks(test_ctx->cnx_client, 1);
-            if (test_id == multipath_test_quality) {
-                (void)picoquic_subscribe_to_quality_update(test_ctx->cnx_client, UINT64_MAX, 50000, 5000);
-                ret = picoquic_subscribe_to_quality_update(test_ctx->cnx_client, 0, 50000, 5000);
+            if (test_id == multipath_test_quality_server) {
+                picoquic_enable_path_callbacks_default(test_ctx->qserver, 1);
+                picoquic_default_quality_update(test_ctx->qserver, 50000, 5000);
             }
-        }
-        if (test_id == multipath_test_callback) {
-            fprintf(test_ctx->path_events, "Time, Path-ID, Event,\n");
-        }
-        else {
-            fprintf(test_ctx->path_events, "Time, Path-ID, Event, Pacing_rate, CWIN, RTT\n");
+            else {
+                picoquic_enable_path_callbacks(test_ctx->cnx_client, 1);
+                if (test_id == multipath_test_quality) {
+                    (void)picoquic_subscribe_to_quality_update(test_ctx->cnx_client, UINT64_MAX, 50000, 5000);
+                    ret = picoquic_subscribe_to_quality_update(test_ctx->cnx_client, 0, 50000, 5000);
+                }
+            }
+            if (test_id == multipath_test_callback) {
+                fprintf(test_ctx->path_events, "Time, Path-ID, Event,\n");
+            }
+            else {
+                fprintf(test_ctx->path_events, "Time, Path-ID, Event, Pacing_rate, CWIN, RTT\n");
+            }
         }
     }
     return ret;
@@ -542,7 +548,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             picoquic_set_default_crypto_epoch_length(test_ctx->qserver, 200);
         }
 
-        if (test_id == multipath_test_callback || test_id == multipath_test_quality || test_id == multipath_test_quality_server) {
+        if (test_id == multipath_test_callback || test_id == multipath_test_quality || test_id == multipath_test_quality_server || test_id == multipath_test_stream_af) {
             multipath_init_callbacks(test_ctx, test_id);
         }
 
@@ -629,6 +635,12 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     /* Check that the two paths are established */
     if (ret == 0) {
         ret = wait_multipath_ready(test_ctx, &simulated_time);
+    }
+    if (ret == 0 && test_id == multipath_test_stream_af) {
+        ret = picoquic_set_stream_path_affinity(test_ctx->cnx_server, 4, 0);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot set stream affinity, ret = %d", ret);
+        }
     }
 
     if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
@@ -748,6 +760,21 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
         else if (test_ctx->cnx_client->nb_paths != 2) {
             DBG_PRINTF("After break and back, %d paths on server connection.\n", test_ctx->cnx_client->nb_paths);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && test_id == multipath_test_stream_af) {
+        if (test_ctx->cnx_server->nb_paths != 2) {
+            DBG_PRINTF("After break and back, %d paths on server connection.\n", test_ctx->cnx_server->nb_paths);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->path[0]->delivered < 1400000) {
+            DBG_PRINTF("Not enough data delivered on server path 0 (%" PRIu64 ".\n", test_ctx->cnx_server->path[0]->delivered);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->path[1]->delivered > 600000) {
+            DBG_PRINTF("Too much data delivered on server path 1 (%" PRIu64 ".\n", test_ctx->cnx_server->path[0]->delivered);
             ret = -1;
         }
     }
@@ -890,6 +917,13 @@ int multipath_quality_test()
     uint64_t max_completion_microsec = 1060000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_quality, 0);
+}
+
+int multipath_stream_af_test()
+{
+    uint64_t max_completion_microsec = 1500000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_stream_af, 0);
 }
 
 

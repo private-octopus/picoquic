@@ -774,6 +774,7 @@ typedef struct st_picoquic_stream_head_t {
     struct st_picoquic_stream_head_t * previous_output_stream;
     picoquic_cnx_t * cnx;
     uint64_t stream_id;
+    struct st_picoquic_path_t * affinity_path; /* Path for which affinity is set, or NULL if none */
     uint64_t consumed_offset; /* amount of data consumed by the application */
     uint64_t fin_offset; /* If the fin mark is received, index of the byte after last */
     uint64_t maxdata_local; /* flow control limit of how much the peer is authorized to send */
@@ -1736,7 +1737,8 @@ void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_he
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, picoquic_packet_type_enum p_type,
     int* no_need_to_repeat, int* do_not_detect_spurious, int is_preemptive);
-uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max,
+uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
+    uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);
 uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, 
     uint8_t* bytes_next, uint8_t* bytes_max, int* is_pure_ack);

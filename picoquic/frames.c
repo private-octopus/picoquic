@@ -1114,7 +1114,7 @@ const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* 
     return bytes;
 }
 
-picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
+picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     picoquic_stream_head_t* first_stream = cnx->first_output_stream;
     picoquic_stream_head_t* stream = first_stream;
@@ -1132,8 +1132,12 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
             break;
         }
         has_data = (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
-            (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
                 (stream->fin_requested && !stream->fin_sent)));
+        if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
+            /* Only consider the streams that meet path affinity requirements */
+            has_data = 0;
+        }
         if ((stream->reset_requested && !stream->reset_sent) ||
             (stream->stop_sending_requested && !stream->stop_sending_sent)) {
             /* urgent action is needed, this takes precedence over FIFO vs round-robin processing */
@@ -1182,6 +1186,11 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
     }
 
     return found_stream;
+}
+
+picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
+{
+    return picoquic_find_ready_stream_path(cnx, NULL);
 }
 
 /* Management of BLOCKED signals
@@ -1596,11 +1605,12 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
  * Update is_pure_ack if formated frames require ack
  * Set stream_tried_and_failed if there was nothing to send, indicating the app limited condition.
  */
-uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max, int* more_data,
+uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes_next, uint8_t* bytes_max, int* more_data,
     int* is_pure_ack, int* stream_tried_and_failed, int* ret)
 {
     uint8_t* bytes_previous = bytes_next;
-    picoquic_stream_head_t* stream = picoquic_find_ready_stream(cnx);
+    picoquic_stream_head_t* stream = picoquic_find_ready_stream_path(cnx,
+        (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)?path_x: NULL);
     int more_stream_data = 0;
 
     while (*ret == 0 && stream != NULL && bytes_next < bytes_max) {

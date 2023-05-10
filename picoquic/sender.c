@@ -2355,7 +2355,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
         }
 
         /* Encode the stream frame, or frames */
-        bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
+        bytes_next = picoquic_format_available_stream_frames(cnx, NULL, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
 
         length = bytes_next - bytes;
 
@@ -3698,7 +3698,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);
                         }
 
-                        bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
+                        bytes_next = picoquic_format_available_stream_frames(cnx, NULL, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
  
                         /* TODO: replace this by posting of frame when CWIN estimated */
                         /* Send bdp frames if there are no stream frames to send 
@@ -4076,7 +4076,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         /* Encode the stream frame, or frames */
                         if (ret == 0 && !split_repeat_queued){
                             if (bytes_next + 8 < bytes_max) {
-                                bytes_next = picoquic_format_available_stream_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
+                                bytes_next = picoquic_format_available_stream_frames(cnx, path_x, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
                                 cnx->datagram_conflicts_count = 0;
                             }
                             else {
@@ -4440,6 +4440,10 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     int i_min_rtt = -1;
     int is_min_rtt_pacing_ok = 0;
     int is_ack_needed = 0;
+    picoquic_stream_head_t* next_stream = picoquic_find_ready_stream(cnx);
+    int stream_affinity_path_id = -1;
+    /* int nb_datagram_ready_path = 0; */
+    /* int datagram_ready_path_id = 0; */
 
     cnx->last_path_polled++;
     if (cnx->last_path_polled > cnx->nb_paths) {
@@ -4533,6 +4537,9 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                                 last_sent_cwin = cnx->path[i]->last_sent_time;
                                 data_path_cwin = i;
                             }
+                            if (next_stream != NULL && cnx->path[i] == next_stream->affinity_path) {
+                                stream_affinity_path_id = i;
+                            }
                         }
                         else {
                             cnx->path[i]->congested++;
@@ -4562,7 +4569,13 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
         path_id = i_min_rtt;
     }
     else if (data_path_cwin >= 0) {
-        path_id = data_path_cwin;
+        /* if there is a path ready to send the most urgent data, select it */
+        if (stream_affinity_path_id >= 0) {
+            path_id = stream_affinity_path_id;
+        }
+        else {
+            path_id = data_path_cwin;
+        }
     }
     else if (data_path_pacing >= 0) {
         path_id = data_path_pacing;
