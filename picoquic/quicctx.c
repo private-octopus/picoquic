@@ -1652,9 +1652,19 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 {
     picoquic_path_t * path_x = cnx->path[path_index];
     picoquic_packet_t* p = NULL;
+    picoquic_stream_head_t* stream = NULL;
 
     if (cnx->quic->F_log != NULL) {
         fflush(cnx->quic->F_log);
+    }
+
+    /* if there are references to path in streams, remove them */
+    stream = picoquic_first_stream(cnx);
+    while (stream != NULL) {
+        if (stream->affinity_path == path_x) {
+            stream->affinity_path = NULL;
+        }
+        stream = picoquic_next_stream(stream);
     }
 
     /* Signal to the application */
@@ -1663,9 +1673,6 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
         cnx->callback_ctx, path_x->app_path_ctx) != 0) {
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0, "Path deleted callback failed.");
     }
-
-    /* TODO: if there are references to path in streams, remove them */
-
 
     /* Remove old path data from retransmit queue */
     picoquic_empty_path_packet_queue(path_x);

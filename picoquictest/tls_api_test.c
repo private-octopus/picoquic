@@ -680,14 +680,15 @@ int test_api_callback(picoquic_cnx_t* cnx,
     {
         int ret = -1;
         if (ctx->datagram_send_fn != NULL) {
-            ret = ctx->datagram_send_fn(cnx, bytes, length, ctx->datagram_ctx);
+            uint64_t unique_path_id = (cnx->are_path_callbacks_enabled) ? stream_id : 0;
+            ret = ctx->datagram_send_fn(cnx, stream_id, bytes, length, ctx->datagram_ctx);
         }
         return ret;
     } else if (fin_or_event == picoquic_callback_datagram)
     {
         int ret = -1;
         if (ctx->datagram_recv_fn != NULL) {
-            ret = ctx->datagram_recv_fn(cnx, bytes, length, ctx->datagram_ctx);
+            ret = ctx->datagram_recv_fn(cnx, stream_id, bytes, length, ctx->datagram_ctx);
         }
         return ret;
     }

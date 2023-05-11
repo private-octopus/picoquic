@@ -43,9 +43,9 @@ extern "C" {
 
  /* Callback function for sending and receiving datagrams.
   */
-typedef int (*picoquic_datagram_send_fn)(picoquic_cnx_t* cnx,
+typedef int (*picoquic_datagram_send_fn)(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint8_t* bytes, size_t length, void* datagram_ctx);
-typedef int (*picoquic_datagram_recv_fn)(picoquic_cnx_t* cnx,
+typedef int (*picoquic_datagram_recv_fn)(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint8_t* bytes, size_t length, void* datagram_ctx);
 typedef int (*picoquic_datagram_ack_fn)(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t d_event, uint8_t* bytes, size_t length, uint64_t sent_time, void* datagram_ctx);
@@ -157,7 +157,6 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     FILE* bw_update;
     /* File used to test path notifications */
     FILE* path_events;
-
     /* Datagram test functions */
     void* datagram_ctx;
     picoquic_datagram_send_fn datagram_send_fn;

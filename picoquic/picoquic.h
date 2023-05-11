@@ -1145,19 +1145,25 @@ int picoquic_discard_stream(picoquic_cnx_t* cnx, uint64_t stream_id, uint16_t lo
 
 /* The function picoquic_set_datagram_ready indicates to the stack
  * whether the application is ready to send datagrams. 
- * The extended variant also specifies a unique path identifier,
+ * 
+ * When running in a multipath environment, some applications may want to
+ * send datagram on a specific path. For example, if an application is sending
+ * voice over IP frames in datagrams, it may want to send all these datagrams
+ * on the same path, to avoid the delay jitters due to random path selection.
+ * The path variant specifies a unique path identifier,
  * indicating that datagrams are ready on that path. The callback
  * "picoquic_callback_prepare_datagram" will be issued if either
  * the current path or the whole connection is marked ready for datagrams.
  */
 int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready);
-int picoquic_mark_datagram_ready_ex(picoquic_cnx_t* cnx, uint64_t unique_path_id, int is_ready);
+int picoquic_mark_datagram_ready_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, int is_path_ready);
 
 /* If a datagram is marked active, the application will receive a callback with
  * event type "picoquic_callback_prepare_datagram" when the transport is ready to
- * send data on a stream. The "length" argument in the call back indicates the
+ * send data on a path. The "length" argument in the call back indicates the
  * largest amount of data that can be sent, and the "bytes" argument points
- * to an opaque context structure. The "stream_id" argument is repurposed to
+ * to an opaque context structure. If the application has indicated support
+ * for path callbacks by using "", the "stream_id" argument is repurposed to
  * indicate the unique path identifier of the current path. In order to prepare data, 
  * the application needs to call "picoquic_provide_datagram_buffer" with the context
  * pointer, and with the number of bytes that it wants to write. The function
@@ -1195,9 +1201,16 @@ int picoquic_mark_datagram_ready_ex(picoquic_cnx_t* cnx, uint64_t unique_path_id
  * it again, otherwise there will be a hot loop consuming a lot of CPU. If you
  * see that, you should really switch to using the new "extended" API and set
  * the "is_active" parameter.
+ * 
+ * The API picoquic_provide_datagram_path_buffer is designed for a multipath
+ * environment. The "picoquic_provide_datagram_path_buffer" allows the
+ * application indicate whether it is ready to send datagrams for the any path
+ * (is_active), and whether it has datagrams to send specifically on the
+ * current path (is_path_active).
  */
 uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length);
 uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, int is_active);
+uint8_t* picoquic_provide_datagram_path_buffer(void* context, size_t length, int is_active, int is_path_active);
 
 /* 
  * Set the optimistic ack policy. The holes will be inserted at random locations,

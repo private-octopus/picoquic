@@ -68,10 +68,12 @@ typedef struct st_test_datagram_send_recv_ctx_t {
     uint64_t next_gen_time[2];
     int is_ready[2];
     int max_packets_received;
-
+    int nb_recv_path_0[2];
+    int nb_recv_path_other[2];
     unsigned int use_extended_provider_api;
     unsigned int do_skip_test[2];
     unsigned int is_skipping[2];
+    unsigned int test_affinity;
 
 } test_datagram_send_recv_ctx_t;
 
@@ -98,7 +100,7 @@ int test_datagram_check_ready(test_datagram_send_recv_ctx_t* dg_ctx, int client_
     return dg_ctx->is_ready[client_mode];
 }
 
-int test_datagram_send(picoquic_cnx_t* cnx,
+int test_datagram_send(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint8_t* bytes, size_t length, void* datagram_ctx)
 {
     int ret = 0;
@@ -122,11 +124,17 @@ int test_datagram_send(picoquic_cnx_t* cnx,
             (void)picoquic_provide_datagram_buffer_ex(bytes, 0, is_active);
         }
     }
-    else if (!dg_ctx->is_ready[cnx->client_mode]) {
+    else if (!dg_ctx->is_ready[cnx->client_mode] || (dg_ctx->test_affinity && unique_path_id != 0)) {
         /* Datagram callback when the client was not ready. */
         is_active = 0;
         if (dg_ctx->use_extended_provider_api) {
-            (void)picoquic_provide_datagram_buffer_ex(bytes, 0, is_active);
+            if (dg_ctx->test_affinity) {
+                int is_active_on_path = is_active && unique_path_id == 0;
+                (void)picoquic_provide_datagram_path_buffer(bytes, 0, 0, is_active_on_path);
+            }
+            else {
+                (void)picoquic_provide_datagram_buffer_ex(bytes, 0, is_active);
+            }
         }
     }
     else {
@@ -144,7 +152,12 @@ int test_datagram_send(picoquic_cnx_t* cnx,
             }
         }
         if (dg_ctx->use_extended_provider_api) {
-            buffer = picoquic_provide_datagram_buffer_ex(bytes, available, 1);
+            if (dg_ctx->test_affinity) {
+                buffer = picoquic_provide_datagram_path_buffer(bytes, available, 0, 1);
+            }
+            else {
+                buffer = picoquic_provide_datagram_buffer_ex(bytes, available, 1);
+            }
         }
         else {
             buffer = picoquic_provide_datagram_buffer(bytes, available);
@@ -181,7 +194,7 @@ int test_datagram_send(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int test_datagram_recv(picoquic_cnx_t* cnx,
+int test_datagram_recv(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint8_t* bytes, size_t length, void* datagram_ctx)
 {
     test_datagram_send_recv_ctx_t* dg_ctx = datagram_ctx;
@@ -193,6 +206,12 @@ int test_datagram_recv(picoquic_cnx_t* cnx,
         uint64_t time_sent;
         uint64_t number_sent;
 
+        if (unique_path_id == 0) {
+            dg_ctx->nb_recv_path_0[cnx->client_mode] += 1;
+        }
+        else {
+            dg_ctx->nb_recv_path_other[cnx->client_mode] += 1;
+        }
 
         if ((dg_bytes = picoquic_frames_uint64_decode(bytes, bytes + length, &number_sent)) != NULL &&
             (dg_bytes = picoquic_frames_uint64_decode(dg_bytes, bytes + length, &time_sent)) != NULL &&

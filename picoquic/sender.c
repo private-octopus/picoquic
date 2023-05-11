@@ -107,6 +107,18 @@ int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready)
     return ret;
 }
 
+int picoquic_mark_datagram_ready_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, int is_path_ready)
+{
+    int ret = 0;
+    int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
+    if (path_id >= 0) {
+        cnx->path[path_id]->is_datagram_ready = is_path_ready;
+    } else {
+        ret = -1;
+    }
+    return ret;
+}
+
 
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void * app_stream_ctx)
@@ -3680,7 +3692,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         if (ret == 0){
                             while (cnx->is_datagram_ready) {
                                 uint8_t* dg_start = bytes_next;
-                                bytes_next = picoquic_format_ready_datagram_frame(cnx, bytes_next, bytes_max,
+                                bytes_next = picoquic_format_ready_datagram_frame(cnx, path_x, bytes_next, bytes_max,
                                     &more_data, &is_pure_ack, &ret);
                                 if (bytes_next == NULL || bytes_next == dg_start) {
                                     break;
@@ -3816,7 +3828,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 }
 
 /* Try to send datagrams */
-static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max,
+static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* datagram_tried_and_failed, int* datagram_sent, int * ret)
 {
     uint8_t* bytes0 = bytes_next;
@@ -3828,7 +3840,7 @@ static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, uint8_t* by
     else {
         while (cnx->is_datagram_ready) {
             uint8_t* dg_start = bytes_next;
-            bytes_next = picoquic_format_ready_datagram_frame(cnx, bytes_next, bytes_max,
+            bytes_next = picoquic_format_ready_datagram_frame(cnx, path_x, bytes_next, bytes_max,
                 more_data, is_pure_ack, ret);
             if (bytes_next == NULL || bytes_next == dg_start) {
                 break;
@@ -4059,7 +4071,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
                         /* Start of CC controlled frames */
                         if (ret == 0 && datagram_first) {
-                            bytes_next = picoquic_prepare_datagram_ready(cnx, bytes_next, bytes_max,
+                            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max,
                                 &more_data, &is_pure_ack, &datagram_tried_and_failed, &datagram_sent, &ret);
                         }
 
@@ -4095,7 +4107,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         if (ret == 0 && !datagram_first) {
-                            bytes_next = picoquic_prepare_datagram_ready(cnx, bytes_next, bytes_max,
+                            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max,
                                 &more_data, &is_pure_ack, &datagram_tried_and_failed, &datagram_sent, &ret);
                         }
 
@@ -4441,9 +4453,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     int is_min_rtt_pacing_ok = 0;
     int is_ack_needed = 0;
     picoquic_stream_head_t* next_stream = picoquic_find_ready_stream(cnx);
-    int stream_affinity_path_id = -1;
-    /* int nb_datagram_ready_path = 0; */
-    /* int datagram_ready_path_id = 0; */
+    int affinity_path_id = -1;
 
     cnx->last_path_polled++;
     if (cnx->last_path_polled > cnx->nb_paths) {
@@ -4537,8 +4547,16 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                                 last_sent_cwin = cnx->path[i]->last_sent_time;
                                 data_path_cwin = i;
                             }
-                            if (next_stream != NULL && cnx->path[i] == next_stream->affinity_path) {
-                                stream_affinity_path_id = i;
+                            if (affinity_path_id < 0) {
+                                /* we select here the first path that is either ready to send on
+                                 * the highest priority stream with affinity on this path, or
+                                 * ready to send datagrams on this path. */
+                                if (next_stream != NULL && cnx->path[i] == next_stream->affinity_path) {
+                                    affinity_path_id = i;
+                                }
+                                else if (cnx->path[i]->is_datagram_ready || cnx->is_datagram_ready) {
+                                    affinity_path_id = i;
+                                }
                             }
                         }
                         else {
@@ -4570,8 +4588,8 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     }
     else if (data_path_cwin >= 0) {
         /* if there is a path ready to send the most urgent data, select it */
-        if (stream_affinity_path_id >= 0) {
-            path_id = stream_affinity_path_id;
+        if (affinity_path_id >= 0) {
+            path_id = affinity_path_id;
         }
         else {
             path_id = data_path_cwin;
