@@ -4709,7 +4709,7 @@ uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, picoquic_path
         datagram_data_context.is_old_api = 0;
         datagram_data_context.was_called = 0;
 
-        if ((cnx->callback_fn)(cnx, (cnx->are_path_callbacks_enabled)?0:0, (uint8_t*)&datagram_data_context, allowed_space,
+        if ((cnx->callback_fn)(cnx, (cnx->are_path_callbacks_enabled)?path_x->unique_path_id:0, (uint8_t*)&datagram_data_context, allowed_space,
             picoquic_callback_prepare_datagram, cnx->callback_ctx, NULL) != 0) {
             /* something went wrong */
             picoquic_log_app_message(cnx, "Prepare datagram returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);

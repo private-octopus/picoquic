@@ -46,36 +46,7 @@
 /*
  * Test whether datagrams are sent and received properly
  */
-typedef struct st_test_datagram_send_recv_ctx_t {
-    uint32_t dg_max_size;
-    uint32_t dg_small_size;
-    int dg_target[2];
-    int dg_sent[2];
-    int dg_recv[2];
-    int dg_acked[2];
-    int dg_nacked[2];
-    int dg_spurious[2];
-    int batch_size[2];
-    int batch_sent[2];
-    uint64_t dg_time_ready[2];
-    uint64_t dg_latency_max[2];
-    uint64_t dg_received_last[2];
-    uint64_t dg_number_delta_max[2];
-    uint64_t dg_latency_target[2];
-    uint64_t dg_number_delta_target[2];
 
-    uint64_t send_delay;
-    uint64_t next_gen_time[2];
-    int is_ready[2];
-    int max_packets_received;
-    int nb_recv_path_0[2];
-    int nb_recv_path_other[2];
-    unsigned int use_extended_provider_api;
-    unsigned int do_skip_test[2];
-    unsigned int is_skipping[2];
-    unsigned int test_affinity;
-
-} test_datagram_send_recv_ctx_t;
 
 uint64_t test_datagram_next_time_ready(test_datagram_send_recv_ctx_t* dg_ctx)
 {
@@ -129,8 +100,9 @@ int test_datagram_send(picoquic_cnx_t* cnx, uint64_t unique_path_id,
         is_active = 0;
         if (dg_ctx->use_extended_provider_api) {
             if (dg_ctx->test_affinity) {
-                int is_active_on_path = is_active && unique_path_id == 0;
-                (void)picoquic_provide_datagram_path_buffer(bytes, 0, 0, is_active_on_path);
+                if (unique_path_id == 0) {
+                    (void)picoquic_provide_datagram_path_buffer(bytes, 0, 0, is_active);
+                }
             }
             else {
                 (void)picoquic_provide_datagram_buffer_ex(bytes, 0, is_active);
@@ -189,7 +161,12 @@ int test_datagram_send(picoquic_cnx_t* cnx, uint64_t unique_path_id,
 
     if (ret == 0 && !skipping && !dg_ctx->use_extended_provider_api) {
         (void)test_datagram_check_ready(dg_ctx, cnx->client_mode, current_time);
-        picoquic_mark_datagram_ready(cnx, dg_ctx->is_ready[cnx->client_mode]);
+        if (dg_ctx->test_affinity) {
+            picoquic_mark_datagram_ready_path(cnx, 0, dg_ctx->is_ready[cnx->client_mode]);
+        }
+        else {
+            picoquic_mark_datagram_ready(cnx, dg_ctx->is_ready[cnx->client_mode]);
+        }
     }
     return ret;
 }

@@ -112,7 +112,16 @@ int picoquic_mark_datagram_ready_path(picoquic_cnx_t* cnx, uint64_t unique_path_
     int ret = 0;
     int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
     if (path_id >= 0) {
+        int was_ready = cnx->path[path_id]->is_datagram_ready;
         cnx->path[path_id]->is_datagram_ready = is_path_ready;
+        if (!was_ready && is_path_ready) {
+            if (cnx->remote_parameters.max_datagram_frame_size == 0) {
+                ret = -1;
+            }
+            else {
+                picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+            }
+        }
     } else {
         ret = -1;
     }
@@ -3690,7 +3699,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         }
 
                         if (ret == 0){
-                            while (cnx->is_datagram_ready) {
+                            while (cnx->is_datagram_ready || path_x->is_datagram_ready) {
                                 uint8_t* dg_start = bytes_next;
                                 bytes_next = picoquic_format_ready_datagram_frame(cnx, path_x, bytes_next, bytes_max,
                                     &more_data, &is_pure_ack, &ret);
@@ -3838,7 +3847,7 @@ static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, picoquic_pa
         *more_data |= (cnx->first_datagram != NULL);
     }
     else {
-        while (cnx->is_datagram_ready) {
+        while (cnx->is_datagram_ready || path_x->is_datagram_ready) {
             uint8_t* dg_start = bytes_next;
             bytes_next = picoquic_format_ready_datagram_frame(cnx, path_x, bytes_next, bytes_max,
                 more_data, is_pure_ack, ret);

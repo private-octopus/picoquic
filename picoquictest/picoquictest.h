@@ -360,6 +360,8 @@ int multipath_perf_test();
 int multipath_callback_test();
 int multipath_quality_test();
 int multipath_stream_af_test();
+int multipath_datagram_test();
+int multipath_dg_af_test();
 int multipath_qlog_test();
 int simple_multipath_basic_test();
 int simple_multipath_drop_first_test();
