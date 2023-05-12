@@ -503,7 +503,7 @@ int multipath_verify_callbacks(multipath_test_enum_t test_id)
 void multipath_init_datagram_ctx(picoquic_test_tls_api_ctx_t* test_ctx, test_datagram_send_recv_ctx_t * dg_ctx)
 {
     /* Initialize the datagram targets as a function of the test id */
-    memset(dg_ctx, 0, sizeof(dg_ctx));
+    memset(dg_ctx, 0, sizeof(test_datagram_send_recv_ctx_t));
     dg_ctx->dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
     dg_ctx->dg_target[0] = 100;
     dg_ctx->dg_target[1] = 100;
