@@ -199,6 +199,8 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     FILE* bw_update;
     /* File used to test path notifications */
     FILE* path_events;
+    /* File used to test default path quality updates */
+    FILE* default_path_update;
     /* Datagram test functions */
     void* datagram_ctx;
     picoquic_datagram_send_fn datagram_send_fn;

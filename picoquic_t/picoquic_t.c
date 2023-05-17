@@ -312,6 +312,7 @@ static const picoquic_test_def_t test_table[] = {
     { "stream_ack", stream_ack_test },
     { "queue_network_input", queue_network_input_test },
     { "pacing_update", pacing_update_test },
+    { "quality_update", quality_update_test },
     { "direct_receive", direct_receive_test },
     { "app_limit_cc", app_limit_cc_test },
     { "initial_race", initial_race_test },

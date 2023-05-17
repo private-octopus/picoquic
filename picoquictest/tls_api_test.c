@@ -732,6 +732,16 @@ int test_api_callback(picoquic_cnx_t* cnx,
                     picoquic_get_quic_time(cnx->quic), stream_id, (int)fin_or_event);
             }
         }
+        else if (fin_or_event == picoquic_callback_path_quality_changed &&
+            ctx->default_path_update != NULL) {
+            picoquic_path_quality_t quality;
+            uint64_t current_time = picoquic_get_quic_time(cnx->quic);
+            picoquic_get_default_path_quality(cnx, &quality);
+            fprintf(ctx->default_path_update,
+                "%" PRIu64 ", %" PRIu64 ", %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
+                current_time, stream_id, (int)fin_or_event,
+                quality.pacing_rate, quality.cwin, quality.rtt);
+        }
         return ret;
     }
 
@@ -1052,6 +1062,10 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
 
     if (test_ctx->path_events != NULL) {
         (void)picoquic_file_close(test_ctx->path_events);
+    }
+
+    if (test_ctx->default_path_update != NULL) {
+        (void)picoquic_file_close(test_ctx->default_path_update);
     }
 
 
@@ -10100,6 +10114,70 @@ int pacing_update_test()
 
     return ret;
 }
+
+/* testing the quality update functionality when using the default path
+* quality API.
+*/
+
+#ifdef _WINDOWS
+#define QUALITY_UPDATE_REF "picoquictest\\quality_update_ref.txt"
+#else
+#define QUALITY_UPDATE_REF "picoquictest/quality_update_ref.txt"
+#endif
+#define QUALITY_UPDATE_CSV "quality_update.csv"
+
+int quality_update_test()
+{
+    uint64_t simulated_time = 0;
+
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        /* Open a file to log bandwidth updates and document it in context */
+        test_ctx->default_path_update = picoquic_file_open(QUALITY_UPDATE_CSV, "w");
+        if (test_ctx->default_path_update == NULL) {
+            DBG_PRINTF("Could not write file <%s>", QUALITY_UPDATE_CSV);
+            ret = -1;
+        }
+        else {
+            fprintf(test_ctx->default_path_update, "Time, Pacing_rate_CB, Pacing_rate, CWIN, RTT\n");
+            /* Request bandwidth updates */
+            picoquic_subscribe_to_quality_update(test_ctx->cnx_client, 0x10000, 0x1000);
+
+            /* Start a standard scenario, pushing 1MB from the client*/
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 20000, 3600000);
+        }
+    }
+
+    /* Free the test contex, which closes the trace file  */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    /* compare the trace to the expected value */
+    if (ret == 0)
+    {
+        char quality_update_ref[512];
+
+        ret = picoquic_get_input_path(quality_update_ref, sizeof(quality_update_ref), picoquic_solution_dir, QUALITY_UPDATE_REF);
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the quality update ref file name.\n");
+        }
+        else {
+            ret = picoquic_test_compare_text_files(QUALITY_UPDATE_CSV, quality_update_ref);
+        }
+    }
+
+    return ret;
+}
+
 
 /* Test the direct receive API
  */

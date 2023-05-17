@@ -2201,50 +2201,74 @@ int picoquic_issue_path_quality_update(picoquic_cnx_t* cnx, picoquic_path_t* pat
     return ret;
 }
 
+static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, picoquic_path_quality_t* quality)
+{
+    picoquic_refresh_path_quality_thresholds(path_x);
+    quality->cwin = path_x->cwin;
+    quality->rtt = path_x->smoothed_rtt;
+    quality->rtt_min = path_x->rtt_min;
+    quality->rtt_variant = path_x->rtt_variant;
+    quality->pacing_rate = path_x->pacing_rate;
+    quality->sent = path_x->path_packet_number;
+    quality->lost = path_x->lost;
+    quality->bytes_in_transit = path_x->bytes_in_transit;
+}
+
 int picoquic_get_path_quality(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_quality_t* quality)
 {
     int ret = -1;
     int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
     if (path_id >= 0) {
         picoquic_path_t* path_x = cnx->path[path_id];
-        picoquic_refresh_path_quality_thresholds(path_x);
-        quality->cwin = path_x->cwin;
-        quality->rtt = path_x->smoothed_rtt;
-        quality->rtt_min = path_x->rtt_min;
-        quality->rtt_variant = path_x->rtt_variant;
-        quality->pacing_rate = path_x->pacing_rate;
-        quality->sent = path_x->path_packet_number;
-        quality->lost = path_x->lost;
-        quality->bytes_in_transit = path_x->bytes_in_transit;
+        picoquic_get_path_quality_from_context(path_x, quality);
         ret = 0;
     }
     return ret;
 }
 
-int picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t unique_path_id,
+void picoquic_get_default_path_quality(picoquic_cnx_t* cnx, picoquic_path_quality_t* quality)
+{
+    picoquic_path_t* path_x = cnx->path[0];
+    picoquic_get_path_quality_from_context(path_x, quality);
+}
+
+void picoquic_subscribe_to_quality_update_per_path_context(picoquic_path_t * path_x,
+    uint64_t pacing_rate_delta, uint64_t rtt_delta)
+{
+    path_x->pacing_rate_update_delta = pacing_rate_delta;
+    path_x->rtt_update_delta = rtt_delta;
+    picoquic_refresh_path_quality_thresholds(path_x);
+}
+
+int picoquic_subscribe_to_quality_update_per_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint64_t pacing_rate_delta, uint64_t rtt_delta)
 {
     int ret = 0;
 
     cnx->is_path_quality_update_requested = 1;
 
-    if (unique_path_id == UINT64_MAX) {
-        cnx->pacing_rate_update_delta = pacing_rate_delta;
-        cnx->rtt_update_delta = rtt_delta;
+    int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
+    if (path_id >= 0) {
+        picoquic_subscribe_to_quality_update_per_path_context(cnx->path[path_id],
+            pacing_rate_delta, rtt_delta);
     }
     else {
-        int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
-        if (path_id >= 0) {
-            picoquic_path_t* path_x = cnx->path[path_id];
-            path_x->pacing_rate_update_delta = pacing_rate_delta;
-            path_x->rtt_update_delta = rtt_delta;
-            picoquic_refresh_path_quality_thresholds(path_x);
-        }
-        else {
-            ret = -1;
-        }
+        ret = -1;
     }
+
     return ret;
+}
+
+void picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t pacing_rate_delta, uint64_t rtt_delta)
+{
+    cnx->pacing_rate_update_delta = pacing_rate_delta;
+    cnx->rtt_update_delta = rtt_delta;
+    cnx->is_path_quality_update_requested = 1;
+
+    for (int i = 0; i < cnx->nb_paths; i++) {
+        picoquic_subscribe_to_quality_update_per_path_context(cnx->path[i],
+            pacing_rate_delta, rtt_delta);
+    }
 }
 
 void picoquic_default_quality_update(picoquic_quic_t* quic, uint64_t pacing_rate_delta, uint64_t rtt_delta)

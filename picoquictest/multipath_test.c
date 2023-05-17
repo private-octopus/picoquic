@@ -466,8 +466,8 @@ int multipath_init_callbacks(picoquic_test_tls_api_ctx_t* test_ctx, multipath_te
         else {
             picoquic_enable_path_callbacks(test_ctx->cnx_client, 1);
             if (test_id == multipath_test_quality) {
-                (void)picoquic_subscribe_to_quality_update(test_ctx->cnx_client, UINT64_MAX, 50000, 5000);
-                ret = picoquic_subscribe_to_quality_update(test_ctx->cnx_client, 0, 50000, 5000);
+                picoquic_subscribe_to_quality_update(test_ctx->cnx_client, 50000, 5000);
+                ret = picoquic_subscribe_to_quality_update_per_path(test_ctx->cnx_client, 0, 50000, 5000);
             }
         }
         if (test_id == multipath_test_callback) {
