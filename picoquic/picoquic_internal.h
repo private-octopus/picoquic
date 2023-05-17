@@ -1531,7 +1531,7 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t* cnx, picoquic_path_
 /* Reset pacing data if congestion algorithm computes it directly */
 void picoquic_update_pacing_rate(picoquic_cnx_t* cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
 /* Manage path quality updates */
-void picoquic_refresh_path_quality_thresholds(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
+void picoquic_refresh_path_quality_thresholds(picoquic_path_t* path_x);
 int picoquic_issue_path_quality_update(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 /* Next time is used to order the list of available connections,

@@ -1532,7 +1532,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
             /* initialize the quality reporting thresholds */
             path_x->rtt_update_delta = cnx->rtt_update_delta;
             path_x->pacing_rate_update_delta = cnx->pacing_rate_update_delta;
-            picoquic_refresh_path_quality_thresholds(cnx, path_x);
+            picoquic_refresh_path_quality_thresholds(path_x);
 
             /* Record the path */
             cnx->path[cnx->nb_paths] = path_x;
@@ -2162,7 +2162,7 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t
 
 /* Management of "path_quality" feedback.
  */
-void picoquic_refresh_path_quality_thresholds(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
+void picoquic_refresh_path_quality_thresholds(picoquic_path_t* path_x)
 {
     if (path_x->rtt_update_delta > 0) {
         if (path_x->smoothed_rtt > path_x->rtt_update_delta) {
@@ -2195,7 +2195,7 @@ int picoquic_issue_path_quality_update(picoquic_cnx_t* cnx, picoquic_path_t* pat
         (path_x->pacing_rate_update_delta > 0 && (
             path_x->pacing_rate < path_x->pacing_rate_threshold_low ||
             path_x->pacing_rate > path_x->pacing_rate_threshold_high))) {
-        picoquic_refresh_path_quality_thresholds(cnx, path_x);
+        picoquic_refresh_path_quality_thresholds(path_x);
         ret = cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_quality_changed, cnx->callback_ctx, NULL);
     }
     return ret;
@@ -2207,7 +2207,7 @@ int picoquic_get_path_quality(picoquic_cnx_t* cnx, uint64_t unique_path_id, pico
     int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
     if (path_id >= 0) {
         picoquic_path_t* path_x = cnx->path[path_id];
-        picoquic_refresh_path_quality_thresholds(cnx, path_x);
+        picoquic_refresh_path_quality_thresholds(path_x);
         quality->cwin = path_x->cwin;
         quality->rtt = path_x->smoothed_rtt;
         quality->rtt_min = path_x->rtt_min;
@@ -2226,6 +2226,8 @@ int picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t unique_pa
 {
     int ret = 0;
 
+    cnx->is_path_quality_update_requested = 1;
+
     if (unique_path_id == UINT64_MAX) {
         cnx->pacing_rate_update_delta = pacing_rate_delta;
         cnx->rtt_update_delta = rtt_delta;
@@ -2236,7 +2238,7 @@ int picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t unique_pa
             picoquic_path_t* path_x = cnx->path[path_id];
             path_x->pacing_rate_update_delta = pacing_rate_delta;
             path_x->rtt_update_delta = rtt_delta;
-            picoquic_refresh_path_quality_thresholds(cnx, path_x);
+            picoquic_refresh_path_quality_thresholds(path_x);
         }
         else {
             ret = -1;

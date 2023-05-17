@@ -712,12 +712,18 @@ int test_api_callback(picoquic_cnx_t* cnx,
             if (fin_or_event == picoquic_callback_path_quality_changed) {
                 uint64_t unique_path_id = stream_id;
                 picoquic_path_quality_t quality;
+                uint64_t current_time = picoquic_get_quic_time(cnx->quic);
+#if 1
+                if (current_time == 121570) {
+                    DBG_PRINTF("%s", "Bug");
+                }
+#endif
 
                 ret = picoquic_get_path_quality(cnx, unique_path_id, &quality);
                 if (ret == 0) {
                     fprintf(ctx->path_events,
                         "%" PRIu64 ", %" PRIu64 ", %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
-                        picoquic_get_quic_time(cnx->quic), stream_id, (int)fin_or_event,
+                        current_time, stream_id, (int)fin_or_event,
                         quality.pacing_rate, quality.cwin, quality.rtt);
                 }
             }
