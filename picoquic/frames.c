@@ -1,3 +1,4 @@
+#include "picoquic.h"
 /*
 * Author: Christian Huitema
 * Copyright (c) 2017, Private Octopus, Inc.
@@ -1114,7 +1115,7 @@ const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* 
     return bytes;
 }
 
-picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
+picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     picoquic_stream_head_t* first_stream = cnx->first_output_stream;
     picoquic_stream_head_t* stream = first_stream;
@@ -1132,8 +1133,12 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
             break;
         }
         has_data = (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
-            (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
                 (stream->fin_requested && !stream->fin_sent)));
+        if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
+            /* Only consider the streams that meet path affinity requirements */
+            has_data = 0;
+        }
         if ((stream->reset_requested && !stream->reset_sent) ||
             (stream->stop_sending_requested && !stream->stop_sending_sent)) {
             /* urgent action is needed, this takes precedence over FIFO vs round-robin processing */
@@ -1182,6 +1187,11 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
     }
 
     return found_stream;
+}
+
+picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
+{
+    return picoquic_find_ready_stream_path(cnx, NULL);
 }
 
 /* Management of BLOCKED signals
@@ -1596,11 +1606,12 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
  * Update is_pure_ack if formated frames require ack
  * Set stream_tried_and_failed if there was nothing to send, indicating the app limited condition.
  */
-uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max, int* more_data,
+uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes_next, uint8_t* bytes_max, int* more_data,
     int* is_pure_ack, int* stream_tried_and_failed, int* ret)
 {
     uint8_t* bytes_previous = bytes_next;
-    picoquic_stream_head_t* stream = picoquic_find_ready_stream(cnx);
+    picoquic_stream_head_t* stream = picoquic_find_ready_stream_path(cnx,
+        (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)?path_x: NULL);
     int more_stream_data = 0;
 
     while (*ret == 0 && stream != NULL && bytes_next < bytes_max) {
@@ -2622,6 +2633,8 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         if (is_first) {
             picoquic_validate_bdp_seed(cnx, old_path, rtt_estimate, current_time);
         }
+        /* Perform a quality changed callback if needed */
+        (void)picoquic_issue_path_quality_update(cnx, old_path);
     }
 }
 
@@ -4282,6 +4295,13 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                     /* We received a first packet from the peer! */
                     picoquic_update_path_rtt(cnx, path_x, path_x, path_x->challenge_time_first, current_time, 0, 0);
                 }
+
+                if (cnx->are_path_callbacks_enabled &&
+                    cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_available,
+                    cnx->callback_ctx, path_x->app_path_ctx) != 0) {
+                    picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_path_response);
+                    bytes = NULL;
+                }
             }
         }
     }
@@ -4466,7 +4486,7 @@ uint8_t* picoquic_decode_datagram_frame_header(uint8_t* bytes, const uint8_t* by
     return bytes;
 }
 
-const uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max)
+const uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint8_t frame_id = *bytes++;
     unsigned int has_length = frame_id & 1;
@@ -4494,8 +4514,8 @@ const uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, const uint8_t
 
     if (bytes != NULL && cnx->callback_fn != NULL) {
         /* submit the data to the app */
-        if (cnx->callback_fn(cnx, 0, (uint8_t*)bytes, (size_t)length, picoquic_callback_datagram,
-            cnx->callback_ctx, NULL) != 0) {
+        if (cnx->callback_fn(cnx, (cnx->are_path_callbacks_enabled)?path_x->unique_path_id:0, (uint8_t*)bytes,
+            (size_t)length, picoquic_callback_datagram, cnx->callback_ctx, NULL) != 0) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_datagram);
             bytes = NULL;
         }
@@ -4580,6 +4600,7 @@ uint8_t * picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byt
 
 typedef struct st_picoquic_datagram_buffer_argument_t {
     picoquic_cnx_t* cnx;
+    picoquic_path_t* path_x;
     uint8_t* bytes0; /* Points to the beginning of the encoding of the datagram frame */
     uint8_t* bytes; /* Position after encoding the datagram frame type */
     uint8_t* bytes_max; /* Pointer to the end of the packet */
@@ -4590,21 +4611,27 @@ typedef struct st_picoquic_datagram_buffer_argument_t {
     int was_called; /* Whether the API was called. */
 } picoquic_datagram_buffer_argument_t;
 
-uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, int is_active)
+uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, picoquic_datagram_active_enum is_active)
 {
     picoquic_datagram_buffer_argument_t* data_ctx = (picoquic_datagram_buffer_argument_t*)context;
     uint8_t* buffer = NULL;
 
-    data_ctx->is_active = is_active;
+    data_ctx->is_active = ((int)is_active) & 1;
     data_ctx->was_called = 1;
 
     if (!data_ctx->is_old_api) {
         /* We apply the state change at this point, rather than after the return of the
         * callback, so as to minimize "developer surprise". If the  application calls
-        * "picoquic_mark_datagram_ready" after this call, the vlaue set by the
+        * "picoquic_mark_datagram_ready" after this call, the value set by the
         * application will stick.
+        * There are two active flag: global, if the application is ready to send datagrams
+        * on any stream, and per path, if the application wants to send datagrams
+        * again on that path.
         */
         data_ctx->cnx->is_datagram_ready = is_active;
+        if (data_ctx->path_x != NULL) {
+            data_ctx->path_x->is_datagram_ready = ((int)is_active)>>1;
+        }
     }
 
     if (length > 0 && length <= data_ctx->allowed_space) {
@@ -4636,7 +4663,7 @@ uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, int i
 
 uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length)
 {
-    return picoquic_provide_datagram_buffer_ex(context, length, 0);
+    return picoquic_provide_datagram_buffer_ex(context, length, picoquic_datagram_not_active);
 }
 
 /* Ready for datagram callback.
@@ -4647,7 +4674,7 @@ uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length)
  * The picoquic_provide_datagram_buffer will set the "still listening" bit
  */
 
-uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes,
     uint8_t* bytes_max, int* more_data, int* is_pure_ack, int * ret)
 {
     uint8_t* bytes0 = bytes;
@@ -4667,6 +4694,7 @@ uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byte
         }
 
         datagram_data_context.cnx = cnx;
+        datagram_data_context.path_x = path_x;
         datagram_data_context.bytes0 = bytes0;
         datagram_data_context.bytes = bytes;
         datagram_data_context.bytes_max = bytes_max;
@@ -4676,7 +4704,7 @@ uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byte
         datagram_data_context.is_old_api = 0;
         datagram_data_context.was_called = 0;
 
-        if ((cnx->callback_fn)(cnx, 0, (uint8_t*)&datagram_data_context, allowed_space,
+        if ((cnx->callback_fn)(cnx, (cnx->are_path_callbacks_enabled)?path_x->unique_path_id:0, (uint8_t*)&datagram_data_context, allowed_space,
             picoquic_callback_prepare_datagram, cnx->callback_ctx, NULL) != 0) {
             /* something went wrong */
             picoquic_log_app_message(cnx, "Prepare datagram returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
@@ -5298,7 +5326,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
             case picoquic_frame_type_datagram_l:
                 /* Datagram carrying packets are acked, but not repeated */
                 ack_needed = 1;
-                bytes = picoquic_decode_datagram_frame(cnx, bytes, bytes_max);
+                bytes = picoquic_decode_datagram_frame(cnx, path_x, bytes, bytes_max);
                 break;
             default: {
                 uint64_t frame_id64;

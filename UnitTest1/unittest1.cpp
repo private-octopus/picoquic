@@ -1757,6 +1757,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quality_update) {
+            int ret = quality_update_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(direct_receive) {
             int ret = direct_receive_test();
 
@@ -1996,6 +2002,36 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_callback) {
+            int ret = multipath_callback_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_quality) {
+            int ret = multipath_quality_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_stream_af) {
+            int ret = multipath_stream_af_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_datagram) {
+            int ret = multipath_datagram_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_dg_af) {
+            int ret = multipath_dg_af_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_qlog) {
             int ret = multipath_qlog_test();
 
@@ -2076,6 +2112,12 @@ namespace UnitTest1
 
         TEST_METHOD(simple_multipath_qlog) {
             int ret = simple_multipath_qlog_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(simple_multipath_quality) {
+            int ret = simple_multipath_quality_test();
 
             Assert::AreEqual(ret, 0);
         }

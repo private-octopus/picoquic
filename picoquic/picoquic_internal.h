@@ -648,6 +648,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int is_flow_control_limited : 1; /* Enforce flow control limit for tests */
     unsigned int test_large_server_flight : 1; /* Use TP to ensure server flight is at least 8K */
     unsigned int is_port_blocking_disabled : 1; /* Do not check client port on incoming connections */
+    unsigned int are_path_callbacks_enabled : 1; /* Enable path specific callbacks by default */
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 
@@ -693,6 +694,12 @@ typedef struct st_picoquic_quic_t {
     void* fuzz_ctx;
     int wake_file;
     int wake_line;
+
+    /* Path quality callback. These variables store the default values
+    * of the min deltas required to perform path quality signaling.
+    */ 
+    uint64_t rtt_update_delta;
+    uint64_t pacing_rate_update_delta;
 
     /* Logging APIS */
     void* F_log;
@@ -767,6 +774,7 @@ typedef struct st_picoquic_stream_head_t {
     struct st_picoquic_stream_head_t * previous_output_stream;
     picoquic_cnx_t * cnx;
     uint64_t stream_id;
+    struct st_picoquic_path_t * affinity_path; /* Path for which affinity is set, or NULL if none */
     uint64_t consumed_offset; /* amount of data consumed by the application */
     uint64_t fin_offset; /* If the fin mark is received, index of the byte after last */
     uint64_t maxdata_local; /* flow control limit of how much the peer is authorized to send */
@@ -952,8 +960,8 @@ typedef struct st_picoquic_path_t {
     picoquic_remote_cnxid_t* p_remote_cnxid;
 
     struct st_picoquic_net_id_key_t* first_net_id;
-
-    uint64_t path_sequence;
+    uint64_t unique_path_id;
+    void* app_path_ctx;
 
     /* Peer address. */
     struct sockaddr_storage peer_addr;
@@ -999,6 +1007,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_nominal_ack_path : 1;
     unsigned int is_ack_lost : 1;
     unsigned int is_ack_expected : 1;
+    unsigned int is_datagram_ready : 1;
 
 
     /* Path priority, for multipath management */
@@ -1111,6 +1120,16 @@ typedef struct st_picoquic_path_t {
     int lost;
     int nb_delay_outliers;
 
+    /* Path quality callback. These variables store the delta set for signaling
+     * and the threshold computed based on these deltas and the latest published value.
+     */ 
+    uint64_t rtt_update_delta;
+    uint64_t pacing_rate_update_delta;
+    uint64_t rtt_threshold_low;
+    uint64_t rtt_threshold_high;
+    uint64_t pacing_rate_threshold_low;
+    uint64_t pacing_rate_threshold_high;
+
     /* BDP parameters sent by the server to be stored at client */
     uint64_t rtt_min_remote;
     uint64_t cwin_remote;
@@ -1184,6 +1203,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_time_stamp_enabled : 1; /* Read time stamp on on incoming */
     unsigned int is_time_stamp_sent : 1; /* Send time stamp with ACKS */
     unsigned int is_pacing_update_requested : 1; /* Whether the application subscribed to pacing updates */
+    unsigned int is_path_quality_update_requested : 1; /* Whether the application subscribed to path quality updates */
     unsigned int is_flow_control_limited : 1; /* Flow control window limited to initial value, mostly for tests */
     unsigned int is_hcid_verified : 1; /* Whether the HCID was received from the peer */
     unsigned int do_grease_quic_bit : 1; /* Negotiated grease of QUIC bit */
@@ -1195,6 +1215,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int ack_ignore_order_remote : 1; /* Peer requested no immediate ack if out of order packet received */
     unsigned int is_multipath_enabled : 1; /* Usage of multipath was negotiated */
     unsigned int is_simple_multipath_enabled : 1; /* Usage of simple multipath was negotiated */
+    unsigned int are_path_callbacks_enabled : 1; /* Enable path specific callbacks */
     unsigned int is_sending_large_buffer : 1; /* Buffer provided by application is sufficient for PMTUD */
     unsigned int is_preemptive_repeat_enabled : 1; /* Preemptive repat of packets to reduce transaction latency */
     unsigned int do_version_negotiation : 1; /* Whether compatible version negotiation is activated */
@@ -1311,9 +1332,13 @@ typedef struct st_picoquic_cnx_t {
     unsigned int stream_blocked : 1;
     /* Congestion algorithm */
     picoquic_congestion_algorithm_t const* congestion_alg;
+    /* Management of quality signalling updates */
+    uint64_t rtt_update_delta;
+    uint64_t pacing_rate_update_delta;
     uint64_t pacing_rate_signalled;
     uint64_t pacing_increase_threshold;
     uint64_t pacing_decrease_threshold;
+    uint64_t pacing_change_threshold;
 
     /* Data accounting for limiting amplification attacks */
     uint64_t initial_data_received;
@@ -1372,7 +1397,7 @@ typedef struct st_picoquic_cnx_t {
     int nb_paths;
     int nb_path_alloc;
     int last_path_polled;
-    uint64_t path_sequence_next;
+    uint64_t unique_path_id_next;
     picoquic_path_t* nominal_path_for_ack;
 
     /* Management of the CNX-ID stash */
@@ -1438,6 +1463,7 @@ int picoquic_register_net_secret(picoquic_cnx_t* cnx);
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     const struct sockaddr* local_addr, const struct sockaddr* peer_addr);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
+int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 void picoquic_enqueue_packet_with_path(picoquic_packet_t* p);
 void picoquic_dequeue_packet_from_path(picoquic_packet_t* p);
 void picoquic_empty_path_packet_queue(picoquic_path_t* path_x);
@@ -1451,6 +1477,7 @@ int picoquic_find_path_by_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int i
     uint64_t path_id_type, uint64_t path_id_value);
 int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
+int picoquic_get_path_id_from_unique(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 
 /* Management of the CNX-ID stash */
 int picoquic_init_cnxid_stash(picoquic_cnx_t* cnx);
@@ -1503,6 +1530,9 @@ void picoquic_update_pacing_after_send(picoquic_path_t* path_x, uint64_t current
 int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_time);
 /* Reset pacing data if congestion algorithm computes it directly */
 void picoquic_update_pacing_rate(picoquic_cnx_t* cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
+/* Manage path quality updates */
+void picoquic_refresh_path_quality_thresholds(picoquic_path_t* path_x);
+int picoquic_issue_path_quality_update(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 /* Next time is used to order the list of available connections,
         * so ready connections are polled first */
@@ -1709,7 +1739,8 @@ void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_he
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, picoquic_packet_type_enum p_type,
     int* no_need_to_repeat, int* do_not_detect_spurious, int is_preemptive);
-uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max,
+uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
+    uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);
 uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, 
     uint8_t* bytes_next, uint8_t* bytes_max, int* is_pure_ack);
@@ -1782,7 +1813,7 @@ void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_m
 void picoquic_clear_ack_ctx(picoquic_ack_context_t* ack_ctx);
 int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx);
 uint8_t* picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
-uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, int* ret);
+uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, int* ret);
 uint8_t* picoquic_decode_datagram_frame_header(uint8_t* bytes, const uint8_t* bytes_max,
     uint8_t* frame_id, uint64_t* length);
 const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* seq, uint64_t* packets, uint64_t* microsec, uint8_t * ignore_order);

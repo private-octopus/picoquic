@@ -680,14 +680,15 @@ int test_api_callback(picoquic_cnx_t* cnx,
     {
         int ret = -1;
         if (ctx->datagram_send_fn != NULL) {
-            ret = ctx->datagram_send_fn(cnx, bytes, length, ctx->datagram_ctx);
+            uint64_t unique_path_id = (cnx->are_path_callbacks_enabled) ? stream_id : 0;
+            ret = ctx->datagram_send_fn(cnx, stream_id, bytes, length, ctx->datagram_ctx);
         }
         return ret;
     } else if (fin_or_event == picoquic_callback_datagram)
     {
         int ret = -1;
         if (ctx->datagram_recv_fn != NULL) {
-            ret = ctx->datagram_recv_fn(cnx, bytes, length, ctx->datagram_ctx);
+            ret = ctx->datagram_recv_fn(cnx, stream_id, bytes, length, ctx->datagram_ctx);
         }
         return ret;
     }
@@ -702,6 +703,47 @@ int test_api_callback(picoquic_cnx_t* cnx,
         }
         return ret;
     }
+    else if (fin_or_event == picoquic_callback_path_available ||
+        fin_or_event == picoquic_callback_path_suspended ||
+        fin_or_event == picoquic_callback_path_deleted ||
+        fin_or_event == picoquic_callback_path_quality_changed) {
+        int ret = 0;
+        if (ctx->path_events != NULL) {
+            if (fin_or_event == picoquic_callback_path_quality_changed) {
+                uint64_t unique_path_id = stream_id;
+                picoquic_path_quality_t quality;
+                uint64_t current_time = picoquic_get_quic_time(cnx->quic);
+#if 1
+                if (current_time == 121570) {
+                    DBG_PRINTF("%s", "Bug");
+                }
+#endif
+
+                ret = picoquic_get_path_quality(cnx, unique_path_id, &quality);
+                if (ret == 0) {
+                    fprintf(ctx->path_events,
+                        "%" PRIu64 ", %" PRIu64 ", %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
+                        current_time, stream_id, (int)fin_or_event,
+                        quality.pacing_rate, quality.cwin, quality.rtt);
+                }
+            }
+            else {
+                fprintf(ctx->path_events, "%" PRIu64 ", %" PRIu64 ", %d,\n",
+                    picoquic_get_quic_time(cnx->quic), stream_id, (int)fin_or_event);
+            }
+        }
+        else if (fin_or_event == picoquic_callback_path_quality_changed &&
+            ctx->default_path_update != NULL) {
+            picoquic_path_quality_t quality;
+            uint64_t current_time = picoquic_get_quic_time(cnx->quic);
+            picoquic_get_default_path_quality(cnx, &quality);
+            fprintf(ctx->default_path_update,
+                "%" PRIu64 ", %" PRIu64 ", %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
+                current_time, stream_id, (int)fin_or_event,
+                quality.pacing_rate, quality.cwin, quality.rtt);
+        }
+        return ret;
+    }
 
     if (bytes != NULL) {
         if (cb_ctx->client_mode) {
@@ -711,11 +753,12 @@ int test_api_callback(picoquic_cnx_t* cnx,
         }
     }
 
-    if (stream_id == 0 && cb_ctx->client_mode == 0 && 
+    if (stream_id == 0 && cb_ctx->client_mode == 0 &&
         (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin)) {
         if (bytes == NULL && length != 0) {
             cb_ctx->error_detected = test_api_bad_stream0_data;
-        } else {
+        }
+        else {
             for (size_t i = 0; i < length; i++) {
                 if (bytes[i] != 0xA5) {
                     cb_ctx->error_detected = test_api_bad_stream0_data;
@@ -981,10 +1024,6 @@ static int verify_version(picoquic_cnx_t* cnx_client, picoquic_cnx_t* cnx_server
 
 void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
 {
-    if (test_ctx->bw_update != NULL) {
-        (void)picoquic_file_close(test_ctx->bw_update);
-    }
-
     if (test_ctx->qclient != NULL) {
         picoquic_free(test_ctx->qclient);
     }
@@ -1016,6 +1055,19 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
     if (test_ctx->send_buffer != NULL) {
         free(test_ctx->send_buffer);
     }
+
+    if (test_ctx->bw_update != NULL) {
+        (void)picoquic_file_close(test_ctx->bw_update);
+    }
+
+    if (test_ctx->path_events != NULL) {
+        (void)picoquic_file_close(test_ctx->path_events);
+    }
+
+    if (test_ctx->default_path_update != NULL) {
+        (void)picoquic_file_close(test_ctx->default_path_update);
+    }
+
 
     free(test_ctx);
 }
@@ -10062,6 +10114,70 @@ int pacing_update_test()
 
     return ret;
 }
+
+/* testing the quality update functionality when using the default path
+* quality API.
+*/
+
+#ifdef _WINDOWS
+#define QUALITY_UPDATE_REF "picoquictest\\quality_update_ref.txt"
+#else
+#define QUALITY_UPDATE_REF "picoquictest/quality_update_ref.txt"
+#endif
+#define QUALITY_UPDATE_CSV "quality_update.csv"
+
+int quality_update_test()
+{
+    uint64_t simulated_time = 0;
+
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        /* Open a file to log bandwidth updates and document it in context */
+        test_ctx->default_path_update = picoquic_file_open(QUALITY_UPDATE_CSV, "w");
+        if (test_ctx->default_path_update == NULL) {
+            DBG_PRINTF("Could not write file <%s>", QUALITY_UPDATE_CSV);
+            ret = -1;
+        }
+        else {
+            fprintf(test_ctx->default_path_update, "Time, Pacing_rate_CB, Pacing_rate, CWIN, RTT\n");
+            /* Request bandwidth updates */
+            picoquic_subscribe_to_quality_update(test_ctx->cnx_client, 0x10000, 0x1000);
+
+            /* Start a standard scenario, pushing 1MB from the client*/
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 20000, 3600000);
+        }
+    }
+
+    /* Free the test contex, which closes the trace file  */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    /* compare the trace to the expected value */
+    if (ret == 0)
+    {
+        char quality_update_ref[512];
+
+        ret = picoquic_get_input_path(quality_update_ref, sizeof(quality_update_ref), picoquic_solution_dir, QUALITY_UPDATE_REF);
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the quality update ref file name.\n");
+        }
+        else {
+            ret = picoquic_test_compare_text_files(QUALITY_UPDATE_CSV, quality_update_ref);
+        }
+    }
+
+    return ret;
+}
+
 
 /* Test the direct receive API
  */
