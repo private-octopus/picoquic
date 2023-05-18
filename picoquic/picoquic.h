@@ -773,12 +773,15 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * with the bytes parameter pointing to the structure, and the length
  * indicating the structure length.
  * 
+ * The call to picoquic_get_default_path_quality uses the same
+ * structure, but only reports the parameters for the "default" path.
+ * This is suitable for applications that do not use multipath.
+ * 
  * The quality changed callback only happens if the application
  * subscribes to it using "picoquic_subscribe_to_quality_update" API
- * for the path or for the connection, setting the "change" thresholds
- * for the datarate and the rtt. The call applies to the specified
- * path if the unique_path_id is valid, and to the whole connection
- * if the unique_path_id is set to UINT64_MAX.
+ * for the connection, or "picoquic_subscribe_to_quality_update" API
+ * for a specific path, setting the "change" thresholds
+ * for the datarate and the rtt. 
  * The function call "picoquic_default_quality_update"
  * can be used to set the default values of these parameters in
  * the quic context.
@@ -1180,14 +1183,14 @@ int picoquic_mark_datagram_ready_path(picoquic_cnx_t* cnx, uint64_t unique_path_
  * 
  * - if the application marked the context ready by mistake, it 
  *   should set the "length" argument to 0, and the "is_active" argument
- *   to 0. This is a way of saying "oops". The stack will stop
- *   polling for datagrams, until there is a new call to
+ *   to picoquic_datagram_not_active. This is a way of saying "oops". The
+ *   stack will stop polling for datagrams, until there is a new call to
  *   "picoquic_mark_datagram_ready"
  * 
  * - if the application does have data to send but the available
  *   length indicated in the callback is too small, it should set the "length"
- *   argument to 0, and the "is_active" argument to 1. The stack will try to
- *   immediately reissue the callback in the next packet, hopefully with
+ *   argument to 0, and the "is_active" argument to picoquic_datagram_active_any_path.
+ *   The stack will try to immediately reissue the callback in the next packet, hopefully with
  *   more space available.
  * 
  * - if the application can send data, it should set the "length"
@@ -1204,15 +1207,28 @@ int picoquic_mark_datagram_ready_path(picoquic_cnx_t* cnx, uint64_t unique_path_
  * see that, you should really switch to using the new "extended" API and set
  * the "is_active" parameter.
  * 
- * The API picoquic_provide_datagram_path_buffer is designed for a multipath
- * environment. The "picoquic_provide_datagram_path_buffer" allows the
- * application indicate whether it is ready to send datagrams for the any path
- * (is_active), and whether it has datagrams to send specifically on the
- * current path (is_path_active).
+ * In multipath environments, the application can use the API 
+ * `picoquic_mark_datagram_ready_path` to signal that is is ready to send
+ * datagrams on a specific path. The picoquic_provide_datagram_path_ex
+ * API allows the application to mark 4 different level of activity:
+ * 
+ * - picoquic_datagram_not_active: not active on this path or any other.
+ * - picoquic_datagram_active_any_path: active, but not specifically on this path.
+ * - picoquic_datagram_active_this_path_only: ready to send datagrams on this
+ *   path, but not on other paths unless they were specifically marked.
+ * - picoquic_datagram_active_this_path_and_others: has traffic ready to
+ *   send on this path, and some different traffic ready for any other path.
  */
+
+typedef enum {
+    picoquic_datagram_not_active = 0,
+    picoquic_datagram_active_any_path = 1,
+    picoquic_datagram_active_this_path_only = 2,
+    picoquic_datagram_active_this_path_and_others = 3
+} picoquic_datagram_active_enum;
+
 uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length);
-uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, int is_active);
-uint8_t* picoquic_provide_datagram_path_buffer(void* context, size_t length, int is_active, int is_path_active);
+uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, picoquic_datagram_active_enum is_active);
 
 /* 
  * Set the optimistic ack policy. The holes will be inserted at random locations,

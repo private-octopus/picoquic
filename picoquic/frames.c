@@ -4611,12 +4611,12 @@ typedef struct st_picoquic_datagram_buffer_argument_t {
     int was_called; /* Whether the API was called. */
 } picoquic_datagram_buffer_argument_t;
 
-uint8_t* picoquic_provide_datagram_path_buffer(void* context, size_t length, int is_active, int is_path_active)
+uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, picoquic_datagram_active_enum is_active)
 {
     picoquic_datagram_buffer_argument_t* data_ctx = (picoquic_datagram_buffer_argument_t*)context;
     uint8_t* buffer = NULL;
 
-    data_ctx->is_active = is_active;
+    data_ctx->is_active = ((int)is_active) & 1;
     data_ctx->was_called = 1;
 
     if (!data_ctx->is_old_api) {
@@ -4630,7 +4630,7 @@ uint8_t* picoquic_provide_datagram_path_buffer(void* context, size_t length, int
         */
         data_ctx->cnx->is_datagram_ready = is_active;
         if (data_ctx->path_x != NULL) {
-            data_ctx->path_x->is_datagram_ready = is_path_active;
+            data_ctx->path_x->is_datagram_ready = ((int)is_active)>>1;
         }
     }
 
@@ -4661,14 +4661,9 @@ uint8_t* picoquic_provide_datagram_path_buffer(void* context, size_t length, int
     return buffer;
 }
 
-uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, int is_active)
-{
-    return picoquic_provide_datagram_path_buffer(context, length, is_active, 0);
-}
-
 uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length)
 {
-    return picoquic_provide_datagram_path_buffer(context, length, 0, 0);
+    return picoquic_provide_datagram_buffer_ex(context, length, picoquic_datagram_not_active);
 }
 
 /* Ready for datagram callback.

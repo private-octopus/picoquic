@@ -98,16 +98,7 @@ int test_datagram_send(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     else if (!dg_ctx->is_ready[cnx->client_mode] || (dg_ctx->test_affinity && unique_path_id != 0)) {
         /* Datagram callback when the client was not ready. */
         is_active = 0;
-        if (dg_ctx->use_extended_provider_api) {
-            if (dg_ctx->test_affinity) {
-                if (unique_path_id == 0) {
-                    (void)picoquic_provide_datagram_path_buffer(bytes, 0, 0, is_active);
-                }
-            }
-            else {
-                (void)picoquic_provide_datagram_buffer_ex(bytes, 0, is_active);
-            }
-        }
+        (void)picoquic_provide_datagram_buffer_ex(bytes, 0, (picoquic_datagram_active_enum)0);
     }
     else {
         uint8_t* buffer = NULL;
@@ -124,12 +115,11 @@ int test_datagram_send(picoquic_cnx_t* cnx, uint64_t unique_path_id,
             }
         }
         if (dg_ctx->use_extended_provider_api) {
+            picoquic_datagram_active_enum is_active = picoquic_datagram_active_any_path;
             if (dg_ctx->test_affinity) {
-                buffer = picoquic_provide_datagram_path_buffer(bytes, available, 0, 1);
+                is_active = picoquic_datagram_active_this_path_only;
             }
-            else {
-                buffer = picoquic_provide_datagram_buffer_ex(bytes, available, 1);
-            }
+            buffer = picoquic_provide_datagram_buffer_ex(bytes, available, is_active);
         }
         else {
             buffer = picoquic_provide_datagram_buffer(bytes, available);
