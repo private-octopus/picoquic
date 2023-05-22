@@ -335,6 +335,8 @@ static const picoquic_test_def_t test_table[] = {
     { "warptest_video_data_audio", warptest_video_data_audio_test },
     { "warptest_worst", warptest_worst_test },
     { "warptest_param", warptest_param_test },
+    { "wifi_bbr", wifi_bbr_test },
+    { "wifi_cubic", wifi_cubic_test },
     { "wifi_reno", wifi_reno_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },

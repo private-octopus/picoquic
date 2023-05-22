@@ -171,6 +171,32 @@ static wifi_test_suspension_t suspension_basic[] = {
 
 static size_t nb_suspension_basic = sizeof(suspension_basic) / sizeof(wifi_test_suspension_t);
 
+int wifi_bbr_test()
+{
+    wifi_test_spec_t spec = {
+        nb_suspension_basic,
+        3000,
+        suspension_basic,
+        picoquic_bbr_algorithm,
+        4500000 };
+    int ret = wifi_test_one(wifi_test_bbr, &spec);
+
+    return ret;
+}
+
+int wifi_cubic_test()
+{
+    wifi_test_spec_t spec = {
+        nb_suspension_basic,
+        3000,
+        suspension_basic,
+        picoquic_cubic_algorithm,
+        4500000 };
+    int ret = wifi_test_one(wifi_test_cubic, &spec);
+
+    return ret;
+}
+
 int wifi_reno_test()
 {
     wifi_test_spec_t spec = {
