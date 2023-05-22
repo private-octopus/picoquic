@@ -215,6 +215,32 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
     }
 }
 
+/*
+* Simulate a brief suspension of transmission on a link, similar to what
+* happens when a Wi-Fi transmission gets suspended while scanning other
+* radio channels. The existing packets are queued for delivery at the end of the interval.
+*/
+
+void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_end_of_interval)
+{
+    picoquictest_sim_packet_t* packet;
+    picoquictest_sim_packet_t* first_old;
+    /* Reset the queue delay to the end of interval */
+    link->queue_time = time_end_of_interval;
+    /* stash the old queue, and reset the queue pointers */
+    first_old = link->first_packet;
+    link->first_packet = NULL;
+    link->last_packet = NULL;
+    /* resubmit all packets at the end of interval time */
+    packet = first_old;
+    while (packet != NULL) {
+        picoquictest_sim_packet_t* next_packet = packet->next_packet;
+        packet->next_packet = NULL;
+        picoquictest_sim_link_submit(link, packet, time_end_of_interval);
+        packet = next_packet;
+    }
+}
+
 int sim_link_one_test(uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t nb_losses)
 {
     int ret = 0;

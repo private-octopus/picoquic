@@ -1,0 +1,185 @@
+/*
+* Author: Christian Huitema
+* Copyright (c) 2019, Private Octopus, Inc.
+* All rights reserved.
+*
+* Permission to use, copy, modify, and distribute this software for any
+* purpose with or without fee is hereby granted, provided that the above
+* copyright notice and this permission notice appear in all copies.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL Private Octopus, Inc. BE LIABLE FOR ANY
+* DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+* ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <math.h>
+#include "picoquic.h"
+#include "picoquic_utils.h"
+#include "picoquictest_internal.h"
+#include "autoqlog.h"
+#include "picoquic_binlog.h"
+
+/* Wifi test: explore the behavior of QUIC over Wi-Fi links.
+* 
+* We are particularly concern over reporta that WiFi links sometimes
+* become unavailable for a "scanning" interval of 100 to 250ms. In the worse
+* case scenario, there may be several consecutive intervals. The intervals
+* may happen on the sending link or on the receiving link.
+* 
+* The first test looks at a single interval, either on up or down link.
+* The interval typically happens every 5 seconds or so, so we can rig
+* a simulation that lasts at least 5 seconds. The Wi-Fi link is about
+* 100 mbps, but we will simulate a lower datarate so we can test without
+* spending too much CPU.
+* 
+* This required adding a "spike" simulation in the link simulator,
+* which is provided by the new "suspend" API.
+*/
+
+typedef enum {
+    wifi_test_reno = 0,
+    wifi_test_cubic,
+    wifi_test_bbr
+} wifi_test_enum;
+
+typedef struct st_wifi_test_suspension_t {
+    uint64_t suspend_time;
+    uint64_t suspend_interval;
+} wifi_test_suspension_t;
+
+typedef struct st_wifi_test_spec_t {
+    size_t nb_suspend;
+    uint64_t latency;
+    wifi_test_suspension_t * suspension;
+    picoquic_congestion_algorithm_t* ccalgo;
+    uint64_t target_time;
+} wifi_test_spec_t;
+
+static test_api_stream_desc_t test_scenario_wifi[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 0, 4, 1000000 },
+    { 12, 0, 8, 1000000 },
+    { 16, 0, 12, 1000000 },
+    { 20, 0, 16, 1000000 }
+};
+
+static int wifi_test_one(wifi_test_enum test_id, wifi_test_spec_t * spec)
+{
+    uint64_t simulated_time = 0;
+    picoquic_connection_id_t initial_cid = { {0x81, 0xf1, 0, 0, 0, 0, 0, 0}, 8 };
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t loss_mask = 0;
+    int ret = 0;
+    
+    initial_cid.id[2] = test_id;
+
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, spec->ccalgo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, spec->ccalgo);
+
+        test_ctx->c_to_s_link->microsec_latency = spec->latency;
+        test_ctx->s_to_c_link->microsec_latency = spec->latency;
+        test_ctx->immediate_exit = 1;
+
+        picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
+
+        /* set the binary logs on both sides */
+        picoquic_set_qlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        picoquic_set_log_level(test_ctx->qserver, 1);
+        picoquic_set_log_level(test_ctx->qclient, 1);
+        test_ctx->qclient->use_long_log = 1;
+        test_ctx->qserver->use_long_log = 1;
+        /* Since the client connection was created before the binlog was set, force log of connection header */
+        binlog_new_connection(test_ctx->cnx_client);
+        /* Initialize the client connection */
+        picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* establish the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 260000, &simulated_time);
+    }
+
+    /* wait until the client (and thus the server) is ready */
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_wifi, sizeof(test_scenario_wifi));
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Init send receive scenario returns %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        for (size_t i = 0; i < spec->nb_suspend; i++) {
+            ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, spec->suspension[i].suspend_time - simulated_time);
+            if (ret == 0) {
+                /* suspension blocks both directions, as the client can neither send not receive */
+                uint64_t resume_time = spec->suspension[i].suspend_time + spec->suspension[i].suspend_interval;
+                picoquic_test_simlink_suspend(test_ctx->c_to_s_link, resume_time);
+                picoquic_test_simlink_suspend(test_ctx->s_to_c_link, resume_time);
+            }
+            else {
+                DBG_PRINTF("Timeout wait %d returns %d\n", i, ret);
+            }
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* Check that the transmission succeeded */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, spec->target_time);
+    }
+
+    /* Delete the context */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+static wifi_test_suspension_t suspension_basic[] = {
+    { 2000000, 250000 }
+};
+
+static size_t nb_suspension_basic = sizeof(suspension_basic) / sizeof(wifi_test_suspension_t);
+
+int wifi_reno_test()
+{
+    wifi_test_spec_t spec = {
+        nb_suspension_basic,
+        3000,
+        suspension_basic,
+        picoquic_newreno_algorithm,
+        4500000 };
+    int ret = wifi_test_one(wifi_test_reno, &spec);
+
+    return ret;
+}

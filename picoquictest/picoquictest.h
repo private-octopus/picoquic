@@ -338,6 +338,7 @@ int warptest_video_audio_test();
 int warptest_video_data_audio_test();
 int warptest_worst_test();
 int warptest_param_test();
+int wifi_reno_test();
 int migration_controlled_test();
 int migration_mtu_drop_test();
 int monopath_basic_test();

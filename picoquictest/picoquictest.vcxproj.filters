@@ -138,6 +138,9 @@
     <ClCompile Include="h3zero_uri_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="wifitest.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

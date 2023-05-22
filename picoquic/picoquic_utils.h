@@ -297,6 +297,11 @@ picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t
 void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
     uint64_t current_time);
 
+/* picoquic_test_simlink_suspend simulates and innteruption of transmission until the
+* specified "end of interval" time.
+ */
+void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_end_of_interval);
+
 /* SNI, Stores and Certificates used for test
  */
 
