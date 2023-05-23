@@ -160,7 +160,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/transport_param_test.c
     picoquictest/util_test.c
     picoquictest/warptest.c
-    picoquictest/wifi_test.c )
+    picoquictest/wifitest.c )
 
 set(PICOHTTP_LIBRARY_FILES
     picohttp/democlient.c

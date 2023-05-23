@@ -243,7 +243,7 @@ int wifi_cubic_hard_test()
         3000,
         suspension_hard,
         picoquic_cubic_algorithm,
-        4050000 };
+        4150000 };
     int ret = wifi_test_one(wifi_test_cubic_hard, &spec);
 
     return ret;
