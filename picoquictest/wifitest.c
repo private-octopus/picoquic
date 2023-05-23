@@ -49,7 +49,10 @@
 typedef enum {
     wifi_test_reno = 0,
     wifi_test_cubic,
-    wifi_test_bbr
+    wifi_test_bbr,
+    wifi_test_reno_hard,
+    wifi_test_cubic_hard,
+    wifi_test_bbr_hard,
 } wifi_test_enum;
 
 typedef struct st_wifi_test_suspension_t {
@@ -68,9 +71,7 @@ typedef struct st_wifi_test_spec_t {
 static test_api_stream_desc_t test_scenario_wifi[] = {
     { 4, 0, 257, 1000000 },
     { 8, 0, 4, 1000000 },
-    { 12, 0, 8, 1000000 },
-    { 16, 0, 12, 1000000 },
-    { 20, 0, 16, 1000000 }
+    { 12, 0, 8, 1000000 }
 };
 
 static int wifi_test_one(wifi_test_enum test_id, wifi_test_spec_t * spec)
@@ -166,7 +167,7 @@ static int wifi_test_one(wifi_test_enum test_id, wifi_test_spec_t * spec)
 }
 
 static wifi_test_suspension_t suspension_basic[] = {
-    { 2000000, 250000 }
+    { 1000000, 250000 }
 };
 
 static size_t nb_suspension_basic = sizeof(suspension_basic) / sizeof(wifi_test_suspension_t);
@@ -178,7 +179,7 @@ int wifi_bbr_test()
         3000,
         suspension_basic,
         picoquic_bbr_algorithm,
-        4500000 };
+        2750000 };
     int ret = wifi_test_one(wifi_test_bbr, &spec);
 
     return ret;
@@ -191,7 +192,7 @@ int wifi_cubic_test()
         3000,
         suspension_basic,
         picoquic_cubic_algorithm,
-        4500000 };
+        2850000 };
     int ret = wifi_test_one(wifi_test_cubic, &spec);
 
     return ret;
@@ -204,8 +205,59 @@ int wifi_reno_test()
         3000,
         suspension_basic,
         picoquic_newreno_algorithm,
-        4500000 };
+        2800000 };
     int ret = wifi_test_one(wifi_test_reno, &spec);
+
+    return ret;
+}
+
+
+static wifi_test_suspension_t suspension_hard[] = {
+    { 1000000, 250000 },
+    { 1255000, 250000 },
+    { 1510000, 250000 },
+    { 1765000, 250000 },
+    { 2020000, 250000 },
+    { 2275000, 250000 },
+};
+
+static size_t nb_suspension_hard = sizeof(suspension_hard) / sizeof(wifi_test_suspension_t);
+
+int wifi_bbr_hard_test()
+{
+    wifi_test_spec_t spec = {
+        nb_suspension_hard,
+        3000,
+        suspension_hard,
+        picoquic_bbr_algorithm,
+        4050000 };
+    int ret = wifi_test_one(wifi_test_bbr_hard, &spec);
+
+    return ret;
+}
+
+int wifi_cubic_hard_test()
+{
+    wifi_test_spec_t spec = {
+        nb_suspension_hard,
+        3000,
+        suspension_hard,
+        picoquic_cubic_algorithm,
+        4050000 };
+    int ret = wifi_test_one(wifi_test_cubic_hard, &spec);
+
+    return ret;
+}
+
+int wifi_reno_hard_test()
+{
+    wifi_test_spec_t spec = {
+        nb_suspension_hard,
+        3000,
+        suspension_hard,
+        picoquic_newreno_algorithm,
+        4150000 };
+    int ret = wifi_test_one(wifi_test_reno_hard, &spec);
 
     return ret;
 }

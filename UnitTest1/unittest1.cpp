@@ -1888,14 +1888,32 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(wifi_bbr_hard) {
+            int ret = wifi_bbr_hard_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(wifi_cubic) {
             int ret = wifi_cubic_test();
 
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(wifi_cubic_hard) {
+            int ret = wifi_cubic_hard_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(wifi_reno) {
             int ret = wifi_reno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_reno_hard) {
+            int ret = wifi_reno_hard_test();
 
             Assert::AreEqual(ret, 0);
         }
