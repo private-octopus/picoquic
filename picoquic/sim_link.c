@@ -207,6 +207,10 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
             if (link->jitter != 0) {
                 packet->arrival_time += picoquictest_sim_link_jitter(link);
             }
+            if (packet->arrival_time < link->resume_time) {
+                packet->arrival_time = link->resume_time;
+            }
+
         }
     } else {
         /* simulate congestion loss or random drop on queue full */
@@ -221,23 +225,38 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
 * radio channels. The existing packets are queued for delivery at the end of the interval.
 */
 
-void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_end_of_interval)
+void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_end_of_interval, int simulate_receive)
 {
     picoquictest_sim_packet_t* packet;
     picoquictest_sim_packet_t* first_old;
-    /* Reset the queue delay to the end of interval */
-    link->queue_time = time_end_of_interval;
-    /* stash the old queue, and reset the queue pointers */
-    first_old = link->first_packet;
-    link->first_packet = NULL;
-    link->last_packet = NULL;
-    /* resubmit all packets at the end of interval time */
-    packet = first_old;
-    while (packet != NULL) {
-        picoquictest_sim_packet_t* next_packet = packet->next_packet;
-        packet->next_packet = NULL;
-        picoquictest_sim_link_submit(link, packet, time_end_of_interval);
-        packet = next_packet;
+
+    if (simulate_receive) {
+        /* specify the resume time */
+        link->resume_time = time_end_of_interval;
+        /* packets scheduled to arrive before the end of the interval are rescheduled to
+         * that end of interval time.
+         */
+        packet = link->first_packet;
+        while (packet != NULL && packet->arrival_time < time_end_of_interval) {
+            packet->arrival_time = time_end_of_interval;
+            packet = packet->next_packet;
+        }
+    }
+    else {
+        /* Reset the queue delay to the end of interval */
+        link->queue_time = time_end_of_interval;
+        /* stash the old queue, and reset the queue pointers */
+        first_old = link->first_packet;
+        link->first_packet = NULL;
+        link->last_packet = NULL;
+        /* resubmit all packets at the end of interval time */
+        packet = first_old;
+        while (packet != NULL) {
+            picoquictest_sim_packet_t* next_packet = packet->next_packet;
+            packet->next_packet = NULL;
+            picoquictest_sim_link_submit(link, packet, time_end_of_interval);
+            packet = next_packet;
+        }
     }
 }
 
