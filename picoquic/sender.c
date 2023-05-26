@@ -2056,10 +2056,6 @@ static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
                 }
                 /* copy the frame */
                 if (write_index + frame_length <= send_buffer_max_minus_checksum) {
-                    if (picoquic_is_stream_frame_unlimited(&old_p->bytes[byte_index]) &&
-                        write_index + frame_length != send_buffer_max_minus_checksum){ 
-                        DBG_PRINTF("%s", "BUG");
-                    }
                     memcpy(&new_bytes[write_index], &old_p->bytes[byte_index], frame_length);
                     write_index += frame_length;
                     *length += frame_length;
