@@ -184,6 +184,7 @@
     <ClCompile Include="util_test.c" />
     <ClCompile Include="warptest.c" />
     <ClCompile Include="webtransport_test.c" />
+    <ClCompile Include="wifitest.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h" />
