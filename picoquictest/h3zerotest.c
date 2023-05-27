@@ -1577,11 +1577,17 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
                 ret = -1;
             }
         }
-
+#if 0
+        if (++nb_trials > 150000) {
+            ret = -1;
+            break;
+        }
+#else
         if (++nb_trials > 100000) {
             ret = -1;
             break;
         }
+#endif
     }
 
     /* Verify that the data was properly received. */

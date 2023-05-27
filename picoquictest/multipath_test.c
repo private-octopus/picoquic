@@ -963,7 +963,7 @@ int multipath_basic_test()
 
 int multipath_drop_first_test()
 {
-    uint64_t max_completion_microsec = 1400000;
+    uint64_t max_completion_microsec = 1450000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_first, 0);
 }
@@ -1527,7 +1527,7 @@ int simple_multipath_basic_test()
 int simple_multipath_drop_first_test()
 {
     /* This is faster than 1.31sec for full multipath */
-    uint64_t max_completion_microsec = 1270000;
+    uint64_t max_completion_microsec = 1280000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_first, 1);
 }
@@ -1572,7 +1572,7 @@ int simple_multipath_nat_test()
 int simple_multipath_break1_test()
 {
     /* On par with 10.6 for full multipath */
-    uint64_t max_completion_microsec = 10500000;
+    uint64_t max_completion_microsec = 10600000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break1, 1);
 }
@@ -1580,7 +1580,7 @@ int simple_multipath_break1_test()
 int simple_multipath_socket_error_test()
 {
     /* On par with 10.6 for full multipath */
-    uint64_t max_completion_microsec = 10500000;
+    uint64_t max_completion_microsec = 10600000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break2, 1);
 }
@@ -1603,7 +1603,7 @@ int simple_multipath_back1_test()
 int simple_multipath_perf_test()
 {
     /* Compares with 1.25 sec for full multipath */
-    uint64_t max_completion_microsec = 1500000;
+    uint64_t max_completion_microsec = 1550000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
 }

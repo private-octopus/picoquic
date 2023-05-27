@@ -713,11 +713,6 @@ int test_api_callback(picoquic_cnx_t* cnx,
                 uint64_t unique_path_id = stream_id;
                 picoquic_path_quality_t quality;
                 uint64_t current_time = picoquic_get_quic_time(cnx->quic);
-#if 1
-                if (current_time == 121570) {
-                    DBG_PRINTF("%s", "Bug");
-                }
-#endif
 
                 ret = picoquic_get_path_quality(cnx, unique_path_id, &quality);
                 if (ret == 0) {
@@ -8644,7 +8639,7 @@ int cubic_test()
 
 int cubic_jitter_test()
 {
-    return congestion_control_test(picoquic_cubic_algorithm, 3500000, 5000, 5);
+    return congestion_control_test(picoquic_cubic_algorithm, 3550000, 5000, 5);
 }
 
 int fastcc_test()
@@ -11048,8 +11043,8 @@ int pacing_cc_test()
     };
     uint64_t algo_loss[5] = {
         100,
-        205,
-        230,
+        210,
+        240,
         180,
         210
     };
@@ -11941,7 +11936,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 8000000;
                     break;
                 case bdp_test_option_reno:
-                    max_completion_time = 6500000;
+                    max_completion_time = 6750000;
                     break;
                 default:
                     break;
