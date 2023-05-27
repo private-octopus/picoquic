@@ -713,11 +713,6 @@ int test_api_callback(picoquic_cnx_t* cnx,
                 uint64_t unique_path_id = stream_id;
                 picoquic_path_quality_t quality;
                 uint64_t current_time = picoquic_get_quic_time(cnx->quic);
-#if 1
-                if (current_time == 121570) {
-                    DBG_PRINTF("%s", "Bug");
-                }
-#endif
 
                 ret = picoquic_get_path_quality(cnx, unique_path_id, &quality);
                 if (ret == 0) {
@@ -1612,11 +1607,6 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 
     while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
-#if 1
-        if (nb_trials > 210) {
-            DBG_PRINTF("%s", "bug");
-        }
-#endif
 
         nb_trials++;
 
@@ -11053,13 +11043,8 @@ int pacing_cc_test()
     };
     uint64_t algo_loss[5] = {
         100,
-#if 1
         210,
         240,
-#else
-        205,
-        230,
-#endif
         180,
         210
     };
@@ -11951,11 +11936,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 8000000;
                     break;
                 case bdp_test_option_reno:
-#if 1
                     max_completion_time = 6750000;
-#else
-                    max_completion_time = 6500000;
-#endif
                     break;
                 default:
                     break;

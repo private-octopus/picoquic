@@ -2562,12 +2562,8 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
 
         /* At the end of the period, update the smoothed and variants statistics.
          */
-#if 0
-        {
-#else
         if (old_path->path_packet_acked_number >= old_path->path_packet_previous_period ||
             old_path->path_rtt_last_period_time + (rtt_estimate/4) > current_time) {
-#endif
             old_path->path_rtt_last_period_time = current_time;
            
             if (old_path->nb_rtt_estimate_in_period > 1) {
