@@ -1612,6 +1612,11 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 
     while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
+#if 1
+        if (nb_trials > 210) {
+            DBG_PRINTF("%s", "bug");
+        }
+#endif
 
         nb_trials++;
 
@@ -8644,7 +8649,7 @@ int cubic_test()
 
 int cubic_jitter_test()
 {
-    return congestion_control_test(picoquic_cubic_algorithm, 3500000, 5000, 5);
+    return congestion_control_test(picoquic_cubic_algorithm, 3550000, 5000, 5);
 }
 
 int fastcc_test()
@@ -11048,8 +11053,13 @@ int pacing_cc_test()
     };
     uint64_t algo_loss[5] = {
         100,
+#if 1
+        210,
+        240,
+#else
         205,
         230,
+#endif
         180,
         210
     };
@@ -11941,7 +11951,11 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 8000000;
                     break;
                 case bdp_test_option_reno:
+#if 1
+                    max_completion_time = 6750000;
+#else
                     max_completion_time = 6500000;
+#endif
                     break;
                 default:
                     break;

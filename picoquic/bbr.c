@@ -212,7 +212,12 @@ typedef enum {
 #define BBR_LT_BW_RATIO_INVERSE 8
 #define BBR_LT_BW_BYTES_PER_SEC_DIFF 4000
 #define BBR_LT_BW_MAX_RTTS 48
+#if 0
+/* Use this setting when debugging BBR slow start */
+#define BBR_HYSTART_THRESHOLD_RTT 1000000
+#else
 #define BBR_HYSTART_THRESHOLD_RTT 50000
+#endif
 
 
 static const double bbr_pacing_gain_cycle[BBR_GAIN_CYCLE_LEN] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.25, 0.75};

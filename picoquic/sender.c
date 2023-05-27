@@ -1342,7 +1342,7 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
  *
  * The principal way to answer this question is by using the RACK algorithm. Did the
  * peer already acknowledge packets sent on the same path after this packet? If yes,
- * there are only two possibilities, out of order deleivery that was not yet acked,
+ * there are only two possibilities, out of order delivery that was not yet acked,
  * or packet loss. For simplicity, we consider that the max out of order delivery delay
  * is 1/4 of the path RTT or 1/2 of the half-path direct delay. (TODO: revisit that.)
  * If the answer is no, there are two possibilities: the packet is lost, or the packet 
@@ -1809,8 +1809,14 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
                         packet->length = 0;
                         packet->offset = 0;
                         if (!packet_is_pure_ack) {
-                            /* Pace down the next retransmission so as to not pile up error upon error */
-                            path_x->pacing_bucket_nanosec -= path_x->pacing_packet_time_nanosec;
+                            /* Pace down the next retransmission so as to not pile up error upon error.
+                             * We only do that if theree are enough tokens in the bucket to allow at least
+                             * one packet out. Otherwise, there is a risk of creating a waiting loop that
+                             * only stops when all queued packets have been processed.
+                             */
+                            if (path_x->pacing_bucket_nanosec > path_x->pacing_packet_time_nanosec) {
+                                path_x->pacing_bucket_nanosec -= path_x->pacing_packet_time_nanosec;
+                            }
                         }
                         /*
                          * If the loop is continuing, this means that we need to look
@@ -3935,7 +3941,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     /* The first action is normally to retransmit lost packets. But if retransmit follows an
      * MTU drop, the stream frame will be fragmented and a fragment will be queued as a
      * misc frame. These fragments should have chance to go out before more retransmit is
-     * permitted, hence the test here for the misc-frame */
+     permitted, hence the test here for the misc-frame */
     if (cnx->first_misc_frame == NULL &&
         (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, 
         send_buffer_min_max, &header_length)) > 0) {
