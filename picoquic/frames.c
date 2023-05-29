@@ -2171,9 +2171,15 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
                     path_x->delivered_limited_index = 0;
                 }
                 /* Statistics */
+#if 1
+                if (bw_estimate > path_x->max_bandwidth_estimate) {
+                    path_x->max_bandwidth_estimate = bw_estimate;
+                }
+#else
                 if (bw_estimate > path_x->bandwidth_estimate_max) {
                     path_x->bandwidth_estimate_max = bw_estimate;
                 }
+#endif
             }
         }
     }

@@ -1605,7 +1605,7 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         max_trials = 4000000;
     }
 
-    while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
+    while (ret == 0 && nb_trials < max_trials && nb_inactive < 512 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
 
         nb_trials++;
@@ -8836,7 +8836,7 @@ int bbr_performance_test()
 
 int bbr_slow_long_test()
 {
-    uint64_t max_completion_time = 81000000;
+    uint64_t max_completion_time = 81500000;
     uint64_t latency = 300000;
     uint64_t jitter = 3000;
     uint64_t buffer = 2 * (latency + jitter);
@@ -10303,8 +10303,11 @@ int app_limit_cc_test_one(
         ret = picoquic_cc_log_file_to_csv(APP_LIMIT_TRACE_BIN, APP_LIMIT_TRACE_CSV);
     }
 
-    /* Compute the max CWIN from the trace file */
-    if (ret == 0)
+    /* Compute the max CWIN from the trace file
+     * TODO: find a way to verify that for BBR. This is not obvious, because BBR
+     * measures the link rate and uses pacing instead of relying on the CWIN.
+     */
+    if (ret == 0 && ccalgo->congestion_algorithm_number != PICOQUIC_CC_ALGO_NUMBER_BBR)
     {
         FILE* F = picoquic_file_open(APP_LIMIT_TRACE_CSV, "r");
         uint64_t cwin_max = 0;
@@ -10367,7 +10370,7 @@ int app_limit_cc_test()
         22000000,
         23500000,
         22000000,
-        21000000,
+        23500000,
         25000000 };
     int ret = 0;
 
@@ -11996,7 +11999,6 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                             bdp_test_option, i, test_ctx->cnx_server->nb_retransmission_total,
                             test_ctx->cnx_server->nb_packets_sent);
                         ret = -1;
-
                     }
                     /* Verify bdp test option was executed */
                     if (!test_ctx->cnx_client->path[0]->is_bdp_sent) {

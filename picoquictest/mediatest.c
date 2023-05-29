@@ -326,7 +326,7 @@ int mediatest_check_stats(mediatest_ctx_t* mt_ctx, media_test_type_enum media_ty
             uint64_t variance = (stats->sum_square_delays / stats->nb_frames) - (average * average);
             uint64_t sigma = (uint64_t)sqrt((double)variance);
 
-            if (average > 25000 || sigma > 12500 || stats->max_delay > 100000) {
+            if (average > 25000 || sigma > 12500 || stats->max_delay > 105000) {
                 ret = -1;
             }
         }

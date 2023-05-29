@@ -212,7 +212,7 @@ typedef enum {
 #define BBR_LT_BW_RATIO_INVERSE 8
 #define BBR_LT_BW_BYTES_PER_SEC_DIFF 4000
 #define BBR_LT_BW_MAX_RTTS 48
-#if 0
+#if 1
 /* Use this setting when debugging BBR slow start */
 #define BBR_HYSTART_THRESHOLD_RTT 1000000
 #else
@@ -246,6 +246,7 @@ typedef struct st_picoquic_bbr_state_t {
     int round_count;
     int full_bw_count;
     int lt_rtt_cnt;
+    int excess_rtt_count;
     uint64_t lt_bw;
     uint64_t lt_last_stamp; /* Time in microsec at start of interval */
     uint64_t previous_round_lost;
@@ -253,7 +254,6 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t previous_sampling_lost;
     uint64_t loss_interval_start; /* Time in microsec when last loss considered */
     uint64_t congestion_sequence; /* sequence number after congestion notification */
-
     unsigned int filled_pipe : 1;
     unsigned int round_start : 1;
     unsigned int rt_prop_expired : 1;
@@ -265,6 +265,7 @@ typedef struct st_picoquic_bbr_state_t {
     unsigned int lt_is_sampling : 1;
     unsigned int last_loss_was_timeout : 1;
     unsigned int cycle_on_loss : 1;
+    unsigned int bandwidth_reestimated : 1;
 
 } picoquic_bbr_state_t;
 
@@ -303,16 +304,42 @@ void BBREnterStartup(picoquic_bbr_state_t* bbr_state)
 
 void BBRSetSendQuantum(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
-    if (bbr_state->pacing_rate < BBR_PACING_RATE_LOW) {
-        bbr_state->send_quantum = 1ull * path_x->send_mtu;
-    } 
-    else if (bbr_state->pacing_rate < BBR_PACING_RATE_MEDIUM) {
-        bbr_state->send_quantum = 2ull * path_x->send_mtu;
+    if (bbr_state->state == picoquic_bbr_alg_startup) {
+        /* use larger quantum during startup, to create the packet
+        * trains necessary for max bandwidth computation. */
+        if (path_x->smoothed_rtt > 4 * PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX) {
+            uint64_t quantum_default = (uint64_t)((bbr_state->pacing_rate * path_x->smoothed_rtt) / (8*1000000));
+            uint64_t quantum_required = (uint64_t)((bbr_state->pacing_rate * PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX) / 1000000.0);
+            bbr_state->send_quantum = quantum_default;
+
+            if (bbr_state->send_quantum > quantum_required) {
+                bbr_state->send_quantum = quantum_required;
+            }
+
+            if (bbr_state->send_quantum > 0x10000) {
+                bbr_state->send_quantum = 0x10000;
+            }
+            if (bbr_state->send_quantum < 0x8000) {
+                bbr_state->send_quantum = 0x8000;
+            }
+        }
+        else if (bbr_state->send_quantum > 16ull * path_x->send_mtu) {
+            bbr_state->send_quantum = 16ull * path_x->send_mtu;
+        }
     }
     else {
-        bbr_state->send_quantum = (uint64_t)(bbr_state->pacing_rate * 0.001);
-        if (bbr_state->send_quantum > 0x10000) {
-            bbr_state->send_quantum = 0x10000;
+
+        if (bbr_state->pacing_rate < BBR_PACING_RATE_LOW) {
+            bbr_state->send_quantum = 1ull * path_x->send_mtu;
+        }
+        else if (bbr_state->pacing_rate < BBR_PACING_RATE_MEDIUM) {
+            bbr_state->send_quantum = 2ull * path_x->send_mtu;
+        }
+        else {
+            bbr_state->send_quantum = (uint64_t)(bbr_state->pacing_rate * 0.001);
+            if (bbr_state->send_quantum > 0x10000) {
+                bbr_state->send_quantum = 0x10000;
+            }
         }
     }
 }
@@ -500,9 +527,12 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, ui
 {
     uint64_t bandwidth_estimate = path_x->bandwidth_estimate;
 
+
     if (bbr_state->state == picoquic_bbr_alg_startup &&
-        bandwidth_estimate < (path_x->max_bandwidth_estimate / 2)) {
-        bandwidth_estimate = path_x->max_bandwidth_estimate/2;
+        bandwidth_estimate < (3*path_x->max_bandwidth_estimate / 4) &&
+        path_x->rtt_sample < (33*bbr_state->rt_prop)/32) {
+        bandwidth_estimate = 3*path_x->max_bandwidth_estimate/4;
+        bbr_state->bandwidth_reestimated = 1;
     }
 
     if (bbr_state->rt_prop > 0) {
@@ -526,6 +556,13 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, ui
     BBRltbwSampling(bbr_state, path_x, current_time);
 
     if (bbr_state->round_start) {
+        /* In startup mode, hit a "pacing pause" to create a 
+         * packet train and enable max bandwidth measurement. */
+        if (bbr_state->state == picoquic_bbr_alg_startup &&
+            path_x->smoothed_rtt > PICOQUIC_TARGET_RENO_RTT) {
+            path_x->pacing_bandwidth_pause = 1;
+        }
+
         /* Forget the oldest BW round, shift by 1, compute the max BTL_BW for
          * the remaining rounds, set current round max to current value */
 
@@ -543,7 +580,12 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, ui
     }
 
     if (bandwidth_estimate > bbr_state->btl_bw_filter[0]) {
+#if 1
+        /* We only store the measured value in the filter */
+        bbr_state->btl_bw_filter[0] = path_x->bandwidth_estimate;
+#else
         bbr_state->btl_bw_filter[0] =bandwidth_estimate;
+#endif
         if (bandwidth_estimate > bbr_state->btl_bw) {
             bbr_state->btl_bw = bandwidth_estimate;
             bbr_state->btl_bw_increased = 1;
@@ -643,17 +685,34 @@ static void BBRResetProbeBwMode(picoquic_bbr_state_t* bbr_state, uint64_t curren
     BBRAdvanceCyclePhase(bbr_state, current_time);
 }
 
-void BBRCheckFullPipe(picoquic_bbr_state_t* bbr_state, int rs_is_app_limited)
+void BBRCheckFullPipe(picoquic_bbr_state_t* bbr_state, int rs_is_app_limited, uint64_t rtt_measurement)
 {
-    if (!bbr_state->filled_pipe && bbr_state->round_start && !rs_is_app_limited) {
-        if (bbr_state->btl_bw >= bbr_state->full_bw * 1.25) {  // BBR.BtlBw still growing?
-            bbr_state->full_bw = bbr_state->btl_bw;   // record new baseline level
-            bbr_state->full_bw_count = 0;
+    if (!rs_is_app_limited) {
+        if (!bbr_state->filled_pipe && bbr_state->round_start && !rs_is_app_limited) {
+            if (bbr_state->btl_bw >= bbr_state->full_bw * 1.25) {  // BBR.BtlBw still growing?
+                bbr_state->full_bw = bbr_state->btl_bw;   // record new baseline level
+                bbr_state->full_bw_count = 0;
+            }
+            else {
+                bbr_state->full_bw_count++; // another round w/o much growth
+                if (bbr_state->full_bw_count >= 3) {
+                    bbr_state->filled_pipe = 1;
+                }
+            }
         }
-        else {
-            bbr_state->full_bw_count++; // another round w/o much growth
-            if (bbr_state->full_bw_count >= 3) {
-                bbr_state->filled_pipe = 1;
+
+        if (!bbr_state->filled_pipe &&
+            bbr_state->round_count > 4) {
+            /* Check delta RTT, does it indicate overflowing capacity? */
+            if (rtt_measurement > (33 * bbr_state->rt_prop) / 32 &&
+                rtt_measurement > bbr_state->rt_prop + 5000) {
+                bbr_state->excess_rtt_count += 1;
+                if (bbr_state->excess_rtt_count >= 2) {
+                    bbr_state->filled_pipe = 1;
+                }
+            }
+            else {
+                bbr_state->excess_rtt_count = 0;
             }
         }
     }
@@ -848,7 +907,7 @@ void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
 {
     BBRUpdateBtlBw(bbr_state, path_x, current_time);
     BBRCheckCyclePhase(bbr_state, packets_lost, current_time);
-    BBRCheckFullPipe(bbr_state, path_x->last_bw_estimate_path_limited);
+    BBRCheckFullPipe(bbr_state, path_x->last_bw_estimate_path_limited, rtt_sample);
     BBRCheckDrain(bbr_state, path_x, bytes_in_transit, current_time);
     BBRUpdateRTprop(bbr_state, rtt_sample, current_time);
     BBRCheckProbeRTT(bbr_state, path_x, bytes_in_transit, current_time);
@@ -908,6 +967,13 @@ void BBRSetCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64
                 path_x->cwin = bbr_state->target_cwnd;
             }
         }
+        else if (path_x->cwin < bbr_state->target_cwnd && 
+            bbr_state->bandwidth_reestimated &&
+            bbr_state->excess_rtt_count == 0) {
+            path_x->cwin = bbr_state->target_cwnd;
+            bbr_state->bandwidth_reestimated = 0;
+        }
+
         else if (path_x->cwin < bbr_state->target_cwnd || path_x->delivered < PICOQUIC_CWIN_INITIAL)
         {
             path_x->cwin += bytes_delivered;
@@ -1018,10 +1084,6 @@ void picoquic_bbr_notify_congestion(
     if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
         BBRExitStartupLongRtt(bbr_state, path_x, current_time);
     }
-    else if (bbr_state->state == picoquic_bbr_alg_startup) {
-        bbr_state->filled_pipe = 1;
-        BBREnterDrain(bbr_state, path_x, current_time);
-    }
     else {
         bbr_state->cycle_on_loss = 1;
     }
@@ -1130,26 +1192,10 @@ static void picoquic_bbr_notify(
             picoquic_bbr_reset(bbr_state, path_x, current_time);
             break;
         case picoquic_congestion_notification_seed_cwin:
-            if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
+            if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt ||
+                bbr_state->state == picoquic_bbr_alg_startup) {
                 BBRExitStartupSeedBDP(bbr_state, path_x, nb_bytes_acknowledged, current_time);
                 picoquic_update_pacing_data(cnx, path_x, 1);
-            }
-            else if (bbr_state->state == picoquic_bbr_alg_startup){
-                /* If in initial startup phase, do something */
-                double seed_bw_estimate = (double)nb_bytes_acknowledged;
-                uint64_t bwe;
-                seed_bw_estimate /= (double)path_x->smoothed_rtt;
-                seed_bw_estimate *= 1000000;
-                bwe = (uint64_t)seed_bw_estimate*2; /* Hack -- account for div by two in BBRUpdateBtlBw */
-                if (path_x->bandwidth_estimate_max < bwe) {
-                    path_x->bandwidth_estimate_max = bwe;
-                    BBRUpdateBtlBw(bbr_state, path_x, current_time);
-                    BBRSetPacingRate(bbr_state);
-                    if (bbr_state->pacing_rate > 0) {
-                        /* Set the pacing rate in picoquic sender */
-                        picoquic_update_pacing_rate(cnx, path_x, bbr_state->pacing_rate, bbr_state->send_quantum);
-                    }
-                }
             }
             break;
         default:

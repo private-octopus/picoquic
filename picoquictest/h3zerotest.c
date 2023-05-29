@@ -2254,7 +2254,7 @@ int h3zero_satellite_test()
 int h09_satellite_test()
 {
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL, satellite_test_scenario, nb_satellite_test_scenario, 
-        demo_test_stream_length, 1, 0, 10750000, 0, NULL, NULL, NULL, 0);
+        demo_test_stream_length, 1, 0, 11000000, 0, NULL, NULL, NULL, 0);
 }
 
 int h09_lone_fin_test()
