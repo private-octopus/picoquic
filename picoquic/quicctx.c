@@ -3559,8 +3559,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
          * but this behavior creates too many ACKS on high speed links, so picoquic will request
          * the peer to not do that if the "delayed ACK" extension is available (ack_ignore_order_local = 1)
          */
-        cnx->ack_ignore_order_local = 1;
-        cnx->ack_ignore_order_remote = 0;
+        cnx->ack_reordering_threshold_local = 1;
+        cnx->ack_reordering_threshold_remote = 0;
 
         cnx->latest_progress_time = start_time;
         cnx->latest_receive_time = start_time;
