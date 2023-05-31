@@ -2800,7 +2800,6 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     struct sockaddr_storage server_address;
     uint64_t server_time = 0;
     uint64_t random_context = 0x12345678;
-    size_t nb_stress_clients = (do_corrupt) ? picohttp_nb_stress_clients / 4 : picohttp_nb_stress_clients;
 
     ret = picoquic_store_text_addr(&server_address, "1::1", 443);
 
@@ -2832,14 +2831,14 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     }
 
     if (ret == 0) {
-        ctx_client = (http_stress_client_context_t**)malloc(sizeof(http_stress_client_context_t*) * nb_stress_clients);
+        ctx_client = (http_stress_client_context_t**)malloc(sizeof(http_stress_client_context_t*) * picohttp_nb_stress_clients);
         if (ctx_client == NULL) {
             ret = -1;
         }
         else {
             /* initialize each client, address 2::nnnn */
-            memset(ctx_client, 0, sizeof(http_stress_client_context_t*) * nb_stress_clients);
-            for (size_t i = 0; ret == 0 && i < nb_stress_clients; i++) {
+            memset(ctx_client, 0, sizeof(http_stress_client_context_t*) * picohttp_nb_stress_clients);
+            for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
                 ctx_client[i] = http_stress_client_create(i, &simulated_time, (struct sockaddr*) & server_address, initial_random);
                 if (ctx_client[i] == NULL) {
                     ret = -1;
@@ -2861,7 +2860,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     while (ret == 0) {
         uint64_t next_time = UINT64_MAX;
         int is_lan_ready = lan->first_packet != NULL;
-        size_t client_id = nb_stress_clients;
+        size_t client_id = picohttp_nb_stress_clients;
         picoquic_quic_t* qready = NULL;
         struct sockaddr* ready_from = NULL;
 
@@ -2877,7 +2876,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
                 next_time = server_time;
             }
 
-            for (size_t i = 0; ret == 0 && i < nb_stress_clients; i++) {
+            for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
                 if (ctx_client[i] != NULL && ctx_client[i]->client_time < next_time && !ctx_client[i]->is_not_sending) {
                     qready = ctx_client[i]->qclient;
                     ready_from = (struct sockaddr*) & ctx_client[i]->client_address;
@@ -2920,7 +2919,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
                 }
             }
 
-            if (client_id < nb_stress_clients && ctx_client[client_id] != NULL) {
+            if (client_id < picohttp_nb_stress_clients && ctx_client[client_id] != NULL) {
                 if (ctx_client[client_id]->is_dropped) {
                     uint64_t should_not_send = picoquic_test_uniform_random(&random_context, 5);
                     ctx_client[client_id]->is_not_sending = should_not_send == 3;
@@ -2958,7 +2957,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
                 }
                 else {
                     int is_matched = 0;
-                    for (size_t i = 0; ret == 0 && i < nb_stress_clients; i++) {
+                    for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
                         if (ctx_client[i] != NULL && !ctx_client[i]->is_dropped &&
                             picoquic_compare_addr((struct sockaddr*) & arrival->addr_to, (struct sockaddr*) & ctx_client[i]->client_address) == 0) {
                             /* submit to client */
@@ -2989,7 +2988,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
 
     if (!do_corrupt && !do_drop) {
         /* verify that each client scenario is properly completed */
-        for (size_t i = 0; ret == 0 && i < nb_stress_clients; i++) {
+        for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
             if (ctx_client[i] != NULL) {
                 if (!ctx_client[i]->callback_ctx.connection_ready) {
                     DBG_PRINTF("Connection #%d failed", (int)i);
@@ -3004,8 +3003,8 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     }
 
     /* verify that the global execution time makes sense */
-    if (ret == 0 && simulated_time > 240000000ull + 1000000ull * nb_stress_clients) {
-        DBG_PRINTF("Taking %llu microseconds for %d clients!", (unsigned long long)simulated_time, (int)nb_stress_clients);
+    if (ret == 0 && simulated_time > 240000000ull + 1000000ull * picohttp_nb_stress_clients) {
+        DBG_PRINTF("Taking %llu microseconds for %d clients!", (unsigned long long)simulated_time, (int)picohttp_nb_stress_clients);
         ret = -1;
     }
 
@@ -3016,7 +3015,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     }
 
     if (ctx_client != NULL) {
-        for (size_t i = 0; i < nb_stress_clients; i++) {
+        for (size_t i = 0; i < picohttp_nb_stress_clients; i++) {
             if (ctx_client[i] != NULL) {
                 (void)http_stress_client_delete(ctx_client[i]);
             }
