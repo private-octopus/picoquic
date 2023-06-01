@@ -1355,86 +1355,7 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
  * packet losts if they have not been acknowledged for two retransmission
  * delays, and if we have performed at least one PTO previously.
  */
-#if 1
-static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
-    picoquic_packet_t* p, uint64_t current_time, uint64_t* next_retransmit_time, int* timer_based)
-{
-    picoquic_packet_context_enum pc = p->pc;
-    uint64_t retransmit_time;
-    int64_t delta_seq = 0;
-    int64_t delta_sent = 0;
-    uint64_t rack_timer_min;
-    int should_retransmit = 0;
-    int is_timer_based = 0;
 
-    if (p->send_path == NULL) {
-        /* This is a bug. Can only happen if the sending path has been
-        * deleted, in which case the packet should be retransmitted immediately */
-        is_timer_based = 0;
-        should_retransmit = 1;
-        retransmit_time = current_time;
-    }
-    else if (p->ptype == picoquic_packet_0rtt_protected && !cnx->zero_rtt_data_accepted) {
-        /* Zero RTT data was not accepted by the peer, the packets are considered lost */
-        retransmit_time = current_time;
-    }
-    else if (p->ptype == picoquic_packet_0rtt_protected && cnx->cnx_state != picoquic_state_ready &&
-        cnx->cnx_state != picoquic_state_client_ready_start) {
-        /* Set the retransmit time ahead of current time since the connection is not ready */
-        retransmit_time = current_time + p->send_path->smoothed_rtt + PICOQUIC_RACK_DELAY;
-    }
-    else {
-        delta_seq = p->send_path->path_packet_acked_number - p->path_packet_number;
-        if (delta_seq >= 3) {
-            /* Last acknowledged packet is ways ahead. That means this packet
-             * is most probably lost.
-             */
-            retransmit_time = current_time;
-        }
-        else if (delta_seq > 0) {
-            /* Set a timer relative to that last packet */
-            int64_t rack_delay = (p->send_path->smoothed_rtt >> 2);
-            delta_sent = p->send_path->path_packet_acked_time_sent - p->send_time;
-            if (rack_delay > PICOQUIC_RACK_DELAY / 2) {
-                rack_delay = PICOQUIC_RACK_DELAY / 2;
-            }
-            retransmit_time = p->send_time + p->send_path->retransmit_timer;
-            rack_timer_min = p->send_path->path_packet_acked_received + rack_delay
-                - delta_sent + cnx->remote_parameters.max_ack_delay;
-            if (retransmit_time > rack_timer_min) {
-                retransmit_time = rack_timer_min;
-            }
-        }
-        else {
-            /* Find the last packet in the queue, which may be this one.
-            * Compute a timer from the time this last packet was sent.
-            * If the timer has elapsed, this packet should be resent,
-            * in a timer based manner. If not, set the timer to
-            * the specified value. */
-            picoquic_packet_t* last_packet = p->send_path->path_packet_last;
-            if (last_packet == NULL) {
-                last_packet = p;
-            }
-            retransmit_time = last_packet->send_time + picoquic_current_retransmit_timer(cnx, p->send_path);
-            is_timer_based = 1;
-        }
-
-        if (current_time >= retransmit_time || (p->is_ack_trap && delta_seq > 0)) {
-            should_retransmit = 1;
-            if (cnx->quic->sequence_hole_pseudo_period != 0 && pc == picoquic_packet_context_application && !p->is_ack_trap) {
-                DBG_PRINTF("Retransmit #%d, delta=%d, timer=%d, time=%d, sent: %d, ack_t: %d, s_rtt: %d, rt: %d",
-                    (int)p->sequence_number, (int)delta_seq, is_timer_based, (int)current_time, (int)p->send_time,
-                    (int)p->send_path->path_packet_acked_received, (int)p->send_path->smoothed_rtt, (int)retransmit_time);
-            }
-        }
-    }
-
-    *timer_based = is_timer_based;
-    *next_retransmit_time = retransmit_time;
-
-    return should_retransmit;
-}
-#else
 static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     picoquic_packet_t* p, uint64_t current_time, uint64_t* next_retransmit_time, int* timer_based)
 {
@@ -1526,7 +1447,6 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
 
     return should_retransmit;
 }
-#endif
 
 int picoquic_queue_stream_frame_for_retransmit(picoquic_cnx_t* cnx, uint8_t * bytes, size_t length)
 {
