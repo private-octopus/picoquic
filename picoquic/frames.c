@@ -4810,7 +4810,7 @@ uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, seq)) != NULL &&
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) != NULL &&
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_delay_max)) != NULL &&
-            (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, (uint8_t)cnx->ack_reordering_threshold_local)) != NULL) {
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->ack_reordering_threshold_local)) != NULL) {
             cnx->ack_frequency_sequence_local = seq;
             cnx->ack_gap_local = ack_gap;
             cnx->ack_frequency_delay_local = ack_delay_max;
