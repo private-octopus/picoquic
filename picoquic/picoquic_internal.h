@@ -1008,6 +1008,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_ack_lost : 1;
     unsigned int is_ack_expected : 1;
     unsigned int is_datagram_ready : 1;
+    unsigned int is_pto_required : 1; /* Should send PTO probe */
 
 
     /* Path priority, for multipath management */

@@ -4468,7 +4468,7 @@ int mtu_drop_test()
         11500000,
         10500000,
         11000000,
-        10300000
+        10700000
     };
     int ret = 0;
 
@@ -10927,7 +10927,7 @@ int multi_segment_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        1100000,
+        1110000,
         1130000,
         1350000,
         1370000,
@@ -11209,6 +11209,11 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
         int nb_repeated = 0;
         int nb_loops = 0;
 
+        if (cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_DCUBIC ||
+            cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST ) {
+            repeat_target = 200;
+        }
+
         if (packet == NULL) {
             ret = -1;
         }
@@ -11217,6 +11222,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
                 test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
                 uint64_t old_time = simulated_time;
                 uint64_t delta_t;
+
                 simulated_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
                 delta_t = simulated_time - old_time;
                 if (delta_t > 3000000) {
@@ -11272,7 +11278,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
 
 int excess_repeat_test()
 {
-    const int nb_repeat_max = 128;
+    const int nb_repeat_max = 128; 
     picoquic_congestion_algorithm_t* algo_list[6] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,

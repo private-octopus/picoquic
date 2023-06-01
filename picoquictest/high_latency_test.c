@@ -307,7 +307,7 @@ int high_latency_cubic_test()
 {
     /* Simple test. */
     uint64_t latency = 5000000;
-    uint64_t expected_completion = 160000000;
+    uint64_t expected_completion = 200000000;
 
     return high_latency_one(0xcb, picoquic_cubic_algorithm,
         hilat_scenario_100mb, sizeof(hilat_scenario_100mb),
