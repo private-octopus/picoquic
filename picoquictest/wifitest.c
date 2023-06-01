@@ -183,7 +183,7 @@ int wifi_bbr_test()
         3000,
         suspension_basic,
         picoquic_bbr_algorithm,
-        2800000,
+        2750000,
         0 };
     int ret = wifi_test_one(wifi_test_bbr, &spec);
 
