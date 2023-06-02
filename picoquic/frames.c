@@ -3033,8 +3033,10 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     uint64_t packets;
                     uint64_t microsec;
                     uint8_t ignore_order;
+                    uint64_t reordering_threshold;
 
-                    if ((bytes = picoquic_parse_ack_frequency_frame(bytes, bytes + bytes_max, &seq, &packets, &microsec, &ignore_order)) != NULL &&
+                    if ((bytes = picoquic_parse_ack_frequency_frame(bytes, bytes + bytes_max,
+                        &seq, &packets, &microsec, &ignore_order, &reordering_threshold)) != NULL &&
                         seq == cnx->ack_frequency_sequence_local) {
                         *no_need_to_repeat = 1;
                     }
@@ -4733,18 +4735,20 @@ const uint8_t* picoquic_skip_ack_frequency_frame(const uint8_t* bytes, const uin
     if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
         (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
         (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL) {
-        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, 1);
+        bytes = picoquic_frames_varint_skip(bytes, bytes_max);
     }
     return bytes;
 }
 
 const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const uint8_t* bytes_max,
-    uint64_t* seq, uint64_t* packets, uint64_t* microsec, uint8_t * ignore_order)
+    uint64_t* seq, uint64_t* packets, uint64_t* microsec, uint8_t * ignore_order, uint64_t *reordering_threshold)
 {
+    *reordering_threshold = 0;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, seq)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, packets)) != NULL &&
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, microsec)) != NULL){
-        bytes = picoquic_frames_uint8_decode(bytes, bytes_max, ignore_order);
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, microsec)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, reordering_threshold)) != NULL){
+        *ignore_order = (*reordering_threshold == 0);
     }
     return bytes;
 }
@@ -4755,9 +4759,10 @@ const uint8_t* picoquic_decode_ack_frequency_frame(const uint8_t* bytes, const u
     uint64_t packets = 0;
     uint64_t microsec = 0;
     uint8_t ignore_order = 0;
+    uint64_t reordering_threshold = 0;
 
     /* This code assumes that the frame type is already skipped */
-    if ((bytes = picoquic_parse_ack_frequency_frame(bytes, bytes_max, &seq, &packets, &microsec, &ignore_order)) != NULL){
+    if ((bytes = picoquic_parse_ack_frequency_frame(bytes, bytes_max, &seq, &packets, &microsec, &ignore_order, &reordering_threshold)) != NULL){
         if (!cnx->is_ack_frequency_negotiated ||
             microsec < cnx->local_parameters.min_ack_delay ||
             packets == 0 ||
@@ -4773,6 +4778,7 @@ const uint8_t* picoquic_decode_ack_frequency_frame(const uint8_t* bytes, const u
                 cnx->ack_gap_remote = packets;
                 cnx->ack_delay_remote = microsec;
                 cnx->ack_ignore_order_remote = (ignore_order) ? 1 : 0;
+                cnx->ack_reordering_threshold_remote = reordering_threshold;
                 /* Keep track of statistics on ACK parameters */
                 if (packets > cnx->max_ack_gap_remote) {
                     cnx->max_ack_gap_remote = packets;
@@ -4795,6 +4801,7 @@ uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes
     uint64_t seq = cnx->ack_frequency_sequence_local + 1;
     uint64_t ack_gap;
     uint64_t ack_delay_max;
+    uint64_t reordering_threshold = (cnx->ack_ignore_order_local) ? 0 : 1;
 
     /* Compute the desired value of the ack frequency*/
     picoquic_compute_ack_gap_and_delay(cnx, cnx->path[0]->rtt_min, cnx->remote_parameters.min_ack_delay,
@@ -4812,7 +4819,7 @@ uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, seq)) != NULL &&
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) != NULL &&
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_delay_max)) != NULL &&
-            (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, (uint8_t)cnx->ack_ignore_order_local)) != NULL) {
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, reordering_threshold)) != NULL) {
             cnx->ack_frequency_sequence_local = seq;
             cnx->ack_gap_local = ack_gap;
             cnx->ack_frequency_delay_local = ack_delay_max;

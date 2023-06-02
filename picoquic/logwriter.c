@@ -418,7 +418,7 @@ static const uint8_t* picoquic_log_ack_frequency_frame(FILE* f, const uint8_t* b
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Seq num */
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Packet tolerance */
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Max ACK delay */
-    bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1); /* Ignore order */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Reordering threshold */
 
     picoquic_binlog_frame(f, bytes_begin, bytes);
 

@@ -1289,10 +1289,11 @@ size_t picoquic_log_ack_frequency_frame(FILE* F, const uint8_t* bytes, size_t by
     const uint8_t* bytes_end = bytes + bytes_max;
     const uint8_t* bytes0 = bytes;
     size_t byte_index = 0;
+    uint64_t reordering_threshold = 0;
 
 
     if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
-        (bytes = picoquic_parse_ack_frequency_frame(bytes, bytes_end, &sequence, &packets, &microsecs, &ignore_order)) == NULL) {
+        (bytes = picoquic_parse_ack_frequency_frame(bytes, bytes_end, &sequence, &packets, &microsecs, &ignore_order, &reordering_threshold)) == NULL) {
         fprintf(F, "    Malformed ACK Frequency frame: ");
         /* log format error */
         for (size_t i = 0; i < bytes_max && i < 8; i++) {
@@ -1305,8 +1306,8 @@ size_t picoquic_log_ack_frequency_frame(FILE* F, const uint8_t* bytes, size_t by
         byte_index = bytes_max;
     }
     else {
-        fprintf(F, "    ACK Frequency: S=%" PRIu64 ", P=%" PRIu64 ", uS=%" PRIu64", Ignore order: %d\n", 
-            sequence, packets, microsecs, ignore_order);
+        fprintf(F, "    ACK Frequency: S=%" PRIu64 ", P=%" PRIu64 ", uS=%" PRIu64", Reordering threshold: %" PRIu64"\n", 
+            sequence, packets, microsecs, reordering_threshold);
         byte_index = bytes - bytes0;
     }
 

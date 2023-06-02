@@ -211,7 +211,12 @@ static uint8_t test_frame_type_handshake_done[] = {
 
 static uint8_t test_frame_type_ack_frequency[] = {
     0x40, picoquic_frame_type_ack_frequency,
-    17, 0x0A, 0x44, 0x20, 0x01
+    17, 0x0A, 0x44, 0x20, 0x00
+};
+
+static uint8_t test_frame_type_ack_frequency_t5[] = {
+    0x40, picoquic_frame_type_ack_frequency,
+    17, 0x0A, 0x44, 0x20, 0x40, 0x05
 };
 
 static uint8_t test_frame_type_time_stamp[] = {
@@ -290,6 +295,7 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("ack_frequency_t5", test_frame_type_ack_frequency_t5, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0),
