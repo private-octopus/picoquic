@@ -1201,7 +1201,7 @@ void picoquic_ignore_incoming_handshake(
     /* If the packet contains ackable data, mark ack needed
      * in the relevant packet context */
     if (ret == 0 && ack_needed) {
-        picoquic_set_ack_needed(cnx, current_time, pc, ph->l_cid);
+        picoquic_set_ack_needed(cnx, current_time, pc, ph->l_cid, 0);
     }
 }
 
@@ -2011,7 +2011,7 @@ int picoquic_incoming_1rtt(
                         }
                     }
                     else {
-                        picoquic_set_ack_needed(cnx, current_time, ph->pc, ph->l_cid);
+                        picoquic_set_ack_needed(cnx, current_time, ph->pc, ph->l_cid, 0);
                     }
                 }
             }

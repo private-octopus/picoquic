@@ -165,7 +165,7 @@ uint8_t client_param3[] = {
     picoquic_tp_initial_max_streams_bidi, 1, 0x01,
     picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
-    0xC0, 0, 0, 0, 0xFF, 0x02, 0xDE, 0x1A, 2, 0x43, 0xE8, /* min ack delay */
+    0xC0, 0, 0, 0, 0xFF, 0x04, 0xDE, 0x1A, 2, 0x43, 0xE8, /* min ack delay */
     0x80, 0, 0x71, 0x58, 0x01, 0x03,
     0x80, (uint8_t)((picoquic_tp_enable_multipath >> 16) & 0xFF),
     (uint8_t)((picoquic_tp_enable_multipath >> 8) & 0xFF),
@@ -926,12 +926,12 @@ static char const* log_tp_fuzz_file = "log_tp_fuzz_test.txt";
 #define LOG_TP_TEST_REF "picoquictest/log_tp_test_ref.txt"
 #endif
 
-void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t cnx_id_64,
+void picoquic_textlog_transport_extension_content(FILE* F, int log_cnxid, uint64_t cnx_id_64,
     uint8_t * bytes, size_t bytes_max);
 
 static void transport_param_log_test_one(FILE * F, uint8_t * bytes, size_t bytes_max, int client_mode)
 {
-    picoquic_log_transport_extension_content(F, 1, 0x0102030405060708ull, bytes, bytes_max);
+    picoquic_textlog_transport_extension_content(F, 1, 0x0102030405060708ull, bytes, bytes_max);
     fprintf(F, "\n");
 }
 
