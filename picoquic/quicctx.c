@@ -780,7 +780,12 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
 {
     quic->default_multipath_option = multipath_option;
     if (quic->default_tp != NULL) {
-        quic->default_tp->enable_multipath = multipath_option;
+        if (multipath_option & 1) {
+            quic->default_tp->enable_multipath = 1;
+        }
+        if (multipath_option & 2) {
+            quic->default_tp->enable_simple_multipath = 1;
+        }
     }
 }
 

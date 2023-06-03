@@ -461,6 +461,9 @@ char const* textlog_tp_name(picoquic_tp_enum tp_number)
     case picoquic_tp_enable_multipath:
         tp_name = "enable_multipath";
         break;
+    case picoquic_tp_enable_simple_multipath:
+        tp_name = "enable_simple_multipath";
+        break;
     case picoquic_tp_version_negotiation:
         tp_name = "version_negotiation";
         break;

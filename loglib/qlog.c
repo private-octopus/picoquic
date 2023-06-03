@@ -350,6 +350,9 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_enable_multipath:
                     qlog_vint_transport_extension(f, "enable_multipath", s, extension_length);
                     break;
+                case picoquic_tp_enable_simple_multipath:
+                    qlog_vint_transport_extension(f, "enable_simple_multipath", s, extension_length);
+                    break;
                 case picoquic_tp_version_negotiation:
                     fprintf(f, "\"version_negotiation\": ");
                     qlog_tp_version_negotiation(f, s, extension_length);

@@ -285,6 +285,7 @@ typedef struct st_picoquic_tp_t {
     int enable_multipath;
     picoquic_tp_version_negotiation_t version_negotiation;
     int enable_bdp_frame;
+    int enable_simple_multipath;
 } picoquic_tp_t;
 
 /*
