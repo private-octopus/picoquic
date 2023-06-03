@@ -530,6 +530,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(immediate_ack)
+        {
+            int ret = immediate_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(connection_drop)
         {
             int ret = connection_drop_test();

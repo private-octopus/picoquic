@@ -315,6 +315,7 @@ int ddos_amplification_0rtt_test();
 int ddos_amplification_8k_test();
 int blackhole_test();
 int no_ack_frequency_test();
+int immediate_ack_test();
 int connection_drop_test();
 int pacing_update_test();
 int quality_update_test();

@@ -103,6 +103,8 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "datagram";
     case picoquic_frame_type_ack_frequency:
         return "ack_frequency";
+    case picoquic_frame_type_immediate_ack:
+        return "immediate_ack";
     case picoquic_frame_type_time_stamp:
         return "time_stamp";
     case picoquic_frame_type_path_abandon:

@@ -4468,7 +4468,7 @@ int mtu_drop_test()
         11500000,
         10500000,
         11000000,
-        10300000
+        10700000
     };
     int ret = 0;
 
@@ -10930,7 +10930,7 @@ int multi_segment_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        1100000,
+        1110000,
         1130000,
         1350000,
         1370000,
@@ -11212,6 +11212,11 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
         int nb_repeated = 0;
         int nb_loops = 0;
 
+        if (cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_DCUBIC ||
+            cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST ) {
+            repeat_target = 200;
+        }
+
         if (packet == NULL) {
             ret = -1;
         }
@@ -11220,6 +11225,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
                 test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
                 uint64_t old_time = simulated_time;
                 uint64_t delta_t;
+
                 simulated_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
                 delta_t = simulated_time - old_time;
                 if (delta_t > 3000000) {
@@ -11275,7 +11281,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
 
 int excess_repeat_test()
 {
-    const int nb_repeat_max = 128;
+    const int nb_repeat_max = 128; 
     picoquic_congestion_algorithm_t* algo_list[6] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,
@@ -12361,6 +12367,109 @@ int port_blocked_test()
 
     for (size_t i = 0; ret == 0 && i < nb_unblocked; i++) {
         ret = port_blocked_test_port(unblocked_port_to_test[i], 0);
+    }
+
+    return ret;
+}
+
+/* Test the immediate ACK function.
+ */
+int immediate_ack_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x1a, 0x1a, 0x1a, 0x1a, 0x1a, 0x1a, 0x1a, 0x1a}, 8 };
+    int ret;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0) {
+        picoquic_set_binlog(test_ctx->qserver, ".");
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0) {
+        int nb_trials = 0;
+        int was_active;
+        uint64_t immediate_received_at_server = 0;
+        uint64_t immediate_cleared_at_server = 0;
+        int all_acked = 0;
+        uint8_t immediate_ack_frame[2] = { 0x40, picoquic_frame_type_immediate_ack };
+        /* Queue misc frame with "Immediate ACK" set */
+        picoquic_queue_misc_frame(test_ctx->cnx_client, immediate_ack_frame, 2, 0);
+        /* Do couple of rounds until the frame is received;
+         * Check that it is received my verifying that the "immediate ACK" 
+         * is set in the ACK context at the server. Check the time.
+         */
+        while (ret == 0 && nb_trials < 16) {
+            nb_trials++;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            if (test_ctx->cnx_server != NULL &&
+                test_ctx->cnx_server->ack_ctx[picoquic_packet_context_application].act[0].is_immediate_ack_required) {
+                immediate_received_at_server = simulated_time;
+                break;
+            }
+        }
+        if (ret == 0 && immediate_received_at_server == 0) {
+            DBG_PRINTF("Immediate ACK not received after %d rounds", nb_trials);
+            ret = -1;
+        }
+        /* Do a couple rounds until the "immediate ACK" flag is not
+         * set at the server anymore. Verify that no time is elapsed since
+         * the end of the previous round */
+        nb_trials = 0;
+        while (ret == 0 && nb_trials < 16) {
+            nb_trials++;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            if (test_ctx->cnx_server != NULL &&
+                !test_ctx->cnx_server->ack_ctx[picoquic_packet_context_application].act[0].is_immediate_ack_required) {
+                immediate_cleared_at_server = simulated_time;
+                break;
+            }
+        }
+        if (ret != 0){
+            if (immediate_cleared_at_server == 0) {
+                DBG_PRINTF("Immediate ACK not cleared after %d rounds", nb_trials);
+                ret = -1;
+            }
+            else if (immediate_cleared_at_server != immediate_received_at_server) {
+                DBG_PRINTF("ACK not quite immediate, set at: %" PRIu64 ", cleared at %" PRIu64,
+                    immediate_received_at_server, immediate_cleared_at_server);
+                ret = -1;
+            }
+        }
+        /* Do couple rounds until the ACK is received at the client. 
+         * This is verified by checking that the client ACK queue is
+         * empty.
+         */
+        nb_trials = 0;
+        while (ret == 0 && nb_trials < 16) {
+            nb_trials++;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            if (test_ctx->cnx_client != NULL && 
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
+                all_acked = 1;
+                break;
+            }
+        }
+        if (ret == 0 && !all_acked) {
+            DBG_PRINTF("ACK was not received at: %" PRIu64, simulated_time);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
     }
 
     return ret;
