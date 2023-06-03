@@ -30,6 +30,7 @@
     handshake_done
     ACK Frequency: S=17, P=10, uS=1056, Reordering threshold: 0
     ACK Frequency: S=17, P=10, uS=1056, Reordering threshold: 5
+    Immediate ACK
     Time Stamp: 1024
     Path Abandon, path_id_type: 0, path_id: 1, reason: 0
     Path Abandon, path_id_type: 1, path_id: 1, reason: 17: bad

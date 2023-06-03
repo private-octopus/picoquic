@@ -125,6 +125,7 @@ static const picoquic_test_def_t test_table[] = {
     { "ddos_amplification_8k", ddos_amplification_8k_test },
     { "blackhole", blackhole_test },
     { "no_ack_frequency", no_ack_frequency_test },
+    { "immediate_ack", immediate_ack_test },
     { "connection_drop", connection_drop_test },
     { "vn_tp", vn_tp_test },
     { "vn_compat", vn_compat_test },

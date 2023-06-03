@@ -219,6 +219,10 @@ static uint8_t test_frame_type_ack_frequency_t5[] = {
     17, 0x0A, 0x44, 0x20, 0x40, 0x05
 };
 
+static uint8_t test_frame_type_immediate_ack[] = {
+    0x40, picoquic_frame_type_immediate_ack
+};
+
 static uint8_t test_frame_type_time_stamp[] = {
     (uint8_t)(0x40 | (picoquic_frame_type_time_stamp >> 8)), (uint8_t)(picoquic_frame_type_time_stamp & 0xFF),
     0x44, 0
@@ -296,6 +300,7 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("ack_frequency_t5", test_frame_type_ack_frequency_t5, 0, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("immediate_ack", test_frame_type_immediate_ack, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0),
@@ -927,7 +932,7 @@ int parse_frame_test()
     return ret;
 }
 
-void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length);
+void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length);
 void picoquic_binlog_frames(FILE* F, uint8_t* bytes, size_t length);
 
 static char const* log_test_file = "log_test.txt";
@@ -1102,7 +1107,7 @@ int logger_test()
         cnx.initial_cnxid = logger_test_cid;
 
         for (size_t i = 0; i < nb_test_skip_list; i++) {
-            picoquic_log_frames(quic.F_log, 0, test_skip_list[i].val, test_skip_list[i].len);
+            picoquic_textlog_frames(quic.F_log, 0, test_skip_list[i].val, test_skip_list[i].len);
         }
         picoquic_log_tls_ticket(&cnx,
             log_test_ticket, (uint16_t) sizeof(log_test_ticket));
@@ -1139,7 +1144,7 @@ int logger_test()
         }
         else {
             ret &= fprintf(quic.F_log, "Log packet test #%d\n", (int)i);
-            picoquic_log_frames(quic.F_log, 0, buffer, bytes_max);
+            picoquic_textlog_frames(quic.F_log, 0, buffer, bytes_max);
             quic.F_log = picoquic_file_close(quic.F_log);
         }
 
@@ -1190,7 +1195,7 @@ int logger_test()
                 bytes_max += sizeof(extra_bytes);
             }
 
-            picoquic_log_frames(quic.F_log, 0, buffer, bytes_max);
+            picoquic_textlog_frames(quic.F_log, 0, buffer, bytes_max);
 
             quic.F_log = picoquic_file_close(quic.F_log);
         }
@@ -1207,14 +1212,14 @@ int logger_test()
         }
 
         ret &= fprintf(quic.F_log, "Log fuzz test #%d\n", (int)i);
-        picoquic_log_frames(quic.F_log, 0, buffer, bytes_max);
+        picoquic_textlog_frames(quic.F_log, 0, buffer, bytes_max);
 
         /* Attempt to log fuzzed packets, and hope nothing crashes */
         for (size_t j = 0; j < 100; j++) {
             ret &= fprintf(quic.F_log, "Log fuzz test #%d, packet %d\n", (int)i, (int)j);
             fflush(quic.F_log);
             skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
-            picoquic_log_frames(quic.F_log, 0, fuzz_buffer, bytes_max);
+            picoquic_textlog_frames(quic.F_log, 0, fuzz_buffer, bytes_max);
         }
         quic.F_log = picoquic_file_close(quic.F_log);
     }

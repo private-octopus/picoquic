@@ -1215,6 +1215,8 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     case picoquic_frame_type_ack_frequency:
         qlog_ack_frequency_frame(f, s);
         break;
+    case picoquic_frame_type_immediate_ack:
+        break;
     case picoquic_frame_type_time_stamp:
         qlog_time_stamp_frame(f, s);
         break;
