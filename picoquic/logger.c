@@ -1456,7 +1456,7 @@ size_t textlog_path_status_frame(FILE* F, const uint8_t* bytes, size_t bytes_max
     const uint8_t* bytes0 = bytes;
     uint64_t path_id;
     uint64_t sequence;
-    size_t status;
+    uint64_t status;
     size_t byte_index = 0;
 
 
