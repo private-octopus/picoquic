@@ -29,7 +29,8 @@ It also implements the following extensions:
 * Greasing the QUIC bit, per [RFC 9287](https://datatracker.ietf.org/doc/rfc9287/)
 * QUIC ACK Frequency, per version 04 of [the ACK Frequency Draft](https://datatracker.ietf.org/doc/draft-ietf-quic-ack-frequency/)
 * QUIC Spin Bit, per RFC 9000,
-* An early version of QUIC Multipath, which is evolving towards standardization,
+* The evolving [QUIC Multipath draft](https://datatracker.ietf.org/doc/draft-ietf-quic-multipath/),
+* The [simple multipath](https://github.com/huitema/quicmpath) alternative to the QUIC Multipath draft 
 * The experimental [BDP draft](https://datatracker.ietf.org/doc/draft-kuhn-quic-bdpframe-extension/),
   tested in various simulations of satellite links of interspatial links.
 * An experimental [Timestamp Draft](https://datatracker.ietf.org/doc/draft-huitema-quic-ts/)
