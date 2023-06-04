@@ -231,8 +231,7 @@ static uint8_t test_frame_type_time_stamp[] = {
 static uint8_t test_frame_type_path_abandon_0[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
-    0x00, /* type 0 */
-    0x01,
+    0x01, /* Path 0 */
     0x00, /* No error */
     0x00 /* No phrase */
 };
@@ -240,7 +239,6 @@ static uint8_t test_frame_type_path_abandon_0[] = {
 static uint8_t test_frame_type_path_abandon_1[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
-    0x01, /* type 1 */
     0x01,
     0x11, /* Some new error */
     0x03, 
@@ -249,12 +247,12 @@ static uint8_t test_frame_type_path_abandon_1[] = {
     (uint8_t)'d',
 };
 
-static uint8_t test_frame_type_path_abandon_2[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
-    (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
-    0x02, /* type 2, this path */
-    0x00, /* No error */
-    0x00 /* No phrase */
+static uint8_t test_frame_type_path_status[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_status >> 24)), (uint8_t)(picoquic_frame_type_path_status >> 16),
+    (uint8_t)(picoquic_frame_type_path_status >> 8), (uint8_t)(picoquic_frame_type_path_status & 0xFF),
+    0x00, /* Path 0 */
+    0x0F, /* Sequence = 0x0F */
+    0x01 /* Available */
 };
 
 static uint8_t test_frame_type_bdp[] = {
@@ -275,36 +273,43 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("connection_close", test_type_connection_close, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("application_close", test_type_application_close, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 0, 0, 3, 0, 0),
+
     TEST_SKIP_ITEM("max_data", test_frame_type_max_data, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("max_stream_data", test_frame_type_max_stream_data, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("max_streams_bidir", test_frame_type_max_streams_bidir, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("max_streams_unidir", test_frame_type_max_streams_unidir, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("ping", test_frame_type_ping, 0, 0, 3, 0, 0),
+
     TEST_SKIP_ITEM("blocked", test_frame_type_blocked, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("stream_data_blocked", test_frame_type_stream_blocked, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("streams_blocked_bidir", test_frame_type_streams_blocked_bidir, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("streams_blocked_unidir", test_frame_type_streams_blocked_unidir, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("new_connection_id", test_frame_type_new_connection_id, 0, 0, 3, 0, 0),
+
     TEST_SKIP_ITEM("stop_sending", test_frame_type_stop_sending, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("challenge", test_frame_type_path_challenge, 1, 0, 3, 0, 0),
     TEST_SKIP_ITEM("response", test_frame_type_path_response, 1, 0, 3, 0, 0),
     TEST_SKIP_ITEM("new_token", test_frame_type_new_token, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("ack", test_frame_type_ack, 1, 0, 3, 0, 0),
+
     TEST_SKIP_ITEM("ack_ecn", test_frame_type_ack_ecn, 1, 0, 3, 0, 0),
     TEST_SKIP_ITEM("stream_min", test_frame_type_stream_range_min, 0, 1, 3, 0, 0),
     TEST_SKIP_ITEM("stream_max", test_frame_type_stream_range_max, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("crypto_hs", test_frame_type_crypto_hs, 0, 0, 2, 0, 0),
     TEST_SKIP_ITEM("retire_connection_id", test_frame_type_retire_connection_id, 0, 0, 3, 0, 0),
+
     TEST_SKIP_ITEM("datagram", test_frame_type_datagram, 0, 1, 3, 0, 0),
     TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("ack_frequency_t5", test_frame_type_ack_frequency_t5, 0, 0, 3, 0, 0),
+
     TEST_SKIP_ITEM("immediate_ack", test_frame_type_immediate_ack, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("path_abandon_2", test_frame_type_path_abandon_2, 0, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("path_status", test_frame_type_path_status, 0, 0, 3, 0, 0),
+
     TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3, 0, 0)
 };
 
@@ -466,8 +471,7 @@ static uint8_t test_frame_stream_hang[] = {
 static uint8_t test_frame_type_path_abandon_bad_0[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
-    0x00, /* type 0 */
-    /* 0x01, missing type */
+    /* Missing path id */
     0x00, /* No error */
     0x00 /* No phrase */
 };
@@ -477,10 +481,8 @@ static uint8_t test_frame_type_path_abandon_bad_1[] = {
     (uint8_t)(picoquic_frame_type_path_abandon >> 16),
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), 
     (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
-    0x01, /* type 1 */
     0x01,
     0x11, /* Some new error */
-    0x4f,
     0xff, /* bad length */
     (uint8_t)'b',
     (uint8_t)'a',
@@ -490,8 +492,8 @@ static uint8_t test_frame_type_path_abandon_bad_1[] = {
 static uint8_t test_frame_type_path_abandon_bad_2[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
-    0x03, /* unknown type */
-    0x00, /* No error */
+    0x00,
+    0xFF, /* Bad error  */
     0x00 /* No phrase */
 };
 
