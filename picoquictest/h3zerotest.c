@@ -25,6 +25,7 @@
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
+#include "tls_api.h"
 #include "h3zero.h"
 #include "h3zero_common.h"
 #include "democlient.h"
@@ -2535,7 +2536,7 @@ static void demo_test_multi_scenario_free(picoquic_demo_stream_desc_t** scenario
     }
 }
 
-static size_t picohttp_test_multifile_number = 1000;
+size_t picohttp_test_multifile_number = 1000;
 #define MULTI_FILE_CLIENT_BIN "multi_file_client_trace.bin"
 #define MULTI_FILE_SERVER_BIN "multi_file_server_trace.bin"
 
@@ -2782,6 +2783,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
 }
 
 size_t picohttp_nb_stress_clients = 128;
+uint64_t picohttp_random_stress_context = 0x12345678;
 
 int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
 {
@@ -2799,10 +2801,8 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     picoquictest_sim_link_t* lan = NULL;
     struct sockaddr_storage server_address;
     uint64_t server_time = 0;
-    uint64_t random_context = 0x12345678;
-    /* TODO: we observe random failures in the http_corrupt test. Investigate!
-     */
-    size_t nb_stress_clients = (do_corrupt) ? (picohttp_nb_stress_clients / 8) : picohttp_nb_stress_clients;
+    uint64_t random_context = picohttp_random_stress_context;
+    size_t nb_stress_clients = picohttp_nb_stress_clients;
 
     ret = picoquic_store_text_addr(&server_address, "1::1", 443);
 
@@ -2829,6 +2829,9 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
             picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
             if (initial_random) {
                 picoquic_set_random_initial(qserver, 1);
+            }
+            if (random_context == 0) {
+                picoquic_crypto_random(qserver, &random_context, sizeof(random_context));
             }
         }
     }
