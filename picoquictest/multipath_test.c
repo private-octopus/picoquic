@@ -354,10 +354,12 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
 
     picoquic_init_transport_parameters(test_parameters, 1);
     if (is_simple_multipath) {
-        test_parameters->enable_multipath = 1;
+        test_parameters->enable_multipath = 0;
+        test_parameters->enable_simple_multipath = 1;
     }
     else {
-        test_parameters->enable_multipath = 2;
+        test_parameters->enable_multipath = 1;
+        test_parameters->enable_simple_multipath = 0;
     }
     test_parameters->enable_time_stamp = 3;
 }
@@ -701,10 +703,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
         if (is_simple_multipath) {
-            test_ctx->cnx_client->local_parameters.enable_multipath = 1;
+            test_ctx->cnx_client->local_parameters.enable_simple_multipath = 1;
         }
         else {
-            test_ctx->cnx_client->local_parameters.enable_multipath = 2;
+            test_ctx->cnx_client->local_parameters.enable_multipath = 1;
         }
         test_ctx->cnx_client->local_parameters.enable_time_stamp = 3;
         /* Initialize the client connection */
@@ -1519,7 +1521,7 @@ int multipath_qlog_test()
 int simple_multipath_basic_test()
 {
     /* Slightly faster than the full multipath test */
-    uint64_t max_completion_microsec = 1030000;
+    uint64_t max_completion_microsec = 1000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_basic, 1);
 }
