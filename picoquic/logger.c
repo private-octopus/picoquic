@@ -371,6 +371,9 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_path_abandon:
         frame_name = "path_abandon";
         break;
+    case picoquic_frame_type_path_status:
+        frame_name = "path_status";
+        break;
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             frame_name = "stream";
@@ -1408,8 +1411,7 @@ size_t textlog_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_ma
 {
     const uint8_t* bytes_end = bytes + bytes_max;
     const uint8_t* bytes0 = bytes;
-    uint64_t path_id_type;
-    uint64_t path_id_value = 0;
+    uint64_t path_id;
     uint64_t reason;
     size_t phrase_length;
     const uint8_t* phrase;
@@ -1418,9 +1420,7 @@ size_t textlog_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_ma
 
 
     if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id_type)) == NULL ||
-        (path_id_type != 2 &&
-            (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id_value)) == NULL) ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &reason)) == NULL ||
         (bytes = picoquic_frames_varlen_decode(bytes, bytes_end, &phrase_length)) == NULL ||
         bytes + phrase_length > bytes_end) {
@@ -1438,10 +1438,7 @@ size_t textlog_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_ma
     else {
         phrase = bytes;
         bytes += phrase_length;
-        fprintf(F, "    Path Abandon, path_id_type: %" PRIu64, path_id_type);
-        if (path_id_type != 2) {
-            fprintf(F, ", path_id: %" PRIu64, path_id_value);
-        }
+        fprintf(F, "    Path Abandon, path_id: %" PRIu64, path_id);
         fprintf(F, ", reason: %" PRIu64, reason);
         if (phrase_length > 0) {
             fprintf(F, ": ");
@@ -1453,6 +1450,40 @@ size_t textlog_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_ma
     return byte_index;
 }
 
+size_t textlog_path_status_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+{
+    const uint8_t* bytes_end = bytes + bytes_max;
+    const uint8_t* bytes0 = bytes;
+    uint64_t path_id;
+    uint64_t sequence;
+    size_t status;
+    size_t byte_index = 0;
+
+
+    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &sequence)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &status)) == NULL) {
+        fprintf(F, "    Malformed Path Abandon frame: ");
+        /* log format error */
+        for (size_t i = 0; i < bytes_max && i < 8; i++) {
+            fprintf(F, "%02x", bytes0[i]);
+        }
+        if (bytes_max > 8) {
+            fprintf(F, "...");
+        }
+        fprintf(F, "\n");
+        byte_index = bytes_max;
+    }
+    else {
+        fprintf(F, "    Path Status, path_id: %" PRIu64, path_id);
+        fprintf(F, ", sequence: %" PRIu64, sequence);
+        fprintf(F, ", status: %" PRIu64, status);
+        fprintf(F, "\n");
+        byte_index = (bytes - bytes0);
+    }
+    return byte_index;
+}
 size_t textlog_bdp_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     const uint8_t* bytes_end = bytes + bytes_max;
@@ -1635,6 +1666,9 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
             break;
         case picoquic_frame_type_path_abandon:
             byte_index += textlog_path_abandon_frame(F, bytes + byte_index, length - byte_index);
+            break;
+        case picoquic_frame_type_path_status:
+            byte_index += textlog_path_status_frame(F, bytes + byte_index, length - byte_index);
             break;
         case picoquic_frame_type_bdp:
             byte_index += textlog_bdp_frame(F, bytes + byte_index, length - byte_index);

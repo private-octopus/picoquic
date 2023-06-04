@@ -1918,45 +1918,27 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
 
 /* Find path by path-ID. This is designed for 
  */
-int picoquic_find_path_by_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_incoming,
-    uint64_t path_id_type, uint64_t path_id_value)
+int picoquic_find_path_by_id(picoquic_cnx_t* cnx, int is_incoming, uint64_t path_id)
 {
-    int path_id = -1;
+    int path_number = -1;
 
-    if (!is_incoming) {
-        path_id_type ^= 1;
-    }
-    if (path_id_type == 0)
-
-        switch (path_id_type) {
-        case 0:
-            for (int i = 0; i < cnx->nb_paths; i++) {
-                if (cnx->path[i]->p_local_cnxid->sequence == path_id_value) {
-                    path_id = i;
-                    break;
-                }
+    if (is_incoming) {
+        for (int i = 0; i < cnx->nb_paths; i++) {
+            if (cnx->path[i]->p_local_cnxid->sequence == path_id) {
+                path_number = i;
+                break;
             }
-            break;
-        case 1:
-            for (int i = 0; i < cnx->nb_paths; i++) {
-                if (cnx->path[i]->p_remote_cnxid->sequence == path_id_value) {
-                    path_id = i;
-                    break;
-                }
-            }
-            break;
-        case 2:
-            for (int i = 0; i < cnx->nb_paths; i++) {
-                if (cnx->path[i] == path_x) {
-                    path_id = i;
-                    break;
-                }
-            }
-            break;
-        default:
-            break;
         }
-    return path_id;
+    }
+    else {
+        for (int i = 0; i < cnx->nb_paths; i++) {
+            if (cnx->path[i]->p_remote_cnxid->sequence == path_id) {
+                path_number = i;
+                break;
+            }
+        }
+    }
+    return path_number;
 }
 
 /* Process a destination unreachable notification. */
@@ -2121,49 +2103,34 @@ int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_fro
 int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason, char const * phrase)
 {
     int ret = 0;
-    int path_id = (int)unique_path_id;
+    int path_number = picoquic_get_path_id_from_unique(cnx, unique_path_id);
 
-    if (path_id < 0 || path_id >= cnx->nb_paths || cnx->nb_paths == 1 ||
+    if (path_number < 0 || path_number >= cnx->nb_paths || cnx->nb_paths == 1 ||
         (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled)) {
         ret = -1;
     }
-    else if (!cnx->path[path_id]->path_is_demoted) {
+    else if (!cnx->path[path_number]->path_is_demoted) {
         /* if demotion is not already in progress, demote the path,
          * and if the path can be properly identified, post a path abandon frame.
          */
-        uint64_t path_id_type = 2;
-        uint64_t path_id_value = 0;
+        uint8_t buffer[512];
+        uint64_t path_id = cnx->path[path_number]->p_remote_cnxid->sequence;
+        int more_data = 0;
+        uint8_t* end_bytes;
 
-        picoquic_demote_path(cnx, path_id, picoquic_get_quic_time(cnx->quic));
-        if (cnx->path[path_id]->p_remote_cnxid->cnx_id.id_len > 0) {
-            path_id_type = 0;
-            path_id_value = cnx->path[path_id]->p_remote_cnxid->sequence;
-        }
-        else if (cnx->path[path_id]->p_local_cnxid->cnx_id.id_len > 0) {
-            path_id_type = 1;
-            path_id_value = cnx->path[path_id]->p_local_cnxid->sequence;
-        }
-        if (path_id_type < 2) {
-            /* Identifier type 2 means "the path over which this is transmitted.
-             * We cannot support that now, because we cannot really steer an abandon frame
-             * or its repetition request to a specific transmission path.
-             */
-            uint8_t buffer[512];
-            int more_data = 0;
-            uint8_t* end_bytes = picoquic_format_path_abandon_frame(buffer, buffer + sizeof(buffer), &more_data,
-                path_id_type, path_id_value, reason, phrase);
-            if (end_bytes != NULL) {
-                ret = picoquic_queue_misc_frame(cnx, buffer, end_bytes - buffer, 0);
-                if (ret == 0) {
-                    picoquic_log_app_message(cnx, "Abandon path %d, reason %" PRIu64, path_id, reason);
-                }
+        picoquic_demote_path(cnx, path_number, picoquic_get_quic_time(cnx->quic));
+        end_bytes = picoquic_format_path_abandon_frame(buffer, buffer + sizeof(buffer), &more_data,
+            path_id, reason, phrase);
+        if (end_bytes != NULL) {
+            ret = picoquic_queue_misc_frame(cnx, buffer, end_bytes - buffer, 0);
+            if (ret == 0) {
+                picoquic_log_app_message(cnx, "Abandon path, unique_id %" PRIu64", reason % " PRIu64, unique_path_id, reason);
             }
         }
     }
 
     return 0;
 }
-
 
 /* Management of "path_quality" feedback.
  */
