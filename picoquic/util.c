@@ -531,7 +531,7 @@ int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_
 {
     int ret = -1;
     if (addr_family == AF_INET) {
-        ret = picoquic_store_text_addr(stored_addr, "128.0.0.1", port);
+        ret = picoquic_store_text_addr(stored_addr, "127.0.0.1", port);
     }
     else if (addr_family == AF_INET6) {
         ret = picoquic_store_text_addr(stored_addr, "::1", port);
