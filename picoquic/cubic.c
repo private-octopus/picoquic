@@ -295,7 +295,7 @@ static void picoquic_cubic_notify(
                 break;
             case picoquic_congestion_notification_bw_measurement: {
                 /* RTT measurements will happen after the bandwidth is estimated */
-                uint64_t max_win = path_x->max_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
                 uint64_t min_win = max_win /= 2;
                 if (path_x->cwin < min_win) {
                     path_x->cwin = min_win;
