@@ -3054,14 +3054,13 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     /* TODO: check whether there is still a need to abandon the path */
                     *no_need_to_repeat = is_preemptive;
                     break;
-                case picoquic_frame_type_path_status: {
+                case picoquic_frame_type_path_status:
 #if 1
                     /* TODO: check whether there is not a status sent with a highest number
                      */
                     *no_need_to_repeat = is_preemptive;
 #endif
                     break;
-                }
                 default:
                     /* If preemptive repeat, only repeat if the frame is explicitly required. */
                     *no_need_to_repeat = is_preemptive;
