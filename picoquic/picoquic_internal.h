@@ -1831,6 +1831,8 @@ uint8_t* picoquic_decode_datagram_frame_header(uint8_t* bytes, const uint8_t* by
 const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const uint8_t* bytes_max, 
     uint64_t* seq, uint64_t* packets, uint64_t* microsec, uint8_t * ignore_order, uint64_t *reordering_threshold);
 uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data);
+const uint8_t* picoquic_parse_path_status_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t* path_id, uint64_t* sequence, uint64_t* status);
 uint8_t* picoquic_format_immediate_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max);
 uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time);
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);

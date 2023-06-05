@@ -2818,7 +2818,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
         ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
     }
     if (ret == 0) {
-        qserver = picoquic_create(256, test_server_cert_file, test_server_key_file, NULL, NULL,
+        qserver = picoquic_create((uint32_t)nb_stress_clients, test_server_cert_file, test_server_key_file, NULL, NULL,
             picoquic_demo_server_callback, &file_param,
             NULL, NULL, reset_seed, simulated_time, &simulated_time, NULL, NULL, 0);
         if (qserver == NULL) {

@@ -3054,13 +3054,20 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     /* TODO: check whether there is still a need to abandon the path */
                     *no_need_to_repeat = is_preemptive;
                     break;
-                case picoquic_frame_type_path_status:
-#if 1
-                    /* TODO: check whether there is not a status sent with a highest number
-                     */
-                    *no_need_to_repeat = is_preemptive;
-#endif
+                case picoquic_frame_type_path_status: {
+                    uint64_t path_id;
+                    uint64_t seq;
+                    uint64_t status;
+
+                    if ((bytes = picoquic_parse_path_status_frame(bytes, bytes + bytes_max, &path_id, &seq, &status)) != NULL){
+                        int path_number = picoquic_find_path_by_id(cnx, 1, path_id);
+                        if (path_number >= 0 && cnx->path[path_number]->status_sequence_to_send_next > seq + 1) {
+                            *no_need_to_repeat = 1;
+                        }
+                    }
+                    * no_need_to_repeat |= is_preemptive;
                     break;
+                }
                 default:
                     /* If preemptive repeat, only repeat if the frame is explicitly required. */
                     *no_need_to_repeat = is_preemptive;
@@ -5024,7 +5031,6 @@ uint8_t* picoquic_format_path_abandon_frame(uint8_t* bytes, uint8_t* bytes_max, 
 
     return bytes;
 }
-
 
 /* Multipath PATH STATUS frames
 */
