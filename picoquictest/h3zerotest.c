@@ -2818,6 +2818,8 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
         ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
     }
     if (ret == 0) {
+        /* Make sure that the server is configured to handle all required clients.
+        */
         qserver = picoquic_create((uint32_t)nb_stress_clients, test_server_cert_file, test_server_key_file, NULL, NULL,
             picoquic_demo_server_callback, &file_param,
             NULL, NULL, reset_seed, simulated_time, &simulated_time, NULL, NULL, 0);
@@ -2949,9 +2951,29 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
 
             if (arrival != NULL) {
                 if (do_corrupt) {
-                    /* simulate packet corruption in flight */
+                    /* simulate packet corruption in flight. But, in the case of server initial packets,
+                     * corrupting the initial connection ID will result in the creation of extra initial
+                     * contexts, which can cause the server to end up with too many connections. We 
+                     * prevent that by doing a minimal parsing of the long-header packets, to avoid
+                     * messing with CID values there.
+                     */
                     uint64_t lost_byte = picoquic_test_uniform_random(&random_context,((uint64_t)4)* arrival->length);
-                    if (lost_byte < arrival->length) {
+                    uint64_t min_length = 0;
+
+                    if ((arrival->bytes[0] & 0x80) == 0x80) {
+                        uint64_t cid_length = 0;
+                        min_length = 1 + 4; /* Skip first byte and version number */
+                        if (min_length < arrival->length) {
+                            cid_length = arrival->bytes[min_length];
+                            min_length += 1 + cid_length; /* skip destination CID */
+                        }
+                        if (min_length < arrival->length) {
+                            cid_length = arrival->bytes[min_length];
+                            min_length += 1 + cid_length; /* skip source CID */
+                        }
+                    }
+
+                    if (lost_byte < arrival->length && lost_byte > min_length) {
                         arrival->bytes[lost_byte] ^= 0xFF;
                     }
                 }
