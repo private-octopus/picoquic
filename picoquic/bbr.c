@@ -214,7 +214,7 @@ typedef enum {
 #define BBR_LT_BW_MAX_RTTS 48
 #if 1
 /* Use this setting when debugging BBR slow start */
-#define BBR_HYSTART_THRESHOLD_RTT 1000000
+#define BBR_HYSTART_THRESHOLD_RTT 150000
 #else
 #define BBR_HYSTART_THRESHOLD_RTT 50000
 #endif

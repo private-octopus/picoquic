@@ -576,15 +576,9 @@ void picoquic_seed_ticket(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t
         uint8_t* ip_addr;
         uint8_t ip_addr_length;
         uint64_t target_cwin = path_x->cwin;
-#if 1
-        if (path_x->max_bandwidth_estimate > 0) {
-            target_cwin = (path_x->max_bandwidth_estimate * path_x->rtt_min) / 1000000ull;
-        }
-#else
         if (path_x->bandwidth_estimate_max > 0) {
             target_cwin = (path_x->bandwidth_estimate_max * path_x->rtt_min) / 1000000ull;
         }
-#endif
         picoquic_get_ip_addr((struct sockaddr*) & path_x->peer_addr, &ip_addr, &ip_addr_length);
         (void) picoquic_remember_issued_ticket(cnx->quic, cnx->issued_ticket_id,
             path_x->rtt_min, target_cwin, ip_addr, ip_addr_length);
