@@ -2206,8 +2206,8 @@ void picoquic_estimate_max_path_bandwidth(picoquic_cnx_t* cnx, picoquic_path_t* 
                 bw_estimate = delivered * 1000000;
                 bw_estimate /= receive_interval;
                 /* Retain if larger than previous estimate */
-                if (bw_estimate > path_x->max_bandwidth_estimate) {
-                    path_x->max_bandwidth_estimate = bw_estimate;
+                if (bw_estimate > path_x->peak_bandwidth_estimate) {
+                    path_x->peak_bandwidth_estimate = bw_estimate;
                 }
 
                 /* Change the reference point if estimate duration is long enough */

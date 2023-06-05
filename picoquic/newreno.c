@@ -281,7 +281,7 @@ static void picoquic_newreno_notify(
             if (nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
                 nr_state->nrss.ssthresh == UINT64_MAX) {
                 /* RTT measurements will happen after the bandwidth is estimated */
-                uint64_t max_win = path_x->max_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
                 uint64_t min_win = max_win /= 2;
                 if (nr_state->nrss.cwin < min_win) {
                     nr_state->nrss.cwin = min_win;

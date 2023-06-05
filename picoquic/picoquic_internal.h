@@ -1070,11 +1070,11 @@ typedef struct st_picoquic_path_t {
     uint64_t delivered_limited_index;
     uint64_t delivered_last_packet;
     uint64_t bandwidth_estimate; /* In bytes per second */
-    uint64_t bandwidth_estimate_max;
+    uint64_t bandwidth_estimate_max; /* Maximum of bandwidth estimate over life of path */
     uint64_t max_sample_acked_time; /* Time max sample was delivered */
     uint64_t max_sample_sent_time; /* Time max sample was sent */
     uint64_t max_sample_delivered; /* Delivered value at time of max sample */
-    uint64_t max_bandwidth_estimate; /* In bytes per second */
+    uint64_t peak_bandwidth_estimate; /* In bytes per second, measured on short interval with highest bandwidth */
 
     uint64_t bytes_sent; /* Total amount of bytes sent on the path */
     uint64_t received; /* Total amount of bytes received from the path */
