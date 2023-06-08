@@ -226,6 +226,7 @@ typedef struct st_picoquic_bbr_state_t {
     picoquic_bbr_alg_state_t state;
     uint64_t btl_bw;
     uint64_t next_round_delivered;
+    uint64_t next_round_sequence;
     uint64_t btl_bw_filter[BBR_BTL_BW_FILTER_LENGTH];
     uint64_t full_bw;
     uint64_t rt_prop;
@@ -512,10 +513,27 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, ui
             bandwidth_estimate = min_bandwidth;
         }
     }
-
+#if 1
+#if 0
+    if (path_x->path_packet_acked_received >= bbr_state->next_round_sequence ||
+        (path_x->path_packet_first != NULL && 
+            path_x->path_packet_first->path_packet_number >= bbr_state->next_round_sequence))
+#else
+    if ((path_x->path_packet_first != NULL && 
+        path_x->path_packet_first->path_packet_number >= bbr_state->next_round_sequence) ||
+        (path_x->path_packet_first == NULL && 
+        path_x->delivered_last_packet >= bbr_state->next_round_delivered)
+#if 0
+        || path_x->path_packet_acked_received >= bbr_state->next_round_sequence
+#endif
+        )
+#endif
+#else
     if (path_x->delivered_last_packet >= bbr_state->next_round_delivered)
+#endif
     {
         bbr_state->next_round_delivered = path_x->delivered;
+        bbr_state->next_round_sequence = path_x->path_packet_number;
         bbr_state->round_count++;
         bbr_state->round_start = 1;
     }
@@ -711,6 +729,7 @@ void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pat
 {
     /* Reset the round filter so it will start at current time */
     bbr_state->next_round_delivered = path_x->delivered;
+    bbr_state->next_round_sequence = path_x->path_packet_number;
     bbr_state->round_count++;
     bbr_state->round_start = 1;
     /* Set the filled pipe indicator */
@@ -797,7 +816,6 @@ void BBRRestoreCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x)
     }
 }
 
-
 void BBRHandleProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, uint64_t bytes_in_transit, uint64_t current_time)
 {
 #if 0
@@ -812,6 +830,7 @@ void BBRHandleProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x
             current_time + BBR_PROBE_RTT_DURATION;
         bbr_state->probe_rtt_round_done = 0;
         bbr_state->next_round_delivered = path_x->delivered;
+        bbr_state->next_round_sequence = path_x->path_packet_number;
     }
     else if (bbr_state->probe_rtt_done_stamp != 0) {
         if (bbr_state->round_start) {

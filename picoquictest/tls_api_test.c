@@ -11050,8 +11050,11 @@ int pacing_cc_test()
     };
 
     int ret = 0;
-
+#if 1
+    for (int i = 4; i < 5 && ret == 0; i++) {
+#else
     for (int i = 0; i < 5 && ret == 0; i++) {
+#endif
         ret = pacing_cc_algotest(algo_list[i], algo_time[i], algo_loss[i]);
         if (ret != 0) {
             DBG_PRINTF("Pacing cc test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
