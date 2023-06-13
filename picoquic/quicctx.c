@@ -3379,7 +3379,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         if (quic->default_tp == NULL) {
             picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
             cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
-            cnx->local_parameters.enable_multipath = quic->default_multipath_option;
+            cnx->local_parameters.enable_multipath = (quic->default_multipath_option & 1) ? 1 : 0;
+            cnx->local_parameters.enable_simple_multipath = (quic->default_multipath_option & 2) ? 1 : 0;
             if (quic->default_idle_timeout != 0) {
                 cnx->local_parameters.idle_timeout = quic->default_idle_timeout;
             }
