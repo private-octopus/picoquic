@@ -556,7 +556,8 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, ui
 void BBRUpdateRTprop(picoquic_bbr_state_t* bbr_state, uint64_t rtt_sample, uint64_t current_time)
 {
     bbr_state->rt_prop_expired =
-        current_time > bbr_state->rt_prop_stamp + BBR_PROBE_RTT_INTERVAL;
+        current_time > bbr_state->rt_prop_stamp + BBR_PROBE_RTT_INTERVAL &&
+        current_time > bbr_state->rt_prop_stamp + 20 * bbr_state->rt_prop;
     if (rtt_sample <= bbr_state->rt_prop || bbr_state->rt_prop_expired) {
         bbr_state->rt_prop = rtt_sample;
         bbr_state->rt_prop_stamp = current_time;
@@ -1055,18 +1056,18 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_ecn_ec:
             /* Non standard code to react on ECN_EC */
-            /* if (lost_packet_number >= bbr_state->congestion_sequence) { */
-            /*     picoquic_bbr_notify_congestion(bbr_state, cnx, path_x, current_time, 0); */
-            /* } */
+            if (lost_packet_number >= bbr_state->congestion_sequence) {
+                picoquic_bbr_notify_congestion(bbr_state, cnx, path_x, current_time, 0);
+            }
             break;
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
             /* Non standard code to react to high rate of packet loss, or timeout loss */
-            /* if (lost_packet_number >= bbr_state->congestion_sequence && */
-            /*     picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification, lost_packet_number)) { */
-            /*     picoquic_bbr_notify_congestion(bbr_state, cnx, path_x, current_time, */
-            /*         (notification == picoquic_congestion_notification_timeout) ? 1 : 0); */
-            /* } */
+            if (lost_packet_number >= bbr_state->congestion_sequence &&
+                picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification, lost_packet_number)) {
+                picoquic_bbr_notify_congestion(bbr_state, cnx, path_x, current_time,
+                    (notification == picoquic_congestion_notification_timeout) ? 1 : 0);
+            }
             break;
         case picoquic_congestion_notification_spurious_repeat:
             break;
