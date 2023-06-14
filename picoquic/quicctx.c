@@ -2153,6 +2153,7 @@ void picoquic_refresh_path_quality_thresholds(picoquic_path_t* path_x)
         else {
             path_x->pacing_rate_threshold_low = 0;
         }
+        path_x->pacing_rate_threshold_high = path_x->pacing_rate + path_x->pacing_rate_update_delta;
         if (path_x->receive_rate_estimate > path_x->pacing_rate_update_delta) {
             path_x->receive_rate_threshold_low = path_x->receive_rate_estimate - path_x->pacing_rate_update_delta;
         }
