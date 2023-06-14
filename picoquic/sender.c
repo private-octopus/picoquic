@@ -1200,7 +1200,6 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, picoqu
                 packet->send_path = NULL;
                 packet->path_packet_number = 0;
                 packet->sequence_number = pkt_ctx->send_sequence++;
-                packet->path_packet_number = path_x->path_packet_number++;
                 picoquic_queue_for_retransmit(cnx, path_x, packet, 0, current_time);
                 *next_wake_time = current_time;
                 SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
