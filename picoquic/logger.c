@@ -32,18 +32,6 @@
 #include "tls_api.h"
 #include "picoquic_unified_log.h"
 
-static void textlog_bytes(FILE* F, uint8_t* bytes, size_t bytes_max)
-{
-    for (size_t i = 0; i < bytes_max;) {
-        fprintf(F, "%04x:  ", (int)i);
-
-        for (int j = 0; j < 16 && i < bytes_max; j++, i++) {
-            fprintf(F, "%02x ", bytes[i]);
-        }
-        fprintf(F, "\n");
-    }
-}
-
 static void textlog_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
     const char* label1, const char* label2)
 {
