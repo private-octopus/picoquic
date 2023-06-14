@@ -680,7 +680,6 @@ int test_api_callback(picoquic_cnx_t* cnx,
     {
         int ret = -1;
         if (ctx->datagram_send_fn != NULL) {
-            uint64_t unique_path_id = (cnx->are_path_callbacks_enabled) ? stream_id : 0;
             ret = ctx->datagram_send_fn(cnx, stream_id, bytes, length, ctx->datagram_ctx);
         }
         return ret;
@@ -2886,7 +2885,6 @@ int implicit_ack_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
-    int was_active = 0;
     picoquic_packet_context_enum pc[2] = { picoquic_packet_context_initial, picoquic_packet_context_handshake };
 
     if (ret == 0) {

@@ -44,15 +44,6 @@ static void textlog_bytes(FILE* F, uint8_t* bytes, size_t bytes_max)
     }
 }
 
-static void textlog_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret)
-{
-    fprintf(F, "Packet length %d caused error: %d\n", (int)bytes_max, ret);
-
-    textlog_bytes(F, bytes, bytes_max);
-
-    fprintf(F, "\n");
-}
-
 static void textlog_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
     const char* label1, const char* label2)
 {
@@ -1802,14 +1793,6 @@ static void textlog_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t*
         &ph, bytes, length, ret);
 }
 
-static void textlog_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret)
-{
-    fprintf(F, "Processed %d bytes, state = %d (%s), return %d\n\n",
-        (int)length, cnx->cnx_state,
-        textlog_state_name(cnx->cnx_state),
-        ret);
-}
-
 void picoquic_textlog_transport_extension_content(FILE* F, int log_cnxid, uint64_t cnx_id_64,
     uint8_t* bytes, size_t bytes_max)
 {
@@ -1914,27 +1897,6 @@ void picoquic_textlog_transport_extension(FILE* F, picoquic_cnx_t* cnx, int rece
     textlog_prefix_initial_cid64(F, cnx_id_64);
     fprintf(F, "%s transport parameter TLS extension (%d bytes):\n", (received) ? "Received" : "Sending", (uint32_t)bytes_max);
     picoquic_textlog_transport_extension_content(F, log_cnxid, cnx_id_64, bytes, bytes_max);
-}
-
-static void textlog_transport_ids(FILE* F, picoquic_cnx_t* cnx, int log_cnxid)
-{
-    char const* sni = picoquic_tls_get_sni(cnx);
-    char const* alpn = picoquic_tls_get_negotiated_alpn(cnx);
-    uint64_t cnx_id64 = (log_cnxid) ? picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)) : 0;
-
-    textlog_prefix_initial_cid64(F, cnx_id64);
-    if (sni == NULL) {
-        fprintf(F, "SNI not received.\n");
-    } else {
-        fprintf(F, "Received SNI: %s\n", sni);
-    }
-
-    textlog_prefix_initial_cid64(F, cnx_id64);
-    if (alpn == NULL) {
-        fprintf(F, "ALPN not received.\n");
-    } else {
-        fprintf(F, "Received ALPN: %s\n", alpn);
-    }
 }
 
 void picoquic_textlog_negotiated_alpn(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, const ptls_iovec_t* list, size_t count)
@@ -2169,28 +2131,6 @@ void picoquic_textlog_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
         textlog_prefix_initial_cid64(F, cnx_id64);
         fprintf(F, "Malformed PTLS ticket, %d extra bytes.\n", ticket_length - min_length);
     }
-}
-
-static void textlog_retry_packet_error(FILE* F, picoquic_cnx_t * cnx, char const * message)
-{
-    textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-    fprintf(F, "Retry packet rejected: %s\n", message);
-}
-
-static void textlog_path_promotion(FILE* F, picoquic_cnx_t* cnx, int path_index, uint64_t current_time)
-{
-    uint64_t cnx_id64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
-    textlog_prefix_initial_cid64(F, cnx_id64);
-    fprintf(F, "Path %d promoted to default at T=", path_index);
-    textlog_time(F, cnx, current_time, "", "\n");
-    textlog_prefix_initial_cid64(F, cnx_id64);
-    fprintf(F, "    Local address:");
-    textlog_address(F, (struct sockaddr*)& cnx->path[path_index]->local_addr);
-    fprintf(F, "\n");
-    textlog_prefix_initial_cid64(F, cnx_id64);
-    fprintf(F, "    Peer address:");
-    textlog_address(F, (struct sockaddr*) & cnx->path[path_index]->peer_addr);
-    fprintf(F, "\n");
 }
 
 /* Adding here a declaration of binlog message defined in logwriter.c,
