@@ -641,6 +641,13 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
+        TEST_METHOD(implicit_ack)
+        {
+            int ret = implicit_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(stateless_reset)
 		{
 			int ret = stateless_reset_test();

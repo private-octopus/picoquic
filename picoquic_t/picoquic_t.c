@@ -137,6 +137,7 @@ static const picoquic_test_def_t test_table[] = {
     { "tls_api_oneway_stream", tls_api_oneway_stream_test },
     { "tls_api_q_and_r_stream", tls_api_q_and_r_stream_test },
     { "tls_api_q2_and_r2_stream", tls_api_q2_and_r2_stream_test },
+    { "implicit_ack", implicit_ack_test },
     { "stateless_reset", stateless_reset_test },
     { "stateless_reset_bad", stateless_reset_bad_test },
     { "stateless_reset_client", stateless_reset_client_test },

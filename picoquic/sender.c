@@ -1196,8 +1196,9 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, picoqu
                 packet->is_ack_trap = 1;
                 packet->pc = picoquic_packet_context_application;
                 packet->ptype = picoquic_packet_1rtt_protected;
-                packet->send_path = path_x;
                 packet->send_time = current_time;
+                packet->send_path = NULL;
+                packet->path_packet_number = 0;
                 packet->sequence_number = pkt_ctx->send_sequence++;
                 picoquic_queue_for_retransmit(cnx, path_x, packet, 0, current_time);
                 *next_wake_time = current_time;
@@ -2508,7 +2509,7 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
 
     /* Remove packets from the retransmit queue */
     while (p != NULL) {
-        picoquic_packet_t* p_next = p->next_packet;
+        picoquic_packet_t* p_next = p->previous_packet;
         picoquic_path_t * old_path = p->send_path;
 
         /* Update the congestion control state for the path, but only for the packets sent

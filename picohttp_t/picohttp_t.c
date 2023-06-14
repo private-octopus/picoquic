@@ -177,7 +177,6 @@ int main(int argc, char** argv)
     int nb_test_tried = 0;
     int nb_test_failed = 0;
     int stress_clients = 0;
-    int found_exclusion = 0;
     test_status_t * test_status = (test_status_t *) calloc(nb_tests, sizeof(test_status_t));
     int opt;
     int random_seed = 0;
@@ -203,7 +202,6 @@ int main(int argc, char** argv)
                 }
                 else {
                     test_status[test_number] = test_excluded;
-                    found_exclusion = 1;
                 }
                 break;
             }

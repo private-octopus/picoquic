@@ -73,6 +73,7 @@ int tls_api_wrong_alpn_test();
 int tls_api_oneway_stream_test();
 int tls_api_q_and_r_stream_test();
 int tls_api_q2_and_r2_stream_test();
+int implicit_ack_test();
 int stateless_reset_test();
 int stateless_reset_bad_test();
 int stateless_reset_client_test();
