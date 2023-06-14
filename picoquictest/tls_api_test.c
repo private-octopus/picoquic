@@ -2876,6 +2876,54 @@ int many_short_loss_test()
     return tls_api_one_scenario_test(test_scenario_more_streams, sizeof(test_scenario_more_streams), 0, 0x882818A881288848ull, 16000, 2000, 0, 0, NULL, NULL);
 }
 
+/* Implicit ACK test: verify that the queues of initial and
+ * handshake packets are empty after reaching the ready state
+ */
+
+int implicit_ack_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    int was_active = 0;
+    picoquic_packet_context_enum pc[2] = { picoquic_packet_context_initial, picoquic_packet_context_handshake };
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    for (int i = 0; ret == 0 && i < 2; i++) {
+        if (test_ctx->cnx_client->pkt_ctx[pc[i]].retransmit_oldest != NULL) {
+            DBG_PRINTF("Retransmit queue type %d not empty on client", pc[i]);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->pkt_ctx[pc[i]].retransmit_oldest != NULL) {
+            DBG_PRINTF("Retransmit queue type %d not empty on server", pc[i]);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->pkt_ctx[pc[i]].retransmitted_oldest != NULL) {
+            DBG_PRINTF("Retransmitted queue type %d not empty on client", pc[i]);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->pkt_ctx[pc[i]].retransmit_oldest != NULL) {
+            DBG_PRINTF("Retransmitted queue type %d not empty on server", pc[i]);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 /*
  * Server reset test.
  * Establish a connection between server and client.

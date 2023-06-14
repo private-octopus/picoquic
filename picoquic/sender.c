@@ -2508,7 +2508,7 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
 
     /* Remove packets from the retransmit queue */
     while (p != NULL) {
-        picoquic_packet_t* p_next = p->next_packet;
+        picoquic_packet_t* p_next = p->previous_packet;
         picoquic_path_t * old_path = p->send_path;
 
         /* Update the congestion control state for the path, but only for the packets sent
