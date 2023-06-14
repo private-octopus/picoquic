@@ -22,3 +22,17 @@ Release
 */*.ilk
 *.b
 /picoquic/qlogger.c
+CMakeFiles/
+turbo/
+cmake_install.cmake
+CMakeCache.txt
+CTestTestfile.cmake
+DartConfiguration.tcl
+libpico*
+Makefile
+pico_baton
+picohttp_ct
+picolog_t
+picoquic_ct
+picoquic_sample
+picoquicdemo
