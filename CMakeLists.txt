@@ -97,6 +97,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sockloop.c
     picoquic/spinbit.c
     picoquic/ticket_store.c
+    picoquic/timing.c
     picoquic/token_store.c
     picoquic/tls_api.c
     picoquic/transport.c

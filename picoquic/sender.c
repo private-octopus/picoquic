@@ -1299,45 +1299,6 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
     }
 }
 
-/*
- * If a retransmit is needed, fill the packet with the required
- * retransmission. Also, prune the retransmit queue as needed.
- *
- * TODO: consider that the retransmit timer is per path, from the path on
- * which the packet was first sent, but the retransmission may be on 
- * a different path, with different MTU.
- */
-
-static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
-{
-    uint64_t rto = path_x->retransmit_timer;
-
-    rto <<= (path_x->nb_retransmit < 3) ? path_x->nb_retransmit : 2;
-
-    if (cnx->cnx_state < picoquic_state_client_ready_start) {
-        if (PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000 < cnx->local_parameters.idle_timeout) {
-            /* Special case of very long delays */
-            rto = path_x->retransmit_timer << path_x->nb_retransmit;
-            if (rto > cnx->local_parameters.idle_timeout * 100) {
-                rto = cnx->local_parameters.idle_timeout * 100;
-            }
-        } else if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
-            rto = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
-        }
-    }
-    else if (rto > PICOQUIC_LARGE_RETRANSMIT_TIMER){
-        uint64_t alt_rto = PICOQUIC_LARGE_RETRANSMIT_TIMER;
-        if (path_x->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
-            alt_rto = (path_x->smoothed_rtt * 3) >> 1;
-        }
-        if (alt_rto < rto) {
-            rto = alt_rto;
-        }
-    }
-
-    return rto;
-}
-
 /* picoquic_retransmit_needed_by_packet:
  * Answer the question, should this packet be considered lost?
  *
