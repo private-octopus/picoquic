@@ -419,16 +419,6 @@ static const uint8_t* picoquic_log_path_status_frame(FILE* f, const uint8_t* byt
     return bytes;
 }
 
-static const uint8_t* picoquic_log_path_states_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
-{
-    const uint8_t* bytes_begin = bytes;
-    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
-    bytes = picoquic_skip_path_status_frame(bytes, bytes_max); /* skip status frame */
-    picoquic_binlog_frame(f, bytes_begin, bytes);
-
-    return bytes;
-}
-
 static const uint8_t* picoquic_log_ack_frequency_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
