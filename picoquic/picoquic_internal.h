@@ -626,6 +626,7 @@ typedef struct st_picoquic_quic_t {
     uint32_t max_number_connections;
     uint64_t stateless_reset_next_time; /* Next time Stateless Reset or VN packet can be sent */
     uint64_t stateless_reset_min_interval; /* Enforced interval between two stateless reset packets */
+    uint64_t cwin_max; /* max value of cwin per connection */
     /* Flags */
     unsigned int check_token : 1;
     unsigned int force_check_token : 1;

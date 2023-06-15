@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.7.0"
+#define PICOQUIC_VERSION "1.1.8.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -587,6 +587,9 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 
 /* Set the multipath option for the context */
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option);
+
+/* set a maximum value for the congestion window (default: UINT64_MAX) */
+void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max);
 
 /* Set the idle timeout parameter for the context. Value is in milliseconds. */
 void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout);

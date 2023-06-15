@@ -318,6 +318,7 @@ static const picoquic_test_def_t test_table[] = {
     { "quality_update", quality_update_test },
     { "direct_receive", direct_receive_test },
     { "app_limit_cc", app_limit_cc_test },
+    { "cwin_max", cwin_max_test },
     { "initial_race", initial_race_test },
     { "chacha20", chacha20_test },
     { "cnx_limit", cnx_limit_test },
