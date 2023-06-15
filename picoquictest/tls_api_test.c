@@ -716,9 +716,9 @@ int test_api_callback(picoquic_cnx_t* cnx,
                 ret = picoquic_get_path_quality(cnx, unique_path_id, &quality);
                 if (ret == 0) {
                     fprintf(ctx->path_events,
-                        "%" PRIu64 ", %" PRIu64 ", %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
+                        "%" PRIu64 ", %" PRIu64 ", %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
                         current_time, stream_id, (int)fin_or_event,
-                        quality.pacing_rate, quality.cwin, quality.rtt);
+                        quality.pacing_rate, quality.receive_rate_estimate, quality.cwin, quality.rtt);
                 }
             }
             else {
@@ -732,9 +732,9 @@ int test_api_callback(picoquic_cnx_t* cnx,
             uint64_t current_time = picoquic_get_quic_time(cnx->quic);
             picoquic_get_default_path_quality(cnx, &quality);
             fprintf(ctx->default_path_update,
-                "%" PRIu64 ", %" PRIu64 ", %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
+                "%" PRIu64 ", %" PRIu64 ", %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
                 current_time, stream_id, (int)fin_or_event,
-                quality.pacing_rate, quality.cwin, quality.rtt);
+                quality.pacing_rate, quality.receive_rate_estimate, quality.cwin, quality.rtt);
         }
         return ret;
     }
@@ -10185,7 +10185,7 @@ int quality_update_test()
             ret = -1;
         }
         else {
-            fprintf(test_ctx->default_path_update, "Time, Pacing_rate_CB, Pacing_rate, CWIN, RTT\n");
+            fprintf(test_ctx->default_path_update, "Time, Path_id, Sending_rate_CB, Pacing_rate, Receive_Rate, CWIN, RTT\n");
             /* Request bandwidth updates */
             picoquic_subscribe_to_quality_update(test_ctx->cnx_client, 0x10000, 0x1000);
 

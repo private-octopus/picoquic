@@ -2154,6 +2154,13 @@ void picoquic_refresh_path_quality_thresholds(picoquic_path_t* path_x)
             path_x->pacing_rate_threshold_low = 0;
         }
         path_x->pacing_rate_threshold_high = path_x->pacing_rate + path_x->pacing_rate_update_delta;
+        if (path_x->receive_rate_estimate > path_x->pacing_rate_update_delta) {
+            path_x->receive_rate_threshold_low = path_x->receive_rate_estimate - path_x->pacing_rate_update_delta;
+        }
+        else {
+            path_x->receive_rate_threshold_low = 0;
+        }
+        path_x->receive_rate_threshold_high = path_x->receive_rate_estimate + path_x->pacing_rate_update_delta;
     }
 }
 
@@ -2166,7 +2173,9 @@ int picoquic_issue_path_quality_update(picoquic_cnx_t* cnx, picoquic_path_t* pat
         path_x->smoothed_rtt > path_x->rtt_threshold_high)) ||
         (path_x->pacing_rate_update_delta > 0 && (
             path_x->pacing_rate < path_x->pacing_rate_threshold_low ||
-            path_x->pacing_rate > path_x->pacing_rate_threshold_high))) {
+            path_x->pacing_rate > path_x->pacing_rate_threshold_high ||
+            path_x->receive_rate_estimate < path_x->receive_rate_threshold_low ||
+            path_x->receive_rate_estimate > path_x->receive_rate_threshold_high))) {
         picoquic_refresh_path_quality_thresholds(path_x);
         ret = cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_quality_changed, cnx->callback_ctx, NULL);
     }
@@ -2179,8 +2188,10 @@ static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, pico
     quality->cwin = path_x->cwin;
     quality->rtt = path_x->smoothed_rtt;
     quality->rtt_min = path_x->rtt_min;
+    quality->rtt_max = path_x->rtt_max;
     quality->rtt_variant = path_x->rtt_variant;
     quality->pacing_rate = path_x->pacing_rate;
+    quality->receive_rate_estimate = path_x->receive_rate_estimate;
     quality->sent = path_x->path_packet_number;
     quality->lost = path_x->lost;
     quality->bytes_in_transit = path_x->bytes_in_transit;

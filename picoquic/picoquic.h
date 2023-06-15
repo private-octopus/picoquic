@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.6.1"
+#define PICOQUIC_VERSION "1.1.7.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -758,34 +758,7 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * maintain path data in an app specific context, it will use a call to
  * "picoquic_set_app_path_ctx" to document it. The path created during
  * the connection setup has the unique_path_id 0.
- * 
- * The calls to picoquic_get_path_quality takes as argument a structure 
- * with the following members:
- *  - pacing_rate: bytes per second.
- *  - cwin: number of bytes
- *  - rtt: smoothed estimate of roundtrip time in micros seconds
- *  - rtt_min: minimum value of RTT, computed since path creation
- *  - rtt_variant: estimate of RTT variability
- *  - sent: number of packets sent on the path
- *  - lost: number of packets considered lost among those sent.
- *  - bytes_in_transit: number of bytes currently in transit.
- * The same structure is documented in the "bytes" and "length"
- * parameter of the picoquic_callback_path_quality_changed callbacks,
- * with the bytes parameter pointing to the structure, and the length
- * indicating the structure length.
- * 
- * The call to picoquic_get_default_path_quality uses the same
- * structure, but only reports the parameters for the "default" path.
- * This is suitable for applications that do not use multipath.
- * 
- * The quality changed callback only happens if the application
- * subscribes to it using "picoquic_subscribe_to_quality_update" API
- * for the connection, or "picoquic_subscribe_to_quality_update" API
- * for a specific path, setting the "change" thresholds
- * for the datarate and the rtt. 
- * The function call "picoquic_default_quality_update"
- * can be used to set the default values of these parameters in
- * the quic context.
+ 
  * 
  * If an error occurs, such as reference to an obsolete unique path id,
  * all the functions return -1.
@@ -798,17 +771,6 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * connection data harder in case of NAT traversal.
  */
 
-typedef struct st_picoquic_path_quality_t {
-    uint64_t pacing_rate;
-    uint64_t cwin;
-    uint64_t rtt;
-    uint64_t rtt_variant;
-    uint64_t rtt_min;
-    uint64_t sent;
-    uint64_t lost;
-    uint64_t bytes_in_transit;
-} picoquic_path_quality_t;
-
 int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
     const struct sockaddr* addr_to, uint64_t current_time);
 int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
@@ -817,14 +779,52 @@ void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
 void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
 int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
 int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason, char const* phrase);
+int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
+int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
+
+/*
+* The calls to picoquic_get_path_quality takes as argument a structure
+* of type `picoquic_path_quality_t`.
+* 
+* The call to picoquic_get_default_path_quality uses the same
+* structure, but only reports the parameters for the "default" path.
+* This is suitable for applications that do not use multipath.
+* 
+* The application can call `picoquic_get_path_quality` or 
+* `picoquic_get_default_path_quality` at any time. The application can
+* also subscribe to the `quality change` callback, and only call
+* the path quality API after the callback signalled a path
+* qualiy change.
+* 
+* The application subscribes to the path quality update
+* using "picoquic_subscribe_to_quality_update" API
+* for the connection, or "picoquic_subscribe_to_quality_update" API
+* for a specific path, setting the "change" thresholds
+* for the datarate and the rtt. 
+* The function call "picoquic_default_quality_update"
+* can be used to set the default values of these parameters in
+* the quic context.
+*/
+
+typedef struct st_picoquic_path_quality_t {
+    uint64_t receive_rate_estimate; /* In bytes per second */
+    uint64_t pacing_rate; /* bytes per second */
+    uint64_t cwin; /* number of bytes in congestion window */
+    uint64_t rtt; /* smoothed estimate of roundtrip time in micros seconds */
+    uint64_t rtt_variant; /* estimate of RTT variability */
+    uint64_t rtt_min; /* minimum value of RTT, computed since path creation */
+    uint64_t rtt_max; /* maximum value of RTT, computed since path creation */
+    uint64_t sent; /* number of packets sent on the path */
+    uint64_t lost; /* number of packets considered lost among those sent */
+    uint64_t bytes_in_transit; /* number of bytes currently in transit */
+} picoquic_path_quality_t;
+
 int picoquic_get_path_quality(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_quality_t * quality);
 void picoquic_get_default_path_quality(picoquic_cnx_t* cnx, picoquic_path_quality_t* quality);
 int picoquic_subscribe_to_quality_update_per_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint64_t pacing_rate_delta, uint64_t rtt_delta);
 void picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t pacing_rate_delta, uint64_t rtt_delta);
 void picoquic_default_quality_update(picoquic_quic_t* quic, uint64_t pacing_rate_delta, uint64_t rtt_delta);
-int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
-int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 
 /* Connection management API.
  * TODO: many of these API should be deprecated. They were created when we

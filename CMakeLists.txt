@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.6.1
+        VERSION 1.1.7.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -97,6 +97,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sockloop.c
     picoquic/spinbit.c
     picoquic/ticket_store.c
+    picoquic/timing.c
     picoquic/token_store.c
     picoquic/tls_api.c
     picoquic/transport.c

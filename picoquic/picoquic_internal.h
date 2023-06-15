@@ -1045,6 +1045,7 @@ typedef struct st_picoquic_path_t {
     uint64_t rtt_variant;
     uint64_t retransmit_timer;
     uint64_t rtt_min;
+    uint64_t rtt_max;
     uint64_t max_spurious_rtt;
     uint64_t max_reorder_delay;
     uint64_t max_reorder_gap;
@@ -1139,6 +1140,8 @@ typedef struct st_picoquic_path_t {
     uint64_t rtt_threshold_high;
     uint64_t pacing_rate_threshold_low;
     uint64_t pacing_rate_threshold_high;
+    uint64_t receive_rate_threshold_low;
+    uint64_t receive_rate_threshold_high;
 
     /* BDP parameters sent by the server to be stored at client */
     uint64_t rtt_min_remote;
@@ -1708,6 +1711,9 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
 /* seed the rtt and bandwidth discovery */
 void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwin,
     const uint8_t* ip_addr, uint8_t ip_addr_length);
+
+/* Management of timers, rtt, etc. */
+uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 /* Update the path RTT upon receiving an explict or implicit acknowledgement */
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, picoquic_path_t* path_x,

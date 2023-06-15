@@ -476,7 +476,7 @@ int multipath_init_callbacks(picoquic_test_tls_api_ctx_t* test_ctx, multipath_te
             fprintf(test_ctx->path_events, "Time, Path-ID, Event,\n");
         }
         else {
-            fprintf(test_ctx->path_events, "Time, Path-ID, Event, Pacing_rate, CWIN, RTT\n");
+            fprintf(test_ctx->path_events, "Time, Path-ID, Event, Pacing_rate, Receive Rate, CWIN, RTT\n");
         }
     }
     return ret;
