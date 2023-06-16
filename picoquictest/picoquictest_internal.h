@@ -318,6 +318,8 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
 
 void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned);
 
+uint64_t picoquic_sqrt_for_tests(uint64_t y);
+
 #ifdef __cplusplus
 }
 #endif
