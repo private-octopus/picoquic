@@ -160,6 +160,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sqrt_for_test)
+        {
+            int ret = sqrt_for_test_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_sack)
         {
             int ret = sacktest();

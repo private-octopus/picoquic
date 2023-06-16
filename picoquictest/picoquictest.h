@@ -94,6 +94,7 @@ int tls_api_two_connections_test();
 int cleartext_aead_test();
 int tls_api_multiple_versions_test();
 int varint_test();
+int sqrt_for_test_test();
 int tls_api_client_losses_test();
 int tls_api_server_losses_test();
 int skip_frame_test();

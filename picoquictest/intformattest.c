@@ -323,3 +323,63 @@ int varint_test()
  
     return ret;
 }
+
+/* Simple implementation of SQRT using UINT64, so we do not have to link 
+ * the math library
+ */
+
+uint64_t picoquic_sqrt_for_tests(uint64_t y)
+{
+    const uint64_t sqrt_6[16] = { 0, 1, 1, 1, 2, 2 };
+    uint64_t x = 0;
+    if (y < 6) {
+        x = sqrt_6[y];
+    }
+    else {
+        uint64_t x_min = 2;
+        uint64_t x_max = ((y / 2) > 0xffffffff) ? 0xffffffff : y / 2;
+        uint64_t x_min_2 = x_min * x_min;
+        uint64_t x_max_2 = x_max * x_max;
+
+        for (int i = 0; i < 64; i++) {
+            uint64_t x2;
+            x = (x_min + x_max) / 2;
+            if (x_min + 1 >= x_max) {
+                break;
+            }
+            x2 = x * x;
+            if (x2 < y) {
+                x_min = x;
+            }
+            else if (x2 > y) {
+                x_max = x;
+            }
+            else
+            {
+                x_min = x;
+                x_max = x;
+                break;
+            }
+        }
+    }
+    return x;
+}
+
+int sqrt_for_test_test()
+{
+    int ret = 0;
+    uint64_t x_base = 0;
+
+    while (x_base < 0xffffffff && ret == 0) {
+        for (uint64_t i = 0; i < 2; i++) {
+            uint64_t y = x_base * (x_base+i);
+            uint64_t x = picoquic_sqrt_for_tests(y);
+            if (x != x_base) {
+                ret = -1;
+                break;
+            }
+        }
+        x_base = 2 * x_base + 1;
+    }
+    return ret;
+}
