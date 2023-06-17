@@ -629,6 +629,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         quic->stateless_reset_next_time = current_time;
         quic->stateless_reset_min_interval = PICOQUIC_MICROSEC_STATELESS_RESET_INTERVAL_DEFAULT;
         quic->default_stream_priority = PICOQUIC_DEFAULT_STREAM_PRIORITY;
+        quic->cwin_max = UINT64_MAX;
 
         quic->random_initial = 1;
         picoquic_wake_list_init(quic);
@@ -787,6 +788,11 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
             quic->default_tp->enable_simple_multipath = 1;
         }
     }
+}
+
+void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max)
+{
+    quic->cwin_max = (cwin_max == 0) ? UINT64_MAX : cwin_max;
 }
 
 void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout)
