@@ -357,7 +357,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     add_test(NAME picoquic_ct
              COMMAND picoquic_ct -S ${PROJECT_SOURCE_DIR} -n -r)
     add_test(NAME picohttp_ct
-             COMMAND picohttp_ct -S ${PROJECT_SOURCE_DIR} -n -r -x http_corrupt -x http_corrupt_rpdn)
+             COMMAND picohttp_ct -S ${PROJECT_SOURCE_DIR} -n -r -x http_corrupt -x http_corrupt_rdpn)
 endif()
 
 # get all project files for formatting
