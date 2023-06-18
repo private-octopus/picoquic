@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:M:e:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:M:e:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:h";
 
 int config_option_letters_test()
 {
@@ -66,6 +66,7 @@ static picoquic_quic_config_t param1 = {
     3,
     "127.0.0.1",
     1,
+    UINT64_MAX, /* Do not limit CWIN */
     /* Common flags */
     1, /* unsigned int initial_random : 1; */
     1, /* unsigned int use_long_log : 1; */
@@ -146,6 +147,7 @@ static picoquic_quic_config_t param2 = {
     0,
     "127.0.0.1",
     0,
+    1000000, /* Limit CWIN to 1 million bytes */
     /* Common flags */
     3, /* unsigned int initial_random : 1; */
     0, /* unsigned int use_long_log : 1; */
@@ -191,6 +193,7 @@ static const char* config_argv2[] = {
     "-T", "/data/tickets.bin",
     "-N", "/data/tokens.bin",
     "-U", "00000002",
+    "-W", "1000000",
     NULL
 };
 
@@ -226,7 +229,16 @@ int config_test_compare_int(const char* title, int expected, int actual)
     return ret;
 }
 
+int config_test_compare_uint64(const char* title, uint64_t expected, uint64_t actual)
+{
+    int ret = 0;
 
+    if (expected != actual) {
+        DBG_PRINTF("Expected %s = %" PRIu64 ", got %" PRIu64, title, actual, expected);
+        ret = -1;
+    }
+    return ret;
+}
 
 int config_test_compare_uint32(const char* title, uint32_t expected, uint32_t actual)
 {
@@ -281,7 +293,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_int("cnx_id_length", expected->cnx_id_length, actual->cnx_id_length);
     ret |= config_test_compare_int("bdp", expected->bdp_frame_option, actual->bdp_frame_option);
     ret |= config_test_compare_int("idle_timeout", expected->idle_timeout, actual->idle_timeout);
-
+    ret |= config_test_compare_uint64("cwin_max", expected->cwin_max, actual->cwin_max);
     return ret;
 }
 
