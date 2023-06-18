@@ -1048,7 +1048,7 @@ int multipath_abandon_test()
  */
 int multipath_back1_test()
 {
-    uint64_t max_completion_microsec = 3200000;
+    uint64_t max_completion_microsec = 3000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_back1, 0);
 }
@@ -1063,14 +1063,14 @@ int multipath_perf_test()
 
 int multipath_callback_test()
 {
-    uint64_t max_completion_microsec = 1060000;
+    uint64_t max_completion_microsec = 1000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_callback, 0);
 }
 
 int multipath_quality_test()
 {
-    uint64_t max_completion_microsec = 1060000;
+    uint64_t max_completion_microsec = 1000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_quality, 0);
 }
@@ -1596,8 +1596,8 @@ int simple_multipath_abandon_test()
 
 int simple_multipath_back1_test()
 {
-    /* Slightly better than 3.2 sec in full multipath test */
-    uint64_t max_completion_microsec = 3050000;
+    /* Similar to full multipath test */
+    uint64_t max_completion_microsec = 3000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_back1, 1);
 }
@@ -1605,15 +1605,15 @@ int simple_multipath_back1_test()
 int simple_multipath_perf_test()
 {
     /* Compares with 1.25 sec for full multipath */
-    uint64_t max_completion_microsec = 1550000;
+    uint64_t max_completion_microsec = 1400000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
 }
 
 int simple_multipath_quality_test()
 {
-    /* Compares with 1.25 sec for full multipath */
-    uint64_t max_completion_microsec = 1500000;
+    /* Compares with full multipath */
+    uint64_t max_completion_microsec = 1000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_quality_server, 1);
 }
