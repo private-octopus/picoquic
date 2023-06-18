@@ -39,7 +39,6 @@ jobs:
             make test && QUICRESULT=$?
             cd ..
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
-            cd build
             exit 1
             
       #TODO: reset the test once openssl issue is understood.
