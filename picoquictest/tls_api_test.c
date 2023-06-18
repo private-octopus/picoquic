@@ -2756,8 +2756,9 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
         uint64_t completion_time = close_time - test_ctx->cnx_client->start_time;
         if (completion_time > max_completion_microsec)
         {
-            DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n",
-                (unsigned long long)completion_time, (unsigned long long)max_completion_microsec);
+            DBG_PRINTF("Scenario completes in %llu microsec, more than %llu, %llu losses, %llu spurious\n",
+                (unsigned long long)completion_time, (unsigned long long)max_completion_microsec,
+                test_ctx->cnx_server->nb_retransmission_total, test_ctx->cnx_server->nb_spurious);
              ret = -1;
         }
     }
@@ -4510,11 +4511,11 @@ int mtu_drop_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        13000000,
-        11500000,
-        10500000,
+        12500000,
+        10700000,
+        10000000,
         11000000,
-        10700000
+        10600000
     };
     int ret = 0;
 
