@@ -2726,7 +2726,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 bytes_next = bytes + length;
                 bytes_max = bytes + send_buffer_max - checksum_overhead;
 
-                if ((tls_ready == 0 || path_x->cwin <= path_x->bytes_in_transit)
+                if ((tls_ready == 0 || path_x->cwin <= path_x->bytes_in_transit || cnx->quic->cwin_max <= path_x->bytes_in_transit)
                     && (cnx->cnx_state == picoquic_state_client_almost_ready
                         || picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc, 0) == 0)
                     && cnx->first_misc_frame == NULL && !force_handshake_padding) {
@@ -2753,7 +2753,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
                     length = bytes_next - bytes;
 
-                    if (ret == 0 && path_x->cwin > path_x->bytes_in_transit) {
+                    if (ret == 0 && path_x->cwin > path_x->bytes_in_transit && cnx->quic->cwin_max > path_x->bytes_in_transit) {
                         /* Encode the crypto handshake frame */
                         if (tls_ready != 0) {
                             /* Encode the crypto frame */
@@ -2939,7 +2939,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         packet->pc = pc;
         bytes_next = bytes + length;
 
-        if ((tls_ready != 0 && path_x->cwin > path_x->bytes_in_transit) 
+        if ((tls_ready != 0 && path_x->cwin > path_x->bytes_in_transit && cnx->quic->cwin_max > path_x->bytes_in_transit) 
             || cnx->ack_ctx[pc].act[0].ack_needed) {
             bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 0);
             /* Encode the crypto frame */
@@ -3716,7 +3716,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     } /* end of PMTU not required */
 
                     if (ret == 0 && length <= header_length 
-                        && path_x->cwin > path_x->bytes_in_transit && pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
+                        && path_x->cwin > path_x->bytes_in_transit && cnx->quic->cwin_max > path_x->bytes_in_transit
+                        && pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
                         if (send_buffer_max > path_x->send_mtu) {
                             /* Since there is no data to send, this is an opportunity to send an MTU probe */
                             length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes, send_buffer_max);
@@ -4013,7 +4014,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 /* Compute the length before entering the CC block */
                 length = bytes_next - bytes;
 
-                if (path_x->cwin < path_x->bytes_in_transit && !path_x->is_pto_required) {
+                if ((path_x->cwin < path_x->bytes_in_transit || cnx->quic->cwin_max < path_x->bytes_in_transit) &&!path_x->is_pto_required) {
                     cnx->cwin_blocked = 1;
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(cnx, path_x,
@@ -4150,7 +4151,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
                     if (ret == 0 && length <= header_length) {
                         if (send_buffer_max > path_x->send_mtu
-                            && path_x->cwin > path_x->bytes_in_transit && pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
+                            && path_x->cwin > path_x->bytes_in_transit 
+                            && cnx->quic->cwin_max > path_x->bytes_in_transit
+                            && pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
                             /* Since there is no data to send, this is an opportunity to send an MTU probe */
                             length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes, send_buffer_max);
                             packet->length = length;
@@ -4537,7 +4540,8 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                                 is_min_rtt_pacing_ok = 1;
                             }
                         }
-                        if (cnx->path[i]->bytes_in_transit < cnx->path[i]->cwin) {
+                        if (cnx->path[i]->bytes_in_transit < cnx->path[i]->cwin &&
+                            cnx->path[i]->bytes_in_transit <  cnx->quic->cwin_max) {
                             if (cnx->path[i]->last_sent_time < last_sent_cwin) {
                                 last_sent_cwin = cnx->path[i]->last_sent_time;
                                 data_path_cwin = i;

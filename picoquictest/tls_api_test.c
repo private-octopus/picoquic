@@ -10429,6 +10429,152 @@ int app_limit_cc_test()
     return ret;
 }
 
+/* Test the effectiveness of the CWIN MAX option
+ */
+
+#define CWIN_MAX_TRACE_CSV "cwin_max_trace.csv"
+#define CWIN_MAX_TRACE_BIN "c9149a0102030405.server.log"
+
+int cwin_max_test_one(
+    picoquic_congestion_algorithm_t* ccalgo, uint64_t cwin_limit, uint64_t max_completion_time)
+{
+    uint64_t simulated_time = 0;
+    uint64_t latency = 300000;
+    uint64_t picoseq_per_byte_1 = (1000000ull * 8) / 100;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t client_parameters;
+    picoquic_connection_id_t initial_cid = { {0xc9, 0x14, 0x9a, 1, 2, 3, 4, 5}, 8 };
+    int ret = 0;
+
+    (void)picoquic_file_delete(APP_LIMIT_TRACE_BIN, NULL);
+
+    memset(&client_parameters, 0, sizeof(picoquic_tp_t));
+    picoquic_init_transport_parameters(&client_parameters, 1);
+
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters,
+        NULL, &initial_cid, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
+        picoquic_set_cwin_max(test_ctx->qserver, 0x10000);
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+        test_ctx->cnx_client->is_flow_control_limited = 1;
+
+        test_ctx->c_to_s_link->jitter = 0;
+        test_ctx->c_to_s_link->microsec_latency = latency;
+        test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_1;
+        test_ctx->s_to_c_link->microsec_latency = latency;
+        test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_1;
+        test_ctx->s_to_c_link->jitter = 0;
+
+        if (ret == 0) {
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 2 * latency, max_completion_time);
+        }
+    }
+
+    /* Free the resource, which will close the log file.
+    */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    /* Create a CSV file from the .bin log file */
+    if (ret == 0) {
+        ret = picoquic_cc_log_file_to_csv(CWIN_MAX_TRACE_BIN, CWIN_MAX_TRACE_CSV);
+    }
+
+    /* Compute the max CWIN from the trace file */
+    if (ret == 0)
+    {
+        FILE* F = picoquic_file_open(CWIN_MAX_TRACE_CSV, "r");
+        uint64_t bytes_in_flight_max = 0;
+
+        if (F == NULL) {
+            DBG_PRINTF("Cannot open <%s>", CWIN_MAX_TRACE_CSV);
+            ret = -1;
+        }
+        else {
+            char buffer[512];
+            uint64_t bytes_in_flight_max = 0;
+
+            while (fgets(buffer, 512, F) != NULL) {
+                /* only consider number lines line */
+                if (buffer[0] >= '0' && buffer[0] <= '9') {
+                    uint64_t bytes_in_flight = 0;
+                    int nb_comma = 0;
+                    int c_index = 0;
+
+                    while (nb_comma < 23 && c_index < 512 && buffer[c_index] != 0) {
+                        if (buffer[c_index] == ',') {
+                            nb_comma++;
+                        }
+                        c_index++;
+                    }
+                    while (c_index < 512 && buffer[c_index] == ' ') {
+                        c_index++;
+                    }
+                    while (c_index < 512 && buffer[c_index] >= '0' && buffer[c_index] <= '9') {
+                        bytes_in_flight *= 10;
+                        bytes_in_flight += (uint64_t)buffer[c_index] - '0';
+                        c_index++;
+                    }
+                    if (bytes_in_flight > bytes_in_flight_max) {
+                        bytes_in_flight_max = bytes_in_flight;
+                    }
+                }
+            }
+
+            (void)picoquic_file_close(F);
+
+            if (bytes_in_flight_max > cwin_limit) {
+                DBG_PRINTF("MAX In Flight = %" PRIu64 ", larger than %" PRIu64, bytes_in_flight_max, cwin_limit);
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
+}
+
+int cwin_max_test()
+{
+    picoquic_congestion_algorithm_t* ccalgos[] = {
+        picoquic_newreno_algorithm,
+        picoquic_cubic_algorithm,
+        picoquic_dcubic_algorithm,
+        picoquic_bbr_algorithm,
+        picoquic_fastcc_algorithm };
+    uint64_t max_completion_times[] = {
+        11000000,
+        12000000,
+        11000000,
+        11000000,
+        13000000 };
+    int ret = 0;
+
+    for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
+        ret = cwin_max_test_one(ccalgos[i], 68000, max_completion_times[i]);
+        if (ret != 0) {
+            DBG_PRINTF("CWIN Max test fails for <%s>", ccalgos[i]->congestion_algorithm_id);
+            break;
+        }
+    }
+
+    return ret;
+}
+
+
+
 /* Initial race condition.
 * What happens if the client immediately repeats the Initial packet?
 */
