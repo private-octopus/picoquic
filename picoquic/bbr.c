@@ -1069,7 +1069,7 @@ static void picoquic_bbr_notify(
             bbr_state->bytes_delivered += nb_bytes_acknowledged;
             break;
         case picoquic_congestion_notification_ecn_ec:
-            if (bbr_state == picoquic_bbr_alg_probe_bw) {
+            if (bbr_state->state == picoquic_bbr_alg_probe_bw) {
                 bbr_state->ecn_count += 1;
             }
             break;
