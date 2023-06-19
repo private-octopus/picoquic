@@ -267,6 +267,7 @@ typedef struct st_picoquic_bbr_state_t {
     unsigned int cycle_on_loss : 1;
 
     unsigned int ecn_count;
+    unsigned int previous_ecn_count;
     double ecn_gain;
 } picoquic_bbr_state_t;
 
@@ -348,6 +349,7 @@ static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t*
     bbr_state->cycle_index = 0;
     bbr_state->cycle_start = 0;
     bbr_state->ecn_count = 0;
+    bbr_state->previous_ecn_count = 0;
 
     BBREnterStartup(bbr_state);
     BBRSetSendQuantum(bbr_state, path_x);
@@ -668,7 +670,8 @@ void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, u
     bbr_state->pacing_gain = 1.0;
     bbr_state->cwnd_gain = 2.0;
     
-    if (bbr_state->ecn_count > 0) {
+    printf("previous ecn count %u\n", bbr_state->previous_ecn_count);
+    if (bbr_state->previous_ecn_count > 0) {
         bbr_state->ecn_gain = 0.8;
     }else
     {
@@ -775,6 +778,7 @@ void BBREnterProbeRTT(picoquic_bbr_state_t* bbr_state)
     bbr_state->state = picoquic_bbr_alg_probe_rtt;
     bbr_state->pacing_gain = 1.0;
     bbr_state->cwnd_gain = 1.0;
+    bbr_state->previous_ecn_count = bbr_state->ecn_count;
     bbr_state->ecn_count= 0;
 }
 
