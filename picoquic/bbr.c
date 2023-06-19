@@ -674,7 +674,7 @@ void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, u
     {
         bbr_state->ecn_gain = 1.0;
     }
-    printf("ecn_gain:%f", bbr_state->ecn_gain);
+    printf("ecn_gain:%f\n", bbr_state->ecn_gain);
 
     bbr_state->pacing_gain = bbr_state->pacing_gain * bbr_state->ecn_gain;
     bbr_state->cwnd_gain = bbr_state->cwnd_gain * bbr_state->ecn_gain;
