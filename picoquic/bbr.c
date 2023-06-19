@@ -266,6 +266,8 @@ typedef struct st_picoquic_bbr_state_t {
     unsigned int last_loss_was_timeout : 1;
     unsigned int cycle_on_loss : 1;
 
+    unsigned int ecn_count;
+    double ecn_gain;
 } picoquic_bbr_state_t;
 
 void BBRltbwSampling(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
@@ -345,6 +347,7 @@ static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t*
     bbr_state->cycle_stamp = current_time;
     bbr_state->cycle_index = 0;
     bbr_state->cycle_start = 0;
+    bbr_state->ecn_count = 0;
 
     BBREnterStartup(bbr_state);
     BBRSetSendQuantum(bbr_state, path_x);
@@ -664,6 +667,17 @@ void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, u
     bbr_state->state = picoquic_bbr_alg_probe_bw;
     bbr_state->pacing_gain = 1.0;
     bbr_state->cwnd_gain = 2.0;
+    
+    if (bbr_state->ecn_count > 0) {
+        bbr_state->ecn_gain = 0.8;
+    }else
+    {
+        bbr_state->ecn_gain = 1.0;
+    }
+    printf("ecn_gain:%f", bbr_state->ecn_gain);
+
+    bbr_state->pacing_gain = bbr_state->pacing_gain * bbr_state->ecn_gain;
+    bbr_state->cwnd_gain = bbr_state->cwnd_gain * bbr_state->ecn_gain;
 
     if (bbr_state->rt_prop > PICOQUIC_TARGET_RENO_RTT) {
         uint64_t ref_rt = (bbr_state->rt_prop > PICOQUIC_TARGET_SATELLITE_RTT) ? PICOQUIC_TARGET_SATELLITE_RTT : bbr_state->rt_prop;
@@ -761,6 +775,7 @@ void BBREnterProbeRTT(picoquic_bbr_state_t* bbr_state)
     bbr_state->state = picoquic_bbr_alg_probe_rtt;
     bbr_state->pacing_gain = 1.0;
     bbr_state->cwnd_gain = 1.0;
+    bbr_state->ecn_count= 0;
 }
 
 void BBRExitProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
@@ -1054,10 +1069,9 @@ static void picoquic_bbr_notify(
             bbr_state->bytes_delivered += nb_bytes_acknowledged;
             break;
         case picoquic_congestion_notification_ecn_ec:
-            /* Non standard code to react on ECN_EC */
-            /* if (lost_packet_number >= bbr_state->congestion_sequence) { */
-            /*     picoquic_bbr_notify_congestion(bbr_state, cnx, path_x, current_time, 0); */
-            /* } */
+            if (bbr_state == picoquic_bbr_alg_probe_bw) {
+                bbr_state->ecn_count += 1;
+            }
             break;
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
