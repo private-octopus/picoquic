@@ -3030,10 +3030,15 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
         }
     }
 
-    /* verify that the global execution time makes sense */
-    if (ret == 0 && simulated_time > 240000000ull + 1000000ull * nb_stress_clients) {
-        DBG_PRINTF("Taking %llu microseconds for %d clients!", (unsigned long long)simulated_time, (int)nb_stress_clients);
-        ret = -1;
+    if (!do_corrupt) {
+        /* verify that the global execution time makes sense,
+        * but only if we are not fuzzing, since fuzzing likely
+        * will cause instances of idle timers on clients or
+        * servers. */
+        if (ret == 0 && simulated_time > 240000000ull + 1000000ull * nb_stress_clients) {
+            DBG_PRINTF("Taking %llu microseconds for %d clients!", (unsigned long long)simulated_time, (int)nb_stress_clients);
+            ret = -1;
+        }
     }
 
     /* clean up */
