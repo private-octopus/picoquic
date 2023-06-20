@@ -3440,9 +3440,9 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
         }
         if (ecnx3[2] > pkt_ctx->ecn_ce_total_remote) {
             pkt_ctx->ecn_ce_total_remote = ecnx3[2];
-            cnx->congestion_alg->alg_notify(cnx, ack_path,
-                picoquic_congestion_notification_ecn_ec,
-                0, 0, 0, largest_in_path, current_time);
+            /* cnx->congestion_alg->alg_notify(cnx, ack_path, */
+            /*     picoquic_congestion_notification_ecn_ec, */
+            /*     0, 0, 0, largest_in_path, current_time); */
         }
     }
 
