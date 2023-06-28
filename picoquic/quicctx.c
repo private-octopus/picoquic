@@ -795,6 +795,11 @@ void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max)
     quic->cwin_max = (cwin_max == 0) ? UINT64_MAX : cwin_max;
 }
 
+void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data)
+{
+    quic->max_data_limit = max_data;
+}
+
 void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout)
 {
     quic->default_idle_timeout = idle_timeout;
@@ -2736,6 +2741,11 @@ picoquic_stream_data_node_t* picoquic_stream_data_node_alloc(picoquic_quic_t* qu
             memset(stream_data, 0, sizeof(picoquic_stream_data_node_t));
             stream_data->quic = quic;
             quic->nb_data_nodes_allocated++;
+#if 1
+            if (quic->nb_data_nodes_allocated > quic->nb_data_nodes_allocated_max) {
+                quic->nb_data_nodes_allocated_max = quic->nb_data_nodes_allocated;
+            }
+#endif
         }
     }
     else {
@@ -3479,7 +3489,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->callback_ctx = quic->default_callback_ctx;
         cnx->congestion_alg = quic->default_congestion_alg;
         cnx->is_preemptive_repeat_enabled = quic->is_preemptive_repeat_enabled;
-        cnx->is_flow_control_limited = quic->is_flow_control_limited;
 
         /* Initialize key rotation interval to default value */
         cnx->crypto_epoch_length_max = quic->crypto_epoch_length_max;

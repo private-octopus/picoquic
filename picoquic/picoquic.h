@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.8.1"
+#define PICOQUIC_VERSION "1.1.9.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -588,8 +588,41 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 /* Set the multipath option for the context */
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option);
 
-/* set a maximum value for the congestion window (default: UINT64_MAX) */
+/** picoquic_set_cwin_max:
+ * Set a maximum value for the congestion window (default: UINT64_MAX)
+ * This option can be used to limit the amount of memory that the sender
+ * will use to manage packet transmission. The main part of that memory
+ * is the queue of packets not yet acknowledged, which size is mostly
+ * similar to "cwin_max". Other components include the queue of packets
+ * that have already been declared lost, and temporary copies of
+ * data waiting to be resent. The copies of packets are kept for some time
+ * in case the loss was "spurious"; the size of that queue is a fraction
+ * of "cwin_max". The temporary copies of data are kept until data can
+ * be sent, which is nor mally a very short delay but can become
+ * longer if the congestion window shrunk after losses were detected.
+ * 
+ * This control is imperfect, because the maximum packet size is always
+ * reserved for each packet.
+ * 
+ * The CWIN value is normally limited by the congestion control algorithm.
+ * The "cwin_max" limit only licks in if the congestion control
+ * algorithm would have authorized a larger value.
+ */
 void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max);
+
+/* picoquic_set_max_data_limit: 
+* set a maximum value for the "max data" option, thus limiting the
+* amount of data that the peer will be able to send before data is
+* acknowledged.
+* This option can be used to control the amount of memory that the
+* receiver will use to reorder received data frames. This control is
+* indirect: the receiver always allocate a full packet size for incoming
+* packets, even if they are small. In tests, we see the allocated memory
+* per connection vary between 2 and 3 times the max data value.
+* Setting the value to 0 (default) means that the "max data" limit
+* will rapidly increase to let transmission proceed quickly.
+*/
+void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data);
 
 /* Set the idle timeout parameter for the context. Value is in milliseconds. */
 void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout);

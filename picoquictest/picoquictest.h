@@ -226,6 +226,7 @@ int cubic_jitter_test();
 int satellite_basic_test();
 int satellite_seeded_test();
 int satellite_loss_test();
+int satellite_loss_fc_test();
 int satellite_jitter_test();
 int satellite_medium_test();
 int satellite_preemptive_test();

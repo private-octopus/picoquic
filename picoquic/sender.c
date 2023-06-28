@@ -271,7 +271,7 @@ int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t
     size_t consumed = 0;
     picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
 
-    if (cnx->cnx_state == picoquic_state_ready && !cnx->is_flow_control_limited){
+    if (cnx->cnx_state == picoquic_state_ready && cnx->quic->max_data_limit == 0){
         /* Only send the update in ready state, so that the misc frame is not picked by the
          * wrong transport context.
          * TODO: find way to queue the update so it is only sent as 0RTT or 1RTT packet.
@@ -456,6 +456,11 @@ picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic)
         packet = (picoquic_packet_t*)malloc(sizeof(picoquic_packet_t));
         if (packet != NULL) {
             quic->nb_packets_allocated++;
+#if 1
+            if (quic->nb_packets_allocated > quic->nb_packets_allocated_max) {
+                quic->nb_packets_allocated_max = quic->nb_packets_allocated;
+            }
+#endif
         }
     }
     else {
@@ -1125,7 +1130,7 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
     if (should_free || p->is_ack_trap) {
         picoquic_recycle_packet(cnx->quic, p);
         p = NULL;
-    }
+    } 
     else {
         p->next_packet = NULL;
         /* add this packet to the retransmitted list */
@@ -1139,6 +1144,7 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
             p->previous_packet = pkt_ctx->retransmitted_newest;
             pkt_ctx->retransmitted_newest = p;
         }
+        pkt_ctx->retransmitted_queue_size += 1;
     }
 
     return p;
@@ -1146,6 +1152,7 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
 
 void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx, picoquic_packet_t* p)
 {
+    pkt_ctx->retransmitted_queue_size -= 1;
     if (p->next_packet == NULL) {
         pkt_ctx->retransmitted_newest = p->previous_packet;
     }
@@ -1796,7 +1803,6 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
             }
         }
     }
-
 
     return (int)length;
 }
@@ -3974,10 +3980,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
                 /* If necessary, encode the max data frame */
                 if (ret == 0){
-                    if (cnx->is_flow_control_limited) {
-                        if (cnx->data_received + (cnx->local_parameters.initial_max_data / 2) > cnx->maxdata_local) {
+                    if (cnx->quic->max_data_limit != 0) {
+                        if (cnx->data_received + (cnx->quic->max_data_limit / 2) > cnx->maxdata_local) {
                             bytes_next = picoquic_format_max_data_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack,
-                                cnx->local_parameters.initial_max_data);
+                                cnx->quic->max_data_limit);
                         }
                     }
                     else if (2 * cnx->data_received > cnx->maxdata_local) {
@@ -4271,10 +4277,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
             picoquic_log_cc_dump(cnx, current_time);
         }
     }
-
     return ret;
 }
-
 
 static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_time, uint64_t current_time)
 {
