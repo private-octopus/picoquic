@@ -289,6 +289,7 @@ static const picoquic_test_def_t test_table[] = {
     { "satellite_basic", satellite_basic_test },
     { "satellite_seeded", satellite_seeded_test },
     { "satellite_loss", satellite_loss_test },
+    { "satellite_loss_fc", satellite_loss_fc_test},
     { "satellite_jitter", satellite_jitter_test },
     { "satellite_medium", satellite_medium_test },
     { "satellite_preemptive", satellite_preemptive_test },

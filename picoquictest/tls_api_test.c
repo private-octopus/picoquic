@@ -1608,6 +1608,11 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
 
         nb_trials++;
+#if 1
+        if (nb_inactive == 250) {
+            DBG_PRINTF("%s", "bug");
+        }
+#endif
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
@@ -10322,7 +10327,7 @@ int app_limit_cc_test_one(
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
-        test_ctx->cnx_client->is_flow_control_limited = 1;
+        picoquic_set_max_data_control(test_ctx->qclient, client_parameters.initial_max_data);
 
         test_ctx->c_to_s_link->jitter = 0;
         test_ctx->c_to_s_link->microsec_latency = latency;
@@ -10465,7 +10470,7 @@ int cwin_max_test_one(
         picoquic_set_cwin_max(test_ctx->qserver, 0x10000);
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
-        test_ctx->cnx_client->is_flow_control_limited = 1;
+        picoquic_set_max_data_control(test_ctx->qclient, client_parameters.initial_max_data);
 
         test_ctx->c_to_s_link->jitter = 0;
         test_ctx->c_to_s_link->microsec_latency = latency;
@@ -11121,10 +11126,10 @@ int multi_segment_test()
     };
     uint64_t algo_time[5] = {
         1110000,
-        1130000,
+        1050000,
+        1250000,
         1350000,
-        1370000,
-        1010000
+        1000000
     };
     int ret = 0;
 

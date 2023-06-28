@@ -47,7 +47,11 @@ extern "C" {
 #define PICOQUIC_DEFAULT_0RTT_WINDOW (10*PICOQUIC_ENFORCED_INITIAL_MTU)
 #define PICOQUIC_NB_PATH_TARGET 8
 #define PICOQUIC_NB_PATH_DEFAULT 2
+#if 1
+#define PICOQUIC_MAX_PACKETS_IN_POOL 0x2000
+#else
 #define PICOQUIC_MAX_PACKETS_IN_POOL 0x8000
+#endif
 #define PICOQUIC_STORED_IP_MAX 16
 
 #define PICOQUIC_INITIAL_RTT 250000ull /* 250 ms */
@@ -649,7 +653,6 @@ typedef struct st_picoquic_quic_t {
     unsigned int is_preemptive_repeat_enabled : 1; /* enable premptive repeat on new connections */
     unsigned int default_send_receive_bdp_frame : 1; /* enable sending and receiving BDP frame */
     unsigned int enforce_client_only : 1; /* Do not authorize incoming connections */
-    unsigned int is_flow_control_limited : 1; /* Enforce flow control limit for tests */
     unsigned int test_large_server_flight : 1; /* Use TP to ensure server flight is at least 8K */
     unsigned int is_port_blocking_disabled : 1; /* Do not check client port on incoming connections */
     unsigned int are_path_callbacks_enabled : 1; /* Enable path specific callbacks by default */
@@ -677,9 +680,15 @@ typedef struct st_picoquic_quic_t {
     picoquic_packet_t * p_first_packet;
     int nb_packets_in_pool;
     int nb_packets_allocated;
+#if 1
+    int nb_packets_allocated_max;
+#endif
     picoquic_stream_data_node_t* p_first_data_node;
     int nb_data_nodes_in_pool;
     int nb_data_nodes_allocated;
+#if 1
+    int nb_data_nodes_allocated_max;
+#endif
 
     picoquic_connection_id_cb_fn cnx_id_callback_fn;
     void* cnx_id_callback_ctx;
@@ -698,6 +707,9 @@ typedef struct st_picoquic_quic_t {
     void* fuzz_ctx;
     int wake_file;
     int wake_line;
+
+    /* Global flow control enforcement */
+    uint64_t max_data_limit;
 
     /* Path quality callback. These variables store the default values
     * of the min deltas required to perform path quality signaling.
@@ -867,6 +879,8 @@ typedef struct st_picoquic_packet_context_t {
     picoquic_packet_t* retransmitted_newest;
     picoquic_packet_t* retransmitted_oldest;
     picoquic_packet_t* preemptive_repeat_ptr;
+    /* monitor size of queues */
+    uint64_t retransmitted_queue_size;
     /* ECN Counters */
     uint64_t ecn_ect0_total_remote;
     uint64_t ecn_ect1_total_remote;
@@ -1218,7 +1232,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_time_stamp_sent : 1; /* Send time stamp with ACKS */
     unsigned int is_pacing_update_requested : 1; /* Whether the application subscribed to pacing updates */
     unsigned int is_path_quality_update_requested : 1; /* Whether the application subscribed to path quality updates */
-    unsigned int is_flow_control_limited : 1; /* Flow control window limited to initial value, mostly for tests */
     unsigned int is_hcid_verified : 1; /* Whether the HCID was received from the peer */
     unsigned int do_grease_quic_bit : 1; /* Negotiated grease of QUIC bit */
     unsigned int quic_bit_greased : 1; /* Indicate whether the quic bit was greased at least once */
