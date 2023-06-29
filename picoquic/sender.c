@@ -1193,7 +1193,7 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, picoqu
         pkt_ctx->next_sequence_hole = UINT64_MAX;
     } else if (cnx->cnx_state == picoquic_state_ready &&
         pkt_ctx->retransmit_newest != NULL &&
-        pkt_ctx->send_sequence >= cnx->pkt_ctx[0].next_sequence_hole) {
+        pkt_ctx->send_sequence >= pkt_ctx->next_sequence_hole) {
         if (pkt_ctx->next_sequence_hole != 0 &&
             !pkt_ctx->retransmit_newest->is_ack_trap) {
             /* Insert a hole in sequence */
@@ -1216,7 +1216,7 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, picoqu
             }
         }
         /* Predict the next hole*/
-        pkt_ctx->next_sequence_hole = pkt_ctx->send_sequence + 3 + picoquic_public_uniform_random(cnx->quic->sequence_hole_pseudo_period);
+        pkt_ctx->next_sequence_hole = pkt_ctx->send_sequence + 3 + picoquic_public_uniform_random(((uint64_t)cnx->quic->sequence_hole_pseudo_period)<<cnx->nb_packet_holes_inserted);
     }
 }
 
