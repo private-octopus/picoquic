@@ -123,6 +123,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
         picoquic_set_preemptive_repeat_policy(test_ctx->qserver, do_preemptive);
         picoquic_set_preemptive_repeat_per_cnx(test_ctx->cnx_client, do_preemptive);
 
+
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
         test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_up;

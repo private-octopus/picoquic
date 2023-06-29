@@ -1144,7 +1144,7 @@ int monopath_test_one(monopath_test_enum_t test_case)
 
         if (test_case == monopath_test_hole) {
             /* set the optimistic ack policy, to trigger hole insertion at the server */
-            picoquic_set_optimistic_ack_policy(test_ctx->qserver, 29);
+            picoquic_set_optimistic_ack_policy(test_ctx->qserver, PICOQUIC_DEFAULT_HOLE_PERIOD);
             /* Reset the uniform random test */
             picoquic_public_random_seed_64(RANDOM_PUBLIC_TEST_SEED, 1);
         }

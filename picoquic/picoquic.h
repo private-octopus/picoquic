@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.9.0"
+#define PICOQUIC_VERSION "1.1.9.1"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1268,9 +1268,16 @@ uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length);
 uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, picoquic_datagram_active_enum is_active);
 
 /* 
- * Set the optimistic ack policy. The holes will be inserted at random locations,
- * which in average will be separated by the pseudo period. By default,
- * the pseudo perio is 0, which means no hole insertion.
+ * Set the optimistic ack policy. This is a security feature that prevents
+ * peer from "faking" acknowledgements of packets that they have not
+ * received by inserting "holes" in the sequence of packet numbers.
+ * Acknowledging a hole is a protocol error, resulting in connection
+ * closure.
+ * 
+ * The holes are inserted at random, based on
+ * a period that doubles after each hole insertion in a given number space.
+ * By default, the initial period is 256. Setting it to 0 suppresses further
+ * hole insertion.
  */
 void picoquic_set_optimistic_ack_policy(picoquic_quic_t* quic, uint32_t sequence_hole_pseudo_period);
 

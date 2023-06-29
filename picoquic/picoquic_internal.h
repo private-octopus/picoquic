@@ -114,6 +114,8 @@ extern "C" {
 #define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
 #define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
 
+#define PICOQUIC_DEFAULT_HOLE_PERIOD 256
+
 /*
  * Types of frames.
  */

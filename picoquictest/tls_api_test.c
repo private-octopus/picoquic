@@ -1177,6 +1177,9 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
                 {
                     test_ctx->qclient->client_zero_share = 1;
                 }
+                /* Do not use hole insertion by default */
+                picoquic_set_optimistic_ack_policy(test_ctx->qclient, 0);
+                picoquic_set_optimistic_ack_policy(test_ctx->qserver, 0);
 
                 /* Create a client connection */
                 test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
@@ -9137,8 +9140,8 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         0, NULL, NULL, &initial_cid, 0);
 
     if (ret == 0) {
-        /* set the optimistic ack policy*/
-        picoquic_set_optimistic_ack_policy(test_ctx->qserver, 29);
+        /* set the optimistic ack policy to the default value */
+        picoquic_set_optimistic_ack_policy(test_ctx->qserver, PICOQUIC_DEFAULT_HOLE_PERIOD);
         /* add a log request for debugging */
         picoquic_set_binlog(test_ctx->qserver, ".");
 
