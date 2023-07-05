@@ -2353,7 +2353,236 @@ int test_format_for_retransmit()
 
     return ret;
 }
+#if 1
+/* Test the formatting of frames queued in retransmit packets.
+ * We assume an API that looks inside the queued packet, find the
+ * next stream frame, and copy the next data for that frame.
+ * We need to consider the following cases:
+ * 
+ * 1- Just one data frame in the packet, and it fits.
+ * 2- Data frame does not fit in the packet, can only
+ *    encode the first bytes, update the index.
+ * 3- First bytes of data frame already sent, the
+ *    reminder fits, send it all.
+ * 4- First bytes of data frame already sent, the
+ *    reminder does not fit, send first bytes only.
+ * 5- Zero data, but need to send the FIN bit.
+ * Add: same as 3..5, but without explicit length.
+ * Add: same as 3..4, but FIN bit
+ * Add: same as 3..4, no length, FIN bit.
+ * Add: variants in which the outgoing frame must
+ * use zero-length encoding.
+ * Add: variants in which the outgoing frame must
+ * use zero-length encoding and one extra pad byte.
+ */
 
+static int dataqueue_prepare_test(int basic_case, int has_length, int has_fin,
+    picoquic_packet_t* packet,
+    size_t * next_frame, size_t * next_index, size_t * buffer_size, size_t * frame_length,
+    uint8_t* data, size_t length_max)
+{
+    int ret = 0;
+    /* Prepare the packet header before the call.
+     *  -1: point to frame. If "no length", set length at final byte.
+     *      If length, add padding.
+     *      next frame and index point after the length.
+     *  -2: same as 1. Must limit the available buffer size.
+     *      next frame pointer unchanged, index after sent byte.
+     *  -3: init same as 1. Index before points to data.
+     *      next frame and index point after the length.
+     *      datasize must be limited.
+     *  -4: init same as 1. Index before points to data.
+     *      Must limit the available buffer size.
+     *      next frame pointer unchanged, index after sent byte.
+     *  -5: init just a header. either last byte or not.
+     * 
+     */
+    uint8_t* bytes;
+    uint8_t* bytes_max;
+    uint8_t* frame_data;
+    uint64_t offset = 1023;
+    uint64_t copied_index = 0;
+    uint64_t copied_offset = offset;
+    uint64_t stream_id = 8;
+    size_t frame_data_length = 2 * 65;
+    size_t copied_length;
+    int copied_fin = has_fin;
+    int constrained_buffer = 0;
+
+    memset(packet, 0, sizeof(picoquic_packet_t));
+    packet->offset = 12;
+    packet->data_repeat_frame = 17;
+    packet->data_repeat_index = 17;
+    if (basic_case == 5) {
+        frame_data_length = 0;
+    }
+    bytes = packet->bytes + packet->data_repeat_frame;
+    bytes_max = bytes + sizeof(packet->bytes);
+    *bytes = picoquic_frame_type_stream_range_min;
+    if (has_length) {
+        *bytes |= 2;
+    }
+    if (has_fin) {
+        *bytes |= 1;
+    }
+    *bytes++ |= 4;
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, stream_id);
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, offset);
+    if (has_length) {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, frame_data_length);
+    }
+    copied_index =  packet->data_repeat_frame + (bytes - (packet->bytes + packet->data_repeat_frame));
+    frame_data = bytes;
+    for (int i = 0; i < frame_data_length; i++) {
+        *bytes++ = (uint8_t)(i + 1);
+    }
+    packet->length = bytes - packet->bytes;
+    switch (basic_case) {
+    case 2:
+        copied_length = frame_data_length/2;
+        *next_frame = packet->data_repeat_frame;
+        *next_index = (frame_data + copied_length) - packet->bytes;
+        copied_fin = 0;
+        constrained_buffer = 1;
+        break;
+    case 3:
+        packet->data_repeat_index = (frame_data + frame_data_length/2) - packet->bytes;
+        copied_index += frame_data_length/2;
+        copied_offset += frame_data_length/2;
+        copied_length = frame_data_length - frame_data_length/2;
+        *next_frame = packet->length;
+        *next_index = packet->length;
+        break;
+    case 4:
+        constrained_buffer = 1;
+        copied_length = frame_data_length;
+        *next_frame = packet->length;
+        *next_index = packet->length;
+        break;
+    case 1:
+    default:
+        copied_length = frame_data_length;
+        *next_frame = packet->length;
+        *next_index = packet->length;
+        break;
+    }
+    /* Prepare the outcoming buffer: */
+    *buffer_size = 0;
+    *frame_length = 0;
+    bytes = data;
+    bytes_max = data + length_max;
+    ret = -1;
+    if (bytes < bytes_max) {
+        *bytes = picoquic_frame_type_stream_range_min;
+        if (!constrained_buffer) {
+            /* Use length encoding */
+            *bytes |= 2;
+        }
+        if (copied_fin) {
+            *bytes |= 1;
+        }
+        *bytes++ |= 4;
+        if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, stream_id)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, copied_offset)) != NULL) {
+            if (!constrained_buffer) {
+                bytes = picoquic_frames_varint_encode(bytes, bytes_max, copied_length);
+            }
+        }
+        if (bytes != NULL && bytes + copied_length < bytes_max) {
+            memcpy(bytes, packet->bytes + copied_index, copied_length);
+            bytes += copied_length;
+            ret = 0;
+        }
+        else {
+            bytes = NULL;
+            ret = -1;
+        }
+    }
+    if (ret == 0){
+        *frame_length = bytes - data;
+        if (!constrained_buffer) {
+            for (int i = 0; i < 4 && bytes < bytes_max; i++) {
+                *bytes++ = 1; /* add a ping frame... */
+            }
+        }
+        *buffer_size = bytes - data;
+    }
+
+    return ret;
+}
+
+static size_t dataqueue_verify_test(picoquic_packet_t* packet,
+    size_t next_frame, size_t next_index, size_t frame_length,
+    uint8_t* data, uint8_t *output, size_t output_length)
+{
+    int ret = 0;
+    if (packet->data_repeat_frame != next_frame) {
+        DBG_PRINTF("Expected frame at %zu, got %zu", packet->data_repeat_frame, next_frame);
+        ret = -1;
+    }
+    else if (packet->data_repeat_index != next_index) {
+        DBG_PRINTF("Expected index at %zu, got %zu", packet->data_repeat_index, next_index);
+        ret = -1;
+    }
+    else if (output_length != frame_length) {
+        DBG_PRINTF("Expected frame length %zu, got %zu", frame_length, output_length);
+        ret = -1;
+    }
+    else if (memcmp(data, output, output_length) != 0) {
+        DBG_PRINTF("%s", "Produced frame does not match");
+        ret = -1;
+    }
+    return ret;
+}
+
+int dataqueue_copy_test()
+{
+    int ret = 0;
+    picoquic_packet_t packet;
+    uint8_t data[1536];
+    uint8_t output[1536];
+    size_t length_max = 1536;
+
+    for (int case_opt = 0; ret == 0 && case_opt < 5; case_opt++) {
+        int has_length = (case_opt & 1) == 0;
+        int has_fin = (case_opt & 2) == 2;
+
+        for (int basic_case = 1; ret == 0 && basic_case <= 5; basic_case++) {
+            size_t next_frame = 0;
+            size_t next_index = 0;
+            size_t buffer_size = 0;
+            size_t frame_length = 0;
+
+            ret = dataqueue_prepare_test(basic_case, has_length, has_fin, &packet,
+                &next_frame, &next_index, &buffer_size, &frame_length, data, length_max);
+
+            if (ret != 0) {
+                DBG_PRINTF("Prepare test fails for case %d, option &x", basic_case, case_opt);
+                ret = -1;
+            }
+            else {
+                uint8_t* next_byte = picoquic_copy_stream_frame_for_retransmit(
+                    NULL, &packet, output, output + buffer_size);
+                if (next_byte == NULL) {
+                    DBG_PRINTF("Copy stream frame fails for case %d, option &x", basic_case, case_opt);
+                    ret = -1;
+                }
+                else
+                {
+                    size_t output_length = next_byte - output;
+                    if (dataqueue_verify_test(&packet, next_frame, next_index, frame_length, data, output, output_length) != 0) {
+                        DBG_PRINTF("Verify data fails for case %d, option &x", basic_case, case_opt);
+                        ret = -1;
+                    }
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+#endif
 /* Testing the sending of blocked frames */
 struct st_stream_blocked_test_t {
     uint64_t stream_id;

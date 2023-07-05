@@ -385,12 +385,20 @@ typedef struct st_picoquic_packet_t {
     struct st_picoquic_path_t* send_path;
     struct st_picoquic_packet_t* path_packet_next;
     struct st_picoquic_packet_t* path_packet_previous;
+#if 1
+    struct st_picoquic_packet_t* data_repeat_previous;
+    struct st_picoquic_packet_t* data_repeat_next;
+#endif
     uint64_t sequence_number;
     uint64_t path_packet_number;
     uint64_t send_time;
     uint64_t delivered_prior;
     uint64_t delivered_time_prior;
     uint64_t delivered_sent_prior;
+#if 1
+    size_t data_repeat_frame;
+    size_t data_repeat_index;
+#endif
     size_t length;
     size_t checksum_overhead;
     size_t offset;
@@ -1403,6 +1411,12 @@ typedef struct st_picoquic_cnx_t {
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
 
+#if 1
+    /* Repeat queue contains packets with data frames that should be
+     * sent in priority when congestion window opens. */
+    struct st_picoquic_packet_t* data_repeat_first;
+    struct st_picoquic_packet_t* data_repeat_last;
+#endif
     /* Retransmit queue contains congestion controlled frames that should
      * be sent in priority when the congestion window opens. */
     struct st_picoquic_misc_frame_header_t* stream_frame_retransmit_queue;
@@ -1776,6 +1790,11 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
 uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);
+#if 1
+uint8_t* picoquic_copy_stream_frame_for_retransmit(
+    picoquic_cnx_t* cnx, picoquic_packet_t* packet,
+    uint8_t* bytes_next, uint8_t* bytes_max);
+#endif
 uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, 
     uint8_t* bytes_next, uint8_t* bytes_max, int* is_pure_ack);
 uint8_t* picoquic_format_stream_frames_queued_for_retransmit(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
