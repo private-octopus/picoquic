@@ -1638,7 +1638,10 @@ uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_p
     return bytes_next;
 }
 
-#if 1
+/* Handling of queue of packets containing data frames that 
+ * should be resent, unless somehow acknowledged before that.
+ */
+
 void picoquic_queue_data_repeat_packet(
     picoquic_cnx_t* cnx, picoquic_packet_t* packet)
 {
@@ -1859,137 +1862,6 @@ uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
 
     return bytes_next;
 }
-
-#endif
-
-/* Format the stream frames that were queued for retransmit */
-
-uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx,
-    uint8_t* bytes_next, uint8_t* bytes_max, int* is_pure_ack)
-{
-    picoquic_misc_frame_header_t* misc = cnx->stream_frame_retransmit_queue;
-    uint8_t* frame = ((uint8_t*)misc) + sizeof(picoquic_misc_frame_header_t);
-    uint64_t stream_id;
-    uint64_t offset;
-    size_t data_length;
-    size_t consumed;
-    int fin;
-    int all_sent = 0;
-
-    if (picoquic_parse_stream_header(frame, misc->length, &stream_id, &offset, &data_length, &fin, &consumed) != 0) {
-        /* Malformed stream frame. Log an error, and ignore. */
-        picoquic_log_app_message(cnx, "Malformed copied stream frame, type %d, length %zu",
-            frame[0], misc->length);
-        all_sent = 1;
-    }
-    else {
-        uint8_t* bytes_first = bytes_next;
-        size_t available = bytes_max - bytes_next;
-        picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
-        if (stream == NULL || stream->reset_sent || picoquic_check_sack_list(&stream->sack_list, offset, offset + data_length)) {
-            /* That frame is not needed anymore */
-            all_sent = 1;
-        } else if (bytes_next + misc->length <= bytes_max) {
-            /* The frame can be copied in full */
-            if ((frame[0] & 2) == 0) {
-                /* Length is not encoded. If it fits just fine, copy. Else, need to be smarter */
-                size_t insert_pad = (bytes_max - bytes_next) - misc->length;
-                if (insert_pad <= 2) {
-                    /* pad, and then copy frame */
-                    while (insert_pad > 0) {
-                        *bytes_next = 0;
-                        bytes_next++;
-                        insert_pad--;
-                    }
-                    memcpy(bytes_next, frame, misc->length);
-                    bytes_next += misc->length;
-                }
-                else {
-                    /* Need to reencode the header, then copy */
-                    if ((bytes_next = picoquic_format_stream_frame_header(bytes_next, bytes_max, stream_id, offset)) != NULL &&
-                        (bytes_next = picoquic_frames_varint_encode(bytes_next, bytes_max, data_length)) != NULL) {
-                        memcpy(bytes_next, frame + consumed, data_length);
-                        bytes_next += data_length;
-                        *bytes_first |= 2; /* length present */
-                        *bytes_first |= fin;
-                    }
-                    else {
-                        bytes_next = bytes_first;
-                    }
-                }
-            }
-            else {
-                memcpy(bytes_next, frame, misc->length);
-                bytes_next += misc->length;
-            }
-            all_sent = 1;
-            *is_pure_ack = 0;
-        }
-        else {
-            int success = 0;
-            if (available > consumed &&
-                (bytes_next = picoquic_format_stream_frame_header(bytes_next, bytes_max, stream_id, offset)) != NULL) {
-                uint8_t* after_length = picoquic_frames_varint_encode(bytes_next, bytes_max, available - 2);
-                if (after_length != NULL && after_length < bytes_max &&
-                    (available = bytes_max - after_length) > 0) {
-                    size_t remain = data_length - available;
-                    uint8_t trial_pad[32] = { 0 }; /* max header = 1 + 8(stream) + 8(offset) +8(length)*/
-                    uint8_t* trial_max = trial_pad + sizeof(trial_pad);
-                    uint8_t* trial_next;
-                    size_t trial_size = 0;
-
-                    if ((trial_next = picoquic_format_stream_frame_header(trial_pad, trial_max, stream_id, offset + available)) != NULL &&
-                        (trial_next = picoquic_frames_varint_encode(trial_next, trial_max, remain)) != NULL &&
-                        (trial_size = trial_next - trial_pad) <= consumed + available) {
-                        /* There are enough bytes available to reformat the frame after copying */
-                        /* Finish encoding the copied bytes */
-                        bytes_next = picoquic_frames_varint_encode(bytes_next, bytes_max, available);
-                        *bytes_first |= 2;
-                        memcpy(bytes_next, frame + consumed, available);
-                        bytes_next += available;
-                        /* Reformat the stored bytes to only keep the remains */
-                        trial_pad[0] |= 2;
-                        memcpy(frame, trial_pad, trial_size);
-                        memmove(frame + trial_size, frame + consumed + available, remain);
-                        misc->length = trial_size + remain;
-                        frame[0] |= fin;
-                        success = 1;
-                        *is_pure_ack = 0;
-                    }
-                }
-            }
-
-            if (!success) {
-                bytes_next = bytes_first;
-            }
-        }
-    }
-
-    if (all_sent) {
-        picoquic_delete_misc_or_dg(&cnx->stream_frame_retransmit_queue, &cnx->stream_frame_retransmit_queue_last, misc);
-    }
-
-    return bytes_next;
-}
-
-#if 0
-uint8_t* picoquic_format_stream_frames_queued_for_retransmit(picoquic_cnx_t* cnx,
-    uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack)
-{
-    picoquic_misc_frame_header_t* misc;
-
-    while ((misc = cnx->stream_frame_retransmit_queue) != NULL && bytes_next < bytes_max) {
-        bytes_next = picoquic_format_stream_frame_for_retransmit(cnx, bytes_next, bytes_max, is_pure_ack);
-        if (misc == cnx->stream_frame_retransmit_queue) {
-            break;
-        }
-    }
-
-    *more_data |= (cnx->stream_frame_retransmit_queue != NULL);
-
-    return bytes_next;
-}
-#endif
 
 /*
  * Crypto HS frames

@@ -456,11 +456,9 @@ picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic)
         packet = (picoquic_packet_t*)malloc(sizeof(picoquic_packet_t));
         if (packet != NULL) {
             quic->nb_packets_allocated++;
-#if 1
             if (quic->nb_packets_allocated > quic->nb_packets_allocated_max) {
                 quic->nb_packets_allocated_max = quic->nb_packets_allocated;
             }
-#endif
         }
     }
     else {
@@ -1151,9 +1149,8 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
             pkt_ctx->retransmitted_newest = p;
         }
         pkt_ctx->retransmitted_queue_size += 1;
-#if 1
         p->is_queued_for_spurious_detection = 1;
-#endif
+
         if (add_to_data_repeat_queue) {
             picoquic_queue_data_repeat_packet(cnx, p);
         }
@@ -1176,20 +1173,9 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
         pkt_ctx->retransmitted_oldest = p->next_packet;
     }
     else {
-#ifdef _DEBUG
-        picoquic_packet_context_enum pc = p->pc;
-
-        if (p->previous_packet->pc != pc) {
-            DBG_PRINTF("Inconsistent PC in queue, %d vs %d\n", p->previous_packet->pc, pc);
-        }
-
-        if (p->previous_packet->next_packet != p) {
-            DBG_PRINTF("Inconsistent chain of packets, pc = %d\n", pc);
-        }
-#endif
         p->previous_packet->next_packet = p->next_packet;
     }
-#if 1
+
     /* Packets can be queued simultaneously for data reapeat and 
     * for detection of spurious losses, so should only be recycled
     * when removed from both queues */
@@ -1197,9 +1183,6 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
     if (!p->is_queued_for_data_repeat) {
         picoquic_recycle_packet(cnx->quic, p);
     }
-#else
-    picoquic_recycle_packet(cnx->quic, p);
-#endif
 }
 
 /*
@@ -1438,30 +1421,6 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     return should_retransmit;
 }
 
-int picoquic_queue_stream_frame_for_retransmit(picoquic_cnx_t* cnx, uint8_t * bytes, size_t length)
-{
-    int ret = 0;
-    picoquic_misc_frame_header_t* misc = picoquic_create_misc_frame(bytes, length, 0);
-
-    if (misc == NULL) {
-        ret = PICOQUIC_ERROR_MEMORY;
-    }
-    else {
-        misc->next_misc_frame = NULL;
-        if (cnx->stream_frame_retransmit_queue_last == NULL) {
-            cnx->stream_frame_retransmit_queue = misc;
-            cnx->stream_frame_retransmit_queue_last = misc;
-        }
-        else {
-            misc->previous_misc_frame = cnx->stream_frame_retransmit_queue_last;
-            cnx->stream_frame_retransmit_queue_last->next_misc_frame = misc;
-            cnx->stream_frame_retransmit_queue_last = misc;
-        }
-    }
-
-    return ret;
-}
-
 int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     picoquic_cnx_t * cnx,
     uint8_t * new_bytes,
@@ -1540,11 +1499,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
             if (ret == 0) {
                 if (!frame_is_pure_ack) {
                     if (PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-#if 1
                         * add_to_data_repeat_queue = 1;
-#else
-                        ret = picoquic_queue_stream_frame_for_retransmit(cnx, &old_p->bytes[byte_index], frame_length);
-#endif
                     }
                     else {
                         if ((force_queue || frame_length > send_buffer_max_minus_checksum - *length) &&
@@ -3717,17 +3672,10 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         }
 
                         /* If present, send stream frames queued for retransmission */
-#if 1
                         if (ret == 0) {
                             bytes_next = picoquic_copy_stream_frames_for_retransmit(cnx, bytes_next, bytes_max,
                                 &more_data, &is_pure_ack);
                         }
-#else
-                        if (ret == 0) {
-                            bytes_next = picoquic_format_stream_frames_queued_for_retransmit(cnx, bytes_next, bytes_max,
-                                &more_data, &is_pure_ack);
-                        }
-#endif
 
                         if (cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
                             bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);
@@ -4100,17 +4048,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         /* If present, send stream frames queued for retransmission */
-#if 1
                         if (ret == 0) {
                             bytes_next = picoquic_copy_stream_frames_for_retransmit(cnx, bytes_next, bytes_max,
                                 &more_data, &is_pure_ack);
                         }
-#else
-                        if (ret == 0) {
-                            bytes_next = picoquic_format_stream_frames_queued_for_retransmit(cnx, bytes_next, bytes_max,
-                                &more_data, &is_pure_ack);
-                        }
-#endif
 
                         if (ret == 0 && cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
                             bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);
