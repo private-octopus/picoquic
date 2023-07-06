@@ -4301,7 +4301,11 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         while (cnx->first_datagram != NULL) {
             picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
         }
-
+#if 1
+        while (cnx->data_repeat_first != NULL) {
+            picoquic_queue_data_repeat_packet(cnx, cnx->data_repeat_first);
+        }
+#endif
         while (cnx->stream_frame_retransmit_queue != NULL) {
             picoquic_delete_misc_or_dg(&cnx->stream_frame_retransmit_queue,
                 &cnx->stream_frame_retransmit_queue_last, cnx->stream_frame_retransmit_queue);

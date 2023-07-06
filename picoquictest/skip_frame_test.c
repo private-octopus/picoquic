@@ -2376,6 +2376,41 @@ int test_format_for_retransmit()
  * use zero-length encoding and one extra pad byte.
  */
 
+static size_t dataqueue_prepare_packet(
+    picoquic_packet_t* packet, int has_length, int has_fin,
+    uint64_t stream_id, uint64_t offset, size_t frame_data_length)
+{
+    uint8_t* bytes = packet->bytes;
+    uint8_t* bytes_max = bytes + sizeof(packet->bytes);
+    size_t copied_index;
+
+    memset(packet, 0, sizeof(picoquic_packet_t));
+    packet->offset = 12;
+    packet->data_repeat_frame = 17;
+    packet->data_repeat_index = 17;
+    bytes += packet->data_repeat_frame;
+    *bytes = picoquic_frame_type_stream_range_min;
+    if (has_length) {
+        *bytes |= 2;
+    }
+    if (has_fin) {
+        *bytes |= 1;
+    }
+    *bytes++ |= 4;
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, stream_id);
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, offset);
+    if (has_length) {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, frame_data_length);
+    }
+    copied_index =  packet->data_repeat_frame + (bytes - (packet->bytes + packet->data_repeat_frame));
+    for (int i = 0; i < frame_data_length; i++) {
+        *bytes++ = (uint8_t)(i + 1);
+    }
+    packet->length = bytes - packet->bytes;
+
+    return copied_index;
+}
+
 static int dataqueue_prepare_test(int basic_case, int has_length, int has_fin,
     picoquic_packet_t* packet,
     size_t * next_frame, size_t * next_index, size_t * buffer_size, size_t * frame_length,
@@ -2406,37 +2441,18 @@ static int dataqueue_prepare_test(int basic_case, int has_length, int has_fin,
     uint64_t stream_id = 8;
     size_t frame_data_length = 2 * 65;
     size_t copied_length;
+    size_t extra_byte = 0;
     int copied_fin = has_fin;
     int constrained_buffer = 0;
 
-    memset(packet, 0, sizeof(picoquic_packet_t));
-    packet->offset = 12;
-    packet->data_repeat_frame = 17;
-    packet->data_repeat_index = 17;
     if (basic_case == 5) {
         frame_data_length = 0;
     }
-    bytes = packet->bytes + packet->data_repeat_frame;
-    bytes_max = bytes + sizeof(packet->bytes);
-    *bytes = picoquic_frame_type_stream_range_min;
-    if (has_length) {
-        *bytes |= 2;
-    }
-    if (has_fin) {
-        *bytes |= 1;
-    }
-    *bytes++ |= 4;
-    bytes = picoquic_frames_varint_encode(bytes, bytes_max, stream_id);
-    bytes = picoquic_frames_varint_encode(bytes, bytes_max, offset);
-    if (has_length) {
-        bytes = picoquic_frames_varint_encode(bytes, bytes_max, frame_data_length);
-    }
-    copied_index =  packet->data_repeat_frame + (bytes - (packet->bytes + packet->data_repeat_frame));
-    frame_data = bytes;
-    for (int i = 0; i < frame_data_length; i++) {
-        *bytes++ = (uint8_t)(i + 1);
-    }
-    packet->length = bytes - packet->bytes;
+
+    copied_index = dataqueue_prepare_packet(packet, has_length, has_fin,
+        stream_id, offset, frame_data_length);
+    frame_data = packet->bytes + copied_index;
+
     switch (basic_case) {
     case 2:
         copied_length = frame_data_length/2;
@@ -2459,6 +2475,13 @@ static int dataqueue_prepare_test(int basic_case, int has_length, int has_fin,
         *next_frame = packet->length;
         *next_index = packet->length;
         break;
+    case 6:
+        constrained_buffer = 1;
+        copied_length = frame_data_length;
+        *next_frame = packet->length;
+        *next_index = packet->length;
+        extra_byte = 1;
+        break;
     case 1:
     default:
         copied_length = frame_data_length;
@@ -2466,13 +2489,17 @@ static int dataqueue_prepare_test(int basic_case, int has_length, int has_fin,
         *next_index = packet->length;
         break;
     }
+
     /* Prepare the outcoming buffer: */
     *buffer_size = 0;
     *frame_length = 0;
     bytes = data;
     bytes_max = data + length_max;
     ret = -1;
-    if (bytes < bytes_max) {
+    if (bytes + extra_byte < bytes_max) {
+        if (extra_byte) {
+            *bytes++ = 0;
+        }
         *bytes = picoquic_frame_type_stream_range_min;
         if (!constrained_buffer) {
             /* Use length encoding */
@@ -2547,7 +2574,7 @@ int dataqueue_copy_test()
         int has_length = (case_opt & 1) == 0;
         int has_fin = (case_opt & 2) == 2;
 
-        for (int basic_case = 1; ret == 0 && basic_case <= 5; basic_case++) {
+        for (int basic_case = 1; ret == 0 && basic_case <= 6; basic_case++) {
             size_t next_frame = 0;
             size_t next_index = 0;
             size_t buffer_size = 0;
@@ -2579,6 +2606,141 @@ int dataqueue_copy_test()
         }
     }
 
+    return ret;
+}
+
+/* Test the API picoquic_copy_stream_frames_for_retransmit
+* Create a connection.
+* Create a data queue packet with 256 bytes of data.
+* First call: buffer size < min size. Expect "more data" to
+* be set, but no data sent. ACK only is expected.
+* Second call: buffer size < packet size. Expect buffer to
+* be filled with data. More data should be set. ACK only = 0.
+* Third call: large buffer size. Expect large packet. More data
+* should not be set. ACK only = 0. 
+* Fourth call: large buffer size. Expect no data, more data=0,
+* ACK only = 1.
+* Add another packet in the queue, or maybe two.
+* Clean everything. The ASAN/UBSAN run will detect any memory leak.
+ */
+
+int dataqueue_packet_test_iterate(int test_id, picoquic_cnx_t* cnx, size_t buffer_size, int expect_data, int expect_more_data, int expect_is_pure_ack)
+{
+    int ret = 0;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    int more_data = 0;
+    int is_pure_ack = 1;
+    uint8_t* next_bytes = picoquic_copy_stream_frames_for_retransmit(cnx, buffer, buffer + buffer_size, &more_data, &is_pure_ack);
+
+    if (next_bytes == NULL) {
+        DBG_PRINTF("Test %d, returns NULL", test_id);
+        ret = -1;
+    }
+    else {
+        int has_data = next_bytes > buffer;
+
+        if (has_data && !expect_data) {
+            DBG_PRINTF("Test %d, got data, not expected", test_id);
+            ret = -1;
+        } else if (!has_data && expect_data) {
+            DBG_PRINTF("Test %d, no data, some expected", test_id);
+            ret = -1;
+        } else if (more_data && !expect_more_data) {
+            DBG_PRINTF("Test %d, more data not expected", test_id);
+            ret = -1;
+        }  else if (!more_data && expect_more_data) {
+            DBG_PRINTF("Test %d, more data expected", test_id);
+            ret = -1;
+        } else if (is_pure_ack && !expect_is_pure_ack) {
+            DBG_PRINTF("Test %d, unexpected pure ACK", test_id);
+            ret = -1;
+        } else if (!is_pure_ack && expect_is_pure_ack) {
+            DBG_PRINTF("Test %d, pure ACK expected", test_id);
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
+int dataqueue_packet_test()
+{
+    picoquic_quic_t* qtest = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    int ret = 0;
+    uint8_t* next_bytes = NULL;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+
+    /* Initialize the connection context */
+    if (ret == 0) {
+        qtest = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+            NULL, NULL, NULL, NULL, simulated_time,
+            &simulated_time, NULL, NULL, 0);
+        if (qtest == NULL) {
+            DBG_PRINTF("%s", "Cannot create QUIC context\n");
+            ret = -1;
+        }
+        else {
+            cnx = picoquic_create_cnx(qtest,
+                picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr*) & saddr,
+                simulated_time, 0, "test-sni", "test-alpn", 1);
+
+            if (cnx == NULL) {
+                ret = -1;
+            }
+            else {
+                /* Create stream 0 so the later tests succeed */
+                uint8_t new_bytes[256];
+                memset(new_bytes, 0, sizeof(new_bytes));
+                if ((ret = picoquic_add_to_stream(cnx, 0, new_bytes, sizeof(new_bytes), 0)) != 0) {
+                    DBG_PRINTF("%s", "Cannot initialize stream 0\n");
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* Create a packet and chain it to the data queue */
+        picoquic_packet_t* packet = picoquic_create_packet(qtest);
+        if (packet == NULL) {
+            ret = -1;
+        }
+        else {
+            (void)dataqueue_prepare_packet(packet, 1, 0, 0, 0, 256);
+            picoquic_queue_data_repeat_packet(cnx, packet);
+        }
+    }
+
+    if (ret == 0 &&
+        (ret = dataqueue_packet_test_iterate(1, cnx, 2, 0, 1, 1)) == 0 &&
+        (ret = dataqueue_packet_test_iterate(2, cnx, 128, 1, 1, 0)) == 0 &&
+        (ret = dataqueue_packet_test_iterate(3, cnx, 1024, 1, 0, 0)) == 0) {
+        ret = dataqueue_packet_test_iterate(4, cnx, 1024, 0, 0, 1);
+    }
+
+    if (ret == 0) {
+        /* Create a packet and chain it to the data queue */
+        picoquic_packet_t* packet = picoquic_create_packet(qtest);
+        if (packet == NULL) {
+            ret = -1;
+        }
+        else {
+            (void)dataqueue_prepare_packet(packet, 1, 0, 0, 0, 256);
+            picoquic_dequeue_data_repeat_packet(cnx, packet);
+        }
+    }
+
+    /* Free the connection context */
+    if (cnx != NULL) {
+        picoquic_delete_cnx(cnx);
+    }
+
+    if (qtest != NULL) {
+        picoquic_free(qtest);
+    }
     return ret;
 }
 

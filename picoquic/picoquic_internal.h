@@ -414,6 +414,10 @@ typedef struct st_picoquic_packet_t {
     unsigned int was_preemptively_repeated : 1;
     unsigned int is_queued_to_path : 1;
     unsigned int is_queued_for_retransmit : 1;
+#if 1
+    unsigned int is_queued_for_spurious_detection : 1;
+    unsigned int is_queued_for_data_repeat : 1;
+#endif
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_packet_t;
@@ -1791,9 +1795,15 @@ uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_p
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);
 #if 1
+void picoquic_queue_data_repeat_packet(
+    picoquic_cnx_t* cnx, picoquic_packet_t* packet);
+void picoquic_dequeue_data_repeat_packet(
+    picoquic_cnx_t* cnx, picoquic_packet_t* packet);
 uint8_t* picoquic_copy_stream_frame_for_retransmit(
     picoquic_cnx_t* cnx, picoquic_packet_t* packet,
     uint8_t* bytes_next, uint8_t* bytes_max);
+uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
+    uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 #endif
 uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, 
     uint8_t* bytes_next, uint8_t* bytes_max, int* is_pure_ack);

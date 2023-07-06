@@ -1145,6 +1145,9 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
             pkt_ctx->retransmitted_newest = p;
         }
         pkt_ctx->retransmitted_queue_size += 1;
+#if 1
+        p->is_queued_for_spurious_detection = 1;
+#endif
     }
 
     return p;
@@ -1177,8 +1180,17 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
 #endif
         p->previous_packet->next_packet = p->next_packet;
     }
-
+#if 1
+    /* Packets can be queued simultaneously for data reapeat and 
+    * for detection of spurious losses, so should only be recycled
+    * when removed from both queues */
+    p->is_queued_for_spurious_detection = 0;
+    if (!p->is_queued_for_data_repeat) {
+        picoquic_recycle_packet(cnx->quic, p);
+    }
+#else
     picoquic_recycle_packet(cnx->quic, p);
+#endif
 }
 
 /*

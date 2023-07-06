@@ -257,6 +257,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(dataqueue_packet)
+        {
+            int ret = dataqueue_packet_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stateless_blowback) {
             int ret = test_stateless_blowback();
 

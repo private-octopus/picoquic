@@ -1639,6 +1639,51 @@ uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_p
 }
 
 #if 1
+void picoquic_queue_data_repeat_packet(
+    picoquic_cnx_t* cnx, picoquic_packet_t* packet)
+{
+    packet->data_repeat_next = NULL;
+    packet->data_repeat_previous = NULL;
+    if (cnx->data_repeat_last == NULL) {
+        cnx->data_repeat_first = packet;
+        cnx->data_repeat_last = packet;
+    }
+    else {
+        packet->data_repeat_previous = cnx->data_repeat_last;
+        cnx->data_repeat_last->data_repeat_next = packet;
+        cnx->data_repeat_last = packet;
+    }
+    packet->data_repeat_frame = packet->offset;
+    packet->data_repeat_index = packet->offset;
+    packet->is_queued_for_data_repeat = 1;
+}
+
+void picoquic_dequeue_data_repeat_packet(
+    picoquic_cnx_t* cnx, picoquic_packet_t* packet)
+{
+    if (packet->data_repeat_previous == NULL) {
+        cnx->data_repeat_first = packet->data_repeat_next;
+    }
+    else {
+        packet->data_repeat_previous->data_repeat_next = packet->data_repeat_next;
+    }
+
+    if (packet->data_repeat_next == NULL) {
+        cnx->data_repeat_last = packet->data_repeat_previous;
+    }
+    else {
+        packet->data_repeat_next->data_repeat_previous = packet->data_repeat_previous;
+    }
+
+    /* Packets can be queued simultaneously for data repeat and 
+     * for detection of spurious losses, so should only be recycled
+     * when removed from both queues */
+    packet->is_queued_for_data_repeat = 0;
+    if (!packet->is_queued_for_spurious_detection) {
+        picoquic_recycle_packet(cnx->quic, packet);
+    }
+}
+
 /* Copy stream frame from packet to specified buffer, and update the
  * packet retransmission pointers
  */
@@ -1705,6 +1750,7 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
                 bytes_next == bytes_max) {
                 /* Cannot encode anything! -- need to wait for another opportunity */
                 bytes_not_sent = data_available;
+                bytes_next = bytes_first;
             }
             else {
                 uint8_t* before_length = bytes_next;
@@ -1756,6 +1802,64 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
 
     return bytes_next;
 }
+
+uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
+    uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack)
+{
+    /* Assume that the "data_repeat_frame" and "data_repeat_index are
+     * properly initialized when the packet is placed in the queue */
+    picoquic_packet_t* packet = cnx->data_repeat_first;
+
+
+    while (packet != NULL && bytes_next < bytes_max) {
+        if (packet->data_repeat_frame < packet->length) {
+            size_t last_frame = packet->data_repeat_frame;
+            size_t last_index = packet->data_repeat_index;
+            uint8_t* data_byte = packet->bytes + packet->data_repeat_frame;
+            if (*data_byte >= picoquic_frame_type_stream_range_min && *data_byte <= picoquic_frame_type_stream_range_max) {
+                /* next frame is a stream data frame. Try to add its content */
+                uint8_t* bytes_first = bytes_next;
+                bytes_next = picoquic_copy_stream_frame_for_retransmit(cnx, packet, bytes_next, bytes_max);
+                if (bytes_next == NULL) {
+                    /* Something bad happened */
+                    break;
+                }
+                else if (bytes_next > bytes_first) {
+                    /* added something */
+                    *is_pure_ack &= 0;
+                }
+                else if (packet->data_repeat_frame == last_frame && packet->data_repeat_index == last_index) {
+                    /* Nothing added, no progress means there was not enough space */
+                    *more_data |= 1;
+                    break;
+                }
+            }
+            else {
+                int forget_about_ack = 0;
+                size_t consumed = 0;
+                if (picoquic_skip_frame(data_byte, packet->length - packet->data_repeat_frame, &consumed, &forget_about_ack) != 0) {
+                    /* Internal error! */
+                    bytes_next = NULL;
+                    break;
+                }
+                else {
+                    packet->data_repeat_frame += consumed;
+                    packet->data_repeat_index = packet->data_repeat_frame;
+                }
+            }
+        }
+        if (packet->data_repeat_frame >= packet->length) {
+            /* This packet is fully consumed */
+            picoquic_dequeue_data_repeat_packet(cnx, packet);
+            packet = cnx->data_repeat_first;
+        }
+    }
+
+    *more_data |= (cnx->data_repeat_first != NULL);
+
+    return bytes_next;
+}
+
 #endif
 
 /* Format the stream frames that were queued for retransmit */
