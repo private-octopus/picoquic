@@ -2501,21 +2501,28 @@ picoquic_remote_cnxid_t* picoquic_remove_stashed_cnxid(picoquic_cnx_t* cnx, pico
             if (recycle_packets) {
                 picoquic_packet_t* recycled = pkt_ctx->retransmit_oldest;
                 while (recycled != NULL) {
+                    picoquic_packet_t * recycled_previous = recycled->previous_packet;
                     int packet_is_pure_ack = 0;
                     int do_not_detect_spurious = 0;
+                    int add_to_data_repeat_queue = 0;
                     size_t length = 0;
                     int ret = picoquic_copy_before_retransmit(recycled, cnx, NULL, 0, &packet_is_pure_ack,
-                        &do_not_detect_spurious, 1, &length);
+                        &do_not_detect_spurious, 1, &length, &add_to_data_repeat_queue);
                     if (ret != 0 || length != 0) {
                         /* Unexpected! */
                         DBG_PRINTF("Recycle stashed packet returns %d, length %zu\n", ret, length);
                     }
-                    recycled = recycled->previous_packet;
+#if 1
+                    (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, recycled, 1, add_to_data_repeat_queue);
+#endif
+                    recycled = recycled_previous;
                 }
             }
-
-            while (pkt_ctx->retransmit_newest != NULL) {
-                (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->retransmit_newest, 1);
+            else
+            {
+                while (pkt_ctx->retransmit_newest != NULL) {
+                    (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->retransmit_newest, 1, 0);
+                }
             }
 
             while (pkt_ctx->retransmitted_newest != NULL) {
@@ -4076,7 +4083,7 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     picoquic_ack_context_t* ack_ctx = &cnx->ack_ctx[pc];
 
     while (pkt_ctx->retransmit_newest != NULL) {
-        (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->retransmit_newest, 1);
+        (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->retransmit_newest, 1, 0);
     }
     
     while (pkt_ctx->retransmitted_newest != NULL) {
@@ -4303,7 +4310,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         }
 #if 1
         while (cnx->data_repeat_first != NULL) {
-            picoquic_queue_data_repeat_packet(cnx, cnx->data_repeat_first);
+            picoquic_dequeue_data_repeat_packet(cnx, cnx->data_repeat_first);
         }
 #endif
         while (cnx->stream_frame_retransmit_queue != NULL) {

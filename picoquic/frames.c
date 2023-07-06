@@ -1736,8 +1736,8 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
                     is_needed = 0;
                 }
                 else {
-                    offset += data_length;
-                    frame_bytes += data_length;
+                    offset += data_available;
+                    frame_bytes += data_available;
                     data_available = 0;
                 }
             }
@@ -1972,6 +1972,7 @@ uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx,
     return bytes_next;
 }
 
+#if 0
 uint8_t* picoquic_format_stream_frames_queued_for_retransmit(picoquic_cnx_t* cnx,
     uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack)
 {
@@ -1988,6 +1989,7 @@ uint8_t* picoquic_format_stream_frames_queued_for_retransmit(picoquic_cnx_t* cnx
 
     return bytes_next;
 }
+#endif
 
 /*
  * Crypto HS frames
@@ -3298,7 +3300,7 @@ static int picoquic_process_ack_range(
                      * The handshake is complete, all the handshake packets are implicitly acknowledged */
                     picoquic_ready_state_transition(cnx, current_time);
                 }
-                (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, p, 1);
+                (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, p, 1, 0);
                 p = next;
             }
 

@@ -1549,7 +1549,8 @@ int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path
 void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
     size_t length, uint64_t current_time);
 picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
-    picoquic_packet_t* p, int should_free);
+    picoquic_packet_t* p, int should_free,
+    int add_to_data_repeat_queue);
 void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx, picoquic_packet_t* p);
 
 /* Reset the connection context, e.g. after retry */
@@ -1804,10 +1805,11 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
     uint8_t* bytes_next, uint8_t* bytes_max);
 uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
     uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
-#endif
+#else
 uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, 
     uint8_t* bytes_next, uint8_t* bytes_max, int* is_pure_ack);
 uint8_t* picoquic_format_stream_frames_queued_for_retransmit(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+#endif
 int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     picoquic_cnx_t * cnx,
     uint8_t * new_bytes,
@@ -1815,7 +1817,8 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     int * packet_is_pure_ack,
     int * do_not_detect_spurious,
     int force_queue,
-    size_t * length);
+    size_t * length,
+    int * add_to_data_repeat_queue);
 
 void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc,
     picoquic_local_cnxid_t* l_cid, int is_immediate_ack_required);
