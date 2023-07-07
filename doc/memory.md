@@ -33,16 +33,18 @@ goes through a series of steps:
   RTT measurements and congestion control state, and the packet memory
   is released.
 * If the packet is not acknowledged in time, it is marked lost. The frames
-  in the packet are extracted and if necessary queued for transmission. For
-  example, if the packet contained data frames, the corresponding data is
-  queued for retransmission. Then, the packet is moved to the "loss
-  confirmation" queue.
+  in the packet are extracted and if necessary queued for transmission. If
+  the packet contained data frames, it is queued for data frame retransmission.
+  Then, the packet is moved to the "loss confirmation" queue. (The packet may
+  be present in both the stream data retransmission and the loss confirmation
+  queue, but it is not duplicated.)
 * In some cases, the acknowledgement of a packet arrives late, after
   it was considered lost. If the packet is in the "loss confirmation"
   queue, the frames in the packet are examined and marked as received,
   RTT and congestion control state are updated. Then, the packet memory
   is released.
-* When the code finally decides that no acknowledgement will arrive, the
+* When the code finally decides that no acknowledgement will arrive, and
+  the stream frame have been repeated in other packets, the
   packet memory is released.
 
 If the packet loss rate is small, the bulk of the memory is dedicated to

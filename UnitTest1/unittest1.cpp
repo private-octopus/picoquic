@@ -243,9 +243,25 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+#if 0
         TEST_METHOD(stream_retransmit_format)
         {
             int ret = test_format_for_retransmit();
+
+            Assert::AreEqual(ret, 0);
+        }
+#endif
+
+        TEST_METHOD(dataqueue_copy)
+        {
+            int ret = dataqueue_copy_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(dataqueue_packet)
+        {
+            int ret = dataqueue_packet_test();
 
             Assert::AreEqual(ret, 0);
         }

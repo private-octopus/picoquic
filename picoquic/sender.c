@@ -456,11 +456,9 @@ picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic)
         packet = (picoquic_packet_t*)malloc(sizeof(picoquic_packet_t));
         if (packet != NULL) {
             quic->nb_packets_allocated++;
-#if 1
             if (quic->nb_packets_allocated > quic->nb_packets_allocated_max) {
                 quic->nb_packets_allocated_max = quic->nb_packets_allocated;
             }
-#endif
         }
     }
     else {
@@ -1090,7 +1088,8 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
 }
 
 picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, 
-    picoquic_packet_context_t * pkt_ctx, picoquic_packet_t* p, int should_free)
+    picoquic_packet_context_t * pkt_ctx, picoquic_packet_t* p, int should_free,
+    int add_to_data_repeat_queue)
 {
     size_t dequeued_length = p->length + p->checksum_overhead;
 
@@ -1128,8 +1127,13 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
     picoquic_dequeue_packet_from_path(p);
 
     if (should_free || p->is_ack_trap) {
-        picoquic_recycle_packet(cnx->quic, p);
-        p = NULL;
+        if (add_to_data_repeat_queue) {
+            picoquic_queue_data_repeat_packet(cnx, p);
+        }
+        else {
+            picoquic_recycle_packet(cnx->quic, p);
+            p = NULL;
+        }
     } 
     else {
         p->next_packet = NULL;
@@ -1145,6 +1149,11 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
             pkt_ctx->retransmitted_newest = p;
         }
         pkt_ctx->retransmitted_queue_size += 1;
+        p->is_queued_for_spurious_detection = 1;
+
+        if (add_to_data_repeat_queue) {
+            picoquic_queue_data_repeat_packet(cnx, p);
+        }
     }
 
     return p;
@@ -1164,21 +1173,16 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
         pkt_ctx->retransmitted_oldest = p->next_packet;
     }
     else {
-#ifdef _DEBUG
-        picoquic_packet_context_enum pc = p->pc;
-
-        if (p->previous_packet->pc != pc) {
-            DBG_PRINTF("Inconsistent PC in queue, %d vs %d\n", p->previous_packet->pc, pc);
-        }
-
-        if (p->previous_packet->next_packet != p) {
-            DBG_PRINTF("Inconsistent chain of packets, pc = %d\n", pc);
-        }
-#endif
         p->previous_packet->next_packet = p->next_packet;
     }
 
-    picoquic_recycle_packet(cnx->quic, p);
+    /* Packets can be queued simultaneously for data reapeat and 
+    * for detection of spurious losses, so should only be recycled
+    * when removed from both queues */
+    p->is_queued_for_spurious_detection = 0;
+    if (!p->is_queued_for_data_repeat) {
+        picoquic_recycle_packet(cnx->quic, p);
+    }
 }
 
 /*
@@ -1417,30 +1421,6 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     return should_retransmit;
 }
 
-int picoquic_queue_stream_frame_for_retransmit(picoquic_cnx_t* cnx, uint8_t * bytes, size_t length)
-{
-    int ret = 0;
-    picoquic_misc_frame_header_t* misc = picoquic_create_misc_frame(bytes, length, 0);
-
-    if (misc == NULL) {
-        ret = PICOQUIC_ERROR_MEMORY;
-    }
-    else {
-        misc->next_misc_frame = NULL;
-        if (cnx->stream_frame_retransmit_queue_last == NULL) {
-            cnx->stream_frame_retransmit_queue = misc;
-            cnx->stream_frame_retransmit_queue_last = misc;
-        }
-        else {
-            misc->previous_misc_frame = cnx->stream_frame_retransmit_queue_last;
-            cnx->stream_frame_retransmit_queue_last->next_misc_frame = misc;
-            cnx->stream_frame_retransmit_queue_last = misc;
-        }
-    }
-
-    return ret;
-}
-
 int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     picoquic_cnx_t * cnx,
     uint8_t * new_bytes,
@@ -1448,7 +1428,8 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     int * packet_is_pure_ack,
     int * do_not_detect_spurious,
     int force_queue,
-    size_t * length)
+    size_t * length,
+    int * add_to_data_repeat_queue)
 {
     /* check if this is an ACK only packet */
     int ret = 0;
@@ -1518,7 +1499,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
             if (ret == 0) {
                 if (!frame_is_pure_ack) {
                     if (PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-                        ret = picoquic_queue_stream_frame_for_retransmit(cnx, &old_p->bytes[byte_index], frame_length);
+                        * add_to_data_repeat_queue = 1;
                     }
                     else {
                         if ((force_queue || frame_length > send_buffer_max_minus_checksum - *length) &&
@@ -1584,7 +1565,7 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
         }
     }
     else if (old_p->is_ack_trap) {
-        picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, 1);
+        picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, 1, 0);
         *continue_next = 1;
     }
     else {
@@ -1592,6 +1573,7 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
         int packet_is_pure_ack = 1;
         int do_not_detect_spurious = 1;
         size_t checksum_length = 0;
+        int add_to_data_repeat_queue = 0;
 
         /* we'll report it where it got lost */
         if (old_path) {
@@ -1655,7 +1637,8 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
                 send_buffer_max - checksum_length,
                 &packet_is_pure_ack,
                 &do_not_detect_spurious, 0,
-                &length);
+                &length,
+                &add_to_data_repeat_queue);
 
             if (ret != 0) {
                 DBG_PRINTF("Copy before retransmit returns %d\n", ret);
@@ -1677,7 +1660,8 @@ static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packe
             }
             /* Keep track of the path, as "old_p->send_path" will be zeroed when dequeued */
             old_path = old_p->send_path;
-            old_p = picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, packet_is_pure_ack & do_not_detect_spurious);
+            old_p = picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, packet_is_pure_ack & do_not_detect_spurious,
+                add_to_data_repeat_queue);
 
             /* If we have a good packet, return it */
             if (old_p == NULL || packet_is_pure_ack) {
@@ -2488,7 +2472,7 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
         }
         /* Update the number of bytes in transit and remove old packet from queue */
         /* The packet will not be placed in the "retransmitted" queue */
-        (void)picoquic_dequeue_retransmit_packet(cnx, &cnx->pkt_ctx[pc], p, 1);
+        (void)picoquic_dequeue_retransmit_packet(cnx, &cnx->pkt_ctx[pc], p, 1, 0);
 
         p = p_next;
     }
@@ -3689,7 +3673,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
                         /* If present, send stream frames queued for retransmission */
                         if (ret == 0) {
-                            bytes_next = picoquic_format_stream_frames_queued_for_retransmit(cnx, bytes_next, bytes_max,
+                            bytes_next = picoquic_copy_stream_frames_for_retransmit(cnx, bytes_next, bytes_max,
                                 &more_data, &is_pure_ack);
                         }
 
@@ -4065,7 +4049,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
                         /* If present, send stream frames queued for retransmission */
                         if (ret == 0) {
-                            bytes_next = picoquic_format_stream_frames_queued_for_retransmit(cnx, bytes_next, bytes_max,
+                            bytes_next = picoquic_copy_stream_frames_for_retransmit(cnx, bytes_next, bytes_max,
                                 &more_data, &is_pure_ack);
                         }
 

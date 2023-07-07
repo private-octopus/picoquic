@@ -47,11 +47,7 @@ extern "C" {
 #define PICOQUIC_DEFAULT_0RTT_WINDOW (10*PICOQUIC_ENFORCED_INITIAL_MTU)
 #define PICOQUIC_NB_PATH_TARGET 8
 #define PICOQUIC_NB_PATH_DEFAULT 2
-#if 1
 #define PICOQUIC_MAX_PACKETS_IN_POOL 0x2000
-#else
-#define PICOQUIC_MAX_PACKETS_IN_POOL 0x8000
-#endif
 #define PICOQUIC_STORED_IP_MAX 16
 
 #define PICOQUIC_INITIAL_RTT 250000ull /* 250 ms */
@@ -385,12 +381,16 @@ typedef struct st_picoquic_packet_t {
     struct st_picoquic_path_t* send_path;
     struct st_picoquic_packet_t* path_packet_next;
     struct st_picoquic_packet_t* path_packet_previous;
+    struct st_picoquic_packet_t* data_repeat_previous;
+    struct st_picoquic_packet_t* data_repeat_next;
     uint64_t sequence_number;
     uint64_t path_packet_number;
     uint64_t send_time;
     uint64_t delivered_prior;
     uint64_t delivered_time_prior;
     uint64_t delivered_sent_prior;
+    size_t data_repeat_frame;
+    size_t data_repeat_index;
     size_t length;
     size_t checksum_overhead;
     size_t offset;
@@ -406,6 +406,8 @@ typedef struct st_picoquic_packet_t {
     unsigned int was_preemptively_repeated : 1;
     unsigned int is_queued_to_path : 1;
     unsigned int is_queued_for_retransmit : 1;
+    unsigned int is_queued_for_spurious_detection : 1;
+    unsigned int is_queued_for_data_repeat : 1;
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_packet_t;
@@ -682,15 +684,12 @@ typedef struct st_picoquic_quic_t {
     picoquic_packet_t * p_first_packet;
     int nb_packets_in_pool;
     int nb_packets_allocated;
-#if 1
     int nb_packets_allocated_max;
-#endif
+
     picoquic_stream_data_node_t* p_first_data_node;
     int nb_data_nodes_in_pool;
     int nb_data_nodes_allocated;
-#if 1
     int nb_data_nodes_allocated_max;
-#endif
 
     picoquic_connection_id_cb_fn cnx_id_callback_fn;
     void* cnx_id_callback_ctx;
@@ -1403,10 +1402,10 @@ typedef struct st_picoquic_cnx_t {
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
 
-    /* Retransmit queue contains congestion controlled frames that should
-     * be sent in priority when the congestion window opens. */
-    struct st_picoquic_misc_frame_header_t* stream_frame_retransmit_queue;
-    struct st_picoquic_misc_frame_header_t* stream_frame_retransmit_queue_last;
+    /* Repeat queue contains packets with data frames that should be
+     * sent in priority when congestion window opens. */
+    struct st_picoquic_packet_t* data_repeat_first;
+    struct st_picoquic_packet_t* data_repeat_last;
 
     /* Management of datagram queue (see also active datagram flag)
      * The "conflict" count indicates how many datagrams have been sent while
@@ -1531,7 +1530,8 @@ int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path
 void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
     size_t length, uint64_t current_time);
 picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
-    picoquic_packet_t* p, int should_free);
+    picoquic_packet_t* p, int should_free,
+    int add_to_data_repeat_queue);
 void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx, picoquic_packet_t* p);
 
 /* Reset the connection context, e.g. after retry */
@@ -1776,9 +1776,23 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
 uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);
-uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, 
-    uint8_t* bytes_next, uint8_t* bytes_max, int* is_pure_ack);
-uint8_t* picoquic_format_stream_frames_queued_for_retransmit(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+
+/* Handling of stream_data_frames that need repeating.
+ */
+void picoquic_queue_data_repeat_packet(
+    picoquic_cnx_t* cnx, picoquic_packet_t* packet);
+void picoquic_dequeue_data_repeat_packet(
+    picoquic_cnx_t* cnx, picoquic_packet_t* packet);
+uint8_t* picoquic_copy_stream_frame_for_retransmit(
+    picoquic_cnx_t* cnx, picoquic_packet_t* packet,
+    uint8_t* bytes_next, uint8_t* bytes_max);
+uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
+    uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+/* Processing of packets considered lost: queueing frames
+ * that need to be repeated as "misc" frames, setting the
+ * flag `add_to_data_repeat_queue` if the packet contains stream
+ * frames that need to be queued.
+ */
 int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     picoquic_cnx_t * cnx,
     uint8_t * new_bytes,
@@ -1786,7 +1800,8 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     int * packet_is_pure_ack,
     int * do_not_detect_spurious,
     int force_queue,
-    size_t * length);
+    size_t * length,
+    int * add_to_data_repeat_queue);
 
 void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc,
     picoquic_local_cnxid_t* l_cid, int is_immediate_ack_required);
