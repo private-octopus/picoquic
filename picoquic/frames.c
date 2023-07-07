@@ -107,8 +107,8 @@ int picoquic_is_stream_acked(picoquic_stream_head_t* stream)
             is_acked = 1;
         }
         else {
-            /* Check whether the ack was already received */
-            is_acked = picoquic_check_sack_list(&stream->sack_list, 0, stream->sent_offset);
+            /* Check whether the ack was already received, including the FIN bit */
+            is_acked = picoquic_check_sack_list(&stream->sack_list, 0, stream->sent_offset + 1);
         }
     }
 
@@ -1728,14 +1728,15 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
             }
         }
         /* Check that these bytes are needed.
-         * TODO: This is a bit complicated, because the stream API is "fire and forget".
-         * The stream context is deleted as soon as the FIN mark is send (sender side) and
-         * the FIN is received (receive side). At that point, there may still be some
-         * stream data frames in transit, not acknowledged.
+         * The code only deletes a stream context if all the stream bytes have been acknowledged,
+         * including the FIN flag which is counted as a final octet after the max offset.
+         * If the stream is deleted or reset, there is no need to send again any stream data frame for that stream.
+         * If all the octets in the frame are acknowledged, including the FIN bit if present, there is
+         * also no need to send the frame again.
          */
         if (cnx != NULL) {
             picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
-            if (stream != NULL && (stream->reset_sent || picoquic_check_sack_list(&stream->sack_list, offset, offset + data_available))) {
+            if (stream == NULL || stream->reset_sent || picoquic_check_sack_list(&stream->sack_list, offset, offset + data_available + (size_t)fin)) {
                 /* That frame is not needed anymore */
                 is_needed = 0;
             }
