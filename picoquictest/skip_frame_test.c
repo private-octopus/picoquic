@@ -2063,7 +2063,7 @@ static size_t dataqueue_prepare_packet(
         bytes = picoquic_frames_varint_encode(bytes, bytes_max, frame_data_length);
     }
     copied_index =  packet->data_repeat_frame + (bytes - (packet->bytes + packet->data_repeat_frame));
-    for (int i = 0; i < frame_data_length; i++) {
+    for (size_t i = 0; i < frame_data_length; i++) {
         *bytes++ = (uint8_t)(i + 1);
     }
     packet->length = bytes - packet->bytes;

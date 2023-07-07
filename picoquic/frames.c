@@ -1768,7 +1768,7 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
                     *bytes_first |= fin; /* fin OK */
                     if (pad_required > 0) {
                         memmove(bytes_first + pad_required, bytes_first, before_length - bytes_first);
-                        for (int i = 0; i < pad_required; i++) {
+                        for (size_t i = 0; i < pad_required; i++) {
                             bytes_first[i] = 0;
                         }
                         bytes_next += pad_required;
