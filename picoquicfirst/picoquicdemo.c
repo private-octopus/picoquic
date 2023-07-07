@@ -1136,7 +1136,7 @@ void usage()
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     picoquic_config_usage();
     fprintf(stderr, "Picoquic demo options:\n");
-    fprintf(stderr, "  -A ip/ifindex[,ip/ifindex]  IP and interface index for multipath alternative path, e.g. 10.0.0.2/3,10.0.0.3/4\n");
+    fprintf(stderr, "  -A \"ip/ifindex[,ip/ifindex]\"  IP and interface index for multipath alternative path, e.g. \"10.0.0.2/3,10.0.0.3/4\"\n");
     fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
     fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
     fprintf(stderr, "                        -f 2  test CNXID renewal,\n");
