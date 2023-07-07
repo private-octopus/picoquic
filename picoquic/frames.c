@@ -1727,22 +1727,17 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
                 data_available = 0;
             }
         }
-        /* Check that these bytes are needed */
+        /* Check that these bytes are needed.
+         * TODO: This is a bit complicated, because the stream API is "fire and forget".
+         * The stream context is deleted as soon as the FIN mark is send (sender side) and
+         * the FIN is received (receive side). At that point, there may still be some
+         * stream data frames in transit, not acknowledged.
+         */
         if (cnx != NULL) {
             picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
-
-            if (stream == NULL || stream->reset_sent || picoquic_check_sack_list(&stream->sack_list, offset, offset + data_available)) {
-                /* That frame is not needed anymore, unless we need to just send the FIN bit.
-                 * We should really check that the FIN has not been acked yet.
-                 */
-                if (!fin) {
-                    is_needed = 0;
-                }
-                else {
-                    offset += data_available;
-                    frame_bytes += data_available;
-                    data_available = 0;
-                }
+            if (stream != NULL && (stream->reset_sent || picoquic_check_sack_list(&stream->sack_list, offset, offset + data_available))) {
+                /* That frame is not needed anymore */
+                is_needed = 0;
             }
         }
         if (is_needed) {
