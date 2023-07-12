@@ -81,18 +81,17 @@ picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uin
 int picoquic_is_stream_closed(picoquic_stream_head_t* stream, int client_mode)
 {
     int is_closed = 0;
-    if (!stream->is_output_stream) {
-        if (IS_BIDIR_STREAM_ID(stream->stream_id)) {
-            is_closed = ((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) &&
-                ((stream->fin_received && stream->fin_signalled) || (stream->reset_received && stream->reset_signalled));
-        }
-        else if (IS_LOCAL_STREAM_ID(stream->stream_id, client_mode)) {
-            /* Unidir from local host*/
-            is_closed = ((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent));
-        }
-        else {
-            is_closed = ((stream->fin_received && stream->fin_signalled) || (stream->reset_received && stream->reset_signalled));
-        }
+
+    if (IS_BIDIR_STREAM_ID(stream->stream_id)) {
+        is_closed = ((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) &&
+            ((stream->fin_received && stream->fin_signalled) || (stream->reset_received && stream->reset_signalled));
+    }
+    else if (IS_LOCAL_STREAM_ID(stream->stream_id, client_mode)) {
+        /* Unidir from local host*/
+        is_closed = ((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent));
+    }
+    else {
+        is_closed = ((stream->fin_received && stream->fin_signalled) || (stream->reset_received && stream->reset_signalled));
     }
 
     return is_closed;
@@ -108,7 +107,7 @@ int picoquic_is_stream_acked(picoquic_stream_head_t* stream)
         }
         else {
             /* Check whether the ack was already received, including the FIN bit */
-            is_acked = picoquic_check_sack_list(&stream->sack_list, 0, stream->sent_offset + 1);
+            is_acked = picoquic_check_sack_list(&stream->sack_list, 0, stream->sent_offset);
         }
     }
 
@@ -1736,7 +1735,8 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
          */
         if (cnx != NULL) {
             picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
-            if (stream == NULL || stream->reset_sent || picoquic_check_sack_list(&stream->sack_list, offset, offset + data_available + (size_t)fin)) {
+            if (stream == NULL || stream->reset_sent || 
+                picoquic_check_sack_list(&stream->sack_list, offset, offset + data_available - ((fin) ? 0 : 1))) {
                 /* That frame is not needed anymore */
                 is_needed = 0;
             }
@@ -1964,7 +1964,7 @@ int picoquic_process_ack_of_crypto_frame(picoquic_cnx_t* cnx, const uint8_t* byt
 
         if (stream != NULL) {
             (void)picoquic_update_sack_list(&stream->sack_list,
-                offset, offset + data_length, 0);
+                offset, offset + data_length - 1, 0);
         }
     }
 
@@ -1992,7 +1992,7 @@ int picoquic_check_crypto_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t*
         }
         else {
             /* Check whether the ack was already received */
-            *no_need_to_repeat = picoquic_check_sack_list(&stream->sack_list, offset, offset + data_length);
+            *no_need_to_repeat = picoquic_check_sack_list(&stream->sack_list, offset, offset + data_length - 1);
         }
     }
 

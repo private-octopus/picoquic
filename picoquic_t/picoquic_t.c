@@ -70,9 +70,6 @@ static const picoquic_test_def_t test_table[] = {
     { "stream_splay", stream_splay_test },
     { "stream_output", stream_output_test },
     { "stream_retransmit_copy", test_copy_for_retransmit },
-#if 0
-    { "stream_retransmit_format", test_format_for_retransmit },
-#endif
     { "dataqueue_copy", dataqueue_copy_test },
     { "dataqueue_packet", dataqueue_packet_test },
     { "stateless_blowback", test_stateless_blowback },

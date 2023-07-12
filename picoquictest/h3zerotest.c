@@ -1626,6 +1626,13 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         }
     }
 
+    if (ret == 0 && test_ctx->qclient->nb_data_nodes_allocated > test_ctx->qclient->nb_data_nodes_in_pool) {
+        ret = -1;
+    }
+    else if (ret == 0 && test_ctx->qserver->nb_data_nodes_allocated > test_ctx->qserver->nb_data_nodes_in_pool) {
+        ret = -1;
+    }
+
     picoquic_demo_client_delete_context(&callback_ctx);
 
     if (test_ctx != NULL) {
