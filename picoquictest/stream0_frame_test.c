@@ -676,6 +676,7 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
         else {
             stream->reset_requested = 1;
             stream->reset_sent = 1;
+            stream->reset_acked = 1;
         }
     }
     if (ret == 0) {

@@ -319,7 +319,7 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
     }
     else {
         stream->app_stream_ctx = NULL;
-        if (stream->fin_sent) {
+        if (stream->fin_sent && picoquic_check_sack_list(&stream->sack_list, 0, stream->fin_offset) == 0){
             ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
         }
         else if (!stream->reset_requested) {
@@ -3893,11 +3893,11 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         }
     }
 
-    /* The first action is normally to retransmit lost packets. But if retransmit follows an
-     * MTU drop, the stream frame will be fragmented and a fragment will be queued as a
-     * misc frame. These fragments should have chance to go out before more retransmit is
-     permitted, hence the test here for the misc-frame */
-    if (cnx->first_misc_frame == NULL &&
+    /* The first action is normally to retransmit lost packets. These lost packets
+     * are queued in the connection context as `cnx->data_repeat_first` when data 
+     * frames need to be repeated, and under `cnx->first_misc_frame` when other
+     * individual frames need repetition. */
+    if (cnx->first_misc_frame == NULL && 
         (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, 
         send_buffer_min_max, &header_length)) > 0) {
         /* Check whether it makes sense to add an ACK at the end of the retransmission */

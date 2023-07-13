@@ -4261,7 +4261,7 @@ int stop_sending_test_one(int discard)
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
     int nb_initial_loop = 0;
 
-    if (ret == 0 && !discard) {
+    if (ret == 0) {
         /* Set long delays, in order to test potential leaks of node structure */
         test_ctx->c_to_s_link->microsec_latency = stop_sending_latency;
         test_ctx->s_to_c_link->microsec_latency = stop_sending_latency;

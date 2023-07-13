@@ -819,6 +819,7 @@ typedef struct st_picoquic_stream_head_t {
     unsigned int fin_signalled : 1; /* After Fin was received from peer, Fin was signalled to the application */
     unsigned int reset_requested : 1; /* Application has requested to reset the stream */
     unsigned int reset_sent : 1; /* Reset stream sent to peer */
+    unsigned int reset_acked : 1; /* Reset stream acked by the peer */
     unsigned int reset_received : 1; /* Reset stream received from peer */
     unsigned int reset_signalled : 1; /* After Reset stream received from peer, application was notified */
     unsigned int stop_sending_requested : 1; /* Application has requested to stop sending */
