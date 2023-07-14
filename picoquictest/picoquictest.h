@@ -278,9 +278,6 @@ int cid_for_lb_cli_test();
 int retry_protection_vector_test();
 int retry_protection_v2_test();
 int test_copy_for_retransmit();
-#if 0
-int test_format_for_retransmit();
-#endif
 int dataqueue_copy_test();
 int dataqueue_packet_test();
 int bad_coalesce_test();

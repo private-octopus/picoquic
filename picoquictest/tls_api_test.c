@@ -2705,6 +2705,13 @@ int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx)
             test_ctx->stream0_sent != test_ctx->stream0_received) {
             ret = -1;
         }
+
+        if (ret == 0 && test_ctx->qclient->nb_data_nodes_allocated > test_ctx->qclient->nb_data_nodes_in_pool) {
+            ret = -1;
+        } else 
+        if (ret == 0 && test_ctx->qserver->nb_data_nodes_allocated > test_ctx->qserver->nb_data_nodes_in_pool) {
+            ret = -1;
+        }
     }
     if (ret != 0)
     {
@@ -4247,11 +4254,18 @@ int zero_rtt_delay_test()
 int stop_sending_test_one(int discard)
 {
     uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0;
+    const uint64_t stop_sending_latency = 100000;
+    uint64_t loss_mask = 0x0F0F0F0F0F000000ull;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
     int nb_initial_loop = 0;
+
+    if (ret == 0) {
+        /* Set long delays, in order to test potential leaks of node structure */
+        test_ctx->c_to_s_link->microsec_latency = stop_sending_latency;
+        test_ctx->s_to_c_link->microsec_latency = stop_sending_latency;
+    }
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -4312,6 +4326,13 @@ int stop_sending_test_one(int discard)
                 }
             }
         }
+    }
+
+    if (ret == 0 && test_ctx->qclient->nb_data_nodes_allocated > test_ctx->qclient->nb_data_nodes_in_pool) {
+        ret = -1;
+    }
+    else if (ret == 0 && test_ctx->qserver->nb_data_nodes_allocated > test_ctx->qserver->nb_data_nodes_in_pool) {
+        ret = -1;
     }
 
     if (ret == 0) {
