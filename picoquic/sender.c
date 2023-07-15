@@ -3493,6 +3493,12 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
  * Lots of the same code as in the "ready" case, but we deal here with extra
  * complexity because the handshake is not finished.
  */
+#define DOUBLE_PING_TRACE(step) ( \
+   (length > 13 && packet->bytes[12] == 1 && packet->bytes[13] == 1) ?\
+       (picoquic_log_app_message(cnx, "Double ping detected at step %d, state %d, trace %" PRIx64, step, cnx->cnx_state, double_ping_trace),1) : \
+       (double_ping_trace |= 1u << step, 0 ))
+
+
 int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time,
     int* is_initial_sent)
@@ -3512,6 +3518,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     int more_data = 0;
     int stream_tried_and_failed = 0;
     int is_challenge_padding_needed = 0;
+    uint64_t double_ping_trace = 0;
 
     /* Perform amplification prevention check */
     if (!cnx->initial_validated &&
@@ -3536,6 +3543,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
         if (length > 0) {
             checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
             bytes_max = bytes + send_buffer_min_max - checksum_overhead;
+            DOUBLE_PING_TRACE(1);
         }
     }
     else {
@@ -3550,6 +3558,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
         if (cnx->client_mode && *is_initial_sent && send_buffer_min_max < length + checksum_overhead + PICOQUIC_MIN_SEGMENT_SIZE) {
             length = picoquic_pad_to_target_length(packet->bytes, length, send_buffer_min_max - checksum_overhead);
+            DOUBLE_PING_TRACE(2);
         }
     }
 
@@ -3601,6 +3610,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     is_pure_ack = 0;
                     packet->send_time = current_time;
                     packet->checksum_overhead = checksum_overhead;
+
+                    DOUBLE_PING_TRACE(3);
                 }
 
                 /* Send here the frames that are not exempt from the pacing control,
@@ -3608,6 +3619,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                 if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc, 0)) {
                     bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data,
                         current_time, pc, 0);
+                    DOUBLE_PING_TRACE(4);
                 }
 
                 length = bytes_next - bytes;
@@ -3646,12 +3658,14 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             if (bytes_next == bytes_misc) {
                                 break;
                             }
+                            DOUBLE_PING_TRACE(4);
                         }
 
                         /* If there are not enough published CID, create and advertise */
                         if (ret == 0) {
                             bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max,
                                 current_time, next_wake_time, &more_data, &is_pure_ack);
+                            DOUBLE_PING_TRACE(5);
                         }
 
                         /* Start of CC controlled frames */
@@ -3675,6 +3689,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         if (ret == 0) {
                             bytes_next = picoquic_copy_stream_frames_for_retransmit(cnx, bytes_next, bytes_max,
                                 &more_data, &is_pure_ack);
+                            DOUBLE_PING_TRACE(6);
                         }
 
                         if (cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
@@ -3691,7 +3706,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         }
            
                         length = bytes_next - bytes;
-
+                        DOUBLE_PING_TRACE(7);
                         if (length <= header_length) {
                             /* Mark the bandwidth estimation as application limited */
                             path_x->delivered_limited_index = path_x->delivered;
@@ -3722,6 +3737,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             *next_wake_time = current_time;
                             SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                         }
+                        DOUBLE_PING_TRACE(8);
                     }
                 } /* end of PMTU references */
             } /* end of CC */
@@ -3752,6 +3768,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     bytes[length++] = picoquic_frame_type_ping;
                     bytes[length++] = 0;
                     cnx->latest_progress_time = current_time;
+                    DOUBLE_PING_TRACE(9);
                 }
                 else if (cnx->latest_progress_time + cnx->keep_alive_interval < *next_wake_time) {
                     *next_wake_time = cnx->latest_progress_time + cnx->keep_alive_interval;
@@ -3776,6 +3793,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
         else {
             length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
         }
+        DOUBLE_PING_TRACE(10);
     }
 
     picoquic_finalize_and_protect_packet(cnx, packet,
@@ -3847,6 +3865,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     int is_challenge_padding_needed = 0;
     int is_nominal_ack_path = (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) ?
         path_x->is_nominal_ack_path : path_x == cnx->path[0];
+    uint64_t double_ping_trace = 0;
 
     picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled) ?
         &path_x->p_remote_cnxid->pkt_ctx : &cnx->pkt_ctx[picoquic_packet_context_application];
@@ -3900,12 +3919,14 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     if (cnx->first_misc_frame == NULL && 
         (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, 
         send_buffer_min_max, &header_length)) > 0) {
+        DOUBLE_PING_TRACE(1);
         /* Check whether it makes sense to add an ACK at the end of the retransmission */
         if (bytes + length + 256 < bytes_max) {
             /* Don't do that if it risks mixing clear text and encrypted ack */
             bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
                 current_time, pc, !is_nominal_ack_path);
             length = bytes_next - bytes;
+            DOUBLE_PING_TRACE(2);
         }
         /* document the send time & overhead */
         is_pure_ack = 0;
@@ -3943,6 +3964,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
             length++;
             length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
             bytes_next = bytes + length;
+            DOUBLE_PING_TRACE(3);
         } else if (cnx->cnx_state != picoquic_state_disconnected && path_x->challenge_verified != 0) {
             /* There are no frames yet that would be exempt from pacing control, but if there
              * was they should be sent here. */
@@ -3955,6 +3977,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data,
                         current_time, pc, !is_nominal_ack_path);
                     ack_sent = (bytes_next > bytes_ack);
+                    DOUBLE_PING_TRACE(4);
                 }
 
                 /* if necessary, prepare the MAX STREAM frames */
@@ -3992,6 +4015,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                      */
                     more_data = 1; 
                     bytes_next = picoquic_format_first_misc_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+                    DOUBLE_PING_TRACE(5);
                     if (bytes_next > bytes_misc) {
                         split_repeat_queued |=
                             PICOQUIC_IN_RANGE(*bytes_misc, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max);
@@ -4039,6 +4063,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         if (ret == 0) {
                             bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max,
                                 current_time, next_wake_time, &more_data, &is_pure_ack);
+                            DOUBLE_PING_TRACE(6);
                         }
 
                         /* Start of CC controlled frames */
@@ -4051,6 +4076,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         if (ret == 0) {
                             bytes_next = picoquic_copy_stream_frames_for_retransmit(cnx, bytes_next, bytes_max,
                                 &more_data, &is_pure_ack);
+                            DOUBLE_PING_TRACE(7);
                         }
 
                         if (ret == 0 && cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
@@ -4062,6 +4088,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             if (bytes_next + 8 < bytes_max) {
                                 bytes_next = picoquic_format_available_stream_frames(cnx, path_x, bytes_next, bytes_max, &more_data, &is_pure_ack, &stream_tried_and_failed, &ret);
                                 cnx->datagram_conflicts_count = 0;
+                                DOUBLE_PING_TRACE(8);
                             }
                             else {
                                 picoquic_stream_head_t* stream = picoquic_find_ready_stream(cnx);
@@ -4115,6 +4142,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                                      preemptive_repeat = 1;
                                      packet->is_preemptive_repeat = 1;
                                  }
+                                 DOUBLE_PING_TRACE(9);
                             }
                             else if (!more_data){
                                 /* Check whether preemptive retrasmission is needed. Same code as above,
@@ -4122,6 +4150,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                                  */
                                 ret = picoquic_preemptive_retransmit_as_needed(cnx, path_x, pc, current_time, next_wake_time, bytes_next,
                                     bytes_max - bytes_next, &length, &more_data, 1);
+                                DOUBLE_PING_TRACE(10);
                             }
                         }
 
@@ -4137,6 +4166,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             length++;
                             is_pure_ack = 0;
                         }
+                        DOUBLE_PING_TRACE(11);
                     } 
 
                     if (ret == 0 && length <= header_length) {
@@ -4151,6 +4181,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             packet->is_mtu_probe = 1;
                             path_x->mtu_probe_sent = 1;
                             is_pure_ack = 0;
+                            DOUBLE_PING_TRACE(12);
                         }
                     }
                 } /* end of CC */
@@ -4182,6 +4213,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     pkt_ctx->ack_of_ack_requested = 1;
                     is_pure_ack = 0;
                     length = bytes_next - bytes;
+                    DOUBLE_PING_TRACE(13);
                 }
             }
 
@@ -4195,6 +4227,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     *bytes_next = picoquic_frame_type_ping;
                     length++;
                 }
+                DOUBLE_PING_TRACE(14);
             }
 
             if (!is_pure_ack) {
@@ -4223,6 +4256,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 bytes[length++] = picoquic_frame_type_ping;
                 bytes[length++] = 0;
                 cnx->latest_progress_time = current_time;
+                DOUBLE_PING_TRACE(15);
             }
             else if (cnx->latest_progress_time + cnx->keep_alive_interval < *next_wake_time) {
                 *next_wake_time = cnx->latest_progress_time + cnx->keep_alive_interval;
@@ -4246,6 +4280,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         else {
             length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
         }
+        DOUBLE_PING_TRACE(16);
     }
 
     picoquic_finalize_and_protect_packet(cnx, packet,
