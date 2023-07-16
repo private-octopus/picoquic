@@ -3494,7 +3494,8 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
  * complexity because the handshake is not finished.
  */
 #define DOUBLE_PING_TRACE(step) ( \
-   (length > 13 && packet->bytes[12] == 1 && packet->bytes[13] == 1) ?\
+   (length > packet->offset + 2 && packet->bytes[packet->offset] == 1 && \
+    (packet->bytes[packet->offset+1] == 1 || (packet->bytes[packet->offset+1] == 0 && packet->bytes[packet->offset+2] != 0)) )? \
        (picoquic_log_app_message(cnx, "Double ping detected at step %d, state %d, trace %" PRIx64, step, cnx->cnx_state, double_ping_trace),1) : \
        (double_ping_trace |= 1u << step, 0 ))
 
