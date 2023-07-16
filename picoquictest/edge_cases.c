@@ -566,7 +566,7 @@ int ec9a_preemptive_amok_test()
         picoquic_cnx_t * last_cnx;
         int loop_count = 0;
         int send_count = 0;
-        const int send_count_max = 25;
+        const int send_count_max = 30;
         uint64_t repeat_begin = simulated_time;
         uint64_t repeat_duration = 0;
 
