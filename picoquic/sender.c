@@ -2119,7 +2119,7 @@ int picoquic_preemptive_retransmit_as_needed(
     size_t send_buffer_max_minus_checksum,
     size_t* length,
     int* more_data,
-    int test_only)
+    int* is_pure_ack)
 {
     /* If there is a single packet context for application frames,
      * the code just has to track the preemptive_repeat_ptr for
@@ -2142,7 +2142,7 @@ int picoquic_preemptive_retransmit_as_needed(
             pkt_ctx = &r_cid->pkt_ctx;
             ret = picoquic_preemptive_retransmit_in_context(
                 cnx, pkt_ctx, rtt, current_time, next_wake_time,
-                new_bytes, send_buffer_max_minus_checksum, length, &has_data, more_data, test_only);
+                new_bytes, send_buffer_max_minus_checksum, length, &has_data, more_data, is_pure_ack == NULL);
             if (ret != 0 || has_data != 0) {
                 break;
             }
@@ -2153,7 +2153,11 @@ int picoquic_preemptive_retransmit_as_needed(
         pkt_ctx = &cnx->pkt_ctx[pc];
         ret = picoquic_preemptive_retransmit_in_context(
             cnx, pkt_ctx, rtt, current_time, next_wake_time,
-            new_bytes, send_buffer_max_minus_checksum, length, &has_data, more_data, test_only);
+            new_bytes, send_buffer_max_minus_checksum, length, &has_data, more_data, is_pure_ack == NULL);
+    }
+    
+    if (ret == 0 &&  is_pure_ack != NULL) {
+        *is_pure_ack &= !has_data;
     }
 
     return ret;
@@ -4138,10 +4142,11 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                                  * data range has not been acked, and it fits: copy it to the data. Move the index to the previous packet.
                                  */
                                  ret = picoquic_preemptive_retransmit_as_needed(cnx, path_x, pc, current_time, next_wake_time, bytes_next,
-                                    bytes_max - bytes_next, &length, &more_data, 0);
+                                    bytes_max - bytes_next, &length, &more_data, &is_pure_ack);
                                  if (length > header_length) {
                                      preemptive_repeat = 1;
                                      packet->is_preemptive_repeat = 1;
+                                     bytes_next = bytes + length;
                                  }
                                  DOUBLE_PING_TRACE(9);
                             }
@@ -4150,7 +4155,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                                  * but in "test_only" mode, will set "more_data" or wait time if repeat is ready 
                                  */
                                 ret = picoquic_preemptive_retransmit_as_needed(cnx, path_x, pc, current_time, next_wake_time, bytes_next,
-                                    bytes_max - bytes_next, &length, &more_data, 1);
+                                    bytes_max - bytes_next, &length, &more_data, NULL);
                                 DOUBLE_PING_TRACE(10);
                             }
                         }
