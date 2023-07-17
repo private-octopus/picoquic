@@ -146,10 +146,10 @@ typedef enum {
     picoquic_frame_type_ack_frequency = 0xAF,
     picoquic_frame_type_immediate_ack = 0xAC,
     picoquic_frame_type_time_stamp = 757,
-    picoquic_frame_type_ack_mp = 0xbaba00,
-    picoquic_frame_type_ack_mp_ecn = 0xbaba01,
-    picoquic_frame_type_path_abandon = 0xbaba05,
-    picoquic_frame_type_path_status = 0xbaba06,
+    picoquic_frame_type_ack_mp = 0x15228c00,
+    picoquic_frame_type_ack_mp_ecn =  0x15228c01,
+    picoquic_frame_type_path_abandon =  0x15228c05,
+    picoquic_frame_type_path_status =  0x15228c06,
     picoquic_frame_type_bdp = 0xebd9
 } picoquic_frame_type_enum_t;
 
@@ -580,7 +580,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_min_ack_delay 0xff04de1aull 
 #define picoquic_tp_enable_time_stamp 0x7158  /* x&1 */
 #define picoquic_tp_grease_quic_bit 0x2ab2
-#define picoquic_tp_enable_multipath 0x0f739bbc1b666d04ull
+#define picoquic_tp_enable_multipath 0x0f739bbc1b666d05ull
 #define picoquic_tp_enable_simple_multipath  0x29e3d19e
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
