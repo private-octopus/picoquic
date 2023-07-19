@@ -1828,7 +1828,7 @@ static int tls_api_attempt_to_close(
     return tls_api_close_with_losses(test_ctx, simulated_time, 0);
 }
 
-static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
+int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t * simulated_time)
 {
     int ret = 0;
@@ -2912,11 +2912,11 @@ int implicit_ack_test()
     }
 
     for (int i = 0; ret == 0 && i < 2; i++) {
-        if (test_ctx->cnx_client->pkt_ctx[pc[i]].retransmit_oldest != NULL) {
+        if (test_ctx->cnx_client->pkt_ctx[pc[i]].pending_first != NULL) {
             DBG_PRINTF("Retransmit queue type %d not empty on client", pc[i]);
             ret = -1;
         }
-        else if (test_ctx->cnx_server->pkt_ctx[pc[i]].retransmit_oldest != NULL) {
+        else if (test_ctx->cnx_server->pkt_ctx[pc[i]].pending_first != NULL) {
             DBG_PRINTF("Retransmit queue type %d not empty on server", pc[i]);
             ret = -1;
         }
@@ -2924,7 +2924,7 @@ int implicit_ack_test()
             DBG_PRINTF("Retransmitted queue type %d not empty on client", pc[i]);
             ret = -1;
         }
-        else if (test_ctx->cnx_server->pkt_ctx[pc[i]].retransmit_oldest != NULL) {
+        else if (test_ctx->cnx_server->pkt_ctx[pc[i]].pending_first != NULL) {
             DBG_PRINTF("Retransmitted queue type %d not empty on server", pc[i]);
             ret = -1;
         }
@@ -9224,7 +9224,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
 
             /* find whether there was a new hole inserted */
             if (test_ctx->cnx_server != NULL) {
-                picoquic_packet_t * packet = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest;
+                picoquic_packet_t * packet = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].pending_first;
 
                 while (packet != NULL && packet->sequence_number > hole_number) {
                     if (packet->is_ack_trap) {
@@ -9240,7 +9240,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                         nb_holes++;
                         break;
                     }
-                    packet = packet->previous_packet;
+                    packet = packet->packet_next;
                 }
             }
 

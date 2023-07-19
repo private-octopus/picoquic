@@ -446,6 +446,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(initial_ping)
+        {
+            int ret = initial_ping_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(initial_ping_ack)
+        {
+            int ret = initial_ping_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(datagram)
         {
             int ret = datagram_test();

@@ -113,6 +113,8 @@ static const picoquic_test_def_t test_table[] = {
     { "client_losses", tls_api_client_losses_test },
     { "server_losses", tls_api_server_losses_test },
     { "many_losses", tls_api_many_losses },
+    { "initial_ping", initial_ping_test },
+    { "initial_ping_ack", initial_ping_ack_test },
     { "datagram", datagram_test },
     { "datagram_rt", datagram_rt_test },
     { "datagram_rt_skip", datagram_rt_skip_test },

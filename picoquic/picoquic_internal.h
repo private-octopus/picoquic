@@ -376,8 +376,8 @@ typedef struct st_picoquic_stream_queue_node_t {
  */
 
 typedef struct st_picoquic_packet_t {
-    struct st_picoquic_packet_t* previous_packet;
-    struct st_picoquic_packet_t* next_packet;
+    struct st_picoquic_packet_t* packet_next;
+    struct st_picoquic_packet_t* packet_previous;
     struct st_picoquic_path_t* send_path;
     struct st_picoquic_packet_t* path_packet_next;
     struct st_picoquic_packet_t* path_packet_previous;
@@ -876,8 +876,8 @@ typedef struct st_picoquic_packet_context_t {
     uint64_t highest_acknowledged;
     uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
     uint64_t highest_acknowledged_time; /* time at which the highest ack was received */
-    picoquic_packet_t* retransmit_newest;
-    picoquic_packet_t* retransmit_oldest;
+    picoquic_packet_t* pending_last;
+    picoquic_packet_t* pending_first;
     picoquic_packet_t* retransmitted_newest;
     picoquic_packet_t* retransmitted_oldest;
     picoquic_packet_t* preemptive_repeat_ptr;
@@ -1628,6 +1628,8 @@ size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, picoquic_epoch_enum is_
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
 void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx); /* For debugging potential PN_ENC corruption */
+
+size_t picoquic_pad_to_target_length(uint8_t* bytes, size_t length, size_t target);
 
 void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,

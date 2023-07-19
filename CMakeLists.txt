@@ -149,6 +149,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/parseheadertest.c
     picoquictest/picoquic_lb_test.c
     picoquictest/pn2pn64test.c
+    picoquictest/quic_tester.c
     picoquictest/sacktest.c
     picoquictest/satellite_test.c
     picoquictest/skip_frame_test.c
