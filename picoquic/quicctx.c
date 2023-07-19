@@ -898,7 +898,7 @@ void picoquic_free(picoquic_quic_t* quic)
 
         /* delete packets in pool */
         while (quic->p_first_packet != NULL) {
-            picoquic_packet_t * p = quic->p_first_packet->next_packet;
+            picoquic_packet_t * p = quic->p_first_packet->packet_previous;
             free(quic->p_first_packet);
             quic->p_first_packet = p;
             quic->nb_packets_allocated--;
@@ -1703,7 +1703,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
                 DBG_PRINTF("Erase path for old packet pc: %d, seq:%" PRIu64 "\n", pc, p->sequence_number);
                 p->send_path = NULL;
             }
-            p = p->previous_packet;
+            p = p->packet_next;
         }
     }
 
@@ -2338,8 +2338,8 @@ void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pk
     else {
         pkt_ctx->send_sequence = 0;
     }
-    pkt_ctx->retransmit_newest = NULL;
-    pkt_ctx->retransmit_oldest = NULL;
+    pkt_ctx->pending_last = NULL;
+    pkt_ctx->pending_first = NULL;
     pkt_ctx->highest_acknowledged = pkt_ctx->send_sequence - 1;
     pkt_ctx->latest_time_acknowledged = cnx->start_time;
     pkt_ctx->highest_acknowledged_time = cnx->start_time;
@@ -2499,9 +2499,9 @@ picoquic_remote_cnxid_t* picoquic_remove_stashed_cnxid(picoquic_cnx_t* cnx, pico
             picoquic_packet_context_t* pkt_ctx = &removed->pkt_ctx;
 
             if (recycle_packets) {
-                picoquic_packet_t* recycled = pkt_ctx->retransmit_oldest;
+                picoquic_packet_t* recycled = pkt_ctx->pending_first;
                 while (recycled != NULL) {
-                    picoquic_packet_t * recycled_previous = recycled->previous_packet;
+                    picoquic_packet_t * recycled_previous = recycled->packet_next;
                     int packet_is_pure_ack = 0;
                     int do_not_detect_spurious = 0;
                     int add_to_data_repeat_queue = 0;
@@ -2518,8 +2518,8 @@ picoquic_remote_cnxid_t* picoquic_remove_stashed_cnxid(picoquic_cnx_t* cnx, pico
             }
             else
             {
-                while (pkt_ctx->retransmit_newest != NULL) {
-                    (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->retransmit_newest, 1, 0);
+                while (pkt_ctx->pending_last != NULL) {
+                    (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->pending_last, 1, 0);
                 }
             }
 
@@ -4078,8 +4078,8 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
     picoquic_ack_context_t* ack_ctx = &cnx->ack_ctx[pc];
 
-    while (pkt_ctx->retransmit_newest != NULL) {
-        (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->retransmit_newest, 1, 0);
+    while (pkt_ctx->pending_last != NULL) {
+        (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->pending_last, 1, 0);
     }
     
     while (pkt_ctx->retransmitted_newest != NULL) {

@@ -2238,7 +2238,7 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
             should_delete = p;
         }
 
-        p = p->previous_packet;
+        p = p->packet_next;
 
         if (should_delete != NULL) {
             picoquic_dequeue_retransmitted_packet(cnx, pkt_ctx, should_delete);
@@ -2261,7 +2261,7 @@ void picoquic_dequeue_old_retransmitted_packets(picoquic_cnx_t* cnx, picoquic_pa
             while (p != NULL && p->send_time < oldest_possible) {
                 picoquic_packet_t* should_delete = p;
 
-                p = p->next_packet;
+                p = p->packet_previous;
 
                 if (should_delete != NULL) {
                     picoquic_dequeue_retransmitted_packet(cnx, pkt_ctx, should_delete);
@@ -2610,7 +2610,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 static picoquic_packet_t* picoquic_find_acked_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
     uint64_t largest, uint64_t current_time, int* is_new_ack)
 {
-    picoquic_packet_t* packet = pkt_ctx->retransmit_oldest;
+    picoquic_packet_t* packet = pkt_ctx->pending_first;
 
     /* Check whether this is a new acknowledgement */
     if (largest > pkt_ctx->highest_acknowledged || pkt_ctx->highest_acknowledged == UINT64_MAX) {
@@ -2620,8 +2620,8 @@ static picoquic_packet_t* picoquic_find_acked_packet(picoquic_cnx_t* cnx, picoqu
         pkt_ctx->ack_of_ack_requested = 0;
         *is_new_ack = 1;
 
-        while (packet != NULL && packet->previous_packet != NULL && packet->sequence_number < largest) {
-            packet = packet->previous_packet;
+        while (packet != NULL && packet->packet_next != NULL && packet->sequence_number < largest) {
+            packet = packet->packet_next;
         }
     }
 
@@ -3175,10 +3175,10 @@ static int picoquic_process_ack_range(
     /* Compare the range to the retransmit queue */
     while (p != NULL && range > 0) {
         if (p->sequence_number > highest) {
-            p = p->next_packet;
+            p = p->packet_previous;
         } else {
             if (p->sequence_number == highest) {
-                picoquic_packet_t* next = p->next_packet;
+                picoquic_packet_t* next = p->packet_previous;
                 picoquic_path_t * old_path = p->send_path;
 
                 if (p->is_ack_trap) {
