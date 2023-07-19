@@ -1828,7 +1828,7 @@ static int tls_api_attempt_to_close(
     return tls_api_close_with_losses(test_ctx, simulated_time, 0);
 }
 
-static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
+int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t * simulated_time)
 {
     int ret = 0;

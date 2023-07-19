@@ -141,6 +141,9 @@
     <ClCompile Include="wifitest.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="quic_tester.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

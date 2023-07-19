@@ -267,6 +267,9 @@ int tls_api_one_scenario_init(
 int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t* simulated_time);
 
+int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
+    char const* sni, char const* alpn, uint64_t* simulated_time);
+
 int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t* test_ctx,
     test_api_stream_desc_t* stream_desc, size_t size_of_scenarios);
 
