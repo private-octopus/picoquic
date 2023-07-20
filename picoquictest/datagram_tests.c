@@ -46,34 +46,7 @@
 /*
  * Test whether datagrams are sent and received properly
  */
-typedef struct st_test_datagram_send_recv_ctx_t {
-    uint32_t dg_max_size;
-    uint32_t dg_small_size;
-    int dg_target[2];
-    int dg_sent[2];
-    int dg_recv[2];
-    int dg_acked[2];
-    int dg_nacked[2];
-    int dg_spurious[2];
-    int batch_size[2];
-    int batch_sent[2];
-    uint64_t dg_time_ready[2];
-    uint64_t dg_latency_max[2];
-    uint64_t dg_received_last[2];
-    uint64_t dg_number_delta_max[2];
-    uint64_t dg_latency_target[2];
-    uint64_t dg_number_delta_target[2];
 
-    uint64_t send_delay;
-    uint64_t next_gen_time[2];
-    int is_ready[2];
-    int max_packets_received;
-
-    unsigned int use_extended_provider_api;
-    unsigned int do_skip_test[2];
-    unsigned int is_skipping[2];
-
-} test_datagram_send_recv_ctx_t;
 
 uint64_t test_datagram_next_time_ready(test_datagram_send_recv_ctx_t* dg_ctx)
 {
@@ -98,7 +71,7 @@ int test_datagram_check_ready(test_datagram_send_recv_ctx_t* dg_ctx, int client_
     return dg_ctx->is_ready[client_mode];
 }
 
-int test_datagram_send(picoquic_cnx_t* cnx,
+int test_datagram_send(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint8_t* bytes, size_t length, void* datagram_ctx)
 {
     int ret = 0;
@@ -122,12 +95,10 @@ int test_datagram_send(picoquic_cnx_t* cnx,
             (void)picoquic_provide_datagram_buffer_ex(bytes, 0, is_active);
         }
     }
-    else if (!dg_ctx->is_ready[cnx->client_mode]) {
+    else if (!dg_ctx->is_ready[cnx->client_mode] || (dg_ctx->test_affinity && unique_path_id != 0)) {
         /* Datagram callback when the client was not ready. */
         is_active = 0;
-        if (dg_ctx->use_extended_provider_api) {
-            (void)picoquic_provide_datagram_buffer_ex(bytes, 0, is_active);
-        }
+        (void)picoquic_provide_datagram_buffer_ex(bytes, 0, (picoquic_datagram_active_enum)0);
     }
     else {
         uint8_t* buffer = NULL;
@@ -144,7 +115,11 @@ int test_datagram_send(picoquic_cnx_t* cnx,
             }
         }
         if (dg_ctx->use_extended_provider_api) {
-            buffer = picoquic_provide_datagram_buffer_ex(bytes, available, 1);
+            picoquic_datagram_active_enum is_active = picoquic_datagram_active_any_path;
+            if (dg_ctx->test_affinity) {
+                is_active = picoquic_datagram_active_this_path_only;
+            }
+            buffer = picoquic_provide_datagram_buffer_ex(bytes, available, is_active);
         }
         else {
             buffer = picoquic_provide_datagram_buffer(bytes, available);
@@ -176,12 +151,17 @@ int test_datagram_send(picoquic_cnx_t* cnx,
 
     if (ret == 0 && !skipping && !dg_ctx->use_extended_provider_api) {
         (void)test_datagram_check_ready(dg_ctx, cnx->client_mode, current_time);
-        picoquic_mark_datagram_ready(cnx, dg_ctx->is_ready[cnx->client_mode]);
+        if (dg_ctx->test_affinity) {
+            picoquic_mark_datagram_ready_path(cnx, 0, dg_ctx->is_ready[cnx->client_mode]);
+        }
+        else {
+            picoquic_mark_datagram_ready(cnx, dg_ctx->is_ready[cnx->client_mode]);
+        }
     }
     return ret;
 }
 
-int test_datagram_recv(picoquic_cnx_t* cnx,
+int test_datagram_recv(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint8_t* bytes, size_t length, void* datagram_ctx)
 {
     test_datagram_send_recv_ctx_t* dg_ctx = datagram_ctx;
@@ -193,6 +173,12 @@ int test_datagram_recv(picoquic_cnx_t* cnx,
         uint64_t time_sent;
         uint64_t number_sent;
 
+        if (unique_path_id == 0) {
+            dg_ctx->nb_recv_path_0[cnx->client_mode] += 1;
+        }
+        else {
+            dg_ctx->nb_recv_path_other[cnx->client_mode] += 1;
+        }
 
         if ((dg_bytes = picoquic_frames_uint64_decode(bytes, bytes + length, &number_sent)) != NULL &&
             (dg_bytes = picoquic_frames_uint64_decode(dg_bytes, bytes + length, &time_sent)) != NULL &&
@@ -251,6 +237,11 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
     int nb_trials = 0;
     int nb_inactive = 0;
     int ret;
+    int wifi_todo = dg_ctx->test_wifi;
+    uint64_t wifi_test_time = 1000000;
+    uint64_t wifi_interval = 250000;
+    int nb_trial_max = (dg_ctx->nb_trials_max == 0) ? 2048 : dg_ctx->nb_trials_max;
+
 
     initial_cid.id[3] = test_id;
 
@@ -267,11 +258,17 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
         /* Set the congestion control  */
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
+        /* request logs */
         test_ctx->qserver->use_long_log = 1;
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qclient->use_long_log = 1;
         picoquic_set_binlog(test_ctx->qclient, ".");
         binlog_new_connection(test_ctx->cnx_client);
+        /* set latency to non default, if desired */
+        if (dg_ctx->link_latency != 0) {
+            test_ctx->c_to_s_link->microsec_latency = dg_ctx->link_latency;
+            test_ctx->s_to_c_link->microsec_latency = dg_ctx->link_latency;
+        }
         /* Set parameters */
         picoquic_init_transport_parameters(&client_parameters, 1);
         client_parameters.max_datagram_frame_size = dg_ctx->dg_max_size;
@@ -280,9 +277,12 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
     }
 
     if (ret == 0) {
-        /* Perform a connection loop to verify it goes OK */
+        /* Perform a connection loop to verify it goes OK 
+         * If testing WiFi spike, set the queue delay max to a high value.
+         */
         ret = tls_api_connection_loop(test_ctx, &loss_mask,
-            2 * test_ctx->c_to_s_link->microsec_latency, &simulated_time);
+            2 * test_ctx->c_to_s_link->microsec_latency + 
+            (dg_ctx->test_wifi)?275000:0, &simulated_time);
 
         if (ret != 0)
         {
@@ -315,11 +315,23 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
     }
 
     /* Send datagrams for specified time */
-    while (ret == 0 && nb_trials < 2048 && nb_inactive < 16) {
+    while (ret == 0 && nb_trials < nb_trial_max && nb_inactive < 16) {
         int was_active = 0;
         uint64_t time_out = test_datagram_next_time_ready(dg_ctx);
 
         nb_trials++;
+
+        if (wifi_todo) {
+            if (simulated_time >= wifi_test_time) {
+                uint64_t resume_time = simulated_time + wifi_interval;
+                picoquic_test_simlink_suspend(test_ctx->c_to_s_link, resume_time, 0);
+                picoquic_test_simlink_suspend(test_ctx->s_to_c_link, resume_time, 1);
+                wifi_todo = 0;
+            }
+            else if (time_out > wifi_test_time) {
+                time_out = wifi_test_time;
+            }
+        }
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
 
@@ -333,7 +345,7 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
             dg_ctx->dg_recv[1] == dg_ctx->dg_target[0]) {
             break;
         }
-        else if (loss_mask_init != 0 &&
+        else if ((loss_mask_init != 0 || dg_ctx->test_wifi != 0) &&
             dg_ctx->dg_sent[0] == dg_ctx->dg_target[0] &&
             dg_ctx->dg_sent[1] == dg_ctx->dg_target[1]) {
             if (all_sent_time == 0) {
@@ -366,7 +378,9 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
     }
 
     if (ret == 0) {
-        if (loss_mask_init == 0) {
+        if (loss_mask_init == 0  ||
+            (dg_ctx->dg_recv[0] == dg_ctx->dg_target[1] &&
+                dg_ctx->dg_recv[1] == dg_ctx->dg_target[0])) {
             /* Verify datagrams have been received */
             if (dg_ctx->dg_recv[0] != dg_ctx->dg_target[1] ||
                 dg_ctx->dg_recv[1] != dg_ctx->dg_target[0]) {
@@ -375,6 +389,18 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
                 for (int i = 0; i < 2; i++) {
                     DBG_PRINTF("dg_target[%d]=%d, dg_sent[%d]=%d, dg_recv[%d]=%d",
                         i, dg_ctx->dg_target[i], i, dg_ctx->dg_sent[i], 1 - i, dg_ctx->dg_recv[1 - i]);
+                }
+                ret = -1;
+            }
+            /* Verify that all NACK are counted spurious */
+            if (ret == 0 && (
+                dg_ctx->dg_nacked[0] != dg_ctx->dg_spurious[0] ||
+                dg_ctx->dg_nacked[1] != dg_ctx->dg_spurious[1])) {
+                for (int i = 0; i < 2; i++) {
+                    DBG_PRINTF("dg_nacked[%d]=%d != dg_spurious[%d]=%d",
+                        i, dg_ctx->dg_nacked[i], i, dg_ctx->dg_spurious[i]);
+                    DBG_PRINTF("dg_nacked[%d]=%d != dg_spurious[%d]=%d",
+                        i, dg_ctx->dg_nacked[i], i, dg_ctx->dg_spurious[i]);
                 }
                 ret = -1;
             }
@@ -510,7 +536,6 @@ int datagram_loss_test()
     dg_ctx.next_gen_time[0] = 100000;
     dg_ctx.next_gen_time[1] = 100000;
 
-
     return datagram_test_one(4, &dg_ctx, 0x040080100200400ull);
 }
 
@@ -557,5 +582,23 @@ int datagram_small_new_test()
     dg_ctx.max_packets_received = 55;
     dg_ctx.use_extended_provider_api = 1;
 
-    return datagram_test_one(6, &dg_ctx, 0);
+    return datagram_test_one(7, &dg_ctx, 0);
+}
+
+int datagram_wifi_test()
+{
+    test_datagram_send_recv_ctx_t dg_ctx = { 0 };
+    dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
+    dg_ctx.dg_target[0] = 1000;
+    dg_ctx.dg_target[1] = 1000;
+    dg_ctx.send_delay = 2000;
+    dg_ctx.next_gen_time[0] = 100000;
+    dg_ctx.next_gen_time[1] = 100000;
+    dg_ctx.dg_latency_target[0] = 305000;
+    dg_ctx.dg_latency_target[1] = 280000;
+    dg_ctx.test_wifi = 1;
+    dg_ctx.nb_trials_max = 64000;
+    dg_ctx.link_latency = 25000;
+
+    return datagram_test_one(8, &dg_ctx, 0);
 }

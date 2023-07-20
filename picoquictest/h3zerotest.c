@@ -25,6 +25,7 @@
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
+#include "tls_api.h"
 #include "h3zero.h"
 #include "h3zero_common.h"
 #include "democlient.h"
@@ -1577,11 +1578,17 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
                 ret = -1;
             }
         }
-
+#if 0
+        if (++nb_trials > 150000) {
+            ret = -1;
+            break;
+        }
+#else
         if (++nb_trials > 100000) {
             ret = -1;
             break;
         }
+#endif
     }
 
     /* Verify that the data was properly received. */
@@ -1617,6 +1624,13 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
             DBG_PRINTF("Test uses %llu microsec instead of %llu", simulated_time, completion_target);
             ret = -1;
         }
+    }
+
+    if (ret == 0 && test_ctx->qclient->nb_data_nodes_allocated > test_ctx->qclient->nb_data_nodes_in_pool) {
+        ret = -1;
+    }
+    else if (ret == 0 && test_ctx->qserver->nb_data_nodes_allocated > test_ctx->qserver->nb_data_nodes_in_pool) {
+        ret = -1;
     }
 
     picoquic_demo_client_delete_context(&callback_ctx);
@@ -2529,7 +2543,7 @@ static void demo_test_multi_scenario_free(picoquic_demo_stream_desc_t** scenario
     }
 }
 
-static size_t picohttp_test_multifile_number = 1000;
+size_t picohttp_test_multifile_number = 1000;
 #define MULTI_FILE_CLIENT_BIN "multi_file_client_trace.bin"
 #define MULTI_FILE_SERVER_BIN "multi_file_server_trace.bin"
 
@@ -2776,6 +2790,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
 }
 
 size_t picohttp_nb_stress_clients = 128;
+uint64_t picohttp_random_stress_context = 0x12345678;
 
 int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
 {
@@ -2793,7 +2808,8 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     picoquictest_sim_link_t* lan = NULL;
     struct sockaddr_storage server_address;
     uint64_t server_time = 0;
-    uint64_t random_context = 0x12345678;
+    uint64_t random_context = picohttp_random_stress_context;
+    size_t nb_stress_clients = picohttp_nb_stress_clients;
 
     ret = picoquic_store_text_addr(&server_address, "1::1", 443);
 
@@ -2809,7 +2825,9 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
         ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
     }
     if (ret == 0) {
-        qserver = picoquic_create(256, test_server_cert_file, test_server_key_file, NULL, NULL,
+        /* Make sure that the server is configured to handle all required clients.
+        */
+        qserver = picoquic_create((uint32_t)nb_stress_clients, test_server_cert_file, test_server_key_file, NULL, NULL,
             picoquic_demo_server_callback, &file_param,
             NULL, NULL, reset_seed, simulated_time, &simulated_time, NULL, NULL, 0);
         if (qserver == NULL) {
@@ -2821,18 +2839,21 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
             if (initial_random) {
                 picoquic_set_random_initial(qserver, 1);
             }
+            if (random_context == 0) {
+                picoquic_crypto_random(qserver, &random_context, sizeof(random_context));
+            }
         }
     }
 
     if (ret == 0) {
-        ctx_client = (http_stress_client_context_t**)malloc(sizeof(http_stress_client_context_t*) * picohttp_nb_stress_clients);
+        ctx_client = (http_stress_client_context_t**)malloc(sizeof(http_stress_client_context_t*) * nb_stress_clients);
         if (ctx_client == NULL) {
             ret = -1;
         }
         else {
             /* initialize each client, address 2::nnnn */
-            memset(ctx_client, 0, sizeof(http_stress_client_context_t*) * picohttp_nb_stress_clients);
-            for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
+            memset(ctx_client, 0, sizeof(http_stress_client_context_t*) * nb_stress_clients);
+            for (size_t i = 0; ret == 0 && i < nb_stress_clients; i++) {
                 ctx_client[i] = http_stress_client_create(i, &simulated_time, (struct sockaddr*) & server_address, initial_random);
                 if (ctx_client[i] == NULL) {
                     ret = -1;
@@ -2854,7 +2875,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     while (ret == 0) {
         uint64_t next_time = UINT64_MAX;
         int is_lan_ready = lan->first_packet != NULL;
-        size_t client_id = picohttp_nb_stress_clients;
+        size_t client_id = nb_stress_clients;
         picoquic_quic_t* qready = NULL;
         struct sockaddr* ready_from = NULL;
 
@@ -2870,7 +2891,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
                 next_time = server_time;
             }
 
-            for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
+            for (size_t i = 0; ret == 0 && i < nb_stress_clients; i++) {
                 if (ctx_client[i] != NULL && ctx_client[i]->client_time < next_time && !ctx_client[i]->is_not_sending) {
                     qready = ctx_client[i]->qclient;
                     ready_from = (struct sockaddr*) & ctx_client[i]->client_address;
@@ -2913,7 +2934,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
                 }
             }
 
-            if (client_id < picohttp_nb_stress_clients && ctx_client[client_id] != NULL) {
+            if (client_id < nb_stress_clients && ctx_client[client_id] != NULL) {
                 if (ctx_client[client_id]->is_dropped) {
                     uint64_t should_not_send = picoquic_test_uniform_random(&random_context, 5);
                     ctx_client[client_id]->is_not_sending = should_not_send == 3;
@@ -2937,9 +2958,29 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
 
             if (arrival != NULL) {
                 if (do_corrupt) {
-                    /* simulate packet corruption in flight */
+                    /* simulate packet corruption in flight. But, in the case of server initial packets,
+                     * corrupting the initial connection ID will result in the creation of extra initial
+                     * contexts, which can cause the server to end up with too many connections. We 
+                     * prevent that by doing a minimal parsing of the long-header packets, to avoid
+                     * messing with CID values there.
+                     */
                     uint64_t lost_byte = picoquic_test_uniform_random(&random_context,((uint64_t)4)* arrival->length);
-                    if (lost_byte < arrival->length) {
+                    uint64_t min_length = 0;
+
+                    if ((arrival->bytes[0] & 0x80) == 0x80) {
+                        uint64_t cid_length = 0;
+                        min_length = 1 + 4; /* Skip first byte and version number */
+                        if (min_length < arrival->length) {
+                            cid_length = arrival->bytes[min_length];
+                            min_length += 1 + cid_length; /* skip destination CID */
+                        }
+                        if (min_length < arrival->length) {
+                            cid_length = arrival->bytes[min_length];
+                            min_length += 1 + cid_length; /* skip source CID */
+                        }
+                    }
+
+                    if (lost_byte < arrival->length && lost_byte > min_length) {
                         arrival->bytes[lost_byte] ^= 0xFF;
                     }
                 }
@@ -2951,7 +2992,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
                 }
                 else {
                     int is_matched = 0;
-                    for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
+                    for (size_t i = 0; ret == 0 && i < nb_stress_clients; i++) {
                         if (ctx_client[i] != NULL && !ctx_client[i]->is_dropped &&
                             picoquic_compare_addr((struct sockaddr*) & arrival->addr_to, (struct sockaddr*) & ctx_client[i]->client_address) == 0) {
                             /* submit to client */
@@ -2982,7 +3023,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
 
     if (!do_corrupt && !do_drop) {
         /* verify that each client scenario is properly completed */
-        for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
+        for (size_t i = 0; ret == 0 && i < nb_stress_clients; i++) {
             if (ctx_client[i] != NULL) {
                 if (!ctx_client[i]->callback_ctx.connection_ready) {
                     DBG_PRINTF("Connection #%d failed", (int)i);
@@ -2996,10 +3037,15 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
         }
     }
 
-    /* verify that the global execution time makes sense */
-    if (ret == 0 && simulated_time > 240000000ull + 1000000ull * picohttp_nb_stress_clients) {
-        DBG_PRINTF("Taking %llu microseconds for %d clients!", (unsigned long long)simulated_time, (int)picohttp_nb_stress_clients);
-        ret = -1;
+    if (!do_corrupt) {
+        /* verify that the global execution time makes sense,
+        * but only if we are not fuzzing, since fuzzing likely
+        * will cause instances of idle timers on clients or
+        * servers. */
+        if (ret == 0 && simulated_time > 240000000ull + 1000000ull * nb_stress_clients) {
+            DBG_PRINTF("Taking %llu microseconds for %d clients!", (unsigned long long)simulated_time, (int)nb_stress_clients);
+            ret = -1;
+        }
     }
 
     /* clean up */
@@ -3009,7 +3055,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     }
 
     if (ctx_client != NULL) {
-        for (size_t i = 0; i < picohttp_nb_stress_clients; i++) {
+        for (size_t i = 0; i < nb_stress_clients; i++) {
             if (ctx_client[i] != NULL) {
                 (void)http_stress_client_delete(ctx_client[i]);
             }

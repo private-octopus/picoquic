@@ -212,7 +212,12 @@ typedef enum {
 #define BBR_LT_BW_RATIO_INVERSE 8
 #define BBR_LT_BW_BYTES_PER_SEC_DIFF 4000
 #define BBR_LT_BW_MAX_RTTS 48
+#if 0
+/* Use this setting when debugging BBR slow start */
+#define BBR_HYSTART_THRESHOLD_RTT 1000000
+#else
 #define BBR_HYSTART_THRESHOLD_RTT 50000
+#endif
 
 
 static const double bbr_pacing_gain_cycle[BBR_GAIN_CYCLE_LEN] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.25, 0.75};
@@ -496,8 +501,8 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, ui
     uint64_t bandwidth_estimate = path_x->bandwidth_estimate;
 
     if (bbr_state->state == picoquic_bbr_alg_startup &&
-        bandwidth_estimate < (path_x->max_bandwidth_estimate / 2)) {
-        bandwidth_estimate = path_x->max_bandwidth_estimate/2;
+        bandwidth_estimate < (path_x->peak_bandwidth_estimate / 2)) {
+        bandwidth_estimate = path_x->peak_bandwidth_estimate/2;
     }
 
     if (bbr_state->rt_prop > 0) {
@@ -1093,7 +1098,7 @@ static void picoquic_bbr_notify(
                 }
                 bbr_state->bytes_delivered = 0;
 
-                max_win = path_x->max_bandwidth_estimate * bbr_state->rt_prop / 1000000;
+                max_win = path_x->peak_bandwidth_estimate * bbr_state->rt_prop / 1000000;
                 min_win = max_win /= 2;
 
                 if (path_x->cwin < min_win) {

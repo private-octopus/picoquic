@@ -1087,7 +1087,7 @@ int quic_client(const char* ip_address_text, int server_port,
         if (sni != NULL && loop_cb.saved_alpn != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time, sni, (uint16_t)strlen(sni), loop_cb.saved_alpn,
             (uint16_t)strlen(loop_cb.saved_alpn), 0, &ticket, &ticket_length, NULL, 0)) {
             fprintf(stdout, "Received ticket from %s (%s):\n", sni, loop_cb.saved_alpn);
-            picoquic_log_picotls_ticket(stdout, picoquic_null_connection_id, ticket, ticket_length);
+            picoquic_textlog_picotls_ticket(stdout, picoquic_null_connection_id, ticket, ticket_length);
         }
 
         if (picoquic_save_session_tickets(qclient, config->ticket_file_name) != 0) {
@@ -1136,7 +1136,9 @@ void usage()
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     picoquic_config_usage();
     fprintf(stderr, "Picoquic demo options:\n");
-    fprintf(stderr, "  -A ip/ifindex[,ip/ifindex]  IP and interface index for multipath alternative path, e.g. 10.0.0.2/3,10.0.0.3/4\n");
+    fprintf(stderr, "  -A \"ip/ifindex[,ip/ifindex]\"  IP and interface index for multipath alternative\n");
+    fprintf(stderr, "                        path, e.g. \"10.0.0.2/3,10.0.0.3/4\". This option only\n");
+    fprintf(stderr, "                        affects the behavior of the client.\n");
     fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
     fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
     fprintf(stderr, "                        -f 2  test CNXID renewal,\n");

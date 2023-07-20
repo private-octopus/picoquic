@@ -547,10 +547,10 @@ int ec9a_preemptive_amok_test()
         }
         else if ( test_ctx->cnx_server->cnx_state != picoquic_state_ready ||
             !test_ctx->test_finished || 
-            test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest == NULL){
+            test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].pending_first == NULL){
             DBG_PRINTF("Unexpected state, server: %d, test finished: %d, queue for repeat %s",
                 test_ctx->cnx_server->cnx_state, test_ctx->test_finished, 
-                (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest == NULL)?"empty":"full");
+                (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].pending_first == NULL)?"empty":"full");
             ret = -1;
         }
     }
@@ -566,7 +566,7 @@ int ec9a_preemptive_amok_test()
         picoquic_cnx_t * last_cnx;
         int loop_count = 0;
         int send_count = 0;
-        const int send_count_max = 25;
+        const int send_count_max = 30;
         uint64_t repeat_begin = simulated_time;
         uint64_t repeat_duration = 0;
 

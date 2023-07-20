@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.4.2
+        VERSION 1.1.10.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -97,6 +97,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sockloop.c
     picoquic/spinbit.c
     picoquic/ticket_store.c
+    picoquic/timing.c
     picoquic/token_store.c
     picoquic/tls_api.c
     picoquic/transport.c
@@ -148,6 +149,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/parseheadertest.c
     picoquictest/picoquic_lb_test.c
     picoquictest/pn2pn64test.c
+    picoquictest/quic_tester.c
     picoquictest/sacktest.c
     picoquictest/satellite_test.c
     picoquictest/skip_frame_test.c
@@ -159,7 +161,8 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/tls_api_test.c
     picoquictest/transport_param_test.c
     picoquictest/util_test.c
-    picoquictest/warptest.c)
+    picoquictest/warptest.c
+    picoquictest/wifitest.c )
 
 set(PICOHTTP_LIBRARY_FILES
     picohttp/democlient.c
@@ -359,7 +362,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     add_test(NAME picoquic_ct
              COMMAND picoquic_ct -S ${PROJECT_SOURCE_DIR} -n -r)
     add_test(NAME picohttp_ct
-             COMMAND picohttp_ct -S ${PROJECT_SOURCE_DIR} -n -r -x http_corrupt)
+             COMMAND picohttp_ct -S ${PROJECT_SOURCE_DIR} -n -r)
 endif()
 
 # get all project files for formatting

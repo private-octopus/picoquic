@@ -114,6 +114,9 @@
     <ClCompile Include="prague.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="timing.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

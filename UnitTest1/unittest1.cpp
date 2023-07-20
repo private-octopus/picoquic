@@ -160,6 +160,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sqrt_for_test)
+        {
+            int ret = sqrt_for_test_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_sack)
         {
             int ret = sacktest();
@@ -236,9 +243,16 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(stream_retransmit_format)
+        TEST_METHOD(dataqueue_copy)
         {
-            int ret = test_format_for_retransmit();
+            int ret = dataqueue_copy_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(dataqueue_packet)
+        {
+            int ret = dataqueue_packet_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -432,6 +446,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(initial_ping)
+        {
+            int ret = initial_ping_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(initial_ping_ack)
+        {
+            int ret = initial_ping_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(datagram)
         {
             int ret = datagram_test();
@@ -488,6 +516,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(datagram_wifi)
+        {
+            int ret = datagram_wifi_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ddos_amplification)
         {
             int ret = ddos_amplification_test();
@@ -519,6 +554,13 @@ namespace UnitTest1
         TEST_METHOD(no_ack_frequency)
         {
             int ret = no_ack_frequency_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(immediate_ack)
+        {
+            int ret = immediate_ack_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -626,6 +668,13 @@ namespace UnitTest1
 
 			Assert::AreEqual(ret, 0);
 		}
+
+        TEST_METHOD(implicit_ack)
+        {
+            int ret = implicit_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 
 		TEST_METHOD(stateless_reset)
 		{
@@ -1757,6 +1806,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quality_update) {
+            int ret = quality_update_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(direct_receive) {
             int ret = direct_receive_test();
 
@@ -1769,6 +1824,11 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cwin_max) {
+            int ret = cwin_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(initial_race) {
             int ret = initial_race_test();
 
@@ -1872,6 +1932,60 @@ namespace UnitTest1
 
         TEST_METHOD(warptest_param) {
             int ret = warptest_param_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_bbr) {
+            int ret = wifi_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_bbr_hard) {
+            int ret = wifi_bbr_hard_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_bbr_long) {
+            int ret = wifi_bbr_long_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_cubic) {
+            int ret = wifi_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_cubic_hard) {
+            int ret = wifi_cubic_hard_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_cubic_long) {
+            int ret = wifi_cubic_long_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_reno) {
+            int ret = wifi_reno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_reno_hard) {
+            int ret = wifi_reno_hard_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_reno_long) {
+            int ret = wifi_reno_long_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1996,6 +2110,36 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_callback) {
+            int ret = multipath_callback_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_quality) {
+            int ret = multipath_quality_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_stream_af) {
+            int ret = multipath_stream_af_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_datagram) {
+            int ret = multipath_datagram_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_dg_af) {
+            int ret = multipath_dg_af_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_qlog) {
             int ret = multipath_qlog_test();
 
@@ -2076,6 +2220,12 @@ namespace UnitTest1
 
         TEST_METHOD(simple_multipath_qlog) {
             int ret = simple_multipath_qlog_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(simple_multipath_quality) {
+            int ret = simple_multipath_quality_test();
 
             Assert::AreEqual(ret, 0);
         }

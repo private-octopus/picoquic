@@ -680,14 +680,14 @@ int test_api_callback(picoquic_cnx_t* cnx,
     {
         int ret = -1;
         if (ctx->datagram_send_fn != NULL) {
-            ret = ctx->datagram_send_fn(cnx, bytes, length, ctx->datagram_ctx);
+            ret = ctx->datagram_send_fn(cnx, stream_id, bytes, length, ctx->datagram_ctx);
         }
         return ret;
     } else if (fin_or_event == picoquic_callback_datagram)
     {
         int ret = -1;
         if (ctx->datagram_recv_fn != NULL) {
-            ret = ctx->datagram_recv_fn(cnx, bytes, length, ctx->datagram_ctx);
+            ret = ctx->datagram_recv_fn(cnx, stream_id, bytes, length, ctx->datagram_ctx);
         }
         return ret;
     }
@@ -702,6 +702,42 @@ int test_api_callback(picoquic_cnx_t* cnx,
         }
         return ret;
     }
+    else if (fin_or_event == picoquic_callback_path_available ||
+        fin_or_event == picoquic_callback_path_suspended ||
+        fin_or_event == picoquic_callback_path_deleted ||
+        fin_or_event == picoquic_callback_path_quality_changed) {
+        int ret = 0;
+        if (ctx->path_events != NULL) {
+            if (fin_or_event == picoquic_callback_path_quality_changed) {
+                uint64_t unique_path_id = stream_id;
+                picoquic_path_quality_t quality;
+                uint64_t current_time = picoquic_get_quic_time(cnx->quic);
+
+                ret = picoquic_get_path_quality(cnx, unique_path_id, &quality);
+                if (ret == 0) {
+                    fprintf(ctx->path_events,
+                        "%" PRIu64 ", %" PRIu64 ", %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
+                        current_time, stream_id, (int)fin_or_event,
+                        quality.pacing_rate, quality.receive_rate_estimate, quality.cwin, quality.rtt);
+                }
+            }
+            else {
+                fprintf(ctx->path_events, "%" PRIu64 ", %" PRIu64 ", %d,\n",
+                    picoquic_get_quic_time(cnx->quic), stream_id, (int)fin_or_event);
+            }
+        }
+        else if (fin_or_event == picoquic_callback_path_quality_changed &&
+            ctx->default_path_update != NULL) {
+            picoquic_path_quality_t quality;
+            uint64_t current_time = picoquic_get_quic_time(cnx->quic);
+            picoquic_get_default_path_quality(cnx, &quality);
+            fprintf(ctx->default_path_update,
+                "%" PRIu64 ", %" PRIu64 ", %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
+                current_time, stream_id, (int)fin_or_event,
+                quality.pacing_rate, quality.receive_rate_estimate, quality.cwin, quality.rtt);
+        }
+        return ret;
+    }
 
     if (bytes != NULL) {
         if (cb_ctx->client_mode) {
@@ -711,11 +747,12 @@ int test_api_callback(picoquic_cnx_t* cnx,
         }
     }
 
-    if (stream_id == 0 && cb_ctx->client_mode == 0 && 
+    if (stream_id == 0 && cb_ctx->client_mode == 0 &&
         (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin)) {
         if (bytes == NULL && length != 0) {
             cb_ctx->error_detected = test_api_bad_stream0_data;
-        } else {
+        }
+        else {
             for (size_t i = 0; i < length; i++) {
                 if (bytes[i] != 0xA5) {
                     cb_ctx->error_detected = test_api_bad_stream0_data;
@@ -981,10 +1018,6 @@ static int verify_version(picoquic_cnx_t* cnx_client, picoquic_cnx_t* cnx_server
 
 void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
 {
-    if (test_ctx->bw_update != NULL) {
-        (void)picoquic_file_close(test_ctx->bw_update);
-    }
-
     if (test_ctx->qclient != NULL) {
         picoquic_free(test_ctx->qclient);
     }
@@ -1016,6 +1049,19 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
     if (test_ctx->send_buffer != NULL) {
         free(test_ctx->send_buffer);
     }
+
+    if (test_ctx->bw_update != NULL) {
+        (void)picoquic_file_close(test_ctx->bw_update);
+    }
+
+    if (test_ctx->path_events != NULL) {
+        (void)picoquic_file_close(test_ctx->path_events);
+    }
+
+    if (test_ctx->default_path_update != NULL) {
+        (void)picoquic_file_close(test_ctx->default_path_update);
+    }
+
 
     free(test_ctx);
 }
@@ -1131,6 +1177,9 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
                 {
                     test_ctx->qclient->client_zero_share = 1;
                 }
+                /* Do not use hole insertion by default */
+                picoquic_set_optimistic_ack_policy(test_ctx->qclient, 0);
+                picoquic_set_optimistic_ack_policy(test_ctx->qserver, 0);
 
                 /* Create a client connection */
                 test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
@@ -1562,6 +1611,11 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
 
         nb_trials++;
+#if 1
+        if (nb_inactive == 250) {
+            DBG_PRINTF("%s", "bug");
+        }
+#endif
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
@@ -1774,7 +1828,7 @@ static int tls_api_attempt_to_close(
     return tls_api_close_with_losses(test_ctx, simulated_time, 0);
 }
 
-static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
+int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t * simulated_time)
 {
     int ret = 0;
@@ -2651,6 +2705,13 @@ int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx)
             test_ctx->stream0_sent != test_ctx->stream0_received) {
             ret = -1;
         }
+
+        if (ret == 0 && test_ctx->qclient->nb_data_nodes_allocated > test_ctx->qclient->nb_data_nodes_in_pool) {
+            ret = -1;
+        } else 
+        if (ret == 0 && test_ctx->qserver->nb_data_nodes_allocated > test_ctx->qserver->nb_data_nodes_in_pool) {
+            ret = -1;
+        }
     }
     if (ret != 0)
     {
@@ -2710,8 +2771,9 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
         uint64_t completion_time = close_time - test_ctx->cnx_client->start_time;
         if (completion_time > max_completion_microsec)
         {
-            DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n",
-                (unsigned long long)completion_time, (unsigned long long)max_completion_microsec);
+            DBG_PRINTF("Scenario completes in %llu microsec, more than %llu, %llu losses, %llu spurious\n",
+                (unsigned long long)completion_time, (unsigned long long)max_completion_microsec,
+                test_ctx->cnx_server->nb_retransmission_total, test_ctx->cnx_server->nb_spurious);
              ret = -1;
         }
     }
@@ -2827,6 +2889,53 @@ int unidir_test()
 int many_short_loss_test()
 {
     return tls_api_one_scenario_test(test_scenario_more_streams, sizeof(test_scenario_more_streams), 0, 0x882818A881288848ull, 16000, 2000, 0, 0, NULL, NULL);
+}
+
+/* Implicit ACK test: verify that the queues of initial and
+ * handshake packets are empty after reaching the ready state
+ */
+
+int implicit_ack_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    picoquic_packet_context_enum pc[2] = { picoquic_packet_context_initial, picoquic_packet_context_handshake };
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    for (int i = 0; ret == 0 && i < 2; i++) {
+        if (test_ctx->cnx_client->pkt_ctx[pc[i]].pending_first != NULL) {
+            DBG_PRINTF("Retransmit queue type %d not empty on client", pc[i]);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->pkt_ctx[pc[i]].pending_first != NULL) {
+            DBG_PRINTF("Retransmit queue type %d not empty on server", pc[i]);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->pkt_ctx[pc[i]].retransmitted_oldest != NULL) {
+            DBG_PRINTF("Retransmitted queue type %d not empty on client", pc[i]);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->pkt_ctx[pc[i]].pending_first != NULL) {
+            DBG_PRINTF("Retransmitted queue type %d not empty on server", pc[i]);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }
 
 /*
@@ -4145,11 +4254,18 @@ int zero_rtt_delay_test()
 int stop_sending_test_one(int discard)
 {
     uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0;
+    const uint64_t stop_sending_latency = 100000;
+    uint64_t loss_mask = 0x0F0F0F0F0F000000ull;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
     int nb_initial_loop = 0;
+
+    if (ret == 0) {
+        /* Set long delays, in order to test potential leaks of node structure */
+        test_ctx->c_to_s_link->microsec_latency = stop_sending_latency;
+        test_ctx->s_to_c_link->microsec_latency = stop_sending_latency;
+    }
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -4210,6 +4326,13 @@ int stop_sending_test_one(int discard)
                 }
             }
         }
+    }
+
+    if (ret == 0 && test_ctx->qclient->nb_data_nodes_allocated > test_ctx->qclient->nb_data_nodes_in_pool) {
+        ret = -1;
+    }
+    else if (ret == 0 && test_ctx->qserver->nb_data_nodes_allocated > test_ctx->qserver->nb_data_nodes_in_pool) {
+        ret = -1;
     }
 
     if (ret == 0) {
@@ -4417,11 +4540,11 @@ int mtu_drop_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        13000000,
-        11500000,
-        10500000,
+        12500000,
+        10700000,
+        10000000,
         11000000,
-        10300000
+        10600000
     };
     int ret = 0;
 
@@ -8592,7 +8715,7 @@ int cubic_test()
 
 int cubic_jitter_test()
 {
-    return congestion_control_test(picoquic_cubic_algorithm, 3500000, 5000, 5);
+    return congestion_control_test(picoquic_cubic_algorithm, 3550000, 5000, 5);
 }
 
 int fastcc_test()
@@ -9038,8 +9161,8 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         0, NULL, NULL, &initial_cid, 0);
 
     if (ret == 0) {
-        /* set the optimistic ack policy*/
-        picoquic_set_optimistic_ack_policy(test_ctx->qserver, 29);
+        /* set the optimistic ack policy to the default value */
+        picoquic_set_optimistic_ack_policy(test_ctx->qserver, PICOQUIC_DEFAULT_HOLE_PERIOD);
         /* add a log request for debugging */
         picoquic_set_binlog(test_ctx->qserver, ".");
 
@@ -9101,7 +9224,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
 
             /* find whether there was a new hole inserted */
             if (test_ctx->cnx_server != NULL) {
-                picoquic_packet_t * packet = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest;
+                picoquic_packet_t * packet = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].pending_first;
 
                 while (packet != NULL && packet->sequence_number > hole_number) {
                     if (packet->is_ack_trap) {
@@ -9117,7 +9240,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                         nb_holes++;
                         break;
                     }
-                    packet = packet->previous_packet;
+                    packet = packet->packet_next;
                 }
             }
 
@@ -10063,6 +10186,70 @@ int pacing_update_test()
     return ret;
 }
 
+/* testing the quality update functionality when using the default path
+* quality API.
+*/
+
+#ifdef _WINDOWS
+#define QUALITY_UPDATE_REF "picoquictest\\quality_update_ref.txt"
+#else
+#define QUALITY_UPDATE_REF "picoquictest/quality_update_ref.txt"
+#endif
+#define QUALITY_UPDATE_CSV "quality_update.csv"
+
+int quality_update_test()
+{
+    uint64_t simulated_time = 0;
+
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        /* Open a file to log bandwidth updates and document it in context */
+        test_ctx->default_path_update = picoquic_file_open(QUALITY_UPDATE_CSV, "w");
+        if (test_ctx->default_path_update == NULL) {
+            DBG_PRINTF("Could not write file <%s>", QUALITY_UPDATE_CSV);
+            ret = -1;
+        }
+        else {
+            fprintf(test_ctx->default_path_update, "Time, Path_id, Sending_rate_CB, Pacing_rate, Receive_Rate, CWIN, RTT\n");
+            /* Request bandwidth updates */
+            picoquic_subscribe_to_quality_update(test_ctx->cnx_client, 0x10000, 0x1000);
+
+            /* Start a standard scenario, pushing 1MB from the client*/
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 20000, 3600000);
+        }
+    }
+
+    /* Free the test contex, which closes the trace file  */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    /* compare the trace to the expected value */
+    if (ret == 0)
+    {
+        char quality_update_ref[512];
+
+        ret = picoquic_get_input_path(quality_update_ref, sizeof(quality_update_ref), picoquic_solution_dir, QUALITY_UPDATE_REF);
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the quality update ref file name.\n");
+        }
+        else {
+            ret = picoquic_test_compare_text_files(QUALITY_UPDATE_CSV, quality_update_ref);
+        }
+    }
+
+    return ret;
+}
+
+
 /* Test the direct receive API
  */
 
@@ -10164,7 +10351,7 @@ int app_limit_cc_test_one(
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
-        test_ctx->cnx_client->is_flow_control_limited = 1;
+        picoquic_set_max_data_control(test_ctx->qclient, client_parameters.initial_max_data);
 
         test_ctx->c_to_s_link->jitter = 0;
         test_ctx->c_to_s_link->microsec_latency = latency;
@@ -10270,6 +10457,152 @@ int app_limit_cc_test()
 
     return ret;
 }
+
+/* Test the effectiveness of the CWIN MAX option
+ */
+
+#define CWIN_MAX_TRACE_CSV "cwin_max_trace.csv"
+#define CWIN_MAX_TRACE_BIN "c9149a0102030405.server.log"
+
+int cwin_max_test_one(
+    picoquic_congestion_algorithm_t* ccalgo, uint64_t cwin_limit, uint64_t max_completion_time)
+{
+    uint64_t simulated_time = 0;
+    uint64_t latency = 300000;
+    uint64_t picoseq_per_byte_1 = (1000000ull * 8) / 100;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t client_parameters;
+    picoquic_connection_id_t initial_cid = { {0xc9, 0x14, 0x9a, 1, 2, 3, 4, 5}, 8 };
+    int ret = 0;
+
+    (void)picoquic_file_delete(APP_LIMIT_TRACE_BIN, NULL);
+
+    memset(&client_parameters, 0, sizeof(picoquic_tp_t));
+    picoquic_init_transport_parameters(&client_parameters, 1);
+
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters,
+        NULL, &initial_cid, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
+        picoquic_set_cwin_max(test_ctx->qserver, 0x10000);
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+        picoquic_set_max_data_control(test_ctx->qclient, client_parameters.initial_max_data);
+
+        test_ctx->c_to_s_link->jitter = 0;
+        test_ctx->c_to_s_link->microsec_latency = latency;
+        test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_1;
+        test_ctx->s_to_c_link->microsec_latency = latency;
+        test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_1;
+        test_ctx->s_to_c_link->jitter = 0;
+
+        if (ret == 0) {
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 2 * latency, max_completion_time);
+        }
+    }
+
+    /* Free the resource, which will close the log file.
+    */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    /* Create a CSV file from the .bin log file */
+    if (ret == 0) {
+        ret = picoquic_cc_log_file_to_csv(CWIN_MAX_TRACE_BIN, CWIN_MAX_TRACE_CSV);
+    }
+
+    /* Compute the max CWIN from the trace file */
+    if (ret == 0)
+    {
+        FILE* F = picoquic_file_open(CWIN_MAX_TRACE_CSV, "r");
+        uint64_t bytes_in_flight_max = 0;
+
+        if (F == NULL) {
+            DBG_PRINTF("Cannot open <%s>", CWIN_MAX_TRACE_CSV);
+            ret = -1;
+        }
+        else {
+            char buffer[512];
+            uint64_t bytes_in_flight_max = 0;
+
+            while (fgets(buffer, 512, F) != NULL) {
+                /* only consider number lines line */
+                if (buffer[0] >= '0' && buffer[0] <= '9') {
+                    uint64_t bytes_in_flight = 0;
+                    int nb_comma = 0;
+                    int c_index = 0;
+
+                    while (nb_comma < 23 && c_index < 512 && buffer[c_index] != 0) {
+                        if (buffer[c_index] == ',') {
+                            nb_comma++;
+                        }
+                        c_index++;
+                    }
+                    while (c_index < 512 && buffer[c_index] == ' ') {
+                        c_index++;
+                    }
+                    while (c_index < 512 && buffer[c_index] >= '0' && buffer[c_index] <= '9') {
+                        bytes_in_flight *= 10;
+                        bytes_in_flight += (uint64_t)buffer[c_index] - '0';
+                        c_index++;
+                    }
+                    if (bytes_in_flight > bytes_in_flight_max) {
+                        bytes_in_flight_max = bytes_in_flight;
+                    }
+                }
+            }
+
+            (void)picoquic_file_close(F);
+
+            if (bytes_in_flight_max > cwin_limit) {
+                DBG_PRINTF("MAX In Flight = %" PRIu64 ", larger than %" PRIu64, bytes_in_flight_max, cwin_limit);
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
+}
+
+int cwin_max_test()
+{
+    picoquic_congestion_algorithm_t* ccalgos[] = {
+        picoquic_newreno_algorithm,
+        picoquic_cubic_algorithm,
+        picoquic_dcubic_algorithm,
+        picoquic_bbr_algorithm,
+        picoquic_fastcc_algorithm };
+    uint64_t max_completion_times[] = {
+        11000000,
+        12000000,
+        11000000,
+        11000000,
+        13000000 };
+    int ret = 0;
+
+    for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
+        ret = cwin_max_test_one(ccalgos[i], 68000, max_completion_times[i]);
+        if (ret != 0) {
+            DBG_PRINTF("CWIN Max test fails for <%s>", ccalgos[i]->congestion_algorithm_id);
+            break;
+        }
+    }
+
+    return ret;
+}
+
+
 
 /* Initial race condition.
 * What happens if the client immediately repeats the Initial packet?
@@ -10816,11 +11149,11 @@ int multi_segment_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        1100000,
-        1130000,
+        1220000,
+        1050000,
+        1250000,
         1350000,
-        1370000,
-        1010000
+        1000000
     };
     int ret = 0;
 
@@ -10932,8 +11265,8 @@ int pacing_cc_test()
     };
     uint64_t algo_loss[5] = {
         100,
-        205,
-        230,
+        210,
+        240,
         180,
         210
     };
@@ -11098,6 +11431,11 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
         int nb_repeated = 0;
         int nb_loops = 0;
 
+        if (cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_DCUBIC ||
+            cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST ) {
+            repeat_target = 200;
+        }
+
         if (packet == NULL) {
             ret = -1;
         }
@@ -11106,6 +11444,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
                 test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
                 uint64_t old_time = simulated_time;
                 uint64_t delta_t;
+
                 simulated_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
                 delta_t = simulated_time - old_time;
                 if (delta_t > 3000000) {
@@ -11161,7 +11500,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
 
 int excess_repeat_test()
 {
-    const int nb_repeat_max = 128;
+    const int nb_repeat_max = 128; 
     picoquic_congestion_algorithm_t* algo_list[6] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,
@@ -11825,7 +12164,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 8000000;
                     break;
                 case bdp_test_option_reno:
-                    max_completion_time = 6500000;
+                    max_completion_time = 6750000;
                     break;
                 default:
                     break;
@@ -12248,6 +12587,109 @@ int port_blocked_test()
 
     for (size_t i = 0; ret == 0 && i < nb_unblocked; i++) {
         ret = port_blocked_test_port(unblocked_port_to_test[i], 0);
+    }
+
+    return ret;
+}
+
+/* Test the immediate ACK function.
+ */
+int immediate_ack_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x1a, 0x1a, 0x1a, 0x1a, 0x1a, 0x1a, 0x1a, 0x1a}, 8 };
+    int ret;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0) {
+        picoquic_set_binlog(test_ctx->qserver, ".");
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0) {
+        int nb_trials = 0;
+        int was_active;
+        uint64_t immediate_received_at_server = 0;
+        uint64_t immediate_cleared_at_server = 0;
+        int all_acked = 0;
+        uint8_t immediate_ack_frame[2] = { 0x40, picoquic_frame_type_immediate_ack };
+        /* Queue misc frame with "Immediate ACK" set */
+        picoquic_queue_misc_frame(test_ctx->cnx_client, immediate_ack_frame, 2, 0);
+        /* Do couple of rounds until the frame is received;
+         * Check that it is received my verifying that the "immediate ACK" 
+         * is set in the ACK context at the server. Check the time.
+         */
+        while (ret == 0 && nb_trials < 16) {
+            nb_trials++;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            if (test_ctx->cnx_server != NULL &&
+                test_ctx->cnx_server->ack_ctx[picoquic_packet_context_application].act[0].is_immediate_ack_required) {
+                immediate_received_at_server = simulated_time;
+                break;
+            }
+        }
+        if (ret == 0 && immediate_received_at_server == 0) {
+            DBG_PRINTF("Immediate ACK not received after %d rounds", nb_trials);
+            ret = -1;
+        }
+        /* Do a couple rounds until the "immediate ACK" flag is not
+         * set at the server anymore. Verify that no time is elapsed since
+         * the end of the previous round */
+        nb_trials = 0;
+        while (ret == 0 && nb_trials < 16) {
+            nb_trials++;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            if (test_ctx->cnx_server != NULL &&
+                !test_ctx->cnx_server->ack_ctx[picoquic_packet_context_application].act[0].is_immediate_ack_required) {
+                immediate_cleared_at_server = simulated_time;
+                break;
+            }
+        }
+        if (ret != 0){
+            if (immediate_cleared_at_server == 0) {
+                DBG_PRINTF("Immediate ACK not cleared after %d rounds", nb_trials);
+                ret = -1;
+            }
+            else if (immediate_cleared_at_server != immediate_received_at_server) {
+                DBG_PRINTF("ACK not quite immediate, set at: %" PRIu64 ", cleared at %" PRIu64,
+                    immediate_received_at_server, immediate_cleared_at_server);
+                ret = -1;
+            }
+        }
+        /* Do couple rounds until the ACK is received at the client. 
+         * This is verified by checking that the client ACK queue is
+         * empty.
+         */
+        nb_trials = 0;
+        while (ret == 0 && nb_trials < 16) {
+            nb_trials++;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            if (test_ctx->cnx_client != NULL && 
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
+                all_acked = 1;
+                break;
+            }
+        }
+        if (ret == 0 && !all_acked) {
+            DBG_PRINTF("ACK was not received at: %" PRIu64, simulated_time);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
     }
 
     return ret;

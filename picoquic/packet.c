@@ -1201,7 +1201,7 @@ void picoquic_ignore_incoming_handshake(
     /* If the packet contains ackable data, mark ack needed
      * in the relevant packet context */
     if (ret == 0 && ack_needed) {
-        picoquic_set_ack_needed(cnx, current_time, pc, ph->l_cid);
+        picoquic_set_ack_needed(cnx, current_time, pc, ph->l_cid, 0);
     }
 }
 
@@ -1272,7 +1272,7 @@ int picoquic_incoming_client_initial(
             (*pcnx)->initial_validated = 1;
         }
 
-        if (!(*pcnx)->initial_validated && (*pcnx)->pkt_ctx[picoquic_packet_context_initial].retransmit_oldest != NULL
+        if (!(*pcnx)->initial_validated && (*pcnx)->pkt_ctx[picoquic_packet_context_initial].pending_first != NULL
             && packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU) {
             /* In most cases, receiving more than 1 initial packets before validation indicates that the
              * client is repeating data that it believes is lost. We set the initial_repeat_needed flag
@@ -2011,7 +2011,7 @@ int picoquic_incoming_1rtt(
                         }
                     }
                     else {
-                        picoquic_set_ack_needed(cnx, current_time, ph->pc, ph->l_cid);
+                        picoquic_set_ack_needed(cnx, current_time, ph->pc, ph->l_cid, 0);
                     }
                 }
             }
@@ -2349,11 +2349,11 @@ int picoquic_incoming_segment(
         (cnx->cnx_state == picoquic_state_client_init_sent || cnx->cnx_state == picoquic_state_client_init_resent))
     {
         /* Indicates that the server probably sent initial and handshake but initial was lost */
-        if (cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_oldest != NULL &&
+        if (cnx->pkt_ctx[picoquic_packet_context_initial].pending_first != NULL &&
             cnx->path[0]->nb_retransmit == 0) {
             /* Reset the retransmit timer to start retransmission immediately */
             cnx->path[0]->retransmit_timer = current_time -
-                cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_oldest->send_time;
+                cnx->pkt_ctx[picoquic_packet_context_initial].pending_first->send_time;
         }
     }
 

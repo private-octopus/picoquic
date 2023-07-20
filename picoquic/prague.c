@@ -399,7 +399,7 @@ void picoquic_prague_notify(
             if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
                 pr_state->ssthresh == UINT64_MAX) {
                 /* RTT measurements will happen after the bandwidth is estimated */
-                uint64_t max_win = path_x->max_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
                 uint64_t min_win = max_win /= 2;
                 if (path_x->cwin < min_win) {
                     path_x->cwin = min_win;

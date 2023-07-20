@@ -29,7 +29,8 @@
 #include <stdlib.h>
 
 extern size_t picohttp_nb_stress_clients;
-static size_t picohttp_test_multifile_number;
+extern size_t picohttp_test_multifile_number;
+extern uint64_t picohttp_random_stress_context;
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
@@ -133,13 +134,26 @@ int usage(char const * argv0)
     }
     fprintf(stderr, "Options: \n");
     fprintf(stderr, "  -x test           Do not run the specified test.\n");
-    fprintf(stderr, "  -s nnn            Run stress for nnn clients.\n");
-    fprintf(stderr, "  -f nnn            Run fuzz for nnn clients.\n");
-    fprintf(stderr, "  -m nnn            Run multi file test with nnn files.\n");
+    fprintf(stderr, "  -s nnn            Set the number of stress clients to nnn.\n");
+    fprintf(stderr, "  -R xxxxxxxx       Set seed for stress tests to xxxxxxxx.\n");
+    fprintf(stderr, "  -m nnn            Set number of files in multi file tests to nnn.\n");
     fprintf(stderr, "  -n                Disable debug prints.\n");
     fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
     fprintf(stderr, "  -S solution_dir   Set the path to the source files to find the default files\n");
+    fprintf(stderr, "\nThe list of tests include http_stress, http_drop, http_corrupt\n");
+    fprintf(stderr, "and http_corrupt_rpdn, which are all variations of the stress\n");
+    fprintf(stderr, "test. Their execution is controlled by a number of clients to\n");
+    fprintf(stderr, "simulate, which can be set by the \"-s\" option (default: 128),\n");
+    fprintf(stderr, "and by an initial random seed which can be set by the \"R\"\n");
+    fprintf(stderr, "option (default: 305,419,896). If the random seed is set to 0,\n");
+    fprintf(stderr, "tests will initailize a seed using the cryptographic random");
+    fprintf(stderr, "number generator.\n");
+    fprintf(stderr, "\nThere are multiple tests that try downloading a series of\n");
+    fprintf(stderr, "files with HTTP3 or H09, with out extra loss, with loss, or\n");
+    fprintf(stderr, "with loss and using preemptive repeat. For all these tests,\n");
+    fprintf(stderr, "the number of files is controlled by the \"-m\" option\n");
+    fprintf(stderr, "(default: 1000).\n");
 
     return -1;
 }
@@ -163,12 +177,9 @@ int main(int argc, char** argv)
     int nb_test_tried = 0;
     int nb_test_failed = 0;
     int stress_clients = 0;
-    int found_exclusion = 0;
     test_status_t * test_status = (test_status_t *) calloc(nb_tests, sizeof(test_status_t));
     int opt;
-    int do_fuzz = 0;
-    int do_stress = 0;
-    int do_multi_file = 0;
+    int random_seed = 0;
     int nb_multi_file = 0;
     int disable_debug = 0;
     int retry_failed_test = 0;
@@ -180,7 +191,7 @@ int main(int argc, char** argv)
     }
     else
     {
-        while (ret == 0 && (opt = getopt(argc, argv, "f:s:m:S:x:nrh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "R:s:m:S:x:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 int test_number = get_test_number(optarg);
@@ -191,32 +202,37 @@ int main(int argc, char** argv)
                 }
                 else {
                     test_status[test_number] = test_excluded;
-                    found_exclusion = 1;
                 }
                 break;
             }
-            case 'f':
-                do_fuzz = 1;
-                stress_clients = atoi(optarg);
-                if (stress_clients <= 0) {
-                    fprintf(stderr, "Incorrect stress minutes: %s\n", optarg);
+            case 'R':
+                random_seed = atoi(optarg);
+                if (random_seed < 0) {
+                    fprintf(stderr, "Incorrect number of stress clients: %s\n", optarg);
                     ret = usage(argv[0]);
+                }
+                else {
+                    picohttp_random_stress_context = (uint64_t)random_seed;
                 }
                 break;
             case 's':
-                do_stress = 1;
                 stress_clients = atoi(optarg);
                 if (stress_clients <= 0) {
-                    fprintf(stderr, "Incorrect stress minutes: %s\n", optarg);
+                    fprintf(stderr, "Incorrect number of stress clients: %s\n", optarg);
                     ret = usage(argv[0]);
+                }
+                else {
+                    picohttp_nb_stress_clients = (size_t) stress_clients;
                 }
                 break;
             case 'm':
-                do_multi_file = 1;
                 nb_multi_file = atoi(optarg);
                 if (nb_multi_file <= 0) {
                     fprintf(stderr, "Incorrect number of files for multi-file test: %s\n", optarg);
                     ret = usage(argv[0]);
+                }
+                else {
+                    picohttp_test_multifile_number = (size_t)nb_multi_file;
                 }
                 break;
             case 'S':
@@ -243,49 +259,6 @@ int main(int argc, char** argv)
         }
         else {
             debug_printf_push_stream(stderr);
-        }
-
-        if (ret == 0 && (stress_clients > 0 || nb_multi_file > 0)) {
-            if (optind >= argc && found_exclusion == 0) {
-                for (size_t i = 0; i < nb_tests; i++) {
-                    if (strcmp(test_table[i].test_name, "http_drop") == 0)
-                    {
-                        if (do_stress == 0) {
-                            test_status[i] = test_excluded;
-                        }
-                    }
-                    else
-                    if (strcmp(test_table[i].test_name, "http_corrupt") == 0)
-                    {
-                        if (do_stress == 0) {
-                            test_status[i] = test_excluded;
-                        }
-                    }
-                    else
-                    if (strcmp(test_table[i].test_name, "http_stress") == 0)
-                    {
-                        if (do_stress == 0) {
-                            test_status[i] = test_excluded;
-                        }
-                    }
-                    else if (strcmp(test_table[i].test_name, "http_fuzz") == 0) {
-                        if (do_fuzz == 0) {
-                            test_status[i] = test_excluded;
-                        }
-                    }
-                    else if (strcmp(test_table[i].test_name, "h3_multi_file") == 0) {
-                        if (do_multi_file == 0) {
-                            test_status[i] = test_excluded;
-                        }
-                    }
-                    else {
-                        test_status[i] = test_excluded;
-                    }
-                }
-                
-                picohttp_nb_stress_clients = (size_t) stress_clients;
-                picohttp_test_multifile_number = (size_t)nb_multi_file;
-            }
         }
 
         if (ret == 0)
