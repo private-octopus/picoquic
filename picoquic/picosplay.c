@@ -24,6 +24,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <pthread.h>
 #include "picosplay.h"
 
 /* The single most important utility function. */
@@ -32,6 +33,7 @@ static void rotate(picosplay_node_t *child);
 static picosplay_node_t* leftmost(picosplay_node_t *node);
 static picosplay_node_t* rightmost(picosplay_node_t *node);
 
+static pthread_mutex_t wake_mutex;
 
 /* The meat: splay the node x. */
 static void zig(picosplay_node_t *x);
@@ -100,6 +102,8 @@ picosplay_tree_t* picosplay_new_tree(picosplay_comparator comp, picosplay_create
  * The insertion is essentially a generic BST insertion.
  */
 picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value) {
+    pthread_mutex_lock(&wake_mutex);
+
     picosplay_node_t *new = tree->create(value);
 
     if (new != NULL) {
@@ -134,6 +138,7 @@ picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value) {
         tree->size++;
     }
 
+    pthread_mutex_unlock(&wake_mutex);
     return new;
 }
 
@@ -187,14 +192,19 @@ picosplay_node_t* picosplay_find_previous(picosplay_tree_t* tree, void* value)
 
 /* Remove a node with the given value, splaying the tree. */
 void picosplay_delete(picosplay_tree_t *tree, void *value) {
+    pthread_mutex_lock(&wake_mutex);
     picosplay_node_t *node = picosplay_find(tree, value);
     picosplay_delete_hint(tree, node);
+    pthread_mutex_unlock(&wake_mutex);
 }
 
 /* Remove the node given by the pointer, splaying the tree. */
 void picosplay_delete_hint(picosplay_tree_t *tree, picosplay_node_t *node) {
     if(node == NULL)
         return;
+
+    pthread_mutex_lock(&wake_mutex);
+
     splay(tree, node); /* Now node is tree's root. */
     if(node->left == NULL) {
         tree->root = node->right;
@@ -219,6 +229,8 @@ void picosplay_delete_hint(picosplay_tree_t *tree, picosplay_node_t *node) {
     }
     tree->delete_node(tree, node);
     tree->size--;
+
+    pthread_mutex_unlock(&wake_mutex);
 }
 
 void picosplay_empty_tree(picosplay_tree_t * tree)
