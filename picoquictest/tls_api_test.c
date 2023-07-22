@@ -10539,7 +10539,6 @@ int cwin_max_test_one(
     if (ret == 0)
     {
         FILE* F = picoquic_file_open(CWIN_MAX_TRACE_CSV, "r");
-        uint64_t bytes_in_flight_max = 0;
 
         if (F == NULL) {
             DBG_PRINTF("Cannot open <%s>", CWIN_MAX_TRACE_CSV);

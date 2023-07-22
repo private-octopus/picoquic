@@ -338,8 +338,6 @@ uint64_t picoquic_sqrt_for_tests(uint64_t y)
     else {
         uint64_t x_min = 2;
         uint64_t x_max = ((y / 2) > 0xffffffff) ? 0xffffffff : y / 2;
-        uint64_t x_min_2 = x_min * x_min;
-        uint64_t x_max_2 = x_max * x_max;
 
         for (int i = 0; i < 64; i++) {
             uint64_t x2;
