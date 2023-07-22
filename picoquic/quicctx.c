@@ -32,6 +32,8 @@
 #include <sys/time.h>
 #endif
 
+#include <pthread.h>
+static pthread_mutex_t _mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /*
  * Supported versions. Specific versions may mandate different processing of different
@@ -1356,9 +1358,12 @@ static void picoquic_insert_cnx_by_wake_time(picoquic_quic_t* quic, picoquic_cnx
 
 void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t next_time)
 {
+    pthread_mutex_lock(&_mutex);
     picoquic_remove_cnx_from_wake_list(cnx);
     cnx->next_wake_time = next_time;
     picoquic_insert_cnx_by_wake_time(quic, cnx);
+    pthread_mutex_unlock(&_mutex);
+
 }
 
 picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_t max_wake_time)
