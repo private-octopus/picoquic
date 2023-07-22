@@ -908,6 +908,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stop_sending_loss)
+        {
+            int ret = stop_sending_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(discard_stream)
         {
             int ret = discard_stream_test();
