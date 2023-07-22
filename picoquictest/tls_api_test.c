@@ -4251,7 +4251,7 @@ int zero_rtt_delay_test()
  * and a stop sending in a single call.
  */
 
-int stop_sending_test_one(int discard)
+int stop_sending_test_one(int discard, int reset_loss)
 {
     uint64_t simulated_time = 0;
     const uint64_t stop_sending_latency = 100000;
@@ -4305,6 +4305,13 @@ int stop_sending_test_one(int discard)
 
     /* resume the sending scenario */
     if (ret == 0) {
+        if (reset_loss) {
+            /* Mask is calibrated to cause loss of the reset packet.
+             * This could be replaced by a specialized wait loop up to the
+             * point when the stop sending packet has been received.
+             */
+            loss_mask = 0x00FC0000000ull;
+        }
         ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
     }
 
@@ -4349,13 +4356,19 @@ int stop_sending_test_one(int discard)
 
 int stop_sending_test()
 {
-    int ret = stop_sending_test_one(0);
+    int ret = stop_sending_test_one(0, 0);
+    return ret;
+}
+
+int stop_sending_loss_test()
+{
+    int ret = stop_sending_test_one(0, 1);
     return ret;
 }
 
 int discard_stream_test()
 {
-    int ret = stop_sending_test_one(1);
+    int ret = stop_sending_test_one(1, 0);
     return ret;
 }
 
