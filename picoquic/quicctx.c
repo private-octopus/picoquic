@@ -277,6 +277,13 @@ static int picoquic_local_cnxid_compare(const void* key1, const void* key2)
     return picoquic_compare_connection_id(&l_cid1->cnx_id, &l_cid2->cnx_id);
 }
 
+static picohash_item * picoquic_local_cnxid_to_item(const void* key)
+{
+    picoquic_local_cnxid_t* l_cid = (picoquic_local_cnxid_t*)key;
+
+    return &l_cid->hash_item;
+}
+
 static uint64_t picoquic_net_id_hash(const void* key)
 {
     const picoquic_net_id_key_t* net = (const picoquic_net_id_key_t*)key;
@@ -655,8 +662,8 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
             quic->tentative_max_number_connections = max_nb_connections;
             quic->max_number_connections = max_nb_connections;
 
-            quic->table_cnx_by_id = picohash_create((size_t)max_nb_connections * 4,
-                picoquic_local_cnxid_hash, picoquic_local_cnxid_compare);
+            quic->table_cnx_by_id = picohash_create_ex((size_t)max_nb_connections * 4,
+                picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item);
 
             quic->table_cnx_by_net = picohash_create((size_t)max_nb_connections * 4,
                 picoquic_net_id_hash, picoquic_net_id_compare);
@@ -3201,11 +3208,10 @@ void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_
 
     if (l_cid->cnx_id.id_len > 0) {
         /* Remove the registration in hash tables */
-        picohash_item* item = picohash_retrieve(cnx->quic->table_cnx_by_id, l_cid);
-        if (item != NULL) {
+        if (l_cid->registered_cnx != NULL) {
+            picohash_item* item = &l_cid->hash_item;
             picohash_delete_item(cnx->quic->table_cnx_by_id, item, 0);
         }
-
         l_cid->registered_cnx = NULL;
     }
     /* Clear the associated ack context */
