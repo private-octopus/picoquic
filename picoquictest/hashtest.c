@@ -20,6 +20,7 @@
 */
 
 #include <stdlib.h>
+#include <string.h>
 #ifdef _WINDOWS
 #include <malloc.h>
 #endif
