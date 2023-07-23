@@ -163,11 +163,7 @@ uint8_t client_param2[] = {
     (uint8_t)((picoquic_tp_enable_multipath >> 16) & 0xFF),
     (uint8_t)((picoquic_tp_enable_multipath >> 8) & 0xFF),
     (uint8_t)(picoquic_tp_enable_multipath&0xFF),
-#if 1
     0,
-#else
-    1, 0x01,
-#endif
 };
 
 uint8_t client_param3[] = {

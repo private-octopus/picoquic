@@ -242,12 +242,6 @@ const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions
 /*
 * Structures used in the hash table of connections
 */
-typedef struct st_picoquic_cnx_id_key_t {
-    picoquic_connection_id_t cnx_id;
-    picoquic_cnx_t* cnx;
-    picoquic_local_cnxid_t* l_cid;
-    struct st_picoquic_cnx_id_key_t* next_cnx_id;
-} picoquic_cnx_id_key_t;
 
 typedef struct st_picoquic_net_id_key_t {
     struct sockaddr_storage saddr;
@@ -269,18 +263,18 @@ typedef struct st_picoquic_net_secret_key_t {
 } picoquic_net_secret_key_t;
 
 /* Hash and compare for CNX hash tables */
-static uint64_t picoquic_cnx_id_hash(const void* key)
+static uint64_t picoquic_local_cnxid_hash(const void* key)
 {
-    const picoquic_cnx_id_key_t* cid = (const picoquic_cnx_id_key_t*)key;
-    return picoquic_connection_id_hash(&cid->cnx_id);
+    const picoquic_local_cnxid_t* l_cid = (const picoquic_local_cnxid_t*)key;
+    return picoquic_connection_id_hash(&l_cid->cnx_id);
 }
 
-static int picoquic_cnx_id_compare(const void* key1, const void* key2)
+static int picoquic_local_cnxid_compare(const void* key1, const void* key2)
 {
-    const picoquic_cnx_id_key_t* cid1 = (const picoquic_cnx_id_key_t*)key1;
-    const picoquic_cnx_id_key_t* cid2 = (const picoquic_cnx_id_key_t*)key2;
+    const picoquic_local_cnxid_t* l_cid1 = (const picoquic_local_cnxid_t*)key1;
+    const picoquic_local_cnxid_t* l_cid2 = (const picoquic_local_cnxid_t*)key2;
 
-    return picoquic_compare_connection_id(&cid1->cnx_id, &cid2->cnx_id);
+    return picoquic_compare_connection_id(&l_cid1->cnx_id, &l_cid2->cnx_id);
 }
 
 static uint64_t picoquic_net_id_hash(const void* key)
@@ -662,7 +656,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
             quic->max_number_connections = max_nb_connections;
 
             quic->table_cnx_by_id = picohash_create((size_t)max_nb_connections * 4,
-                picoquic_cnx_id_hash, picoquic_cnx_id_compare);
+                picoquic_local_cnxid_hash, picoquic_local_cnxid_compare);
 
             quic->table_cnx_by_net = picohash_create((size_t)max_nb_connections * 4,
                 picoquic_net_id_hash, picoquic_net_id_compare);
@@ -922,7 +916,7 @@ void picoquic_free(picoquic_quic_t* quic)
         }
 
         if (quic->table_cnx_by_id != NULL) {
-            picohash_delete(quic->table_cnx_by_id, 1);
+            picohash_delete(quic->table_cnx_by_id, 0);
         }
 
         if (quic->table_cnx_by_net != NULL) {
@@ -1062,28 +1056,13 @@ int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
 {
     int ret = 0;
     picohash_item* item;
-    picoquic_cnx_id_key_t* key = (picoquic_cnx_id_key_t*)malloc(sizeof(picoquic_cnx_id_key_t));
 
-    if (key == NULL) {
+    item = picohash_retrieve(quic->table_cnx_by_id, l_cid);
+    if (item != NULL) {
         ret = -1;
     } else {
-        key->cnx_id = l_cid->cnx_id;
-        key->cnx = cnx;
-        key->l_cid = l_cid;
-        key->next_cnx_id = NULL;
-
-        item = picohash_retrieve(quic->table_cnx_by_id, key);
-
-        if (item != NULL) {
-            ret = -1;
-        } else {
-            ret = picohash_insert(quic->table_cnx_by_id, key);
-
-            if (ret == 0) {
-                key->next_cnx_id = l_cid->first_cnx_id;
-                l_cid->first_cnx_id = key;
-            }
-        }
+        l_cid->registered_cnx = cnx;
+        ret = picohash_insert(quic->table_cnx_by_id, l_cid);
     }
 
     return ret;
@@ -3222,17 +3201,12 @@ void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_
 
     if (l_cid->cnx_id.id_len > 0) {
         /* Remove the registration in hash tables */
-        if (l_cid->first_cnx_id != NULL) {
-            picohash_item* item;
-            picoquic_cnx_id_key_t* cnx_id_key = l_cid->first_cnx_id;
-
-            item = picohash_retrieve(cnx->quic->table_cnx_by_id, cnx_id_key);
-            if (item != NULL) {
-                picohash_delete_item(cnx->quic->table_cnx_by_id, item, 1);
-            }
-
-            l_cid->first_cnx_id = NULL;
+        picohash_item* item = picohash_retrieve(cnx->quic->table_cnx_by_id, l_cid);
+        if (item != NULL) {
+            picohash_delete_item(cnx->quic->table_cnx_by_id, item, 0);
         }
+
+        l_cid->registered_cnx = NULL;
     }
     /* Clear the associated ack context */
     picoquic_clear_ack_ctx(&l_cid->ack_ctx);
@@ -4377,7 +4351,7 @@ picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
-    picoquic_cnx_id_key_t key;
+    picoquic_local_cnxid_t key;
 
     memset(&key, 0, sizeof(key));
     key.cnx_id = cnx_id;
@@ -4385,14 +4359,15 @@ picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id
     item = picohash_retrieve(quic->table_cnx_by_id, &key);
 
     if (item != NULL) {
-        ret = ((picoquic_cnx_id_key_t*)item->key)->cnx;
+        ret = ((picoquic_local_cnxid_t*)item->key)->registered_cnx;
         if (l_cid != NULL) {
-            *l_cid = ((picoquic_cnx_id_key_t*)item->key)->l_cid;
+            *l_cid = ((picoquic_local_cnxid_t*)item->key);
         }
     }
     else if (l_cid != NULL) {
         *l_cid = NULL;
     }
+
     return ret;
 }
 

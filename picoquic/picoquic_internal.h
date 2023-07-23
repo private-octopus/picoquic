@@ -934,7 +934,7 @@ typedef struct st_picoquic_ack_context_t {
 */
 typedef struct st_picoquic_local_cnxid_t {
     struct st_picoquic_local_cnxid_t* next;
-    struct st_picoquic_cnx_id_key_t* first_cnx_id;
+    picoquic_cnx_t* registered_cnx;
     uint64_t sequence;
     uint64_t create_time;
     picoquic_connection_id_t cnx_id;
