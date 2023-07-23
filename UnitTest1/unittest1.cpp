@@ -34,12 +34,19 @@ namespace UnitTest1
             debug_printf_suspend();
         }
 
-	    TEST_METHOD(test_picohash)
+	    TEST_METHOD(picohash)
 	    {
             int ret = picohash_test();
 
             Assert::AreEqual(ret, 0);
 	    }
+
+        TEST_METHOD(picohash_embedded)
+        {
+            int ret = picohash_embedded_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 
         TEST_METHOD(bytestream)
         {

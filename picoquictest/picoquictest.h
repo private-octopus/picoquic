@@ -40,6 +40,7 @@ int util_sprintf_test();
 int util_memcmp_test();
 int util_threading_test();
 int picohash_test();
+int picohash_embedded_test();
 int bytestream_test();
 int cnxcreation_test();
 int parseheadertest();
