@@ -529,6 +529,7 @@ void picoquic_free_tokens(picoquic_stored_token_t** pp_first_token);
 typedef struct st_picoquic_issued_ticket_t {
     struct st_picoquic_issued_ticket_t* next_ticket;
     struct st_picoquic_issued_ticket_t* previous_ticket;
+    picohash_item hash_item;
     uint64_t ticket_id;
     uint64_t creation_time;
     uint64_t rtt;

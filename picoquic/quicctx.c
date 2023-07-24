@@ -384,6 +384,13 @@ static int picoquic_issued_ticket_compare(const void* key1, const void* key2)
     return ret;
 }
 
+picohash_item* picoquic_issued_ticket_key_to_item(const void* key)
+{
+    picoquic_issued_ticket_t* ticket_key = (picoquic_issued_ticket_t*)key;
+
+    return &ticket_key->hash_item;
+}
+
 picoquic_issued_ticket_t* picoquic_retrieve_issued_ticket(picoquic_quic_t* quic,
     uint64_t ticket_id)
 {
@@ -675,8 +682,8 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
             quic->table_cnx_by_secret = picohash_create((size_t)max_nb_connections * 4,
                 picoquic_net_secret_hash, picoquic_net_secret_compare);
 
-            quic->table_issued_tickets = picohash_create((size_t)max_nb_connections,
-                picoquic_issued_ticket_hash, picoquic_issued_ticket_compare);
+            quic->table_issued_tickets = picohash_create_ex((size_t)max_nb_connections,
+                picoquic_issued_ticket_hash, picoquic_issued_ticket_compare, picoquic_issued_ticket_key_to_item);
 
             picosplay_init_tree(&quic->token_reuse_tree, picoquic_registered_token_compare,
                 picoquic_registered_token_create, picoquic_registered_token_delete, picoquic_registered_token_value);
