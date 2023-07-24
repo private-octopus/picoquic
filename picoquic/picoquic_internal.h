@@ -1296,7 +1296,10 @@ typedef struct st_picoquic_cnx_t {
     picoquic_connection_id_t original_cnxid;
     struct sockaddr_storage registered_icid_addr;
     picohash_item registered_icid_item;
-    struct st_picoquic_net_secret_key_t* reset_secret_key;
+    struct sockaddr_storage registered_secret_addr;
+    uint8_t registered_reset_secret[PICOQUIC_RESET_SECRET_SIZE];
+    picohash_item registered_reset_secret_item;
+
     uint64_t start_time;
     int64_t phase_delay;
     uint64_t application_error;
