@@ -9842,6 +9842,7 @@ int ddos_amplification_test_one(int use_0rtt, int do_8k)
         }
         else {
             data_sent_by_client += packet->length;
+            picoquic_store_addr(&packet->addr_from, (struct sockaddr*)&test_ctx->client_addr);
 
             ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
                 (struct sockaddr*) & packet->addr_from,

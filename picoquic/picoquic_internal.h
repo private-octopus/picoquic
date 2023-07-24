@@ -1293,7 +1293,8 @@ typedef struct st_picoquic_cnx_t {
     picoquic_state_enum cnx_state;
     picoquic_connection_id_t initial_cnxid;
     picoquic_connection_id_t original_cnxid;
-    struct st_picoquic_net_icid_key_t* net_icid_key;
+    struct sockaddr_storage registered_icid_addr;
+    picohash_item registered_icid_item;
     struct st_picoquic_net_secret_key_t* reset_secret_key;
     uint64_t start_time;
     int64_t phase_delay;
