@@ -1611,11 +1611,6 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
 
         nb_trials++;
-#if 1
-        if (nb_inactive == 250) {
-            DBG_PRINTF("%s", "bug");
-        }
-#endif
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
@@ -9847,6 +9842,7 @@ int ddos_amplification_test_one(int use_0rtt, int do_8k)
         }
         else {
             data_sent_by_client += packet->length;
+            picoquic_store_addr(&packet->addr_from, (struct sockaddr*)&test_ctx->client_addr);
 
             ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
                 (struct sockaddr*) & packet->addr_from,
