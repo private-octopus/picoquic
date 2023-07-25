@@ -981,8 +981,9 @@ typedef struct st_picoquic_remote_cnxid_t {
 typedef struct st_picoquic_path_t {
     picoquic_local_cnxid_t* p_local_cnxid; 
     picoquic_remote_cnxid_t* p_remote_cnxid;
-
-    struct st_picoquic_net_id_key_t* first_net_id;
+    struct sockaddr_storage registered_peer_addr;
+    picohash_item net_id_hash_item;
+    struct st_picoquic_cnx_t* cnx;
     uint64_t unique_path_id;
 
     void* app_path_ctx;
@@ -1021,7 +1022,6 @@ typedef struct st_picoquic_path_t {
     unsigned int response_required : 1;
     unsigned int path_is_demoted : 1;
     unsigned int current_spin : 1;
-    unsigned int path_is_registered : 1;
     unsigned int last_bw_estimate_path_limited : 1;
     unsigned int path_cid_rotated : 1;
     unsigned int path_is_preferred_path : 1;

@@ -280,19 +280,29 @@ static picohash_item * picoquic_local_cnxid_to_item(const void* key)
 
 static uint64_t picoquic_net_id_hash(const void* key)
 {
-    const picoquic_net_id_key_t* net = (const picoquic_net_id_key_t*)key;
+    const picoquic_path_t* path_x = (const picoquic_path_t*)key;
 
     // return picohash_bytes((uint8_t*)&net->saddr, sizeof(net->saddr));
-    return picoquic_hash_addr((struct sockaddr*) & net->saddr);
+    return picoquic_hash_addr((struct sockaddr*) & path_x->registered_peer_addr);
 }
+
+static picohash_item * picoquic_local_netid_to_item(const void* key)
+{
+    picoquic_path_t* path_x = (picoquic_path_t*)key;
+
+    return &path_x->net_id_hash_item;
+}
+
 
 static int picoquic_net_id_compare(const void* key1, const void* key2)
 {
-    const picoquic_net_id_key_t* net1 = (const picoquic_net_id_key_t*)key1;
-    const picoquic_net_id_key_t* net2 = (const picoquic_net_id_key_t*)key2;
+    const picoquic_path_t* path_x1 = (const picoquic_path_t*)key1;
+    const picoquic_path_t* path_x2 = (const picoquic_path_t*)key2;
 
-    return picoquic_compare_addr((struct sockaddr*) & net1->saddr, (struct sockaddr*) & net2->saddr);
+    return picoquic_compare_addr((struct sockaddr*) & path_x1->registered_peer_addr, (struct sockaddr*) & path_x2->registered_peer_addr);
 }
+
+
 
 static uint64_t picoquic_net_icid_hash(const void* key)
 {
@@ -678,8 +688,8 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
             quic->table_cnx_by_id = picohash_create_ex((size_t)max_nb_connections * 4,
                 picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item);
 
-            quic->table_cnx_by_net = picohash_create((size_t)max_nb_connections * 4,
-                picoquic_net_id_hash, picoquic_net_id_compare);
+            quic->table_cnx_by_net = picohash_create_ex((size_t)max_nb_connections * 4,
+                picoquic_net_id_hash, picoquic_net_id_compare, picoquic_local_netid_to_item);
 
             quic->table_cnx_by_icid = picohash_create_ex((size_t)max_nb_connections,
                 picoquic_net_icid_hash, picoquic_net_icid_compare, picoquic_net_icid_to_item);
@@ -1088,37 +1098,32 @@ int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
     return ret;
 }
 
-int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t * path_x, struct sockaddr* addr)
+void picoquic_unregister_net_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
+{
+    if (path_x->net_id_hash_item.key != NULL) {
+        picohash_item* item = picohash_retrieve(cnx->quic->table_cnx_by_net, path_x);
+        if (item != NULL) {
+            picohash_delete_item(cnx->quic->table_cnx_by_net, item, 0);
+        }
+        memset(&path_x->registered_peer_addr, 0, sizeof(struct sockaddr_storage));
+    }
+}
+
+int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     int ret = 0;
     picohash_item* item;
-    picoquic_net_id_key_t* key = (picoquic_net_id_key_t*)malloc(sizeof(picoquic_net_id_key_t));
 
-    if (key == NULL) {
+    /* If registration was present, remove it */
+    picoquic_unregister_net_id(cnx, path_x);
+    /* Try registering the new address */
+    picoquic_store_addr(&path_x->registered_peer_addr, (struct sockaddr *)&path_x->peer_addr);
+    item = picohash_retrieve(quic->table_cnx_by_net, path_x);
+
+    if (item != NULL) {
         ret = -1;
     } else {
-        memset(key, 0, sizeof(picoquic_net_id_key_t));
-        picoquic_store_addr(&key->saddr, addr);
-
-        key->cnx = cnx;
-        key->path = path_x;
-
-        item = picohash_retrieve(quic->table_cnx_by_net, key);
-
-        if (item != NULL) {
-            ret = -1;
-        } else {
-            ret = picohash_insert(quic->table_cnx_by_net, key);
-
-            if (ret == 0) {
-                key->next_net_id = path_x->first_net_id;
-                path_x->first_net_id = key;
-            }
-        }
-    }
-
-    if (key != NULL && ret != 0) {
-        free(key);
+        ret = picohash_insert(quic->table_cnx_by_net, path_x);
     }
 
     return ret;
@@ -1486,6 +1491,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
             /* Register the sequence number */
             path_x->unique_path_id = cnx->unique_path_id_next;
             cnx->unique_path_id_next++;
+            path_x->cnx = cnx;
 
             /* Set the addresses */
             picoquic_store_addr(&path_x->peer_addr, peer_addr);
@@ -1537,12 +1543,9 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
  */
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
-
-    if (path_x->peer_addr.ss_family != 0) {
-        (void)picoquic_register_net_id(cnx->quic, cnx, cnx->path[0], (struct sockaddr *)&path_x->peer_addr);
+    if (path_x->peer_addr.ss_family != 0 && cnx->quic->local_cnxid_length == 0) {
+        (void)picoquic_register_net_id(cnx->quic, cnx, path_x);
     }
-
-    path_x->path_is_registered = 1;
 }
 
 /* To delete a path, we need to delete the data allocated to the path: search items in
@@ -1553,17 +1556,7 @@ void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 
 static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x) 
 {
-    while (path_x->first_net_id != NULL) {
-        picohash_item* item;
-        picoquic_net_id_key_t* net_id_key = path_x->first_net_id;
-        path_x->first_net_id = net_id_key->next_net_id;
-        net_id_key->next_net_id = NULL;
-
-        item = picohash_retrieve(cnx->quic->table_cnx_by_net, net_id_key);
-        if (item != NULL) {
-            picohash_delete_item(cnx->quic->table_cnx_by_net, item, 1);
-        }
-    }
+    picoquic_unregister_net_id(cnx, path_x);
     /* Remove the congestion data */
     if (cnx->congestion_alg != NULL) {
         cnx->congestion_alg->alg_delete(path_x);
@@ -4368,15 +4361,14 @@ picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, const struct sockaddr
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
-    picoquic_net_id_key_t key;
+    picoquic_path_t dummy_path_x = { 0 };
 
-    memset(&key, 0, sizeof(key));
-    picoquic_store_addr(&key.saddr, addr);
+    picoquic_store_addr(&dummy_path_x.registered_peer_addr, addr);
 
-    item = picohash_retrieve(quic->table_cnx_by_net, &key);
+    item = picohash_retrieve(quic->table_cnx_by_net, &dummy_path_x);
 
     if (item != NULL) {
-        ret = ((picoquic_net_id_key_t*)item->key)->cnx;
+        ret = ((picoquic_path_t*)item->key)->cnx;
     }
     return ret;
 }
