@@ -1428,6 +1428,71 @@ static int tls_api_server_departure(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
+static void tls_api_prepare_coalesce_test(picoquic_test_tls_api_ctx_t* test_ctx,
+    size_t * coalesced_length, size_t send_buffer_size)
+{
+    uint32_t hl = 0;
+
+    test_ctx->send_buffer[hl++] = 0xE0; /* handshake */
+    picoformat_32(&test_ctx->send_buffer[hl],
+        picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
+    hl += 4;
+    test_ctx->send_buffer[hl++] = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len;
+    hl += picoquic_format_connection_id(&test_ctx->send_buffer[hl],
+        send_buffer_size - hl, test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id);
+    test_ctx->send_buffer[hl++] = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id.id_len;
+    hl += picoquic_format_connection_id(&test_ctx->send_buffer[hl],
+        send_buffer_size - hl, test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id);
+    test_ctx->send_buffer[hl++] = 21;
+    picoquic_public_random(&test_ctx->send_buffer[hl], 21);
+    *coalesced_length = hl + 21;
+}
+
+static int tls_api_client_departure(picoquic_test_tls_api_ctx_t* test_ctx,
+    struct sockaddr_storage * addr_from, struct sockaddr_storage * addr_to,
+    int * was_active, size_t * send_length, size_t * p_segment_size,
+    picoquictest_sim_link_t** p_target_link, uint64_t simulated_time)
+{
+    int ret = 0;
+    /* check whether the client has something to send */
+    size_t coalesced_length = 0;
+    size_t send_buffer_size = test_ctx->send_buffer_size;
+
+    if (test_ctx->do_bad_coalesce_test && test_ctx->cnx_client->cnx_state > picoquic_state_server_handshake) {
+        send_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
+        p_segment_size = NULL;
+        tls_api_prepare_coalesce_test(test_ctx, &coalesced_length, send_buffer_size);
+    }
+
+    ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time,
+        test_ctx->send_buffer + coalesced_length, send_buffer_size - coalesced_length, send_length,
+        addr_to, addr_from, NULL, p_segment_size);
+    test_ctx->client_endpoint.next_time_ready = simulated_time +
+        test_ctx->client_endpoint.prepare_cpu_time;
+    if (ret != 0)
+    {
+        /* useless test, but makes it easier to add a breakpoint under debugger */
+        ret = -1;
+    }
+    else if (*send_length > 0) {
+        *send_length += coalesced_length;
+        /* queue in c_to_s */
+        if (addr_from->ss_family == 0) {
+            picoquic_store_addr(addr_from, (struct sockaddr*)& test_ctx->client_addr);
+        }
+
+        if (test_ctx->c_to_s_link_2 != NULL &&
+            picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_2,
+                (struct sockaddr*) addr_from) == 0) {
+            *p_target_link = test_ctx->c_to_s_link_2;
+        }
+        else {
+            *p_target_link = test_ctx->c_to_s_link;
+        }
+    }
+    return ret;
+}
+
 int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t time_out, int* was_active)
 {
@@ -1543,54 +1608,9 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
             }
             else if (next_action == sim_action_client_departure) {
                 /* check whether the client has something to send */
-                uint8_t coalesced_length = 0;
-                size_t send_buffer_size = test_ctx->send_buffer_size;
-
-                if (test_ctx->do_bad_coalesce_test && test_ctx->cnx_client->cnx_state > picoquic_state_server_handshake) {
-                    uint32_t hl = 0;
-                    send_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
-                    p_segment_size = NULL;
-
-                    test_ctx->send_buffer[hl++] = 0xE0; /* handshake */
-                    picoformat_32(&test_ctx->send_buffer[hl],
-                        picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
-                    hl += 4;
-                    test_ctx->send_buffer[hl++] = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len;
-                    hl += picoquic_format_connection_id(&test_ctx->send_buffer[hl],
-                        send_buffer_size - hl, test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id);
-                    test_ctx->send_buffer[hl++] = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id.id_len;
-                    hl += picoquic_format_connection_id(&test_ctx->send_buffer[hl],
-                        send_buffer_size - hl, test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id);
-                    test_ctx->send_buffer[hl++] = 21;
-                    picoquic_public_random(&test_ctx->send_buffer[hl], 21);
-                    coalesced_length = hl + 21;
-                }
-                ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, *simulated_time,
-                    test_ctx->send_buffer + coalesced_length, send_buffer_size - coalesced_length, &send_length,
-                    &addr_to, &addr_from, NULL, p_segment_size);
-                test_ctx->client_endpoint.next_time_ready = *simulated_time +
-                    test_ctx->client_endpoint.prepare_cpu_time;
-                if (ret != 0)
-                {
-                    /* useless test, but makes it easier to add a breakpoint under debugger */
-                    ret = -1;
-                }
-                else if (send_length > 0) {
-                    send_length += coalesced_length;
-                    /* queue in c_to_s */
-                    if (addr_from.ss_family == 0) {
-                        picoquic_store_addr(&addr_from, (struct sockaddr*)& test_ctx->client_addr);
-                    }
-
-                    if (test_ctx->c_to_s_link_2 != NULL &&
-                        picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_2,
-                        (struct sockaddr*) & addr_from) == 0) {
-                        target_link = test_ctx->c_to_s_link_2;
-                    }
-                    else {
-                        target_link = test_ctx->c_to_s_link;
-                    }
-                }
+                ret = tls_api_client_departure(test_ctx, &addr_from, &addr_to,
+                    was_active, &send_length, p_segment_size, &target_link,
+                    *simulated_time);
             }
             else if (next_action == sim_action_server_departure) {
                 ret = tls_api_server_departure(test_ctx, &addr_from, &addr_to,
