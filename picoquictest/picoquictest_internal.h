@@ -141,6 +141,32 @@ typedef struct st_test_api_stream_t {
     uint8_t* r_rcv;
 } test_api_stream_t;
 
+typedef enum {
+    sim_action_none = 0,
+    sim_action_stateless_packet = 1,
+    sim_action_client_departure,
+    sim_action_server_departure,
+    sim_action_client_arrival,
+    sim_action_server_arrival,
+    sim_action_client_arrival2,
+    sim_action_server_arrival2,
+    sim_action_client_dequeue,
+    sim_action_server_dequeue
+} tls_api_sim_action_enum;
+
+typedef struct st_picoquic_test_endpoint_t {
+    /* configuration parameters */
+    uint64_t prepare_cpu_time;
+    uint64_t incoming_cpu_time;
+    size_t packet_queue_max;
+    /* next time client ready */
+    uint64_t next_time_ready;
+    /* packet queue waiting to be processed. */
+    size_t queue_size;
+    picoquictest_sim_packet_t* first_packet;
+    picoquictest_sim_packet_t* last_packet;
+} picoquic_test_endpoint_t;
+
 typedef struct st_test_api_callback_t {
     int client_mode;
     int fin_received;
@@ -169,7 +195,9 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     picoquictest_sim_link_t* c_to_s_link_2; /* for use in multipath tests */
     picoquictest_sim_link_t* s_to_c_link;
     picoquictest_sim_link_t* s_to_c_link_2;
-    int received_version_negotiation;
+    /* Simulation of CPU limited sender or receiver */
+    picoquic_test_endpoint_t client_endpoint;
+    picoquic_test_endpoint_t server_endpoint;
     /* Management of UDP multiple message simulation */
     uint8_t* send_buffer;
     size_t send_buffer_size;
@@ -181,7 +209,8 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     size_t stream0_received;
     int stream0_test_option;
     int stream0_flow_release;
-
+    /* Flags */
+    int received_version_negotiation;
     int sum_data_received_at_server;
     int sum_data_received_at_client;
     int test_finished;
