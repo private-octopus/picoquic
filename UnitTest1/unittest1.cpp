@@ -1802,6 +1802,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(limited_batch) {
+            int ret = limited_batch_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(limited_cubic) {
             int ret = limited_cubic_test();
 

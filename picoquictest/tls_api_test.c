@@ -1016,6 +1016,22 @@ static int verify_version(picoquic_cnx_t* cnx_client, picoquic_cnx_t* cnx_server
     return ret;
 }
 
+static void tls_api_endpoint_release(
+    picoquic_test_endpoint_t* endpoint)
+{
+    picoquictest_sim_packet_t* packet = endpoint->first_packet;
+
+    while (packet != NULL) {
+        picoquictest_sim_packet_t* to_free = packet;
+
+        packet = packet->next_packet;
+
+        free(to_free);
+    }
+    endpoint->first_packet = NULL;
+    endpoint->last_packet = NULL;
+}
+
 void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
 {
     if (test_ctx->qclient != NULL) {
@@ -1062,6 +1078,8 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
         (void)picoquic_file_close(test_ctx->default_path_update);
     }
 
+    tls_api_endpoint_release(&test_ctx->client_endpoint);
+    tls_api_endpoint_release(&test_ctx->server_endpoint);
 
     free(test_ctx);
 }

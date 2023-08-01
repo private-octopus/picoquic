@@ -1,6 +1,6 @@
 /*
 * Author: Christian Huitema
-* Copyright (c) 2017, Private Octopus, Inc.
+* Copyright (c) 2023, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -63,26 +63,58 @@ typedef struct st_limited_test_config_t {
     uint64_t incoming_cpu_time;
     uint64_t prepare_cpu_time;
     size_t packet_queue_max;
+    size_t nb_initial_steps;
+    size_t nb_final_steps;
     uint64_t max_completion_time;
+    uint64_t microsec_latency;
+    uint64_t picosec_per_byte;
 } limited_test_config_t;
 
-static test_api_stream_desc_t test_scenario_limited[] = {
-#if 1
-    { 4, 0, 257, 1000000 },
-    { 8, 0, 257, 1000000 }
-#else
-    { 4, 0, 257, 1000000 },
-    { 8, 0, 257, 1000000 },
-    { 12, 0, 257, 1000000 },
-    { 16, 0, 257, 1000000 }
-#endif
-};
+int limited_client_create_scenario(
+    size_t nb_initial_steps, size_t nb_final_steps,
+    test_api_stream_desc_t ** p_scenario,
+    size_t * p_scenario_size)
+{
+    int ret = 0;
+    size_t nb_steps = nb_initial_steps + nb_final_steps;
+    size_t scenario_size = sizeof(test_api_stream_desc_t) * nb_steps;
+    test_api_stream_desc_t* scenario = (test_api_stream_desc_t*)malloc(scenario_size);
+    uint64_t previous_stream_id = 0;
+
+    if (scenario == NULL) {
+        *p_scenario = NULL;
+        *p_scenario_size = 0;
+        ret = -1;
+    }
+    else {
+        *p_scenario = scenario;
+        *p_scenario_size = scenario_size;
+        memset(scenario, 0, scenario_size);
+        for (size_t i = 0; i < nb_initial_steps; i++) {
+            scenario[i].q_len = 257;
+            scenario[i].r_len = 32000;
+            scenario[i].previous_stream_id = previous_stream_id;
+            previous_stream_id += 4;
+            scenario[i].stream_id = previous_stream_id;
+        }
+        for (size_t i = nb_initial_steps; i < nb_steps; i++) {
+            scenario[i].q_len = 257;
+            scenario[i].r_len = 1000000;
+            scenario[i].previous_stream_id = previous_stream_id; 
+            scenario[i].stream_id = previous_stream_id + 4*(i+1);
+        }
+    }
+
+    return ret;
+}
 
 int limited_client_test_one(limited_test_config_t * config)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0x11, 0x01, 0xc1, 0x1e, 0x44, 0, 0, 0}, 8 };
+    test_api_stream_desc_t* scenario = NULL;
+    size_t scenario_size = 0;
     int ret;
 
     initial_cid.id[5] = config->test_id;
@@ -92,6 +124,10 @@ int limited_client_test_one(limited_test_config_t * config)
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
+    }
+    else {
+        ret = limited_client_create_scenario(config->nb_initial_steps,
+            config->nb_final_steps, &scenario, &scenario_size);
     }
 
     /* Set the congestion algorithm and endpoint limits to specified value. */
@@ -107,9 +143,14 @@ int limited_client_test_one(limited_test_config_t * config)
         test_ctx->qclient->use_long_log = 1;
         picoquic_set_binlog(test_ctx->qclient, ".");
         binlog_new_connection(test_ctx->cnx_client);
+        /* Set long delays, 1 Mbps each way */
+        test_ctx->c_to_s_link->microsec_latency = config->microsec_latency;
+        test_ctx->c_to_s_link->picosec_per_byte = config->picosec_per_byte;
+        test_ctx->s_to_c_link->microsec_latency = config->microsec_latency;
+        test_ctx->s_to_c_link->picosec_per_byte = config->picosec_per_byte;
 
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_limited, sizeof(test_scenario_limited), 0, 0, 0, 20000, config->max_completion_time);
+            scenario, scenario_size, 0, 0, 0, 4 * config->microsec_latency, config->max_completion_time);
     }
 
     /* Free the resource, which will close the log file.
@@ -118,6 +159,10 @@ int limited_client_test_one(limited_test_config_t * config)
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    if (scenario != NULL) {
+        free(scenario);
     }
 
     return ret;
@@ -131,6 +176,10 @@ static void limited_config_set_default( limited_test_config_t* config, uint8_t t
     config->incoming_cpu_time = 2000;
     config->prepare_cpu_time = 2000;
     config->packet_queue_max = 16;
+    config->nb_final_steps = 2;
+    config->nb_initial_steps = 0;
+    config->microsec_latency = 50000;
+    config->picosec_per_byte = 80000; /* corresponds to 100 Mbps */
 }
 
 int limited_reno_test()
@@ -138,7 +187,7 @@ int limited_reno_test()
     limited_test_config_t config;
     limited_config_set_default(&config, 1);
     config.ccalgo = picoquic_newreno_algorithm;
-    config.max_completion_time = 3750000;
+    config.max_completion_time = 4500000;
 
     return limited_client_test_one(&config);
 }
@@ -148,7 +197,7 @@ int limited_cubic_test()
     limited_test_config_t config;
     limited_config_set_default(&config, 2);
     config.ccalgo = picoquic_cubic_algorithm;
-    config.max_completion_time = 3700000;
+    config.max_completion_time = 4100000;
 
     return limited_client_test_one(&config);
 }
@@ -158,7 +207,18 @@ int limited_bbr_test()
     limited_test_config_t config;
     limited_config_set_default(&config, 3);
     config.ccalgo = picoquic_bbr_algorithm;
-    config.max_completion_time = 3700000;
+    config.max_completion_time = 4100000;
+
+    return limited_client_test_one(&config);
+}
+
+int limited_batch_test()
+{
+    limited_test_config_t config;
+    limited_config_set_default(&config, 4);
+    config.ccalgo = picoquic_bbr_algorithm;
+    config.max_completion_time = 6400000;
+    config.nb_initial_steps = 10;
 
     return limited_client_test_one(&config);
 }

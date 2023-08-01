@@ -311,6 +311,7 @@ int large_client_hello_test();
 int limited_reno_test();
 int limited_cubic_test();
 int limited_bbr_test();
+int limited_batch_test();
 int fast_nat_rebinding_test();
 int datagram_test();
 int datagram_rt_test();
