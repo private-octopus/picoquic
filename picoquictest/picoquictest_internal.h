@@ -159,8 +159,11 @@ typedef struct st_picoquic_test_endpoint_t {
     uint64_t prepare_cpu_time;
     uint64_t incoming_cpu_time;
     size_t packet_queue_max;
-    /* next time client ready */
+    /* next time endpoint ready */
     uint64_t next_time_ready;
+    /* last time client sent something */
+    uint64_t last_send_time;
+    int ready_to_send;
     /* packet queue waiting to be processed. */
     size_t queue_size;
     picoquictest_sim_packet_t* first_packet;

@@ -1230,11 +1230,6 @@ static picoquictest_sim_packet_t* tls_api_one_endpoint_packet_dequeue(
     picoquic_test_endpoint_t* endpoint)
 {
     picoquictest_sim_packet_t* packet = endpoint->first_packet;
-#if 1
-    if (endpoint->queue_size > 1) {
-        DBG_PRINTF("%s", "bug");
-    }
-#endif
 
     if (packet != NULL) {
         if (packet->next_packet == NULL) {
@@ -1311,11 +1306,6 @@ static void tls_api_one_endpoint_arrival(picoquictest_sim_link_t* sim_link,
         }
         else if (endpoint->queue_size < endpoint->packet_queue_max ||
             endpoint->packet_queue_max == 0) {
-#if 1
-            if (packet->arrival_time < endpoint->last_packet->arrival_time) {
-                DBG_PRINTF("%s", "Bug");
-            }
-#endif
             /* add this packet to the endpoint input queue */
             packet->next_packet = NULL;
             endpoint->last_packet->next_packet = packet;
@@ -1403,6 +1393,8 @@ static int tls_api_server_departure(picoquic_test_tls_api_ctx_t* test_ctx,
 {
     int ret = 0;
 
+    test_ctx->server_endpoint.last_send_time = simulated_time;
+
     ret = picoquic_prepare_packet_ex(test_ctx->cnx_server, simulated_time,
         test_ctx->send_buffer, test_ctx->send_buffer_size, send_length,
         addr_to, addr_from, NULL, p_segment_size);
@@ -1457,6 +1449,8 @@ static int tls_api_client_departure(picoquic_test_tls_api_ctx_t* test_ctx,
     /* check whether the client has something to send */
     size_t coalesced_length = 0;
     size_t send_buffer_size = test_ctx->send_buffer_size;
+
+    test_ctx->client_endpoint.last_send_time = simulated_time;
 
     if (test_ctx->do_bad_coalesce_test && test_ctx->cnx_client->cnx_state > picoquic_state_server_handshake) {
         send_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
@@ -1564,13 +1558,19 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
             }
 
             if (test_ctx->client_endpoint.first_packet != NULL &&
-                test_ctx->client_endpoint.next_time_ready <= next_time) {
+                test_ctx->client_endpoint.next_time_ready <= next_time &&
+                (next_action != sim_action_client_departure ||
+                    test_ctx->client_endpoint.incoming_cpu_time == 0 ||
+                    test_ctx->client_endpoint.last_send_time + PICOQUIC_ACK_DELAY_MAX > next_time )){
                 next_time = test_ctx->client_endpoint.next_time_ready;
                 next_action = sim_action_client_dequeue;
             }
 
             if (test_ctx->server_endpoint.first_packet != NULL &&
-                test_ctx->server_endpoint.next_time_ready <= next_time) {
+                test_ctx->server_endpoint.next_time_ready <= next_time &&
+                (next_action != sim_action_server_departure ||
+                    test_ctx->server_endpoint.incoming_cpu_time == 0 ||
+                    test_ctx->server_endpoint.last_send_time + PICOQUIC_ACK_DELAY_MAX > next_time )){
                 next_time = test_ctx->server_endpoint.next_time_ready;
                 next_action = sim_action_server_dequeue;
             }

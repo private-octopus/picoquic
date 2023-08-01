@@ -57,7 +57,108 @@
 * We test this configuration with a couple of scenarios.
 */
 
-int limited_endpoint_test()
+typedef struct st_limited_test_config_t {
+    uint8_t test_id;
+    picoquic_congestion_algorithm_t* ccalgo;
+    uint64_t incoming_cpu_time;
+    uint64_t prepare_cpu_time;
+    size_t packet_queue_max;
+    uint64_t max_completion_time;
+} limited_test_config_t;
+
+static test_api_stream_desc_t test_scenario_limited[] = {
+#if 1
+    { 4, 0, 257, 1000000 },
+    { 8, 0, 257, 1000000 }
+#else
+    { 4, 0, 257, 1000000 },
+    { 8, 0, 257, 1000000 },
+    { 12, 0, 257, 1000000 },
+    { 16, 0, 257, 1000000 }
+#endif
+};
+
+int limited_client_test_one(limited_test_config_t * config)
 {
-    return -1;
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x11, 0x01, 0xc1, 0x1e, 0x44, 0, 0, 0}, 8 };
+    int ret;
+
+    initial_cid.id[5] = config->test_id;
+
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the congestion algorithm and endpoint limits to specified value. */
+    if (ret == 0) {
+
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, config->ccalgo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, config->ccalgo);
+        test_ctx->client_endpoint.incoming_cpu_time = config->incoming_cpu_time;
+        test_ctx->client_endpoint.prepare_cpu_time = config->prepare_cpu_time;
+        test_ctx->client_endpoint.packet_queue_max = config->packet_queue_max;
+        test_ctx->qserver->use_long_log = 1;
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        test_ctx->qclient->use_long_log = 1;
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        binlog_new_connection(test_ctx->cnx_client);
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_limited, sizeof(test_scenario_limited), 0, 0, 0, 20000, config->max_completion_time);
+    }
+
+    /* Free the resource, which will close the log file.
+    */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+static void limited_config_set_default( limited_test_config_t* config, uint8_t test_id)
+{
+    memset(config, 0, sizeof(config));
+    config->test_id = test_id;
+    config->ccalgo = picoquic_newreno_algorithm;
+    config->incoming_cpu_time = 2000;
+    config->prepare_cpu_time = 2000;
+    config->packet_queue_max = 16;
+}
+
+int limited_reno_test()
+{
+    limited_test_config_t config;
+    limited_config_set_default(&config, 1);
+    config.ccalgo = picoquic_newreno_algorithm;
+    config.max_completion_time = 3750000;
+
+    return limited_client_test_one(&config);
+}
+
+int limited_cubic_test()
+{
+    limited_test_config_t config;
+    limited_config_set_default(&config, 2);
+    config.ccalgo = picoquic_cubic_algorithm;
+    config.max_completion_time = 3700000;
+
+    return limited_client_test_one(&config);
+}
+
+int limited_bbr_test()
+{
+    limited_test_config_t config;
+    limited_config_set_default(&config, 3);
+    config.ccalgo = picoquic_bbr_algorithm;
+    config.max_completion_time = 3700000;
+
+    return limited_client_test_one(&config);
 }
