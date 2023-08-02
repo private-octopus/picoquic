@@ -822,7 +822,25 @@ void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max)
 
 void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data)
 {
+    picoquic_cnx_t* cnx = quic->cnx_list;
     quic->max_data_limit = max_data;
+
+
+    if (quic->default_tp != NULL) {
+        quic->default_tp->initial_max_data = max_data;
+    }
+
+    while (cnx != NULL) {
+        /* If the connection is not yet initialized, reset the maxdata parameter */
+        if (cnx->client_mode &&
+            cnx->cnx_state == picoquic_state_client_init &&
+            cnx->tls_stream[0].sent_offset == 0 &&
+            cnx->tls_stream[0].send_queue == NULL){
+            cnx->local_parameters.initial_max_data = max_data;
+            cnx->maxdata_local = max_data;
+        }
+        cnx = cnx->next_in_table;
+    }
 }
 
 void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout)
@@ -3367,6 +3385,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     if (cnx != NULL) {
         if (quic->default_tp == NULL) {
             picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
+            if (quic->max_data_limit != 0) {
+                cnx->local_parameters.initial_max_data = quic->max_data_limit;
+            }
             cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
             cnx->local_parameters.enable_multipath = (quic->default_multipath_option & 1) ? 1 : 0;
             cnx->local_parameters.enable_simple_multipath = (quic->default_multipath_option & 2) ? 1 : 0;

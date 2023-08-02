@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.10.2
+        VERSION 1.1.10.3
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -136,6 +136,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cnx_creation_test.c
     picoquictest/cnxstress.c
     picoquictest/cplusplus.cpp
+    picoquictest/cpu_limited.c
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
     picoquictest/edge_cases.c
