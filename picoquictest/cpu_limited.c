@@ -188,7 +188,7 @@ int limited_client_test_one(limited_test_config_t * config)
 
 static void limited_config_set_default( limited_test_config_t* config, uint8_t test_id)
 {
-    memset(config, 0, sizeof(config));
+    memset(config, 0, sizeof(limited_test_config_t));
     config->test_id = test_id;
     config->ccalgo = picoquic_newreno_algorithm;
     config->incoming_cpu_time = 2000;
