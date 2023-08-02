@@ -10583,7 +10583,7 @@ int app_limit_cc_test_one(
     if (ret == 0)
     {
         FILE* F = picoquic_file_open(APP_LIMIT_TRACE_CSV, "r");
-        uint64_t cwin_max = 0;
+        uint64_t transit_max = 0;
 
         if (F == NULL) {
             DBG_PRINTF("Cannot open <%s>", APP_LIMIT_TRACE_CSV);
@@ -10595,11 +10595,11 @@ int app_limit_cc_test_one(
             while (fgets(buffer, 512, F) != NULL) {
                 /* only consider number lines line */
                 if (buffer[0] >= '0' && buffer[0] <= '9') {
-                    uint64_t cwin = 0;
+                    uint64_t transit = 0;
                     int nb_comma = 0;
                     int c_index = 0;
 
-                    while (nb_comma < 6 && c_index < 512 && buffer[c_index] != 0) {
+                    while (nb_comma < 23 && c_index < 512 && buffer[c_index] != 0) {
                         if (buffer[c_index] == ',') {
                             nb_comma++;
                         }
@@ -10609,20 +10609,20 @@ int app_limit_cc_test_one(
                         c_index++;
                     }
                     while (c_index < 512 && buffer[c_index] >= '0' && buffer[c_index] <= '9') {
-                        cwin *= 10;
-                        cwin += (uint64_t)buffer[c_index] - '0';
+                        transit *= 10;
+                        transit += (uint64_t)buffer[c_index] - '0';
                         c_index++;
                     }
-                    if (cwin > cwin_max) {
-                        cwin_max = cwin;
+                    if (transit > transit_max) {
+                        transit_max = transit;
                     }
                 }
             }
 
             (void)picoquic_file_close(F);
 
-            if (cwin_max > cwin_limit) {
-                DBG_PRINTF("MAX CWIN = %" PRIu64 ", larger than %" PRIu64, cwin_max, cwin_limit);
+            if (transit_max > cwin_limit) {
+                DBG_PRINTF("MAX Transit = %" PRIu64 ", larger than %" PRIu64, transit_max, cwin_limit);
                 ret = -1;
             }
         }

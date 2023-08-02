@@ -68,6 +68,8 @@ typedef struct st_limited_test_config_t {
     uint64_t max_completion_time;
     uint64_t microsec_latency;
     uint64_t picosec_per_byte;
+    uint64_t flow_control_max;
+    uint64_t nb_losses_max;
 } limited_test_config_t;
 
 int limited_client_create_scenario(
@@ -148,9 +150,25 @@ int limited_client_test_one(limited_test_config_t * config)
         test_ctx->c_to_s_link->picosec_per_byte = config->picosec_per_byte;
         test_ctx->s_to_c_link->microsec_latency = config->microsec_latency;
         test_ctx->s_to_c_link->picosec_per_byte = config->picosec_per_byte;
-
+        /* if required, set the flow control limit */
+        if (config->flow_control_max != 0) {
+            picoquic_set_max_data_control(test_ctx->qclient, config->flow_control_max);
+        }
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             scenario, scenario_size, 0, 0, 0, 4 * config->microsec_latency, config->max_completion_time);
+    }
+
+    if (ret == 0 && config->nb_losses_max != 0) {
+        if (test_ctx->cnx_server == NULL) {
+            DBG_PRINTF("Cannot verify number of losses < %" PRIu64 ", server connection deleted",
+                config->nb_losses_max);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->nb_retransmission_total >= config->nb_losses_max) {
+            DBG_PRINTF("Got %" PRIu64 ", >= %" PRIu64,
+                test_ctx->cnx_server->nb_retransmission_total, config->nb_losses_max);
+            ret = -1;
+        }
     }
 
     /* Free the resource, which will close the log file.
@@ -219,6 +237,18 @@ int limited_batch_test()
     config.ccalgo = picoquic_bbr_algorithm;
     config.max_completion_time = 6400000;
     config.nb_initial_steps = 10;
+
+    return limited_client_test_one(&config);
+}
+
+int limited_safe_test()
+{
+    limited_test_config_t config;
+    limited_config_set_default(&config, 5);
+    config.ccalgo = picoquic_cubic_algorithm;
+    config.max_completion_time = 5100000;
+    config.nb_losses_max = 1;
+    config.flow_control_max = 57344;
 
     return limited_client_test_one(&config);
 }

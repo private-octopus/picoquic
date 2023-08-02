@@ -2163,17 +2163,6 @@ int picoquic_preemptive_retransmit_as_needed(
     return ret;
 }
 
-/* Decide whether MAX data need to be sent or not */
-int picoquic_should_send_max_data(picoquic_cnx_t* cnx)
-{
-    int ret = 0;
-
-    if (2 * cnx->data_received > cnx->maxdata_local)
-        ret = 1;
-
-    return ret;
-}
-
 /* Compute the next logical probe length */
 static size_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
@@ -3968,9 +3957,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 /* If necessary, encode the max data frame */
                 if (ret == 0){
                     if (cnx->quic->max_data_limit != 0) {
-                        if (cnx->data_received + (cnx->quic->max_data_limit / 2) > cnx->maxdata_local) {
+                        if (cnx->data_received + ((3 * cnx->quic->max_data_limit) / 4) > cnx->maxdata_local) {
+                            uint64_t max_data_increase = cnx->data_received + cnx->quic->max_data_limit - cnx->maxdata_local;
                             bytes_next = picoquic_format_max_data_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack,
-                                cnx->quic->max_data_limit);
+                                max_data_increase);
                         }
                     }
                     else if (2 * cnx->data_received > cnx->maxdata_local) {

@@ -226,7 +226,7 @@ int satellite_loss_fc_test()
     /* Should be less than 10 sec per draft etosat.
      * The flow control option sets the "max data" to 2 BDP, with the effect
      * of reducing the memory consumption, while the transmission is slowed. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 10000000, 250, 3, 0, 1, 0, 0, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 10010000, 250, 3, 0, 1, 0, 0, 0, 1);
 }
 
 int satellite_preemptive_test()
