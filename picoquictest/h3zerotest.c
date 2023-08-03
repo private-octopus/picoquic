@@ -3226,3 +3226,177 @@ int h3zero_settings_test()
 
     return ret;
 }
+
+/* Test support for H3 greasing of stream types.
+* This is a test of the handling of unidirectional streams of unknown types. The
+* desired handling is specified in
+* https://datatracker.ietf.org/doc/html/rfc9114#name-unidirectional-streams
+* If the stream header indicates a stream type that is not supported by the recipient,
+* the remainder of the stream cannot be consumed as the semantics are unknown.
+* Recipients of unknown stream types MUST either abort reading of the stream or
+* discard incoming data without further processing. If reading is aborted,
+* the recipient SHOULD use the H3_STREAM_CREATION_ERROR error code or a
+* reserved error code (Section 8.1). The recipient MUST NOT consider unknown
+* stream types to be a connection error of any kind.
+* This can be tested with stream types reserved for Grease, as specified in
+* https://datatracker.ietf.org/doc/html/rfc9114#name-reserved-stream-types,
+* which reserves codes of the form 0x1f * N + 0x21.
+* 
+* We want the tests in two directions: server and client.
+ */
+
+static int h3_grease_test_one(int server_test)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t time_out;
+    int nb_trials = 0;
+    int was_active = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_demo_callback_ctx_t callback_ctx;
+    int ret;
+    void* server_param = NULL;
+    picoquic_connection_id_t initial_cid = { {0x68, 0xea, 0x5e, 0, 0, 0, 0, 0}, 8 };
+    initial_cid.id[3] = (uint8_t)server_test;
+
+    ret = picoquic_demo_client_initialize_context(&callback_ctx, demo_test_scenario, nb_demo_test_scenario, PICOHTTP_ALPN_H3_LATEST, 0, 0);
+    callback_ctx.out_dir = NULL;
+    callback_ctx.no_print = 1;
+
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(&test_ctx,
+            PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOHTTP_ALPN_H3_LATEST, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+        if (ret == 0) {
+            picoquic_set_binlog(test_ctx->qserver, ".");
+            test_ctx->qserver->use_long_log = 1;
+        }
+
+        if (ret == 0) {
+            picoquic_set_binlog(test_ctx->qclient, ".");
+        }
+
+        /* Question: is there a need to change the server params? */
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_INTERNAL_TEST_VERSION_1);
+    }
+    else if (test_ctx == NULL || test_ctx->cnx_client == NULL || test_ctx->qserver == NULL) {
+        DBG_PRINTF("%s", "Connections where not properly created!\n");
+        ret = -1;
+    }
+
+    /* The default procedure creates connections using the test callback.
+    * We want to replace that by the demo client callback */
+
+    if (ret == 0) {
+        picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
+        picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, server_param);
+        picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
+        if (ret == 0) {
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_demo_client_start_streams(test_ctx->cnx_client, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+    }
+
+    if (ret == 0) {
+        /* start a unidir stream for greasing.
+         * grease_stream_type = 0x1f * 4 + 0x21 = 0x9d
+         * encodes as varint= 0x409d
+        */
+        uint8_t grease_data[] = { 0x40, 0x9d, 0xba, 0xad, 0xc0, 0xff, 0xee, 0x00, 0x00, 0x00, 0x00 };
+        picoquic_cnx_t* grease_cnx = (server_test) ? test_ctx->cnx_client: test_ctx->cnx_server;
+        uint64_t grease_stream_id = picoquic_get_next_local_stream_id(grease_cnx, 1);
+        ret = picoquic_add_to_stream(grease_cnx, grease_stream_id, grease_data, sizeof(grease_data), 1);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot send grease data, ret=%d(0x%d)", ret, ret);
+        }
+    }
+
+    /* Simulate the connection from the client side. */
+    time_out = simulated_time + 30000000;
+    while (ret == 0 && picoquic_get_cnx_state(test_ctx->cnx_client) != picoquic_state_disconnected) {
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+
+        if (ret == -1) {
+            break;
+        }
+
+        if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
+            if (callback_ctx.nb_open_streams == 0) {
+                ret = picoquic_close(test_ctx->cnx_client, 0);
+            }
+            else if (simulated_time > callback_ctx.last_interaction_time &&
+                simulated_time - callback_ctx.last_interaction_time > 10000000ull) {
+                (void)picoquic_close(test_ctx->cnx_client, 0);
+                ret = -1;
+            }
+        }
+        if (++nb_trials > 100000) {
+            ret = -1;
+            break;
+        }
+    }
+
+    /* Minimal verification that the data was properly received. */
+    for (size_t i = 0; ret == 0 && i < nb_demo_test_scenario; i++) {
+        picoquic_demo_client_stream_ctx_t* stream = callback_ctx.first_stream;
+
+        while (stream != NULL && stream->stream_id != demo_test_scenario[i].stream_id) {
+            stream = stream->next_stream;
+        }
+
+        if (stream == NULL) {
+            DBG_PRINTF("Scenario stream %d is missing\n", (int)i);
+            ret = -1;
+        }
+        else if (stream->F != NULL) {
+            DBG_PRINTF("Scenario stream %d, file was not closed\n", (int)i);
+            ret = -1;
+        }
+        else if (stream->post_sent < demo_test_scenario[i].post_size) {
+            DBG_PRINTF("Scenario stream %d, only %d bytes sent\n",
+                (int)i, (int)stream->post_sent);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && test_ctx->qclient->nb_data_nodes_allocated > test_ctx->qclient->nb_data_nodes_in_pool) {
+        ret = -1;
+    }
+    else if (ret == 0 && test_ctx->qserver->nb_data_nodes_allocated > test_ctx->qserver->nb_data_nodes_in_pool) {
+        ret = -1;
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int h3_grease_client_test()
+{
+    int ret = h3_grease_test_one(0);
+
+    return ret;
+}
+
+int h3_grease_server_test()
+{
+    int ret = h3_grease_test_one(1);
+
+    return ret;
+}
