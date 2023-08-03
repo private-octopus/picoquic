@@ -2400,6 +2400,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3_grease_client) {
+            int ret = h3_grease_client_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3_grease_server) {
+            int ret = h3_grease_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3_long_file_name) {
             int ret = h3_long_file_name_test();
 

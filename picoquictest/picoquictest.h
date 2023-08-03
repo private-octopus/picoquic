@@ -426,6 +426,8 @@ int http_stress_test();
 int http_corrupt_test();
 int http_corrupt_rdpn_test();
 int http_drop_test();
+int h3_grease_client_test();
+int h3_grease_server_test();
 int h3_long_file_name_test();
 int h3_multi_file_test();
 int h3_multi_file_loss_test();
