@@ -128,8 +128,8 @@ void picoquic_ptls_openssl_load(int unload);
 void picoquic_tls_api_init_providers(int unload)
 {
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
-    if (ptls_fusion_is_supported_by_cpu() && !use_low_memory) {
-        picoquic_fusion_load(unload);
+    if (ptls_fusion_is_supported_by_cpu()) {
+        picoquic_ptls_fusion_load(unload);
     }
 #endif
     // picoquic_bcrypt_load(unload);
