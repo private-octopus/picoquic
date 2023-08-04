@@ -25,6 +25,9 @@
 
 #include "picotls.h"
 #include "picoquic_crypto_provider_api.h"
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
+#include "picotls/fusion.h"
+#endif
 
 #ifdef _WINDOWS
 #ifndef PTLS_WITHOUT_FUSION
