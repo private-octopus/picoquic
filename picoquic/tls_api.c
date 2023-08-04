@@ -113,87 +113,11 @@ struct st_picoquic_log_event_t {
 
 #ifdef CRYPTO_PROVIDERS_REGION
 
-#if 0
- /*
-  * Make sure that openssl is properly initialized.
-  *
-  * The OpenSSL resources are allocated on first use, and not released until the end of the
-  * process. The only problem is when use memory leak tracers such as valgrind. The OpenSSL
-  * allocations will create a large number of issues, which may hide the actual leaks that
-  * should be fixed. To alleviate that, the application may use an explicit call to
-  * a global destructor like OPENSSL_cleanup(), but normally the OpenSSL stack does it
-  * during the process exit.
-  */
-static int openssl_is_init = 0;
-#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-static OSSL_PROVIDER* openssl_default_provider = NULL;
-#endif
-
-static void picoquic_init_openssl()
-{
-    if (openssl_is_init == 0) {
-        openssl_is_init = 1;
-        OpenSSL_add_all_algorithms();
-#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-        openssl_default_provider = OSSL_PROVIDER_load(NULL, "default");
-#else
-        ERR_load_crypto_strings();
-#if !defined(OPENSSL_NO_ENGINE)
-        /* Load all compiled-in ENGINEs */
-        ENGINE_load_builtin_engines();
-        ENGINE_register_all_ciphers();
-        ENGINE_register_all_digests();
-#endif
-#endif
-    }
-}
-
-void picoquic_clear_openssl()
-{
-    if (openssl_is_init) {
-#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-        if (openssl_default_provider != NULL) {
-            (void)OSSL_PROVIDER_unload(openssl_default_provider);
-            openssl_default_provider = NULL;
-        }
-#else
-#if !defined(OPENSSL_NO_ENGINE)
-        /* Free allocations from engines ENGINEs */
-        ENGINE_cleanup();
-#endif
-        ERR_free_strings();
-#endif
-        EVP_cleanup();
-        openssl_is_init = 0;
-    }
-}
-#endif
-
-#if 1
 #define PICOQUIC_CIPHER_SUITES_NB_MAX 8
 struct st_picoquic_cipher_suites_t {
     ptls_cipher_suite_t* high_memory_suite;
     ptls_cipher_suite_t* low_memory_suite;
 } picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
-#else
-ptls_cipher_suite_t* picoquic_cipher_suites[] = {
-    &ptls_openssl_aes128gcmsha256,
-    &ptls_openssl_aes256gcmsha384,
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-    & ptls_openssl_chacha20poly1305sha256,
-#else
-    /* No support for ChaCha 20 */
-#endif
-    NULL };
-#endif
-
-#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
-/* Definition of fusion versions of AESGCM */
-ptls_cipher_suite_t picoquic_fusion_aes128gcmsha256 = { PTLS_CIPHER_SUITE_AES_128_GCM_SHA256, &ptls_fusion_aes128gcm,
-                                                    &ptls_openssl_sha256 };
-ptls_cipher_suite_t picoquic_fusion_aes256gcmsha384 = { PTLS_CIPHER_SUITE_AES_256_GCM_SHA384, &ptls_fusion_aes256gcm,
-                                                    &ptls_openssl_sha384 };
-#endif
 
 /* Initialization of the cryptographic tables and functions */
 void picoquic_ptls_fusion_load(int unload);
@@ -255,7 +179,6 @@ void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory
     }
 }
 
-#if 1
 /* List of cipher suites that are suitable for this context */
 static int picoquic_set_cipher_suite_list(ptls_cipher_suite_t** selected_suites, int cipher_suite_id, int use_low_memory)
 {
@@ -279,53 +202,6 @@ static int picoquic_set_cipher_suite_list(ptls_cipher_suite_t** selected_suites,
 
     return nb_suites;
 }
-#else
-/* Setting of cipher suites.
- * By default, the code select the most performant functions from openssl or fusion.
- * The only downside of fusion is the memory allocation -- the code uses a large
- * buffer to precompute g_hash results, which adds 7KB to the memory required
- * per connection. If this is too much, the application sets the 
- * use_low_memory flag in the QUIC context, and the selection code
- * will prefer the openssl implementation of AES_GCM to the fusion implementation.
- */
-
-static int picoquic_set_cipher_suite_list(ptls_cipher_suite_t** selected_suites, int cipher_suite_id, int use_low_memory)
-{
-    int nb_suites = 0;
-        /* Check first if fusion is enabled */
-#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
-        if (ptls_fusion_is_supported_by_cpu() && !use_low_memory) {
-            if (cipher_suite_id == 0 || cipher_suite_id == 128) {
-                selected_suites[nb_suites++] = &picoquic_fusion_aes128gcmsha256;
-            }
-
-            if (cipher_suite_id == 0 || cipher_suite_id == 256) {
-                selected_suites[nb_suites++] = &picoquic_fusion_aes256gcmsha384;
-            }
-        }
-#endif
-#ifndef PTLS_WITHOUT_OPENSSL
-        if (nb_suites == 0) {
-            /* Fallback to openssl if fusion is not supported */
-            if (cipher_suite_id == 0 || cipher_suite_id == 128) {
-                selected_suites[nb_suites++] = &ptls_openssl_aes128gcmsha256;
-            }
-
-            if (cipher_suite_id == 0 || cipher_suite_id == 256) {
-                selected_suites[nb_suites++] = &ptls_openssl_aes256gcmsha384;
-            }
-        }
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-        if (cipher_suite_id == 0 || cipher_suite_id == 20) {
-            selected_suites[nb_suites++] = &ptls_openssl_chacha20poly1305sha256;
-        }
-#else
-        /* Consider getting ChaCha20 from mini crypto, despite poor performance */
-#endif
-#endif
-    return nb_suites;
-}
-#endif
 
 static int picoquic_set_cipher_suite_in_ctx(ptls_context_t* ctx, int cipher_suite_id, int use_low_memory)
 {
@@ -378,20 +254,97 @@ ptls_cipher_suite_t* picoquic_get_selected_cipher_suite_by_id(int cipher_suite_i
     return cipher;
 }
 
+static ptls_cipher_algorithm_t* picoquic_get_ecb_cipher_by_id(const char* ecb_cipher_name)
+{
+    ptls_cipher_algorithm_t* ecb_cipher = NULL;
+
+    for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX && ecb_cipher == NULL; i++) {
+        if (picoquic_cipher_suites[i].high_memory_suite == NULL) {
+            break;
+        }
+        if (strcmp(picoquic_cipher_suites[i].high_memory_suite->aead->ecb_cipher->name, ecb_cipher_name) == 0) {
+            ecb_cipher = picoquic_cipher_suites[i].high_memory_suite->aead->ecb_cipher;
+            break;
+        }
+    }
+    return ecb_cipher;
+}
+
+/* Obtain an AES128 ECB cipher, which is required for CID encryption
+* according to the CID for load balancer specification.
+* TODO: rewrite this as a call to the generic "get cipher suite" API,
+* then derive the ECB function from the selection of the AEAD function.
+* This will obviate the need of providing a specific API.
+*/
+void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key)
+{
+    void* created = NULL;
+    ptls_cipher_algorithm_t* ecb_cipher = picoquic_get_ecb_cipher_by_id("AES128-ECB");
+
+    if (ecb_cipher != NULL) {
+        created = (void*)ptls_cipher_new(ecb_cipher, is_enc, ecb_key);
+    }
+    
+    return created;
+}
+
+/* Obtain a hash algorithm from the table of supported cipher suites.*/
+static ptls_hash_algorithm_t* picoquic_get_hash_algorithm_by_name(const char* hash_algorithm_name)
+{
+    ptls_hash_algorithm_t* hash = NULL;
+
+    for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX && hash == NULL; i++) {
+        if (picoquic_cipher_suites[i].high_memory_suite == NULL) {
+            break;
+        }
+        if (strcmp(picoquic_cipher_suites[i].high_memory_suite->hash->name, hash_algorithm_name) == 0) {
+            hash = picoquic_cipher_suites[i].high_memory_suite->hash;
+            break;
+        }
+    }
+    return hash;
+}
+
+/* Obtain the SHA256 hash, used to derive some secrets
+*/
+ptls_hash_algorithm_t* picoquic_get_sha256()
+{
+    return picoquic_get_hash_algorithm_by_name("sha256");
+}
+
+void* picoquic_get_sha256_v()
+{
+    return (void*)picoquic_get_sha256();
+}
+
+/* Export hash functions so applications do not need to access picotls.
+* It is not clear that these functions are actually used by applications.
+*/
+
+void* picoquic_hash_create(char const* algorithm_name) {
+    ptls_hash_context_t* ctx = NULL;
+    ptls_hash_algorithm_t*hash = picoquic_get_hash_algorithm_by_name(algorithm_name);
+
+    if (hash != NULL) {
+        ctx = hash->create();
+    }
+
+    return (void*)ctx;
+}
+
+size_t picoquic_hash_get_length(char const* algorithm_name) {
+    size_t len = 0;
+    ptls_hash_algorithm_t*hash = picoquic_get_hash_algorithm_by_name(algorithm_name);
+
+    if (hash != NULL) {
+        len = hash->digest_size;
+    }
+
+    return len;
+}
+
+
 #ifndef PTLS_WITHOUT_OPENSSL
-
-/* Obtain an AES128 ECB cipher using openSSL */
-void* picoquic_aes128_ecb_openssl_create(int is_enc, const void* ecb_key)
-{
-    return (void*)ptls_cipher_new(&ptls_openssl_aes128ecb, is_enc, ecb_key);
-}
-
-/* Obtain the SHA256 hash algorithm used to create secrets 
- */
-ptls_hash_algorithm_t* picoquic_get_openssl_sha256()
-{
-    return &ptls_openssl_sha256;
-}
 
 /* Setting the supported key exchange algorithms,
    using definitions in openSSL */
@@ -648,12 +601,7 @@ void picoquic_openssl_clear_crypto_errors()
 /* Implementation of generic setup functions using the default present
  * in this file. These functions may be declared in tls_api.h.
  */
-#if 0
-void picoquic_init_crypto_provider()
-{
-    picoquic_init_openssl();
-}
-#endif
+
 #ifndef PTLS_WITHOUT_OPENSSL
 /* Set the cryptographic random provider */
 static void picoquic_set_random_provider_in_ctx(ptls_context_t* ctx)
@@ -684,67 +632,6 @@ static ptls_cipher_suite_t* picoquic_get_cipher_suite_by_id(int cipher_suite_id,
 static int picoquic_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchange_id)
 {
     return picoquic_openssl_set_key_exchange_in_ctx(ctx, key_exchange_id);
-}
-
-/* Obtain an AES128 ECB cipher, which is required for CID encryption
- * according the CID for load balancer specification.
- * TODO: rewrite this as a call to the generic "get cipher suite" API,
- * then derive the ECB function from the selection of the AEAD function.
- * This will obviate the need of providing a specific API.
- */
-void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key)
-{
-    return (void*)picoquic_aes128_ecb_openssl_create(is_enc, ecb_key);
-}
-
-/* Export hash functions so applications do not need to access picotls.
- * It is not clear that these functions are actually used by applications.
- * TODO: maybe reuse the "cipher suite" API, and just obtain the hash
- * function in cipher suite 128 (SHA256) or 256 (SHA384).
- */
-
-void* picoquic_hash_create(char const* algorithm_name) {
-    ptls_hash_context_t* ctx;
-
-    if (strcmp(algorithm_name, "SHA256") == 0) {
-        ctx = ptls_openssl_sha256.create();
-    }
-    else if (strcmp(algorithm_name, "SHA384") == 0) {
-        ctx = ptls_openssl_sha384.create();
-    }
-    else {
-        ctx = NULL;
-    }
-
-    return (void*)ctx;
-}
-
-size_t picoquic_hash_get_length(char const* algorithm_name) {
-    size_t len;
-
-    if (strcmp(algorithm_name, "SHA256") == 0) {
-        len = ptls_openssl_sha256.digest_size;
-    }
-    else if (strcmp(algorithm_name, "SHA384") == 0) {
-        len = ptls_openssl_sha384.digest_size;
-    }
-    else {
-        len = 0;
-    }
-
-    return len;
-}
-
-/* Obtain the SHA256 hash, used to derive some secrets
- */
-ptls_hash_algorithm_t* picoquic_get_sha256()
-{
-    return picoquic_get_openssl_sha256();
-}
-
-void* picoquic_get_sha256_v()
-{
-    return (void*)picoquic_get_sha256();
 }
 
 /* Get private key from current crypto processor */
@@ -808,7 +695,6 @@ void picoquic_dispose_certificate_verifier(ptls_verify_certificate_t* verifier) 
 /* Provide a crypto provider independent interface to crypto errors.
  * Can be called repeatedly until no error needs to be signalled. 
  */
-
 int picoquic_explain_crypto_error(char const** err_file, int* err_line)
 {
     return picoquic_open_ssl_explain_crypto_error(err_file, err_line);
@@ -835,11 +721,7 @@ void picoquic_clear_crypto_errors()
 /* Get the AES128GCM+SHA256 cipher suite required for Initial packets */
 static ptls_cipher_suite_t* picoquic_get_aes128gcm_sha256(int use_low_memory)
 {
-#if 1
     return picoquic_get_cipher_suite_by_id(PICOQUIC_AES_128_GCM_SHA256, use_low_memory);
-#else
-    return picoquic_get_cipher_suite_by_id(128, use_low_memory);
-#endif
 }
 
 void* picoquic_get_aes128gcm_sha256_v(int use_low_memory)
