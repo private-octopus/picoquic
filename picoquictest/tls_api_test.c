@@ -8517,8 +8517,8 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog, uint8_t recv_ecn)
         memcpy(test_ctx->qserver->reset_seed, reset_seed_server, PICOQUIC_RESET_SECRET_SIZE);
 
         /* Force ciphersuite to AES128, so Client Hello has a constant format */
-        if (picoquic_set_cipher_suite(test_ctx->qclient, 128) != 0) {
-            DBG_PRINTF("Could not set ciphersuite to %d", 128);
+        if (picoquic_set_cipher_suite(test_ctx->qclient, PICOQUIC_AES_128_GCM_SHA256) != 0) {
+            DBG_PRINTF("Could not set ciphersuite to 0x%04x", PICOQUIC_AES_128_GCM_SHA256);
         }
         if (picoquic_set_key_exchange(test_ctx->qclient, 128) != 0) {
             DBG_PRINTF("Could not set key exchange to %d", 128);
@@ -11009,7 +11009,7 @@ int chacha20_test()
     /* Set the cipher suite to chacha20
      */
     if (ret == 0) {
-        has_chacha_poly = (picoquic_set_cipher_suite(test_ctx->qclient, 20) == 0);
+        has_chacha_poly = (picoquic_set_cipher_suite(test_ctx->qclient, PICOQUIC_CHACHA20_POLY1305_SHA256) == 0);
 
         if (has_chacha_poly) {
 

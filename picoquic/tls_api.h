@@ -40,6 +40,10 @@
 #define PICOQUIC_LABEL_QUIC_V1_KEY_BASE "tls13 quic "
 #define PICOQUIC_LABEL_QUIC_V2_KEY_BASE "tls13 quicv2 "
 
+#define PICOQUIC_AES_128_GCM_SHA256 0x1301
+#define PICOQUIC_AES_256_GCM_SHA384 0x1302
+#define PICOQUIC_CHACHA20_POLY1305_SHA256 0x1303
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -203,7 +207,7 @@ void picoquic_aes128_ecb_free(void* v_aesecb);
 
 void picoquic_aes128_ecb_encrypt(void* v_aesecb, uint8_t* output, const uint8_t* input, size_t len);
 
-void picoquic_clear_openssl();
+void picoquic_tls_api_unload();
 
 #ifdef __cplusplus
 }

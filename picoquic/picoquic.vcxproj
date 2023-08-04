@@ -157,6 +157,8 @@
     <ClCompile Include="newreno.c" />
     <ClCompile Include="performance_log.c" />
     <ClCompile Include="picoquic_lb.c" />
+    <ClCompile Include="picoquic_ptls_fusion.c" />
+    <ClCompile Include="picoquic_ptls_openssl.c" />
     <ClCompile Include="picosocks.c" />
     <ClCompile Include="picosplay.c" />
     <ClCompile Include="port_blocking.c" />
@@ -192,6 +194,7 @@
     <ClInclude Include="performance_log.h" />
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picoquic_config.h" />
+    <ClInclude Include="picoquic_crypto_provider_api.h" />
     <ClInclude Include="picoquic_internal.h" />
     <ClInclude Include="picoquic_logger.h" />
     <ClInclude Include="picoquic_packet_loop.h" />

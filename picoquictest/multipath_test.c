@@ -1369,11 +1369,11 @@ int multipath_trace_test_one(int is_simple_multipath)
         picoquic_set_default_tp(test_ctx->qclient, &server_parameters);
 
         /* Force ciphersuite to AES128, so Client Hello has a constant format */
-        if (picoquic_set_cipher_suite(test_ctx->qclient, 128) != 0) {
-            DBG_PRINTF("Could not set ciphersuite to %d", 128);
+        if (picoquic_set_cipher_suite(test_ctx->qclient, PICOQUIC_AES_128_GCM_SHA256) != 0) {
+            DBG_PRINTF("Could not set ciphersuite to 0x%04x", PICOQUIC_AES_128_GCM_SHA256);
         }
         if (picoquic_set_key_exchange(test_ctx->qclient, 128) != 0) {
-            DBG_PRINTF("Could not set key exchange to %d", 128);
+            DBG_PRINTF("Could not set key exchange to 0x%04x", 128);
         }
         /* Delete the old connection */
         picoquic_delete_cnx(test_ctx->cnx_client);

@@ -28,7 +28,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-void picoquic_clear_openssl();
+void picoquic_tls_api_unload();
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
@@ -828,7 +828,7 @@ int main(int argc, char** argv)
         }
 
         free(test_status);
-        picoquic_clear_openssl();
+        picoquic_tls_api_unload();
     }
     return (ret);
 }
