@@ -86,6 +86,8 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/performance_log.c
     picoquic/picohash.c
     picoquic/picoquic_lb.c
+    picoquic/picoquic_ptls_fusion.c
+    picoquic/picoquic_ptls_openssl.c
     picoquic/picosocks.c
     picoquic/picosplay.c
     picoquic/port_blocking.c

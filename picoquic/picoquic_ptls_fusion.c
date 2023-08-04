@@ -49,8 +49,12 @@ void picoquic_ptls_fusion_load(int unload)
         /* Nothing to do */
     }
     else {
-        picoquic_register_ciphersuite(&picoquic_fusion_aes128gcmsha256);
-        picoquic_register_ciphersuite(&picoquic_fusion_aes256gcmsha384);
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
+        if (ptls_fusion_is_supported_by_cpu()) {
+            picoquic_register_ciphersuite(&picoquic_fusion_aes128gcmsha256);
+            picoquic_register_ciphersuite(&picoquic_fusion_aes256gcmsha384);
+        }
+#endif
     }
 }
 #endif
