@@ -269,17 +269,14 @@ static ptls_cipher_algorithm_t* picoquic_get_ecb_cipher_by_id(const char* ecb_ci
 
     for (int j = 0; j < 2 && ecb_cipher == NULL; j++) {
         for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX && ecb_cipher == NULL; i++) {
-            if (picoquic_cipher_suites[i].high_memory_suite == NULL) {
+            ptls_cipher_suite_t* suite = (j == 0) ?
+                picoquic_cipher_suites[i].high_memory_suite :
+                picoquic_cipher_suites[i].low_memory_suite;
+
+            if (suite != NULL && suite->aead != NULL && suite->aead->ecb_cipher != NULL &&
+                strcmp(suite->aead->ecb_cipher->name, ecb_cipher_name) == 0){
+                ecb_cipher = suite->aead->ecb_cipher;
                 break;
-            }
-            if (strcmp(picoquic_cipher_suites[i].high_memory_suite->aead->ecb_cipher->name, ecb_cipher_name) == 0) {
-                if (j == 0) {
-                    if (picoquic_cipher_suites[i].low_memory_suite != NULL) {
-                        ecb_cipher = picoquic_cipher_suites[i].low_memory_suite->aead->ecb_cipher;
-                    }
-                } else {
-                    ecb_cipher = picoquic_cipher_suites[i].high_memory_suite->aead->ecb_cipher;
-                }
             }
         }
     }
