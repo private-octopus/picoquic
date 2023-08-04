@@ -119,21 +119,31 @@ struct st_picoquic_cipher_suites_t {
     ptls_cipher_suite_t* low_memory_suite;
 } picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
 
-/* Initialization of the cryptographic tables and functions */
+/* Initialization of the cryptographic tables and functions
+ * 
+ * The code calls a series of potential crypto providers. 
+ * The personalization relies on compile mode parameters
+ * such as "ifdef" and real time flags assessed in each
+ * per provider module.
+ */
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
 void picoquic_ptls_fusion_load(int unload);
+#endif
 // void picoquic_bcrypt_load(int unload);
+#ifndef PTLS_WITHOUT_OPENSSL
 void picoquic_ptls_openssl_load(int unload);
+#endif
 // void picoquic_minicrypto_load(int unload);
 
 void picoquic_tls_api_init_providers(int unload)
 {
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
-    if (ptls_fusion_is_supported_by_cpu()) {
-        picoquic_ptls_fusion_load(unload);
-    }
+    picoquic_ptls_fusion_load(unload);
 #endif
     // picoquic_bcrypt_load(unload);
+#ifndef PTLS_WITHOUT_OPENSSL
     picoquic_ptls_openssl_load(unload);
+#endif
     // picoquic_minicrypto_load(unload);
 }
 

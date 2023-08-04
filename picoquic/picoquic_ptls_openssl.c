@@ -103,10 +103,10 @@ void picoquic_ptls_openssl_load(int unload)
     else {
         picoquic_init_openssl();
 
-        picoquic_register_ciphersuite(&ptls_openssl_aes128gcmsha256);
-        picoquic_register_ciphersuite(&ptls_openssl_aes256gcmsha384);
+        picoquic_register_ciphersuite(&ptls_openssl_aes128gcmsha256, 1);
+        picoquic_register_ciphersuite(&ptls_openssl_aes256gcmsha384, 1);
 #ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-        picoquic_register_ciphersuite(&ptls_openssl_chacha20poly1305sha256);
+        picoquic_register_ciphersuite(&ptls_openssl_chacha20poly1305sha256, 1);
 #endif
     }
 }

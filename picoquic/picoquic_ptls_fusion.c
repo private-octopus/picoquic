@@ -25,26 +25,29 @@
 
 #include "picotls.h"
 #include "picoquic_crypto_provider_api.h"
-#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
-#include "picotls/fusion.h"
-#endif
 
-#ifdef _WINDOWS
+#ifdef _WINDOWS_TRY_AGAIN
 #ifndef PTLS_WITHOUT_FUSION
  /* temporary disabling of PTLS_FUSION until memory alignment issues are fixed*/
 #define PTLS_WITHOUT_FUSION
 #endif
 #endif
 
-#ifdef PTLS_WITHOUT_FUSION
-void picoquic_ptls_fusion_load(int unload)
-{
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(unload);
+#pragma warning(disable:4324)
 #endif
-    /* Nothing to do, as the module is not loaded. */
-}
-#else
+#include "picotls/fusion.h"
+/* Definition of fusion versions of AESGCM
+ * TODO: use definition of sha256 from an available location.
+ * probably bcrypt on windows, minicrypto otherwise.
+ */
+#include "picotls/openssl.h"
+
+ptls_cipher_suite_t picoquic_fusion_aes128gcmsha256 = { PTLS_CIPHER_SUITE_AES_128_GCM_SHA256, &ptls_fusion_aes128gcm,
+&ptls_openssl_sha256 };
+ptls_cipher_suite_t picoquic_fusion_aes256gcmsha384 = { PTLS_CIPHER_SUITE_AES_256_GCM_SHA384, &ptls_fusion_aes256gcm,
+&ptls_openssl_sha384 };
 
 void picoquic_ptls_fusion_load(int unload)
 {
@@ -52,12 +55,18 @@ void picoquic_ptls_fusion_load(int unload)
         /* Nothing to do */
     }
     else {
-#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
         if (ptls_fusion_is_supported_by_cpu()) {
-            picoquic_register_ciphersuite(&picoquic_fusion_aes128gcmsha256);
-            picoquic_register_ciphersuite(&picoquic_fusion_aes256gcmsha384);
+            picoquic_register_ciphersuite(&picoquic_fusion_aes128gcmsha256, 0);
+            picoquic_register_ciphersuite(&picoquic_fusion_aes256gcmsha384, 0);
         }
-#endif
     }
+}
+#else
+void picoquic_ptls_fusion_load(int unload)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(unload);
+#endif
+    /* Nothing to do, as the module is not loaded. */
 }
 #endif
