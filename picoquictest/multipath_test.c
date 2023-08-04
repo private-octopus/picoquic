@@ -1372,8 +1372,8 @@ int multipath_trace_test_one(int is_simple_multipath)
         if (picoquic_set_cipher_suite(test_ctx->qclient, PICOQUIC_AES_128_GCM_SHA256) != 0) {
             DBG_PRINTF("Could not set ciphersuite to 0x%04x", PICOQUIC_AES_128_GCM_SHA256);
         }
-        if (picoquic_set_key_exchange(test_ctx->qclient, 128) != 0) {
-            DBG_PRINTF("Could not set key exchange to 0x%04x", 128);
+        if (picoquic_set_key_exchange(test_ctx->qclient, PICOQUIC_GROUP_SECP256R1) != 0) {
+            DBG_PRINTF("Could not set key exchange to %d", PICOQUIC_GROUP_SECP256R1);
         }
         /* Delete the old connection */
         picoquic_delete_cnx(test_ctx->cnx_client);

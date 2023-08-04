@@ -118,6 +118,10 @@ struct st_picoquic_cipher_suites_t {
     ptls_cipher_suite_t* low_memory_suite;
 } picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
 
+#define PICOQUIC_KEY_EXCHANGES_NB_MAX 4
+ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
+ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
+
 /* Initialization of the cryptographic tables and functions
  * 
  * The code calls a series of potential crypto providers. 
@@ -152,6 +156,7 @@ void picoquic_tls_api_init()
     if (!tls_api_is_init) {
         tls_api_is_init = 1;
         memset(picoquic_cipher_suites, 0, sizeof(picoquic_cipher_suites));
+        memset((void*)picoquic_key_exchanges, 0, sizeof(picoquic_key_exchanges));
         picoquic_tls_api_init_providers(0);
     }
 }
@@ -185,6 +190,26 @@ void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory
             }
             break;
         }
+    }
+}
+
+/* Registration of key exchange algorithms */
+void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key_exchange)
+{
+    for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX; i++) {
+        if (picoquic_key_exchanges[i] == NULL) {
+            picoquic_key_exchanges[i] = key_exchange;
+            break;
+        }
+        else if (picoquic_key_exchanges[i]->id == key_exchange->id) {
+            /* Already registered by another provider */
+            break;
+        }
+    }
+
+    if (picoquic_key_exchange_secp256r1[0] == NULL &&
+        key_exchange->id == PICOQUIC_GROUP_SECP256R1) {
+        picoquic_key_exchange_secp256r1[0] = key_exchange;
     }
 }
 
@@ -293,9 +318,6 @@ void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key)
 {
     void* created = NULL;
     ptls_cipher_algorithm_t* ecb_cipher = picoquic_get_ecb_cipher_by_id("AES128-ECB");
-#if 1
-    DBG_PRINTF("%x, %x, %x", ecb_cipher, is_enc, ecb_key);
-#endif
 
     if (ecb_cipher != NULL) {
         created = (void*)ptls_cipher_new(ecb_cipher, is_enc, ecb_key);
@@ -359,58 +381,42 @@ size_t picoquic_hash_get_length(char const* algorithm_name) {
     return len;
 }
 
+/* Set the supported key exchange in the TLS context
+* Supported algorithms are defined by keyexchange_id
+* - 0: set all supported algorithms
+* - PICOQUIC_GROUP_SECP256R1: secp256r1
+*/
 
-#ifndef PTLS_WITHOUT_OPENSSL
-
-/* Setting the supported key exchange algorithms,
-   using definitions in openSSL */
-
-ptls_key_exchange_algorithm_t* picoquic_key_exchanges[] = { &ptls_openssl_secp256r1,
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-                                                           & ptls_openssl_x25519,
-#endif
-                                                           NULL };
-
-ptls_key_exchange_algorithm_t* picoquic_key_secp256r1[] = { &ptls_openssl_secp256r1, NULL };
-
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-ptls_key_exchange_algorithm_t* picoquic_key_x25519[] = { &ptls_openssl_x25519, NULL };
-#endif
-
-
-static int picoquic_openssl_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchange_id)
+static int picoquic_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchange_id)
 {
     int ret = 0;
 
-    if (ctx == NULL) {
+    switch (key_exchange_id) {
+    case 0:
+        ctx->key_exchanges = picoquic_key_exchanges;
+        break;
+    case PICOQUIC_GROUP_SECP256R1:
+        ctx->key_exchanges = picoquic_key_exchange_secp256r1;
+        break;
+    default:
         ret = -1;
+        break;
     }
-    else {
-        switch (key_exchange_id) {
-        case 0:
-            ctx->key_exchanges = picoquic_key_exchanges;
-            break;
-        case 20:
-#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
-            ctx->key_exchanges = picoquic_key_x25519;
-            break;
-#else
-            ret = -1;
-            break;
-#endif
-        case 128:
-            ctx->key_exchanges = picoquic_key_secp256r1;
-            break;
-        case 256:
-            ctx->key_exchanges = picoquic_key_secp256r1;
-            break;
-        default:
-            ret = -1;
-            break;
-        }
-    }
+
     return ret;
 }
+
+int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id)
+{
+    int ret = 0;
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+
+    ret = picoquic_set_key_exchange_in_ctx(ctx, key_exchange_id);
+    return ret;
+}
+
+
+#ifndef PTLS_WITHOUT_OPENSSL
 
 /* Provide a certificate signature function, based on the implementation in openssl.
  */
@@ -636,18 +642,6 @@ int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
 static ptls_cipher_suite_t* picoquic_get_cipher_suite_by_id(int cipher_suite_id, int use_low_memory)
 {
     return picoquic_get_selected_cipher_suite_by_id(cipher_suite_id, use_low_memory);
-}
-
-/* Set the supported key exchange in the TLS context
- * Supported algorithms are defined by keyexchange_id
- * - 0: set all supported algorithms
- * - 20: x25519
- * - 128 or 256: secp256r1
- */
-
-static int picoquic_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchange_id)
-{
-    return picoquic_openssl_set_key_exchange_in_ctx(ctx, key_exchange_id);
 }
 
 /* Get private key from current crypto processor */
@@ -1809,16 +1803,6 @@ static void free_certificates_list(ptls_iovec_t* certs, size_t len) {
         free(certs[i].base);
     }
     free(certs);
-}
-
-
-int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id)
-{
-    int ret = 0;
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-
-    ret = picoquic_set_key_exchange_in_ctx(ctx, key_exchange_id);
-    return ret;
 }
 
 void picoquic_master_tlscontext_free(picoquic_quic_t* quic)

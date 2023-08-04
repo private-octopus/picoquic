@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
     void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory);
-
+    void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key_exchange);
 
 #ifdef __cplusplus
 }

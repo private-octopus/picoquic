@@ -44,6 +44,8 @@
 #define PICOQUIC_AES_256_GCM_SHA384 0x1302
 #define PICOQUIC_CHACHA20_POLY1305_SHA256 0x1303
 
+#define PICOQUIC_GROUP_SECP256R1 23
+
 #ifdef __cplusplus
 extern "C" {
 #endif
