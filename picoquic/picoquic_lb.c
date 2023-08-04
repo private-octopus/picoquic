@@ -470,7 +470,7 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
                     }
                     else if (lb_config->method == picoquic_load_balancer_cid_block_cipher) {
                         lb_ctx->cid_decryption_context = picoquic_aes128_ecb_create(0, lb_config->cid_encryption_key);
-                        if (lb_ctx->cid_decryption_context == NULL) {
+                        if (lb_ctx->cid_decryption_context != NULL) {
                             picoquic_aes128_ecb_free(lb_ctx->cid_encryption_context);
                             lb_ctx->cid_encryption_context = NULL;
                             ret = -1;
