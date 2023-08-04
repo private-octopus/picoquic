@@ -47,6 +47,7 @@
 #endif
 #endif
 
+#if 1
 #ifdef _WINDOWS
 #include "wincompat.h"
 #ifndef PTLS_WITHOUT_FUSION
@@ -54,13 +55,11 @@
 #define PTLS_WITHOUT_FUSION
 #endif
 #endif
+#endif
 #include <stddef.h>
 #include "picotls.h"
 #include "picoquic_internal.h"
 #include "picotls/openssl.h"
-#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
-#include "picotls/fusion.h"
-#endif
 #include "tls_api.h"
 #include <openssl/pem.h>
 #include <openssl/err.h>
@@ -268,13 +267,20 @@ static ptls_cipher_algorithm_t* picoquic_get_ecb_cipher_by_id(const char* ecb_ci
 {
     ptls_cipher_algorithm_t* ecb_cipher = NULL;
 
-    for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX && ecb_cipher == NULL; i++) {
-        if (picoquic_cipher_suites[i].high_memory_suite == NULL) {
-            break;
-        }
-        if (strcmp(picoquic_cipher_suites[i].high_memory_suite->aead->ecb_cipher->name, ecb_cipher_name) == 0) {
-            ecb_cipher = picoquic_cipher_suites[i].high_memory_suite->aead->ecb_cipher;
-            break;
+    for (int j = 0; j < 2 && ecb_cipher == NULL; j++) {
+        for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX && ecb_cipher == NULL; i++) {
+            if (picoquic_cipher_suites[i].high_memory_suite == NULL) {
+                break;
+            }
+            if (strcmp(picoquic_cipher_suites[i].high_memory_suite->aead->ecb_cipher->name, ecb_cipher_name) == 0) {
+                if (j == 0) {
+                    if (picoquic_cipher_suites[i].low_memory_suite != NULL) {
+                        ecb_cipher = picoquic_cipher_suites[i].low_memory_suite->aead->ecb_cipher;
+                    }
+                } else {
+                    ecb_cipher = picoquic_cipher_suites[i].high_memory_suite->aead->ecb_cipher;
+                }
+            }
         }
     }
     return ecb_cipher;
@@ -290,6 +296,9 @@ void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key)
 {
     void* created = NULL;
     ptls_cipher_algorithm_t* ecb_cipher = picoquic_get_ecb_cipher_by_id("AES128-ECB");
+#if 1
+    DBG_PRINTF("%x, %x, %x", ecb_cipher, is_enc, ecb_key);
+#endif
 
     if (ecb_cipher != NULL) {
         created = (void*)ptls_cipher_new(ecb_cipher, is_enc, ecb_key);
