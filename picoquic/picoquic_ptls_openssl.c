@@ -123,7 +123,7 @@ static int set_openssl_sign_certificate_from_key(EVP_PKEY* pkey, ptls_context_t*
     return ret;
 }
 
-int picoquic_set_tls_key_openssl(ptls_context_t* ctx, const uint8_t* data, size_t len)
+int picoquic_openssl_set_tls_key(ptls_context_t* ctx, const uint8_t* data, size_t len)
 {
     if (ctx->sign_certificate != NULL) {
         ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
@@ -172,6 +172,110 @@ static int set_openssl_private_key_from_key_file(char const* keypem, ptls_contex
     return ret;
 }
 
+/* Clear certificate objects allocated via openssl for a certificate
+*/
+static void picoquic_openssl_dispose_sign_certificate(ptls_sign_certificate_t* cert)
+{
+    ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)cert);
+}
+
+
+/* Read certificates from a file using openSSL functions
+* TODO: what if we need to read multiple certificates for the chain?
+*/
+static ptls_iovec_t* picoquic_openssl_get_certs_from_file(char const * file_name, size_t * count)
+{
+    BIO* bio_key = BIO_new_file(file_name, "rb");
+    /* Load cert and convert to DER */
+    X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
+    int length = i2d_X509(cert, NULL);
+    unsigned char* cert_der = (unsigned char*)malloc(length);
+    unsigned char* tmp = cert_der;
+    i2d_X509(cert, &tmp);
+    X509_free(cert);
+    BIO_free(bio_key);
+
+    ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t));
+    if (chain == NULL) {
+        *count = 0;
+    } else {
+        *count = 1;
+        chain[0] = ptls_iovec_init(cert_der, length);
+    }
+    return chain;
+}
+
+/* Use openssl functions to create a certficate verifier */
+ptls_openssl_verify_certificate_t* picoquic_openssl_get_openssl_certificate_verifier(char const * cert_root_file_name,
+    unsigned int * is_cert_store_not_empty)
+{
+    ptls_openssl_verify_certificate_t * verifier = (ptls_openssl_verify_certificate_t*)malloc(sizeof(ptls_openssl_verify_certificate_t));
+    if (verifier != NULL) {
+        X509_STORE* store = X509_STORE_new();
+
+        if (cert_root_file_name != NULL && store != NULL) {
+            int file_ret = 0;
+            X509_LOOKUP* lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
+            if ((file_ret = X509_LOOKUP_load_file(lookup, cert_root_file_name, X509_FILETYPE_PEM)) == 1) {
+                *is_cert_store_not_empty = 1;
+            }
+        }
+#ifdef PTLS_OPENSSL_VERIFY_CERTIFICATE_ENABLE_OVERRIDE
+        ptls_openssl_init_verify_certificate(verifier, store, NULL);
+#else
+        ptls_openssl_init_verify_certificate(verifier, store);
+#endif
+
+        // If we created an instance of the store, release our reference after giving it to the verify_certificate callback.
+        // The callback internally increased the reference counter by one.
+#if OPENSSL_VERSION_NUMBER > 0x10100000L
+        if (store != NULL) {
+            X509_STORE_free(store);
+        }
+#endif
+    }
+    return verifier;
+}
+
+ptls_verify_certificate_t* picoquic_openssl_get_certificate_verifier(char const* cert_root_file_name,
+    unsigned int* is_cert_store_not_empty)
+{
+    ptls_openssl_verify_certificate_t* verifier = picoquic_openssl_get_openssl_certificate_verifier(cert_root_file_name,
+        is_cert_store_not_empty);
+    return (verifier == NULL) ? NULL : &verifier->super;
+}
+
+void picoquic_openssl_dispose_certificate_verifier(ptls_verify_certificate_t* verifier) {
+    ptls_openssl_dispose_verify_certificate((ptls_openssl_verify_certificate_t*)verifier);
+}
+
+/* Set the list of root certificates used by the client.
+* This implementation is specific to OpenSSL, because it is tied to the 
+* implementation of the verify certificate function. */
+
+int picoquic_openssl_set_tls_root_certificates(ptls_context_t* ctx, ptls_iovec_t* certs, size_t count)
+{
+    ptls_openssl_verify_certificate_t* verify_ctx = (ptls_openssl_verify_certificate_t*)ctx->verify_certificate;
+
+    for (size_t i = 0; i < count; ++i) {
+        uint8_t* cert_i_base = certs[i].base;
+        X509* cert = d2i_X509(NULL, (const uint8_t**)&cert_i_base, (long)certs[i].len);
+
+        if (cert == NULL) {
+            return -1;
+        }
+
+        if (X509_STORE_add_cert(verify_ctx->cert_store, cert) == 0) {
+            X509_free(cert);
+            return -2;
+        }
+
+        X509_free(cert);
+    }
+
+    return 0;
+}
+
 void picoquic_ptls_openssl_load(int unload)
 {
     if (unload) {
@@ -187,9 +291,15 @@ void picoquic_ptls_openssl_load(int unload)
         picoquic_register_ciphersuite(&ptls_openssl_chacha20poly1305sha256, 1);
         picoquic_register_key_exchange_algorithm(&ptls_openssl_x25519);
 #endif
-        picoquic_register_tls_key_provider_fn(picoquic_set_tls_key_openssl,
+        picoquic_register_tls_key_provider_fn(
+            picoquic_openssl_set_tls_key,
             get_openssl_private_key_from_key_file,
-            set_openssl_private_key_from_key_file);
+            set_openssl_private_key_from_key_file,
+            picoquic_openssl_dispose_sign_certificate,
+            picoquic_openssl_get_certs_from_file);
+        picoquic_register_verify_certificate_fn(picoquic_openssl_get_certificate_verifier,
+            picoquic_openssl_dispose_certificate_verifier,
+            picoquic_openssl_set_tls_root_certificates);
     }
 }
 #endif

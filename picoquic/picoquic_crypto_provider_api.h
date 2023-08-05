@@ -29,12 +29,25 @@ extern "C" {
     void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory);
     void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key_exchange);
 
-    typedef int (*picoquic_set_tls_key_provider_fn)(ptls_context_t* ctx, const uint8_t* data, size_t len);
-    typedef uint8_t* (*picoquic_get_private_key_from_key_file_fn)(char const* file_name, int* key_length);
-    typedef int (*picoquic_set_private_key_from_key_file_fn)(char const* keypem, ptls_context_t* ctx);
-    void picoquic_register_tls_key_provider_fn(picoquic_set_tls_key_provider_fn set_tls_key_fn,
-        picoquic_get_private_key_from_key_file_fn get_key_from_key_file_fn,
-        picoquic_set_private_key_from_key_file_fn set_key_from_key_file_fn);
+    typedef int (*picoquic_set_tls_key_provider_t)(ptls_context_t* ctx, const uint8_t* data, size_t len);
+    typedef uint8_t* (*picoquic_get_private_key_from_key_file_t)(char const* file_name, int* key_length);
+    typedef int (*picoquic_set_private_key_from_key_file_t)(char const* keypem, ptls_context_t* ctx);
+    typedef void (*picoquic_dispose_sign_certificate_t)(ptls_sign_certificate_t* cert);
+    typedef ptls_iovec_t* (*picoquic_get_certs_from_file_t)(char const* file_name, size_t* count);
+    typedef ptls_verify_certificate_t* (*picoquic_get_certificate_verifier_t)(char const* cert_root_file_name,
+        unsigned int* is_cert_store_not_empty);
+    typedef void (*picoquic_dispose_certificate_verifier_t)(ptls_verify_certificate_t* verifier);
+    typedef int (*picoquic_set_tls_root_certificates_t)(ptls_context_t* ctx, ptls_iovec_t* certs, size_t count);
+
+    void picoquic_register_tls_key_provider_fn(picoquic_set_tls_key_provider_t set_tls_key_fn,
+        picoquic_get_private_key_from_key_file_t get_key_from_key_file_fn,
+        picoquic_set_private_key_from_key_file_t set_key_from_key_file_fn,
+        picoquic_dispose_sign_certificate_t dispose_sign_certificate_fn,
+        picoquic_get_certs_from_file_t get_certs_from_file_fn);
+
+    void picoquic_register_verify_certificate_fn(picoquic_get_certificate_verifier_t certificate_verifier_fn,
+        picoquic_dispose_certificate_verifier_t dispose_certificate_verifier_fn,
+        picoquic_set_tls_root_certificates_t set_tls_root_certificates_fn);
 
 #ifdef __cplusplus
 }

@@ -122,9 +122,15 @@ struct st_picoquic_cipher_suites_t {
 ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
 ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
 
-picoquic_set_tls_key_provider_fn picoquic_set_tls_key_provider = NULL;
-picoquic_set_private_key_from_key_file_fn picoquic_set_key_from_key_file_fn = NULL;
-picoquic_get_private_key_from_key_file_fn picoquic_get_key_from_key_file_fn = NULL;
+picoquic_set_tls_key_provider_t picoquic_set_tls_key_provider_fn = NULL;
+picoquic_get_private_key_from_key_file_t picoquic_get_key_from_key_file_fn = NULL;
+picoquic_set_private_key_from_key_file_t picoquic_set_key_from_key_file_fn = NULL;
+picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn = NULL;
+picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn = NULL;
+
+picoquic_get_certificate_verifier_t picoquic_certificate_verifier_fn = NULL;
+picoquic_dispose_certificate_verifier_t picoquic_dispose_certificate_verifier_fn = NULL;
+picoquic_set_tls_root_certificates_t picoquic_set_tls_root_certificates_fn = NULL;
 
 /* Initialization of the cryptographic tables and functions
  * 
@@ -161,7 +167,12 @@ static void picoquic_tls_api_zero()
     memset(picoquic_cipher_suites, 0, sizeof(picoquic_cipher_suites));
     memset((void*)picoquic_key_exchanges, 0, sizeof(picoquic_key_exchanges));
     memset((void*)picoquic_key_exchange_secp256r1, 0, sizeof(picoquic_key_exchange_secp256r1));
-    picoquic_set_tls_key_provider = NULL;
+    picoquic_set_tls_key_provider_fn = NULL;
+    picoquic_get_key_from_key_file_fn = NULL;
+    picoquic_get_certs_from_file_fn = NULL;
+    picoquic_certificate_verifier_fn = NULL;
+    picoquic_dispose_certificate_verifier_fn = NULL;
+    picoquic_set_tls_root_certificates_fn = NULL;
 }
 
 void picoquic_tls_api_init()
@@ -225,14 +236,27 @@ void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key
     }
 }
 
-void picoquic_register_tls_key_provider_fn(picoquic_set_tls_key_provider_fn set_tls_key_fn,
-    picoquic_get_private_key_from_key_file_fn get_key_from_key_file_fn,
-    picoquic_set_private_key_from_key_file_fn set_key_from_key_file_fn)
+void picoquic_register_tls_key_provider_fn(picoquic_set_tls_key_provider_t set_tls_key_fn,
+    picoquic_get_private_key_from_key_file_t get_key_from_key_file_fn,
+    picoquic_set_private_key_from_key_file_t set_key_from_key_file_fn,
+    picoquic_dispose_sign_certificate_t dispose_sign_certificate_fn,
+    picoquic_get_certs_from_file_t get_certs_from_file_fn)
 {
-    if (picoquic_set_tls_key_provider == NULL) {
-        picoquic_set_tls_key_provider = set_tls_key_fn;
+    if (picoquic_set_tls_key_provider_fn == NULL) {
+        picoquic_set_tls_key_provider_fn = set_tls_key_fn;
         picoquic_get_key_from_key_file_fn = get_key_from_key_file_fn;
         picoquic_set_key_from_key_file_fn = set_key_from_key_file_fn;
+    }
+}
+
+void picoquic_register_verify_certificate_fn(picoquic_get_certificate_verifier_t certificate_verifier_fn,
+    picoquic_dispose_certificate_verifier_t dispose_certificate_verifier_fn,
+    picoquic_set_tls_root_certificates_t set_tls_root_certificates_fn)
+{
+    if (picoquic_certificate_verifier_fn == NULL) {
+        picoquic_certificate_verifier_fn = certificate_verifier_fn;
+        picoquic_dispose_certificate_verifier_fn = dispose_certificate_verifier_fn;
+        picoquic_set_tls_root_certificates_fn = set_tls_root_certificates_fn;
     }
 }
 
@@ -455,107 +479,7 @@ int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id)
     return ret;
 }
 
-
 #ifndef PTLS_WITHOUT_OPENSSL
-
-/* Read certificates from a file using openSSL functions
- * TODO: what if we need to read multiple certificates for the chain?
- */
-static ptls_iovec_t* picoquic_openssl_get_certs_from_file(char const * file_name, size_t * count)
-{
-    BIO* bio_key = BIO_new_file(file_name, "rb");
-    /* Load cert and convert to DER */
-    X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
-    int length = i2d_X509(cert, NULL);
-    unsigned char* cert_der = (unsigned char*)malloc(length);
-    unsigned char* tmp = cert_der;
-    i2d_X509(cert, &tmp);
-    X509_free(cert);
-    BIO_free(bio_key);
-
-    ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t));
-    if (chain == NULL) {
-        *count = 0;
-    } else {
-        *count = 1;
-        chain[0] = ptls_iovec_init(cert_der, length);
-    }
-    return chain;
-}
-
-/* Clear certificate objects allocated via openssl for a certificate
- */
-static void picoquic_openssl_dispose_sign_certificate(ptls_sign_certificate_t* cert)
-{
-    ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)cert);
-}
-
-/* Use openssl functions to create a certficate verifier */
-ptls_openssl_verify_certificate_t* picoquic_openssl_get_certificate_verifier(char const * cert_root_file_name,
-    unsigned int * is_cert_store_not_empty)
-{
-    ptls_openssl_verify_certificate_t * verifier = (ptls_openssl_verify_certificate_t*)malloc(sizeof(ptls_openssl_verify_certificate_t));
-    if (verifier != NULL) {
-        X509_STORE* store = X509_STORE_new();
-
-        if (cert_root_file_name != NULL && store != NULL) {
-            int file_ret = 0;
-            X509_LOOKUP* lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
-            if ((file_ret = X509_LOOKUP_load_file(lookup, cert_root_file_name, X509_FILETYPE_PEM)) != 1) {
-                DBG_PRINTF("Cannot load X509 store (%s), ret = %d\n",
-                    cert_root_file_name, file_ret);
-            }
-            else {
-                *is_cert_store_not_empty = 1;
-            }
-        }
-#ifdef PTLS_OPENSSL_VERIFY_CERTIFICATE_ENABLE_OVERRIDE
-        ptls_openssl_init_verify_certificate(verifier, store, NULL);
-#else
-        ptls_openssl_init_verify_certificate(verifier, store);
-#endif
-
-        // If we created an instance of the store, release our reference after giving it to the verify_certificate callback.
-        // The callback internally increased the reference counter by one.
-#if OPENSSL_VERSION_NUMBER > 0x10100000L
-        if (store != NULL) {
-            X509_STORE_free(store);
-        }
-#endif
-    }
-    return verifier;
-}
-
-/* Set the list of root certificates used by the client.
- * This implementation is specific to OpenSSL, because it is tied to the 
- * implementation of the verify certificate function. */
-
-int picoquic_openssl_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
-{
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-    ptls_openssl_verify_certificate_t* verify_ctx = (ptls_openssl_verify_certificate_t*)ctx->verify_certificate;
-
-    for (size_t i = 0; i < count; ++i) {
-        uint8_t* cert_i_base = certs[i].base;
-        X509* cert = d2i_X509(NULL, (const uint8_t**)&cert_i_base, (long)certs[i].len);
-
-        if (cert == NULL) {
-            return -1;
-        }
-
-        if (X509_STORE_add_cert(verify_ctx->cert_store, cert) == 0) {
-            X509_free(cert);
-            return -2;
-        }
-
-        quic->is_cert_store_not_empty = 1;
-
-        X509_free(cert);
-    }
-
-    return 0;
-}
-
 /* Explain OPENSSL errors */
 int picoquic_open_ssl_explain_crypto_error(char const** err_file, int* err_line)
 {
@@ -609,37 +533,45 @@ uint8_t* picoquic_get_private_key_from_key_file(char const* file_name, int* key_
 /* Set the certificate signing function in the context */
 static int set_private_key_from_key_file(char const* keypem, ptls_context_t* ctx)
 {
-    return picoquic_set_key_from_key_file_fn(keypem, ctx);
+    if (picoquic_set_key_from_key_file_fn == NULL) {
+        return -1;
+    }
+    else {
+        return picoquic_set_key_from_key_file_fn(keypem, ctx);
+    }
 }
+
+/* Clear certificate objects allocated by the crypto stack for a certficate
+*/
+void picoquic_dispose_sign_certificate(ptls_sign_certificate_t* cert)
+{
+    if (picoquic_dispose_sign_certificate_fn != NULL) {
+        picoquic_dispose_sign_certificate_fn(cert);
+    }
+}
+
+
 /* Read certificates from a file
  */
 ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count)
 {
-    return picoquic_openssl_get_certs_from_file(file_name, count);
-}
-
-/* Clear certificate objects allocated by the crypto stack for a certficate
- */
-void picoquic_dispose_sign_certificate(ptls_sign_certificate_t* cert)
-{
-    picoquic_openssl_dispose_sign_certificate(cert);
-}
-
-/* Set the list of root certificates used by the client. */
-int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
-{
-    return picoquic_openssl_set_tls_root_certificates(quic, certs, count);
+    if (picoquic_get_certs_from_file_fn == NULL) {
+        return NULL;
+    }
+    else {
+        return picoquic_get_certs_from_file_fn(file_name, count);
+    }
 }
 
 /* Set the TLS Key */
 int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-    if (picoquic_set_tls_key_provider == NULL) {
+    if (picoquic_set_tls_key_provider_fn == NULL) {
         return -1;
     }
     else {
-        return picoquic_set_tls_key_provider(ctx, data, len);
+        return picoquic_set_tls_key_provider_fn(ctx, data, len);
     }
 }
 
@@ -647,20 +579,37 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
 ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_root_file_name,
     unsigned int* is_cert_store_not_empty)
 {
-    ptls_openssl_verify_certificate_t* verifier = picoquic_openssl_get_certificate_verifier(cert_root_file_name,
-        is_cert_store_not_empty);
-    return (verifier == NULL) ? NULL : &verifier->super;
+    if (picoquic_certificate_verifier_fn == NULL) {
+        return NULL;
+    }
+    else {
+        return picoquic_certificate_verifier_fn(cert_root_file_name, is_cert_store_not_empty);
+    }
 }
 
 /* Release a verify certificate callback function.
  * TODO: there should be a delete function documented at the same time the
  * callback is installed, to allow replacing one type of callback by another.
  */
-
 void picoquic_dispose_certificate_verifier(ptls_verify_certificate_t* verifier) {
     ptls_openssl_dispose_verify_certificate((ptls_openssl_verify_certificate_t*)verifier);
+    if (picoquic_dispose_certificate_verifier_fn != NULL) {
+        picoquic_dispose_certificate_verifier_fn(verifier);
+    }
 }
 
+/* Set the list of root certificates used by the client. */
+int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
+{
+    int ret = -1;
+
+    if (picoquic_set_tls_root_certificates_fn != NULL) {
+        if ((ret = picoquic_set_tls_root_certificates_fn(quic->tls_master_ctx, certs, count)) == 0){
+            quic->is_cert_store_not_empty = 1;
+        }
+    }
+    return ret;
+}
 /* Provide a crypto provider independent interface to crypto errors.
  * Can be called repeatedly until no error needs to be signalled. 
  */

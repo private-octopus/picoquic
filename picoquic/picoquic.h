@@ -540,7 +540,7 @@ int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id);
 /* Set key exchange algorithms, for tests.
  * use key_exchange_id = 0 for default values,
  * or PICOQUIC_GROUP_SECP256R1 for supporting only secp256r1
- * returns 0 if OK, -1 if the specified key_exchange_id is not supported.
+ * returns 0 if OK, -1 if the specified cipher suite is not supported.
  */
 int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id);
 
