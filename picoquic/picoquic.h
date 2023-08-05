@@ -139,6 +139,12 @@ extern "C" {
 
 #define FOURCC(a, b, c, d) ((((uint32_t)(d)<<24) | ((c)<<16) | ((b)<<8) | (a)))
 
+#define PICOQUIC_AES_128_GCM_SHA256 0x1301
+#define PICOQUIC_AES_256_GCM_SHA384 0x1302
+#define PICOQUIC_CHACHA20_POLY1305_SHA256 0x1303
+
+#define PICOQUIC_GROUP_SECP256R1 23
+
 /*
 * Connection states, useful to expose the state to the application.
 */
@@ -521,20 +527,20 @@ int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int low_memory_mode);
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
 
 /* Set cipher suite, for tests. 
- * 0: default values
- * 20: chacha20poly1305sha256
- * 128: aes128gcmsha256
- * 256: aes256gcmsha384
+ * use cipher_suite_id = 0 for default values, or one 
+ * of the values defined by IANA for cipher suites, 
+ * including: 
+ *     PICOQUIC_AES_128_GCM_SHA256
+ *     PICOQUIC_AES_256_GCM_SHA384
+ *     PICOQUIC_CHACHA20_POLY1305_SHA256
  * returns 0 if OK, -1 if the specified ciphersuite is not supported.
  */
 int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id);
 
 /* Set key exchange algorithms, for tests.
- * 0: default values
- * 20: x25519
- * 128: secp256r1
- * 256: secp256r1
- * returns 0 if OK, -1 if the specified ciphersuite is not supported.
+ * use key_exchange_id = 0 for default values,
+ * or PICOQUIC_GROUP_SECP256R1 for supporting only secp256r1
+ * returns 0 if OK, -1 if the specified key_exchange_id is not supported.
  */
 int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id);
 

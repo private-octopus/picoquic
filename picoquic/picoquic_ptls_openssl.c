@@ -95,6 +95,83 @@ static void picoquic_clear_openssl()
     }
 }
 
+/* Provide a certificate signature function, based on the implementation in openssl.
+*/
+static int set_openssl_sign_certificate_from_key(EVP_PKEY* pkey, ptls_context_t* ctx)
+{
+    int ret = 0;
+    ptls_openssl_sign_certificate_t* signer;
+
+    signer = (ptls_openssl_sign_certificate_t*)malloc(sizeof(ptls_openssl_sign_certificate_t));
+
+    if (signer == NULL || pkey == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = ptls_openssl_init_sign_certificate(signer, pkey);
+        ctx->sign_certificate = &signer->super;
+    }
+
+    if (pkey != NULL) {
+        EVP_PKEY_free(pkey);
+    }
+
+    if (ret != 0 && signer != NULL) {
+        free(signer);
+    }
+
+    return ret;
+}
+
+int picoquic_set_tls_key_openssl(ptls_context_t* ctx, const uint8_t* data, size_t len)
+{
+    if (ctx->sign_certificate != NULL) {
+        ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
+        ctx->sign_certificate = NULL;
+    }
+
+    return set_openssl_sign_certificate_from_key(d2i_AutoPrivateKey(NULL, &data, (long)len), ctx);
+}
+
+/* Read a private key from file using openSSL */
+static uint8_t* get_openssl_private_key_from_key_file(char const* file_name, int * key_length)
+{
+    unsigned char* key_der;
+    unsigned char* tmp;
+    int length;
+
+    BIO* bio_key = BIO_new_file(file_name, "rb");
+    /* Load key and convert to DER */
+    EVP_PKEY* key = PEM_read_bio_PrivateKey(bio_key, NULL, NULL, NULL);
+    length = i2d_PrivateKey(key, NULL);
+    key_der = (unsigned char*)malloc(length);
+    tmp = key_der;
+    i2d_PrivateKey(key, &tmp);
+    EVP_PKEY_free(key);
+    BIO_free(bio_key);
+
+    *key_length = length;
+    return key_der;
+}
+
+/* Set the certificate signature function and context using openSSL
+*/
+
+static int set_openssl_private_key_from_key_file(char const* keypem, ptls_context_t* ctx)
+{
+    int ret = 0;
+    BIO* bio = BIO_new_file(keypem, "rb");
+    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+    if (pkey == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = set_openssl_sign_certificate_from_key(pkey, ctx);
+    }
+    BIO_free(bio);
+    return ret;
+}
+
 void picoquic_ptls_openssl_load(int unload)
 {
     if (unload) {
@@ -110,6 +187,9 @@ void picoquic_ptls_openssl_load(int unload)
         picoquic_register_ciphersuite(&ptls_openssl_chacha20poly1305sha256, 1);
         picoquic_register_key_exchange_algorithm(&ptls_openssl_x25519);
 #endif
+        picoquic_register_tls_key_provider_fn(picoquic_set_tls_key_openssl,
+            get_openssl_private_key_from_key_file,
+            set_openssl_private_key_from_key_file);
     }
 }
 #endif

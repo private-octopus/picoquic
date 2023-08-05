@@ -29,6 +29,13 @@ extern "C" {
     void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory);
     void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key_exchange);
 
+    typedef int (*picoquic_set_tls_key_provider_fn)(ptls_context_t* ctx, const uint8_t* data, size_t len);
+    typedef uint8_t* (*picoquic_get_private_key_from_key_file_fn)(char const* file_name, int* key_length);
+    typedef int (*picoquic_set_private_key_from_key_file_fn)(char const* keypem, ptls_context_t* ctx);
+    void picoquic_register_tls_key_provider_fn(picoquic_set_tls_key_provider_fn set_tls_key_fn,
+        picoquic_get_private_key_from_key_file_fn get_key_from_key_file_fn,
+        picoquic_set_private_key_from_key_file_fn set_key_from_key_file_fn);
+
 #ifdef __cplusplus
 }
 #endif
