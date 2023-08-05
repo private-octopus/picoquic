@@ -132,6 +132,11 @@ picoquic_get_certificate_verifier_t picoquic_certificate_verifier_fn = NULL;
 picoquic_dispose_certificate_verifier_t picoquic_dispose_certificate_verifier_fn = NULL;
 picoquic_set_tls_root_certificates_t picoquic_set_tls_root_certificates_fn = NULL;
 
+picoquic_explain_crypto_error_t picoquic_explain_crypto_error_fn = NULL;
+picoquic_clear_crypto_errors_t picoquic_clear_crypto_errors_fn = NULL;
+
+picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn = NULL;
+
 /* Initialization of the cryptographic tables and functions
  * 
  * The code calls a series of potential crypto providers. 
@@ -173,6 +178,8 @@ static void picoquic_tls_api_zero()
     picoquic_certificate_verifier_fn = NULL;
     picoquic_dispose_certificate_verifier_fn = NULL;
     picoquic_set_tls_root_certificates_fn = NULL;
+    picoquic_explain_crypto_error_fn = NULL;
+    picoquic_clear_crypto_errors_fn = NULL;
 }
 
 void picoquic_tls_api_init()
@@ -257,6 +264,22 @@ void picoquic_register_verify_certificate_fn(picoquic_get_certificate_verifier_t
         picoquic_certificate_verifier_fn = certificate_verifier_fn;
         picoquic_dispose_certificate_verifier_fn = dispose_certificate_verifier_fn;
         picoquic_set_tls_root_certificates_fn = set_tls_root_certificates_fn;
+    }
+}
+
+void picoquic_register_explain_crypto_error_fn(picoquic_explain_crypto_error_t explain_crypto_error_fn,
+    picoquic_clear_crypto_errors_t clear_crypto_errors_fn)
+{
+    if (picoquic_explain_crypto_error_fn == NULL) {
+        picoquic_explain_crypto_error_fn = explain_crypto_error_fn;
+        picoquic_clear_crypto_errors_fn = clear_crypto_errors_fn;
+    }
+}
+
+void picoquic_get_crypto_random_provider_fn(picoquic_crypto_random_provider_t crypto_random_provider_fn)
+{
+    if (picoquic_crypto_random_provider_fn == NULL) {
+        picoquic_crypto_random_provider_fn = crypto_random_provider_fn;
     }
 }
 
@@ -479,28 +502,6 @@ int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id)
     return ret;
 }
 
-#ifndef PTLS_WITHOUT_OPENSSL
-/* Explain OPENSSL errors */
-int picoquic_open_ssl_explain_crypto_error(char const** err_file, int* err_line)
-{
-#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-    const char *func = NULL;
-    const char *data = NULL;
-    int flags=0;
-    return (int)ERR_get_error_all(err_file, err_line, &func, &data, &flags);
-#else
-    return ERR_get_error_line(err_file, err_line);
-#endif
-}
-
-/* Clear the recorded errors in the crypto stack, e.g. before
- * processing a new message.
- */
-void picoquic_openssl_clear_crypto_errors()
-{
-    ERR_clear_error();
-}
-#endif
 #endif /* CRYPTO_PROVIDERS_REGION */
 
 #define CRYPTO_PROVIDERS_API_REGION 1
@@ -510,8 +511,14 @@ void picoquic_openssl_clear_crypto_errors()
  * in this file. These functions may be declared in tls_api.h.
  */
 
-#ifndef PTLS_WITHOUT_OPENSSL
+
 /* Set the cryptographic random provider */
+#if 1
+static void picoquic_set_random_provider_in_ctx(ptls_context_t* ctx)
+{
+    ctx->random_bytes = picoquic_crypto_random_provider_fn;
+}
+#else
 static void picoquic_set_random_provider_in_ctx(ptls_context_t* ctx)
 {
     ctx->random_bytes = ptls_openssl_random_bytes;
@@ -615,7 +622,11 @@ int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* cert
  */
 int picoquic_explain_crypto_error(char const** err_file, int* err_line)
 {
-    return picoquic_open_ssl_explain_crypto_error(err_file, err_line);
+    int ret = 0;
+    if (picoquic_explain_crypto_error_fn != NULL) {
+        ret = picoquic_explain_crypto_error_fn(err_file, err_line);
+    }
+    return ret;
 }
 
 /* Clear the recorded errors in the crypto stack, e.g. before
@@ -623,10 +634,10 @@ int picoquic_explain_crypto_error(char const** err_file, int* err_line)
  */
 void picoquic_clear_crypto_errors()
 {
-    picoquic_openssl_clear_crypto_errors();
+    if (picoquic_clear_crypto_errors_fn != NULL) {
+        picoquic_clear_crypto_errors_fn();
+    }
 }
-
-
 
 #endif /* CRYPTO_PROVIDERS_API_REGION */
 
@@ -679,12 +690,12 @@ static void picoquic_free_log_event(picoquic_quic_t* quic);
 
 void picoquic_log_crypto_errors(picoquic_cnx_t* cnx, int ret)
 {
-    unsigned long openssl_err;
+    unsigned long crypto_err;
     char const* err_file = NULL;
     int err_line = 0;
 
-    while ((openssl_err = picoquic_explain_crypto_error(&err_file, &err_line)) != 0) {
-        picoquic_log_app_message(cnx, "OpenSSL error: %lu, file %s, line %d", openssl_err,
+    while ((crypto_err = picoquic_explain_crypto_error(&err_file, &err_line)) != 0) {
+        picoquic_log_app_message(cnx, "Crypto SSL error: %lu, file %s, line %d", crypto_err,
             (err_file == NULL) ? "?" : err_file, err_line);
     }
 

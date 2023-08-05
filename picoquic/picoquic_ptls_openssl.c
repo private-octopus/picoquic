@@ -242,7 +242,7 @@ ptls_verify_certificate_t* picoquic_openssl_get_certificate_verifier(char const*
 {
     ptls_openssl_verify_certificate_t* verifier = picoquic_openssl_get_openssl_certificate_verifier(cert_root_file_name,
         is_cert_store_not_empty);
-    return (verifier == NULL) ? NULL : &verifier->super;
+    return (verifier == NULL) ? NULL : (ptls_verify_certificate_t*)&verifier->super;
 }
 
 void picoquic_openssl_dispose_certificate_verifier(ptls_verify_certificate_t* verifier) {
@@ -276,6 +276,29 @@ int picoquic_openssl_set_tls_root_certificates(ptls_context_t* ctx, ptls_iovec_t
     return 0;
 }
 
+/* Explain OPENSSL errors */
+int picoquic_open_ssl_explain_crypto_error(char const** err_file, int* err_line)
+{
+#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+    const char *func = NULL;
+    const char *data = NULL;
+    int flags=0;
+    return (int)ERR_get_error_all(err_file, err_line, &func, &data, &flags);
+#else
+    return ERR_get_error_line(err_file, err_line);
+#endif
+}
+
+/* Clear the recorded errors in the crypto stack, e.g. before
+* processing a new message.
+*/
+void picoquic_openssl_clear_crypto_errors()
+{
+    ERR_clear_error();
+}
+
+/* Register the openssl functions
+ */
 void picoquic_ptls_openssl_load(int unload)
 {
     if (unload) {
@@ -300,6 +323,9 @@ void picoquic_ptls_openssl_load(int unload)
         picoquic_register_verify_certificate_fn(picoquic_openssl_get_certificate_verifier,
             picoquic_openssl_dispose_certificate_verifier,
             picoquic_openssl_set_tls_root_certificates);
+        picoquic_register_explain_crypto_error_fn(picoquic_open_ssl_explain_crypto_error,
+            picoquic_openssl_clear_crypto_errors);
+        picoquic_get_crypto_random_provider_fn(ptls_openssl_random_bytes);
     }
 }
 #endif
