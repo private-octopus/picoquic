@@ -253,6 +253,7 @@ void picoquic_register_tls_key_provider_fn(picoquic_set_tls_key_provider_t set_t
         picoquic_set_tls_key_provider_fn = set_tls_key_fn;
         picoquic_get_key_from_key_file_fn = get_key_from_key_file_fn;
         picoquic_set_key_from_key_file_fn = set_key_from_key_file_fn;
+        picoquic_get_certs_from_file_fn = get_certs_from_file_fn;
     }
 }
 
