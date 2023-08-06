@@ -583,6 +583,7 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
     }
 }
 
+#if 0
 /* Return the certificate verifier callback provided by the crypto stack */
 ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_root_file_name,
     unsigned int* is_cert_store_not_empty)
@@ -604,6 +605,61 @@ void picoquic_dispose_certificate_verifier(ptls_verify_certificate_t* verifier) 
         picoquic_dispose_certificate_verifier_fn(verifier);
     }
 }
+#else
+/* Use openssl functions to create a certficate verifier */
+ptls_openssl_verify_certificate_t* picoquic_openssl_get_certificate_verifier_old(char const * cert_root_file_name,
+    unsigned int * is_cert_store_not_empty)
+{
+    ptls_openssl_verify_certificate_t * verifier = (ptls_openssl_verify_certificate_t*)malloc(sizeof(ptls_openssl_verify_certificate_t));
+    if (verifier != NULL) {
+        X509_STORE* store = X509_STORE_new();
+
+        if (cert_root_file_name != NULL && store != NULL) {
+            int file_ret = 0;
+            X509_LOOKUP* lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
+            if ((file_ret = X509_LOOKUP_load_file(lookup, cert_root_file_name, X509_FILETYPE_PEM)) != 1) {
+                DBG_PRINTF("Cannot load X509 store (%s), ret = %d\n",
+                    cert_root_file_name, file_ret);
+            }
+            else {
+                *is_cert_store_not_empty = 1;
+            }
+        }
+#ifdef PTLS_OPENSSL_VERIFY_CERTIFICATE_ENABLE_OVERRIDE
+        ptls_openssl_init_verify_certificate(verifier, store, NULL);
+#else
+        ptls_openssl_init_verify_certificate(verifier, store);
+#endif
+
+        // If we created an instance of the store, release our reference after giving it to the verify_certificate callback.
+        // The callback internally increased the reference counter by one.
+#if OPENSSL_VERSION_NUMBER > 0x10100000L
+        if (store != NULL) {
+            X509_STORE_free(store);
+        }
+#endif
+    }
+    return verifier;
+}
+
+/* Return the certificate verifier callback provided by the crypto stack */
+ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_root_file_name,
+    unsigned int* is_cert_store_not_empty)
+{
+    ptls_openssl_verify_certificate_t* verifier = picoquic_openssl_get_certificate_verifier_old(cert_root_file_name,
+        is_cert_store_not_empty);
+    return (verifier == NULL) ? NULL : &verifier->super;
+}
+
+void ptls_openssl_dispose_verify_certificate_old(ptls_openssl_verify_certificate_t *self)
+{
+    X509_STORE_free(self->cert_store);
+}
+
+void picoquic_dispose_certificate_verifier(ptls_verify_certificate_t* verifier) {
+    ptls_openssl_dispose_verify_certificate_old((ptls_openssl_verify_certificate_t*)verifier);
+}
+#endif
 
 /* Set the list of root certificates used by the client. */
 int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
