@@ -253,6 +253,7 @@ void picoquic_register_tls_key_provider_fn(picoquic_set_tls_key_provider_t set_t
         picoquic_set_tls_key_provider_fn = set_tls_key_fn;
         picoquic_get_key_from_key_file_fn = get_key_from_key_file_fn;
         picoquic_set_key_from_key_file_fn = set_key_from_key_file_fn;
+        picoquic_dispose_sign_certificate_fn = dispose_sign_certificate_fn;
         picoquic_get_certs_from_file_fn = get_certs_from_file_fn;
     }
 }
@@ -583,7 +584,7 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
     }
 }
 
-#if 0
+#if 1
 /* Return the certificate verifier callback provided by the crypto stack */
 ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_root_file_name,
     unsigned int* is_cert_store_not_empty)
