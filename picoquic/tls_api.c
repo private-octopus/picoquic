@@ -599,7 +599,6 @@ ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_ro
  * callback is installed, to allow replacing one type of callback by another.
  */
 void picoquic_dispose_certificate_verifier(ptls_verify_certificate_t* verifier) {
-    ptls_openssl_dispose_verify_certificate((ptls_openssl_verify_certificate_t*)verifier);
     if (picoquic_dispose_certificate_verifier_fn != NULL) {
         picoquic_dispose_certificate_verifier_fn(verifier);
     }
