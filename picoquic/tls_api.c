@@ -165,10 +165,12 @@ void picoquic_tls_api_init_providers(int unload)
     }
 #endif
     // picoquic_bcrypt_load(unload);
+#if 0
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
     if ((tls_api_init_flags && TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
         picoquic_ptls_fusion_load(unload);
     }
+#endif
 #endif
 }
 
@@ -179,12 +181,19 @@ static void picoquic_tls_api_zero()
     memset(picoquic_cipher_suites, 0, sizeof(picoquic_cipher_suites));
     memset((void*)picoquic_key_exchanges, 0, sizeof(picoquic_key_exchanges));
     memset((void*)picoquic_key_exchange_secp256r1, 0, sizeof(picoquic_key_exchange_secp256r1));
+
+    picoquic_set_private_key_from_file_fn = NULL;
+    picoquic_dispose_sign_certificate_fn = NULL;
     picoquic_get_certs_from_file_fn = NULL;
+
     picoquic_certificate_verifier_fn = NULL;
     picoquic_dispose_certificate_verifier_fn = NULL;
     picoquic_set_tls_root_certificates_fn = NULL;
+
     picoquic_explain_crypto_error_fn = NULL;
     picoquic_clear_crypto_errors_fn = NULL;
+ 
+    picoquic_crypto_random_provider_fn = NULL;
 }
 
 void picoquic_tls_api_init()
@@ -208,10 +217,12 @@ void picoquic_tls_api_unload()
 void picoquic_tls_api_reset(uint64_t init_flags)
 {
     if (tls_api_is_init) {
-        tls_api_is_init = 0;
         picoquic_tls_api_init_providers(2);
+        tls_api_is_init = 0;
         picoquic_tls_api_zero();
         tls_api_init_flags = init_flags;
+        picoquic_tls_api_init_providers(0);
+        tls_api_is_init = 1;
     }
 }
 /* Registration of ciphersuites.
