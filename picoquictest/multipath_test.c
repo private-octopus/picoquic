@@ -657,7 +657,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     /* Create the context but delay initialization, so the multipath option can be set */
     ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid,
-        8, 0, send_buffer_size);
+        8, 0, send_buffer_size, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;

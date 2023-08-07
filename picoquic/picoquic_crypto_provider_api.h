@@ -26,12 +26,17 @@
 extern "C" {
 #endif
 
+#define TLS_API_INIT_FLAGS_NO_OPENSSL 1
+#define TLS_API_INIT_FLAGS_NO_MINICRYPTO 2
+#define TLS_API_INIT_FLAGS_NO_FUSION 4
+    extern uint64_t tls_api_init_flags;
+
     void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory);
     void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key_exchange);
 
     typedef int (*picoquic_set_tls_key_provider_t)(ptls_context_t* ctx, const uint8_t* data, size_t len);
-    typedef uint8_t* (*picoquic_get_private_key_from_key_file_t)(char const* file_name, int* key_length);
-    typedef int (*picoquic_set_private_key_from_key_file_t)(char const* keypem, ptls_context_t* ctx);
+    typedef uint8_t* (*picoquic_get_private_key_from_file_t)(char const* file_name, int* key_length);
+    typedef int (*picoquic_set_private_key_from_file_t)(char const* keypem, ptls_context_t* ctx);
     typedef void (*picoquic_dispose_sign_certificate_t)(ptls_sign_certificate_t* cert);
     typedef ptls_iovec_t* (*picoquic_get_certs_from_file_t)(char const* file_name, size_t* count);
     typedef ptls_verify_certificate_t* (*picoquic_get_certificate_verifier_t)(char const* cert_root_file_name,
@@ -44,9 +49,11 @@ extern "C" {
     typedef void (*picoquic_crypto_random_provider_t)(void *buf, size_t len);
 
     void picoquic_register_tls_key_provider_fn(
+#if 0
         picoquic_set_tls_key_provider_t set_tls_key_fn,
-        picoquic_get_private_key_from_key_file_t get_key_from_key_file_fn,
-        picoquic_set_private_key_from_key_file_t set_key_from_key_file_fn,
+        picoquic_get_private_key_from_file_t get_private_key_from_key_file_fn,
+#endif
+        picoquic_set_private_key_from_file_t set_private_key_from_file_fn,
         picoquic_dispose_sign_certificate_t dispose_sign_certificate_fn,
         picoquic_get_certs_from_file_t get_certs_from_file_fn);
 
@@ -54,11 +61,10 @@ extern "C" {
         picoquic_dispose_certificate_verifier_t dispose_certificate_verifier_fn,
         picoquic_set_tls_root_certificates_t set_tls_root_certificates_fn);
 
-    void picoquic_register_explain_crypto_error_fn(
-        picoquic_explain_crypto_error_t explain_crypto_error_fn,
+    void picoquic_register_explain_crypto_error_fn(picoquic_explain_crypto_error_t explain_crypto_error_fn,
         picoquic_clear_crypto_errors_t clear_crypto_errors_fn);
 
-    void picoquic_get_crypto_random_provider_fn(picoquic_crypto_random_provider_t random_provider);
+    void picoquic_register_crypto_random_provider_fn(picoquic_crypto_random_provider_t random_provider);
 
 #ifdef __cplusplus
 }

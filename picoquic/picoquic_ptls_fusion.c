@@ -38,16 +38,19 @@
 #pragma warning(disable:4324)
 #endif
 #include "picotls/fusion.h"
-/* Definition of fusion versions of AESGCM
- * TODO: use definition of sha256 from an available location.
- * probably bcrypt on windows, minicrypto otherwise.
- */
-#include "picotls/openssl.h"
 
-ptls_cipher_suite_t picoquic_fusion_aes128gcmsha256 = { PTLS_CIPHER_SUITE_AES_128_GCM_SHA256, &ptls_fusion_aes128gcm,
-&ptls_openssl_sha256 };
-ptls_cipher_suite_t picoquic_fusion_aes256gcmsha384 = { PTLS_CIPHER_SUITE_AES_256_GCM_SHA384, &ptls_fusion_aes256gcm,
-&ptls_openssl_sha384 };
+/* Declaration of the function `picoquic_get_hash_algorithm_by_name`, which the code
+* uses to complete the declaration of the cipher suites. This is a bit of a hack: it
+* only works if `picoquic_ptls_fusion_load` is called after loading other providers
+* like `openssl` or `minicrypto`, that will have registered ciphersuites for
+* AES_128_GCM_SHA256 and AES_256_GCM_SHA384.
+*/
+ptls_hash_algorithm_t* picoquic_get_hash_algorithm_by_name(const char* hash_algorithm_name);
+
+struct st_ptls_cipher_suite_t picoquic_fusion_aes128gcmsha256 = { PTLS_CIPHER_SUITE_AES_128_GCM_SHA256, &ptls_fusion_aes128gcm,
+NULL };
+struct st_ptls_cipher_suite_t picoquic_fusion_aes256gcmsha384 = { PTLS_CIPHER_SUITE_AES_256_GCM_SHA384, &ptls_fusion_aes256gcm,
+NULL };
 
 void picoquic_ptls_fusion_load(int unload)
 {
@@ -56,8 +59,12 @@ void picoquic_ptls_fusion_load(int unload)
     }
     else {
         if (ptls_fusion_is_supported_by_cpu()) {
-            picoquic_register_ciphersuite(&picoquic_fusion_aes128gcmsha256, 0);
-            picoquic_register_ciphersuite(&picoquic_fusion_aes256gcmsha384, 0);
+            if ((picoquic_fusion_aes128gcmsha256.hash = picoquic_get_hash_algorithm_by_name("SHA256")) != NULL) {
+                picoquic_register_ciphersuite((ptls_cipher_suite_t*)&picoquic_fusion_aes128gcmsha256, 0);
+            }
+            if ((picoquic_fusion_aes256gcmsha384.hash = picoquic_get_hash_algorithm_by_name("SHA384")) != NULL) {
+                picoquic_register_ciphersuite(&picoquic_fusion_aes256gcmsha384, 0);
+            }
         }
     }
 }

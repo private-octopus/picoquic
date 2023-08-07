@@ -123,37 +123,6 @@ static int set_openssl_sign_certificate_from_key(EVP_PKEY* pkey, ptls_context_t*
     return ret;
 }
 
-int picoquic_openssl_set_tls_key(ptls_context_t* ctx, const uint8_t* data, size_t len)
-{
-    if (ctx->sign_certificate != NULL) {
-        ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
-        ctx->sign_certificate = NULL;
-    }
-
-    return set_openssl_sign_certificate_from_key(d2i_AutoPrivateKey(NULL, &data, (long)len), ctx);
-}
-
-/* Read a private key from file using openSSL */
-static uint8_t* get_openssl_private_key_from_key_file(char const* file_name, int * key_length)
-{
-    unsigned char* key_der;
-    unsigned char* tmp;
-    int length;
-
-    BIO* bio_key = BIO_new_file(file_name, "rb");
-    /* Load key and convert to DER */
-    EVP_PKEY* key = PEM_read_bio_PrivateKey(bio_key, NULL, NULL, NULL);
-    length = i2d_PrivateKey(key, NULL);
-    key_der = (unsigned char*)malloc(length);
-    tmp = key_der;
-    i2d_PrivateKey(key, &tmp);
-    EVP_PKEY_free(key);
-    BIO_free(bio_key);
-
-    *key_length = length;
-    return key_der;
-}
-
 /* Set the certificate signature function and context using openSSL
 */
 
@@ -315,8 +284,6 @@ void picoquic_ptls_openssl_load(int unload)
         picoquic_register_key_exchange_algorithm(&ptls_openssl_x25519);
 #endif
         picoquic_register_tls_key_provider_fn(
-            picoquic_openssl_set_tls_key,
-            get_openssl_private_key_from_key_file,
             set_openssl_private_key_from_key_file,
             picoquic_openssl_dispose_sign_certificate,
             picoquic_openssl_get_certs_from_file);
@@ -325,7 +292,7 @@ void picoquic_ptls_openssl_load(int unload)
             picoquic_openssl_set_tls_root_certificates);
         picoquic_register_explain_crypto_error_fn(picoquic_open_ssl_explain_crypto_error,
             picoquic_openssl_clear_crypto_errors);
-        picoquic_get_crypto_random_provider_fn(ptls_openssl_random_bytes);
+        picoquic_register_crypto_random_provider_fn(ptls_openssl_random_bytes);
     }
 }
 #endif

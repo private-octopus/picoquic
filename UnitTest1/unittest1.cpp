@@ -2044,6 +2044,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(minicrypto) {
+            int ret = minicrypto_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(monopath_basic) {
             int ret = monopath_basic_test();
 

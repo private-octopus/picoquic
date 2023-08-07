@@ -87,6 +87,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/picohash.c
     picoquic/picoquic_lb.c
     picoquic/picoquic_ptls_fusion.c
+    picoquic/picoquic_ptls_minicrypto.c
     picoquic/picoquic_ptls_openssl.c
     picoquic/picosocks.c
     picoquic/picosplay.c
@@ -147,6 +148,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/intformattest.c
     picoquictest/l4s_test.c
     picoquictest/mediatest.c
+    picoquictest/minicrypto_test.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
     picoquictest/parseheadertest.c

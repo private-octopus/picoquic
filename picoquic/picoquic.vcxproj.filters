@@ -123,6 +123,9 @@
     <ClCompile Include="picoquic_ptls_openssl.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="picoquic_ptls_minicrypto.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
