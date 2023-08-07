@@ -3,6 +3,7 @@
 if (PICOQUIC_FETCH_PTLS)
     set(PTLS_CORE_LIBRARY picotls-core)
     set(PTLS_OPENSSL_LIBRARY picotls-openssl)
+    set(PTLS_MINICRYPTO_LIBRARY picotls-minicrypto)
     if(WITH_FUSION)
         set(PTLS_FUSION_LIBRARY picotls-fusion)
         set(PTLS_WITH_FUSION_DEFAULT ON)
