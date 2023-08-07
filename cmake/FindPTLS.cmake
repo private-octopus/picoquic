@@ -26,6 +26,7 @@ else(PICOQUIC_FETCH_PTLS)
     find_library(PTLS_CORE_LIBRARY picotls-core HINTS ${PTLS_HINTS})
     find_library(PTLS_OPENSSL_LIBRARY picotls-openssl HINTS ${PTLS_HINTS})
     find_library(PTLS_FUSION_LIBRARY picotls-fusion HINTS ${PTLS_HINTS})
+    find_library(PTLS_MINICRYPTO_LIBRARY picotls-minicrypto HINTS ${PTLS_HINTS})
 
     if(NOT PTLS_FUSION_LIBRARY)
         include(FindPackageHandleStandardArgs)
@@ -34,9 +35,10 @@ else(PICOQUIC_FETCH_PTLS)
         find_package_handle_standard_args(PTLS REQUIRED_VARS
             PTLS_CORE_LIBRARY
             PTLS_OPENSSL_LIBRARY
+            PTLS_MINICRYPTO_LIBRARY
             PTLS_INCLUDE_DIR)
         if(PTLS_FOUND)
-            set(PTLS_LIBRARIES ${PTLS_CORE_LIBRARY} ${PTLS_OPENSSL_LIBRARY} )
+            set(PTLS_LIBRARIES ${PTLS_CORE_LIBRARY} ${PTLS_OPENSSL_LIBRARY} ${PTLS_MINICRYPTO_LIBRARY})
             set(PTLS_INCLUDE_DIRS ${PTLS_INCLUDE_DIR})
             set(PTLS_WITH_FUSION_DEFAULT OFF)
         endif()
@@ -48,10 +50,11 @@ else(PICOQUIC_FETCH_PTLS)
             PTLS_CORE_LIBRARY
             PTLS_OPENSSL_LIBRARY
             PTLS_FUSION_LIBRARY
+            PTLS_MINICRYPTO_LIBRARY
             PTLS_INCLUDE_DIR)
 
         if(PTLS_FOUND)
-            set(PTLS_LIBRARIES ${PTLS_CORE_LIBRARY} ${PTLS_OPENSSL_LIBRARY} ${PTLS_FUSION_LIBRARY})
+            set(PTLS_LIBRARIES ${PTLS_CORE_LIBRARY} ${PTLS_OPENSSL_LIBRARY} ${PTLS_FUSION_LIBRARY} ${PTLS_MINICRYPTO_LIBRARY})
             set(PTLS_INCLUDE_DIRS ${PTLS_INCLUDE_DIR})
             set(PTLS_WITH_FUSION_DEFAULT ON)
         endif()
