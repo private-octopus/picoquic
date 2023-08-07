@@ -662,7 +662,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
-    else {
+
+    if (ret == 0) {
         int is_sat_test = (test_id == multipath_test_sat_plus);
         if (is_sat_test || test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_back1) {
             /* Reduce the throughput of path #0 to 1 mbps.
