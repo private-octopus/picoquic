@@ -99,6 +99,7 @@ int minicrypto_test()
     }
 
     picoquic_tls_api_unload();
+    tls_api_init_flags = 0;
 
     return ret;
 }
