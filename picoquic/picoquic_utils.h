@@ -326,6 +326,8 @@ void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_
 #define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs/badcert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_KEY "certs/key.pem"
 #define PICOQUIC_TEST_FILE_CERT_STORE "certs/test-ca.crt"
+#define PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA "certs/ecdsa/cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY_ECDSA "certs/ecdsa/key.pem"
 #endif
 
  /* To set the solution directory for tests */
