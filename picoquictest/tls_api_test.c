@@ -4141,8 +4141,10 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
                 test_ctx->cnx_client->local_parameters.enable_time_stamp = 0;
             }
 
-            /* Initialize the client connection */
-            picoquic_start_client_cnx(test_ctx->cnx_client);
+            if (ret == 0) {
+                /* Initialize the client connection */
+                picoquic_start_client_cnx(test_ctx->cnx_client);
+            }
         }
 
         if (ret == 0 && i == 1) {
