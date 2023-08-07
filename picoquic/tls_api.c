@@ -148,7 +148,7 @@ void picoquic_ptls_minicrypto_load(int unload);
  * This is means to be used mostly in tests. In production,
  * it is better to just use compile options.
  */
-uint64_t tls_api_init_flags = 0;
+static uint64_t tls_api_init_flags = 0;
 
 /* Initialization of providers. The latest registration wins.
 * This implies an initialization order from least desirable
@@ -205,6 +205,15 @@ void picoquic_tls_api_unload()
     }
 }
 
+void picoquic_tls_api_reset(uint64_t init_flags)
+{
+    if (tls_api_is_init) {
+        tls_api_is_init = 0;
+        picoquic_tls_api_init_providers(2);
+        picoquic_tls_api_zero();
+        tls_api_init_flags = init_flags;
+    }
+}
 /* Registration of ciphersuites.
  * This API is called by crypto providers to register available cipher suites.
  */

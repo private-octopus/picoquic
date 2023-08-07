@@ -271,7 +271,9 @@ void picoquic_openssl_clear_crypto_errors()
 void picoquic_ptls_openssl_load(int unload)
 {
     if (unload) {
-        picoquic_clear_openssl();
+        if (unload == 1) {
+            picoquic_clear_openssl();
+        }
     }
     else {
         picoquic_init_openssl();

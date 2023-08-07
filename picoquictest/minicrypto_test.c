@@ -64,8 +64,7 @@ int minicrypto_test()
     picoquic_connection_id_t initial_cid = { {0x81, 0x81, 0xc8, 0x19, 0x40, 0, 6, 7}, 8 };
     int ret = 0;
 
-    picoquic_tls_api_unload();
-    tls_api_init_flags = TLS_API_INIT_FLAGS_NO_OPENSSL;
+    picoquic_tls_api_reset(TLS_API_INIT_FLAGS_NO_OPENSSL);
 
     ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid, 8, 0, 0, 1);
@@ -98,8 +97,7 @@ int minicrypto_test()
         test_ctx = NULL;
     }
 
-    picoquic_tls_api_unload();
-    tls_api_init_flags = 0;
+    picoquic_tls_api_reset(0);
 
     return ret;
 }
