@@ -259,7 +259,7 @@ int picoquic_open_ssl_explain_crypto_error(char const** err_file, int* err_line)
 }
 
 
-#if 1
+#if 0
 void picoquic_ptls_openssl_aead_clean_up(void* v_aead)
 {
     struct aead_crypto_context_t {

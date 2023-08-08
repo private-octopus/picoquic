@@ -4397,9 +4397,6 @@ int zero_rtt_many_losses_test()
             DBG_PRINTF("Handshake fails for mask %d, mask = %llx", i, (unsigned long long)loss_mask);
         }
     }
-#if 1
-    picoquic_tls_api_unload();
-#endif
     return ret;
 }
 

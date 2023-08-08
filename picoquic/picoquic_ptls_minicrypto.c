@@ -30,35 +30,7 @@
 
 static int set_minicrypto_private_key_from_key_file(char const* keypem, ptls_context_t* ctx)
 {
-#if 1
     return ptls_minicrypto_load_private_key(ctx, keypem);
-#else
-    ptls_asn1_pkcs8_private_key_t pkey = {{0}};
-    int ret = ptls_pem_parse_private_key(keypem, &pkey, NULL);
-
-    if (ret != 0)
-        goto err;
-#if 0
-    /* Check that this is the expected key type.
-    * At this point, the minicrypto library only supports ECDSA keys.
-    * In theory, we could add support for RSA keys at some point.
-    */
-    if (pkey.algorithm_length != sizeof(ptls_asn1_algorithm_ecdsa) ||
-        memcmp(pkey.vec.base + pkey.algorithm_index, ptls_asn1_algorithm_ecdsa, sizeof(ptls_asn1_algorithm_ecdsa)) != 0) {
-        ret = -1;
-        goto err;
-    }
-#endif
-
-    ret = ptls_set_ecdsa_private_key(ctx, &pkey, NULL);
-
-err:
-    if (pkey.vec.base) {
-        ptls_clear_memory(pkey.vec.base, pkey.vec.len);
-        free(pkey.vec.base);
-    }
-    return ret;
-#endif
 }
 
 

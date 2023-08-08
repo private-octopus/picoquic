@@ -149,7 +149,7 @@ void picoquic_ptls_minicrypto_load(int unload);
  * it is better to just use compile options.
  */
 static uint64_t tls_api_init_flags = 0;
-#if 1
+#if 0
 int nb_decrypts = 0;
 #endif
 /* Initialization of providers. The latest registration wins.
@@ -1176,9 +1176,7 @@ void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic) {
  * after a key update callback, and also to create the initial keys from a locally
  * computed secret
  */
-#if 1
-void picoquic_ptls_openssl_aead_clean_up(void* v_aead);
-#endif
+
 static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * cipher, int is_enc, const void *secret, const char *prefix_label)
 {
     int ret = 0;
@@ -2322,26 +2320,29 @@ uint64_t picoquic_aead_confidentiality_limit(void* aead_ctx)
     return ((ptls_aead_context_t*)aead_ctx)->algo->confidentiality_limit;
 }
 
+#if 0
+void picoquic_ptls_openssl_aead_clean_up(void * aead_ctx);
+#endif
+
 /* AEAD encrypt/decrypt routines */
 size_t picoquic_aead_decrypt_generic(uint8_t* output, const uint8_t* input, size_t input_length,
     uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_ctx)
 {
     size_t decrypted = 0;
-#if 1
+#if 0
     nb_decrypts += 1;
 #endif
 
     if (aead_ctx == NULL) {
         decrypted = SIZE_MAX;
     } else {
-
-#if 1
+#if 0
         picoquic_ptls_openssl_aead_clean_up(aead_ctx);
 #endif
         decrypted = ptls_aead_decrypt((ptls_aead_context_t*)aead_ctx,
             (void*)output, (const void*)input, input_length, seq_num,
             (void*)auth_data, auth_data_length);
-#if 1
+#if 0
         if (decrypted > input_length) {
             DBG_PRINTF("%s", "bug");
         }
