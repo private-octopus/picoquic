@@ -149,7 +149,9 @@ void picoquic_ptls_minicrypto_load(int unload);
  * it is better to just use compile options.
  */
 static uint64_t tls_api_init_flags = 0;
-
+#if 1
+int nb_decrypts = 0;
+#endif
 /* Initialization of providers. The latest registration wins.
 * This implies an initialization order from least desirable
 * to most desirable.
@@ -165,12 +167,10 @@ void picoquic_tls_api_init_providers(int unload)
     }
 #endif
     // picoquic_bcrypt_load(unload);
-#if 0
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
     if ((tls_api_init_flags && TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
         picoquic_ptls_fusion_load(unload);
     }
-#endif
 #endif
 }
 
@@ -217,13 +217,13 @@ void picoquic_tls_api_unload()
 void picoquic_tls_api_reset(uint64_t init_flags)
 {
     if (tls_api_is_init) {
-        picoquic_tls_api_init_providers(2);
         tls_api_is_init = 0;
+        picoquic_tls_api_init_providers(2);
         picoquic_tls_api_zero();
-        tls_api_init_flags = init_flags;
-        picoquic_tls_api_init_providers(0);
-        tls_api_is_init = 1;
     }
+    tls_api_init_flags = init_flags;
+    tls_api_is_init = 1;
+    picoquic_tls_api_init_providers(0);
 }
 /* Registration of ciphersuites.
  * This API is called by crypto providers to register available cipher suites.
@@ -1176,6 +1176,9 @@ void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic) {
  * after a key update callback, and also to create the initial keys from a locally
  * computed secret
  */
+#if 1
+void picoquic_ptls_openssl_aead_clean_up(void* v_aead);
+#endif
 static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * cipher, int is_enc, const void *secret, const char *prefix_label)
 {
     int ret = 0;
@@ -2324,13 +2327,25 @@ size_t picoquic_aead_decrypt_generic(uint8_t* output, const uint8_t* input, size
     uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_ctx)
 {
     size_t decrypted = 0;
+#if 1
+    nb_decrypts += 1;
+#endif
 
     if (aead_ctx == NULL) {
         decrypted = SIZE_MAX;
     } else {
+
+#if 1
+        picoquic_ptls_openssl_aead_clean_up(aead_ctx);
+#endif
         decrypted = ptls_aead_decrypt((ptls_aead_context_t*)aead_ctx,
             (void*)output, (const void*)input, input_length, seq_num,
             (void*)auth_data, auth_data_length);
+#if 1
+        if (decrypted > input_length) {
+            DBG_PRINTF("%s", "bug");
+        }
+#endif
     }
 
     return decrypted;

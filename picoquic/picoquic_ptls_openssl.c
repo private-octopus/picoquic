@@ -258,6 +258,29 @@ int picoquic_open_ssl_explain_crypto_error(char const** err_file, int* err_line)
 #endif
 }
 
+
+#if 1
+void picoquic_ptls_openssl_aead_clean_up(void* v_aead)
+{
+    struct aead_crypto_context_t {
+        ptls_aead_context_t super;
+        EVP_CIPHER_CTX* evp_ctx;
+        uint8_t static_iv[PTLS_MAX_IV_SIZE];
+    };
+
+    struct aead_crypto_context_t* ctx = (struct aead_crypto_context_t*)v_aead;
+
+    if (ctx->super.algo->setup_crypto == ptls_openssl_aes128gcmsha256.aead->setup_crypto) {
+        size_t iv_size = ctx->super.algo->iv_size;
+
+        if (iv_size < PTLS_MAX_IV_SIZE) {
+            memset(ctx->static_iv + iv_size, 0, PTLS_MAX_IV_SIZE - iv_size);
+        }
+    }
+}
+#endif
+
+
 /* Clear the recorded errors in the crypto stack, e.g. before
 * processing a new message.
 */
