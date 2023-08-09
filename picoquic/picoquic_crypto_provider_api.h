@@ -47,10 +47,6 @@ extern "C" {
     typedef void (*picoquic_crypto_random_provider_t)(void *buf, size_t len);
 
     void picoquic_register_tls_key_provider_fn(
-#if 0
-        picoquic_set_tls_key_provider_t set_tls_key_fn,
-        picoquic_get_private_key_from_file_t get_private_key_from_key_file_fn,
-#endif
         picoquic_set_private_key_from_file_t set_private_key_from_file_fn,
         picoquic_dispose_sign_certificate_t dispose_sign_certificate_fn,
         picoquic_get_certs_from_file_t get_certs_from_file_fn);
