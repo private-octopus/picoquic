@@ -160,7 +160,7 @@ void picoquic_tls_api_init_providers(int unload)
         picoquic_ptls_openssl_load(unload);
     }
 #else
-    if (unload == 0 && !tls_api_is_init) {
+    if (unload == 0 && tls_api_is_init == 0) {
         DBG_PRINTF("%s", "Picoquic was compiled without OpenSSL");
     }
 #endif
@@ -170,7 +170,7 @@ void picoquic_tls_api_init_providers(int unload)
         picoquic_ptls_fusion_load(unload);
     }
 #else
-    if (unload == 0 && !tls_api_is_init) {
+    if (unload == 0 && tls_api_is_init == 0) {
         DBG_PRINTF("%s","Picoquic was compiled without Fusion");
     }
 #endif
@@ -208,9 +208,9 @@ void picoquic_tls_api_init()
 void picoquic_tls_api_unload()
 {
     if (tls_api_is_init) {
-        tls_api_is_init = 0;
         picoquic_tls_api_init_providers(1);
         picoquic_tls_api_zero();
+        tls_api_is_init = 0;
     }
 }
 
@@ -222,8 +222,8 @@ void picoquic_tls_api_reset(uint64_t init_flags)
         picoquic_tls_api_zero();
     }
     tls_api_init_flags = init_flags;
-    tls_api_is_init = 1;
     picoquic_tls_api_init_providers(0);
+    tls_api_is_init = 1;
 }
 /* Registration of ciphersuites.
  * This API is called by crypto providers to register available cipher suites.
