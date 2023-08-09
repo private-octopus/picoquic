@@ -41,11 +41,6 @@
  * As an intermediate state towards that goal, we isolate the dependencies on
  * OpenSSL in a small set of function calls.
  */
-#if 0
-#ifndef PTLS_WITHOUT_OPENSSL
-#define PTLS_WITHOUT_OPENSSL 1
-#endif
-#endif
 
 #ifdef _WINDOWS
 #include "wincompat.h"
@@ -165,12 +160,16 @@ void picoquic_tls_api_init_providers(int unload)
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_OPENSSL) == 0) {
         picoquic_ptls_openssl_load(unload);
     }
+#else
+    DBG_PRINTF("%s","Picoquic was compiled without OpenSSL");
 #endif
     // picoquic_bcrypt_load(unload);
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
     if ((tls_api_init_flags && TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
         picoquic_ptls_fusion_load(unload);
     }
+#else
+    DBG_PRINTF("%s","Picoquic was compiled without Fusion");
 #endif
 }
 
@@ -1623,10 +1622,14 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
             if (cert_file_name != NULL && key_file_name != NULL) {
                 /* Read the certificate file */
                 if (ptls_load_certificates(ctx, (char*)cert_file_name) != 0) {
+                    DBG_PRINTF("Cannot load certificate: %s", cert_file_name);
                     ret = -1;
                 }
                 else {
                     ret = set_private_key_from_file(key_file_name, ctx);
+                    if (ret != 0){
+                        DBG_PRINTF("Cannot load key: %s, ret = 0x%x", key_file_name, ret);
+                    }
                 }
             }
         }

@@ -39,6 +39,6 @@ jobs:
             ulimit -c unlimited -S
             cd build
             make picoquic_ct
-            ./picoquic_ct -n tls_api_q_and_r_stream && QUICRESULT=$?
+            ./picoquic_ct -S .. minicrypto.c && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
             exit 1

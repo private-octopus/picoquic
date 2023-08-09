@@ -230,8 +230,7 @@ if(WITH_OPENSSL)
     message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 else()
     message(STATUS "Building without picotls-openssl")
-    list(APPEND PICOQUIC_ADDITIONAL_C_FLAGS -DPICOQUIC_WITHOUT_OPENSSL)
-    list(APPEND PICOQUIC_ADDITIONAL_CXX_FLAGS -DPICOQUIC_WITHOUT_OPENSSL)
+    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
