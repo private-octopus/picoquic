@@ -166,7 +166,7 @@ void picoquic_tls_api_init_providers(int unload)
 #endif
     // picoquic_bcrypt_load(unload);
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
-    if ((tls_api_init_flags && TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
+    if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
         picoquic_ptls_fusion_load(unload);
     }
 #else
