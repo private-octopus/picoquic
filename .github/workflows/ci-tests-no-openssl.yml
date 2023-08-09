@@ -13,6 +13,9 @@ jobs:
   citests:
     name: CI-Tests-No-OpenSSL
     runs-on: ubuntu-latest
+    env:
+        CC: clang
+        CXX: clang++
 
     steps:
       - name: Checkout repository
@@ -29,7 +32,7 @@ jobs:
           sudo apt-get install -y libssl-dev
           echo $CC
           echo $CXX
-          $CC --version
+          # $CC --version
           ./ci/build_picotls.sh
           cmake -S . -B build "-DWITH_OPENSSL=OFF"
           cmake --build build

@@ -144,9 +144,8 @@ void picoquic_ptls_minicrypto_load(int unload);
  * it is better to just use compile options.
  */
 static uint64_t tls_api_init_flags = 0;
-#if 0
-int nb_decrypts = 0;
-#endif
+static int tls_api_is_init = 0;
+
 /* Initialization of providers. The latest registration wins.
 * This implies an initialization order from least desirable
 * to most desirable.
@@ -161,7 +160,9 @@ void picoquic_tls_api_init_providers(int unload)
         picoquic_ptls_openssl_load(unload);
     }
 #else
-    DBG_PRINTF("%s","Picoquic was compiled without OpenSSL");
+    if (unload == 0 && !tls_api_is_init) {
+        DBG_PRINTF("%s", "Picoquic was compiled without OpenSSL");
+    }
 #endif
     // picoquic_bcrypt_load(unload);
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
@@ -169,11 +170,11 @@ void picoquic_tls_api_init_providers(int unload)
         picoquic_ptls_fusion_load(unload);
     }
 #else
-    DBG_PRINTF("%s","Picoquic was compiled without Fusion");
+    if (unload == 0 && !tls_api_is_init) {
+        DBG_PRINTF("%s","Picoquic was compiled without Fusion");
+    }
 #endif
 }
-
-static int tls_api_is_init = 0;
 
 static void picoquic_tls_api_zero()
 {
@@ -199,8 +200,8 @@ void picoquic_tls_api_init()
 {
     if (!tls_api_is_init) {
         picoquic_tls_api_zero();
-        tls_api_is_init = 1;
         picoquic_tls_api_init_providers(0);
+        tls_api_is_init = 1;
     }
 }
 
@@ -2323,33 +2324,18 @@ uint64_t picoquic_aead_confidentiality_limit(void* aead_ctx)
     return ((ptls_aead_context_t*)aead_ctx)->algo->confidentiality_limit;
 }
 
-#if 0
-void picoquic_ptls_openssl_aead_clean_up(void * aead_ctx);
-#endif
-
 /* AEAD encrypt/decrypt routines */
 size_t picoquic_aead_decrypt_generic(uint8_t* output, const uint8_t* input, size_t input_length,
     uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_ctx)
 {
     size_t decrypted = 0;
-#if 0
-    nb_decrypts += 1;
-#endif
 
     if (aead_ctx == NULL) {
         decrypted = SIZE_MAX;
     } else {
-#if 0
-        picoquic_ptls_openssl_aead_clean_up(aead_ctx);
-#endif
         decrypted = ptls_aead_decrypt((ptls_aead_context_t*)aead_ctx,
             (void*)output, (const void*)input, input_length, seq_num,
             (void*)auth_data, auth_data_length);
-#if 0
-        if (decrypted > input_length) {
-            DBG_PRINTF("%s", "bug");
-        }
-#endif
     }
 
     return decrypted;
