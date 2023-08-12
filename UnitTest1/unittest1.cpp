@@ -1117,15 +1117,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-#if 0
-        /* temporary disabled, as the test does not use the same memory allocator as the code. */
+
         TEST_METHOD(test_set_certificate_and_key)
         {
             int ret = set_certificate_and_key_test();
 
             Assert::AreEqual(ret, 0);
         }
-#endif
     
         TEST_METHOD(test_bad_client_certificate)
         {
@@ -2042,6 +2040,12 @@ namespace UnitTest1
 
         TEST_METHOD(migration_mtu_drop) {
             int ret = migration_mtu_drop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(minicrypto) {
+            int ret = minicrypto_test();
 
             Assert::AreEqual(ret, 0);
         }

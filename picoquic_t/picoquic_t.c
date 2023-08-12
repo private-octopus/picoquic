@@ -28,7 +28,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-void picoquic_clear_openssl();
+void picoquic_tls_api_unload();
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
@@ -362,6 +362,7 @@ static const picoquic_test_def_t test_table[] = {
     { "wifi_reno_long", wifi_reno_long_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
+    { "minicrypto", minicrypto_test },
     { "monopath_basic", monopath_basic_test },
     { "monopath_hole", monopath_hole_test },
     { "monopath_rotation", monopath_rotation_test },
@@ -828,7 +829,7 @@ int main(int argc, char** argv)
         }
 
         free(test_status);
-        picoquic_clear_openssl();
+        picoquic_tls_api_unload();
     }
     return (ret);
 }
