@@ -128,6 +128,7 @@ set(PICOQUIC_LOGLIB_HEADERS loglib/autoqlog.h)
 
 set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
+    picoquictest/app_limited.c
     picoquictest/bytestream_test.c
     picoquictest/cert_verify_test.c
     picoquictest/cleartext_aead_test.c

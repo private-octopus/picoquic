@@ -1868,6 +1868,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(app_limited_bbr) {
+            int ret = app_limited_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(app_limited_cubic) {
+            int ret = app_limited_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(app_limited_reno) {
+            int ret = app_limited_reno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(app_limited_rpr) {
+            int ret = app_limited_rpr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cwin_max) {
             int ret = cwin_max_test();
 

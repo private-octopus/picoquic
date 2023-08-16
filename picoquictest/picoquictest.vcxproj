@@ -148,6 +148,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ack_of_ack_test.c" />
+    <ClCompile Include="app_limited.c" />
     <ClCompile Include="bytestream_test.c" />
     <ClCompile Include="cert_verify_test.c" />
     <ClCompile Include="cleartext_aead_test.c" />
