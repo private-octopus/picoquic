@@ -177,7 +177,7 @@ int app_limited_receive_stream_data(app_limited_cnx_ctx_t* cnx_ctx,
 void app_limited_prepare_to_send_on_stream(app_limited_cnx_ctx_t* cnx_ctx,
     app_limited_stream_ctx_t* stream_ctx, uint8_t* context, size_t length, uint64_t simulated_time)
 {
-    size_t available = stream_ctx->data_size - stream_ctx->octets_sent;
+    uint64_t available = stream_ctx->data_size - stream_ctx->octets_sent;
     int is_fin = 0;
     int is_still_active = 1;
     uint8_t* buffer = NULL;
@@ -192,7 +192,7 @@ void app_limited_prepare_to_send_on_stream(app_limited_cnx_ctx_t* cnx_ctx,
             available = length;
         }
 
-        cnx_ctx->al_ctx->stream0_bytes_sent_this_packet += available;
+        cnx_ctx->al_ctx->stream0_bytes_sent_this_packet += (size_t)available;
         if (cnx_ctx->al_ctx->stream0_bytes_sent_this_packet >= cnx_ctx->al_ctx->config->stream_0_packet_size){
             /* the whole packet was scheduled */
             cnx_ctx->al_ctx->stream0_bytes_sent_this_packet = 0;
@@ -210,11 +210,11 @@ void app_limited_prepare_to_send_on_stream(app_limited_cnx_ctx_t* cnx_ctx,
         is_fin = 1;
     }
 
-    buffer = (uint8_t*)picoquic_provide_stream_data_buffer(context, available, is_fin, is_still_active);
+    buffer = (uint8_t*)picoquic_provide_stream_data_buffer(context, (size_t)available, is_fin, is_still_active);
     if (buffer != NULL) {
         stream_ctx->is_fin_sent = is_fin;
         /* fill the bytes */
-        for (size_t i = 0; i < available; i++) {
+        for (size_t i = 0; i < (size_t)available; i++) {
             uint8_t b = (uint8_t)(stream_ctx->octets_sent & 0xff);
             buffer[i] = b;
             stream_ctx->octets_sent++;
@@ -343,7 +343,7 @@ void app_limited_initialize_context(app_limited_ctx_t* al_ctx, app_limited_test_
 {
     memset(al_ctx, 0, sizeof(app_limited_ctx_t));
     for (int i = 0; i < 3; i++) {
-        size_t data_size = (i != 0) ? config->data_stream_size : ((config->time_to_stream[2] + 1000000) * config->stream_0_packet_size) / config->stream_0_packet_interval;
+        uint64_t data_size = (i != 0) ? config->data_stream_size : ((config->time_to_stream[2] + 1000000) * config->stream_0_packet_size) / config->stream_0_packet_interval;
         al_ctx->client_cnx_ctx.stream_ctx[i].stream_id = UINT64_MAX;
         al_ctx->client_cnx_ctx.stream_ctx[i].data_size = data_size;
         al_ctx->client_cnx_ctx.stream_ctx[i].rank = i;
