@@ -447,7 +447,7 @@ static int app_limited_test_one(app_limited_test_config_t * config)
     if (ret == 0) {
         ret = tls_api_init_ctx_ex2(&test_ctx,
             PICOQUIC_INTERNAL_TEST_VERSION_1,
-            PICOQUIC_TEST_SNI, APP_LIMITED_TEST_ALPN, &al_ctx.simulated_time, NULL, NULL, 0, 1, 0, &initial_cid, 8, 0, 0);
+            PICOQUIC_TEST_SNI, APP_LIMITED_TEST_ALPN, &al_ctx.simulated_time, NULL, NULL, 0, 1, 0, &initial_cid, 8, 0, 0, 0);
 
         if (ret == 0) {
             al_ctx.client_cnx_ctx.cnx = test_ctx->cnx_client;
