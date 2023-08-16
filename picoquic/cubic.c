@@ -154,7 +154,6 @@ static void picoquic_cubic_enter_recovery(picoquic_cnx_t * cnx,
         path_x->cwin = PICOQUIC_CWIN_MINIMUM;
     }
     else {
-
         if (notification == picoquic_congestion_notification_timeout) {
             path_x->cwin = PICOQUIC_CWIN_MINIMUM;
             cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;

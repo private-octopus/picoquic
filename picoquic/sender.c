@@ -1126,6 +1126,11 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
     /* Remove from per path list */
     picoquic_dequeue_packet_from_path(p);
 
+    /* Replace head of preemptive repeat list if it was this packet. */
+    if (pkt_ctx->preemptive_repeat_ptr == p) {
+        pkt_ctx->preemptive_repeat_ptr = p->packet_next;
+    }
+
     if (should_free || p->is_ack_trap) {
         if (add_to_data_repeat_queue) {
             picoquic_queue_data_repeat_packet(cnx, p);
@@ -1473,7 +1478,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
              * case of spurious retransmissions */
             if (ret == 0 && frame_is_pure_ack == 0) {
                 ret = picoquic_check_frame_needs_repeat(cnx, &old_p->bytes[byte_index],
-                    frame_length, old_p->ptype, &frame_is_pure_ack, do_not_detect_spurious, 0);
+                    frame_length, old_p->ptype, &frame_is_pure_ack, do_not_detect_spurious, NULL);
             }
 
             /* Keep track of datagram frames that are possibly lost */
@@ -1966,7 +1971,17 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
     return backlog_empty;
 }
 
-/* Management of preemptive repeats
+/* Management of preemptive repeats.
+ * This function only perform preemptive repeat for packets that contain
+ * at least on frame that triggers premptive repeat, such as a stream
+ * belonging to a stream for which FIN was sent. If a packet is
+ * selected for preemptive repeat, then the function attempts to repeat
+ * all frames that are not "pure ack". If all such frames are repeated,
+ * the old packet can be marked as "was_preemptively_repeated", so that
+ * it will not be repeated if loss is detected. But if not all frames
+ * could be repeated, e.g., because of packet size, then the old packet
+ * must not be marked as preemptively repeated, because otherwise these
+ * non-repeated frames would be lost forever.
  */
 static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
     picoquic_cnx_t* cnx,
@@ -1983,6 +1998,8 @@ static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
     size_t write_index = 0;
     int is_repeated = 1;
     int do_not_detect_spurious = 0;
+    int is_preemptive_needed = 0;
+    size_t initial_length = *length;
     *has_data = 0;
 
     if (!old_p->is_mtu_probe &&
@@ -1999,7 +2016,7 @@ static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
              * case of spurious retransmissions */
             if (ret == 0 && frame_is_pure_ack == 0) {
                 ret = picoquic_check_frame_needs_repeat(cnx, &old_p->bytes[byte_index],
-                    frame_length, old_p->ptype, &frame_is_pure_ack, &do_not_detect_spurious, 1);
+                    frame_length, old_p->ptype, &frame_is_pure_ack, &do_not_detect_spurious, &is_preemptive_needed);
             }
 
             /* Prepare retransmission if needed */
@@ -2029,8 +2046,15 @@ static int picoquic_preemptive_retransmit_packet(picoquic_packet_t* old_p,
         }
     }
 
-    if (*has_data && is_repeated) {
-        old_p->was_preemptively_repeated = 1;
+    if (*has_data) {
+        if (!is_preemptive_needed) {
+            /* If the packet does not contain any frame requiring preemptive repeat, do not repeat it. */
+            *length = initial_length;
+            *has_data = 0;
+            is_repeated = 0;
+        } else if (is_repeated) {
+            old_p->was_preemptively_repeated = 1;
+        }
     }
 
     return ret;
