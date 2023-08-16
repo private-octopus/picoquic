@@ -345,10 +345,10 @@ void app_limited_initialize_context(app_limited_ctx_t* al_ctx, app_limited_test_
     for (int i = 0; i < 3; i++) {
         uint64_t data_size = (i != 0) ? config->data_stream_size : ((config->time_to_stream[2] + 1000000) * config->stream_0_packet_size) / config->stream_0_packet_interval;
         al_ctx->client_cnx_ctx.stream_ctx[i].stream_id = UINT64_MAX;
-        al_ctx->client_cnx_ctx.stream_ctx[i].data_size = data_size;
+        al_ctx->client_cnx_ctx.stream_ctx[i].data_size = (size_t)data_size;
         al_ctx->client_cnx_ctx.stream_ctx[i].rank = i;
         al_ctx->server_cnx_ctx.stream_ctx[i].stream_id = UINT64_MAX;
-        al_ctx->server_cnx_ctx.stream_ctx[i].data_size = data_size;
+        al_ctx->server_cnx_ctx.stream_ctx[i].data_size = (size_t)data_size;
         al_ctx->server_cnx_ctx.stream_ctx[i].rank = i;
     }
     al_ctx->client_cnx_ctx.al_ctx = al_ctx;
