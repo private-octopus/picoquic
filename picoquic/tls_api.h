@@ -177,7 +177,10 @@ size_t picoquic_hash_get_length(char const* algorithm_name);
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context);
 void picoquic_hash_finalize(uint8_t* output, void* hash_context);
 
-uint8_t* picoquic_get_private_key_from_key_file(char const* file_name, int* key_length);
+#if 0
+uint8_t* picoquic_get_private_key_from_file(char const* file_name, int* key_length);
+#endif
+int picoquic_set_private_key_from_file(picoquic_quic_t* quic, char const* file_name);
 ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count);
 
 
@@ -203,7 +206,8 @@ void picoquic_aes128_ecb_free(void* v_aesecb);
 
 void picoquic_aes128_ecb_encrypt(void* v_aesecb, uint8_t* output, const uint8_t* input, size_t len);
 
-void picoquic_clear_openssl();
+void picoquic_tls_api_unload();
+void picoquic_tls_api_reset(uint64_t init_flags);
 
 #ifdef __cplusplus
 }

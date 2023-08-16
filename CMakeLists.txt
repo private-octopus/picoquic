@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.10.4
+        VERSION 1.1.11.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -86,6 +86,9 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/performance_log.c
     picoquic/picohash.c
     picoquic/picoquic_lb.c
+    picoquic/picoquic_ptls_fusion.c
+    picoquic/picoquic_ptls_minicrypto.c
+    picoquic/picoquic_ptls_openssl.c
     picoquic/picosocks.c
     picoquic/picosplay.c
     picoquic/port_blocking.c
@@ -146,6 +149,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/intformattest.c
     picoquictest/l4s_test.c
     picoquictest/mediatest.c
+    picoquictest/minicrypto_test.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
     picoquictest/parseheadertest.c
@@ -215,14 +219,20 @@ else()
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_FUSION)
 endif()
 
-find_package(OpenSSL REQUIRED)
-message(STATUS "root: ${OPENSSL_ROOT_DIR}")
-message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
-message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
-message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
-message(STATUS "CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
-message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+OPTION(WITH_OPENSSL "build with OpenSSL" ON)
 
+if(WITH_OPENSSL)
+    find_package(OpenSSL REQUIRED)
+    message(STATUS "root: ${OPENSSL_ROOT_DIR}")
+    message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
+    message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
+    message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
+    message(STATUS "CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
+    message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+else()
+    message(STATUS "Building without picotls-openssl")
+    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
+endif()
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
 macro(set_picoquic_compile_settings)

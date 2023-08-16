@@ -369,6 +369,7 @@ int wifi_reno_hard_test();
 int wifi_reno_long_test();
 int migration_controlled_test();
 int migration_mtu_drop_test();
+int minicrypto_test();
 int monopath_basic_test();
 int monopath_hole_test();
 int monopath_rotation_test();
