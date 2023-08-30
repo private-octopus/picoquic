@@ -153,6 +153,19 @@ int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE 
             break;
         }
         else {
+
+            unsigned int tos = 0x88;
+            if(setsockopt(s_socket[i], IPPROTO_IP, IP_TOS, &tos, sizeof(tos)) < 0){
+                DBG_PRINTF("setsockopt IPv4 IP_TOS (0x%x) fails, errno: %d\n", tos, errno);
+            }
+
+            struct timeval sock_timeout;
+            sock_timeout.tv_sec = 0;
+            sock_timeout.tv_usec = 1000;
+
+            setsockopt(s_socket[i], SOL_SOCKET, SO_RCVTIMEO, &sock_timeout, sizeof(sock_timeout));
+            setsockopt(s_socket[i], SOL_SOCKET, SO_SNDTIMEO, &sock_timeout, sizeof(sock_timeout));
+
             if (local_address.ss_family == AF_INET6) {
                 sock_ports[i] = ntohs(((struct sockaddr_in6*)&local_address)->sin6_port);
             }
