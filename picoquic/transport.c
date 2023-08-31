@@ -525,7 +525,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (cnx->local_parameters.do_grease_quic_bit && bytes != NULL) {
         bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_grease_quic_bit);
     }
-#if 1
+
     if (cnx->local_parameters.enable_multipath && bytes != NULL) {
         if (cnx->path[0]->p_local_cnxid->cnx_id.id_len >= 0) {
             bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_enable_multipath);
@@ -536,19 +536,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             cnx->local_parameters.enable_multipath = 0;
         }
     }
-#else
-    if (cnx->local_parameters.enable_multipath > 0 && bytes != NULL){
-        if (cnx->path[0]->p_local_cnxid->cnx_id.id_len >= 0) {
-            bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_multipath,
-                (uint64_t)cnx->local_parameters.enable_multipath);
-        }
-        else {
-            DBG_PRINTF("Do not propose multipath option, cid_len = %u",
-                cnx->path[0]->p_local_cnxid->cnx_id.id_len);
-            cnx->local_parameters.enable_multipath = 0;
-        }
-    }
-#endif
 
     if (cnx->local_parameters.enable_simple_multipath > 0 && bytes != NULL) {
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_simple_multipath,
@@ -865,7 +852,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         cnx->remote_parameters.do_grease_quic_bit = 1;
                     }
                     break;
-#if 1
                 case picoquic_tp_enable_multipath: 
                     if (extension_length != 0) {
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Enable Multipath TP");
@@ -877,24 +863,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         cnx->remote_parameters.enable_multipath = 1;
                     }
                     break;
-#else
-                case picoquic_tp_enable_multipath: {
-                    uint64_t enable_multipath =
-                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    if (ret == 0) {
-                        if (enable_multipath > 1) {
-                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Multipath TP, wrong value");
-                        }
-                        else if (enable_multipath && !cnx->client_mode && cnx->path[0]->p_remote_cnxid->cnx_id.id_len == 0) {
-                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Multipath TP, cid length = 0");
-                        }
-                        else {
-                            cnx->remote_parameters.enable_multipath = (int)enable_multipath;
-                        }
-                    }
-                    break;
-                }
-#endif
                 case picoquic_tp_enable_simple_multipath: {
                     uint64_t enable_simple_multipath =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);

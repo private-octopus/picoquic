@@ -529,6 +529,7 @@ void picoquic_free_tokens(picoquic_stored_token_t** pp_first_token);
 typedef struct st_picoquic_issued_ticket_t {
     struct st_picoquic_issued_ticket_t* next_ticket;
     struct st_picoquic_issued_ticket_t* previous_ticket;
+    picohash_item hash_item;
     uint64_t ticket_id;
     uint64_t creation_time;
     uint64_t rtt;
@@ -934,7 +935,8 @@ typedef struct st_picoquic_ack_context_t {
 */
 typedef struct st_picoquic_local_cnxid_t {
     struct st_picoquic_local_cnxid_t* next;
-    struct st_picoquic_cnx_id_key_t* first_cnx_id;
+    picoquic_cnx_t* registered_cnx;
+    picohash_item hash_item;
     uint64_t sequence;
     uint64_t create_time;
     picoquic_connection_id_t cnx_id;
@@ -979,8 +981,9 @@ typedef struct st_picoquic_remote_cnxid_t {
 typedef struct st_picoquic_path_t {
     picoquic_local_cnxid_t* p_local_cnxid; 
     picoquic_remote_cnxid_t* p_remote_cnxid;
-
-    struct st_picoquic_net_id_key_t* first_net_id;
+    struct sockaddr_storage registered_peer_addr;
+    picohash_item net_id_hash_item;
+    struct st_picoquic_cnx_t* cnx;
     uint64_t unique_path_id;
 
     void* app_path_ctx;
@@ -1019,7 +1022,6 @@ typedef struct st_picoquic_path_t {
     unsigned int response_required : 1;
     unsigned int path_is_demoted : 1;
     unsigned int current_spin : 1;
-    unsigned int path_is_registered : 1;
     unsigned int last_bw_estimate_path_limited : 1;
     unsigned int path_cid_rotated : 1;
     unsigned int path_is_preferred_path : 1;
@@ -1292,8 +1294,12 @@ typedef struct st_picoquic_cnx_t {
     picoquic_state_enum cnx_state;
     picoquic_connection_id_t initial_cnxid;
     picoquic_connection_id_t original_cnxid;
-    struct st_picoquic_net_icid_key_t* net_icid_key;
-    struct st_picoquic_net_secret_key_t* reset_secret_key;
+    struct sockaddr_storage registered_icid_addr;
+    picohash_item registered_icid_item;
+    struct sockaddr_storage registered_secret_addr;
+    uint8_t registered_reset_secret[PICOQUIC_RESET_SECRET_SIZE];
+    picohash_item registered_reset_secret_item;
+
     uint64_t start_time;
     int64_t phase_delay;
     uint64_t application_error;
@@ -1775,7 +1781,7 @@ void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_he
  * May have to split a retransmitted stream frame if it does not fit in the new packet size */
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, picoquic_packet_type_enum p_type,
-    int* no_need_to_repeat, int* do_not_detect_spurious, int is_preemptive);
+    int* no_need_to_repeat, int* do_not_detect_spurious, int *is_preemptive_needed);
 uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);

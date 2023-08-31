@@ -137,8 +137,6 @@ void tester_finalize_packet(picoquic_cnx_t* cnx,
     size_t* send_length,
     uint8_t* send_buffer, size_t send_buffer_max)
 {
-    size_t header_length = packet->offset;
-    size_t checksum_overhead = 16;
     picoquic_path_t* path_x = cnx->path[0];
     packet->length = length;
 
@@ -210,7 +208,6 @@ int initial_ping_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    picoquic_packet_t* ping_packet = NULL;
     uint8_t ping_frame[1] = { 1 };
     picoquic_connection_id_t initial_cid = { {0x4e, 0x54, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11}, 8 };
     int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
@@ -272,7 +269,6 @@ int initial_ping_ack_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    picoquic_packet_t* ping_packet = NULL;
     uint8_t ping_frame[1] = { 1 };
     picoquic_connection_id_t initial_cid = { {0x4e, 0x54, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12}, 8 };
     int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);

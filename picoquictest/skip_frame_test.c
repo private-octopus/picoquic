@@ -2327,7 +2327,6 @@ int dataqueue_packet_test()
     picoquic_quic_t* qtest = NULL;
     picoquic_cnx_t* cnx = NULL;
     int ret = 0;
-    uint8_t* next_bytes = NULL;
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
 

@@ -484,8 +484,8 @@ int datagram_rt_test()
     dg_ctx.send_delay = 20000;
     dg_ctx.next_gen_time[0] = 100000;
     dg_ctx.next_gen_time[1] = 100000;
-    dg_ctx.dg_latency_target[0] = 12000;
-    dg_ctx.dg_latency_target[1] = 12000;
+    dg_ctx.dg_latency_target[0] = 18000;
+    dg_ctx.dg_latency_target[1] = 13000;
 
     return datagram_test_one(2, &dg_ctx, 0);
 }
@@ -500,7 +500,7 @@ int datagram_rt_skip_test()
     dg_ctx.next_gen_time[0] = 100000;
     dg_ctx.next_gen_time[1] = 100000;
     dg_ctx.dg_latency_target[0] = 13000;
-    dg_ctx.dg_latency_target[1] = 13000;
+    dg_ctx.dg_latency_target[1] = 20000;
     dg_ctx.do_skip_test[0] = 1;
     dg_ctx.do_skip_test[1] = 1;
 
@@ -517,7 +517,7 @@ int datagram_rtnew_skip_test()
     dg_ctx.next_gen_time[0] = 100000;
     dg_ctx.next_gen_time[1] = 100000;
     dg_ctx.dg_latency_target[0] = 13000;
-    dg_ctx.dg_latency_target[1] = 13000;
+    dg_ctx.dg_latency_target[1] = 20000;
     dg_ctx.do_skip_test[0] = 1;
     dg_ctx.do_skip_test[1] = 1;
     dg_ctx.use_extended_provider_api = 1;

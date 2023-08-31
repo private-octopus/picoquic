@@ -33,6 +33,7 @@
 #include "picoquic_logger.h"
 #include "picoquic_unified_log.h"
 #include "picoquic_config.h"
+#include "tls_api.h"
 
 typedef struct st_option_param_t {
     char const * param;
@@ -850,7 +851,17 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         }
 
         if (config->cipher_suite_id != 0) {
-            if (picoquic_set_cipher_suite(quic, config->cipher_suite_id) != 0) {
+            int iana_cipher_suite_code = config->cipher_suite_id;
+            if (config->cipher_suite_id == 20) {
+                iana_cipher_suite_code = PICOQUIC_CHACHA20_POLY1305_SHA256;
+            }
+            else if (config->cipher_suite_id == 128) {
+                iana_cipher_suite_code = PICOQUIC_AES_128_GCM_SHA256;
+            }
+            else if (config->cipher_suite_id == 256) {
+                iana_cipher_suite_code = PICOQUIC_AES_256_GCM_SHA384;
+            }
+            if (picoquic_set_cipher_suite(quic, iana_cipher_suite_code) != 0) {
                 fprintf(stderr, "Could not set cipher suite #%d.\n", config->cipher_suite_id);
             }
         }

@@ -148,6 +148,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ack_of_ack_test.c" />
+    <ClCompile Include="app_limited.c" />
     <ClCompile Include="bytestream_test.c" />
     <ClCompile Include="cert_verify_test.c" />
     <ClCompile Include="cleartext_aead_test.c" />
@@ -155,6 +156,7 @@
     <ClCompile Include="cnx_creation_test.c" />
     <ClCompile Include="code_version_test.c" />
     <ClCompile Include="config_test.c" />
+    <ClCompile Include="cpu_limited.c" />
     <ClCompile Include="datagram_tests.c" />
     <ClCompile Include="delay_tolerant_test.c" />
     <ClCompile Include="edge_cases.c" />
@@ -165,6 +167,7 @@
     <ClCompile Include="intformattest.c" />
     <ClCompile Include="l4s_test.c" />
     <ClCompile Include="mediatest.c" />
+    <ClCompile Include="minicrypto_test.c" />
     <ClCompile Include="multipath_test.c" />
     <ClCompile Include="netperf_test.c" />
     <ClCompile Include="parseheadertest.c" />
