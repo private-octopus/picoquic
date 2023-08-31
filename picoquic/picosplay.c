@@ -32,7 +32,6 @@ static void rotate(picosplay_node_t *child);
 static picosplay_node_t* leftmost(picosplay_node_t *node);
 static picosplay_node_t* rightmost(picosplay_node_t *node);
 
-
 /* The meat: splay the node x. */
 static void zig(picosplay_node_t *x);
 static void zigzig(picosplay_node_t *x, picosplay_node_t *p);
@@ -130,9 +129,11 @@ picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value) {
             else
                 parent->right = new;
         }
+
         splay(tree, new);
         tree->size++;
     }
+
 
     return new;
 }
@@ -158,6 +159,7 @@ picosplay_node_t* picosplay_find(picosplay_tree_t *tree, void *value)
      * perform measurements with and without it and keep the best alternative. */
     if(curr != NULL)
         splay(tree, curr);
+
     return curr;
 }
 
@@ -195,6 +197,7 @@ void picosplay_delete(picosplay_tree_t *tree, void *value) {
 void picosplay_delete_hint(picosplay_tree_t *tree, picosplay_node_t *node) {
     if(node == NULL)
         return;
+
     splay(tree, node); /* Now node is tree's root. */
     if(node->left == NULL) {
         tree->root = node->right;
@@ -287,6 +290,7 @@ static void mark_gp(picosplay_node_t *child);
 
 /* Rotate to make the given child take its parent's place in the tree. */
 static void rotate(picosplay_node_t *child) {
+
     picosplay_node_t *parent = child->parent;
     assert(parent != NULL);
     if(parent->left == child) { /* A left child given. */

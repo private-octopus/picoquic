@@ -221,7 +221,9 @@ endif()
 
 OPTION(WITH_OPENSSL "build with OpenSSL" ON)
 
-if(WITH_OPENSSL)
+if (OPENSSL_FOUND)
+    message(STATUS "OpenSSL already found: ${OPENSSL_ROOT_DIR}")
+elseif (WITH_OPENSSL)
     find_package(OpenSSL REQUIRED)
     message(STATUS "root: ${OPENSSL_ROOT_DIR}")
     message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
@@ -233,6 +235,7 @@ else()
     message(STATUS "Building without picotls-openssl")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
+
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
 macro(set_picoquic_compile_settings)
@@ -387,6 +390,8 @@ add_custom_target(
 # Specify Install targets
 install(TARGETS picoquicdemo picolog_t picoquic-core picoquic-log picohttp-core
         RUNTIME DESTINATION bin
+        BUNDLE DESTINATION bin
+        FRAMEWORK DESTINATION lib
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib)
 

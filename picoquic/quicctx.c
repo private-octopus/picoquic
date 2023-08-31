@@ -32,7 +32,6 @@
 #include <sys/time.h>
 #endif
 
-
 /*
  * Supported versions. Specific versions may mandate different processing of different
  * formats.
