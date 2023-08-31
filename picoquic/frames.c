@@ -2783,7 +2783,7 @@ int picoquic_process_ack_of_ack_mp_frame(
 
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, picoquic_packet_type_enum p_type, 
-    int* no_need_to_repeat, int* do_not_detect_spurious, int is_preemptive)
+    int* no_need_to_repeat, int* do_not_detect_spurious, int *is_preemptive_needed)
 {
     int ret = 0;
     int fin;
@@ -2811,12 +2811,13 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                 if (stream->reset_sent) {
                     *no_need_to_repeat = 1;
                 }
-                else if (is_preemptive && !stream->fin_sent) {
-                    *no_need_to_repeat = 1;
-                }
                 else {
                     /* Check whether the ack was already received */
                     *no_need_to_repeat = picoquic_check_sack_list(&stream->sack_list, offset, offset + data_length - ((fin) ? 0 : 1));
+                }
+
+                if (is_preemptive_needed != NULL && stream->fin_sent) {
+                    *is_preemptive_needed |= 1;
                 }
             }
         }
@@ -2992,16 +2993,15 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     break;
                 case picoquic_frame_type_path_abandon:
                     /* TODO: check whether there is still a need to abandon the path */
-                    *no_need_to_repeat = is_preemptive;
+                    *no_need_to_repeat = 0;
                     break;
                 case picoquic_frame_type_path_status:
                     /* TODO: check whether there is not a status sent with a highest number
                      */
-                    *no_need_to_repeat = is_preemptive;
+                    *no_need_to_repeat = 0;
                     break;
                 default:
-                    /* If preemptive repeat, only repeat if the frame is explicitly required. */
-                    *no_need_to_repeat = is_preemptive;
+                    *no_need_to_repeat = 0;
                     break;
                 }
             }

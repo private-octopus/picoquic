@@ -353,7 +353,7 @@ uint8_t* h3zero_parse_incoming_remote_stream(
 					is_wt_context_id_required = 1;
 					break;
 				default:
-					bytes = NULL;
+					/* Per section 6.2 of RFC 9114, unknown stream types are just ignored */
 					break;
 				}
 			}

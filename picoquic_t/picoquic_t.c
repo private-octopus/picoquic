@@ -28,7 +28,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-void picoquic_clear_openssl();
+void picoquic_tls_api_unload();
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
@@ -49,6 +49,7 @@ static const picoquic_test_def_t test_table[] = {
     { "memcmp", util_memcmp_test },
     { "threading", util_threading_test },
     { "picohash", picohash_test },
+    { "picohash_embedded", picohash_embedded_test },
     { "bytestream", bytestream_test },
     { "splay", splay_test },
     { "cnxcreation", cnxcreation_test },
@@ -175,6 +176,7 @@ static const picoquic_test_def_t test_table[] = {
     { "zero_rtt", zero_rtt_test },
     { "zero_rtt_loss", zero_rtt_loss_test },
     { "stop_sending", stop_sending_test },
+    { "stop_sending_loss", stop_sending_loss_test },
     { "discard_stream", discard_stream_test },
     { "unidir", unidir_test },
     { "mtu_discovery", mtu_discovery_test },
@@ -316,6 +318,11 @@ static const picoquic_test_def_t test_table[] = {
     { "bad_cnxid", bad_cnxid_test },
     { "document_addresses", document_addresses_test },
     { "large_client_hello", large_client_hello_test },
+    { "limited_reno", limited_reno_test },
+    { "limited_cubic", limited_cubic_test },
+    { "limited_bbr", limited_bbr_test },
+    { "limited_batch", limited_batch_test },
+    { "limited_safe", limited_safe_test },
     { "send_stream_blocked", send_stream_blocked_test },
     { "stream_ack", stream_ack_test },
     { "queue_network_input", queue_network_input_test },
@@ -323,6 +330,10 @@ static const picoquic_test_def_t test_table[] = {
     { "quality_update", quality_update_test },
     { "direct_receive", direct_receive_test },
     { "app_limit_cc", app_limit_cc_test },
+    { "app_limited_bbr", app_limited_bbr_test },
+    { "app_limited_cubic", app_limited_cubic_test },
+    { "app_limited_reno", app_limited_reno_test },
+    { "app_limited_rpr", app_limited_rpr_test },
     { "cwin_max", cwin_max_test },
     { "initial_race", initial_race_test },
     { "chacha20", chacha20_test },
@@ -355,6 +366,7 @@ static const picoquic_test_def_t test_table[] = {
     { "wifi_reno_long", wifi_reno_long_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
+    { "minicrypto", minicrypto_test },
     { "monopath_basic", monopath_basic_test },
     { "monopath_hole", monopath_hole_test },
     { "monopath_rotation", monopath_rotation_test },
@@ -821,7 +833,7 @@ int main(int argc, char** argv)
         }
 
         free(test_status);
-        picoquic_clear_openssl();
+        picoquic_tls_api_unload();
     }
     return (ret);
 }

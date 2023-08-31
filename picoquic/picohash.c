@@ -26,9 +26,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-picohash_table* picohash_create(size_t nb_bin,
+picohash_table* picohash_create_ex(size_t nb_bin,
     uint64_t (*picohash_hash)(const void*),
-    int (*picohash_compare)(const void*, const void*))
+    int (*picohash_compare)(const void*, const void*),
+    picohash_item * (*picohash_key_to_item)(const void*))
 {
     picohash_table* t = (picohash_table*)malloc(sizeof(picohash_table));
     if (t != NULL) {
@@ -43,10 +44,18 @@ picohash_table* picohash_create(size_t nb_bin,
             t->count = 0;
             t->picohash_hash = picohash_hash;
             t->picohash_compare = picohash_compare;
+            t->picohash_key_to_item = picohash_key_to_item;
         }
     }
 
     return t;
+}
+
+picohash_table* picohash_create(size_t nb_bin,
+    uint64_t(*picohash_hash)(const void*),
+    int (*picohash_compare)(const void*, const void*))
+{
+    return picohash_create_ex(nb_bin, picohash_hash, picohash_compare, NULL);
 }
 
 picohash_item* picohash_retrieve(picohash_table* hash_table, const void* key)
@@ -71,7 +80,14 @@ int picohash_insert(picohash_table* hash_table, const void* key)
     uint64_t hash = hash_table->picohash_hash(key);
     uint32_t bin = (uint32_t)(hash % hash_table->nb_bin);
     int ret = 0;
-    picohash_item* item = (picohash_item*)malloc(sizeof(picohash_item));
+    picohash_item* item;
+    
+    if (hash_table->picohash_key_to_item == NULL) {
+        item = (picohash_item*)malloc(sizeof(picohash_item));
+    }
+    else {
+        item = hash_table->picohash_key_to_item(key);
+    }
 
     if (item == NULL) {
         ret = -1;
@@ -90,6 +106,7 @@ void picohash_delete_item(picohash_table* hash_table, picohash_item* item, int d
 {
     uint32_t bin = (uint32_t)(item->hash % hash_table->nb_bin);
     picohash_item* previous = hash_table->hash_bin[bin];
+    const void* shall_delete = NULL;
 
     if (previous == item) {
         hash_table->hash_bin[bin] = item->next_in_bin;
@@ -106,11 +123,15 @@ void picohash_delete_item(picohash_table* hash_table, picohash_item* item, int d
         }
     }
 
-    if (delete_key_too) {
-        free((void*)item->key);
+    shall_delete = item->key;
+
+    if (hash_table->picohash_key_to_item == NULL) {
+        free(item);
     }
 
-    free(item);
+    if (delete_key_too) {
+        free((void*)shall_delete);
+    }
 }
 
 void picohash_delete_key(picohash_table* hash_table, void* key, int delete_key_too)
@@ -131,12 +152,16 @@ void picohash_delete(picohash_table* hash_table, int delete_key_too)
         picohash_item* item = hash_table->hash_bin[i];
         while (item != NULL) {
             picohash_item* tmp = item;
+            const void* key_to_delete = tmp->key;
+
             item = item->next_in_bin;
 
-            if (delete_key_too) {
-                free((void*)tmp->key);
+            if (hash_table->picohash_key_to_item == NULL) {
+                free(tmp);
             }
-            free(tmp);
+            if (delete_key_too) {
+                free((void*)key_to_delete);
+            }
         }
     }
 

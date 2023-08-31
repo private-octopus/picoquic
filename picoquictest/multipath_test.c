@@ -657,12 +657,13 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     /* Create the context but delay initialization, so the multipath option can be set */
     ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid,
-        8, 0, send_buffer_size);
+        8, 0, send_buffer_size, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
-    else {
+
+    if (ret == 0) {
         int is_sat_test = (test_id == multipath_test_sat_plus);
         if (is_sat_test || test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_back1) {
             /* Reduce the throughput of path #0 to 1 mbps.
@@ -1369,11 +1370,11 @@ int multipath_trace_test_one(int is_simple_multipath)
         picoquic_set_default_tp(test_ctx->qclient, &server_parameters);
 
         /* Force ciphersuite to AES128, so Client Hello has a constant format */
-        if (picoquic_set_cipher_suite(test_ctx->qclient, 128) != 0) {
-            DBG_PRINTF("Could not set ciphersuite to %d", 128);
+        if (picoquic_set_cipher_suite(test_ctx->qclient, PICOQUIC_AES_128_GCM_SHA256) != 0) {
+            DBG_PRINTF("Could not set ciphersuite to 0x%04x", PICOQUIC_AES_128_GCM_SHA256);
         }
-        if (picoquic_set_key_exchange(test_ctx->qclient, 128) != 0) {
-            DBG_PRINTF("Could not set key exchange to %d", 128);
+        if (picoquic_set_key_exchange(test_ctx->qclient, PICOQUIC_GROUP_SECP256R1) != 0) {
+            DBG_PRINTF("Could not set key exchange to %d", PICOQUIC_GROUP_SECP256R1);
         }
         /* Delete the old connection */
         picoquic_delete_cnx(test_ctx->cnx_client);

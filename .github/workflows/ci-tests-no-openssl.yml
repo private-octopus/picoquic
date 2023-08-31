@@ -1,5 +1,5 @@
 ---
-name: "CITests"
+name: "CITestsNoOpenSSL"
 
 on:
   push:
@@ -11,8 +11,11 @@ on:
 
 jobs:
   citests:
-    name: CI-Tests
+    name: CI-Tests-No-OpenSSL
     runs-on: ubuntu-latest
+    env:
+        CC: clang
+        CXX: clang++
 
     steps:
       - name: Checkout repository
@@ -25,22 +28,20 @@ jobs:
 
       - name: Building picoquic
         run: |
+          sudo apt-get install clangd
           sudo apt-get install -y libssl-dev
-          cmake -S . -B build -DPICOQUIC_FETCH_PTLS:BOOL=ON
+          echo $CC
+          echo $CXX
+          # $CC --version
+          ./ci/build_picotls.sh
+          cmake -S . -B build "-DWITH_OPENSSL=OFF"
           cmake --build build
 
       - name: Perform Unit Tests
         run: |
             ulimit -c unlimited -S
             cd build
-            make test && QUICRESULT=$?
+            make picoquic_ct
+            ./picoquic_ct -S .. minicrypto && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
-            cat /home/runner/work/picoquic/picoquic/build/Testing/Temporary/LastTest.log
             exit 1
-            
-      - name: Run Valgrind
-        run: |
-            sudo apt-get update
-            sudo apt-get install -y valgrind
-            # Remove, until the picotls/openssl issue is resolved.
-            # valgrind -v --error-exitcode=1  --track-origins=yes build/picoquic_ct zero_rtt_many_losses

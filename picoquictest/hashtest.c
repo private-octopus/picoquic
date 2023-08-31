@@ -20,6 +20,7 @@
 */
 
 #include <stdlib.h>
+#include <string.h>
 #ifdef _WINDOWS
 #include <malloc.h>
 #endif
@@ -29,6 +30,7 @@
 
 struct hashtestkey {
     uint64_t x;
+    picohash_item item;
 };
 
 static uint64_t hashtest_hash(const void* v)
@@ -46,22 +48,37 @@ static int hashtest_compare(const void* v1, const void* v2)
     return (k1->x == k2->x) ? 0 : -1;
 }
 
+static picohash_item * hashtest_key_to_item(const void * key)
+{
+    struct hashtestkey* p = (struct hashtestkey*)key;
+
+    return &p->item;
+}
+
 static struct hashtestkey* hashtest_item(uint64_t x)
 {
     struct hashtestkey* p = (struct hashtestkey*)malloc(sizeof(struct hashtestkey));
 
     if (p != NULL) {
+        memset(p, 0, sizeof(struct hashtestkey));
         p->x = x;
     }
 
     return p;
 }
 
-int picohash_test()
+int picohash_test_one(int embedded_item)
 {
     /* Create a hash table */
     int ret = 0;
-    picohash_table* t = picohash_create(32, hashtest_hash, hashtest_compare);
+    picohash_table* t = NULL;
+    
+    if (!embedded_item) {
+        t = picohash_create(32, hashtest_hash, hashtest_compare);
+    }
+    else {
+        t = picohash_create_ex(32, hashtest_hash, hashtest_compare, hashtest_key_to_item);
+    }
 
     if (t == NULL) {
         DBG_PRINTF("%s", "picohash_create() failed\n");
@@ -172,4 +189,14 @@ int picohash_test()
     }
 
     return ret;
+}
+
+int picohash_test()
+{
+    return(picohash_test_one(0));
+}
+
+int picohash_embedded_test()
+{
+    return(picohash_test_one(1));
 }

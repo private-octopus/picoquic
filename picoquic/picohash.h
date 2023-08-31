@@ -46,11 +46,17 @@ typedef struct picohash_table {
     size_t count;
     uint64_t (*picohash_hash)(const void*);
     int (*picohash_compare)(const void*, const void*);
+    picohash_item* (*picohash_key_to_item)(const void*);
 } picohash_table;
 
 picohash_table* picohash_create(size_t nb_bin,
     uint64_t (*picohash_hash)(const void*),
     int (*picohash_compute)(const void*, const void*));
+
+picohash_table* picohash_create_ex(size_t nb_bin,
+    uint64_t(*picohash_hash)(const void*),
+    int (*picohash_compare)(const void*, const void*),
+    picohash_item* (*picohash_key_to_item)(const void*));
 
 picohash_item* picohash_retrieve(picohash_table* hash_table, const void* key);
 

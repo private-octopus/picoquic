@@ -34,12 +34,19 @@ namespace UnitTest1
             debug_printf_suspend();
         }
 
-	    TEST_METHOD(test_picohash)
+	    TEST_METHOD(picohash)
 	    {
             int ret = picohash_test();
 
             Assert::AreEqual(ret, 0);
 	    }
+
+        TEST_METHOD(picohash_embedded)
+        {
+            int ret = picohash_embedded_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 
         TEST_METHOD(bytestream)
         {
@@ -908,6 +915,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stop_sending_loss)
+        {
+            int ret = stop_sending_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(discard_stream)
         {
             int ret = discard_stream_test();
@@ -1103,15 +1117,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-#if 0
-        /* temporary disabled, as the test does not use the same memory allocator as the code. */
+
         TEST_METHOD(test_set_certificate_and_key)
         {
             int ret = set_certificate_and_key_test();
 
             Assert::AreEqual(ret, 0);
         }
-#endif
     
         TEST_METHOD(test_bad_client_certificate)
         {
@@ -1782,6 +1794,36 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(limited_reno) {
+            int ret = limited_reno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(limited_batch) {
+            int ret = limited_batch_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(limited_cubic) {
+            int ret = limited_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(limited_bbr) {
+            int ret = limited_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(limited_safe) {
+            int ret = limited_safe_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(send_stream_blocked) {
             int ret = send_stream_blocked_test();
 
@@ -1820,6 +1862,30 @@ namespace UnitTest1
 
         TEST_METHOD(app_limit_cc) {
             int ret = app_limit_cc_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(app_limited_bbr) {
+            int ret = app_limited_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(app_limited_cubic) {
+            int ret = app_limited_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(app_limited_reno) {
+            int ret = app_limited_reno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(app_limited_rpr) {
+            int ret = app_limited_rpr_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1998,6 +2064,12 @@ namespace UnitTest1
 
         TEST_METHOD(migration_mtu_drop) {
             int ret = migration_mtu_drop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(minicrypto) {
+            int ret = minicrypto_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2382,6 +2454,18 @@ namespace UnitTest1
 
         TEST_METHOD(h09_lone_fin) {
             int ret = h09_lone_fin_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3_grease_client) {
+            int ret = h3_grease_client_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3_grease_server) {
+            int ret = h3_grease_server_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.10.0
+        VERSION 1.1.11.1
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -86,6 +86,9 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/performance_log.c
     picoquic/picohash.c
     picoquic/picoquic_lb.c
+    picoquic/picoquic_ptls_fusion.c
+    picoquic/picoquic_ptls_minicrypto.c
+    picoquic/picoquic_ptls_openssl.c
     picoquic/picosocks.c
     picoquic/picosplay.c
     picoquic/port_blocking.c
@@ -127,6 +130,7 @@ set(PICOQUIC_LOGLIB_HEADERS loglib/autoqlog.h)
 
 set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
+    picoquictest/app_limited.c
     picoquictest/bytestream_test.c
     picoquictest/cert_verify_test.c
     picoquictest/cleartext_aead_test.c
@@ -135,6 +139,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cnx_creation_test.c
     picoquictest/cnxstress.c
     picoquictest/cplusplus.cpp
+    picoquictest/cpu_limited.c
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
     picoquictest/edge_cases.c
@@ -143,6 +148,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/intformattest.c
     picoquictest/l4s_test.c
     picoquictest/mediatest.c
+    picoquictest/minicrypto_test.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
     picoquictest/parseheadertest.c
@@ -212,18 +218,22 @@ else()
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_FUSION)
 endif()
 
+OPTION(WITH_OPENSSL "build with OpenSSL" ON)
+
 if (OPENSSL_FOUND)
     message(STATUS "OpenSSL already found: ${OPENSSL_ROOT_DIR}")
-else()
+elseif (WITH_OPENSSL)
     find_package(OpenSSL REQUIRED)
     message(STATUS "root: ${OPENSSL_ROOT_DIR}")
     message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
     message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
     message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
+    message(STATUS "CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
+    message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+else()
+    message(STATUS "Building without picotls-openssl")
+    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
-
-message(STATUS "CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
-message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
@@ -304,26 +314,27 @@ target_include_directories(picohttp-core
         picoquic)
 set_picoquic_compile_settings(picohttp-core)
 
+add_executable(picoquicdemo
+    picoquicfirst/picoquicdemo.c
+    picoquicfirst/getopt.c)
+target_link_libraries(picoquicdemo
+    PRIVATE
+        ${PTLS_LIBRARIES}
+        ${OPENSSL_LIBRARIES}
+        picoquic-log
+        picoquic-core
+        picohttp-core)
+target_include_directories(picoquicdemo PRIVATE picohttp)
+set_picoquic_compile_settings(picoquicdemo)
+
 add_executable(picolog_t picolog/picolog.c)
 target_link_libraries(picolog_t PRIVATE picoquic-log picoquic-core)
 target_include_directories(picolog_t PRIVATE loglib)
 set_picoquic_compile_settings(picolog_t)
 
-if(BUILD_TESTING AND picoquic_BUILD_TESTS)
-    add_executable(picoquicdemo
-            picoquicfirst/picoquicdemo.c
-            picoquicfirst/getopt.c)
-    target_link_libraries(picoquicdemo
-            PRIVATE
-            ${PTLS_LIBRARIES}
-            ${OPENSSL_LIBRARIES}
-            picoquic-log
-            picoquic-core
-            picohttp-core)
-    target_include_directories(picoquicdemo PRIVATE picohttp)
-    set_picoquic_compile_settings(picoquicdemo)
+include(CTest)
 
-    include(CTest)
+if(BUILD_TESTING AND picoquic_BUILD_TESTS)
 
     add_library(picoquic-test STATIC ${PICOQUIC_TEST_LIBRARY_FILES})
     target_link_libraries(picoquic-test PUBLIC picoquic-core picoquic-log)
@@ -376,7 +387,7 @@ add_custom_target(
     ${CLANG_FORMAT_SOURCE_FILES})
 
 # Specify Install targets
-install(TARGETS picolog_t picoquic-core picoquic-log picohttp-core
+install(TARGETS picoquicdemo picolog_t picoquic-core picoquic-log picohttp-core
         RUNTIME DESTINATION bin
         BUNDLE DESTINATION bin
         FRAMEWORK DESTINATION lib
