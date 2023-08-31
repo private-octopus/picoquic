@@ -211,7 +211,9 @@ endif()
 
 OPTION(WITH_OPENSSL "build with OpenSSL" ON)
 
-if(WITH_OPENSSL)
+if (OPENSSL_FOUND)
+    message(STATUS "OpenSSL already found: ${OPENSSL_ROOT_DIR}")
+elseif (WITH_OPENSSL)
     find_package(OpenSSL REQUIRED)
     message(STATUS "root: ${OPENSSL_ROOT_DIR}")
     message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
