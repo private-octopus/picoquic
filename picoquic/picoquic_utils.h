@@ -256,6 +256,7 @@ typedef struct st_picoquictest_sim_packet_t {
 typedef struct st_picoquictest_sim_link_t {
     uint64_t next_send_time;
     uint64_t queue_time;
+    uint64_t resume_time;
     uint64_t queue_delay_max;
     uint64_t picosec_per_byte;
     uint64_t microsec_latency;
@@ -296,6 +297,17 @@ picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t
 
 void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
     uint64_t current_time);
+
+/* picoquic_test_simlink_suspend simulates and interuption of transmission until the
+* specified "end of interval" time. There are two modes:
+* 
+* - simulate_receive = 1: receive side. Simulate suspension of reception until the
+*   specified end of interval. All rpending packets are delivered at this point.
+* - simulate_receive = 0: sender side. Simulate suspension of transmission until the
+*   specified end of interval. Packets are queued as if transmitted in sequence
+*   after that interval.
+ */
+void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_end_of_interval, int simulate_receive);
 
 /* SNI, Stores and Certificates used for test
  */

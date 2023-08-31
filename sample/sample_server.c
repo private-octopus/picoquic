@@ -242,6 +242,11 @@ int sample_server_callback(picoquic_cnx_t* cnx,
             if (stream_ctx == NULL) {
                 /* Create and initialize stream context */
                 stream_ctx = sample_server_create_stream_context(server_ctx, stream_id);
+                if (picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx) != 0) {
+                    /* Internal error */
+                    (void) picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_INTERNAL_ERROR);
+                    return(-1);
+                }
             }
 
             if (stream_ctx == NULL) {

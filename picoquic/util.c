@@ -531,7 +531,7 @@ int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_
 {
     int ret = -1;
     if (addr_family == AF_INET) {
-        ret = picoquic_store_text_addr(stored_addr, "128.0.0.1", port);
+        ret = picoquic_store_text_addr(stored_addr, "127.0.0.1", port);
     }
     else if (addr_family == AF_INET6) {
         ret = picoquic_store_text_addr(stored_addr, "::1", port);
@@ -1162,7 +1162,7 @@ uint64_t picoquic_test_uniform_random(uint64_t* random_context, uint64_t rnd_max
     uint64_t rnd = 0;
 
     if (rnd_max > 0) {
-        uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
+        uint64_t rnd_min = UINT64_MAX % rnd_max;
 
         do {
             rnd = picoquic_test_random(random_context);

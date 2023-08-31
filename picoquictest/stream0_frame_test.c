@@ -671,11 +671,12 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
         if (R_or_F == 0) {
             stream->fin_requested = 1;
             stream->fin_sent = 1;
-            ret = picoquic_sack_list_reset(&stream->sack_list, 0, stream->sent_offset, 0);
+            ret = picoquic_sack_list_reset(&stream->sack_list, 0, stream->sent_offset + 1, 0);
         }
         else {
             stream->reset_requested = 1;
             stream->reset_sent = 1;
+            stream->reset_acked = 1;
         }
     }
     if (ret == 0) {

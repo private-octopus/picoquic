@@ -68,6 +68,9 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "picoquic_utils.h"
 #include "autoqlog.h"
 #include "h3zero.h"
+#include "h3zero_common.h"
+#include "pico_webtransport.h"
+#include "wt_baton.h"
 #include "democlient.h"
 #include "demoserver.h"
 #include "siduck.h"
@@ -150,6 +153,133 @@ static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb
     return ret;
 }
 
+/* Define a "post" context used to test the "post" function "end to end".
+ */
+typedef struct st_demoserver_post_test_t {
+    size_t nb_received;
+    size_t nb_sent;
+    size_t response_length;
+    char posted[256];
+} demoserver_post_test_t;
+
+int demoserver_post_callback(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length,
+    picohttp_call_back_event_t event, picohttp_server_stream_ctx_t* stream_ctx,
+    void * callback_ctx)
+{
+    int ret = 0;
+    demoserver_post_test_t* ctx = (demoserver_post_test_t*)stream_ctx->path_callback_ctx;
+
+    switch (event) {
+    case picohttp_callback_get: /* Received a get command */
+        break;
+    case picohttp_callback_post: /* Received a post command */
+        if (ctx == NULL) {
+            ctx = (demoserver_post_test_t*)malloc(sizeof(demoserver_post_test_t));
+            if (ctx == NULL) {
+                /* cannot handle the stream -- TODO: reset stream? */
+                return -1;
+            }
+            else {
+                memset(ctx, 0, sizeof(demoserver_post_test_t));
+                stream_ctx->path_callback_ctx = (void*)ctx;
+            }
+        }
+        else {
+            /* unexpected. Should not have a context here */
+            return -1;
+        }
+        break;
+    case picohttp_callback_post_data: /* Data received from peer on stream N */
+    case picohttp_callback_post_fin: /* All posted data have been received, prepare the response now. */
+        /* Add data to echo size */
+        if (ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            ctx->nb_received += length;
+            if (event == picohttp_callback_post_fin) {
+                if (ctx != NULL) {
+                    size_t nb_chars = 0;
+                    if (picoquic_sprintf(ctx->posted, sizeof(ctx->posted), &nb_chars, "Received %zu bytes.\n", ctx->nb_received) >= 0) {
+                        ctx->response_length = nb_chars;
+                        ret = (int)nb_chars;
+                        if (ctx->response_length <= length) {
+                            memcpy(bytes, ctx->posted, ctx->response_length);
+                        }
+                    }
+                    else {
+                        ret = -1;
+                    }
+                }
+                else {
+                    ret = -1;
+                }
+            }
+        }
+        break;
+    case picohttp_callback_provide_data:
+        if (ctx == NULL || ctx->nb_sent > ctx->response_length) {
+            ret = -1;
+        }
+        else
+        {
+            /* Provide data. */
+            uint8_t* buffer;
+            size_t available = ctx->response_length - ctx->nb_sent;
+            int is_fin = 1;
+
+            if (available > length) {
+                available = length;
+                is_fin = 0;
+            }
+
+            buffer = picoquic_provide_stream_data_buffer(bytes, available, is_fin, !is_fin);
+            if (buffer != NULL) {
+                memcpy(buffer, ctx->posted + ctx->nb_sent, available);
+                ctx->nb_sent += available;
+                ret = 0;
+            }
+            else {
+                ret = -1;
+            }
+        }
+        break;
+    case picohttp_callback_reset: /* stream is abandoned */
+        stream_ctx->path_callback = NULL;
+        stream_ctx->path_callback_ctx = NULL;
+
+        if (ctx != NULL) {
+            free(ctx);
+        }
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+
+    return ret;
+}
+
+picohttp_server_path_item_t path_item_list[2] =
+{
+    {
+        "/post",
+        5,
+        demoserver_post_callback,
+        NULL
+    },
+    {
+        "/baton",
+        6,
+        wt_baton_callback,
+        NULL
+    }
+};
+
+
+
+
 int quic_server(const char* server_name, picoquic_quic_config_t * config, int just_once)
 {
     /* Start: start the QUIC process with cert and key files */
@@ -161,6 +291,9 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
 
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
     picoquic_file_param.web_folder = config->www_dir;
+    picoquic_file_param.path_table = path_item_list;
+    picoquic_file_param.path_table_nb = 2;
+
     memset(&loop_cb_ctx, 0, sizeof(server_loop_cb_t));
     loop_cb_ctx.just_once = just_once;
 
@@ -916,18 +1049,25 @@ int quic_client(const char* ip_address_text, int server_port,
                 }
                 else {
                     double receive_rate_mbps = 8.0 * ((double)picoquic_get_data_received(cnx_client)) / duration_usec;
+                    double send_rate_mbps = 8.0* ((double)picoquic_get_data_sent(cnx_client)) / duration_usec;
                     fprintf(stdout, "Received %" PRIu64 " bytes in %f seconds, %f Mbps.\n",
                         picoquic_get_data_received(cnx_client),
                         duration_usec / 1000000.0, receive_rate_mbps);
                     picoquic_log_app_message(cnx_client, "Received %" PRIu64 " bytes in %f seconds, %f Mbps.",
                         picoquic_get_data_received(cnx_client),
                         duration_usec / 1000000.0, receive_rate_mbps);
+                    fprintf(stdout, "Sent %" PRIu64 " bytes in %f seconds, %f Mbps.\n",
+                        picoquic_get_data_sent(cnx_client),
+                        duration_usec / 1000000.0, send_rate_mbps);
+                    picoquic_log_app_message(cnx_client, "Sent %" PRIu64 " bytes in %f seconds, %f Mbps.",
+                        picoquic_get_data_sent(cnx_client),
+                        duration_usec / 1000000.0, send_rate_mbps);
                 }
                 /* Print those for debugging the effects of ack frequency and flow control */
                 printf("max_data_local: %" PRIu64 "\n", cnx_client->maxdata_local);
                 printf("max_stream_data_local: %" PRIu64 "\n", cnx_client->max_stream_data_local);
                 printf("max_data_remote: %" PRIu64 "\n", cnx_client->maxdata_remote);
-                printf("max_stream_data_remote: % " PRIu64 "\n", cnx_client->max_stream_data_remote);
+                printf("max_stream_data_remote: %" PRIu64 "\n", cnx_client->max_stream_data_remote);
                 printf("ack_delay_remote: %" PRIu64 " ... %" PRIu64 "\n",
                     cnx_client->min_ack_delay_remote, cnx_client->max_ack_delay_remote);
                 printf("max_ack_gap_remote: %" PRIu64 "\n", cnx_client->max_ack_gap_remote);
@@ -947,7 +1087,7 @@ int quic_client(const char* ip_address_text, int server_port,
         if (sni != NULL && loop_cb.saved_alpn != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time, sni, (uint16_t)strlen(sni), loop_cb.saved_alpn,
             (uint16_t)strlen(loop_cb.saved_alpn), 0, &ticket, &ticket_length, NULL, 0)) {
             fprintf(stdout, "Received ticket from %s (%s):\n", sni, loop_cb.saved_alpn);
-            picoquic_log_picotls_ticket(stdout, picoquic_null_connection_id, ticket, ticket_length);
+            picoquic_textlog_picotls_ticket(stdout, picoquic_null_connection_id, ticket, ticket_length);
         }
 
         if (picoquic_save_session_tickets(qclient, config->ticket_file_name) != 0) {
@@ -996,7 +1136,9 @@ void usage()
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     picoquic_config_usage();
     fprintf(stderr, "Picoquic demo options:\n");
-    fprintf(stderr, "  -A ip/ifindex[,ip/ifindex]  IP and interface index for multipath alternative path, e.g. 10.0.0.2/3,10.0.0.3/4\n");
+    fprintf(stderr, "  -A \"ip/ifindex[,ip/ifindex]\"  IP and interface index for multipath alternative\n");
+    fprintf(stderr, "                        path, e.g. \"10.0.0.2/3,10.0.0.3/4\". This option only\n");
+    fprintf(stderr, "                        affects the behavior of the client.\n");
     fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
     fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
     fprintf(stderr, "                        -f 2  test CNXID renewal,\n");

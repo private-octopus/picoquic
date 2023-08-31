@@ -43,12 +43,57 @@ extern "C" {
 
  /* Callback function for sending and receiving datagrams.
   */
-typedef int (*picoquic_datagram_send_fn)(picoquic_cnx_t* cnx,
+typedef int (*picoquic_datagram_send_fn)(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint8_t* bytes, size_t length, void* datagram_ctx);
-typedef int (*picoquic_datagram_recv_fn)(picoquic_cnx_t* cnx,
+typedef int (*picoquic_datagram_recv_fn)(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint8_t* bytes, size_t length, void* datagram_ctx);
 typedef int (*picoquic_datagram_ack_fn)(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t d_event, uint8_t* bytes, size_t length, uint64_t sent_time, void* datagram_ctx);
+
+/* Example functions for datagrams. */
+typedef struct st_test_datagram_send_recv_ctx_t {
+    uint32_t dg_max_size;
+    uint32_t dg_small_size;
+    int dg_target[2];
+    int dg_sent[2];
+    int dg_recv[2];
+    int dg_acked[2];
+    int dg_nacked[2];
+    int dg_spurious[2];
+    int batch_size[2];
+    int batch_sent[2];
+    uint64_t dg_time_ready[2];
+    uint64_t dg_latency_max[2];
+    uint64_t dg_received_last[2];
+    uint64_t dg_number_delta_max[2];
+    uint64_t dg_latency_target[2];
+    uint64_t dg_number_delta_target[2];
+    uint64_t link_latency;
+    uint64_t send_delay;
+    uint64_t next_gen_time[2];
+    int is_ready[2];
+    int max_packets_received;
+    int nb_recv_path_0[2];
+    int nb_recv_path_other[2];
+    int nb_trials_max;
+
+    unsigned int use_extended_provider_api;
+    unsigned int do_skip_test[2];
+    unsigned int is_skipping[2];
+    unsigned int test_affinity;
+    unsigned int test_wifi;
+
+} test_datagram_send_recv_ctx_t;
+
+uint64_t test_datagram_next_time_ready(test_datagram_send_recv_ctx_t* dg_ctx);
+int test_datagram_check_ready(test_datagram_send_recv_ctx_t* dg_ctx, int client_mode, uint64_t current_time);
+int test_datagram_send(picoquic_cnx_t* cnx, uint64_t unique_path_id,
+    uint8_t* bytes, size_t length, void* datagram_ctx);
+int test_datagram_recv(picoquic_cnx_t* cnx, uint64_t unique_path_id,
+    uint8_t* bytes, size_t length, void* datagram_ctx);
+int test_datagram_ack(picoquic_cnx_t* cnx,
+    picoquic_call_back_event_t d_event, uint8_t* bytes, size_t length, uint64_t sent_time, void* datagram_ctx);
+
 /* Test context
  */
 
@@ -155,7 +200,10 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
 
     /* File used to test bandwidth notification */
     FILE* bw_update;
-
+    /* File used to test path notifications */
+    FILE* path_events;
+    /* File used to test default path quality updates */
+    FILE* default_path_update;
     /* Datagram test functions */
     void* datagram_ctx;
     picoquic_datagram_send_fn datagram_send_fn;
@@ -219,6 +267,9 @@ int tls_api_one_scenario_init(
 int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t* simulated_time);
 
+int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
+    char const* sni, char const* alpn, uint64_t* simulated_time);
+
 int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t* test_ctx,
     test_api_stream_desc_t* stream_desc, size_t size_of_scenarios);
 
@@ -258,6 +309,7 @@ void picoquic_set_test_address(struct sockaddr_in * addr, uint32_t addr_val, uin
 
 int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, void * pn_dec, uint8_t * sample);
 
+int picoquic_compare_lines(char const* b1, char const* b2);
 int picoquic_test_compare_text_files(char const* fname1, char const* fname2);
 int picoquic_test_compare_binary_files(char const* fname1, char const* fname2);
 
@@ -268,6 +320,8 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     picoquic_tp_t* client_params, picoquic_tp_t* server_params);
 
 void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned);
+
+uint64_t picoquic_sqrt_for_tests(uint64_t y);
 
 #ifdef __cplusplus
 }

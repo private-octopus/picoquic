@@ -81,6 +81,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_ROOT_TRUST_FILE, 't', "root_trust_file", 1, "file", "root trust file" },
     { picoquic_option_FORCE_ZERO_SHARE, 'z', "force_zero_share", 0, "", "Set TLS zero share behavior on client, to force HRR" },
     { picoquic_option_CNXID_LENGTH, 'I', "cnxid_length", 1, "length", "Length of CNX_ID used by the client, default=8" },
+    { picoquic_option_Idle_Timeout, 'd', "idle_timeout", 1, "ms", "Duration of idle timeout in milliseconds" },
     { picoquic_option_NO_DISK, 'D', "no_disk", 0, "", "no disk: do not save received files on disk" },
     { picoquic_option_LARGE_CLIENT_HELLO, 'Q', "large_client_hello", 0, "",
     "send a large client hello in order to test post quantum readiness" },
@@ -92,6 +93,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_Version_Upgrade, 'U', "version_upgrade", 1, "", "Version upgrade if server agrees, e.g. -U 6b3343cf" },
     { picoquic_option_No_GSO, '0', "no_gso", 0, "", "Do not use UDP GSO or equivalent" },
     { picoquic_option_BDP_frame, 'j', "bdp", 1, "number", "use bdp extension frame(1) or don\'t (0). Default=0" },
+    { picoquic_option_CWIN_MAX, 'W', "cwin_max", 1, "bytes", "Max value for CWIN. Default=UINT64_MAX"},
     { picoquic_option_HELP, 'h', "help", 0, "This help message" }
 };
 
@@ -451,6 +453,13 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
             ret = -1;
         }
         break;
+    case picoquic_option_Idle_Timeout:
+        config->idle_timeout = config_atoi(params, nb_params, 0, &ret);
+        if (config->idle_timeout < 0) {
+            fprintf(stderr, "Invalid idle timer: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = -1;
+        }
+        break;
     case picoquic_option_NO_DISK:
         config->no_disk = 1;
         break;
@@ -493,6 +502,17 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         else {
             config->bdp_frame_option = v;
+        }
+        break;
+    }
+    case picoquic_option_CWIN_MAX:{
+        int v = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || v < 0) {
+            fprintf(stderr, "Invalid cwin max option: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = (ret == 0) ? -1 : ret;
+        }
+        else {
+            config->cwin_max = (v==0)?UINT64_MAX:v;
         }
         break;
     }
@@ -772,12 +792,16 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         if (cc_algo == NULL) {
             cc_algo = picoquic_bbr_algorithm;
         }
+
         picoquic_set_default_congestion_algorithm(quic, cc_algo);
 
         picoquic_set_default_spinbit_policy(quic, config->spinbit_policy);
         picoquic_set_default_lossbit_policy(quic, config->lossbit_policy);
 
         picoquic_set_default_multipath_option(quic, config->multipath_option);
+        picoquic_set_default_idle_timeout(quic, (uint64_t)config->idle_timeout);
+
+        picoquic_set_cwin_max(quic, config->cwin_max);
 
         if (config->token_file_name) {
             if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {
@@ -859,6 +883,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     config->cnx_id_length = -1;
     config->nb_connections = 256;
     config->initial_random = 3;
+    config->cwin_max = UINT64_MAX;
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)

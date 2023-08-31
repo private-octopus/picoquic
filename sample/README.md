@@ -20,8 +20,8 @@ Example
 
 Generate the certificates:
 ```
-openssl req -x509 -newkey rsa:2048 -days 365 -keyout ca-key.pem -out ca-cert.pem
-openssl req -newkey rsa:2048 -keyout server-key.pem -out server-req.pem
+openssl req -nodes -x509 -newkey rsa:2048 -days 365 -keyout ca-key.pem -out ca-cert.pem
+openssl req -nodes -newkey rsa:2048 -keyout server-key.pem -out server-req.pem
 ```
 These commands will prompt a few questions, you don't need to put actual data
 for this simple test.

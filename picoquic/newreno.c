@@ -241,6 +241,7 @@ static void picoquic_newreno_notify(
         case picoquic_congestion_notification_spurious_repeat:
             picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, lost_packet_number, current_time);
             path_x->cwin = nr_state->nrss.cwin;
+            path_x->is_ssthresh_initialized = 1;
             break;
         case picoquic_congestion_notification_rtt_measurement:
             /* Using RTT increases as signal to get out of initial slow start */
@@ -280,7 +281,7 @@ static void picoquic_newreno_notify(
             if (nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
                 nr_state->nrss.ssthresh == UINT64_MAX) {
                 /* RTT measurements will happen after the bandwidth is estimated */
-                uint64_t max_win = path_x->max_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
                 uint64_t min_win = max_win /= 2;
                 if (nr_state->nrss.cwin < min_win) {
                     nr_state->nrss.cwin = min_win;
