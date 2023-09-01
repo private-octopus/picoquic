@@ -665,6 +665,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_stateless_packet_t* pending_stateless_packet;
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;
+    uint64_t wifi_shadow_rtt;
 
     struct st_picoquic_cnx_t* cnx_list;
     struct st_picoquic_cnx_t* cnx_last;

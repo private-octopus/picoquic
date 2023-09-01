@@ -1814,7 +1814,7 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
 
         /* Set the congestion algorithm for the new path */
         if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_init(path_x, current_time);
+            cnx->congestion_alg->alg_init(cnx, path_x, current_time);
         }
 
         /* Mark old path as demoted */
@@ -3583,7 +3583,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
         cnx->congestion_alg = cnx->quic->default_congestion_alg;
         if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_init(cnx->path[0], start_time);
+            cnx->congestion_alg->alg_init(cnx, cnx->path[0], start_time);
         }
     }
 
@@ -4510,10 +4510,15 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
     if (cnx->congestion_alg != NULL) {
         if (cnx->path != NULL) {
             for (int i = 0; i < cnx->nb_paths; i++) {
-                cnx->congestion_alg->alg_init(cnx->path[i], picoquic_get_quic_time(cnx->quic));
+                cnx->congestion_alg->alg_init(cnx, cnx->path[i], picoquic_get_quic_time(cnx->quic));
             }
         }
     }
+}
+
+void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt)
+{
+    quic->wifi_shadow_rtt = wifi_shadow_rtt;
 }
 
 void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrease_threshold, uint64_t increase_threshold)

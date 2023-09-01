@@ -56,6 +56,7 @@ typedef enum {
     wifi_test_reno_long,
     wifi_test_cubic_long,
     wifi_test_bbr_long,
+    wifi_test_bbr_shadow,
 } wifi_test_enum;
 
 typedef struct st_wifi_test_suspension_t {
@@ -70,6 +71,7 @@ typedef struct st_wifi_test_spec_t {
     picoquic_congestion_algorithm_t* ccalgo;
     uint64_t target_time;
     int simulate_receive_block;
+    uint64_t wifi_shadow_rtt;
 } wifi_test_spec_t;
 
 static test_api_stream_desc_t test_scenario_wifi[] = {
@@ -95,6 +97,10 @@ static int wifi_test_one(wifi_test_enum test_id, wifi_test_spec_t * spec)
     }
 
     if (ret == 0) {
+        if (spec->wifi_shadow_rtt > 0) {
+            picoquic_set_default_wifi_shadow_rtt(test_ctx->qserver, spec->wifi_shadow_rtt);
+            picoquic_set_default_wifi_shadow_rtt(test_ctx->qclient, spec->wifi_shadow_rtt);
+        }
 
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, spec->ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, spec->ccalgo);
@@ -176,15 +182,23 @@ static wifi_test_suspension_t suspension_basic[] = {
 
 static size_t nb_suspension_basic = sizeof(suspension_basic) / sizeof(wifi_test_suspension_t);
 
+void wifi_test_set_default_spec(wifi_test_spec_t* spec, picoquic_congestion_algorithm_t* ccalgo, uint64_t target_time)
+{
+    memset(spec, 0, sizeof(wifi_test_spec_t));
+
+    spec->nb_suspend = nb_suspension_basic;
+    spec->latency = 3000;
+    spec->suspension = suspension_basic;
+    spec->ccalgo = ccalgo;
+    spec->target_time = target_time;
+    spec->simulate_receive_block = 0;
+    spec->wifi_shadow_rtt = 0;
+}
+
 int wifi_bbr_test()
 {
-    wifi_test_spec_t spec = {
-        nb_suspension_basic,
-        3000,
-        suspension_basic,
-        picoquic_bbr_algorithm,
-        2750000,
-        0 };
+    wifi_test_spec_t spec;
+    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 2750000);
     int ret = wifi_test_one(wifi_test_bbr, &spec);
 
     return ret;
@@ -192,13 +206,9 @@ int wifi_bbr_test()
 
 int wifi_cubic_test()
 {
-    wifi_test_spec_t spec = {
-        nb_suspension_basic,
-        3000,
-        suspension_basic,
-        picoquic_cubic_algorithm,
-        2850000,
-        0 };
+    wifi_test_spec_t spec;
+    wifi_test_set_default_spec(&spec, picoquic_cubic_algorithm, 2850000);
+
     int ret = wifi_test_one(wifi_test_cubic, &spec);
 
     return ret;
@@ -206,13 +216,8 @@ int wifi_cubic_test()
 
 int wifi_reno_test()
 {
-    wifi_test_spec_t spec = {
-        nb_suspension_basic,
-        3000,
-        suspension_basic,
-        picoquic_newreno_algorithm,
-        2800000,
-        0 };
+    wifi_test_spec_t spec;
+    wifi_test_set_default_spec(&spec, picoquic_newreno_algorithm, 2800000);
     int ret = wifi_test_one(wifi_test_reno, &spec);
 
     return ret;
@@ -232,13 +237,11 @@ static size_t nb_suspension_hard = sizeof(suspension_hard) / sizeof(wifi_test_su
 
 int wifi_bbr_hard_test()
 {
-    wifi_test_spec_t spec = {
-        nb_suspension_hard,
-        3000,
-        suspension_hard,
-        picoquic_bbr_algorithm,
-        4050000,
-        0 };
+    wifi_test_spec_t spec;
+    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 4050000);
+    spec.nb_suspend = nb_suspension_hard;
+    spec.suspension = suspension_hard;
+
     int ret = wifi_test_one(wifi_test_bbr_hard, &spec);
 
     return ret;
@@ -246,13 +249,11 @@ int wifi_bbr_hard_test()
 
 int wifi_cubic_hard_test()
 {
-    wifi_test_spec_t spec = {
-        nb_suspension_hard,
-        3000,
-        suspension_hard,
-        picoquic_cubic_algorithm,
-        4200000,
-        0 };
+    wifi_test_spec_t spec;
+    wifi_test_set_default_spec(&spec, picoquic_cubic_algorithm, 4200000);
+    spec.nb_suspend = nb_suspension_hard;
+    spec.suspension = suspension_hard;
+
     int ret = wifi_test_one(wifi_test_cubic_hard, &spec);
 
     return ret;
@@ -260,13 +261,10 @@ int wifi_cubic_hard_test()
 
 int wifi_reno_hard_test()
 {
-    wifi_test_spec_t spec = {
-        nb_suspension_hard,
-        3000,
-        suspension_hard,
-        picoquic_newreno_algorithm,
-        4150000,
-        0 };
+    wifi_test_spec_t spec;
+    wifi_test_set_default_spec(&spec, picoquic_newreno_algorithm, 4150000);
+    spec.nb_suspend = nb_suspension_hard;
+    spec.suspension = suspension_hard;
     int ret = wifi_test_one(wifi_test_reno_hard, &spec);
 
     return ret;
@@ -274,13 +272,10 @@ int wifi_reno_hard_test()
 
 int wifi_bbr_long_test()
 {
-    wifi_test_spec_t spec = {
-        nb_suspension_basic,
-        50000,
-        suspension_basic,
-        picoquic_bbr_algorithm,
-        3100000,
-        1 };
+    wifi_test_spec_t spec;
+    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 3100000);
+    spec.latency = 50000;
+    spec.simulate_receive_block = 1;
     int ret = wifi_test_one(wifi_test_bbr_long, &spec);
 
     return ret;
@@ -288,13 +283,10 @@ int wifi_bbr_long_test()
 
 int wifi_cubic_long_test()
 {
-    wifi_test_spec_t spec = {
-        nb_suspension_basic,
-        50000,
-        suspension_basic,
-        picoquic_cubic_algorithm,
-        3100000,
-        1 };
+    wifi_test_spec_t spec;
+    wifi_test_set_default_spec(&spec, picoquic_cubic_algorithm, 3100000);
+    spec.latency = 50000;
+    spec.simulate_receive_block = 1;
     int ret = wifi_test_one(wifi_test_cubic_long, &spec);
 
     return ret;
@@ -302,14 +294,23 @@ int wifi_cubic_long_test()
 
 int wifi_reno_long_test()
 {
-    wifi_test_spec_t spec = {
-        nb_suspension_basic,
-        50000,
-        suspension_basic,
-        picoquic_newreno_algorithm,
-        3000000,
-        1 };
+    wifi_test_spec_t spec;
+    wifi_test_set_default_spec(&spec, picoquic_newreno_algorithm, 3000000);
+    spec.latency = 50000;
+    spec.simulate_receive_block = 1;
+
     int ret = wifi_test_one(wifi_test_reno_long, &spec);
+
+    return ret;
+}
+
+int wifi_bbr_shadow_test()
+{
+    wifi_test_spec_t spec;
+    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 2750000);
+    spec.wifi_shadow_rtt = 250000;
+
+    int ret = wifi_test_one(wifi_test_bbr_shadow, &spec);
 
     return ret;
 }
