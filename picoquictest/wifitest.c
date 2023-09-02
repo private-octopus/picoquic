@@ -72,6 +72,7 @@ typedef struct st_wifi_test_spec_t {
     uint64_t target_time;
     int simulate_receive_block;
     uint64_t wifi_shadow_rtt;
+    uint64_t queue_max_delay;
 } wifi_test_spec_t;
 
 static test_api_stream_desc_t test_scenario_wifi[] = {
@@ -126,7 +127,7 @@ static int wifi_test_one(wifi_test_enum test_id, wifi_test_spec_t * spec)
 
     /* establish the connection */
     if (ret == 0) {
-        ret = tls_api_connection_loop(test_ctx, &loss_mask, 260000, &simulated_time);
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, spec->queue_max_delay, &simulated_time);
     }
 
     /* wait until the client (and thus the server) is ready */
@@ -193,6 +194,7 @@ void wifi_test_set_default_spec(wifi_test_spec_t* spec, picoquic_congestion_algo
     spec->target_time = target_time;
     spec->simulate_receive_block = 0;
     spec->wifi_shadow_rtt = 0;
+    spec->queue_max_delay = 260000;
 }
 
 int wifi_bbr_test()
@@ -307,8 +309,10 @@ int wifi_reno_long_test()
 int wifi_bbr_shadow_test()
 {
     wifi_test_spec_t spec;
-    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 2750000);
+    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 2500000);
     spec.wifi_shadow_rtt = 250000;
+    spec.queue_max_delay = 600000;
+    spec.simulate_receive_block = 1;
 
     int ret = wifi_test_one(wifi_test_bbr_shadow, &spec);
 
