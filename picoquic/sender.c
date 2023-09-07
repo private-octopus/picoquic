@@ -35,7 +35,7 @@
  * Data is sent in packets, which contain stream frames and possibly other frames.
  * The retransmission logic is done by calling functions implemented in
  * `loss_recovery.c`
- * 
+ *
  * The retransmission logic operates on packets. If a packet is seen as lost, the
  * important frames that it contains will have to be retransmitted.
  #endif
@@ -1676,8 +1676,8 @@ picoquic_pmtu_discovery_status_enum picoquic_is_mtu_probe_needed(picoquic_cnx_t*
 {
     int ret = picoquic_pmtu_discovery_not_needed;
 
-    if ((cnx->cnx_state == picoquic_state_ready || 
-        cnx->cnx_state == picoquic_state_client_ready_start || 
+    if ((cnx->cnx_state == picoquic_state_ready ||
+        cnx->cnx_state == picoquic_state_client_ready_start ||
         cnx->cnx_state == picoquic_state_server_false_start)
         && path_x->mtu_probe_sent == 0 && cnx->pmtud_policy != picoquic_pmtud_blocked) {
         if (path_x->send_mtu_max_tried == 0 || path_x->send_mtu_max_tried > 1400) {
@@ -2035,7 +2035,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             epoch = picoquic_epoch_0rtt;
             pc = picoquic_packet_context_application;
             packet_type = picoquic_packet_0rtt_protected;
-        } else if (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt != NULL && 
+        } else if (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt != NULL &&
             cnx->tls_stream[picoquic_epoch_0rtt].send_queue == NULL) {
             epoch = picoquic_epoch_handshake;
             pc = picoquic_packet_context_handshake;
