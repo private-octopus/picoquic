@@ -147,8 +147,8 @@ static void fastcc_notify_congestion(
         path_x->cwin = path_x->cwin / 2;
     }
 
-    if (is_timeout || path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
-        path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+    if (is_timeout || path_x->cwin < cnx->quic->cwin_min) {
+        path_x->cwin = cnx->quic->cwin_min;
     }
 
     picoquic_update_pacing_data(cnx, path_x, 0);
