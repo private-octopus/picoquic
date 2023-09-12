@@ -95,6 +95,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_No_GSO, '0', "no_gso", 0, "", "Do not use UDP GSO or equivalent" },
     { picoquic_option_BDP_frame, 'j', "bdp", 1, "number", "use bdp extension frame(1) or don\'t (0). Default=0" },
     { picoquic_option_CWIN_MAX, 'W', "cwin_max", 1, "bytes", "Max value for CWIN. Default=UINT64_MAX"},
+    { picoquic_option_CWIN_MIN, 'M', "cwin_min", 1, "bytes", "Minimum value for CWIN. Default=3072"},
     { picoquic_option_HELP, 'h', "help", 0, "This help message" }
 };
 
@@ -517,6 +518,17 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         break;
     }
+    case picoquic_option_CWIN_MIN:{
+            int v = config_atoi(params, nb_params, 0, &ret);
+            if (ret != 0 || v < 0) {
+                fprintf(stderr, "Invalid cwin min option: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+                ret = (ret == 0) ? -1 : ret;
+            }
+            else {
+                config->cwin_min = (v==0)?PICOQUIC_CWIN_MINIMUM:v;
+            }
+            break;
+        }
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -805,6 +817,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_default_idle_timeout(quic, (uint64_t)config->idle_timeout);
 
         picoquic_set_cwin_max(quic, config->cwin_max);
+        picoquic_set_cwin_min(quic, config->cwin_min);
 
         if (config->token_file_name) {
             if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {

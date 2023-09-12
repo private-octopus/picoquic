@@ -145,7 +145,7 @@ static void picoquic_cubic_enter_recovery(picoquic_cnx_t * cnx,
     }
     /* Compute the new ssthresh */
     cubic_state->ssthresh = (uint64_t)(cubic_state->W_max * cubic_state->beta*(double)path_x->send_mtu);
-    if (cubic_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
+    if (cubic_state->ssthresh < cnx->quic->cwin_min) {
         /* If things are that bad, fall back to slow start */
 
         cubic_state->alg_state = picoquic_cubic_alg_slow_start;
@@ -153,12 +153,12 @@ static void picoquic_cubic_enter_recovery(picoquic_cnx_t * cnx,
         path_x->is_ssthresh_initialized = 0;
         cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
         cubic_state->start_of_epoch = current_time;
-        cubic_state->W_reno = PICOQUIC_CWIN_MINIMUM;
-        path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+        cubic_state->W_reno = cnx->quic->cwin_min;
+        path_x->cwin = cnx->quic->cwin_min;
     }
     else {
         if (notification == picoquic_congestion_notification_timeout) {
-            path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+            path_x->cwin = cnx->quic->cwin_min;
             cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
             cubic_state->start_of_epoch = current_time;
             cubic_state->alg_state = picoquic_cubic_alg_slow_start;
