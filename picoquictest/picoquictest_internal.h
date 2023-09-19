@@ -72,6 +72,7 @@ typedef struct st_test_datagram_send_recv_ctx_t {
     uint64_t picosec_per_byte;
     uint64_t send_delay;
     uint64_t next_gen_time[2];
+    uint64_t duration_max;
     int is_ready[2];
     int max_packets_received;
     int nb_recv_path_0[2];

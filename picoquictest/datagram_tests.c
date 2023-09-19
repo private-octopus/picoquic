@@ -418,6 +418,13 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
                     ret = -1;
                 }
             }
+
+            if (ret == 0 && dg_ctx->duration_max > 0 && dg_ctx->duration_max < simulated_time) {
+                DBG_PRINTF("Expected test complete in %" PRIu64 ", but simulation lasted until %" PRIu64,
+                    dg_ctx->duration_max, simulated_time);
+                ret = -1;
+
+            }
         }
         else {
             /* In a loss test, check that ACK and NACK are as expected */
@@ -621,11 +628,12 @@ int datagram_small_packet_test()
     dg_ctx.next_gen_time[1] = 50000;
     dg_ctx.link_latency = 10000;
     dg_ctx.picosec_per_byte = 20000; /* 400 Mbps */
-    dg_ctx.dg_latency_target[0] = 100000;
-    dg_ctx.dg_latency_target[1] = 100000;
+    dg_ctx.dg_latency_target[0] = 13500;
+    dg_ctx.dg_latency_target[1] = 13500;
     dg_ctx.use_extended_provider_api = 1;
     dg_ctx.one_datagram_per_packet = 1;
     dg_ctx.nb_trials_max = 200000;
+    dg_ctx.duration_max = 2060000;
 
     return datagram_test_one(9, &dg_ctx, 0);
 }
