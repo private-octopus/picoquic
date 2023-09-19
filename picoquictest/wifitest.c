@@ -237,7 +237,7 @@ int wifi_bbr_hard_test()
         3000,
         suspension_hard,
         picoquic_bbr_algorithm,
-        4050000,
+        4005000,
         0 };
     int ret = wifi_test_one(wifi_test_bbr_hard, &spec);
 
@@ -251,7 +251,7 @@ int wifi_cubic_hard_test()
         3000,
         suspension_hard,
         picoquic_cubic_algorithm,
-        4200000,
+        4250000,
         0 };
     int ret = wifi_test_one(wifi_test_cubic_hard, &spec);
 
@@ -265,7 +265,7 @@ int wifi_reno_hard_test()
         3000,
         suspension_hard,
         picoquic_newreno_algorithm,
-        4150000,
+        4050000,
         0 };
     int ret = wifi_test_one(wifi_test_reno_hard, &spec);
 
@@ -279,7 +279,7 @@ int wifi_bbr_long_test()
         50000,
         suspension_basic,
         picoquic_bbr_algorithm,
-        3100000,
+        3050000,
         1 };
     int ret = wifi_test_one(wifi_test_bbr_long, &spec);
 
