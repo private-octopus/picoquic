@@ -69,8 +69,10 @@ typedef struct st_test_datagram_send_recv_ctx_t {
     uint64_t dg_latency_target[2];
     uint64_t dg_number_delta_target[2];
     uint64_t link_latency;
+    uint64_t picosec_per_byte;
     uint64_t send_delay;
     uint64_t next_gen_time[2];
+    uint64_t duration_max;
     int is_ready[2];
     int max_packets_received;
     int nb_recv_path_0[2];
@@ -82,6 +84,7 @@ typedef struct st_test_datagram_send_recv_ctx_t {
     unsigned int is_skipping[2];
     unsigned int test_affinity;
     unsigned int test_wifi;
+    unsigned int one_datagram_per_packet;
 
 } test_datagram_send_recv_ctx_t;
 

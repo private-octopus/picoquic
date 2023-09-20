@@ -862,6 +862,16 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     return send_length;
 }
 
+
+/* Compute nanosec per packet */
+uint64_t picoquic_packet_time_nanosec(picoquic_path_t* path_x, size_t length)
+{
+    const uint64_t nanosec_per_sec = 1000000000ull;
+    uint64_t packet_time_nanosec = (nanosec_per_sec * length + (path_x->pacing_rate - 1)) / path_x->pacing_rate;
+
+    return packet_time_nanosec;
+}
+
 /* Update the leaky bucket used for pacing.
  */
 static void picoquic_update_pacing_bucket(picoquic_path_t * path_x, uint64_t current_time)
@@ -925,6 +935,26 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t * cnx, picoquic_path
  */
 void picoquic_update_pacing_rate(picoquic_cnx_t * cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum)
 {
+#if 0
+    const uint64_t nanosec_per_sec = 1000000000ull;
+
+    path_x->pacing_rate = (uint64_t)pacing_rate;
+
+    if (quantum > path_x->pacing_quantum_max) {
+        path_x->pacing_quantum_max = quantum;
+    }
+    if (path_x->pacing_rate > path_x->pacing_rate_max) {
+        path_x->pacing_rate_max = path_x->pacing_rate;
+    }
+
+    path_x->pacing_packet_time_nanosec = picoquic_packet_time_nanosec(path_x, path_x->send_mtu);
+
+    path_x->pacing_bucket_max = (nanosec_per_sec * quantum) / path_x->pacing_rate;
+    if (path_x->pacing_bucket_max <= 0) {
+        path_x->pacing_bucket_max = 16 * path_x->pacing_packet_time_nanosec;
+    }
+
+#else
     double packet_time = (double)path_x->send_mtu / pacing_rate;
     double quantum_time = (double)quantum / pacing_rate;
     uint64_t rtt_nanosec = path_x->smoothed_rtt * 1000;
@@ -955,6 +985,7 @@ void picoquic_update_pacing_rate(picoquic_cnx_t * cnx, picoquic_path_t* path_x, 
     if (path_x->pacing_bucket_max <= 0) {
         path_x->pacing_bucket_max = 16 * path_x->pacing_packet_time_nanosec;
     }
+#endif
 
     if (path_x->pacing_bucket_nanosec > path_x->pacing_bucket_max) {
         path_x->pacing_bucket_nanosec = path_x->pacing_bucket_max;
@@ -1040,11 +1071,14 @@ void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
 /* 
  * Update the pacing data after sending a packet.
  */
-void picoquic_update_pacing_after_send(picoquic_path_t * path_x, uint64_t current_time)
+void picoquic_update_pacing_after_send(picoquic_path_t * path_x, size_t length, uint64_t current_time)
 {
+    uint64_t packet_time_nanosec;
+
     picoquic_update_pacing_bucket(path_x, current_time);
 
-    path_x->pacing_bucket_nanosec -= path_x->pacing_packet_time_nanosec;
+    packet_time_nanosec = ((path_x->pacing_packet_time_nanosec * (uint64_t)length) + (path_x->send_mtu - 1)) / path_x->send_mtu;
+    path_x->pacing_bucket_nanosec -= packet_time_nanosec;
 }
 
 /*
@@ -1083,7 +1117,7 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
         path_x->bytes_in_transit += length;
         path_x->is_cc_data_updated = 1;
         /* Update the pacing data */
-        picoquic_update_pacing_after_send(path_x, current_time);
+        picoquic_update_pacing_after_send(path_x, length, current_time);
     }
 }
 
