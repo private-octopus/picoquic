@@ -526,27 +526,35 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, ui
     BBRltbwSampling(bbr_state, path_x, current_time);
 
     if (bbr_state->round_start) {
-        /* Forget the oldest BW round, shift by 1, compute the max BTL_BW for
-         * the remaining rounds, set current round max to current value */
-
-        bbr_state->btl_bw = 0;
-
-        for (int i = BBR_BTL_BW_FILTER_LENGTH - 2; i >= 0; i--) {
-            uint64_t b = bbr_state->btl_bw_filter[i];
-            bbr_state->btl_bw_filter[i + 1] = b;
-            if (b > bbr_state->btl_bw) {
-                bbr_state->btl_bw = b;
+        if (bandwidth_estimate > bbr_state->btl_bw ||
+            !path_x->last_bw_estimate_path_limited) {
+            /* Forget the oldest BW round, shift by 1, compute the max BTL_BW for
+            * the remaining rounds, set current round max to current value */
+            bbr_state->btl_bw = 0;
+            for (int i = BBR_BTL_BW_FILTER_LENGTH - 2; i >= 0; i--) {
+                uint64_t b = bbr_state->btl_bw_filter[i];
+                bbr_state->btl_bw_filter[i + 1] = b;
+                if (b > bbr_state->btl_bw) {
+                    bbr_state->btl_bw = b;
+                }
+            }
+            bbr_state->btl_bw_increased |= (bandwidth_estimate > bbr_state->btl_bw_filter[0]);
+            bbr_state->btl_bw_filter[0] = bandwidth_estimate;
+            if (bandwidth_estimate > bbr_state->btl_bw) {
+                bbr_state->btl_bw = bandwidth_estimate;
             }
         }
-
-        bbr_state->btl_bw_filter[0] = 0;
+        else {
+            bbr_state->btl_bw_increased = 0;
+        }
     }
-
-    if (bandwidth_estimate > bbr_state->btl_bw_filter[0]) {
-        bbr_state->btl_bw_filter[0] =bandwidth_estimate;
-        if (bandwidth_estimate > bbr_state->btl_bw) {
-            bbr_state->btl_bw = bandwidth_estimate;
-            bbr_state->btl_bw_increased = 1;
+    else {
+        if (bandwidth_estimate > bbr_state->btl_bw_filter[0]) {
+            bbr_state->btl_bw_filter[0] =bandwidth_estimate;
+            if (bandwidth_estimate > bbr_state->btl_bw) {
+                bbr_state->btl_bw = bandwidth_estimate;
+                bbr_state->btl_bw_increased = 1;
+            }
         }
     }
 }

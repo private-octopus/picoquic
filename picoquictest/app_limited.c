@@ -586,6 +586,7 @@ int app_limited_cubic_test()
     app_limited_config_set_default(&config, 2);
     config.ccalgo = picoquic_cubic_algorithm;
     config.nb_losses_max = 64;
+    config.data_rate_max = 4013000;
 
     return app_limited_test_one(&config);
 }
