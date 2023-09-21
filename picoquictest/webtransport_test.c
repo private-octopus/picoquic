@@ -159,12 +159,14 @@ static int picowt_baton_test_one(
     while (ret == 0 && picoquic_get_cnx_state(test_ctx->cnx_client) != picoquic_state_disconnected) {
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
 
-        if (ret == -1) {
+        if (ret != 0) {
+            DBG_PRINTF("Simulation error detected after %d trials\n", nb_trials);
             break;
         }
 
         /* TODO: insert here the logic of web transport scenarios. */
         if (++nb_trials > 100000) {
+            DBG_PRINTF("Simulation not concluded after %d trials\n", nb_trials);
             ret = -1;
             break;
         }
