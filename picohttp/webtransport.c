@@ -131,7 +131,8 @@ h3zero_stream_ctx_t* picowt_create_local_stream(picoquic_cnx_t* cnx, int is_bidi
         int ret;
 
         uint8_t* bytes = stream_header;
-        bytes = picoquic_frames_varint_encode(bytes, stream_header + 16, h3zero_frame_webtransport_stream);
+        bytes = picoquic_frames_varint_encode(bytes, stream_header + 16, 
+            (is_bidir)?h3zero_frame_webtransport_stream:h3zero_stream_type_webtransport);
         bytes = picoquic_frames_varint_encode(bytes, stream_header + 16, control_stream_id);
         if ((ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, stream_header, bytes - stream_header, 0, stream_ctx)) != 0) {
             /* something went wrong */
