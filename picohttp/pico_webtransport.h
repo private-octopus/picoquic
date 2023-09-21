@@ -30,16 +30,21 @@ extern "C" {
 
     /* Set required transport parameters for web transport  */
     void picowt_set_transport_parameters(picoquic_cnx_t* cnx);
+
+    /* Create the control stream for the Web Transport session on the client. */
+    h3zero_stream_ctx_t* picowt_set_control_stream(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx);
     /* Web transport initiate, client side
      * cnx: an established QUIC connection, set to ALPN=H3.
+     * stream_ctx: the stream context returned by picowt_set_control_stream
      * wt_callback: callback function to use in the web transport connection.
+     *              this is defined in h3zero_common.h
      * wt_ctx: application level context for that connection.
      */
-    int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, picohttp_server_stream_ctx_t* stream_ctx, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
+    int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
     /* Send capsule to close web transport session,
      * and close web transport control stream.
      */
-    int picowt_send_close_session_message(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* control_stream_ctx, uint32_t picowt_err, const char* err_msg);
+    int picowt_send_close_session_message(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* control_stream_ctx, uint32_t picowt_err, const char* err_msg);
 
     /* accumulate data for the web transport capsule in
      * specified context.
@@ -53,6 +58,15 @@ extern "C" {
 
     int picowt_receive_capsule(picoquic_cnx_t *cnx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t* capsule);
     void picowt_release_capsule(picowt_capsule_t* capsule);
+
+    /**
+    * Create local stream: when a stream is created locally. 
+    * Send the stream header. Associate the stream with a per_stream
+    * app context.
+    */
+    h3zero_stream_ctx_t* picowt_create_local_stream(picoquic_cnx_t* cnx, int is_bidir, h3zero_callback_ctx_t* h3_ctx,
+        uint64_t control_stream_id);
+
 #ifdef __cplusplus
 }
 #endif

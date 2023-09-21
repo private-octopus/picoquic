@@ -130,13 +130,13 @@ extern "C" {
 
     int wt_baton_accept(picoquic_cnx_t* cnx,
         uint8_t* bytes, size_t length,
-        struct st_picohttp_server_stream_ctx_t* stream_ctx,
+        struct st_h3zero_stream_ctx_t* stream_ctx,
         void* path_app_ctx);
 
-    picohttp_server_stream_ctx_t* wt_baton_create_stream(picoquic_cnx_t* cnx, int is_bidir, wt_baton_ctx_t* baton_ctx);
-    picohttp_server_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* ctx, uint64_t stream_id);
+    h3zero_stream_ctx_t* wt_baton_create_stream(picoquic_cnx_t* cnx, int is_bidir, wt_baton_ctx_t* baton_ctx);
+    h3zero_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* ctx, uint64_t stream_id);
 
-    int wt_baton_ctx_init(wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t* app_ctx, picohttp_server_stream_ctx_t* stream_ctx);
+    int wt_baton_ctx_init(wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t* app_ctx, h3zero_stream_ctx_t* stream_ctx);
     
     /* Web transport callback. This will be called from the web server
     * when the path points to a web transport callback
@@ -145,7 +145,7 @@ extern "C" {
     int wt_baton_callback(picoquic_cnx_t* cnx,
         uint8_t* bytes, size_t length,
         picohttp_call_back_event_t fin_or_event,
-        struct st_picohttp_server_stream_ctx_t* stream_ctx,
+        struct st_h3zero_stream_ctx_t* stream_ctx,
         void* path_app_ctx);
 
 #ifdef __cplusplus

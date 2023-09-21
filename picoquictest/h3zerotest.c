@@ -1694,18 +1694,18 @@ static size_t nb_h09_header_data_test_cases = sizeof(h09_header_data_test_case) 
 int h09_header_split_test(const uint8_t* bytes, size_t length, size_t split, h09_header_test_data_t* expected)
 {
     int ret = 0;
-    picohttp_server_stream_ctx_t* stream_ctx;
+    h3zero_stream_ctx_t* stream_ctx;
     size_t total_processed = 0;
 
     /* Create stream context */
-    stream_ctx = (picohttp_server_stream_ctx_t*)
-        malloc(sizeof(picohttp_server_stream_ctx_t));
+    stream_ctx = (h3zero_stream_ctx_t*)
+        malloc(sizeof(h3zero_stream_ctx_t));
     if (stream_ctx == NULL) {
         DBG_PRINTF("%s", "Cannot allocate stream context");
         ret = -1;
     }
     else {
-        memset(stream_ctx, 0, sizeof(picohttp_server_stream_ctx_t));
+        memset(stream_ctx, 0, sizeof(h3zero_stream_ctx_t));
         stream_ctx->is_h3 = 0; /* This is http... */
     }
 
@@ -1903,7 +1903,7 @@ typedef struct st_hzero_post_echo_ctx_t {
 
 int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t event, picohttp_server_stream_ctx_t* stream_ctx,
+    picohttp_call_back_event_t event, h3zero_stream_ctx_t* stream_ctx,
     void * callback_ctx)
 {
     int ret = 0;

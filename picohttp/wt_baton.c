@@ -90,7 +90,7 @@ int wt_baton_close_session(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx, uint3
 {
     int ret = 0;
 
-    picohttp_server_stream_ctx_t* stream_ctx = wt_baton_find_stream(baton_ctx, baton_ctx->control_stream_id);
+    h3zero_stream_ctx_t* stream_ctx = wt_baton_find_stream(baton_ctx, baton_ctx->control_stream_id);
 
     picoquic_log_app_message(cnx, "Closing session control stream %" PRIu64, baton_ctx->control_stream_id);
 
@@ -125,7 +125,7 @@ int wt_baton_close_session(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx, uint3
 
 /* Update context when sending a connect request */
 int wt_baton_connecting(picoquic_cnx_t* cnx,
-    picohttp_server_stream_ctx_t* stream_ctx, void * v_baton_ctx)
+    h3zero_stream_ctx_t* stream_ctx, void * v_baton_ctx)
 {
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)v_baton_ctx;
 
@@ -148,39 +148,21 @@ void wt_baton_set_receive_ready(wt_baton_ctx_t* baton_ctx)
 
 /* Process incoming stream data. */
 int wt_baton_relay(picoquic_cnx_t* cnx, 
-    picohttp_server_stream_ctx_t* stream_ctx, wt_baton_ctx_t* baton_ctx, size_t lane_id)
+    h3zero_stream_ctx_t* stream_ctx, wt_baton_ctx_t* baton_ctx, size_t lane_id)
 {
     int ret = 0;
 
     /* Find the next stream context */
     if (stream_ctx == NULL ||
         (IS_BIDIR_STREAM_ID(stream_ctx->stream_id) && IS_LOCAL_STREAM_ID(stream_ctx->stream_id, baton_ctx->is_client))) {
-        /* need to relay on a new unidir stream */
-        stream_ctx = wt_baton_create_stream(cnx, 0, baton_ctx);
-        if (stream_ctx != NULL) {
-            /* Write the first required bytes for sending the context ID */
-            uint8_t unidir_header[16];
-            uint8_t* bytes = unidir_header;
-            bytes = picoquic_frames_varint_encode(bytes, unidir_header + 16, h3zero_stream_type_webtransport);
-            bytes = picoquic_frames_varint_encode(bytes, unidir_header + 16, baton_ctx->control_stream_id);
-            ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, unidir_header, bytes - unidir_header, 0, stream_ctx);
-        }
-        else {
+        /* need to relay the baton on a new local unidir stream */
+        if ((stream_ctx = picowt_create_local_stream(cnx, 0, baton_ctx->h3_ctx, baton_ctx->control_stream_id)) == NULL) {
             ret = -1;
         }
     }
     else if (!IS_BIDIR_STREAM_ID(stream_ctx->stream_id)) {
-        /* need to relay on a new local bidir stream */
-        stream_ctx = wt_baton_create_stream(cnx, 1, baton_ctx);
-        if (stream_ctx != NULL) {
-            /* Write the first required bytes for sending the context ID */
-            uint8_t bidir_header[16];
-            uint8_t* bytes = bidir_header;
-            bytes = picoquic_frames_varint_encode(bytes, bidir_header + 16, h3zero_frame_webtransport_stream);
-            bytes = picoquic_frames_varint_encode(bytes, bidir_header + 16, baton_ctx->control_stream_id);
-            ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, bidir_header, bytes - bidir_header, 0, stream_ctx);
-        }
-        else {
+        /* need to relay the baton on a new local bidir stream */
+        if ((stream_ctx = picowt_create_local_stream(cnx, 1, baton_ctx->h3_ctx, baton_ctx->control_stream_id)) == NULL) {
             ret = -1;
         }
     }
@@ -205,7 +187,7 @@ int wt_baton_relay(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int wt_baton_check(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx,
+int wt_baton_check(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
     wt_baton_ctx_t* baton_ctx, uint8_t baton_received)
 {
     int ret = 0;
@@ -347,7 +329,7 @@ int wt_baton_incoming_data(picoquic_cnx_t * cnx, wt_baton_ctx_t* baton_ctx,
 
 int wt_baton_stream_data(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length, int is_fin,
-    struct st_picohttp_server_stream_ctx_t* stream_ctx,
+    struct st_h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
     int ret = 0;
@@ -465,7 +447,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
  */
 int wt_baton_provide_data(picoquic_cnx_t* cnx,
     uint8_t* context, size_t space,
-    struct st_picohttp_server_stream_ctx_t* stream_ctx,
+    struct st_h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
     int ret = 0;
@@ -600,7 +582,7 @@ int wt_baton_ctx_path_params(wt_baton_ctx_t* baton_ctx, const uint8_t* path, siz
 /* Accept an incoming connection */
 int wt_baton_accept(picoquic_cnx_t* cnx,
     uint8_t* path, size_t path_length,
-    struct st_picohttp_server_stream_ctx_t* stream_ctx,
+    struct st_h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
     int ret = 0;
@@ -639,7 +621,7 @@ int wt_baton_accept(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int wt_baton_stream_reset(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx,
+int wt_baton_stream_reset(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
     int ret = 0;
@@ -662,7 +644,7 @@ int wt_baton_stream_reset(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* str
 }
 
 void wt_baton_unlink_context(picoquic_cnx_t* cnx,
-    struct st_picohttp_server_stream_ctx_t* control_stream_ctx,
+    struct st_h3zero_stream_ctx_t* control_stream_ctx,
     void* v_ctx)
 {
     h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
@@ -678,8 +660,8 @@ void wt_baton_unlink_context(picoquic_cnx_t* cnx,
             break;
         }
         else {
-            picohttp_server_stream_ctx_t* stream_ctx =
-                (picohttp_server_stream_ctx_t*)picohttp_stream_node_value(next);
+            h3zero_stream_ctx_t* stream_ctx =
+                (h3zero_stream_ctx_t*)picohttp_stream_node_value(next);
 
             if (control_stream_ctx->stream_id == stream_ctx->control_stream_id &&
                 control_stream_ctx->stream_id != stream_ctx->stream_id) {
@@ -710,7 +692,7 @@ void wt_baton_unlink_context(picoquic_cnx_t* cnx,
  */
 int wt_baton_receive_datagram(picoquic_cnx_t* cnx,
     const uint8_t* bytes, size_t length,
-    struct st_picohttp_server_stream_ctx_t* stream_ctx,
+    struct st_h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
     int ret = 0;
@@ -739,7 +721,7 @@ int wt_baton_receive_datagram(picoquic_cnx_t* cnx,
 
 int wt_baton_provide_datagram(picoquic_cnx_t* cnx,
     void* context, size_t space,
-    struct st_picohttp_server_stream_ctx_t* stream_ctx,
+    struct st_h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
     int ret = 0;
@@ -784,7 +766,7 @@ int wt_baton_provide_datagram(picoquic_cnx_t* cnx,
 int wt_baton_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
     picohttp_call_back_event_t wt_event,
-    struct st_picohttp_server_stream_ctx_t* stream_ctx,
+    struct st_h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
     int ret = 0;
@@ -863,38 +845,16 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-/**
-* Create stream: when a stream is created locally. 
-* Send the stream header. Associate the stream with a per_stream
-* app context. mark the stream as active, per batn protocol.
-*/
-
-picohttp_server_stream_ctx_t* wt_baton_create_stream(picoquic_cnx_t* cnx, int is_bidir, wt_baton_ctx_t* baton_ctx)
+h3zero_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* baton_ctx, uint64_t stream_id)
 {
-
-    uint64_t stream_id = picoquic_get_next_local_stream_id(cnx, !is_bidir);
-    picohttp_server_stream_ctx_t* stream_ctx = h3zero_find_or_create_stream(
-        cnx, stream_id, baton_ctx->h3_ctx, 1, 1);
-    if (stream_ctx != NULL) {
-        /* Associate the stream with a per_stream context */
-        stream_ctx->control_stream_id = baton_ctx->control_stream_id;
-        if (picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx) != 0) {
-            fprintf(stdout, "Could not set context for stream %"PRIu64 ".\n", stream_id);
-        }
-    }
-    return stream_ctx;
-}
-
-picohttp_server_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* baton_ctx, uint64_t stream_id)
-{
-    picohttp_server_stream_ctx_t* stream_ctx = h3zero_find_stream(baton_ctx->h3_ctx, stream_id);
+    h3zero_stream_ctx_t* stream_ctx = h3zero_find_stream(baton_ctx->h3_ctx, stream_id);
     return stream_ctx;
 }
 
 /* Initialize the content of a wt_baton context.
 * TODO: replace internal pointers by pointer to h3zero context
 */
-int wt_baton_ctx_init(wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t * app_ctx, picohttp_server_stream_ctx_t* stream_ctx)
+int wt_baton_ctx_init(wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t * app_ctx, h3zero_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
 
@@ -933,7 +893,7 @@ int wt_baton_ctx_init(wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx, 
 int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event,
-    picohttp_server_stream_ctx_t* stream_ctx,
+    h3zero_stream_ctx_t* stream_ctx,
     wt_baton_ctx_t* baton_ctx)
 {
     int ret = 0;
@@ -968,16 +928,13 @@ int wt_baton_connect(picoquic_cnx_t * cnx, wt_baton_ctx_t* baton_ctx, h3zero_cal
     int ret = 0;
 
     /* Create a stream context for the connect call. */
-    picohttp_server_stream_ctx_t* stream_ctx = wt_baton_create_stream(cnx, 1, baton_ctx);
+    h3zero_stream_ctx_t* stream_ctx = picowt_set_control_stream(cnx, h3_ctx);
     if (stream_ctx == NULL) {
         ret = -1;
     }
     else {
         baton_ctx->connection_ready = 1;
         baton_ctx->is_client = 1;
-        stream_ctx->is_open = 1;
-        stream_ctx->path_callback = wt_baton_callback;
-        stream_ctx->path_callback_ctx = baton_ctx;
 
         if (baton_ctx->server_path != NULL) {
             ret = wt_baton_ctx_path_params(baton_ctx, (const uint8_t*)baton_ctx->server_path, 

@@ -63,7 +63,7 @@ requirements are:
    this is done by setting the callback to `picoquic_demo_server_callback`,
    defined in `demoserver.c`. That callback provides support for 4 different
    protocols: HTTP3, HTTP/0.9, SIDUCK and QUICPERF. If you only want to support
-   HTTP3, you can set the callback function to `picoquic_h09_server_callback`.
+   HTTP3, you can set the callback function to `h3zero_callback`, defined in `
 
  * Configure the HTTP3 server to accept and process Web Transport requests by
    configuring a "path table". Each path specifies a local URL, a path callback
@@ -79,7 +79,7 @@ connection to the target web server, then attach a web transport session
 to that connection. In picoquic, this requires:
 
  * Creating a client side quic context
- * 
+
  * Creating a connection with the ALPN set to "H3" and the callback
    set to `h3zero_callback` defined in `h3zero_common.h`.
 
@@ -103,6 +103,30 @@ QUIC stack in three ways:
  * Opening and closing streams,
 
  * Responding to "path" callbacks from the web stack.
+
+### Setting up a web transport session on the client
+
+The web transport connection is set in four phases:
+ 
+ 1- Create an h3zero stream context for the control stream, using
+    the API picowt_set_control_stream.
+ 
+ 2- Prepare the application state before the connection. This may
+    include documenting the control stream context.
+ 
+ 3- Call the picowt_connect API to prepare and queue the web transport
+    connect message. The API takes the following parameters:
+ 
+  - `cnx`: QUIC connection context
+  - `stream_ctx`: the stream context returned by `picowt_set_control_stream`
+  - `path`: the path parameter for the connect request
+  - `wt_callback`: the path callback used for the application
+  - `wt_ctx`: the web transport application context associated with the path callback
+ 
+ 4- Make sure that the application is ready to process incoming streams.
+
+The function `wt_baton_connect` in `wt_baton.c` provides an example
+of setting the web transport session on the client._
 
 ### Web transport callback
 
@@ -138,20 +162,18 @@ in `wt_baton.c`._
 
 ### Creating streams
 
-An example of stream creation is provided in `wt_baton_create_stream`
-in `wt_baton.c`. The steps are:
+Once the session is created, client and server will be able to open "local"
+streams, i.e., client initiated streams on the client or server initiated
+on the servers.
 
- * Find the next available stream number, using the API `picoquic_get_next_local_stream_id`
+These streams should be called by calling the function `picowt_create_local_stream`
+with parameters:
 
- * Create an HTTP3 stream context, of type `picohttp_server_stream_ctx_t`,
-   by using the API `h3zero_find_or_create_stream` defined in `h3zero_common.h`.
+  - `cnx`: QUIC connection context
+  - `h3_ctx`: the h3zero context for the connection
+  - `control_stream_id`: the stream_id of the control stream for the web transport session.
 
- * Create the application context for the stream
+Once streams are created, data can be sent pretty much like for plain QUIC applications.
 
- * Create the appropriate stream header
-
- * push the header bytes on the stream using `picoquic_add_to_stream_with_ctx`
-
-Subsequent interactions with the stream will be through the callback API.
 
 

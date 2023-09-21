@@ -99,28 +99,104 @@ void picowt_set_transport_parameters(picoquic_cnx_t* cnx)
 
 /* Web transport commands */
 
-/* Web transport initiate, client side
+
+/**
+* Create stream: when a stream is created locally. 
+* Send the stream header. Associate the stream with a per_stream
+* app context. mark the stream as active, per batn protocol.
+*/
+static h3zero_stream_ctx_t* picowt_create_stream_ctx(picoquic_cnx_t* cnx, int is_bidir, h3zero_callback_ctx_t* h3_ctx, 
+    uint64_t control_stream_id)
+{
+    uint64_t stream_id = picoquic_get_next_local_stream_id(cnx, !is_bidir);
+    h3zero_stream_ctx_t* stream_ctx = h3zero_find_or_create_stream(
+        cnx, stream_id, h3_ctx, 1, 1);
+    if (stream_ctx != NULL) {
+        /* Associate the stream with a per_stream context */
+        stream_ctx->control_stream_id = control_stream_id;
+        if (picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx) != 0) {
+            DBG_PRINTF("Could not set context for stream %"PRIu64, stream_id);
+        }
+    }
+    return stream_ctx;
+}
+
+h3zero_stream_ctx_t* picowt_create_local_stream(picoquic_cnx_t* cnx, int is_bidir, h3zero_callback_ctx_t* h3_ctx,
+    uint64_t control_stream_id)
+{
+    h3zero_stream_ctx_t* stream_ctx = picowt_create_stream_ctx(cnx, is_bidir, h3_ctx, control_stream_id);
+    if (stream_ctx != NULL) {
+        /* Write the first required bytes for sending the context ID */
+        uint8_t stream_header[16];
+        int ret;
+
+        uint8_t* bytes = stream_header;
+        bytes = picoquic_frames_varint_encode(bytes, stream_header + 16, h3zero_frame_webtransport_stream);
+        bytes = picoquic_frames_varint_encode(bytes, stream_header + 16, control_stream_id);
+        if ((ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, stream_header, bytes - stream_header, 0, stream_ctx)) != 0) {
+            /* something went wrong */
+            DBG_PRINTF("Could not add data for stream %"PRIu64 ", ret = %d", stream_ctx->stream_id, ret);
+            h3zero_delete_stream(cnx, h3_ctx, stream_ctx);
+            stream_ctx = NULL;
+        }
+    }
+    return(stream_ctx);
+}
+
+
+/* Web transport initiate, client side. Start with two parameters:
 * cnx: an established QUIC connection, set to ALPN=H3.
-* stream_ctx: a new stream, created for the purpose of sending the connect request
-* wt_callback: callback function to use in the web transport connection.
-* wt_ctx: application level context for that connection.
+* h3_ctx: the http3 connection context.
 * 
-* This will reserve a bidir stream, and send a "connect" frame on that
-* stream. The client will receive a WT event when the response comes
-* back. 
+* The web transport connection is set in four phases:
 * 
-* This should create a WT connection context, which will be associated with
-* the stream ID. This is associated with the connection itself. Do we have
-* an H3 context for the connection?
+* 1- Create an h3zero stream context for the control stream, using
+*    the API picowt_set_control_stream.
+* 
+* 2- Prepare the application state before the connection. This may
+*    include documenting the control stream context.
+* 
+* 3- Call the picowt_connect API to prepare and queue the web transport
+*    connect message. The API takes the following parameters:
+* 
+*      - cnx: QUIC connection context
+*      - stream_ctx: the stream context returned by `picowt_set_control_stream`
+*      - path: the path parameter for the connect request
+*      - wt_callback: the path callback used for the application
+*      - wt_ctx: the web transport application context associated with the path callback
+* 
+* 4- Make sure that the application is ready to process incoming streams.
 */
 
-int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  picohttp_server_stream_ctx_t* stream_ctx, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
+h3zero_stream_ctx_t* picowt_set_control_stream(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx)
+{
+    uint64_t stream_id = picoquic_get_next_local_stream_id(cnx, 0);
+    h3zero_stream_ctx_t* stream_ctx = h3zero_find_or_create_stream(
+        cnx, stream_id, h3_ctx, 1, 1);
+    if (stream_ctx != NULL) {
+        /* Associate the stream with a per_stream context */
+        if (picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx) != 0) {
+            DBG_PRINTF("Could not set context for stream %"PRIu64, stream_id);
+            h3zero_delete_stream(cnx, h3_ctx, stream_ctx);
+            stream_ctx = NULL;
+        }
+    }
+    return stream_ctx;
+}
+
+
+int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stream_ctx_t* stream_ctx, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
 {
     /* register the stream ID as session ID */
     int ret = h3zero_declare_stream_prefix(ctx, stream_ctx->stream_id, wt_callback, wt_ctx);
     if (cnx != NULL) {
         picoquic_log_app_message(cnx, "Allocated prefix for control stream %" PRIu64, stream_ctx->stream_id);
     }
+    /* set the required stream parameters for the state of the stream. */
+    stream_ctx->is_open = 1;
+    stream_ctx->path_callback = wt_callback;
+    stream_ctx->path_callback_ctx = wt_ctx;
+
     /* Declare the outgoing connection through the callback, so it can update its own state */
     ret = wt_callback(cnx, NULL, 0, picohttp_callback_connecting, stream_ctx, wt_ctx);
 
@@ -176,7 +252,7 @@ CLOSE_WEBTRANSPORT_SESSION Capsule {
 #define PICOWT_CLOSE_WEBTRANSPORT_SESSION 0x2843
 
 int picowt_send_close_session_message(picoquic_cnx_t* cnx, 
-    picohttp_server_stream_ctx_t* control_stream_ctx, 
+    h3zero_stream_ctx_t* control_stream_ctx, 
     uint32_t picowt_err, const char* err_msg)
 {
     uint8_t buffer[512];
@@ -258,3 +334,4 @@ void picowt_release_capsule(picowt_capsule_t* capsule)
 {
     h3zero_release_capsule(&capsule->h3_capsule);
 }
+
