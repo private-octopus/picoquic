@@ -855,6 +855,7 @@ typedef struct st_picoquic_path_quality_t {
     uint64_t pacing_rate; /* bytes per second */
     uint64_t cwin; /* number of bytes in congestion window */
     uint64_t rtt; /* smoothed estimate of roundtrip time in micros seconds */
+    uint64_t rtt_sample; /* most recent RTT sample */
     uint64_t rtt_variant; /* estimate of RTT variability */
     uint64_t rtt_min; /* minimum value of RTT, computed since path creation */
     uint64_t rtt_max; /* maximum value of RTT, computed since path creation */
