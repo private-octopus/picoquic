@@ -238,7 +238,7 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
     printf("Final baton state: %d\n", baton_ctx.baton_state);
     printf("Nb turns: %d\n", baton_ctx.nb_turns);
     /* print statistics per lane */
-    for (size_t i = 0; i < baton_ctx.count; i++) {
+    for (size_t i = 0; i < baton_ctx.nb_lanes; i++) {
         printf("Lane %zu, first baton: 0x%02x, last sent: 0x%02x, last received: 0x%02x\n", i,
             baton_ctx.lanes[i].first_baton, baton_ctx.lanes[i].baton, baton_ctx.lanes[i].baton_received);
     }

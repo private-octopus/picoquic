@@ -175,5 +175,62 @@ with parameters:
 
 Once streams are created, data can be sent pretty much like for plain QUIC applications.
 
+### Sending datagrams
+
+Once the session is created or accepted by both peers, an application may send and
+receive datagrams. An application signals its desire to send datagrams by calling the
+function `h3zero_set_datagram_ready` defined in `h3zero_common.h` with two parameters:
+
+ - `cnx`: QUIC connection context,
+ - `stream_id`: Stream ID of the control stream for the web transport session.
+ 
+When the stack is ready to send a datagram, it will issue a callback that is
+relayed to the web transport user as `picohttp_callback_provide_datagram`.
+The process for sending datagrams is very similar to the process with raw QUIC,
+but to acquire a datagram buffer it uses the function `h3zero_provide_datagram_buffer`
+with parameters:
+
+ - `context`: must be set to the value of the argument `bytes` of the 
+   `picohttp_callback_provide_datagram` callback.
+ - `length`: the length of the datagram prepared by the application, which must be
+   lower than or equal to the value of the argument `length` of the 
+   `picohttp_callback_provide_datagram` callback.
+ - `ready_to_send`: whether the application is ready to send more datagrams.
+
+An example of sending datagrams can be found in the function `wt_baton_provide_datagram`
+in `wt_baton.c`.
+
+When a datagram is ready, the application will receive a callback
+`picohttp_callback_post_datagram` in which the arguments `bytes`
+and `length` provide the value and length of the received datagram.
+
+The raw QUIC callbacks `picoquic_callback_datagram_acked`,
+`picoquic_callback_datagram_lost`, and `picoquic_callback_datagram_spurious`
+are not propagated to the Web Transport application. (Not impossible, but nobody
+has asked for them yet.)
+
+## Running a web transport and a raw QUIC server in the same process
+
+It is possible to create a server that handles both "raw" QUIC connections
+and "web transport" connections. All these connections will share a single
+QUIC context and a single UDP port. The requirements are:
+
+ - develop an ALPN selection function of type `picoquic_alpn_select_fn`,
+   as specified in `picoquic.h`, then call `picoquic_set_alpn_select_fn`
+   to attach the ALPN selection function to the QUIC context.
+ - develop two callback functions, one of type `picoquic_stream_data_cb_fn`
+   for the "raw" connections, and another of type `picohttp_post_data_cb_fn`
+   for the "web transport" sessions.
+ - develop a third callback function that will only be set as default callback
+   for the QUIC context. This function will only be used for the first
+   callback for an incoming connection. The function should retrieve the
+   ALPN of the incoming connection using the API `picoquic_tls_get_negotiated_alpn`,
+   and then relay the call to the appropriate callback, `h3zero_callback` if this
+   is an HTTP3 connection, or the raw callback of the application if this
+   is a call to the ALPN of the application protocol.
+
+There is an example of this process in `demoserver.c`, with the ALPN selection
+function `picoquic_demo_server_callback_select_alpn` and the redirection
+callback `picoquic_demo_server_callback`.
 
 

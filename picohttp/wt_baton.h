@@ -49,6 +49,7 @@ extern "C" {
 
 #define WT_BATON_VERSION 0
 #define WT_BATON_MAX_COUNT 256
+#define WT_BATON_MAX_LANES 256
 
     /* Wt_baton context:
      *
@@ -100,8 +101,9 @@ extern "C" {
         /* Baton protocol data */
         uint64_t version;
         uint64_t initial_baton;
-        uint64_t count;
-        uint64_t count_completed;
+        // uint64_t count;
+        uint64_t nb_lanes;
+        uint64_t lanes_completed;
         uint64_t count_fin_wait;
         uint64_t inject_error;
         int nb_turns;

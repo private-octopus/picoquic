@@ -139,7 +139,7 @@ int wt_baton_connecting(picoquic_cnx_t* cnx,
 /* Ready to receive */
 void wt_baton_set_receive_ready(wt_baton_ctx_t* baton_ctx)
 {
-    for (size_t i = 0; i < baton_ctx->count; i++) {
+    for (size_t i = 0; i < baton_ctx->nb_lanes; i++) {
         baton_ctx->incoming[i].is_receiving = 0;
         baton_ctx->incoming[i].receiving_stream_id = UINT64_MAX;
         baton_ctx->incoming[i].padding_expected = UINT64_MAX;
@@ -194,7 +194,7 @@ int wt_baton_check(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
     size_t lane_id = SIZE_MAX;
     size_t available_lane = SIZE_MAX;
 
-    for (size_t i = 0; i < baton_ctx->count; i++) {
+    for (size_t i = 0; i < baton_ctx->nb_lanes; i++) {
         /* TODO: maybe store expected value if known */
         /* Looking first for direct match */
         if (baton_ctx->lanes[i].baton_state == wt_baton_state_sent) {
@@ -228,14 +228,14 @@ int wt_baton_check(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
         if (baton_received == 0) {
             picoquic_log_app_message(cnx, "All ZERO baton on stream: %"PRIu64 " after %d turns", stream_ctx->stream_id, baton_ctx->nb_turns);
             baton_ctx->lanes[lane_id].baton_state = wt_baton_state_done;
-            baton_ctx->count_completed += 1;
+            baton_ctx->lanes_completed += 1;
             /* Close the control stream, which will close the session */
             if (IS_BIDIR_STREAM_ID(stream_ctx->stream_id) && !IS_LOCAL_STREAM_ID(stream_ctx->stream_id, baton_ctx->is_client)) {
                 /* Close this stream, because there is no response expected on return path */
                 ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, NULL, 0, 1, NULL);
                 stream_ctx->ps.stream_state.is_fin_sent = 1;
             }
-            if (baton_ctx->count_completed >= baton_ctx->count) {
+            if (baton_ctx->lanes_completed >= baton_ctx->nb_lanes) {
                 /* Close the session, because we are done. */
                 ret = wt_baton_close_session(cnx, baton_ctx, 0, NULL);
             }
@@ -259,7 +259,7 @@ int wt_baton_check(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
             }
             baton_ctx->baton_state = wt_baton_state_sent;
             if (baton_ctx->lanes[lane_id].baton == 0) {
-                baton_ctx->count_completed += 1;
+                baton_ctx->lanes_completed += 1;
             }
             ret = wt_baton_relay(cnx, stream_ctx, baton_ctx, lane_id);
         }
@@ -371,7 +371,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
     }
     else {
         /* Associate the stream with one of the incoming contexts */
-        for (size_t i = 0; i < baton_ctx->count; i++) {
+        for (size_t i = 0; i < baton_ctx->nb_lanes; i++) {
             if (baton_ctx->incoming[i].receiving_stream_id == stream_ctx->stream_id) {
                 receive_id = i;
                 break;
@@ -456,7 +456,7 @@ int wt_baton_provide_data(picoquic_cnx_t* cnx,
     wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
 
     /* Check whether there is already a lane assigned to that stream */
-    for (size_t i = 0; i < baton_ctx->count; i++) {
+    for (size_t i = 0; i < baton_ctx->nb_lanes; i++) {
         if (baton_ctx->lanes[i].sending_stream_id == stream_ctx->stream_id) {
             lane_id = i;
             break;
@@ -560,20 +560,29 @@ int wt_baton_ctx_path_params(wt_baton_ctx_t* baton_ctx, const uint8_t* path, siz
 
         if (h3zero_query_parameter_number(queries, queries_length, "version", 5, &baton_ctx->version, 0) != 0 ||
             h3zero_query_parameter_number(queries, queries_length, "baton", 5, &baton_ctx->initial_baton, 0) != 0 ||
-            h3zero_query_parameter_number(queries, queries_length, "count", 5, &baton_ctx->count, 1) != 0 ||
+            h3zero_query_parameter_number(queries, queries_length, "count", 5, &baton_ctx->nb_lanes, 1) != 0 ||
             h3zero_query_parameter_number(queries, queries_length, "inject", 6, &baton_ctx->inject_error, 0) != 0) {
             ret = -1;
         }
         else if ( baton_ctx->version != WT_BATON_VERSION ||
             baton_ctx->initial_baton > 255 ||
-            baton_ctx->count > WT_BATON_MAX_COUNT||
-            baton_ctx->count < 1 ) {
+            baton_ctx->nb_lanes > WT_BATON_MAX_LANES||
+            baton_ctx->nb_lanes < 1 ) {
             ret = -1;
         }
+#if 0
+        else {
+            baton_ctx->count = 256 - baton_ctx->initial_baton;
+        }
+#endif
     }
     else {
         /* Set parameters to default values */
+        baton_ctx->initial_baton = 240;
+#if 0
         baton_ctx->count = 1;
+#endif
+        baton_ctx->nb_lanes = 1;
     }
 
     return ret;
@@ -610,7 +619,7 @@ int wt_baton_accept(picoquic_cnx_t* cnx,
                 baton_ctx->initial_baton = (uint8_t)picoquic_public_uniform_random(32) + 128;
             }
 
-            for (size_t lane_id = 0; ret == 0 && lane_id < baton_ctx->count; lane_id++) {
+            for (size_t lane_id = 0; ret == 0 && lane_id < baton_ctx->nb_lanes; lane_id++) {
                 baton_ctx->lanes[lane_id].baton = (uint8_t)baton_ctx->initial_baton;
                 baton_ctx->lanes[lane_id].first_baton = (uint8_t)baton_ctx->initial_baton;
                 /* Get the relaying started */

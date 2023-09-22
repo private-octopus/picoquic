@@ -1233,7 +1233,6 @@ static uint8_t const h3zero_default_setting_frame_val[] = {
     (uint8_t)((h3zero_settings_webtransport_max_sessions >> 16)&0xff),
     (uint8_t)((h3zero_settings_webtransport_max_sessions >> 8)&0xff),
     (uint8_t)((h3zero_settings_webtransport_max_sessions)&0xff), 1
-    /* TO DO: add datagrams when supported */
 };
 
 uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;

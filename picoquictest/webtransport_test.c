@@ -177,7 +177,7 @@ static int picowt_baton_test_one(
         if (test_id == 3 || test_id == 4 ||
             ((baton_ctx.baton_state == wt_baton_state_done || baton_ctx.baton_state == wt_baton_state_closed) &&
                 baton_ctx.nb_turns >= 8 &&
-                baton_ctx.count_completed == baton_ctx.count &&
+                baton_ctx.lanes_completed == baton_ctx.nb_lanes &&
                 baton_ctx.nb_datagrams_sent > 0 && baton_ctx.nb_datagrams_received > 0)) {
             DBG_PRINTF("Baton test succeeds after %d turns, %d datagrams sent, %d received",
                 baton_ctx.nb_turns, baton_ctx.nb_datagrams_sent, baton_ctx.nb_datagrams_received);
