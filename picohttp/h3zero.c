@@ -1224,13 +1224,6 @@ static uint8_t const h3zero_default_setting_frame_val[] = {
     (uint8_t)h3zero_settings_enable_connect_protocol, 1,
     /* datagram support */
     (uint8_t)h3zero_setting_h3_datagram, 1,
-    /* Declare support for web transport */
-#if 0
-    (uint8_t)0x80|((h3zero_settings_enable_web_transport >> 24)&0xff),
-    (uint8_t)((h3zero_settings_enable_web_transport >> 16)&0xff),
-    (uint8_t)((h3zero_settings_enable_web_transport >> 8)&0xff),
-    (uint8_t)((h3zero_settings_enable_web_transport)&0xff), 1,
-#endif
     /* Declare max 1 web transport session */
     (uint8_t)0x80|((h3zero_settings_webtransport_max_sessions >> 24)&0xff)|0x80,
     (uint8_t)((h3zero_settings_webtransport_max_sessions >> 16)&0xff),

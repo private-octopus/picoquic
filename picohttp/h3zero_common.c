@@ -1426,9 +1426,6 @@ uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const 
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_qpack_blocked_streams, settings->blocked_streams, UINT64_MAX)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_enable_connect_protocol, settings->enable_connect_protocol, 0)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_setting_h3_datagram, settings->h3_datagram, 0)) != NULL &&
-#if 0
-				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_enable_web_transport, settings->is_web_transport_enabled, 0)) != NULL &&
-#endif
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_webtransport_max_sessions, settings->webtransport_max_sessions, 0)) != NULL) {
 				size_t actual_length = bytes - bytes_after_length;
 				uint8_t* bytes_final_length = picoquic_frames_varint_encode(bytes_of_length, bytes_after_length, actual_length);
@@ -1482,11 +1479,6 @@ const uint8_t* h3zero_settings_decode(const uint8_t* bytes, const uint8_t* bytes
 					case h3zero_setting_h3_datagram:
 						settings->h3_datagram = (unsigned int)component_value;
 						break;
-#if 0
-					case h3zero_settings_enable_web_transport:
-						settings->is_web_transport_enabled = (unsigned int)component_value;
-						break;
-#endif
 					case h3zero_settings_webtransport_max_sessions:
 						settings->webtransport_max_sessions = component_value;
 						break;

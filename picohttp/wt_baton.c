@@ -570,18 +570,10 @@ int wt_baton_ctx_path_params(wt_baton_ctx_t* baton_ctx, const uint8_t* path, siz
             baton_ctx->nb_lanes < 1 ) {
             ret = -1;
         }
-#if 0
-        else {
-            baton_ctx->count = 256 - baton_ctx->initial_baton;
-        }
-#endif
     }
     else {
         /* Set parameters to default values */
         baton_ctx->initial_baton = 240;
-#if 0
-        baton_ctx->count = 1;
-#endif
         baton_ctx->nb_lanes = 1;
     }
 
