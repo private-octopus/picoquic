@@ -1917,7 +1917,6 @@ int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
 {
     int ret = 0;
     uint64_t time_out = *simulated_time + time_out_delay;
-    int nb_trials = 0;
     int nb_inactive = 0;
 
     while (*simulated_time < time_out &&
@@ -1926,7 +1925,6 @@ int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
         nb_inactive < 64 &&
         ret == 0) {
         int was_active = 0;
-        nb_trials++;
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
 
