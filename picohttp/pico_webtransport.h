@@ -27,6 +27,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+    /* Capsule types defined for web transport */
+#define picowt_capsule_close_webtransport_session 0x2843
+#define picowt_capsule_drain_webtransport_session 0x78ae 
 
     /* Set required transport parameters for web transport  */
     void picowt_set_transport_parameters(picoquic_cnx_t* cnx);
@@ -45,7 +48,10 @@ extern "C" {
      * and close web transport control stream.
      */
     int picowt_send_close_session_message(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* control_stream_ctx, uint32_t picowt_err, const char* err_msg);
-
+    /* Send drain capsule to tell the peer to finish and then close the session.
+     */
+    int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
+        h3zero_stream_ctx_t* control_stream_ctx);
     /* accumulate data for the web transport capsule in
      * specified context.
      */

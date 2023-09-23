@@ -190,6 +190,7 @@ typedef struct st_h3zero_header_parts_t {
     unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
 
+/* Setting codes. */
 #define h3zero_setting_reserved = 0x0
 #define h3zero_setting_header_table_size 0x1
 #define h3zero_setting_max_header_list_size 0x6
