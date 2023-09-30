@@ -159,12 +159,14 @@ static int picowt_baton_test_one(
     while (ret == 0 && picoquic_get_cnx_state(test_ctx->cnx_client) != picoquic_state_disconnected) {
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
 
-        if (ret == -1) {
+        if (ret != 0) {
+            DBG_PRINTF("Simulation error detected after %d trials\n", nb_trials);
             break;
         }
 
         /* TODO: insert here the logic of web transport scenarios. */
         if (++nb_trials > 100000) {
+            DBG_PRINTF("Simulation not concluded after %d trials\n", nb_trials);
             ret = -1;
             break;
         }
@@ -175,7 +177,7 @@ static int picowt_baton_test_one(
         if (test_id == 3 || test_id == 4 ||
             ((baton_ctx.baton_state == wt_baton_state_done || baton_ctx.baton_state == wt_baton_state_closed) &&
                 baton_ctx.nb_turns >= 8 &&
-                baton_ctx.count_completed == baton_ctx.count &&
+                baton_ctx.lanes_completed == baton_ctx.nb_lanes &&
                 baton_ctx.nb_datagrams_sent > 0 && baton_ctx.nb_datagrams_received > 0)) {
             DBG_PRINTF("Baton test succeeds after %d turns, %d datagrams sent, %d received",
                 baton_ctx.nb_turns, baton_ctx.nb_datagrams_sent, baton_ctx.nb_datagrams_received);

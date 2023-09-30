@@ -55,13 +55,13 @@ extern char const* h3zero_server_post_response_page;
 void h3zero_init_stream_tree(picosplay_tree_t* h3_stream_tree);
 int h3zero_server_parse_path(const uint8_t* path, size_t path_length, uint64_t* echo_size,
     char** file_path, char const* web_folder, int* file_error);
-int h3zero_server_prepare_to_send(void* context, size_t space, picohttp_server_stream_ctx_t* stream_ctx);
+int h3zero_server_prepare_to_send(void* context, size_t space, h3zero_stream_ctx_t* stream_ctx);
 
 /* Defining then the Http 0.9 variant of the server
  */
 #define picoquic_h09_server_callback_ctx_t h3zero_callback_ctx_t
 
-int picoquic_h09_server_process_data_header(const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, picohttp_server_stream_ctx_t* stream_ctx, size_t* r_processed);
+int picoquic_h09_server_process_data_header(const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx, size_t* r_processed);
 
 int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,

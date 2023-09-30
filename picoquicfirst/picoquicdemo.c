@@ -164,7 +164,7 @@ typedef struct st_demoserver_post_test_t {
 
 int demoserver_post_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t event, picohttp_server_stream_ctx_t* stream_ctx,
+    picohttp_call_back_event_t event, h3zero_stream_ctx_t* stream_ctx,
     void * callback_ctx)
 {
     int ret = 0;

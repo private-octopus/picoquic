@@ -523,6 +523,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(datagram_small_packet)
+        {
+            int ret = datagram_small_packet_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(datagram_wifi)
         {
             int ret = datagram_wifi_test();

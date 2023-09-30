@@ -1917,7 +1917,6 @@ int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
 {
     int ret = 0;
     uint64_t time_out = *simulated_time + time_out_delay;
-    int nb_trials = 0;
     int nb_inactive = 0;
 
     while (*simulated_time < time_out &&
@@ -1926,7 +1925,6 @@ int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
         nb_inactive < 64 &&
         ret == 0) {
         int was_active = 0;
-        nb_trials++;
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
 
@@ -10951,7 +10949,7 @@ int pacing_test()
                 uint64_t next_time = current_time + 10000000;
                 if (picoquic_is_sending_authorized_by_pacing(cnx, cnx->path[0], current_time, &next_time)) {
                     nb_sent++;
-                    picoquic_update_pacing_after_send(cnx->path[0], current_time);
+                    picoquic_update_pacing_after_send(cnx->path[0], cnx->path[0]->send_mtu, current_time);
                 }
                 else {
                     if (current_time < next_time) {
@@ -11252,13 +11250,13 @@ int red_cc_test()
         500000,
         500000,
         500000,
-        650000,
-        550000
+        500000,
+        500000
     };
     uint64_t algo_loss[5] = {
         150,
-        200,
-        270,
+        225,
+        275,
         250,
         170
     };

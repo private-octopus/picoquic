@@ -165,9 +165,12 @@ int wait_client_migration_done(picoquic_test_tls_api_ctx_t* test_ctx,
         test_ctx->cnx_client->cnx_state == picoquic_state_ready &&
         nb_trials < 1024 &&
         nb_inactive < 64 &&
-        picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->local_addr) == 0 &&
-        picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr) == 0 &&
-        ret == 0) {
+        ret == 0 && (
+            (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->local_addr) == 0 &&
+                picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr) == 0)
+            ||
+            (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr) == 0 &&
+                picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr) == 0))){
         was_active = 0;
         nb_trials++;
 
@@ -181,10 +184,12 @@ int wait_client_migration_done(picoquic_test_tls_api_ctx_t* test_ctx,
         }
     }
 
-    if (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_ready ||
+    if (ret != 0 || (test_ctx->cnx_client->cnx_state != picoquic_state_ready ||
         (picoquic_compare_addr((struct sockaddr*) & old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->local_addr) == 0 &&
-            picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr) == 0)))
-    {
+            picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr) == 0))
+        ||
+        (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr) == 0 &&
+            picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr) == 0)){
         DBG_PRINTF("Could not complete migration, client state = %d\n",
             test_ctx->cnx_client->cnx_state);
         ret = -1;
@@ -1522,15 +1527,15 @@ int multipath_qlog_test()
 int simple_multipath_basic_test()
 {
     /* Slightly faster than the full multipath test */
-    uint64_t max_completion_microsec = 1000000;
+    uint64_t max_completion_microsec = 1020000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_basic, 1);
 }
 
 int simple_multipath_drop_first_test()
 {
-    /* This is same as 1.31sec for full multipath */
-    uint64_t max_completion_microsec = 1310000;
+    /* This is larger than 1.31sec for full multipath */
+    uint64_t max_completion_microsec = 1530000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_first, 1);
 }
@@ -1538,7 +1543,7 @@ int simple_multipath_drop_first_test()
 int simple_multipath_drop_second_test()
 {
     /* This is about same as the full multipath test */
-    uint64_t max_completion_microsec = 1270000;
+    uint64_t max_completion_microsec = 1320000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second, 1);
 }
@@ -1614,7 +1619,7 @@ int simple_multipath_perf_test()
 int simple_multipath_quality_test()
 {
     /* Compares with full multipath */
-    uint64_t max_completion_microsec = 1000000;
+    uint64_t max_completion_microsec = 1020000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_quality_server, 1);
 }

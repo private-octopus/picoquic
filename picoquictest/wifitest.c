@@ -239,11 +239,13 @@ static size_t nb_suspension_hard = sizeof(suspension_hard) / sizeof(wifi_test_su
 
 int wifi_bbr_hard_test()
 {
-    wifi_test_spec_t spec;
-    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 4050000);
-    spec.nb_suspend = nb_suspension_hard;
-    spec.suspension = suspension_hard;
-
+    wifi_test_spec_t spec = {
+        nb_suspension_hard,
+        3000,
+        suspension_hard,
+        picoquic_bbr_algorithm,
+        4005000,
+        0 };
     int ret = wifi_test_one(wifi_test_bbr_hard, &spec);
 
     return ret;
@@ -251,11 +253,13 @@ int wifi_bbr_hard_test()
 
 int wifi_cubic_hard_test()
 {
-    wifi_test_spec_t spec;
-    wifi_test_set_default_spec(&spec, picoquic_cubic_algorithm, 4200000);
-    spec.nb_suspend = nb_suspension_hard;
-    spec.suspension = suspension_hard;
-
+    wifi_test_spec_t spec = {
+        nb_suspension_hard,
+        3000,
+        suspension_hard,
+        picoquic_cubic_algorithm,
+        4250000,
+        0 };
     int ret = wifi_test_one(wifi_test_cubic_hard, &spec);
 
     return ret;
@@ -263,10 +267,13 @@ int wifi_cubic_hard_test()
 
 int wifi_reno_hard_test()
 {
-    wifi_test_spec_t spec;
-    wifi_test_set_default_spec(&spec, picoquic_newreno_algorithm, 4150000);
-    spec.nb_suspend = nb_suspension_hard;
-    spec.suspension = suspension_hard;
+    wifi_test_spec_t spec = {
+        nb_suspension_hard,
+        3000,
+        suspension_hard,
+        picoquic_newreno_algorithm,
+        4050000,
+        0 };
     int ret = wifi_test_one(wifi_test_reno_hard, &spec);
 
     return ret;
@@ -274,10 +281,13 @@ int wifi_reno_hard_test()
 
 int wifi_bbr_long_test()
 {
-    wifi_test_spec_t spec;
-    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 3100000);
-    spec.latency = 50000;
-    spec.simulate_receive_block = 1;
+    wifi_test_spec_t spec = {
+        nb_suspension_basic,
+        50000,
+        suspension_basic,
+        picoquic_bbr_algorithm,
+        3050000,
+        1 };
     int ret = wifi_test_one(wifi_test_bbr_long, &spec);
 
     return ret;

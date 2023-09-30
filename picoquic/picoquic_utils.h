@@ -65,6 +65,7 @@ extern "C" {
 
 
 void debug_set_stream(FILE *F);
+void debug_set_callback(void (*cb)(const char *msg, void *argp), void *argp);
 void debug_printf(const char* fmt, ...);
 void debug_printf_push_stream(FILE* f);
 void debug_printf_pop_stream(void);

@@ -92,7 +92,7 @@ int test_datagram_send(picoquic_cnx_t* cnx, uint64_t unique_path_id,
         skipping = 1;
         if (dg_ctx->use_extended_provider_api) {
             is_active = test_datagram_check_ready(dg_ctx, cnx->client_mode, current_time);
-            (void)picoquic_provide_datagram_buffer_ex(bytes, 0, is_active);
+            (void)picoquic_provide_datagram_buffer_ex(bytes, 0, (is_active && !dg_ctx->one_datagram_per_packet));
         }
     }
     else if (!dg_ctx->is_ready[cnx->client_mode] || (dg_ctx->test_affinity && unique_path_id != 0)) {
@@ -119,7 +119,9 @@ int test_datagram_send(picoquic_cnx_t* cnx, uint64_t unique_path_id,
             if (dg_ctx->test_affinity) {
                 is_active = picoquic_datagram_active_this_path_only;
             }
+            is_active &= !dg_ctx->one_datagram_per_packet;
             buffer = picoquic_provide_datagram_buffer_ex(bytes, available, is_active);
+            dg_ctx->is_ready[cnx->client_mode] = is_active;
         }
         else {
             buffer = picoquic_provide_datagram_buffer(bytes, available);
@@ -269,6 +271,10 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
             test_ctx->c_to_s_link->microsec_latency = dg_ctx->link_latency;
             test_ctx->s_to_c_link->microsec_latency = dg_ctx->link_latency;
         }
+        if (dg_ctx->picosec_per_byte != 0) {
+            test_ctx->c_to_s_link->picosec_per_byte = dg_ctx->picosec_per_byte;
+            test_ctx->s_to_c_link->picosec_per_byte = dg_ctx->picosec_per_byte;
+        }
         /* Set parameters */
         picoquic_init_transport_parameters(&client_parameters, 1);
         client_parameters.max_datagram_frame_size = dg_ctx->dg_max_size;
@@ -411,6 +417,13 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
                         dg_ctx->max_packets_received, dg_ctx->dg_recv[1], dg_ctx->batch_size[0], test_ctx->cnx_client->nb_packets_received);
                     ret = -1;
                 }
+            }
+
+            if (ret == 0 && dg_ctx->duration_max > 0 && dg_ctx->duration_max < simulated_time) {
+                DBG_PRINTF("Expected test complete in %" PRIu64 ", but simulation lasted until %" PRIu64,
+                    dg_ctx->duration_max, simulated_time);
+                ret = -1;
+
             }
         }
         else {
@@ -601,4 +614,26 @@ int datagram_wifi_test()
     dg_ctx.link_latency = 25000;
 
     return datagram_test_one(8, &dg_ctx, 0);
+}
+
+int datagram_small_packet_test()
+{
+    test_datagram_send_recv_ctx_t dg_ctx = { 0 };
+    dg_ctx.dg_max_size = 512;
+    dg_ctx.dg_small_size = 64;
+    dg_ctx.dg_target[0] = 100;
+    dg_ctx.dg_target[1] = 20000;
+    dg_ctx.send_delay = 100;
+    dg_ctx.next_gen_time[0] = 50000;
+    dg_ctx.next_gen_time[1] = 50000;
+    dg_ctx.link_latency = 10000;
+    dg_ctx.picosec_per_byte = 20000; /* 400 Mbps */
+    dg_ctx.dg_latency_target[0] = 13500;
+    dg_ctx.dg_latency_target[1] = 13500;
+    dg_ctx.use_extended_provider_api = 1;
+    dg_ctx.one_datagram_per_packet = 1;
+    dg_ctx.nb_trials_max = 200000;
+    dg_ctx.duration_max = 2060000;
+
+    return datagram_test_one(9, &dg_ctx, 0);
 }
