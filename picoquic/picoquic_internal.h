@@ -1813,6 +1813,8 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     size_t * length,
     int * add_to_data_repeat_queue);
 
+int picoquic_retransmit_needed(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time, picoquic_packet_t* packet, size_t send_buffer_max, size_t* header_length);
+
 void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc,
     picoquic_local_cnxid_t* l_cid, int is_immediate_ack_required);
 

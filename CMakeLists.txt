@@ -81,6 +81,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/intformat.c
     picoquic/logger.c
     picoquic/logwriter.c
+    picoquic/loss_recovery.c
     picoquic/newreno.c
     picoquic/packet.c
     picoquic/performance_log.c

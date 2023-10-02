@@ -33,8 +33,14 @@
  * first time.
  * 
  * Data is sent in packets, which contain stream frames and possibly other frames.
+ #if 1
+ * The retransmission logic is done by calling functions implemented in
+ * `recovery.c`
+ #else
+ * 
  * The retransmission logic operates on packets. If a packet is seen as lost, the
  * important frames that it contains will have to be retransmitted.
+ #endif
  *
  * Unacknowledged packets are kept in a chained list. Packets get removed from that
  * list during the processing of acknowledgements. Packets are marked lost when a
@@ -1349,6 +1355,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
     }
 }
 
+#if 0
 /* picoquic_retransmit_needed_by_packet:
  * Answer the question, should this packet be considered lost?
  *
@@ -1944,7 +1951,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
     return length;
 }
-
+#endif
 /*
  * Returns true if there is nothing to repeat in the retransmission queue
  */
