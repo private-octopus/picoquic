@@ -44,6 +44,12 @@
 * 
 * This required adding a "spike" simulation in the link simulator,
 * which is provided by the new "suspend" API.
+* 
+* 
+* TODO: develop a version of the "hard" test to validate an adaptive
+* response. Use the "max_rtt", which is dynamic, in pretty much the
+* same way that the "shadow rtt" is used in the current code. 
+* 
 */
 
 typedef enum {
@@ -57,6 +63,7 @@ typedef enum {
     wifi_test_cubic_long,
     wifi_test_bbr_long,
     wifi_test_bbr_shadow,
+    wifi_test_bbr_many
 } wifi_test_enum;
 
 typedef struct st_wifi_test_suspension_t {
@@ -169,6 +176,17 @@ static int wifi_test_one(wifi_test_enum test_id, wifi_test_spec_t * spec)
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, spec->target_time);
     }
 
+    /* Check that RTT max is consistent with suspension time.
+     * Test on server only, as client is only sending ACKs.
+     */
+    if (ret == 0) {
+        if (test_ctx->cnx_server->path[0]->rtt_max < spec->suspension->suspend_interval) {
+            DBG_PRINTF("Expected rtt_max > %" PRIu64 ", got %" PRIu64, spec->suspension->suspend_interval,
+                test_ctx->cnx_server->path[0]->rtt_max);
+            ret = -1;
+        }
+    }
+
     /* Delete the context */
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
@@ -224,7 +242,6 @@ int wifi_reno_test()
 
     return ret;
 }
-
 
 static wifi_test_suspension_t suspension_hard[] = {
     { 1000000, 250000 },
@@ -325,6 +342,31 @@ int wifi_bbr_shadow_test()
     spec.simulate_receive_block = 1;
 
     int ret = wifi_test_one(wifi_test_bbr_shadow, &spec);
+
+    return ret;
+}
+
+static wifi_test_suspension_t suspension_many[] = {
+    { 1000000, 250000 },
+    { 1500000, 250000 },
+    { 2000000, 250000 },
+    { 2500000, 250000 },
+    { 3000000, 250000 },
+    { 3500000, 250000 },
+};
+
+static size_t nb_suspension_many = sizeof(suspension_many) / sizeof(wifi_test_suspension_t);
+
+int wifi_bbr_many_test()
+{
+    wifi_test_spec_t spec = {
+        nb_suspension_many,
+        3000,
+        suspension_many,
+        picoquic_bbr_algorithm,
+        4070000,
+        0 };
+    int ret = wifi_test_one(wifi_test_bbr_many, &spec);
 
     return ret;
 }

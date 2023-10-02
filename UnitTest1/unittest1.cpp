@@ -2027,6 +2027,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(wifi_bbr_many) {
+            int ret = wifi_bbr_many_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(wifi_bbr_shadow) {
             int ret = wifi_bbr_shadow_test();
 
