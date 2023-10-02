@@ -28,11 +28,16 @@
 /* Packet loss recovery logic. This is an implementation of the RACK
  * algorithm, with two key functions:
  * 
- * picoquic_recovery
+ * - picoquic_retransmit_needed: perform the packet number based loss
+ *   detection.
+ * - picoquic_pto_needed: perform the timer based loss detection.
+ * 
+ * We expect the pto code to be called only if there
+ * is nothing else to send on a specific pass -- cwin is blocked,
+ * application is inactive. 
  */
 
 
-#if 1
  /* picoquic_retransmit_needed_by_packet:
  * Answer the question, should this packet be considered lost?
  *
@@ -243,6 +248,40 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     }
 
     return ret;
+}
+
+int picoquic_is_packet_ack_soliciting(picoquic_packet_t * packet)
+{
+    /* check if this is an ACK soliciting packet */
+    int is_ack_soliciting = 0;
+
+    if (packet->is_evaluated) {
+        is_ack_soliciting = packet->is_ack_soliciting;
+    } else {
+        /* Trap packets are never supposed to elicit an ACK. */
+        /* For other packets, we need to look at the frames inside. */
+        if (!packet->is_ack_trap) {
+            size_t frame_length = 0;
+            size_t byte_index = packet->offset;
+
+            while (byte_index < packet->length) {
+                int frame_is_pure_ack = 0;
+                if (picoquic_skip_frame(&packet->bytes[byte_index],
+                    packet->length - byte_index, &frame_length, &frame_is_pure_ack) != 0) {
+                    /* Malformed packet. Ignore it. Do not expect an ack */
+                    break;
+                }
+                if (!frame_is_pure_ack) {
+                    is_ack_soliciting = 1;
+                    break;
+                }
+            }
+        }
+        packet->is_ack_soliciting = is_ack_soliciting;
+        packet->is_evaluated = 1;
+    }
+
+    return is_ack_soliciting;
 }
 
 static int picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
@@ -628,4 +667,75 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
     return length;
 }
-#endif
+
+/* PTO logic, timer based.
+* If the sending time of the last packet plus the retransmit timer
+* is elapsed, something should be resent on that path. However,
+* this should only occur if the "last packet" is ACK eliciting, i.e.,
+* not "is pure ACK".
+* 
+* Testing whether a packet is a "pure ACK" involves checking whether
+* at least on frame in the packet would solicit an acknowledgement.
+* This could be costly.
+* 
+* We could question whether "pure ACK" packets should placed in the
+* retransmitted queue. Keeping them would allow "ack of ack"
+* processing in case of spurious repeat.
+ */
+int picoquic_pto_needed_on_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
+    uint64_t current_time, uint64_t* next_retransmit_time)
+{
+    uint64_t retransmit_time = UINT64_MAX;
+    int should_retransmit = 0;
+    picoquic_packet_t* last_packet = path_x->path_packet_last;
+
+    /* find the "last packet" that is not a pure acknowledgement */
+    while (last_packet != NULL) {
+        /* Find out whether a packet is ACK soliciting */
+        if (!picoquic_is_packet_ack_soliciting(last_packet)){
+            last_packet = last_packet->path_packet_previous;
+            continue;
+        }
+    }
+    /* If there is no ack soliciting packet in queue, last_packet will be NULL */
+    if (last_packet != NULL) {
+        retransmit_time = last_packet->send_time + picoquic_current_retransmit_timer(cnx, path_x);
+        if (current_time >= retransmit_time) {
+            should_retransmit = 1;
+            retransmit_time = current_time;
+        }
+    }
+    *next_retransmit_time = retransmit_time;
+
+    return should_retransmit;
+}
+
+/* In single path operation, just check the default path.
+ * Format a probe packet -- possibly send data from the
+ * oldest no acked packet.
+ * 
+ * The decision to only resend the last packet over a timeout
+ * is a tradeoff between delays and efficiency. Resending
+ * sooner would result in lower latencies, at a risk of
+ * many more spurious retransmissions. We may consider a
+ * control variable to pilot that tradeoff.
+ */
+
+
+/* In multipath operation, we may need to check all paths.
+ * If a path is PTO eligible, it will be marked as "PTO requested".
+ * 
+ * The multipath scheduler will avoid sending more data packets
+ * on a path subject to timeout loss. When packets are declared lost,
+ * the frames in these packets could be resent on any other path.
+ * However, the PTO system will only detect these losses when
+ * one of the packets is finally acknowledged, or when the path
+ * is finally considered broken. This will affect global delays.
+ * 
+ * If there are other paths available, it might be a good idea
+ * to do an opportunistic copy of the last packets onto
+ * other paths, without waiting for those packets to be formally
+ * declared as lost. Or, these packets could be "presumed lost"
+ * after maybe 1 or 2 PTO, so they could be resent on other
+ * paths.
+ */
