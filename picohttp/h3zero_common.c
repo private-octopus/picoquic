@@ -277,7 +277,24 @@ int h3zero_protocol_init(picoquic_cnx_t* cnx)
 	uint8_t decoder_stream_head = 0x03;
 	uint8_t encoder_stream_head = 0x02;
 	uint64_t settings_stream_id = picoquic_get_next_local_stream_id(cnx, 1);
-	int ret = picoquic_add_to_stream(cnx, settings_stream_id, h3zero_default_setting_frame, h3zero_default_setting_frame_size, 0);
+	/* Some of the setting values depend on the presence of connection parameters */
+	uint8_t settings_buffer[256];
+	uint8_t* settings_last = 0;
+	h3zero_settings_t settings = { 0 };
+	int ret = 0;
+
+	settings.enable_connect_protocol = 1;
+	if (cnx->local_parameters.max_datagram_frame_size > 0) {
+		settings.h3_datagram = 1;
+	}
+	settings.webtransport_max_sessions = 1;
+
+	if ((settings_last = h3zero_settings_encode(settings_buffer, settings_buffer + sizeof(settings_buffer), &settings)) == NULL) {
+		ret = H3ZERO_INTERNAL_ERROR;
+	}
+	else {
+		ret = picoquic_add_to_stream(cnx, settings_stream_id, settings_buffer, settings_last - settings_buffer, 0);
+	}
 
 	if (ret == 0) {
 		/* set the settings stream the first stream to write! */
