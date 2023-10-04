@@ -816,7 +816,13 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
 
 void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max)
 {
-    quic->cwin_max = (cwin_max == 0) ? UINT64_MAX : cwin_max;
+    quic->cwin_max = (cwin_max == 0 || cwin_max < PICOQUIC_MAX_PACKET_SIZE) ? UINT64_MAX : cwin_max;
+}
+
+void picoquic_set_cwin_min(picoquic_quic_t* quic, uint64_t cwin_min)
+{
+    quic->cwin_min = (cwin_min > quic->cwin_max || cwin_min < PICOQUIC_MAX_PACKET_SIZE) ? PICOQUIC_CWIN_MINIMUM : cwin_min;
+    fprintf(stderr, "cwin value: %" PRIu64 "\n", quic->cwin_min);
 }
 
 void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data)

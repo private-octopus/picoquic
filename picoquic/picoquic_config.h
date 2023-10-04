@@ -72,6 +72,7 @@ typedef enum {
     picoquic_option_No_GSO,
     picoquic_option_BDP_frame,
     picoquic_option_CWIN_MAX,
+    picoquic_option_CWIN_MIN,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -98,6 +99,7 @@ typedef struct st_picoquic_quic_config_t {
     int multipath_option;
     char *multipath_alt_config;
     int bdp_frame_option;
+    uint64_t cwin_min;
     uint64_t cwin_max;
     /* TODO: control other extensions, e.g. time stamp, ack delay */
     /* Common flags */

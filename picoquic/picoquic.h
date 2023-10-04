@@ -618,6 +618,17 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
  */
 void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max);
 
+/** picoquic_set_cwin_min:
+ *
+ * Set a minimum value for congestion control window (default: PICOQUIC_CWIN_MINIMUM)
+ * This option can be used to change the congestion control minimum value
+ * that would be used during periods of congestion.
+ *
+ * This should be called after calling picoquic_set_cwin_max when also changing
+ * the cwin_max value.
+ */
+void picoquic_set_cwin_min(picoquic_quic_t* quic, uint64_t cwin_min);
+
 /* picoquic_set_max_data_limit: 
 * set a maximum value for the "max data" option, thus limiting the
 * amount of data that the peer will be able to send before data is

@@ -184,12 +184,12 @@ static void picoquic_prague_enter_recovery(
     uint64_t current_time)
 {
     pr_state->ssthresh = path_x->cwin / 2;
-    if (pr_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
-        pr_state->ssthresh = PICOQUIC_CWIN_MINIMUM;
+    if (pr_state->ssthresh < cnx->quic->cwin_min) {
+        pr_state->ssthresh = cnx->quic->cwin_min;
     }
 
     if (notification == picoquic_congestion_notification_timeout) {
-        path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+        path_x->cwin = cnx->quic->cwin_min;
         pr_state->alg_state = picoquic_prague_alg_slow_start;
     }
     else {
@@ -268,8 +268,8 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
                 /* If we got ECN marks in the last RTT, update the ssthresh and the CWIN */
                 uint64_t reduction = (path_x->cwin * pr_state->alpha) / 2048;
                 pr_state->ssthresh = path_x->cwin - reduction;
-                if (pr_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
-                    pr_state->ssthresh = PICOQUIC_CWIN_MINIMUM;
+                if (pr_state->ssthresh < cnx->quic->cwin_min) {
+                    pr_state->ssthresh = cnx->quic->cwin_min;
                 }
                 uint64_t old_cwin = path_x->cwin;
                 path_x->cwin = pr_state->ssthresh;
