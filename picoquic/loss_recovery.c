@@ -134,11 +134,12 @@ static size_t picoquic_retransmit_needed_loop(picoquic_cnx_t* cnx, picoquic_pack
     picoquic_packet_context_enum pc,
     picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time,
     picoquic_packet_t* packet, size_t send_buffer_max, size_t* header_length);
-
+#if 0
 static size_t picoquic_retransmit_needed_multipath(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
     picoquic_packet_context_enum pc,
     picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time,
     picoquic_packet_t* packet, size_t send_buffer_max, size_t length, size_t* header_length);
+#endif
 
 static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
     picoquic_packet_t* old_p,
@@ -149,6 +150,13 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
 
 static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     picoquic_packet_t* p, uint64_t current_time, uint64_t* next_retransmit_time, int* timer_based);
+
+static picoquic_packet_t* picoquic_process_lost_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
+    picoquic_packet_t* old_p,
+    picoquic_packet_context_enum pc,
+    picoquic_path_t* path_x, uint64_t current_time,
+    picoquic_packet_t* packet, size_t send_buffer_max,
+    size_t* length, int* packet_is_pure_ack, size_t* checksum_length);
 
 int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc,
@@ -266,6 +274,58 @@ static size_t picoquic_retransmit_needed_loop(picoquic_cnx_t* cnx, picoquic_pack
     return length;
 }
 
+/*
+* Per packet processing. The code makes a series of determinations:
+* 
+* - Is the packet considered lost? (should really test just numbers)
+* - Should the content of this packet be resent?
+* - Should a copy of this packet be kept in the reransmitted queue?
+* - Should the PTO needed flag be set for the path?
+* - Should the MTU be reset?
+* - Should the path be abandoned?
+* - Should the code continue processing other packets queued in the path?
+* - Should the wakeup timer be reset?
+* 
+* The decisions are based on a series of tests:
+* 
+* - RACK test: are there enough acknowledged packets after this one?
+* - 0RTT test: is this a 0RTT packet, are we expecting ACKs for those?
+* - ACK Trap: not real packets but PNs that were skipped to catch bad receiver behavior.
+* - Initial retransmit: the server should repeat Initial packets because the client did
+* - Pure ACK: if a packet only contains frames that do not need repeating.
+* 
+* TODO:
+* Current decision mixe "is lost" and "needs repeating", with "on timer"
+* indication. This is bad, because "needs repeating" is a decision, which
+* should be in one place.
+* 
+* Need PTO indication is a property of the path, not a property of a packet.
+* 
+* Continue the loop is an artefact of the software code: simple multipath
+* uses a loop per path, the other modes use a loop per number space. Leave it
+* in the per packet code for now. The loop should be:
+* 
+* - while a packet is deemed lost (by number):
+*      - maybe skip if packet is 0RTT.
+*      - just delete the packet if ACK Trap. 
+*      - track MTU issues
+*      - try "copy for retransmit".
+*          - unchain, but only delete if pure ACK.
+*      - do statistics and notifications.
+*      - if copied packet is empty, continue, else stop there.
+* 
+* - After all pure losses have been worked on, check whether the last "ACK
+*   soliciting" packet is too old.
+*      - if yes, set PTO needed.
+*      - exit the loop.
+* 
+* TODO:
+* Path closing logic should probably not use a hard max repeat number.
+* maybe tie that to idle timeout?
+* 
+* Detect a path suspension.
+* 
+ */
 static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
     picoquic_packet_t* old_p,
     picoquic_packet_context_enum pc,
@@ -283,7 +343,6 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
     uint64_t next_retransmit_time = *next_wake_time;
     uint64_t lost_packet_number = old_p->path_packet_number;
     uint8_t* new_bytes = packet->bytes;
-    int ret = 0;
 
     length = 0;
 
@@ -302,7 +361,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
         else {
             if (next_retransmit_time < *next_wake_time) {
                 *next_wake_time = next_retransmit_time;
-                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_LOSS_RECOVERY);
             }
             /* Will not continue */
             *continue_next = 0;
@@ -315,9 +374,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
     else {
         /* check if this is an ACK only packet */
         int packet_is_pure_ack = 1;
-        int do_not_detect_spurious = 1;
         size_t checksum_length = 0;
-        int add_to_data_repeat_queue = 0;
 
         /* we'll report it where it got lost */
         if (old_path) {
@@ -352,60 +409,22 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
         }
 
         if (should_retransmit != 0) {
-            packet->sequence_number = pkt_ctx->send_sequence;
-            packet->send_path = path_x;
-            packet->pc = pc;
-            *header_length = length;
-
-            switch (packet->ptype) {
-            case picoquic_packet_1rtt_protected:
-                checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
-                break;
-            case picoquic_packet_initial:
-                checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_initial);
-                break;
-            case picoquic_packet_handshake:
-                checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
-                break;
-            case picoquic_packet_0rtt_protected:
-                checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_0rtt);
-                break;
-            default:
-                DBG_PRINTF("Trying to retransmit packet type %d", old_p->ptype);
-                checksum_length = 0;
-                break;
-            }
-
-            ret = picoquic_copy_before_retransmit(old_p, cnx,
-                new_bytes,
-                send_buffer_max - checksum_length,
-                &packet_is_pure_ack,
-                &do_not_detect_spurious, 0,
-                &length,
-                &add_to_data_repeat_queue);
-
-            if (ret != 0) {
-                DBG_PRINTF("Copy before retransmit returns %d\n", ret);
-            }
-
-            /* Update the number of bytes in transit and remove old packet from queue */
-            /* If not pure ack, the packet will be placed in the "retransmitted" queue,
-            * in order to enable detection of spurious restransmissions */
-
             picoquic_log_packet_lost(cnx, old_p->send_path, old_p->ptype, old_p->sequence_number,
                 (timer_based_retransmit == 0) ? "repeat" : "timer",
                 (old_p->send_path == NULL) ? NULL : &old_p->send_path->p_remote_cnxid->cnx_id,
                 old_p->length, current_time);
 
-
-            if (old_p->send_path != NULL && (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)) {
-                /* If ack only packets are lost, bundle a ping next time an ACK is sent on that path */
-                old_p->send_path->is_ack_lost = 1;
-            }
             /* Keep track of the path, as "old_p->send_path" will be zeroed when dequeued */
             old_path = old_p->send_path;
-            old_p = picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, packet_is_pure_ack & do_not_detect_spurious,
-                add_to_data_repeat_queue);
+            /* Remember the header length */
+            *header_length = length;
+            /* Parse the old packet, queue frames for retransmit, perhaps copy some
+             * frames into the new packet, dequeue from packet queue and if needed
+             * copy to "retransmitted", return old_p = 0 if freed.
+             */
+            old_p = picoquic_process_lost_packet(cnx, pkt_ctx, old_p, pc, path_x, current_time,
+                packet, send_buffer_max, &length, 
+                &packet_is_pure_ack, &checksum_length);
 
             /* If we have a good packet, return it */
             if (old_p == NULL || packet_is_pure_ack) {
@@ -414,9 +433,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
             }
             else {
                 int exit_early = 0;
-                if (old_path != NULL) {
-                    old_path->lost++;
-                }
+
                 if (old_path != NULL &&
                     (old_p->length + old_p->checksum_overhead) == old_path->send_mtu &&
                     cnx->cnx_state >= picoquic_state_ready) {
@@ -727,6 +744,71 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
 
     return ret;
 }
+
+#if 1
+static picoquic_packet_t* picoquic_process_lost_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
+    picoquic_packet_t* old_p,
+    picoquic_packet_context_enum pc,
+    picoquic_path_t* path_x, uint64_t current_time,
+    picoquic_packet_t* packet, size_t send_buffer_max,
+    size_t* length, int * packet_is_pure_ack, size_t* checksum_length)
+{
+    int do_not_detect_spurious = 1;
+    int add_to_data_repeat_queue = 0;
+    uint8_t* new_bytes = packet->bytes;
+    int ret = 0;
+
+    *packet_is_pure_ack = 1;
+    packet->sequence_number = pkt_ctx->send_sequence;
+    packet->send_path = path_x;
+    packet->pc = pc;
+
+    switch (packet->ptype) {
+    case picoquic_packet_1rtt_protected:
+        *checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
+        break;
+    case picoquic_packet_initial:
+        *checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_initial);
+        break;
+    case picoquic_packet_handshake:
+        *checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
+        break;
+    case picoquic_packet_0rtt_protected:
+        *checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_0rtt);
+        break;
+    default:
+        DBG_PRINTF("Trying to retransmit packet type %d", old_p->ptype);
+        checksum_length = 0;
+        break;
+    }
+
+    ret = picoquic_copy_before_retransmit(old_p, cnx,
+        new_bytes,
+        send_buffer_max - *checksum_length,
+        packet_is_pure_ack,
+        &do_not_detect_spurious, 0,
+        length,
+        &add_to_data_repeat_queue);
+
+    if (ret != 0) {
+        DBG_PRINTF("Copy before retransmit returns %d\n", ret);
+    }
+
+    if (old_p->send_path != NULL && (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)) {
+        /* If ack only packets are lost, bundle a ping next time an ACK is sent on that path */
+        old_p->send_path->is_ack_lost = 1;
+    }
+
+    /* Update the number of bytes in transit and remove old packet from queue */
+    /* If not pure ack, the packet will be placed in the "retransmitted" queue,
+    * in order to enable detection of spurious restransmissions */
+    /* Keep track of the path, as "old_p->send_path" will be zeroed when dequeued */
+    old_p = picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, *packet_is_pure_ack & do_not_detect_spurious,
+        add_to_data_repeat_queue);
+    return old_p;
+}
+#endif
+
 
 
 #if 0

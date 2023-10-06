@@ -1148,7 +1148,6 @@ typedef struct st_picoquic_path_t {
     int paced;
     int congested;
     int selected;
-    int lost;
     int nb_delay_outliers;
 
     /* Path quality callback. These variables store the delta set for signaling

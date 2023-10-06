@@ -2187,7 +2187,7 @@ static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, pico
     quality->pacing_rate = path_x->pacing_rate;
     quality->receive_rate_estimate = path_x->receive_rate_estimate;
     quality->sent = path_x->path_packet_number;
-    quality->lost = path_x->lost;
+    quality->lost = path_x->retrans_count;
     quality->bytes_in_transit = path_x->bytes_in_transit;
 }
 
