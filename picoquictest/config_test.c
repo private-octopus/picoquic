@@ -66,6 +66,7 @@ static picoquic_quic_config_t param1 = {
     3,
     "127.0.0.1",
     1,
+    PICOQUIC_CWIN_MINIMUM,
     UINT64_MAX, /* Do not limit CWIN */
     /* Common flags */
     1, /* unsigned int initial_random : 1; */
