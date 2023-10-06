@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
 
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:M:e:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:M:e:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:u:h";
 
 int config_option_letters_test()
 {
@@ -66,6 +66,7 @@ static picoquic_quic_config_t param1 = {
     3,
     "127.0.0.1",
     1,
+    3072,
     UINT64_MAX, /* Do not limit CWIN */
     /* Common flags */
     1, /* unsigned int initial_random : 1; */
@@ -147,6 +148,7 @@ static picoquic_quic_config_t param2 = {
     0,
     "127.0.0.1",
     0,
+    3072,
     1000000, /* Limit CWIN to 1 million bytes */
     /* Common flags */
     3, /* unsigned int initial_random : 1; */
@@ -294,6 +296,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_int("bdp", expected->bdp_frame_option, actual->bdp_frame_option);
     ret |= config_test_compare_int("idle_timeout", expected->idle_timeout, actual->idle_timeout);
     ret |= config_test_compare_uint64("cwin_max", expected->cwin_max, actual->cwin_max);
+    ret |= config_test_compare_uint64("cwin_min", expected->cwin_min, actual->cwin_min);
     return ret;
 }
 
