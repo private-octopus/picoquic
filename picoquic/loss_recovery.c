@@ -876,10 +876,10 @@ static void picoquic_check_path_mtu_on_losses(
             picoquic_reset_path_mtu(old_p->send_path);
             if (old_mtu != old_p->send_path->send_mtu) {
                 picoquic_log_app_message(cnx,
-                    "Reset path MTU after %d retransmissions, %d MTU losses, %s",
+                    "Reset path MTU after %" PRIu64 " retransmissions, %" PRIu64 "MTU losses, Timer mode : % d",
                     old_p->send_path->nb_retransmit,
                     old_p->send_path->nb_mtu_losses,
-                    (timer_based_retransmit) ? "timer" : "packet");
+                    timer_based_retransmit);
             }
         }
     }
