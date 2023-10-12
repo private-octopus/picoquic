@@ -644,11 +644,6 @@ static int picoquic_is_packet_probably_lost(picoquic_cnx_t* cnx,
         if (retransmit_time_timer < retransmit_time) {
             retransmit_time = retransmit_time_timer;
         }
-#if 1
-        else {
-            DBG_PRINTF("%s", "bug");
-        }
-#endif
     }
     if (*next_retransmit_time > retransmit_time) {
         *next_retransmit_time = retransmit_time;

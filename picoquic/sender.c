@@ -3374,7 +3374,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         packet->checksum_overhead = checksum_overhead;
     }
     else if (cnx->cnx_state == picoquic_state_disconnected) {
-        DBG_PRINTF("Retransmission check caused a disconnect");
+        DBG_PRINTF("%s", "Retransmission check caused a disconnect");
     }
     else {
         length = picoquic_predict_packet_header_length(
