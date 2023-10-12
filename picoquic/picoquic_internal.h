@@ -1008,7 +1008,6 @@ typedef struct st_picoquic_path_t {
     /* The packet list holds unkacknowledged packets sent on this path.*/
     picoquic_packet_t* path_packet_first;
     picoquic_packet_t* path_packet_last;
-    picoquic_packet_t* path_packet_last_eliciting;
     /* status management */
     int status_set_by_peer;
     int status_set_locally;
@@ -1669,8 +1668,6 @@ void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx)
 
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx,  uint64_t current_time, uint64_t * next_wake_time, 
     picoquic_packet_context_enum pc, int is_opportunistic);
-
-int picoquic_is_packet_ack_eliciting(picoquic_packet_t* packet);
 
 int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
     picoquic_local_cnxid_t * l_cid, uint64_t pn64);

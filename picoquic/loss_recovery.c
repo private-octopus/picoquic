@@ -149,12 +149,6 @@ static size_t picoquic_retransmit_needed_loop(picoquic_cnx_t* cnx, picoquic_pack
     picoquic_packet_context_enum pc,
     picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time,
     picoquic_packet_t* packet, size_t send_buffer_max, size_t* header_length);
-#if 0
-static size_t picoquic_retransmit_needed_multipath(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
-    picoquic_packet_context_enum pc,
-    picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time,
-    picoquic_packet_t* packet, size_t send_buffer_max, size_t length, size_t* header_length);
-#endif
 
 static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
     picoquic_packet_t* old_p,
@@ -162,11 +156,6 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
     picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time,
     picoquic_packet_t* packet, size_t send_buffer_max, size_t* header_length,
     int* continue_next);
-
-#if 0
-static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
-    picoquic_packet_t* p, uint64_t current_time, uint64_t* next_retransmit_time, int* timer_based);
-#endif
 
 static picoquic_packet_t* picoquic_process_lost_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
     picoquic_packet_t* old_p,
@@ -176,7 +165,9 @@ static picoquic_packet_t* picoquic_process_lost_packet(picoquic_cnx_t* cnx, pico
     picoquic_packet_t* packet, size_t send_buffer_max,
     size_t* length, int* packet_is_pure_ack, size_t * header_length);
 
-void picoquic_set_wake_up_from_packet_retransmit(
+static int picoquic_is_packet_ack_eliciting(picoquic_packet_t* packet);
+
+static void picoquic_set_wake_up_from_packet_retransmit(
     picoquic_cnx_t* cnx, picoquic_packet_t* old_p, uint64_t current_time, uint64_t* next_wake_time);
 
 int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
@@ -639,6 +630,32 @@ static int picoquic_is_packet_probably_lost(picoquic_cnx_t* cnx,
                 *is_timer_expired = 1;
             }
         }
+        else {
+            /* RACK has failure modes if the sender keeps adding small packets to the
+             * retransmit queue. In that case, we pick a safe timer based retransmit.
+             * The "timer" condition will have consequences on congestion control;
+             * we only set it if the packet is ack eliciting and if another
+             * path is plausible.
+             */
+            uint64_t alt_retransmit_timer = old_p->send_time + 2*picoquic_current_retransmit_timer(cnx, old_p->send_path);
+
+            if (alt_retransmit_timer < last_packet->send_time) {
+                retransmit_time_timer = alt_retransmit_timer;
+
+                if (current_time >= retransmit_time_timer) {
+                    if (picoquic_is_packet_ack_eliciting(old_p) &&
+                        (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) &&
+                        cnx->nb_paths > 1)
+                    {
+                        *is_timer_expired = 1;
+                    }
+                    else {
+                        is_probably_lost = 1;
+                    }
+                }
+            }
+        }
+
         if (retransmit_time_timer < retransmit_time) {
             retransmit_time = retransmit_time_timer;
         }
@@ -650,7 +667,7 @@ static int picoquic_is_packet_probably_lost(picoquic_cnx_t* cnx,
     return is_probably_lost;
 }
 
-void picoquic_set_wake_up_from_packet_retransmit(
+static void picoquic_set_wake_up_from_packet_retransmit(
     picoquic_cnx_t * cnx, picoquic_packet_t * old_p, uint64_t current_time, uint64_t * next_wake_time)
 {
     uint64_t next_retransmit_time = *next_wake_time;
@@ -909,7 +926,7 @@ static void picoquic_count_and_notify_loss(
     }
 }
 
-int picoquic_is_packet_ack_eliciting(picoquic_packet_t * packet)
+static int picoquic_is_packet_ack_eliciting(picoquic_packet_t * packet)
 {
     /* check if this is an ACK eliciting packet */
     int is_ack_eliciting = 0;
