@@ -907,17 +907,6 @@ void picoquic_free(picoquic_quic_t* quic)
         /* delete all the connection contexts -- do this before any other
          * action, as deleting connections may add packets to queues or
          * change connection lists */
-#if 1
-        picoquic_cnx_t* cnx_next = quic->cnx_list;
-        int nb_cnx = 0;
-        while (cnx_next != NULL) {
-            nb_cnx++;
-            cnx_next = cnx_next->next_in_table;
-        }
-        if (nb_cnx > 1) {
-            DBG_PRINTF("There are %d connections in list", nb_cnx);
-        }
-#endif
         while (quic->cnx_list != NULL) {
             picoquic_delete_cnx(quic->cnx_list);
         }
