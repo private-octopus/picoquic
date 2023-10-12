@@ -42,7 +42,7 @@
  *   a very high chance that the packet is actually lost, and the frames
  *   in such packets shall be resent asap.
  * - doing timeout based loss detection. This should only trigger if
- *   the last "ack soliciting" packet in the queue was not acknowledged
+ *   the last "ack eliciting" packet in the queue was not acknowledged
  *   yet. There is a much higher risk of getting these timers wrong
  *   than getting number-based loss detection wrong, so we want to
  *   proceed conservatively.
@@ -311,7 +311,7 @@ static size_t picoquic_retransmit_needed_loop(picoquic_cnx_t* cnx, picoquic_pack
 *      - if copied packet is empty, continue, else stop there.
 * 
 * - After all pure losses have been worked on, check whether the last "ACK
-*   soliciting" packet is too old.
+*   eliciting" packet is too old.
 *      - if yes, set PTO needed.
 *      - exit the loop.
 * 
@@ -338,8 +338,6 @@ static void picoquic_check_path_mtu_on_losses(
 
 static void picoquic_count_and_notify_loss(
     picoquic_cnx_t* cnx, picoquic_packet_t* old_p, int timer_based_retransmit, uint64_t current_time);
-
-static int picoquic_is_packet_ack_soliciting(picoquic_packet_t* packet);
 
 static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_packet_context_t* pkt_ctx, uint64_t current_time);
@@ -448,7 +446,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
         /* The timer is expired */
 
         /* Evaluate whether this packet did in fact require an acknowledgement */
-        if (!picoquic_is_packet_ack_soliciting(old_p)) {
+        if (!picoquic_is_packet_ack_eliciting(old_p)) {
             /* if the packet did not require an acknowledgement, it can be safely
              * removed from the queue, and processing will move to the next packet.
              */
@@ -499,7 +497,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                     }
                     old_path->nb_retransmit++;
                     old_path->last_loss_event_detected = current_time;
-                    if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
+                    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) && cnx->nb_paths > 1) {
                         picoquic_retransmit_path_packet_queue(cnx, old_path, pkt_ctx, current_time);
                     }
                     if (old_path->nb_retransmit > 9 &&
@@ -911,13 +909,13 @@ static void picoquic_count_and_notify_loss(
     }
 }
 
-static int picoquic_is_packet_ack_soliciting(picoquic_packet_t * packet)
+int picoquic_is_packet_ack_eliciting(picoquic_packet_t * packet)
 {
-    /* check if this is an ACK soliciting packet */
-    int is_ack_soliciting = 0;
+    /* check if this is an ACK eliciting packet */
+    int is_ack_eliciting = 0;
 
     if (packet->is_evaluated) {
-        is_ack_soliciting = packet->is_ack_soliciting;
+        is_ack_eliciting = packet->is_ack_eliciting;
     } else {
         /* Trap packets are never supposed to elicit an ACK. */
         /* For other packets, we need to look at the frames inside. */
@@ -933,17 +931,17 @@ static int picoquic_is_packet_ack_soliciting(picoquic_packet_t * packet)
                     break;
                 }
                 if (!frame_is_pure_ack) {
-                    is_ack_soliciting = 1;
+                    is_ack_eliciting = 1;
                     break;
                 }
                 byte_index += frame_length;
             }
         }
-        packet->is_ack_soliciting = is_ack_soliciting;
+        packet->is_ack_eliciting = is_ack_eliciting;
         packet->is_evaluated = 1;
     }
 
-    return is_ack_soliciting;
+    return is_ack_eliciting;
 }
 
 static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
@@ -989,13 +987,15 @@ void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path
 {
     picoquic_packet_context_t* pkt_ctx = NULL;
 
-    if (cnx->cnx_state == picoquic_state_ready) {
+    if (cnx->cnx_state == picoquic_state_ready && cnx->nb_paths > 1) {
         if (cnx->is_multipath_enabled) {
             pkt_ctx = &path_x->p_remote_cnxid->pkt_ctx;
         }
         else {
             pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
         }
-        picoquic_retransmit_path_packet_queue(cnx, path_x, pkt_ctx, current_time);
+        if (pkt_ctx != NULL) {
+            picoquic_retransmit_path_packet_queue(cnx, path_x, pkt_ctx, current_time);
+        }
     }
 }
