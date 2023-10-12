@@ -87,8 +87,7 @@ in the "BBR state" structure, with a few exceptions:
 * BBR.delivered is represented by path_x.delivered, and is maintained
   as part of ACK processing
 
-* Instead of "bytes_in_transit", we use "bytes_in_transit", which is
-  already maintained by the stack.
+* We use "bytes_in_transit", which is already maintained by the stack.
 
 * Compute bytes_delivered by summing all calls to ACK(bytes) before
   the call to RTT update.

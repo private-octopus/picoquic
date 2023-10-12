@@ -1052,11 +1052,19 @@ typedef struct st_picoquic_path_t {
     uint64_t last_packet_received_at;
     uint64_t last_loss_event_detected;
     uint64_t nb_retransmit; /* Number of timeout retransmissions since last ACK */
+#if 0
     uint64_t retrans_count; /* Number of packet losses for the path */
+#endif
+    uint64_t total_bytes_lost; /* Sum of length of packet lost on this path */
+    uint64_t nb_losses_found;
     uint64_t nb_spurious; /* Number of spurious retransmissiosn for the path */
     uint64_t path_packet_acked_number; /* path packet number of highest ack */
     uint64_t path_packet_acked_time_sent; /* path packet number of highest ack */
     uint64_t path_packet_acked_received; /* time at which the highest ack was received */
+                                         
+    /* Loss bit data */
+    uint64_t nb_losses_reported;
+    uint64_t q_square;
     /* Time measurement */
     uint64_t max_ack_delay;
     uint64_t rtt_sample;
@@ -1133,12 +1141,6 @@ typedef struct st_picoquic_path_t {
 
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;
-
-    /* Loss bit data */
-    uint64_t total_bytes_lost; /* Sum of length of packet lost on this path */
-    uint64_t nb_losses_found;
-    uint64_t nb_losses_reported;
-    uint64_t q_square;
 
     /* Debug MP */
     int lost_after_delivered;
@@ -1507,6 +1509,7 @@ void picoquic_dequeue_packet_from_path(picoquic_packet_t* p);
 void picoquic_empty_path_packet_queue(picoquic_path_t* path_x);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
+void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);

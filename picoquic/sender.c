@@ -33,10 +33,8 @@
  * first time.
  * 
  * Data is sent in packets, which contain stream frames and possibly other frames.
- #if 1
  * The retransmission logic is done by calling functions implemented in
- * `recovery.c`
- #else
+ * `loss_recovery.c`
  * 
  * The retransmission logic operates on packets. If a packet is seen as lost, the
  * important frames that it contains will have to be retransmitted.
@@ -1678,7 +1676,9 @@ picoquic_pmtu_discovery_status_enum picoquic_is_mtu_probe_needed(picoquic_cnx_t*
 {
     int ret = picoquic_pmtu_discovery_not_needed;
 
-    if ((cnx->cnx_state == picoquic_state_ready || cnx->cnx_state == picoquic_state_client_ready_start || cnx->cnx_state == picoquic_state_server_false_start)
+    if ((cnx->cnx_state == picoquic_state_ready || 
+        cnx->cnx_state == picoquic_state_client_ready_start || 
+        cnx->cnx_state == picoquic_state_server_false_start)
         && path_x->mtu_probe_sent == 0 && cnx->pmtud_policy != picoquic_pmtud_blocked) {
         if (path_x->send_mtu_max_tried == 0 || path_x->send_mtu_max_tried > 1400) {
             /* MTU discovery is required if the chances of success are large enough
@@ -2154,6 +2154,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             packet->length = length;
             packet->send_time = current_time;
             packet->checksum_overhead = checksum_overhead;
+            *is_initial_sent = (packet->ptype == picoquic_packet_initial);
         }
         else if (ret == 0 && is_cleartext_mode && tls_ready == 0
             && cnx->first_misc_frame == NULL && !cnx->ack_ctx[pc].act[0].ack_needed && !force_handshake_padding) {
@@ -3372,7 +3373,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         packet->send_time = current_time;
         packet->checksum_overhead = checksum_overhead;
     }
-    else if (ret == 0) {
+    else if (cnx->cnx_state == picoquic_state_disconnected) {
+        DBG_PRINTF("Retransmission check caused a disconnect");
+    }
+    else {
         length = picoquic_predict_packet_header_length(
             cnx, packet_type, pkt_ctx);
         packet->ptype = packet_type;
@@ -3465,7 +3469,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 /* Compute the length before entering the CC block */
                 length = bytes_next - bytes;
 
-                if ((path_x->cwin < path_x->bytes_in_transit || cnx->quic->cwin_max < path_x->bytes_in_transit) &&!path_x->is_pto_required) {
+                if ((path_x->cwin < path_x->bytes_in_transit || cnx->quic->cwin_max < path_x->bytes_in_transit)
+                    &&!path_x->is_pto_required) {
                     cnx->cwin_blocked = 1;
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(cnx, path_x,

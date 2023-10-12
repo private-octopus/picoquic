@@ -1867,7 +1867,6 @@ uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
      * properly initialized when the packet is placed in the queue */
     picoquic_packet_t* packet = cnx->data_repeat_first;
 
-
     while (packet != NULL && bytes_next < bytes_max) {
         if (packet->data_repeat_frame < packet->length) {
             size_t last_frame = packet->data_repeat_frame;
