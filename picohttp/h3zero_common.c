@@ -274,8 +274,8 @@ uint64_t h3zero_parse_stream_prefix(uint8_t* buffer_8, size_t* nb_in_buffer, uin
 
 int h3zero_protocol_init(picoquic_cnx_t* cnx)
 {
-	uint8_t decoder_stream_head = 0x03;
-	uint8_t encoder_stream_head = 0x02;
+	uint8_t decoder_stream_head = (uint8_t)h3zero_stream_type_qpack_decoder;
+	uint8_t encoder_stream_head = (uint8_t)h3zero_stream_type_qpack_encoder;
 	uint64_t settings_stream_id = picoquic_get_next_local_stream_id(cnx, 1);
 	/* Some of the setting values depend on the presence of connection parameters */
 	uint8_t settings_buffer[256];
@@ -289,7 +289,8 @@ int h3zero_protocol_init(picoquic_cnx_t* cnx)
 	}
 	settings.webtransport_max_sessions = 1;
 
-	if ((settings_last = h3zero_settings_encode(settings_buffer, settings_buffer + sizeof(settings_buffer), &settings)) == NULL) {
+	settings_buffer[0] = (uint8_t)h3zero_stream_type_control;
+	if ((settings_last = h3zero_settings_encode(settings_buffer + 1, settings_buffer + sizeof(settings_buffer), &settings)) == NULL) {
 		ret = H3ZERO_INTERNAL_ERROR;
 	}
 	else {
