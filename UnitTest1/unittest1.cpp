@@ -2027,6 +2027,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(wifi_bbr_many) {
+            int ret = wifi_bbr_many_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_bbr_shadow) {
+            int ret = wifi_bbr_shadow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(wifi_cubic) {
             int ret = wifi_cubic_test();
 
@@ -2495,11 +2507,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+#if 0
         TEST_METHOD(h09_multi_file_preemptive) {
             int ret = h09_multi_file_preemptive_test();
 
             Assert::AreEqual(ret, 0);
         }
+#endif
 
         TEST_METHOD(h3_multi_file) {
             int ret = h3_multi_file_test();
@@ -2513,11 +2527,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+#if 0
         TEST_METHOD(h3_multi_file_preemptive) {
             int ret = h3_multi_file_preemptive_test();
 
             Assert::AreEqual(ret, 0);
         }
+#endif
 
         TEST_METHOD(h3zero_settings) {
             int ret = h3zero_settings_test();

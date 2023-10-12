@@ -154,6 +154,7 @@
     <ClCompile Include="intformat.c" />
     <ClCompile Include="logger.c" />
     <ClCompile Include="logwriter.c" />
+    <ClCompile Include="loss_recovery.c" />
     <ClCompile Include="newreno.c" />
     <ClCompile Include="performance_log.c" />
     <ClCompile Include="picoquic_lb.c" />

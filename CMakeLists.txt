@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.12.0
+        VERSION 1.1.12.1
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -81,6 +81,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/intformat.c
     picoquic/logger.c
     picoquic/logwriter.c
+    picoquic/loss_recovery.c
     picoquic/newreno.c
     picoquic/packet.c
     picoquic/performance_log.c

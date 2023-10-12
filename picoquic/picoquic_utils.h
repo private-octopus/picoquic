@@ -61,6 +61,7 @@ extern "C" {
 #define PICOQUIC_PACKET 2
 #define PICOQUIC_QUICCTX 3
 #define PICOQUIC_FRAME 4
+#define PICOQUIC_LOSS_RECOVERY 5
 #define SET_LAST_WAKE(quic, file_id) ((quic)->wake_file = file_id, (quic)->wake_line = __LINE__)
 
 

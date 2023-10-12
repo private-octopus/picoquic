@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.12.0"
+#define PICOQUIC_VERSION "1.1.12.1"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1339,7 +1339,7 @@ typedef enum {
     picoquic_congestion_notification_reset
 } picoquic_congestion_notification_t;
 
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x, uint64_t current_time);
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
@@ -1378,6 +1378,20 @@ void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_c
 void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
+
+/* Special code for Wi-Fi network. These networks are subject to occasional
+ * "suspension", for power saving reasons. If the suspension is too long,
+ * it causes transmission to stop after cngestion control credits are
+ * exhausted. We expect that the effects of suspension are not so bad if
+ * the congestion control parameters allow for transmission through the
+ * suspension. The "wifi shadow RTT" parameter tells the congestion control
+ * algorithm BBR to set the CWIN large enough to sustain transmission through
+ * that duration. The value is in microseconds.
+ * 
+ * This parameter should be set before the first connections are started.
+ * Changing the settings will not affect existing connections.
+ */
+void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt);
 
 /* Bandwidth update and congestion control parameters value.
  * Congestion control in picoquic is characterized by three values:

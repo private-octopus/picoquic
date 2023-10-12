@@ -87,8 +87,7 @@ in the "BBR state" structure, with a few exceptions:
 * BBR.delivered is represented by path_x.delivered, and is maintained
   as part of ACK processing
 
-* Instead of "bytes_in_transit", we use "bytes_in_transit", which is
-  already maintained by the stack.
+* We use "bytes_in_transit", which is already maintained by the stack.
 
 * Compute bytes_delivered by summing all calls to ACK(bytes) before
   the call to RTT update.
@@ -254,6 +253,8 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t loss_interval_start; /* Time in microsec when last loss considered */
     uint64_t congestion_sequence; /* sequence number after congestion notification */
 
+    uint64_t wifi_shadow_rtt; /* Shadow RTT used for wifi connections. */
+
     unsigned int filled_pipe : 1;
     unsigned int round_start : 1;
     unsigned int rt_prop_expired : 1;
@@ -322,7 +323,11 @@ uint64_t BBRInflight(picoquic_bbr_state_t* bbr_state, double gain)
     uint64_t cwnd = PICOQUIC_CWIN_INITIAL;
     if (bbr_state->rt_prop != UINT64_MAX){
         /* Bandwidth is estimated in bytes per second, rtt in microseconds*/
-        double estimated_bdp = (((double)BBRGetBtlBW(bbr_state) * (double)bbr_state->rt_prop) / 1000000.0);
+        uint64_t rt_target = bbr_state->rt_prop;
+        if (bbr_state->rt_prop < bbr_state->wifi_shadow_rtt) {
+            rt_target = bbr_state->wifi_shadow_rtt;
+        }
+        double estimated_bdp = (((double)BBRGetBtlBW(bbr_state) * (double)rt_target) / 1000000.0);
         uint64_t quanta = 3 * bbr_state->send_quantum;       
         cwnd = (uint64_t)(gain * estimated_bdp) + quanta;
     }
@@ -335,11 +340,12 @@ void BBRUpdateTargetCwnd(picoquic_bbr_state_t* bbr_state)
     bbr_state->target_cwnd = BBRInflight(bbr_state, bbr_state->cwnd_gain);
 }
 
-static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time, uint64_t wifi_shadow_rtt)
 {
     memset(bbr_state, 0, sizeof(picoquic_bbr_state_t));
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
     bbr_state->rt_prop = UINT64_MAX;
+    bbr_state->wifi_shadow_rtt = wifi_shadow_rtt;
 
     bbr_state->rt_prop_stamp = current_time;
     bbr_state->cycle_stamp = current_time;
@@ -351,13 +357,14 @@ static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t*
     BBRUpdateTargetCwnd(bbr_state);
 }
 
-static void picoquic_bbr_init(picoquic_path_t* path_x, uint64_t current_time)
+static void picoquic_bbr_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)malloc(sizeof(picoquic_bbr_state_t));
+
     path_x->congestion_alg_state = (void*)bbr_state;
     if (bbr_state != NULL) {
-        picoquic_bbr_reset(bbr_state, path_x, current_time);
+        picoquic_bbr_reset(bbr_state, path_x, current_time, cnx->quic->wifi_shadow_rtt);
     }
 }
 
@@ -1135,7 +1142,7 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_cwin_blocked:
             break;
         case picoquic_congestion_notification_reset:
-            picoquic_bbr_reset(bbr_state, path_x, current_time);
+            picoquic_bbr_reset(bbr_state, path_x, current_time, cnx->quic->wifi_shadow_rtt);
             break;
         case picoquic_congestion_notification_seed_cwin:
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
