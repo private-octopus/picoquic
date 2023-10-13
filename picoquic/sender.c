@@ -3475,6 +3475,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
                 if ((path_x->cwin < path_x->bytes_in_transit || cnx->quic->cwin_max < path_x->bytes_in_transit)
                     &&!path_x->is_pto_required) {
+                  
                     cnx->cwin_blocked = 1;
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(cnx, path_x,
