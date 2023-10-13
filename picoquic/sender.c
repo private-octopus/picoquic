@@ -3746,7 +3746,7 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
         if (idle_timer < 3 * rto) {
             idle_timer = 3 * rto;
         }
-        idle_timer += cnx->latest_progress_time;
+        idle_timer += cnx->latest_receive_time;
 
         if (idle_timer < cnx->idle_timeout) {
             idle_timer = UINT64_MAX;
@@ -4147,10 +4147,10 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     struct sockaddr_storage addr_to_log;
     struct sockaddr_storage addr_from_log;
     uint64_t initial_next_time;
-    uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
+    uint64_t next_wake_time = cnx->latest_receive_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
 
     if (cnx->local_parameters.idle_timeout >(PICOQUIC_MICROSEC_SILENCE_MAX / 500)) {
-        next_wake_time = cnx->latest_progress_time + cnx->local_parameters.idle_timeout * 1000ull;
+        next_wake_time = cnx->latest_receive_time + cnx->local_parameters.idle_timeout * 1000ull;
     }
 
     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);

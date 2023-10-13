@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.13)
  option(picoquic_BUILD_TESTS "Build Tests for picoquic" OFF)
 
 project(picoquic
-        VERSION 1.1.12.2
+        VERSION 1.1.12.3
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
