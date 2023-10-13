@@ -204,9 +204,7 @@ if(PICOQUIC_FETCH_PTLS)
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-add_subdirectory( deps/picotls  )
-set( PTLS_INCLUDE_DIRS deps/picotls/include )
-set( PTLS_LIBRARIES picotls-openssl )
+find_package(PTLS REQUIRED)
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
 message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
 
