@@ -2150,7 +2150,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         if (ret == 0 && retransmit_possible &&
             (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_max, &header_length)) > 0) {
             /* Check whether it makes sens to add an ACK at the end of the retransmission */
-            if (epoch != picoquic_epoch_0rtt) {
+            if (epoch != picoquic_epoch_0rtt && length > header_length) {
                 bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc, 0);
                 length = bytes_next - bytes;
             } 
@@ -3057,7 +3057,9 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet,
                         send_buffer_min_max, &header_length)) > 0) {
                     /* Check whether it makes sense to add an ACK at the end of the retransmission */
-                    if (bytes + length + 256 < bytes_max) {
+                    /* Testing header length for defense in depth -- avoid creating new packet if
+                     * picoquic_retransmit_needed erroneously returns length <= header_length */
+                    if (bytes + length + 256 < bytes_max && length > header_length) {
                         /* Don't do that if it risks mixing clear text and encrypted ack */
                         bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
                             current_time, pc, 0);
@@ -3366,7 +3368,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, 
         send_buffer_min_max, &header_length)) > 0) {
         /* Check whether it makes sense to add an ACK at the end of the retransmission */
-        if (bytes + length + 256 < bytes_max) {
+        /* Testing header length for defense in depth -- avoid creating new packet if
+         * picoquic_retransmit_needed erroneously returns length <= header_length */
+        if (bytes + length + 256 < bytes_max  && length > header_length) {
             /* Don't do that if it risks mixing clear text and encrypted ack */
             bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
                 current_time, pc, !is_nominal_ack_path);
