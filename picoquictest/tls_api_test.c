@@ -1820,6 +1820,11 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
             nb_inactive = 0;
         } else {
             nb_inactive++;
+#if 1
+            if (nb_inactive >= 128) {
+                DBG_PRINTF("%s", "bug");
+            }
+#endif
         }
 
         if (test_ctx->test_finished) {
