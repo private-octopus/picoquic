@@ -51,6 +51,7 @@ int intformattest();
 int sacktest();
 int StreamZeroFrameTest();
 int sendacktest();
+int sendack_loop_test();
 #if 0
 /* The TLS API connect test is only useful when debugging issues step by step */
 int tls_api_connect_test();

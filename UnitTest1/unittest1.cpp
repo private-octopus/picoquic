@@ -277,6 +277,13 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
+        TEST_METHOD(ack_loop)
+        {
+            int ret = sendack_loop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_range)
         {
             int ret = ackrange_test();
