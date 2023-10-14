@@ -1063,7 +1063,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
         if (fin) {
             stream->fin_received = 1;
             should_notify = 1;
-            cnx->latest_progress_time = current_time;
+            cnx->latest_receive_time = current_time;
             picoquic_update_max_stream_ID_local(cnx, stream);
         }
 
@@ -1112,7 +1112,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
             }
             else if (new_data_available) {
                 should_notify = 1;
-                cnx->latest_progress_time = current_time;
+                cnx->latest_receive_time = current_time;
             }
 
             if (ret == 0 && should_notify != 0 && cnx->callback_fn != NULL) {
@@ -3302,7 +3302,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                 if (pkt_ctx->latest_time_acknowledged < top_packet->send_time) {
                     pkt_ctx->latest_time_acknowledged = top_packet->send_time;
                 }
-                cnx->latest_progress_time = current_time;
+                cnx->latest_receive_time = current_time;
                 if (packet_data != NULL) {
                     packet_data->last_ack_delay = ack_delay;
                 }
@@ -5444,7 +5444,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
         process_decoded_packet_data(cnx, path_x, current_time, &packet_data);
 
         if (ack_needed) {
-            cnx->latest_progress_time = current_time;
+            cnx->latest_receive_time = current_time;
             picoquic_set_ack_needed(cnx, current_time, pc, path_x->p_local_cnxid, 0);
         }
 
