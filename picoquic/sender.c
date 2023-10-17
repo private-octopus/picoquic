@@ -352,7 +352,7 @@ uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir)
 }
 
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint16_t local_stream_error)
+    uint64_t stream_id, uint64_t local_stream_error)
 {
     int ret = 0;
     picoquic_stream_head_t* stream = NULL;
@@ -4358,7 +4358,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         p_addr_to, p_addr_from, if_index, NULL);
 }
 
-int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code)
+int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code)
 {
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(cnx->quic);
