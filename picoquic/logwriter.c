@@ -1136,7 +1136,7 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         bytewrite_vint(ps_msg, path->send_mtu);
         bytewrite_vint(ps_msg, path->pacing_packet_time_microsec);
         if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
-            bytewrite_vint(ps_msg, path->retrans_count);
+            bytewrite_vint(ps_msg, path->nb_losses_found);
             bytewrite_vint(ps_msg, path->nb_spurious);
         }
         else {

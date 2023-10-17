@@ -1780,6 +1780,13 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
         cnx->path[path_index]->path_is_demoted = 1;
         cnx->path[path_index]->demotion_time = current_time + 3* demote_timer;
         cnx->path_demotion_needed = 1;
+
+        /* TODO: add suspended callback */
+
+        /* if in multipath, call "retransmit on path demoted" */
+        if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
+            picoquic_retransmit_demoted_path(cnx, cnx->path[path_index], current_time);
+        }
     }
 }
 
@@ -1814,7 +1821,7 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
 
         /* Set the congestion algorithm for the new path */
         if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_init(path_x, current_time);
+            cnx->congestion_alg->alg_init(cnx, path_x, current_time);
         }
 
         /* Mark old path as demoted */
@@ -1945,21 +1952,18 @@ void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx, uint64_t curre
         int path_id = picoquic_find_path_by_address(cnx, addr_local, addr_peer, &partial_match);
 
         if (path_id >= 0) {
-            cnx->path[path_id]->path_is_demoted = 1;
-            cnx->path[path_id]->demotion_time = current_time;
-            cnx->path_demotion_needed = 1;
-
             for (int i = 0; no_path_left && i < cnx->nb_paths; i++) {
                 no_path_left &= cnx->path[i]->path_is_demoted;         
             }
-
             if (no_path_left) {
-                picoquic_log_app_message(cnx, "Deleting connection after error on path %d,  socket error %d, if %d", path_id, socket_err, if_index);
-                cnx->local_error = PICOQUIC_ERROR_SOCKET_ERROR;
-                picoquic_connection_disconnect(cnx);
+                /* Caution here: ICMP packets could be forged */
+                if (cnx->cnx_state == picoquic_state_ready) {
+                    picoquic_set_path_challenge(cnx, path_id, current_time);
+                }
             }
             else {
                 picoquic_log_app_message(cnx, "Demoting path %d after socket error %d, if %d", path_id, socket_err, if_index);
+                picoquic_demote_path(cnx, path_id, current_time);
             }
         }
     }
@@ -2188,7 +2192,7 @@ static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, pico
     quality->pacing_rate = path_x->pacing_rate;
     quality->receive_rate_estimate = path_x->receive_rate_estimate;
     quality->sent = path_x->path_packet_number;
-    quality->lost = path_x->lost;
+    quality->lost = path_x->nb_losses_found;
     quality->bytes_in_transit = path_x->bytes_in_transit;
 }
 
@@ -3182,6 +3186,11 @@ void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_
         if (cnx->path[i]->p_local_cnxid == l_cid) {
             cnx->path[i]->p_local_cnxid = NULL;
             cnx->path[i]->was_local_cnxid_retired = 1;
+
+            if (cnx->cnx_state == picoquic_state_ready &&
+                (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)) {
+                picoquic_set_path_challenge(cnx, i, picoquic_get_quic_time(cnx->quic));
+            }
         }
     }
 
@@ -3584,7 +3593,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
         cnx->congestion_alg = cnx->quic->default_congestion_alg;
         if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_init(cnx->path[0], start_time);
+            cnx->congestion_alg->alg_init(cnx, cnx->path[0], start_time);
         }
     }
 
@@ -4511,10 +4520,15 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
     if (cnx->congestion_alg != NULL) {
         if (cnx->path != NULL) {
             for (int i = 0; i < cnx->nb_paths; i++) {
-                cnx->congestion_alg->alg_init(cnx->path[i], picoquic_get_quic_time(cnx->quic));
+                cnx->congestion_alg->alg_init(cnx, cnx->path[i], picoquic_get_quic_time(cnx->quic));
             }
         }
     }
+}
+
+void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt)
+{
+    quic->wifi_shadow_rtt = wifi_shadow_rtt;
 }
 
 void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrease_threshold, uint64_t increase_threshold)

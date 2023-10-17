@@ -29,9 +29,6 @@
 #include "h3zero.h"
 #include "h3zero_common.h"
 #include "democlient.h"
-#include "demoserver.h"
-#include "siduck.h"
-#include "quicperf.h"
 
 /*
  * Incoming data call back.
@@ -183,7 +180,7 @@ int h3zero_server_parse_path(const uint8_t * path, size_t path_length, uint64_t 
 
 /* Prepare to send. This is the same code as on the client side, except for the
  * delayed opening of the data file */
-int h3zero_server_prepare_to_send(void* context, size_t space, picohttp_server_stream_ctx_t* stream_ctx)
+int h3zero_server_prepare_to_send(void* context, size_t space, h3zero_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
 
@@ -195,7 +192,7 @@ int h3zero_server_prepare_to_send(void* context, size_t space, picohttp_server_s
     }
 
     if (ret == 0) {
-        ret = demo_client_prepare_to_send(context, space, stream_ctx->echo_length, &stream_ctx->echo_sent,
+        ret = h3zero_prepare_and_send_data(context, space, stream_ctx->echo_length, &stream_ctx->echo_sent,
             stream_ctx->F);
     }
 
