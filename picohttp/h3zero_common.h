@@ -113,11 +113,27 @@ extern "C" {
         uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
         char* file_path;
         FILE* F;
-        /* Callback processing -- handling of POST and of Web Transport */
-        uint64_t control_stream_id;
         picohttp_post_data_cb_fn path_callback;
         void* path_callback_ctx;
     } h3zero_stream_ctx_t;
+
+    /* Parsing of a data stream. This is implemented as a filter, with a set of states:
+    *
+    * - Reading frame length: obtaining the length and type of the next frame.
+    * - Reading header frame: obtaining the bytes of the data frame.
+    *   When all bytes are obtained, the header is parsed and the header
+    *   structure is documented. State moves back to initial, with header-read
+    *   flag set. Having two frame headers before a data frame is a bug.
+    * - Reading data frame: the frame header indicated a data frame of
+    *   length N. Treat the following N bytes as data.
+    *
+    * There may be several data frames in a stream. The application will pick
+    * the bytes and treat them as data.
+    */
+    uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
+        h3zero_data_stream_state_t * stream_state, size_t * available_data, uint64_t * error_found);
+
+    void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state);
 
     void* picohttp_stream_node_value(picosplay_node_t* node);
     void h3zero_init_stream_tree(picosplay_tree_t* h3_stream_tree);
@@ -143,6 +159,7 @@ extern "C" {
 
     /* handling of setting frames */
     uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const h3zero_settings_t* settings);
+    const uint8_t* h3zero_settings_components_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings);
     const uint8_t* h3zero_settings_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings);
 
     /* Handling of stream prefixes, for applications that use it.
@@ -180,6 +197,8 @@ extern "C" {
         picohttp_server_path_item_t * path_table;
         size_t path_table_nb;
         char const* web_folder;
+        /* Settings */
+        h3zero_settings_t settings;
         /* connection wide tracking of stream prefixes */
         h3zero_stream_prefixes_t stream_prefixes;
         uint64_t last_datagram_prefix;

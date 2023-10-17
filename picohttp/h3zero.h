@@ -202,12 +202,13 @@ typedef struct st_h3zero_header_parts_t {
 #define h3zero_settings_webtransport_max_sessions 0xc671706aull
 
 typedef struct st_h3zero_settings_t {
+    uint64_t webtransport_max_sessions;
     uint64_t table_size;
     uint64_t max_header_list_size;
     uint64_t blocked_streams;
     unsigned int enable_connect_protocol : 1;
     unsigned int h3_datagram : 1;
-    uint64_t webtransport_max_sessions;
+    unsigned int settings_received : 1;
 } h3zero_settings_t;
 
 extern uint8_t const * h3zero_default_setting_frame;
@@ -244,8 +245,10 @@ uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes
 uint8_t* h3zero_create_bad_method_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max, char const* server_string);
 
 typedef struct st_h3zero_data_stream_state_t {
+    struct st_h3zero_callback_ctx_t* h3_ctx;
     h3zero_header_parts_t header;
     h3zero_header_parts_t trailer;
+    uint64_t stream_type;
     uint8_t * current_frame;
     uint64_t current_frame_type;
     uint64_t current_frame_length;
@@ -259,6 +262,8 @@ typedef struct st_h3zero_data_stream_state_t {
     unsigned int header_found : 1;
     unsigned int data_found : 1;
     unsigned int trailer_found : 1;
+    unsigned int is_h3_control : 1;
+    unsigned int is_current_frame_ignored : 1;
     /* Keeping track of FIN sent and FIN received, so applications can delete stream contexts that are not useful */
     unsigned int is_fin_received : 1; 
     unsigned int is_fin_sent : 1;
@@ -278,12 +283,10 @@ typedef struct st_h3zero_data_stream_state_t {
 * the bytes and treat them as data.
 */
 
-uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
-    h3zero_data_stream_state_t * stream_state, size_t * available_data, uint16_t * error_found);
-
+size_t h3zero_varint_skip(const uint8_t* bytes);
+size_t h3zero_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
+uint8_t* h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t* result, uint8_t* buffer, size_t* buffer_length);
 void h3zero_release_header_parts(h3zero_header_parts_t* header);
-
-void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state);
 
 int hzero_qpack_huffman_decode(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t * decoded, size_t max_decoded, size_t * nb_decoded);

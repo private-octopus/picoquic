@@ -358,7 +358,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             h3zero_delete_stream_prefix(cnx, baton_ctx->h3_ctx, stream_ctx->stream_id);
         }
     }
-    else if (stream_ctx->control_stream_id == UINT64_MAX) {
+    else if (stream_ctx->ps.stream_state.control_stream_id == UINT64_MAX) {
         picoquic_log_app_message(cnx, "Received FIN after baton close on stream %" PRIu64, stream_ctx->stream_id);
     }
     else if (baton_ctx->baton_state != wt_baton_state_ready &&
@@ -664,9 +664,9 @@ void wt_baton_unlink_context(picoquic_cnx_t* cnx,
             h3zero_stream_ctx_t* stream_ctx =
                 (h3zero_stream_ctx_t*)picohttp_stream_node_value(next);
 
-            if (control_stream_ctx->stream_id == stream_ctx->control_stream_id &&
+            if (control_stream_ctx->stream_id == stream_ctx->ps.stream_state.control_stream_id &&
                 control_stream_ctx->stream_id != stream_ctx->stream_id) {
-                stream_ctx->control_stream_id = UINT64_MAX;
+                stream_ctx->ps.stream_state.control_stream_id = UINT64_MAX;
                 stream_ctx->path_callback = NULL;
                 stream_ctx->path_callback_ctx = NULL;
                 picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
@@ -876,7 +876,7 @@ int wt_baton_ctx_init(wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx, 
         if (stream_ctx != NULL) {
             /* Register the control stream and the stream id */
             baton_ctx->control_stream_id = stream_ctx->stream_id;
-            stream_ctx->control_stream_id = stream_ctx->stream_id;
+            stream_ctx->ps.stream_state.control_stream_id = stream_ctx->stream_id;
             ret = h3zero_declare_stream_prefix(baton_ctx->h3_ctx, stream_ctx->stream_id, wt_baton_callback, baton_ctx);
         }
         else {

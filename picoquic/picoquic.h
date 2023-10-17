@@ -738,7 +738,7 @@ int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
  * to the context after making this call will cause an error, which
  * makes it unsafe to use inside a callback.
  */
-int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code);
+int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code);
 
 void picoquic_close_immediate(picoquic_cnx_t* cnx);
 
@@ -1186,7 +1186,7 @@ uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
 /* Ask the peer to stop sending on a stream. The peer is expected
  * to reset that stream when receiving the "stop sending" signal. */
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint16_t local_stream_error);
+    uint64_t stream_id, uint64_t local_stream_error);
 
 /* Discard stream. This is equivalent to sending a stream reset
  * and a stop sending request, and also setting the app context
