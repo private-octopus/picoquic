@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.13)
 
- option(picoquic_BUILD_TESTS "Build Tests for picoquic" OFF)
+# Building tests by default depends on whether this is a subproject
+if(DEFINED PROJECT_NAME)
+    option(picoquic_BUILD_TESTS "Build Tests for picoquic" OFF)
+else()
+    option(picoquic_BUILD_TESTS "Build Tests for picoquic" ON)
+endif()
 
 project(picoquic
         VERSION 1.1.12.3
