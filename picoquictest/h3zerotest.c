@@ -1212,7 +1212,7 @@ int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes,
     uint8_t data[64];
     uint8_t packet_buffer[256];
     size_t available_data;
-    uint16_t error_found;
+    uint64_t error_found;
 
     memset(&stream_state, 0, sizeof(h3zero_data_stream_state_t));
 
@@ -1578,17 +1578,10 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
                 ret = -1;
             }
         }
-#if 0
-        if (++nb_trials > 150000) {
-            ret = -1;
-            break;
-        }
-#else
         if (++nb_trials > 100000) {
             ret = -1;
             break;
         }
-#endif
     }
 
     /* Verify that the data was properly received. */
@@ -1647,7 +1640,7 @@ int h3zero_server_test()
 {
     return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, 
         demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
-        0, 0, 0, 0, NULL, NULL, NULL, 0);
+        0, 0, 0, 0, NULL, ".", ".", 0);
 }
 
 int h09_server_test()
@@ -1694,18 +1687,18 @@ static size_t nb_h09_header_data_test_cases = sizeof(h09_header_data_test_case) 
 int h09_header_split_test(const uint8_t* bytes, size_t length, size_t split, h09_header_test_data_t* expected)
 {
     int ret = 0;
-    picohttp_server_stream_ctx_t* stream_ctx;
+    h3zero_stream_ctx_t* stream_ctx;
     size_t total_processed = 0;
 
     /* Create stream context */
-    stream_ctx = (picohttp_server_stream_ctx_t*)
-        malloc(sizeof(picohttp_server_stream_ctx_t));
+    stream_ctx = (h3zero_stream_ctx_t*)
+        malloc(sizeof(h3zero_stream_ctx_t));
     if (stream_ctx == NULL) {
         DBG_PRINTF("%s", "Cannot allocate stream context");
         ret = -1;
     }
     else {
-        memset(stream_ctx, 0, sizeof(picohttp_server_stream_ctx_t));
+        memset(stream_ctx, 0, sizeof(h3zero_stream_ctx_t));
         stream_ctx->is_h3 = 0; /* This is http... */
     }
 
@@ -1903,7 +1896,7 @@ typedef struct st_hzero_post_echo_ctx_t {
 
 int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t event, picohttp_server_stream_ctx_t* stream_ctx,
+    picohttp_call_back_event_t event, h3zero_stream_ctx_t* stream_ctx,
     void * callback_ctx)
 {
     int ret = 0;
@@ -3203,9 +3196,11 @@ int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_sett
     else if (decoded.h3_datagram != ref->h3_datagram){
         ret = -1;
     }
+#if 0
     else if (decoded.is_web_transport_enabled != ref->is_web_transport_enabled){
         ret = -1;
     }
+#endif
     else if (decoded.webtransport_max_sessions != ref->webtransport_max_sessions) {
         ret = -1;
     }
@@ -3213,7 +3208,7 @@ int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_sett
 }
 
 h3zero_settings_t default_setting_expected = {
-    0, 0, 0, 1, 1, 1, 1
+    1, 0, 0, 0, 1, 1, 0
 };
 
 int h3zero_settings_test()

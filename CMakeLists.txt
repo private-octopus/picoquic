@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.11.1
+        VERSION 1.1.12.3
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -71,41 +71,43 @@ if(ENABLE_UBSAN)
 endif()
 
 set(PICOQUIC_LIBRARY_FILES
-        picoquic/bbr.c
-        picoquic/bytestream.c
-        picoquic/cc_common.c
-        picoquic/config.c
-        picoquic/cubic.c
-        picoquic/fastcc.c
-        picoquic/frames.c
-        picoquic/intformat.c
-        picoquic/logger.c
-        picoquic/logwriter.c
-        picoquic/newreno.c
-        picoquic/packet.c
-        picoquic/performance_log.c
-        picoquic/picohash.c
-        picoquic/picoquic_lb.c
-        picoquic/picoquic_ptls_fusion.c
-        picoquic/picoquic_ptls_minicrypto.c
-        picoquic/picoquic_ptls_openssl.c
-        picoquic/picosocks.c
-        picoquic/picosplay.c
-        picoquic/port_blocking.c
-        picoquic/prague.c
-        picoquic/quicctx.c
-        picoquic/sacks.c
-        picoquic/sender.c
-        picoquic/sim_link.c
-        picoquic/sockloop.c
-        picoquic/spinbit.c
-        picoquic/ticket_store.c
-        picoquic/timing.c
-        picoquic/token_store.c
-        picoquic/tls_api.c
-        picoquic/transport.c
-        picoquic/unified_log.c
-        picoquic/util.c)
+
+    picoquic/bbr.c
+    picoquic/bytestream.c
+    picoquic/cc_common.c
+    picoquic/config.c
+    picoquic/cubic.c
+    picoquic/fastcc.c
+    picoquic/frames.c
+    picoquic/intformat.c
+    picoquic/logger.c
+    picoquic/logwriter.c
+    picoquic/loss_recovery.c
+    picoquic/newreno.c
+    picoquic/packet.c
+    picoquic/performance_log.c
+    picoquic/picohash.c
+    picoquic/picoquic_lb.c
+    picoquic/picoquic_ptls_fusion.c
+    picoquic/picoquic_ptls_minicrypto.c
+    picoquic/picoquic_ptls_openssl.c
+    picoquic/picosocks.c
+    picoquic/picosplay.c
+    picoquic/port_blocking.c
+    picoquic/prague.c
+    picoquic/quicctx.c
+    picoquic/sacks.c
+    picoquic/sender.c
+    picoquic/sim_link.c
+    picoquic/sockloop.c
+    picoquic/spinbit.c
+    picoquic/ticket_store.c
+    picoquic/timing.c
+    picoquic/token_store.c
+    picoquic/tls_api.c
+    picoquic/transport.c
+    picoquic/unified_log.c
+    picoquic/util.c)
 
 set(PICOQUIC_CORE_HEADERS
         picoquic/picoquic.h

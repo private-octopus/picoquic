@@ -162,49 +162,6 @@ static picoquic_demo_client_stream_ctx_t* picoquic_demo_client_find_stream(
     return stream_ctx;
 }
 
-
-int demo_client_prepare_to_send(void * context, size_t space, uint64_t echo_length, uint64_t * echo_sent, FILE * F)
-{
-    int ret = 0;
-
-    if (*echo_sent < echo_length) {
-        uint8_t * buffer;
-        uint64_t available = echo_length - *echo_sent;
-        int is_fin = 1;
-
-        if (available > space) {
-            available = space;
-            is_fin = 0;
-        }
-
-        buffer = picoquic_provide_stream_data_buffer(context, (size_t)available, is_fin, !is_fin);
-        if (buffer != NULL) {
-            if (F) {
-                size_t nb_read = fread(buffer, 1, (size_t)available, F);
-
-                if (nb_read != available) {
-                    ret = -1;
-                }
-                else {
-                    *echo_sent += available;
-                    ret = 0;
-                }
-            }
-            else {
-                /* TODO: fill buffer with some text */
-                memset(buffer, 0x5A, (size_t)available);
-                *echo_sent += available;
-                ret = 0;
-            }
-        }
-        else {
-            ret = -1;
-        }
-    }
-
-    return ret;
-}
-
 /* HTTP 0.9 client. 
  * This is the client that was used for QUIC interop testing prior
  * to availability of HTTP 3.0. It allows for testing transport
@@ -506,7 +463,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             if (ret == 0 && length > 0) {
                 switch (ctx->alpn) {
                 case picoquic_alpn_http_3: {
-                    uint16_t error_found = 0;
+                    uint64_t error_found = 0;
                     size_t available_data = 0;
                     uint8_t * bytes_max = bytes + length;
                     while (bytes < bytes_max) {
@@ -640,7 +597,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             return 0;
         }
         else {
-            return demo_client_prepare_to_send((void*)bytes, length, stream_ctx->post_size, &stream_ctx->post_sent, NULL);
+            return h3zero_prepare_and_send_data((void*)bytes, length, stream_ctx->post_size, &stream_ctx->post_sent, NULL);
         }
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:

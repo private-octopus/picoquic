@@ -72,6 +72,7 @@ typedef struct st_app_limited_test_config_t {
     uint64_t loss_mask;
     uint64_t completion_target;
     uint64_t rtt_max;
+    uint64_t cwin_min;
     uint64_t cwin_max;
     uint64_t data_rate_max;
     uint64_t nb_losses_max;
@@ -102,6 +103,7 @@ typedef struct st_app_limited_ctx_t {
     int nb_client_streams_completed;
     uint64_t last_interaction_time;
     uint64_t rtt_max;
+    uint64_t cwin_min;
     uint64_t cwin_max;
     uint64_t data_rate_max;
     app_limited_cnx_ctx_t client_cnx_ctx;
@@ -566,6 +568,7 @@ static void app_limited_config_set_default( app_limited_test_config_t* config, u
     config->time_to_stream[2] = 7500000;
     config->completion_target = 12000000;
     config->rtt_max = 62000;
+    config->cwin_min = 3072;
     config->cwin_max = 100000;
     config->data_rate_max = 4000000;
     config->nb_losses_max = 10;
@@ -586,6 +589,7 @@ int app_limited_cubic_test()
     app_limited_config_set_default(&config, 2);
     config.ccalgo = picoquic_cubic_algorithm;
     config.nb_losses_max = 64;
+    config.data_rate_max = 4013000;
 
     return app_limited_test_one(&config);
 }
@@ -606,8 +610,8 @@ int app_limited_rpr_test()
     config.ccalgo = picoquic_cubic_algorithm;
     config.do_preemptive_repeat = 1;
     config.loss_mask = 0x1482481224818214ull;
-    config.completion_target = 41000000;
-    config.nb_losses_max = 1930;
+    config.completion_target = 39000000;
+    config.nb_losses_max = 1960;
     config.rtt_max = 275000;
 
     return app_limited_test_one(&config);

@@ -44,7 +44,13 @@ int baton_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_
 static void usage(char const * sample_name)
 {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    %s server_name port path [nb_rounds]\n", sample_name);
+    fprintf(stderr, "    %s server_name port path\n", sample_name);
+    fprintf(stderr, "The path argument may include parameters:\n");
+    fprintf(stderr, " - version: baton protocol version,\n");
+    fprintf(stderr, " - baton: initial version value,\n");
+    fprintf(stderr, " - count: number of rounds,\n");
+    fprintf(stderr, " - inject: inject error for testing\n");
+    fprintf(stderr, "For example, set a path like /baton?count=17 to have 17 rounds of baton exchange.");
     exit(1);
 }
 
@@ -67,23 +73,13 @@ int main(int argc, char** argv)
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
 
-    if (argc < 4 || argc > 5) {
+    if (argc != 4) {
         usage(argv[0]);
     }
     else {
         char const* server_name = argv[1];
         int server_port = get_port(argv[0], argv[2]);
         char const * path = argv[3];
-        int nb_rounds = 15;
-        if (argc == 5) {
-            char* end_of_int = NULL;
-            nb_rounds = (int)strtol(argv[4], &end_of_int, 10);
-            if (nb_rounds < 0 || end_of_int == NULL || *end_of_int != 0 ||
-                (end_of_int - argv[4]) > 3) {
-                fprintf(stderr, "Invalid number of rounds: %s\n", argv[4]);
-                usage(argv[0]);
-            }
-        }
 
         ret = wt_baton_client(server_name, server_port, path);
 
@@ -242,7 +238,7 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
     printf("Final baton state: %d\n", baton_ctx.baton_state);
     printf("Nb turns: %d\n", baton_ctx.nb_turns);
     /* print statistics per lane */
-    for (size_t i = 0; i < baton_ctx.count; i++) {
+    for (size_t i = 0; i < baton_ctx.nb_lanes; i++) {
         printf("Lane %zu, first baton: 0x%02x, last sent: 0x%02x, last received: 0x%02x\n", i,
             baton_ctx.lanes[i].first_baton, baton_ctx.lanes[i].baton, baton_ctx.lanes[i].baton_received);
     }

@@ -31,7 +31,7 @@
 #include "picoquic_internal.h"
 #include "picosocks.h"
 #include "picoquic_utils.h"
-#include "h3zero.c"
+#include "h3zero.h"
 #include "democlient.h"
 #include "picoquic_packet_loop.h"
 
@@ -178,7 +178,7 @@ int quicwind_callback(picoquic_cnx_t* cnx,
             if (length > 0) {
                 switch (ctx->alpn) {
                 case picoquic_alpn_http_3: {
-                    uint16_t error_found = 0;
+                    uint64_t error_found = 0;
                     size_t available_data = 0;
                     uint8_t * bytes_max = bytes + length;
                     while (bytes < bytes_max) {

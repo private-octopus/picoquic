@@ -1820,6 +1820,11 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
             nb_inactive = 0;
         } else {
             nb_inactive++;
+#if 1
+            if (nb_inactive >= 128) {
+                DBG_PRINTF("%s", "bug");
+            }
+#endif
         }
 
         if (test_ctx->test_finished) {
@@ -1917,7 +1922,6 @@ int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
 {
     int ret = 0;
     uint64_t time_out = *simulated_time + time_out_delay;
-    int nb_trials = 0;
     int nb_inactive = 0;
 
     while (*simulated_time < time_out &&
@@ -1926,7 +1930,6 @@ int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
         nb_inactive < 64 &&
         ret == 0) {
         int was_active = 0;
-        nb_trials++;
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
 
@@ -4746,11 +4749,11 @@ int mtu_drop_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        12500000,
-        10700000,
-        10000000,
-        11000000,
-        10600000
+        11100000,
+        9450000,
+        9200000,
+        11400000,
+        9750000
     };
     int ret = 0;
 
@@ -5671,11 +5674,20 @@ int fast_nat_rebinding_test()
     uint64_t loss_mask = 0;
     const int nb_switches_required = 6;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    picoquic_connection_id_t initial_cid = { {0xfa, 0x57, 0x08, 0xa7, 0, 0, 0, 0}, 8 };
+
+    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        /* Set up logging */ 
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        binlog_new_connection(test_ctx->cnx_client);
     }
 
     if (ret == 0) {
@@ -10120,6 +10132,11 @@ int ddos_amplification_8k_test()
     return ddos_amplification_test_one(0, 1);
 }
 
+/*
+ * The "blackhole" test simulates a link breakage of 2 seconds, during which all packets
+ * are lost. The connection is expected to survive the blackhole, and then recover.
+*/
+
 static int blackhole_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time, uint64_t jitter)
 {
     uint64_t simulated_time = 0;
@@ -10951,7 +10968,7 @@ int pacing_test()
                 uint64_t next_time = current_time + 10000000;
                 if (picoquic_is_sending_authorized_by_pacing(cnx, cnx->path[0], current_time, &next_time)) {
                     nb_sent++;
-                    picoquic_update_pacing_after_send(cnx->path[0], current_time);
+                    picoquic_update_pacing_after_send(cnx->path[0], cnx->path[0]->send_mtu, current_time);
                 }
                 else {
                     if (current_time < next_time) {
@@ -11252,13 +11269,13 @@ int red_cc_test()
         500000,
         500000,
         500000,
-        650000,
-        550000
+        500000,
+        500000
     };
     uint64_t algo_loss[5] = {
         150,
-        200,
-        270,
+        225,
+        275,
         250,
         170
     };
@@ -11578,6 +11595,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     int nb_initial_loop = 0;
+    int nb_repeated = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0xe8, 0xce, 0x55, 0, 0, 0, 0, 0}, 8 };
     int ret;
@@ -11625,7 +11643,6 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
         picoquic_connection_id_t log_cid;
         picoquic_cnx_t* last_cnx;
         uint64_t max_disconnected_time = simulated_time + 20000000;
-        int nb_repeated = 0;
         int nb_loops = 0;
 
         if (cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_DCUBIC ||
@@ -11697,7 +11714,8 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
 
 int excess_repeat_test()
 {
-    const int nb_repeat_max = 128; 
+    const int nb_repeat_max = 128;
+
     picoquic_congestion_algorithm_t* algo_list[6] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,

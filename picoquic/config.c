@@ -697,12 +697,14 @@ int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
 
                 if (option_index == -1) {
                     char buffer[256];
-                    fprintf(stderr, "Unknown option: -%s\n", config_optval_string(buffer, 256, line + name_offset, name_length));
+                    fprintf(stderr, "Line %d, unknown option: -%s\n", line_number,
+                        config_optval_string(buffer, 256, line + name_offset, name_length));
                     ret = -1;
                 }
                 else {
                     if (option_table[option_index].nb_params_required != nb_params) {
-                        fprintf(stderr, "option %s requires %d arguments, %d present\n",
+                        fprintf(stderr, "Line %d, option %s requires %d arguments, %d present\n",
+                            line_number,
                             option_table[option_index].option_name,
                             option_table[option_index].nb_params_required,
                             nb_params);
@@ -713,7 +715,7 @@ int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
                 if (ret == 0) {
                     offset = skip_name(line, offset);
                     if (line[offset] != 0 && line[offset] != '#') {
-                        fprintf(stderr, "Unexpected character at position %d\n", offset);
+                        fprintf(stderr, "Line %d, unexpected character at position %d\n", line_number, offset);
                     }
                 }
 
@@ -907,6 +909,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     config->cnx_id_length = -1;
     config->nb_connections = 256;
     config->initial_random = 3;
+    config->cwin_min = PICOQUIC_CWIN_MINIMUM;
     config->cwin_max = UINT64_MAX;
 }
 

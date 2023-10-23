@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.11.1"
+#define PICOQUIC_VERSION "1.1.12.3"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -749,7 +749,7 @@ int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
  * to the context after making this call will cause an error, which
  * makes it unsafe to use inside a callback.
  */
-int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code);
+int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code);
 
 void picoquic_close_immediate(picoquic_cnx_t* cnx);
 
@@ -866,6 +866,7 @@ typedef struct st_picoquic_path_quality_t {
     uint64_t pacing_rate; /* bytes per second */
     uint64_t cwin; /* number of bytes in congestion window */
     uint64_t rtt; /* smoothed estimate of roundtrip time in micros seconds */
+    uint64_t rtt_sample; /* most recent RTT sample */
     uint64_t rtt_variant; /* estimate of RTT variability */
     uint64_t rtt_min; /* minimum value of RTT, computed since path creation */
     uint64_t rtt_max; /* maximum value of RTT, computed since path creation */
@@ -1197,7 +1198,7 @@ uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
 /* Ask the peer to stop sending on a stream. The peer is expected
  * to reset that stream when receiving the "stop sending" signal. */
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint16_t local_stream_error);
+    uint64_t stream_id, uint64_t local_stream_error);
 
 /* Discard stream. This is equivalent to sending a stream reset
  * and a stop sending request, and also setting the app context
@@ -1350,7 +1351,7 @@ typedef enum {
     picoquic_congestion_notification_reset
 } picoquic_congestion_notification_t;
 
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x, uint64_t current_time);
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
@@ -1389,6 +1390,20 @@ void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_c
 void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
+
+/* Special code for Wi-Fi network. These networks are subject to occasional
+ * "suspension", for power saving reasons. If the suspension is too long,
+ * it causes transmission to stop after cngestion control credits are
+ * exhausted. We expect that the effects of suspension are not so bad if
+ * the congestion control parameters allow for transmission through the
+ * suspension. The "wifi shadow RTT" parameter tells the congestion control
+ * algorithm BBR to set the CWIN large enough to sustain transmission through
+ * that duration. The value is in microseconds.
+ * 
+ * This parameter should be set before the first connections are started.
+ * Changing the settings will not affect existing connections.
+ */
+void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt);
 
 /* Bandwidth update and congestion control parameters value.
  * Congestion control in picoquic is characterized by three values:

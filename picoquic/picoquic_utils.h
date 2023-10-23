@@ -61,10 +61,12 @@ extern "C" {
 #define PICOQUIC_PACKET 2
 #define PICOQUIC_QUICCTX 3
 #define PICOQUIC_FRAME 4
+#define PICOQUIC_LOSS_RECOVERY 5
 #define SET_LAST_WAKE(quic, file_id) ((quic)->wake_file = file_id, (quic)->wake_line = __LINE__)
 
 
 void debug_set_stream(FILE *F);
+void debug_set_callback(void (*cb)(const char *msg, void *argp), void *argp);
 void debug_printf(const char* fmt, ...);
 void debug_printf_push_stream(FILE* f);
 void debug_printf_pop_stream(void);

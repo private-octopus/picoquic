@@ -397,7 +397,7 @@ typedef struct st_picoquic_packet_t {
     picoquic_packet_type_enum ptype;
     picoquic_packet_context_enum pc;
     unsigned int is_evaluated : 1;
-    unsigned int is_pure_ack : 1;
+    unsigned int is_ack_eliciting : 1;
     unsigned int is_mtu_probe : 1;
     unsigned int is_multipath_probe : 1;
     unsigned int is_ack_trap : 1;
@@ -666,6 +666,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_stateless_packet_t* pending_stateless_packet;
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;
+    uint64_t wifi_shadow_rtt;
 
     struct st_picoquic_cnx_t* cnx_list;
     struct st_picoquic_cnx_t* cnx_last;
@@ -1052,11 +1053,19 @@ typedef struct st_picoquic_path_t {
     uint64_t last_packet_received_at;
     uint64_t last_loss_event_detected;
     uint64_t nb_retransmit; /* Number of timeout retransmissions since last ACK */
+#if 0
     uint64_t retrans_count; /* Number of packet losses for the path */
+#endif
+    uint64_t total_bytes_lost; /* Sum of length of packet lost on this path */
+    uint64_t nb_losses_found;
     uint64_t nb_spurious; /* Number of spurious retransmissiosn for the path */
     uint64_t path_packet_acked_number; /* path packet number of highest ack */
     uint64_t path_packet_acked_time_sent; /* path packet number of highest ack */
     uint64_t path_packet_acked_received; /* time at which the highest ack was received */
+                                         
+    /* Loss bit data */
+    uint64_t nb_losses_reported;
+    uint64_t q_square;
     /* Time measurement */
     uint64_t max_ack_delay;
     uint64_t rtt_sample;
@@ -1134,12 +1143,6 @@ typedef struct st_picoquic_path_t {
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;
 
-    /* Loss bit data */
-    uint64_t total_bytes_lost; /* Sum of length of packet lost on this path */
-    uint64_t nb_losses_found;
-    uint64_t nb_losses_reported;
-    uint64_t q_square;
-
     /* Debug MP */
     int lost_after_delivered;
     int responder;
@@ -1148,7 +1151,6 @@ typedef struct st_picoquic_path_t {
     int paced;
     int congested;
     int selected;
-    int lost;
     int nb_delay_outliers;
 
     /* Path quality callback. These variables store the delta set for signaling
@@ -1508,6 +1510,7 @@ void picoquic_dequeue_packet_from_path(picoquic_packet_t* p);
 void picoquic_empty_path_packet_queue(picoquic_path_t* path_x);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
+void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);
@@ -1565,7 +1568,7 @@ picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* res
 
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int slow_start);
-void picoquic_update_pacing_after_send(picoquic_path_t* path_x, uint64_t current_time);
+void picoquic_update_pacing_after_send(picoquic_path_t* path_x, size_t length, uint64_t current_time);
 int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_time);
 /* Reset pacing data if congestion algorithm computes it directly */
 void picoquic_update_pacing_rate(picoquic_cnx_t* cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
@@ -1812,6 +1815,8 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     int force_queue,
     size_t * length,
     int * add_to_data_repeat_queue);
+
+int picoquic_retransmit_needed(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time, picoquic_packet_t* packet, size_t send_buffer_max, size_t* header_length);
 
 void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc,
     picoquic_local_cnxid_t* l_cid, int is_immediate_ack_required);
