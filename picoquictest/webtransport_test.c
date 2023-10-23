@@ -193,6 +193,11 @@ static int picowt_baton_test_one(
             ret = -1;
         }
     }
+    /* Verify that settings were correctly received */
+    if (ret == 0 && !h3zero_cb->settings.settings_received) {
+        DBG_PRINTF("Settings not received at t: %llu", simulated_time);
+        ret = -1;
+    }
     /* verify that the execution time is as expected */
     if (ret == 0 && completion_target != 0) {
         if (simulated_time > completion_target) {

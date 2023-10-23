@@ -2190,6 +2190,7 @@ static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, pico
     picoquic_refresh_path_quality_thresholds(path_x);
     quality->cwin = path_x->cwin;
     quality->rtt = path_x->smoothed_rtt;
+    quality->rtt_sample = path_x->rtt_sample;
     quality->rtt_min = path_x->rtt_min;
     quality->rtt_max = path_x->rtt_max;
     quality->rtt_variant = path_x->rtt_variant;

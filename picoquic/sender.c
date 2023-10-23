@@ -352,7 +352,7 @@ uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir)
 }
 
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint16_t local_stream_error)
+    uint64_t stream_id, uint64_t local_stream_error)
 {
     int ret = 0;
     picoquic_stream_head_t* stream = NULL;
@@ -2150,7 +2150,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         if (ret == 0 && retransmit_possible &&
             (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_max, &header_length)) > 0) {
             /* Check whether it makes sens to add an ACK at the end of the retransmission */
-            if (epoch != picoquic_epoch_0rtt) {
+            if (epoch != picoquic_epoch_0rtt && length > header_length) {
                 bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc, 0);
                 length = bytes_next - bytes;
             } 
@@ -3057,7 +3057,9 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet,
                         send_buffer_min_max, &header_length)) > 0) {
                     /* Check whether it makes sense to add an ACK at the end of the retransmission */
-                    if (bytes + length + 256 < bytes_max) {
+                    /* Testing header length for defense in depth -- avoid creating new packet if
+                     * picoquic_retransmit_needed erroneously returns length <= header_length */
+                    if (bytes + length + 256 < bytes_max && length > header_length) {
                         /* Don't do that if it risks mixing clear text and encrypted ack */
                         bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
                             current_time, pc, 0);
@@ -3366,7 +3368,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, 
         send_buffer_min_max, &header_length)) > 0) {
         /* Check whether it makes sense to add an ACK at the end of the retransmission */
-        if (bytes + length + 256 < bytes_max) {
+        /* Testing header length for defense in depth -- avoid creating new packet if
+         * picoquic_retransmit_needed erroneously returns length <= header_length */
+        if (bytes + length + 256 < bytes_max  && length > header_length) {
             /* Don't do that if it risks mixing clear text and encrypted ack */
             bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
                 current_time, pc, !is_nominal_ack_path);
@@ -4359,7 +4363,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         p_addr_to, p_addr_from, if_index, NULL);
 }
 
-int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code)
+int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code)
 {
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(cnx->quic);

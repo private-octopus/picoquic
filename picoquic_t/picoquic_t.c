@@ -75,6 +75,7 @@ static const picoquic_test_def_t test_table[] = {
     { "dataqueue_packet", dataqueue_packet_test },
     { "stateless_blowback", test_stateless_blowback },
     { "ack_send", sendacktest },
+    { "ack_loop", sendack_loop_test },
     { "ack_range", ackrange_test },
     { "ack_disorder", ack_disorder_test },
     { "ack_horizon", ack_horizon_test },
