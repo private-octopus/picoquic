@@ -568,7 +568,7 @@ static void app_limited_config_set_default( app_limited_test_config_t* config, u
     config->time_to_stream[2] = 7500000;
     config->completion_target = 12000000;
     config->rtt_max = 62000;
-    config->cwin_min = 10000;
+    config->cwin_min = 3072;
     config->cwin_max = 100000;
     config->data_rate_max = 4000000;
     config->nb_losses_max = 10;

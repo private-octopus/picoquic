@@ -909,6 +909,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     config->cnx_id_length = -1;
     config->nb_connections = 256;
     config->initial_random = 3;
+    config->cwin_min = PICOQUIC_CWIN_MINIMUM;
     config->cwin_max = UINT64_MAX;
 }
 

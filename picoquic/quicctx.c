@@ -652,6 +652,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         quic->stateless_reset_next_time = current_time;
         quic->stateless_reset_min_interval = PICOQUIC_MICROSEC_STATELESS_RESET_INTERVAL_DEFAULT;
         quic->default_stream_priority = PICOQUIC_DEFAULT_STREAM_PRIORITY;
+        quic->cwin_min = PICOQUIC_CWIN_MINIMUM;
         quic->cwin_max = UINT64_MAX;
         quic->sequence_hole_pseudo_period = PICOQUIC_DEFAULT_HOLE_PERIOD;
 
