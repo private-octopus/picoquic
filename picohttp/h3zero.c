@@ -1008,8 +1008,6 @@ uint8_t * h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t
 {
     uint8_t* bp = buffer + *buffer_length;
     uint8_t* be;
-    int ret = 0;
-
 
     if (bytes == bytes_max){
         return bytes; /* continuing */
@@ -1028,7 +1026,6 @@ uint8_t * h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t
         if ((*buffer_length = bp - be) > 0) {
             memmove(buffer, be, *buffer_length);
         }
-        ret = 1;
     }
     return bytes;
 }
