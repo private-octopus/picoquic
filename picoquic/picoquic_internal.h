@@ -150,6 +150,8 @@ typedef enum {
     picoquic_frame_type_ack_mp_ecn =  0x15228c01,
     picoquic_frame_type_path_abandon =  0x15228c05,
     picoquic_frame_type_path_status =  0x15228c06,
+    picoquic_frame_type_path_standby =  0x15228c07,
+    picoquic_frame_type_path_available =  0x15228c08,
     picoquic_frame_type_bdp = 0xebd9
 } picoquic_frame_type_enum_t;
 
@@ -581,7 +583,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_min_ack_delay 0xff04de1aull 
 #define picoquic_tp_enable_time_stamp 0x7158  /* x&1 */
 #define picoquic_tp_grease_quic_bit 0x2ab2
-#define picoquic_tp_enable_multipath 0x0f739bbc1b666d05ull
+#define picoquic_tp_enable_multipath 0x0f739bbc1b666d06ull
 #define picoquic_tp_enable_simple_multipath  0x29e3d19e
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
@@ -1896,6 +1898,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_skip_path_status_frame(const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_skip_path_available_or_standby_frame(const uint8_t* bytes, const uint8_t* bytes_max);
 
 int picoquic_decode_closing_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, int* closing_received);
 
