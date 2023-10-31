@@ -247,14 +247,6 @@ static uint8_t test_frame_type_path_abandon_1[] = {
     (uint8_t)'d',
 };
 
-static uint8_t test_frame_type_path_status[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_status >> 24)), (uint8_t)(picoquic_frame_type_path_status >> 16),
-    (uint8_t)(picoquic_frame_type_path_status >> 8), (uint8_t)(picoquic_frame_type_path_status & 0xFF),
-    0x00, /* Path 0 */
-    0x0F, /* Sequence = 0x0F */
-    0x01 /* Available */
-};
-
 static uint8_t test_frame_type_path_standby[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_standby >> 24)), (uint8_t)(picoquic_frame_type_path_standby >> 16),
     (uint8_t)(picoquic_frame_type_path_standby >> 8), (uint8_t)(picoquic_frame_type_path_standby & 0xFF),
@@ -323,7 +315,6 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("path_status", test_frame_type_path_status, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_standby", test_frame_type_path_standby, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_available", test_frame_type_path_available, 0, 0, 3, 0, 0),
 

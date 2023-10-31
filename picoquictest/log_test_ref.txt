@@ -34,7 +34,6 @@
     Time Stamp: 1024
     Path Abandon, path_id: 1, reason: 0
     Path Abandon, path_id: 1, reason: 17: bad
-    Path Status, path_id: 0, sequence: 15, status: 1
     path_standby, path_id: 0, sequence: 15
     path_available, path_id: 0, sequence: 15
     BDP sample, lifetime: 1, bytes_in_flight: 2, min_rtt: 3, ip: 0a000001

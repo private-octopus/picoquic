@@ -409,16 +409,6 @@ static const uint8_t* picoquic_log_path_abandon_frame(FILE* f, const uint8_t* by
     return bytes;
 }
 
-static const uint8_t* picoquic_log_path_status_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
-{
-    const uint8_t* bytes_begin = bytes;
-    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
-    bytes = picoquic_skip_path_status_frame(bytes, bytes_max); /* skip status frame */
-    picoquic_binlog_frame(f, bytes_begin, bytes);
-
-    return bytes;
-}
-
 static const uint8_t* picoquic_log_path_available_or_standby_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
@@ -595,9 +585,6 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
             break;
         case picoquic_frame_type_path_abandon:
             bytes = picoquic_log_path_abandon_frame(f, bytes, bytes_max);
-            break;
-        case picoquic_frame_type_path_status:
-            bytes = picoquic_log_path_status_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_path_standby:
         case picoquic_frame_type_path_available:

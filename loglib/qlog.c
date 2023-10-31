@@ -792,20 +792,6 @@ void qlog_path_abandon_frame(FILE* f, bytestream* s)
     }
 }
 
-void qlog_path_status_frame(FILE* f, bytestream* s)
-{
-    uint64_t path_id = 0;
-    uint64_t sequence;
-    uint64_t status;
-
-    byteread_vint(s, &path_id);
-    byteread_vint(s, &sequence);
-    byteread_vint(s, &status);
-    fprintf(f, ", \"path_id\": %"PRIu64, path_id);
-    fprintf(f, ", \"sequence\": %"PRIu64, sequence);
-    fprintf(f, ", \"status\": %"PRIu64, status);
-}
-
 void qlog_path_standby_frame(FILE* f, bytestream* s)
 {
     uint64_t path_id = 0;
@@ -1254,9 +1240,6 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_path_abandon:
         qlog_path_abandon_frame(f, s);
-        break;
-    case picoquic_frame_type_path_status:
-        qlog_path_status_frame(f, s);
         break;
     case picoquic_frame_type_path_standby:
         qlog_path_standby_frame(f, s);

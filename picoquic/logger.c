@@ -350,9 +350,6 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_path_abandon:
         frame_name = "path_abandon";
         break;
-    case picoquic_frame_type_path_status:
-        frame_name = "path_status";
-        break;
     case picoquic_frame_type_path_standby:
         frame_name = "path_standby";
         break;
@@ -1435,39 +1432,6 @@ size_t textlog_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_ma
     return byte_index;
 }
 
-size_t textlog_path_status_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
-{
-    const uint8_t* bytes_end = bytes + bytes_max;
-    const uint8_t* bytes0 = bytes;
-    uint64_t path_id;
-    uint64_t sequence;
-    uint64_t status;
-    size_t byte_index = 0;
-
-
-    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &sequence)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &status)) == NULL) {
-        for (size_t i = 0; i < bytes_max && i < 8; i++) {
-            fprintf(F, "%02x", bytes0[i]);
-        }
-        if (bytes_max > 8) {
-            fprintf(F, "...");
-        }
-        fprintf(F, "\n");
-        byte_index = bytes_max;
-    }
-    else {
-        fprintf(F, "    Path Status, path_id: %" PRIu64, path_id);
-        fprintf(F, ", sequence: %" PRIu64, sequence);
-        fprintf(F, ", status: %" PRIu64, status);
-        fprintf(F, "\n");
-        byte_index = (bytes - bytes0);
-    }
-    return byte_index;
-}
-
 size_t textlog_path_available_or_standby_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     const uint8_t* bytes_end = bytes + bytes_max;
@@ -1684,9 +1648,6 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
             break;
         case picoquic_frame_type_path_abandon:
             byte_index += textlog_path_abandon_frame(F, bytes + byte_index, length - byte_index);
-            break;
-        case picoquic_frame_type_path_status:
-            byte_index += textlog_path_status_frame(F, bytes + byte_index, length - byte_index);
             break;
         case picoquic_frame_type_path_standby:
         case picoquic_frame_type_path_available:
