@@ -36,6 +36,8 @@ int picoquic_process_ack_of_max_streams_frame(picoquic_cnx_t* cnx, const uint8_t
     size_t bytes_size, size_t* consumed);
 int picoquic_check_max_streams_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     const uint8_t* p_last_byte, int* no_need_to_repeat);
+int picoquic_path_available_or_standby_frame_need_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat);
 
 picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote)
 {
@@ -2996,9 +2998,8 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     break;
                 case picoquic_frame_type_path_standby:
                 case picoquic_frame_type_path_available:
-                    /* TODO: check whether there is not a status sent with a highest number
-                     */
-                    *no_need_to_repeat = 0;
+                    (void)picoquic_path_available_or_standby_frame_need_repeat(cnx, bytes,
+                        bytes + bytes_max, no_need_to_repeat);
                     break;
                 default:
                     *no_need_to_repeat = 0;
@@ -4970,6 +4971,44 @@ uint8_t* picoquic_format_path_abandon_frame(uint8_t* bytes, uint8_t* bytes_max, 
 
 /* Multipath PATH SNADBY and AVAILABLE frames
 */
+uint8_t* picoquic_format_path_available_or_standby_frame(
+    uint8_t* bytes, const uint8_t* bytes_max, uint64_t frame_type,
+    uint64_t path_id, uint64_t sequence)
+{
+    /* This code assumes that the frame type is already skipped */
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, frame_type)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, path_id)) != NULL){
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, sequence);
+    }
+    return bytes;
+}
+
+int picoquic_queue_path_available_or_standby_frame(
+    picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_path_status_enum status)
+{
+    int ret = 0;
+
+    if (path_x->p_remote_cnxid == NULL) {
+        ret = -1;
+    }
+    else {
+        uint8_t frame_buffer[256];
+        uint64_t frame_type = (status == picoquic_path_status_available) ?
+            picoquic_path_status_available : picoquic_frame_type_path_standby;
+        uint64_t sequence = cnx->status_sequence_to_send_next++;
+        uint64_t path_id = path_x->p_remote_cnxid->sequence;
+        int is_pure_ack = 0;
+        uint8_t* bytes_next = picoquic_format_path_available_or_standby_frame(
+            frame_buffer, frame_buffer + sizeof(frame_buffer), frame_type, path_id, sequence);
+        size_t consumed = bytes_next - frame_buffer;
+        ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed, is_pure_ack);
+        if (ret == 0) {
+            path_x->status_sequence_sent_last = sequence;
+        }
+    }
+
+    return ret;
+}
 
 const uint8_t* picoquic_skip_path_available_or_standby_frame(const uint8_t* bytes, const uint8_t* bytes_max)
 {
@@ -5013,7 +5052,7 @@ const uint8_t* picoquic_decode_path_available_or_standby_frame(const uint8_t* by
         if (path_number < 0) {
             /* Invalid path ID. Just ignore this frame. Add line in log for debug */
             picoquic_log_app_message(cnx, "Ignore path %s frame with invalid ID: %" PRIu64,
-                (frame_id64 == picoquic_frame_type_path_standby)?"standby":"available", path_id);
+                (frame_id64 == picoquic_frame_type_path_available)?"available":"standby", path_id);
         }
         else {
             if (cnx->path[path_number]->status_sequence_to_receive_next > sequence) {
@@ -5024,11 +5063,39 @@ const uint8_t* picoquic_decode_path_available_or_standby_frame(const uint8_t* by
                  * Default status is 0?
                  */
                 cnx->path[path_number]->status_sequence_to_receive_next = sequence + 1;
-                cnx->path[path_number]->status_set_by_peer = (frame_id64 == picoquic_frame_type_path_standby) ? 1:2;
+                cnx->path[path_number]->path_is_standby = (frame_id64 == picoquic_frame_type_path_available) ? 0:1;
             }
         }
     }
     return bytes;
+}
+
+
+int picoquic_path_available_or_standby_frame_need_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat)
+{
+    int ret = 0;
+    uint64_t path_id = 0;
+    uint64_t sequence = 0;
+
+    *no_need_to_repeat = 0;
+
+    if ((bytes = picoquic_parse_path_available_or_standby_frame(bytes, bytes_max, &path_id, &sequence)) == NULL){
+        /* Malformed frame, do not retransmit */
+        *no_need_to_repeat = 1;
+    }
+    else {
+        /* check whether this is the last frame sent on path */
+        int path_number = picoquic_find_path_by_id(cnx, 1, path_id);
+        if (path_number < 0 ||
+            cnx->path[path_number]->status_sequence_sent_last != sequence ||
+            cnx->path[path_number]->path_is_demoted) {
+            /* If the path is not there anymore, or is demoted, or
+             * this is not the last status, no point repeating the frame. */
+            *no_need_to_repeat = 1;
+        }
+    }
+    return ret;
 }
 
 /* BDP frames as defined in https://tools.ietf.org/html/draft-kuhn-quic-0rtt-bdp-09

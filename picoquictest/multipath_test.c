@@ -1743,3 +1743,37 @@ int path_packet_queue_test()
     /* And that's it */
     return ret;
 }
+
+/* Unit test of path selection.
+ * The input to path selections include the state of the path,
+ * the status set by the peer, the presence of losses, etc.
+ * Each test set up a connection context and two path contexts,
+ * with stated values for the key variables, then verify that
+ * the path selection is as expected.
+ * 
+ * Key values include:
+ * cnx->path[i]->status_set_by_peer
+ * cnx->path[i]->path_is_demoted
+ * cnx->path[i]->challenge_failed (leads to demotion)
+ * cnx->path[i]->response_required (set challenge path)
+ * cnx->path[i]->challenge_verified (and next challenge time)
+ * cnx->path[i]->challenge_repeat_count
+ * cnx->path[i]->nb_retransmit
+ * cnx->path[i]->rtt_min
+ * picoquic_is_sending_authorized_by_pacing
+ * affinity path for the next stream, or is_datagram_ready per path/cnx
+ * cnx->path[i]->bytes_in_transit < cnx->path[i]->cwin, cnx->quic->cwin_max
+ * then the selection:
+ * 1) challenge path;
+ * 2) if is_ack_needed, min rtt path for ACK
+ * 3) affinity_path, if cwin_ok
+ * 4) data path, if cwin ok
+ * 5) data path with pacing OK
+ * 6) path 0, after setting the timers.
+ * 
+ * TODO: break that into parts that can be verified!
+ */
+int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time,
+    uint64_t* next_wake_time);
+
+

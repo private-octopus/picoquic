@@ -3895,6 +3895,25 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
  *  - there are datagram ready to be sent on any path, or,
  *  - there is an active stream on that path, 
  *  - there is an active stream on any path.
+ * 
+ * TODO: this is probably too complicated, and it does not align well with the
+ * general archictecture of picoquic in which:
+ * 
+ * - various external actions mark the connection as ready and set the
+ *   connection wakeup time to "current"
+ * - the "prepare packet" function is called at the wake up time
+ * - at various places in the sending process, the code tries an action,
+ *   and if it is not possible yet sets the wakeup time to a later value.
+ * 
+ * The solution micht be to manage a wakeup time per path, and set the
+ * per connection time to the min of the per path times. This is not hard,
+ * except for the part where "various external actions mark the connection as ready".
+ * Instead, these various interactions may need to be selective, mark some
+ * paths as ready based on conditions.
+ * 
+ * The handling of "standby" should be integrated in the sending process,
+ * so congestion controlled data is not sent on standby path, and delay
+ * sensitive data is not sent on suspect paths.
  */
 
 static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time)
@@ -3922,6 +3941,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     }
 
     for (i = 0; i < cnx->nb_paths; i++) {
+        int path_priority = (cnx->path[i]->path_is_standby) ? 0 : 1;
         cnx->path[i]->is_nominal_ack_path = 0;
         if (cnx->path[i]->path_is_demoted) {
             continue;
@@ -3963,11 +3983,11 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                     cnx->congestion_alg->alg_init(cnx, cnx->path[i], current_time);
                 }
 
-                if (cnx->path[i]->path_priority > highest_priority) {
+                if (path_priority > highest_priority) {
                     is_polled = 1;
                     is_new_priority = 1;
                 }
-                else if (cnx->path[i]->path_priority == highest_priority) {
+                else if (path_priority == highest_priority) {
                     if (cnx->path[i]->nb_retransmit < highest_retransmit) {
                         is_polled = 1;
                         is_new_priority = 1;
@@ -3978,7 +3998,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                 }
 
                 if (is_new_priority) {
-                    highest_priority = cnx->path[i]->path_priority;
+                    highest_priority = path_priority;
                     highest_retransmit = cnx->path[i]->nb_retransmit;
                     data_path_cwin = -1;
                     data_path_pacing = -1;

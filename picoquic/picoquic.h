@@ -202,6 +202,15 @@ typedef enum {
 } picoquic_lossbit_version_enum;
 
 /*
+* Path statuses
+*/
+
+typedef enum {
+    picoquic_path_status_available = 0, /* Path available for sending */
+    picoquic_path_status_standby = 1 /* Do not use if other path available */
+} picoquic_path_status_enum;
+
+/*
  * Provisional definition of the connection ID.
  */
 #define PICOQUIC_CONNECTION_ID_MIN_SIZE 0
@@ -825,7 +834,7 @@ int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void
 int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason, char const* phrase);
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
-
+int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
 /*
 * The calls to picoquic_get_path_quality takes as argument a structure
 * of type `picoquic_path_quality_t`.

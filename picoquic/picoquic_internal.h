@@ -1009,11 +1009,8 @@ typedef struct st_picoquic_path_t {
     /* The packet list holds unkacknowledged packets sent on this path.*/
     picoquic_packet_t* path_packet_first;
     picoquic_packet_t* path_packet_last;
-    /* status management */
-    int status_set_by_peer;
-    int status_set_locally;
-    uint64_t status_sequence_to_send_next;
     uint64_t status_sequence_to_receive_next;
+    uint64_t status_sequence_sent_last;
     /* Last 1-RTT "non path validating" packet received on this path */
     /* flags */
     unsigned int mtu_probe_sent : 1;
@@ -1022,6 +1019,7 @@ typedef struct st_picoquic_path_t {
     unsigned int challenge_verified : 1;
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
+    unsigned int path_is_standby : 1;
     unsigned int path_is_demoted : 1;
     unsigned int current_spin : 1;
     unsigned int last_bw_estimate_path_limited : 1;
@@ -1040,9 +1038,6 @@ typedef struct st_picoquic_path_t {
     unsigned int is_ack_expected : 1;
     unsigned int is_datagram_ready : 1;
     unsigned int is_pto_required : 1; /* Should send PTO probe */
-
-    /* Path priority, for multipath management */
-    int path_priority;
 
     /* Management of retransmissions in a path.
      * The "path_packet" variables are used for the RACK algorithm, per path, to avoid
@@ -1439,6 +1434,7 @@ typedef struct st_picoquic_cnx_t {
     int last_path_polled;
     uint64_t unique_path_id_next;
     picoquic_path_t* nominal_path_for_ack;
+    uint64_t status_sequence_to_send_next;
 
     /* Management of the CNX-ID stash */
     uint64_t retire_cnxid_before;
@@ -1897,6 +1893,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_skip_path_available_or_standby_frame(const uint8_t* bytes, const uint8_t* bytes_max);
+int picoquic_queue_path_available_or_standby_frame(
+    picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_path_status_enum status);
 
 int picoquic_decode_closing_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, int* closing_received);
 
