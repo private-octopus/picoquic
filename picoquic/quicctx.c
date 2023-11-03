@@ -2291,6 +2291,17 @@ int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, u
     return ret;
 }
 
+int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status)
+{
+    int ret = 0;
+    int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
+    if (path_id >= 0) {
+        cnx->path[path_id]->path_is_standby = (status != picoquic_path_status_available);
+        ret = picoquic_queue_path_available_or_standby_frame(cnx, cnx->path[path_id], status);
+    }
+    return ret;
+}
+
 /* Reset the path MTU, for example if too many packet losses are detected */
 void picoquic_reset_path_mtu(picoquic_path_t* path_x)
 {

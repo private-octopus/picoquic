@@ -109,8 +109,10 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "time_stamp";
     case picoquic_frame_type_path_abandon:
         return "path_abandon";
-    case picoquic_frame_type_path_status:
-        return "path_status";
+    case picoquic_frame_type_path_standby:
+        return "path_standby";
+    case picoquic_frame_type_path_available:
+        return "path_available";
     case picoquic_frame_type_bdp:
         return "bdp";
     default:

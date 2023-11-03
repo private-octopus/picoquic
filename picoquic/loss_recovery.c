@@ -891,7 +891,8 @@ static void picoquic_check_path_mtu_on_losses(
             picoquic_reset_path_mtu(old_p->send_path);
             if (old_mtu != old_p->send_path->send_mtu) {
                 picoquic_log_app_message(cnx,
-                    "Reset path MTU after %" PRIu64 " retransmissions, %" PRIu64 "MTU losses, Timer mode : % d",
+                    "Reset path %" PRIu64 " MTU after %" PRIu64 " retransmissions, %" PRIu64 "MTU losses, Timer mode : % d",
+                    old_p->send_path->unique_path_id,
                     old_p->send_path->nb_retransmit,
                     old_p->send_path->nb_mtu_losses,
                     timer_based_retransmit);
