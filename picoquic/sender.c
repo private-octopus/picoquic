@@ -4097,11 +4097,6 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
         }
         path_id = 0;
     }
-#if 1
-    if (current_time > 800000 && path_id == 0 && !cnx->client_mode) {
-        DBG_PRINTF("%s", "bug");
-    }
-#endif
 
     cnx->path[path_id]->selected++;
 
