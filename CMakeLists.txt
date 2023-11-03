@@ -234,6 +234,29 @@ else()
     message(STATUS "Building without picotls-openssl")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
+
+
+OPTION(WITH_MBEDTLS "enable MBEDTLS" OFF)
+
+
+IF (WITH_MBEDTLS)
+    FIND_PACKAGE(MbedTLS)
+    IF (MbedTLS_FOUND)
+        message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+        message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
+        list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_MBEDTLS)
+# TODO:
+#       add mbedtls include dir to include path?
+#       maybe, create an mbed-ltls library in picoquic?
+#       either ADD_LIBRARY(picoquic-mbedtls lib/ptls_mbedtls.c)
+#       or ADD file to core libraries, easier for users?
+#       list(APPEND PICOQUIC_LIBRARY_FILES picoquic/ptls_mbedtls.c)
+    ELSE ()
+        MESSAGE (FATAL_ERROR "MbedTLS not found")
+    ENDIF()
+ENDIF ()
+
+
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
 macro(set_picoquic_compile_settings)
@@ -320,6 +343,7 @@ target_link_libraries(picoquicdemo
     PRIVATE
         ${PTLS_LIBRARIES}
         ${OPENSSL_LIBRARIES}
+        ${MBEDTLS_LIBRARIES}
         picoquic-log
         picoquic-core
         picohttp-core)
