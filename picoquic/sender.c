@@ -3942,6 +3942,9 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
 
     for (i = 0; i < cnx->nb_paths; i++) {
         int path_priority = (cnx->path[i]->path_is_standby) ? 0 : 1;
+        if (cnx->path[i]->nb_retransmit > 0) {
+            path_priority = 0;
+        }
         cnx->path[i]->is_nominal_ack_path = 0;
         if (cnx->path[i]->path_is_demoted) {
             continue;
@@ -4010,7 +4013,10 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                 }
                 if (is_polled) {
                     /* This path is a candidate for min rtt */
-                    if (i_min_rtt < 0 || cnx->path[i]->rtt_min < cnx->path[i_min_rtt]->rtt_min) {
+                    if (i_min_rtt < 0 ||
+                        cnx->path[i]->nb_retransmit < cnx->path[i_min_rtt]->nb_retransmit ||
+                        (cnx->path[i]->nb_retransmit == cnx->path[i_min_rtt]->nb_retransmit &&
+                        cnx->path[i]->rtt_min < cnx->path[i_min_rtt]->rtt_min)) {
                         i_min_rtt = i;
                         is_min_rtt_pacing_ok = 0;
                     }
@@ -4091,6 +4097,11 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
         }
         path_id = 0;
     }
+#if 1
+    if (current_time > 800000 && path_id == 0 && !cnx->client_mode) {
+        DBG_PRINTF("%s", "bug");
+    }
+#endif
 
     cnx->path[path_id]->selected++;
 

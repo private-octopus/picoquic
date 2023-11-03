@@ -2190,7 +2190,11 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                     old_path->path_packet_acked_number = p->path_packet_number;
                     old_path->path_packet_acked_time_sent = p->send_time;
                     old_path->path_packet_acked_received = current_time;
-                    old_path->nb_retransmit = 0;
+                    if (old_path->nb_retransmit > 0 &&
+                        (old_path->path_packet_last == NULL ||
+                            p->path_packet_number >= old_path->path_packet_last->path_packet_number)) {
+                        old_path->nb_retransmit = 0;
+                    }
                 }
 
                 /* Record the updated delay and CC data in packet context
@@ -3197,7 +3201,13 @@ static int picoquic_process_ack_range(
                         old_path->path_packet_acked_number = p->path_packet_number;
                         old_path->path_packet_acked_time_sent = p->send_time;
                         old_path->path_packet_acked_received = current_time;
-                        old_path->nb_retransmit = 0;
+                        if (old_path->nb_retransmit > 0 &&
+                            ((!cnx->is_multipath_enabled && 
+                                !cnx->is_simple_multipath_enabled) ||
+                            (old_path->path_packet_last == NULL ||
+                                p->path_packet_number >= old_path->path_packet_last->path_packet_number))) {
+                            old_path->nb_retransmit = 0;
+                        }
                     }
 
                     picoquic_record_ack_packet_data(packet_data, p);
