@@ -35,7 +35,7 @@ jobs:
       - name: Building picoquic
         run: |
           sudo apt-get install -y libssl-dev
-          cmake -S . -B build -DPICOQUIC_FETCH_PTLS:BOOL=ON -DUSE_MBEDTLS=ON
+          cmake -S . -B build -DPICOQUIC_FETCH_PTLS:BOOL=ON -DWITH_MBEDTLS=ON
           cmake --build build
 
       - name: Perform Unit Tests
