@@ -1,0 +1,48 @@
+---
+name: "MbedTLS-test"
+
+on: [push, pull_request]
+
+jobs:
+  mbedtls:
+    name: MbedTLS-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          # We must fetch at least the immediate parents so that if this is
+          # a pull request then we can checkout the head.
+          fetch-depth: 2
+          submodules: 'recursive'
+
+      - name: Installing MbedTLS
+        run: |
+             cd ..
+             git clone https://github.com/Mbed-TLS/mbedtls
+             cd mbedtls
+             echo "cloned mbedtls"
+             mkdir build
+             cd build
+             cmake -S .. .
+             echo "cmake done"
+             make
+             echo "compiled MbedTLS"
+             pwd
+             cd ../../picoquic
+
+      - name: Building picoquic
+        run: |
+          sudo apt-get install -y libssl-dev
+          cmake -S . -B build -DPICOQUIC_FETCH_PTLS:BOOL=ON -DUSE_MBEDTLS=ON
+          cmake --build build
+
+      - name: Perform Unit Tests
+        run: |
+            ulimit -c unlimited -S
+            cd build
+            make test && QUICRESULT=$?
+            if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
+            cat /home/runner/work/picoquic/picoquic/build/Testing/Temporary/LastTest.log
+            exit 1

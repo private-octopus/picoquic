@@ -29,6 +29,7 @@ extern "C" {
 #define TLS_API_INIT_FLAGS_NO_OPENSSL 1
 #define TLS_API_INIT_FLAGS_NO_MINICRYPTO 2
 #define TLS_API_INIT_FLAGS_NO_FUSION 4
+#define TLS_API_INIT_FLAGS_NO_MBEDTLS 8
     void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory);
     void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key_exchange);
 
