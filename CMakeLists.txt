@@ -239,7 +239,6 @@ endif()
 
 OPTION(WITH_MBEDTLS "enable MBEDTLS" OFF)
 
-
 IF (WITH_MBEDTLS)
     FIND_PACKAGE(MbedTLS)
     IF (MbedTLS_FOUND)
@@ -305,11 +304,13 @@ target_include_directories(picoquic-core
     PRIVATE
         ${PTLS_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR}
+        ${MBEDTLS_INCLUDE_DIRS}
     PUBLIC
         picoquic)
 target_link_libraries(picoquic-core
     PRIVATE
         ${OPENSSL_LIBRARIES}
+        ${MBEDTLS_LIBRARIES}
     PUBLIC
         ${PTLS_LIBRARIES}
         Threads::Threads)
@@ -329,6 +330,7 @@ target_link_libraries(picohttp-core
     PRIVATE
         ${PTLS_LIBRARIES}
         ${OPENSSL_LIBRARIES}
+        ${MBEDTLS_LIBRARIES}
     PUBLIC
         picoquic-core)
 target_include_directories(picohttp-core
