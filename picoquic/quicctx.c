@@ -771,6 +771,9 @@ int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp)
     if (quic->default_tp == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
     }
+    else if (tp == NULL) {
+        picoquic_init_transport_parameters(quic->default_tp, 0);
+    }
     else {
         memcpy(quic->default_tp, tp, sizeof(picoquic_tp_t));
     }
