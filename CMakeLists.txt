@@ -90,6 +90,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/picoquic_ptls_fusion.c
     picoquic/picoquic_ptls_minicrypto.c
     picoquic/picoquic_ptls_openssl.c
+    picoquic/picoquic_mbedtls.c
     picoquic/picosocks.c
     picoquic/picosplay.c
     picoquic/port_blocking.c
