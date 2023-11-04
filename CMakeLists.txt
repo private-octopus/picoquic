@@ -252,6 +252,8 @@ IF (WITH_MBEDTLS)
 #       or ADD file to core libraries, easier for users?
 #       list(APPEND PICOQUIC_LIBRARY_FILES picoquic/ptls_mbedtls.c)
     ELSE ()
+        message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+        message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
         MESSAGE (FATAL_ERROR "MbedTLS not found")
     ENDIF()
 ENDIF ()
