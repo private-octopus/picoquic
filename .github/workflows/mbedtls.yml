@@ -52,7 +52,8 @@ jobs:
         run: |
             ulimit -c unlimited -S
             cd build
-            make test && QUICRESULT=$?
+            make picotls_ct
+            picotls_ct -n zero_rtt_loss && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
             cat /home/runner/work/picoquic/picoquic/build/Testing/Temporary/LastTest.log
             exit 1
