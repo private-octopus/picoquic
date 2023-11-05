@@ -93,7 +93,6 @@ struct st_picoquic_log_event_t {
 
 /* This first part of this file provides a set of function for accessing
  * the cryptographic libraries.
- * The explicit calls to 
  */
 #define CRYPTO_PROVIDERS_REGION 1
 
@@ -130,10 +129,13 @@ static picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn = NU
  * such as "ifdef" and real time flags assessed in each
  * per provider module.
  */
+#ifdef PICOQUIC_WITH_MBEDTLS
+void picoquic_mbedtls_load(int unload);
+#endif
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
 void picoquic_ptls_fusion_load(int unload);
 #endif
-// void picoquic_bcrypt_load(int unload);
+/* void picoquic_bcrypt_load(int unload); */
 #ifndef PTLS_WITHOUT_OPENSSL
 void picoquic_ptls_openssl_load(int unload);
 #endif
@@ -171,7 +173,14 @@ void picoquic_tls_api_init_providers(int unload)
     }
 #else
     if (unload == 0 && tls_api_is_init == 0) {
-        DBG_PRINTF("%s","Picoquic was compiled without Fusion");
+        DBG_PRINTF("%s", "Picoquic was compiled without Fusion");
+    }
+#endif
+
+#ifdef PICOQUIC_WITH_MBEDTLS
+    if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MBEDTLS) == 0) {
+        DBG_PRINTF("%s", "Loading MbedTLS");
+        picoquic_mbedtls_load(unload);
     }
 #endif
 }

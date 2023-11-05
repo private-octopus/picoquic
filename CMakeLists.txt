@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.13.2
+        VERSION 1.1.14.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -90,6 +90,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/picoquic_ptls_fusion.c
     picoquic/picoquic_ptls_minicrypto.c
     picoquic/picoquic_ptls_openssl.c
+    picoquic/picoquic_mbedtls.c
     picoquic/picosocks.c
     picoquic/picosplay.c
     picoquic/port_blocking.c
@@ -149,6 +150,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/high_latency_test.c
     picoquictest/intformattest.c
     picoquictest/l4s_test.c
+    picoquictest/mbedtls_test.c
     picoquictest/mediatest.c
     picoquictest/minicrypto_test.c
     picoquictest/multipath_test.c
@@ -203,7 +205,7 @@ if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
         GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             7d294ab4f2e0ed749b4bcfaf533225a4e0c096f7)
+        GIT_TAG             af66fc4aa8853b0725fcb2c18a702e8f1c656cf1)
     FetchContent_MakeAvailable(picotls)
 endif()
 
@@ -234,6 +236,30 @@ else()
     message(STATUS "Building without picotls-openssl")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
+
+
+OPTION(WITH_MBEDTLS "enable MBEDTLS" OFF)
+
+IF (WITH_MBEDTLS)
+    FIND_PACKAGE(MbedTLS)
+    IF (MbedTLS_FOUND)
+        message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+        message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
+        list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_MBEDTLS)
+# TODO:
+#       add mbedtls include dir to include path?
+#       maybe, create an mbed-ltls library in picoquic?
+#       either ADD_LIBRARY(picoquic-mbedtls lib/ptls_mbedtls.c)
+#       or ADD file to core libraries, easier for users?
+#       list(APPEND PICOQUIC_LIBRARY_FILES picoquic/ptls_mbedtls.c)
+    ELSE ()
+        message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+        message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
+        MESSAGE (FATAL_ERROR "MbedTLS not found")
+    ENDIF()
+ENDIF ()
+
+
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
 macro(set_picoquic_compile_settings)
@@ -279,11 +305,13 @@ target_include_directories(picoquic-core
     PRIVATE
         ${PTLS_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR}
+        ${MBEDTLS_INCLUDE_DIRS}
     PUBLIC
         picoquic)
 target_link_libraries(picoquic-core
     PRIVATE
         ${OPENSSL_LIBRARIES}
+        ${MBEDTLS_LIBRARIES}
     PUBLIC
         ${PTLS_LIBRARIES}
         Threads::Threads)
@@ -303,6 +331,7 @@ target_link_libraries(picohttp-core
     PRIVATE
         ${PTLS_LIBRARIES}
         ${OPENSSL_LIBRARIES}
+        ${MBEDTLS_LIBRARIES}
     PUBLIC
         picoquic-core)
 target_include_directories(picohttp-core
@@ -320,6 +349,7 @@ target_link_libraries(picoquicdemo
     PRIVATE
         ${PTLS_LIBRARIES}
         ${OPENSSL_LIBRARIES}
+        ${MBEDTLS_LIBRARIES}
         picoquic-log
         picoquic-core
         picohttp-core)
@@ -338,6 +368,8 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     add_library(picoquic-test STATIC ${PICOQUIC_TEST_LIBRARY_FILES})
     target_link_libraries(picoquic-test PUBLIC picoquic-core picoquic-log)
     target_include_directories(picoquic-test
+        PRIVATE
+            ${MBEDTLS_INCLUDE_DIRS}
         PUBLIC
             ${PTLS_INCLUDE_DIRS}
             picoquic
@@ -345,7 +377,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     set_picoquic_compile_settings(picoquic-test)
 
     add_executable(picoquic_ct picoquic_t/picoquic_t.c)
-    target_link_libraries(picoquic_ct PRIVATE picoquic-test)
+    target_link_libraries(picoquic_ct PRIVATE picoquic-test ${MBEDTLS_LIBRARIES})
     set_picoquic_compile_settings(picoquic_ct)
 
     add_executable(picohttp_ct

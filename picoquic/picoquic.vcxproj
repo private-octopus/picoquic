@@ -158,6 +158,7 @@
     <ClCompile Include="newreno.c" />
     <ClCompile Include="performance_log.c" />
     <ClCompile Include="picoquic_lb.c" />
+    <ClCompile Include="picoquic_mbedtls.c" />
     <ClCompile Include="picoquic_ptls_fusion.c" />
     <ClCompile Include="picoquic_ptls_minicrypto.c" />
     <ClCompile Include="picoquic_ptls_openssl.c" />
