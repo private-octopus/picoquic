@@ -368,6 +368,8 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     add_library(picoquic-test STATIC ${PICOQUIC_TEST_LIBRARY_FILES})
     target_link_libraries(picoquic-test PUBLIC picoquic-core picoquic-log)
     target_include_directories(picoquic-test
+        PRIVATE
+            ${MBEDTLS_INCLUDE_DIRS}
         PUBLIC
             ${PTLS_INCLUDE_DIRS}
             picoquic

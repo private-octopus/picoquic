@@ -370,12 +370,9 @@ int sendack_loop_test_one(uint64_t ack_gap, uint64_t ack_delay)
     picoquic_quic_t quic;
     uint64_t current_time;
     uint64_t next_ack_time = UINT64_MAX;
-    uint64_t next_ack_number = UINT64_MAX;;
     uint64_t largest_received_number = 0;
     uint64_t largest_ack_number = 0;
     uint64_t largest_time_sent = 0;
-    uint64_t received_mask = 0;
-    uint64_t previous_mask = 0;
     uint8_t bytes[256];
     picoquic_packet_context_enum pc = 0;
 
@@ -404,7 +401,6 @@ int sendack_loop_test_one(uint64_t ack_gap, uint64_t ack_delay)
             if (largest_received_number + 1 != test_pn64[i]) {
                 out_of_order = 1;
             }
-            received_mask |= 1ull << (test_pn64[i] & 63);
             picoquic_set_ack_needed(&cnx, current_time, pc, cnx.local_cnxid_first, out_of_order);
             if (next_ack_time > current_time + ack_delay) {
                 next_ack_time = current_time + ack_delay;
