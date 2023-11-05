@@ -705,7 +705,7 @@ typedef struct st_picoquic_quic_t {
     struct st_ptls_verify_certificate_t * verify_certificate_callback;
     picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
 
-    picoquic_tp_t * default_tp;
+    picoquic_tp_t default_tp;
 
     picoquic_fuzz_fn fuzz_fn;
     void* fuzz_ctx;
