@@ -49,7 +49,7 @@ jobs:
           echo $CXX
           # $CC --version
           ./ci/build_picotls.sh
-          cmake -S . -B build "-DWITH_OPENSSL=OFF" "-DWITH_MBEDTLS=ON""
+          cmake -S . -B build "-DWITH_OPENSSL=OFF" "-DWITH_MBEDTLS=ON"
           cmake --build build
 
       - name: Perform Unit Tests
