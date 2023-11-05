@@ -362,6 +362,7 @@ int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
         cnx->is_simple_multipath_enabled = 1;
         if (!cnx->client_mode) {
             cnx->local_parameters.enable_multipath = 0;
+            cnx->local_parameters.enable_simple_multipath = 1;
         }
     }
     else if (cnx->remote_parameters.enable_multipath &&
@@ -370,6 +371,7 @@ int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
         /* Enable the multipath option */
         cnx->is_multipath_enabled = 1;
         if (!cnx->client_mode) {
+            cnx->local_parameters.enable_multipath = 1;
             cnx->local_parameters.enable_simple_multipath = 0;
         }
     }

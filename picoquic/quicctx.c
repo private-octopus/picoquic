@@ -656,6 +656,8 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         quic->cwin_max = UINT64_MAX;
         quic->sequence_hole_pseudo_period = PICOQUIC_DEFAULT_HOLE_PERIOD;
 
+        picoquic_init_transport_parameters(&quic->default_tp, 0);
+
         quic->random_initial = 1;
         picoquic_wake_list_init(quic);
 
@@ -764,15 +766,11 @@ int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp)
 {
     int ret = 0;
 
-    if (quic->default_tp == NULL) {
-        quic->default_tp = (picoquic_tp_t *)malloc(sizeof(picoquic_tp_t));
-    }
-
-    if (quic->default_tp == NULL) {
-        ret = PICOQUIC_ERROR_MEMORY;
+    if (tp == NULL) {
+        picoquic_init_transport_parameters(&quic->default_tp, 0);
     }
     else {
-        memcpy(quic->default_tp, tp, sizeof(picoquic_tp_t));
+        memcpy(&quic->default_tp, tp, sizeof(picoquic_tp_t));
     }
 
     return ret;
@@ -780,7 +778,7 @@ int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp)
 
 picoquic_tp_t const* picoquic_get_default_tp(picoquic_quic_t* quic)
 {
-    return quic->default_tp;
+    return &quic->default_tp;
 }
 
 void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize)
@@ -797,21 +795,17 @@ void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbi
 void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy)
 {
     quic->default_lossbit_policy = default_lossbit_policy;
-    if (quic->default_tp != NULL) {
-        quic->default_tp->enable_loss_bit = (int)default_lossbit_policy;
-    }
+    quic->default_tp.enable_loss_bit = (int)default_lossbit_policy;
 }
 
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option)
 {
     quic->default_multipath_option = multipath_option;
-    if (quic->default_tp != NULL) {
-        if (multipath_option & 1) {
-            quic->default_tp->enable_multipath = 1;
-        }
-        if (multipath_option & 2) {
-            quic->default_tp->enable_simple_multipath = 1;
-        }
+    if (multipath_option & 1) {
+        quic->default_tp.enable_multipath = 1;
+    }
+    if (multipath_option & 2) {
+        quic->default_tp.enable_simple_multipath = 1;
     }
 }
 
@@ -825,10 +819,7 @@ void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data)
     picoquic_cnx_t* cnx = quic->cnx_list;
     quic->max_data_limit = max_data;
 
-
-    if (quic->default_tp != NULL) {
-        quic->default_tp->initial_max_data = max_data;
-    }
+    quic->default_tp.initial_max_data = max_data;
 
     while (cnx != NULL) {
         /* If the connection is not yet initialized, reset the maxdata parameter */
@@ -846,9 +837,7 @@ void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data)
 void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout)
 {
     quic->default_idle_timeout = idle_timeout;
-    if (quic->default_tp != NULL) {
-        quic->default_tp->idle_timeout = idle_timeout;
-    }
+    quic->default_tp.idle_timeout = idle_timeout;
 }
 
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max)
@@ -985,11 +974,6 @@ void picoquic_free(picoquic_quic_t* quic)
 
         if (quic->verify_certificate_callback != NULL) {
             picoquic_dispose_verify_certificate_callback(quic);
-        }
-
-        if (quic->default_tp != NULL) {
-            free(quic->default_tp);
-            quic->default_tp = NULL;
         }
 
         /* Delete the picotls context */
@@ -3404,44 +3388,25 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        if (quic->default_tp == NULL) {
-            picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
-            if (quic->max_data_limit != 0) {
-                cnx->local_parameters.initial_max_data = quic->max_data_limit;
+        memcpy(&cnx->local_parameters, &quic->default_tp, sizeof(picoquic_tp_t));
+        /* If the default parameters include preferred address, document it */
+        if (cnx->local_parameters.prefered_address.is_defined) {
+            /* Create an additional CID */
+            picoquic_local_cnxid_t* cnxid1 = picoquic_create_local_cnxid(cnx, NULL, start_time);
+            if (cnxid1 != NULL){
+                /* copy the connection ID into the local parameter */
+                cnx->local_parameters.prefered_address.connection_id = cnxid1->cnx_id;
+                /* Create the reset secret */
+                (void)picoquic_create_cnxid_reset_secret(cnx->quic, &cnxid1->cnx_id,
+                    cnx->local_parameters.prefered_address.statelessResetToken);
             }
-            cnx->local_parameters.enable_loss_bit = quic->default_lossbit_policy;
-            cnx->local_parameters.enable_multipath = (quic->default_multipath_option & 1) ? 1 : 0;
-            cnx->local_parameters.enable_simple_multipath = (quic->default_multipath_option & 2) ? 1 : 0;
-            if (quic->default_idle_timeout != 0) {
-                cnx->local_parameters.idle_timeout = quic->default_idle_timeout;
-            }
-            /* Apply the defined MTU MAX instead of default, if specified */
-            if (cnx->quic->mtu_max > 0)
-            {
-                cnx->local_parameters.max_packet_size = cnx->quic->mtu_max -
-                    PICOQUIC_MTU_OVERHEAD(addr_to);
-            }
-        } else {
-            memcpy(&cnx->local_parameters, quic->default_tp, sizeof(picoquic_tp_t));
-            /* If the default parameters include preferred address, document it */
-            if (cnx->local_parameters.prefered_address.is_defined) {
-                /* Create an additional CID */
-                picoquic_local_cnxid_t* cnxid1 = picoquic_create_local_cnxid(cnx, NULL, start_time);
-                if (cnxid1 != NULL){
-                    /* copy the connection ID into the local parameter */
-                    cnx->local_parameters.prefered_address.connection_id = cnxid1->cnx_id;
-                    /* Create the reset secret */
-                    (void)picoquic_create_cnxid_reset_secret(cnx->quic, &cnxid1->cnx_id,
-                        cnx->local_parameters.prefered_address.statelessResetToken);
-                }
-            }
+        }
 
-            /* Apply the defined MTU MAX if specified and not set in defaults. */
-            if (cnx->local_parameters.max_packet_size == 0 && cnx->quic->mtu_max > 0)
-            {
-                cnx->local_parameters.max_packet_size = cnx->quic->mtu_max -
-                    PICOQUIC_MTU_OVERHEAD(addr_to);
-            }
+        /* Apply the defined MTU MAX if specified and not set in defaults. */
+        if (cnx->local_parameters.max_packet_size == 0 && cnx->quic->mtu_max > 0)
+        {
+            cnx->local_parameters.max_packet_size = cnx->quic->mtu_max -
+                PICOQUIC_MTU_OVERHEAD(addr_to);
         }
 
         /* If local connection ID size is null, don't allow migration */
@@ -3947,6 +3912,7 @@ uint64_t picoquic_get_default_connection_id_ttl(picoquic_quic_t* quic)
 void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max)
 {
     quic->mtu_max = mtu_max;
+    quic->default_tp.max_packet_size = mtu_max;
 }
 
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn)
