@@ -57,6 +57,6 @@ jobs:
             ulimit -c unlimited -S
             cd build
             make picoquic_ct
-            ./picoquic_ct -S .. many_losses && QUICRESULT=$?
+            ./picoquic_ct -S .. mbedtls_crypto mbedtls && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
             exit 1
