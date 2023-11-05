@@ -343,6 +343,9 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
                         }
                     }
                 }
+                if (ret == 0) {
+                    fprintf(stdout, "Accept enable multipath: %d.\n", qserver->default_multipath_option);
+                }
             }
         }
     }
@@ -978,6 +981,13 @@ int quic_client(const char* ip_address_text, int server_port,
                 fprintf(stdout, "Could not negotiate version 0x%" PRIx32 ", used version 0x%" PRIu32 ".\n", 
                     config->desired_version, v);
             }
+        }
+
+        if ((config->multipath_option&1) != 0) {
+            fprintf(stdout, "Enable multipath: %s.\n", (cnx_client->is_multipath_enabled)?"Success":"Refused");
+        }
+        if ((config->multipath_option&2) != 0) {
+            fprintf(stdout, "Enable simple multipath: %s.\n", (cnx_client->is_simple_multipath_enabled)?"Success":"Refused");
         }
 
         if (loop_cb.force_migration){
