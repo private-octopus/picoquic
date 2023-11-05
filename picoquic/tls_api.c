@@ -129,6 +129,9 @@ static picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn = NU
  * such as "ifdef" and real time flags assessed in each
  * per provider module.
  */
+#ifdef PICOQUIC_WITH_MBEDTLS
+void picoquic_mbedtls_load(int unload);
+#endif
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
 void picoquic_ptls_fusion_load(int unload);
 #endif
@@ -137,9 +140,6 @@ void picoquic_ptls_fusion_load(int unload);
 void picoquic_ptls_openssl_load(int unload);
 #endif
 void picoquic_ptls_minicrypto_load(int unload);
-#ifdef PICOQUIC_WITH_MBEDTLS
-void picoquic_mbedtls_load(int unload);
-#endif
 
 /* Flags controlling which providers will be launched.
  * This is means to be used mostly in tests. In production,

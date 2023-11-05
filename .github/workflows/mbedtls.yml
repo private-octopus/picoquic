@@ -43,16 +43,20 @@ jobs:
 
       - name: Building picoquic
         run: |
-          pwd
+          sudo apt-get install clangd
           sudo apt-get install -y libssl-dev
-          cmake -S . -B build -DPICOQUIC_FETCH_PTLS:BOOL=ON -DWITH_MBEDTLS=ON
+          echo $CC
+          echo $CXX
+          # $CC --version
+          ./ci/build_picotls.sh
+          cmake -S . -B build "-DWITH_OPENSSL=OFF"
           cmake --build build
 
       - name: Perform Unit Tests
         run: |
             ulimit -c unlimited -S
             cd build
-            make test && QUICRESULT=$?
+            make picoquic_ct
+            ./picoquic_ct -S .. many_losses && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
-            cat /home/runner/work/picoquic/picoquic/build/Testing/Temporary/LastTest.log
             exit 1
