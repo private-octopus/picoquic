@@ -41,6 +41,7 @@
 #include "performance_log.h"
 #include "picoquictest.h"
 #include "picoquic_crypto_provider_api.h"
+#include "picotls/minicrypto.h"
 
 /* Minicrypto test:
  * Use the "flag" option of tls_api_init to only load specified
@@ -98,6 +99,63 @@ int minicrypto_test()
     }
 
     picoquic_tls_api_reset(0);
+
+    return ret;
+}
+
+extern ptls_cipher_suite_t ptls_minicrypto_aes128gcmsha256;
+extern picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn;
+
+int minicrypto_is_last_test()
+{
+    int ret = 0;
+    int expected_aes128gcm_sha256 = 0;
+    int expected_aes128gcm_sha256_low = 0;
+    int expected_set_key = 1;
+    int actual_aes128gcm_sha256;
+    int actual_aes128gcm_sha256_low;
+    int actual_set_key;
+    void* actual_aes128gcmsha256 = picoquic_get_aes128gcm_sha256_v(0);
+    void* actual_aes128gcmsha256_low = picoquic_get_aes128gcm_sha256_v(1);
+
+    picoquic_tls_api_reset(0);
+
+#if defined(PICOQUIC_WITH_MBEDTLS) || !defined(PTLS_WITHOUT_OPENSSL) || !defined(PTLS_WITHOUT_FUSION)
+    expected_aes128gcm_sha256 = 0;
+#endif
+#if defined(PICOQUIC_WITH_MBEDTLS) || !defined(PTLS_WITHOUT_OPENSSL)
+    expected_aes128gcm_sha256_low = 0;
+#endif
+#if !defined(PTLS_WITHOUT_OPENSSL)
+    expected_set_key = 0;
+#endif
+    actual_aes128gcm_sha256 = (actual_aes128gcmsha256 == (void*)&ptls_minicrypto_aes128gcmsha256);
+    actual_aes128gcm_sha256_low = (actual_aes128gcmsha256 == (void*)&ptls_minicrypto_aes128gcmsha256);
+    actual_set_key = ((void*)picoquic_set_private_key_from_file_fn == (void*)ptls_minicrypto_load_private_key);
+    if (actual_aes128gcm_sha256 != expected_aes128gcm_sha256) {
+        DBG_PRINTF("Wrong aes gcm 128 sha 256. Expected: %s, actual: %s",
+            (expected_aes128gcm_sha256) ? "minicrypto" : "other",
+            (actual_aes128gcm_sha256) ? "minicrypto" : "other");
+        ret = -1;
+    }
+    if (actual_aes128gcm_sha256 != expected_aes128gcm_sha256) {
+        DBG_PRINTF("Wrong aes gcm 128 sha 256. Expected: %s, actual: %s",
+            (expected_aes128gcm_sha256) ? "minicrypto" : "other",
+            (actual_aes128gcm_sha256) ? "minicrypto" : "other");
+        ret = -1;
+    }
+    if (actual_aes128gcm_sha256 != expected_aes128gcm_sha256) {
+        DBG_PRINTF("Wrong aes gcm 128 sha 256. Expected: %s, actual: %s",
+            (expected_aes128gcm_sha256) ? "minicrypto" : "other",
+            (actual_aes128gcm_sha256) ? "minicrypto" : "other");
+        ret = -1;
+    }
+    if (actual_set_key != expected_set_key) {
+        DBG_PRINTF("Wrong wrong set key function. Expected: %s, actual: %s",
+            (expected_set_key) ? "minicrypto" : "other",
+            (actual_set_key) ? "minicrypto" : "other");
+        ret = -1;
+    }
 
     return ret;
 }

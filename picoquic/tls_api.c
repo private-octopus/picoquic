@@ -109,7 +109,7 @@ static struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER
 #define PICOQUIC_KEY_EXCHANGES_NB_MAX 4
 static ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
 static ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
-static picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn = NULL;
+picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn = NULL;
 static picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn = NULL;
 static picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn = NULL;
 

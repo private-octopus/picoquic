@@ -371,6 +371,7 @@ static const picoquic_test_def_t test_table[] = {
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
     { "minicrypto", minicrypto_test },
+    { "minicrypto_is_last", minicrypto_is_last_test },
 #ifdef PICOQUIC_WITH_MBEDTLS
     { "mbedtls", mbedtls_test },
     { "mbedtls_crypto", mbedtls_crypto_test },
