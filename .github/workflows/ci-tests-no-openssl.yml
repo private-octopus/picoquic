@@ -16,6 +16,7 @@ jobs:
     env:
         CC: clang
         CXX: clang++
+        PTLS_CMAKE_OPTS: -DWITH_FUSION=OFF
 
     steps:
       - name: Checkout repository
@@ -42,6 +43,6 @@ jobs:
             ulimit -c unlimited -S
             cd build
             make picoquic_ct
-            ./picoquic_ct -S .. minicrypto && QUICRESULT=$?
+            ./picoquic_ct -S .. minicrypto_is_last minicrypto && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
             exit 1

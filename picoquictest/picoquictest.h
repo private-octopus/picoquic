@@ -374,6 +374,7 @@ int wifi_reno_long_test();
 int migration_controlled_test();
 int migration_mtu_drop_test();
 int minicrypto_test();
+int minicrypto_is_last_test();
 #ifdef PICOQUIC_WITH_MBEDTLS
 int mbedtls_crypto_test();
 #endif
