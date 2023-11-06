@@ -155,10 +155,12 @@ static int tls_api_is_init = 0;
 void picoquic_tls_api_init_providers(int unload)
 {
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MINICRYPTO) == 0) {
+        DBG_PRINTF("%s", "Loading minicrypto");
         picoquic_ptls_minicrypto_load(unload);
     }
 #ifndef PTLS_WITHOUT_OPENSSL
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_OPENSSL) == 0) {
+        DBG_PRINTF("%s", "Loading openssl");
         picoquic_ptls_openssl_load(unload);
     }
 #else
@@ -169,6 +171,7 @@ void picoquic_tls_api_init_providers(int unload)
     // picoquic_bcrypt_load(unload);
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
+        DBG_PRINTF("%s", "Loading fusion");
         picoquic_ptls_fusion_load(unload);
     }
 #else
@@ -275,6 +278,7 @@ void picoquic_register_tls_key_provider_fn(
     picoquic_dispose_sign_certificate_t dispose_sign_certificate_fn,
     picoquic_get_certs_from_file_t get_certs_from_file_fn)
 {
+    DBG_PRINTF("%s", "Loading set key functions.");
     picoquic_set_private_key_from_file_fn = set_key_from_key_file_fn;
     picoquic_dispose_sign_certificate_fn = dispose_sign_certificate_fn;
     picoquic_get_certs_from_file_fn = get_certs_from_file_fn;
