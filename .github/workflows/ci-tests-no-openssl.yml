@@ -16,6 +16,7 @@ jobs:
     env:
         CC: clang
         CXX: clang++
+        PTLS_CMAKE_OPTS: -DWITH_FUSION=OFF
 
     steps:
       - name: Checkout repository
