@@ -463,7 +463,7 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
                 memcpy(alt_ip+(*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
                 valid_ip = 1;
             }
-            if (atoi(token2) > 0) {
+            if (atoi(token2) >= 0) {
                 *(src_if+(*nb_alt_paths)) = atoi(token2);
                 valid_index = 1;
             }
@@ -540,10 +540,25 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             }
             else if (ret == 0 && (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready ||
                 picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
+                int simulate_multipath = 0;
 
                 if (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready && cb_ctx->multipath_probe_done == 0) {
+                    /* Create the required additional paths. 
+                     * In some cases, we just want to test the software from a computer that is not actually
+                     * multihomed. In that case, the client_alt_address is set to ::0 (IPv6 null address),
+                     * and the callback will return "PICOQUIC_NO_ERROR_SIMULATE_MIGRATION", which
+                     * causes the socket code to create an additional socket, and issue a 
+                     * picoquic_probe_new_path request for the corresponding address.
+                     */
+                    struct sockaddr_in6 addr_zero = { 0 };
+                    addr_zero.sin6_family = AF_INET6;
+
                     for (int i = 0; i < cb_ctx->nb_alt_paths; i++) {
-                        if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr *)&cb_ctx->server_address,
+                        if (picoquic_compare_addr((struct sockaddr*)&addr_zero, (struct sockaddr*)&cb_ctx->client_alt_address[i]) == 0) {
+                            simulate_multipath = 1;
+                            picoquic_log_app_message(cb_ctx->cnx_client, "%s\n", "Will try to simulate new path");
+                        }
+                        else if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr *)&cb_ctx->server_address,
                                 (struct sockaddr *)&cb_ctx->client_alt_address[i], cb_ctx->client_alt_if[i], picoquic_get_quic_time(quic), 0)) != 0) {
                             picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d\n", ret);
                         } else {
@@ -648,6 +663,9 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                     picoquic_log_app_message(cb_ctx->cnx_client, "%s", "All done, Closing the connection.");
 
                     ret = picoquic_close(cb_ctx->cnx_client, 0);
+                }
+                if (simulate_multipath) {
+                    ret = PICOQUIC_NO_ERROR_SIMULATE_MIGRATION;
                 }
             }
             break;
@@ -1084,6 +1102,13 @@ int quic_client(const char* ip_address_text, int server_port,
                 printf("max_ack_gap_local: %" PRIu64 "\n", cnx_client->max_ack_gap_local);
                 printf("max_mtu_sent: %zu\n", cnx_client->max_mtu_sent);
                 printf("max_mtu_received: %zu\n", cnx_client->max_mtu_received);
+
+                if (config->multipath_option != 0) {
+                    for (int i = 0; i < cnx_client->nb_paths; i++) {
+                        printf("Path[%d], packets sent: %" PRIu64 "\n", i,
+                            cnx_client->path[i]->path_packet_number);
+                    }
+                }
             }
         }
     }
