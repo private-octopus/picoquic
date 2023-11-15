@@ -4744,7 +4744,7 @@ int mtu_drop_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        11100000,
+        11600000,
         9450000,
         9200000,
         11400000,

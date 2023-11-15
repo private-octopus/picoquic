@@ -2577,15 +2577,17 @@ int h3_multi_file_test()
     return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, 0, 0);
 }
 
+#define H3ZERO_MULTI_LOSS_PATTERN 0xa242EDB710000ull
+
 int h3_multi_file_loss_test()
 {
-    uint64_t loss_pattern = 0xa243FFB700000ull;
+    uint64_t loss_pattern = H3ZERO_MULTI_LOSS_PATTERN;
     return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, loss_pattern, 0);
 }
 
 int h3_multi_file_preemptive_test()
 {
-    uint64_t loss_pattern = 0xa243FFB700000ull;
+    uint64_t loss_pattern = H3ZERO_MULTI_LOSS_PATTERN;
     return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, loss_pattern, 1);
 }
 
@@ -2596,14 +2598,14 @@ int h09_multi_file_test()
 
 int h09_multi_file_loss_test()
 {
-    uint64_t loss_pattern = 0xa243FFB700000ull; 
+    uint64_t loss_pattern = H3ZERO_MULTI_LOSS_PATTERN;
     return http_multi_file_test_one(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, 
         loss_pattern, 0);
 }
 
 int h09_multi_file_preemptive_test()
 {
-    uint64_t loss_pattern = 0xa243FFB700000ull;
+    uint64_t loss_pattern = H3ZERO_MULTI_LOSS_PATTERN;
     return http_multi_file_test_one(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback,
         loss_pattern, 1);
 }

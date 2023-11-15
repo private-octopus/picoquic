@@ -74,12 +74,12 @@ static const picoquic_test_def_t test_table[] = {
     { "h3_long_file_name", h3_long_file_name_test },
     { "h3_multi_file", h3_multi_file_test },
     { "h3_multi_file_loss", h3_multi_file_loss_test },
-#if 0
+#if 1
     { "h3_multi_file_preemptive", h3_multi_file_preemptive_test },
 #endif
     { "h09_multi_file", h09_multi_file_test },
     { "h09_multi_file_loss", h09_multi_file_loss_test },
-#if 0
+#if 1
     { "h09_multi_file_preemptive", h09_multi_file_preemptive_test },
 #endif
     { "h3zero_settings", h3zero_settings_test },
