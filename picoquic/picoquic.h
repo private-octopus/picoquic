@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.12.1"
+#define PICOQUIC_VERSION "1.1.14.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -200,6 +200,15 @@ typedef enum {
     picoquic_lossbit_send_only = 1, /* Able to send the loss bit, but not receive it */
     picoquic_lossbit_send_receive = 2, /* Able to send or receive the loss bits */
 } picoquic_lossbit_version_enum;
+
+/*
+* Path statuses
+*/
+
+typedef enum {
+    picoquic_path_status_available = 0, /* Path available for sending */
+    picoquic_path_status_standby = 1 /* Do not use if other path available */
+} picoquic_path_status_enum;
 
 /*
  * Provisional definition of the connection ID.
@@ -738,7 +747,7 @@ int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
  * to the context after making this call will cause an error, which
  * makes it unsafe to use inside a callback.
  */
-int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code);
+int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code);
 
 void picoquic_close_immediate(picoquic_cnx_t* cnx);
 
@@ -825,7 +834,7 @@ int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void
 int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason, char const* phrase);
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
-
+int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
 /*
 * The calls to picoquic_get_path_quality takes as argument a structure
 * of type `picoquic_path_quality_t`.
@@ -855,6 +864,7 @@ typedef struct st_picoquic_path_quality_t {
     uint64_t pacing_rate; /* bytes per second */
     uint64_t cwin; /* number of bytes in congestion window */
     uint64_t rtt; /* smoothed estimate of roundtrip time in micros seconds */
+    uint64_t rtt_sample; /* most recent RTT sample */
     uint64_t rtt_variant; /* estimate of RTT variability */
     uint64_t rtt_min; /* minimum value of RTT, computed since path creation */
     uint64_t rtt_max; /* maximum value of RTT, computed since path creation */
@@ -1186,7 +1196,7 @@ uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
 /* Ask the peer to stop sending on a stream. The peer is expected
  * to reset that stream when receiving the "stop sending" signal. */
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint16_t local_stream_error);
+    uint64_t stream_id, uint64_t local_stream_error);
 
 /* Discard stream. This is equivalent to sending a stream reset
  * and a stop sending request, and also setting the app context

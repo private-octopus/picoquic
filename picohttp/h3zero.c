@@ -993,187 +993,40 @@ uint8_t* h3zero_create_bad_method_header_frame(uint8_t* bytes, uint8_t* bytes_ma
     return h3zero_create_bad_method_header_frame_ex(bytes, bytes_max, H3ZERO_USER_AGENT_STRING);
 }
 
-/* Parsing of a data stream. This is implemented as a filter, with a set of states:
+/* Read varint from stream.
+ * The H3 streams data structures often include series of varint for
+ * encoding of types, lengths, or property values. The size of
+ * the messages is not known in advance. Instead, the parser is called
+ * when bytes are received from the network.
  * 
- * - Reading frame length: obtaining the length and type of the next frame.
- * - Reading header frame: obtaining the bytes of the header frame.
- *   When all bytes are obtained, the header is parsed and the header
- *   structure is documented. State moves back to initial, with header-read
- *   flag set. Having two frame headers before a data frame is a bug.
- * - Reading unknown frame: unknown frames can happen at any point in
- *   the stream, and should just be ignored.
- * - Reading data frame: the frame header indicated a data frame of
- *   length N. Treat the following N bytes as data.
- * 
- * There may be several data frames in a stream. The application will pick
- * the bytes and treat them as data.
+ * The parser retains as state the number of bytes accumulated in 
+ * a buffer. If the first byte is read, this byte provides the
+ * length of the encoding. If there are zero bytes, the first byte
+ * to be read will be placed in the buffer.
  */
-
-uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
-    h3zero_data_stream_state_t * stream_state, size_t * available_data, uint16_t * error_found)
+uint8_t * h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t * result, uint8_t * buffer, size_t* buffer_length)
 {
-    *available_data = 0;
-    *error_found = 0;
+    uint8_t* bp = buffer + *buffer_length;
+    uint8_t* be;
 
-    if (bytes == NULL || bytes >= bytes_max) {
-        *error_found = H3ZERO_INTERNAL_ERROR;
-        return NULL;
+    if (bytes == bytes_max){
+        return bytes; /* continuing */
+    }
+    if (bp == buffer) {
+        *bp++ = *bytes++;
+    }
+    be = buffer + h3zero_varint_skip(buffer);
+
+    while (bytes < bytes_max && bp < be) {
+        *bp++ = *bytes++;
     }
 
-    if (!stream_state->frame_header_parsed) {
-        size_t frame_type_length;
-        size_t frame_header_length;
-
-        if (stream_state->frame_header_read < 1) {
-            stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
-        }
-        frame_type_length = h3zero_varint_skip(stream_state->frame_header);
-
-        while (stream_state->frame_header_read < frame_type_length && bytes < bytes_max) {
-            stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
-        }
-
-        if (stream_state->frame_header_read < frame_type_length) {
-            /* No change in state, wait for more bytes */
-            return bytes;
-        }
-
-        (void)h3zero_varint_decode(stream_state->frame_header, frame_type_length,
-            &stream_state->current_frame_type);
-
-        while (stream_state->frame_header_read < frame_type_length + 1 && bytes < bytes_max) {
-            stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
-        }
-
-        frame_header_length = h3zero_varint_skip(stream_state->frame_header + frame_type_length) + frame_type_length;
-
-        if (frame_header_length > sizeof(stream_state->frame_header)) {
-            *error_found = H3ZERO_INTERNAL_ERROR;
-            return NULL; /* This should never happen! */
-        }
-
-        while (stream_state->frame_header_read < frame_header_length && bytes < bytes_max) {
-            stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
-        }
-
-        if (stream_state->frame_header_read >= frame_header_length) {
-            (void)h3zero_varint_decode(stream_state->frame_header + frame_type_length, frame_header_length - frame_type_length,
-                &stream_state->current_frame_length);
-            stream_state->current_frame_read = 0;
-            stream_state->frame_header_parsed = 1;
-
-            if (stream_state->current_frame_type == h3zero_frame_data) {
-                if (!stream_state->header_found || stream_state->trailer_found || stream_state->is_web_transport) {
-                    /* protocol error */
-                    *error_found = H3ZERO_FRAME_UNEXPECTED;
-                    bytes = NULL;
-                }
-            }
-            else if (stream_state->current_frame_type == h3zero_frame_header) {
-                if (stream_state->header_found && (!stream_state->data_found || stream_state->trailer_found || stream_state->is_web_transport)) {
-                    /* protocol error */
-                    *error_found = H3ZERO_FRAME_UNEXPECTED;
-                    bytes = NULL;
-                }
-                else if (stream_state->current_frame_length > 0x10000) {
-                    /* error, excessive load */
-                    *error_found = H3ZERO_INTERNAL_ERROR;
-                    bytes = NULL;
-                }
-                else {
-                    stream_state->current_frame = (uint8_t *)malloc((size_t)stream_state->current_frame_length);
-                    if (stream_state->current_frame == NULL) {
-                        /* error, internal error */
-                        *error_found = H3ZERO_INTERNAL_ERROR;
-                        bytes = NULL;
-                    }
-                }
-            }
-            else if (stream_state->current_frame_type == h3zero_frame_webtransport_stream) {
-                if (stream_state->header_found) {
-                    /* protocol error */
-                    *error_found = H3ZERO_FRAME_UNEXPECTED;
-                    bytes = NULL;
-                }
-                else {
-                    stream_state->header_found = 1;
-                    stream_state->is_web_transport = 1;
-                    stream_state->control_stream_id = stream_state->current_frame_length;
-                    stream_state->current_frame_length = 0;
-                    stream_state->frame_header_parsed = 1;
-                }
-            }
-            else if (stream_state->current_frame_type == h3zero_frame_cancel_push || 
-                stream_state->current_frame_type == h3zero_frame_goaway ||
-                stream_state->current_frame_type == h3zero_frame_max_push_id) {
-                *error_found = H3ZERO_GENERAL_PROTOCOL_ERROR;
-                bytes = NULL;
-            }
-            else if (stream_state->current_frame_type == h3zero_frame_settings) {
-                *error_found = H3ZERO_FRAME_UNEXPECTED;
-                bytes = NULL;
-            }
-        }
-        return bytes;
-    }
-    else {
-        size_t available = bytes_max - bytes;
-        if (stream_state->is_web_transport) {
-            /* Bypass all processing if using web transport */
-            *available_data = (size_t) available;
-        }
-        else {
-            if (stream_state->current_frame_read + available > stream_state->current_frame_length) {
-                available = (size_t)(stream_state->current_frame_length - stream_state->current_frame_read);
-            }
-
-            if (stream_state->current_frame_type == h3zero_frame_header) {
-                memcpy(stream_state->current_frame + stream_state->current_frame_read, bytes, available);
-                stream_state->current_frame_read += available;
-                bytes += available;
-
-                if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-                    uint8_t* parsed;
-                    h3zero_header_parts_t* parts = (stream_state->header_found) ?
-                        &stream_state->trailer : &stream_state->header;
-                    stream_state->trailer_found = stream_state->header_found;
-                    stream_state->header_found = 1;
-                    /* parse */
-                    parsed = h3zero_parse_qpack_header_frame(stream_state->current_frame,
-                        stream_state->current_frame + stream_state->current_frame_length, parts);
-                    if (parsed == NULL || (size_t)(parsed - stream_state->current_frame) != stream_state->current_frame_length) {
-                        /* protocol error */
-                        *error_found = H3ZERO_FRAME_ERROR;
-                        bytes = NULL;
-                    }
-                    /* free resource */
-                    stream_state->frame_header_parsed = 0;
-                    stream_state->frame_header_read = 0;
-                    free(stream_state->current_frame);
-                    stream_state->current_frame = NULL;
-                }
-            }
-            else if (stream_state->current_frame_type == h3zero_frame_data) {
-                *available_data = (size_t)available;
-                stream_state->current_frame_read += available;
-                if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-                    stream_state->frame_header_parsed = 0;
-                    stream_state->frame_header_read = 0;
-                    stream_state->data_found = 1;
-                }
-            }
-            else {
-                /* Unknown frame type, should just be ignored */
-                stream_state->current_frame_read += available;
-                bytes += available;
-                if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-                    stream_state->frame_header_parsed = 0;
-                    stream_state->frame_header_read = 0;
-                }
-            }
+    if (bp >= be) {
+        (void)h3zero_varint_decode(buffer, bp - buffer, result);
+        if ((*buffer_length = bp - be) > 0) {
+            memmove(buffer, be, *buffer_length);
         }
     }
-
     return bytes;
 }
 

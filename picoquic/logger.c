@@ -350,8 +350,11 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_path_abandon:
         frame_name = "path_abandon";
         break;
-    case picoquic_frame_type_path_status:
-        frame_name = "path_status";
+    case picoquic_frame_type_path_standby:
+        frame_name = "path_standby";
+        break;
+    case picoquic_frame_type_path_available:
+        frame_name = "path_available";
         break;
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
@@ -1429,21 +1432,21 @@ size_t textlog_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_ma
     return byte_index;
 }
 
-size_t textlog_path_status_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+size_t textlog_path_available_or_standby_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     const uint8_t* bytes_end = bytes + bytes_max;
     const uint8_t* bytes0 = bytes;
+    uint64_t frame_id = 0;
     uint64_t path_id;
     uint64_t sequence;
-    uint64_t status;
     size_t byte_index = 0;
 
 
-    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_end, &frame_id)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &sequence)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &status)) == NULL) {
-        fprintf(F, "    Malformed Path Abandon frame: ");
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &sequence)) == NULL){
+        /* log format error */
+        fprintf(F, "    Malformed %s frame: ", textlog_frame_names(frame_id));
         /* log format error */
         for (size_t i = 0; i < bytes_max && i < 8; i++) {
             fprintf(F, "%02x", bytes0[i]);
@@ -1455,14 +1458,14 @@ size_t textlog_path_status_frame(FILE* F, const uint8_t* bytes, size_t bytes_max
         byte_index = bytes_max;
     }
     else {
-        fprintf(F, "    Path Status, path_id: %" PRIu64, path_id);
+        fprintf(F, "    %s, path_id: %" PRIu64,  textlog_frame_names(frame_id), path_id);
         fprintf(F, ", sequence: %" PRIu64, sequence);
-        fprintf(F, ", status: %" PRIu64, status);
         fprintf(F, "\n");
         byte_index = (bytes - bytes0);
     }
     return byte_index;
 }
+
 size_t textlog_bdp_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     const uint8_t* bytes_end = bytes + bytes_max;
@@ -1646,8 +1649,9 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
         case picoquic_frame_type_path_abandon:
             byte_index += textlog_path_abandon_frame(F, bytes + byte_index, length - byte_index);
             break;
-        case picoquic_frame_type_path_status:
-            byte_index += textlog_path_status_frame(F, bytes + byte_index, length - byte_index);
+        case picoquic_frame_type_path_standby:
+        case picoquic_frame_type_path_available:
+            byte_index += textlog_path_available_or_standby_frame(F, bytes + byte_index, length - byte_index);
             break;
         case picoquic_frame_type_bdp:
             byte_index += textlog_bdp_frame(F, bytes + byte_index, length - byte_index);

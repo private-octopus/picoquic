@@ -463,7 +463,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             if (ret == 0 && length > 0) {
                 switch (ctx->alpn) {
                 case picoquic_alpn_http_3: {
-                    uint16_t error_found = 0;
+                    uint64_t error_found = 0;
                     size_t available_data = 0;
                     uint8_t * bytes_max = bytes + length;
                     while (bytes < bytes_max) {

@@ -113,7 +113,8 @@ static h3zero_stream_ctx_t* picowt_create_stream_ctx(picoquic_cnx_t* cnx, int is
         cnx, stream_id, h3_ctx, 1, 1);
     if (stream_ctx != NULL) {
         /* Associate the stream with a per_stream context */
-        stream_ctx->control_stream_id = control_stream_id;
+        stream_ctx->ps.stream_state.stream_type = (is_bidir) ? h3zero_frame_webtransport_stream : h3zero_stream_type_webtransport;
+        stream_ctx->ps.stream_state.control_stream_id = control_stream_id;
         if (picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx) != 0) {
             DBG_PRINTF("Could not set context for stream %"PRIu64, stream_id);
         }

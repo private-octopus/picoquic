@@ -1212,7 +1212,7 @@ int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes,
     uint8_t data[64];
     uint8_t packet_buffer[256];
     size_t available_data;
-    uint16_t error_found;
+    uint64_t error_found;
 
     memset(&stream_state, 0, sizeof(h3zero_data_stream_state_t));
 
@@ -1640,7 +1640,7 @@ int h3zero_server_test()
 {
     return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, 
         demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
-        0, 0, 0, 0, NULL, NULL, NULL, 0);
+        0, 0, 0, 0, NULL, ".", ".", 0);
 }
 
 int h09_server_test()
@@ -3210,7 +3210,7 @@ int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_sett
 }
 
 h3zero_settings_t default_setting_expected = {
-    0, 0, 0, 1, 1, 1
+    1, 0, 0, 0, 1, 1, 0
 };
 
 int h3zero_settings_test()

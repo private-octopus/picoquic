@@ -674,42 +674,42 @@ int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
             else {
                 name_length = offset - name_offset;
                 /* Parse the option parameters, up to 5 of them */
-                offset = parse_line_params(line, offset, params, 5, &nb_params);
-                /* Recognize the option and apply the parameters  */
-                for (size_t i = 0; i < option_table_size; i++) {
-                    if (compare_option_name(line, name_offset, (size_t)name_length, option_table[i].option_name) == 0) {
-                        option_index = (int)i;
-                        break;
-                    }
-                }
+offset = parse_line_params(line, offset, params, 5, &nb_params);
+/* Recognize the option and apply the parameters  */
+for (size_t i = 0; i < option_table_size; i++) {
+    if (compare_option_name(line, name_offset, (size_t)name_length, option_table[i].option_name) == 0) {
+        option_index = (int)i;
+        break;
+    }
+}
 
-                if (option_index == -1) {
-                    char buffer[256];
-                    fprintf(stderr, "Line %d, unknown option: -%s\n", line_number,
-                        config_optval_string(buffer, 256, line + name_offset, name_length));
-                    ret = -1;
-                }
-                else {
-                    if (option_table[option_index].nb_params_required != nb_params) {
-                        fprintf(stderr, "Line %d, option %s requires %d arguments, %d present\n",
-                            line_number,
-                            option_table[option_index].option_name,
-                            option_table[option_index].nb_params_required,
-                            nb_params);
-                        ret = -1;
-                    }
-                }
+if (option_index == -1) {
+    char buffer[256];
+    fprintf(stderr, "Line %d, unknown option: -%s\n", line_number,
+        config_optval_string(buffer, 256, line + name_offset, name_length));
+    ret = -1;
+}
+else {
+    if (option_table[option_index].nb_params_required != nb_params) {
+        fprintf(stderr, "Line %d, option %s requires %d arguments, %d present\n",
+            line_number,
+            option_table[option_index].option_name,
+            option_table[option_index].nb_params_required,
+            nb_params);
+        ret = -1;
+    }
+}
 
-                if (ret == 0) {
-                    offset = skip_name(line, offset);
-                    if (line[offset] != 0 && line[offset] != '#') {
-                        fprintf(stderr, "Line %d, unexpected character at position %d\n", line_number, offset);
-                    }
-                }
+if (ret == 0) {
+    offset = skip_name(line, offset);
+    if (line[offset] != 0 && line[offset] != '#') {
+        fprintf(stderr, "Line %d, unexpected character at position %d\n", line_number, offset);
+    }
+}
 
-                if (ret == 0) {
-                    ret = config_set_option(&option_table[option_index], params, nb_params, config);
-                }
+if (ret == 0) {
+    ret = config_set_option(&option_table[option_index], params, nb_params, config);
+}
 
 
             }
@@ -746,11 +746,11 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
     picoquic_stream_data_cb_fn default_callback_fn,
     void* default_callback_ctx,
     uint64_t current_time,
-    uint64_t * p_simulated_time)
+    uint64_t* p_simulated_time)
 {
     /* Create context */
-    /* TODO: padding policy 
-     * TODO: mtu max accessor 
+    /* TODO: padding policy
+     * TODO: mtu max accessor
      * TODO: set supported CC without linking every option
      * TODO: set logging option without linking every option
      * TODO: set key log file option
@@ -765,7 +765,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         default_callback_ctx,
         NULL,
         NULL,
-        (uint8_t *)config->reset_seed,
+        (uint8_t*)config->reset_seed,
         current_time,
         p_simulated_time,
         config->ticket_file_name,
@@ -829,12 +829,12 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         /* Cannot set the cnx_id callback here, because it requires libraries
          * that are not linked by default */
 
-        /* TODO: parameters to define padding policy */
+         /* TODO: parameters to define padding policy */
         picoquic_set_padding_policy(quic, 39, 128);
 
         picoquic_set_binlog(quic, config->bin_dir);
 
-        /* We cannot set qlog here, because of the dependency on libraries 
+        /* We cannot set qlog here, because of the dependency on libraries
          * that are not linked with picoquic by default. The application
          * will have to call:
          *    picoquic_set_qlog(quic, config->qlog_dir);

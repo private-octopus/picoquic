@@ -4648,7 +4648,7 @@ int mtu_required_test()
 
 int mtu_max_test()
 {
-    int ret = mtu_discovery_test_one(picoquic_pmtud_basic, 1392, 1392,
+    int ret = mtu_discovery_test_one(picoquic_pmtud_basic, 1420, 1392,
         test_scenario_mtu_discovery, sizeof(test_scenario_mtu_discovery), 1420);
     return ret;
 }

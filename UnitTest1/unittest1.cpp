@@ -277,6 +277,13 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
+        TEST_METHOD(ack_loop)
+        {
+            int ret = sendack_loop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_range)
         {
             int ret = ackrange_test();
@@ -2093,6 +2100,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(minicrypto_is_last ){
+            int ret = minicrypto_is_last_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(monopath_basic) {
             int ret = monopath_basic_test();
 
@@ -2227,6 +2240,18 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_dg_af) {
             int ret = multipath_dg_af_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_standby) {
+            int ret = multipath_standby_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_standup) {
+            int ret = multipath_standup_test();
 
             Assert::AreEqual(ret, 0);
         }
