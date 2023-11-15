@@ -607,8 +607,8 @@ int app_limited_rpr_test()
     config.ccalgo = picoquic_cubic_algorithm;
     config.do_preemptive_repeat = 1;
     config.loss_mask = 0x1482481224818214ull;
-    config.completion_target = 39000000;
-    config.nb_losses_max = 1960;
+    config.completion_target = 44000000;
+    config.nb_losses_max = 1980;
     config.rtt_max = 275000;
 
     return app_limited_test_one(&config);

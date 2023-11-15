@@ -922,7 +922,7 @@ static void picoquic_count_and_notify_loss(
         if (cnx->congestion_alg != NULL && cnx->cnx_state >= picoquic_state_ready && old_p->send_path != NULL) {
             cnx->congestion_alg->alg_notify(cnx, old_p->send_path,
                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
-                0, 0, 0, old_p->sequence_number, current_time);
+                0, 0, 0, old_p->path_packet_number, current_time);
         }
     }
 }
