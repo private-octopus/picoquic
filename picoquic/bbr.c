@@ -1046,7 +1046,6 @@ void picoquic_bbr_notify_congestion(
         /* filter repeated loss events */
         return;
     }
-#if 1
     if (is_timeout || path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
         if (!bbr_state->is_suspended) {
             bbr_state->is_suspended = 1;
@@ -1056,16 +1055,6 @@ void picoquic_bbr_notify_congestion(
     } else {
         path_x->cwin = path_x->cwin / 2;
     }
-#else
-    path_x->cwin = path_x->cwin / 2;
-    if (is_timeout || path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
-        if (!bbr_state->is_suspended) {
-            bbr_state->is_suspended = 1;
-            bbr_state->cwin_before_suspension = path_x->cwin;
-        }
-        path_x->cwin = PICOQUIC_CWIN_MINIMUM;
-    }
-#endif
     bbr_state->loss_interval_start = current_time;
     bbr_state->last_loss_was_timeout = is_timeout;
     bbr_state->congestion_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
