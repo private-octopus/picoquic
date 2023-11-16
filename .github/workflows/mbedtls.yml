@@ -1,5 +1,5 @@
 ---
-name: "CITestsNoOpenSSL"
+name: "MbedTLS-test"
 
 on:
   push:
@@ -10,13 +10,9 @@ on:
       - master
 
 jobs:
-  citests:
-    name: CI-Tests-No-OpenSSL
+  mbedtls:
+    name: MbedTLS-test
     runs-on: ubuntu-latest
-    env:
-        CC: clang
-        CXX: clang++
-        PTLS_CMAKE_OPTS: -DWITH_FUSION=OFF
 
     steps:
       - name: Checkout repository
@@ -27,6 +23,24 @@ jobs:
           fetch-depth: 2
           submodules: 'recursive'
 
+      - name: Installing MbedTLS
+        run: |
+             pwd
+             cd ..
+             git clone https://github.com/Mbed-TLS/mbedtls
+             cd mbedtls
+             echo "cloned mbedtls"
+             mkdir build
+             cd build
+             cmake -S .. .
+             echo "cmake done"
+             make
+             echo "compiled MbedTLS"
+             pwd
+             cd ../../picoquic
+             pwd
+             ls
+
       - name: Building picoquic
         run: |
           sudo apt-get install clangd
@@ -35,7 +49,7 @@ jobs:
           echo $CXX
           # $CC --version
           ./ci/build_picotls.sh
-          cmake -S . -B build "-DWITH_OPENSSL=OFF"
+          cmake -S . -B build "-DWITH_OPENSSL=OFF" "-DWITH_MBEDTLS=ON"
           cmake --build build
 
       - name: Perform Unit Tests
@@ -43,6 +57,6 @@ jobs:
             ulimit -c unlimited -S
             cd build
             make picoquic_ct
-            ./picoquic_ct -S .. minicrypto_is_last minicrypto && QUICRESULT=$?
+            ./picoquic_ct -S .. mbedtls_crypto minicrypto_is_last mbedtls && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
             exit 1

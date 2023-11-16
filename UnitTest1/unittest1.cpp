@@ -2100,6 +2100,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(minicrypto_is_last ){
+            int ret = minicrypto_is_last_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(monopath_basic) {
             int ret = monopath_basic_test();
 
@@ -2234,6 +2240,18 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_dg_af) {
             int ret = multipath_dg_af_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_standby) {
+            int ret = multipath_standby_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_standup) {
+            int ret = multipath_standup_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2514,13 +2532,11 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-#if 0
         TEST_METHOD(h09_multi_file_preemptive) {
             int ret = h09_multi_file_preemptive_test();
 
             Assert::AreEqual(ret, 0);
         }
-#endif
 
         TEST_METHOD(h3_multi_file) {
             int ret = h3_multi_file_test();
@@ -2534,13 +2550,11 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-#if 0
         TEST_METHOD(h3_multi_file_preemptive) {
             int ret = h3_multi_file_preemptive_test();
 
             Assert::AreEqual(ret, 0);
         }
-#endif
 
         TEST_METHOD(h3zero_settings) {
             int ret = h3zero_settings_test();

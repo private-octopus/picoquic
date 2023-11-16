@@ -166,6 +166,7 @@
     <ClCompile Include="high_latency_test.c" />
     <ClCompile Include="intformattest.c" />
     <ClCompile Include="l4s_test.c" />
+    <ClCompile Include="mbedtls_test.c" />
     <ClCompile Include="mediatest.c" />
     <ClCompile Include="minicrypto_test.c" />
     <ClCompile Include="multipath_test.c" />

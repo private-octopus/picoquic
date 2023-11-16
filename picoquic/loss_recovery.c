@@ -891,7 +891,8 @@ static void picoquic_check_path_mtu_on_losses(
             picoquic_reset_path_mtu(old_p->send_path);
             if (old_mtu != old_p->send_path->send_mtu) {
                 picoquic_log_app_message(cnx,
-                    "Reset path MTU after %" PRIu64 " retransmissions, %" PRIu64 "MTU losses, Timer mode : % d",
+                    "Reset path %" PRIu64 " MTU after %" PRIu64 " retransmissions, %" PRIu64 "MTU losses, Timer mode : % d",
+                    old_p->send_path->unique_path_id,
                     old_p->send_path->nb_retransmit,
                     old_p->send_path->nb_mtu_losses,
                     timer_based_retransmit);
@@ -921,7 +922,7 @@ static void picoquic_count_and_notify_loss(
         if (cnx->congestion_alg != NULL && cnx->cnx_state >= picoquic_state_ready && old_p->send_path != NULL) {
             cnx->congestion_alg->alg_notify(cnx, old_p->send_path,
                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
-                0, 0, 0, old_p->sequence_number, current_time);
+                0, 0, 0, old_p->path_packet_number, current_time);
         }
     }
 }

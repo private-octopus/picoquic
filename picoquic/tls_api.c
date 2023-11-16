@@ -93,7 +93,6 @@ struct st_picoquic_log_event_t {
 
 /* This first part of this file provides a set of function for accessing
  * the cryptographic libraries.
- * The explicit calls to 
  */
 #define CRYPTO_PROVIDERS_REGION 1
 
@@ -110,7 +109,7 @@ static struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER
 #define PICOQUIC_KEY_EXCHANGES_NB_MAX 4
 static ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
 static ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
-static picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn = NULL;
+picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn = NULL;
 static picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn = NULL;
 static picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn = NULL;
 
@@ -130,10 +129,13 @@ static picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn = NU
  * such as "ifdef" and real time flags assessed in each
  * per provider module.
  */
+#ifdef PICOQUIC_WITH_MBEDTLS
+void picoquic_mbedtls_load(int unload);
+#endif
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
 void picoquic_ptls_fusion_load(int unload);
 #endif
-// void picoquic_bcrypt_load(int unload);
+/* void picoquic_bcrypt_load(int unload); */
 #ifndef PTLS_WITHOUT_OPENSSL
 void picoquic_ptls_openssl_load(int unload);
 #endif
@@ -153,10 +155,12 @@ static int tls_api_is_init = 0;
 void picoquic_tls_api_init_providers(int unload)
 {
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MINICRYPTO) == 0) {
+        DBG_PRINTF("%s", "Loading minicrypto");
         picoquic_ptls_minicrypto_load(unload);
     }
 #ifndef PTLS_WITHOUT_OPENSSL
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_OPENSSL) == 0) {
+        DBG_PRINTF("%s", "Loading openssl");
         picoquic_ptls_openssl_load(unload);
     }
 #else
@@ -167,11 +171,19 @@ void picoquic_tls_api_init_providers(int unload)
     // picoquic_bcrypt_load(unload);
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
+        DBG_PRINTF("%s", "Loading fusion");
         picoquic_ptls_fusion_load(unload);
     }
 #else
     if (unload == 0 && tls_api_is_init == 0) {
-        DBG_PRINTF("%s","Picoquic was compiled without Fusion");
+        DBG_PRINTF("%s", "Picoquic was compiled without Fusion");
+    }
+#endif
+
+#ifdef PICOQUIC_WITH_MBEDTLS
+    if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MBEDTLS) == 0) {
+        DBG_PRINTF("%s", "Loading MbedTLS");
+        picoquic_mbedtls_load(unload);
     }
 #endif
 }
@@ -266,6 +278,7 @@ void picoquic_register_tls_key_provider_fn(
     picoquic_dispose_sign_certificate_t dispose_sign_certificate_fn,
     picoquic_get_certs_from_file_t get_certs_from_file_fn)
 {
+    DBG_PRINTF("%s", "Loading set key functions.");
     picoquic_set_private_key_from_file_fn = set_key_from_key_file_fn;
     picoquic_dispose_sign_certificate_fn = dispose_sign_certificate_fn;
     picoquic_get_certs_from_file_fn = get_certs_from_file_fn;

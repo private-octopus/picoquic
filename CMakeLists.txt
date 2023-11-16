@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.12.3
+        VERSION 1.1.14.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -71,7 +71,6 @@ if(ENABLE_UBSAN)
 endif()
 
 set(PICOQUIC_LIBRARY_FILES
-
     picoquic/bbr.c
     picoquic/bytestream.c
     picoquic/cc_common.c
@@ -91,6 +90,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/picoquic_ptls_fusion.c
     picoquic/picoquic_ptls_minicrypto.c
     picoquic/picoquic_ptls_openssl.c
+    picoquic/picoquic_mbedtls.c
     picoquic/picosocks.c
     picoquic/picosplay.c
     picoquic/port_blocking.c
@@ -110,101 +110,102 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/util.c)
 
 set(PICOQUIC_CORE_HEADERS
-        picoquic/picoquic.h
-        picoquic/picosocks.h
-        picoquic/picoquic_utils.h
-        picoquic/picoquic_packet_loop.h
-        picoquic/picoquic_unified_log.h
-        picoquic/picoquic_logger.h
-        picoquic/picoquic_binlog.h
-        picoquic/picoquic_config.h
-        picoquic/picoquic_lb.h)
+     picoquic/picoquic.h
+     picoquic/picosocks.h
+     picoquic/picoquic_utils.h
+     picoquic/picoquic_packet_loop.h
+     picoquic/picoquic_unified_log.h
+     picoquic/picoquic_logger.h
+     picoquic/picoquic_binlog.h
+     picoquic/picoquic_config.h
+     picoquic/picoquic_lb.h)
 
 set(LOGLIB_LIBRARY_FILES
-        loglib/autoqlog.c
-        loglib/cidset.c
-        loglib/csv.c
-        loglib/logconvert.c
-        loglib/logreader.c
-        loglib/qlog.c
-        loglib/svg.c)
+    loglib/autoqlog.c
+    loglib/cidset.c
+    loglib/csv.c
+    loglib/logconvert.c
+    loglib/logreader.c
+    loglib/qlog.c
+    loglib/svg.c)
 
 set(PICOQUIC_LOGLIB_HEADERS loglib/autoqlog.h)
 
 set(PICOQUIC_TEST_LIBRARY_FILES
-        picoquictest/ack_of_ack_test.c
-        picoquictest/app_limited.c
-        picoquictest/bytestream_test.c
-        picoquictest/cert_verify_test.c
-        picoquictest/cleartext_aead_test.c
-        picoquictest/code_version_test.c
-        picoquictest/config_test.c
-        picoquictest/cnx_creation_test.c
-        picoquictest/cnxstress.c
-        picoquictest/cplusplus.cpp
-        picoquictest/cpu_limited.c
-        picoquictest/datagram_tests.c
-        picoquictest/delay_tolerant_test.c
-        picoquictest/edge_cases.c
-        picoquictest/hashtest.c
-        picoquictest/high_latency_test.c
-        picoquictest/intformattest.c
-        picoquictest/l4s_test.c
-        picoquictest/mediatest.c
-        picoquictest/minicrypto_test.c
-        picoquictest/multipath_test.c
-        picoquictest/netperf_test.c
-        picoquictest/parseheadertest.c
-        picoquictest/picoquic_lb_test.c
-        picoquictest/pn2pn64test.c
-        picoquictest/quic_tester.c
-        picoquictest/sacktest.c
-        picoquictest/satellite_test.c
-        picoquictest/skip_frame_test.c
-        picoquictest/socket_test.c
-        picoquictest/splay_test.c
-        picoquictest/stream0_frame_test.c
-        picoquictest/stresstest.c
-        picoquictest/ticket_store_test.c
-        picoquictest/tls_api_test.c
-        picoquictest/transport_param_test.c
-        picoquictest/util_test.c
-        picoquictest/warptest.c
-        picoquictest/wifitest.c )
+    picoquictest/ack_of_ack_test.c
+    picoquictest/app_limited.c
+    picoquictest/bytestream_test.c
+    picoquictest/cert_verify_test.c
+    picoquictest/cleartext_aead_test.c
+    picoquictest/code_version_test.c
+    picoquictest/config_test.c
+    picoquictest/cnx_creation_test.c
+    picoquictest/cnxstress.c
+    picoquictest/cplusplus.cpp
+    picoquictest/cpu_limited.c
+    picoquictest/datagram_tests.c
+    picoquictest/delay_tolerant_test.c
+    picoquictest/edge_cases.c
+    picoquictest/hashtest.c
+    picoquictest/high_latency_test.c
+    picoquictest/intformattest.c
+    picoquictest/l4s_test.c
+    picoquictest/mbedtls_test.c
+    picoquictest/mediatest.c
+    picoquictest/minicrypto_test.c
+    picoquictest/multipath_test.c
+    picoquictest/netperf_test.c
+    picoquictest/parseheadertest.c
+    picoquictest/picoquic_lb_test.c
+    picoquictest/pn2pn64test.c
+    picoquictest/quic_tester.c
+    picoquictest/sacktest.c
+    picoquictest/satellite_test.c
+    picoquictest/skip_frame_test.c
+    picoquictest/socket_test.c
+    picoquictest/splay_test.c
+    picoquictest/stream0_frame_test.c
+    picoquictest/stresstest.c
+    picoquictest/ticket_store_test.c
+    picoquictest/tls_api_test.c
+    picoquictest/transport_param_test.c
+    picoquictest/util_test.c
+    picoquictest/warptest.c
+    picoquictest/wifitest.c )
 
 set(PICOHTTP_LIBRARY_FILES
-        picohttp/democlient.c
-        picohttp/demoserver.c
-        picohttp/h3zero.c
-        picohttp/h3zero_client.c
-        picohttp/h3zero_common.c
-        picohttp/h3zero_server.c
-        picohttp/h3zero_uri.c
-        picohttp/quicperf.c
-        picohttp/siduck.c
-        picohttp/webtransport.c
-        picohttp/wt_baton.c)
+    picohttp/democlient.c
+    picohttp/demoserver.c
+    picohttp/h3zero.c
+    picohttp/h3zero_client.c
+    picohttp/h3zero_common.c
+    picohttp/h3zero_server.c
+     picohttp/h3zero_uri.c
+    picohttp/quicperf.c
+    picohttp/siduck.c
+    picohttp/webtransport.c
+    picohttp/wt_baton.c)
 
 set(PICOHTTP_HEADERS
-        picohttp/h3zero.h
-        picohttp/h3zero_common.h
-        picohttp/h3zero_uri.h
-        picohttp/democlient.h
-        picohttp/demoserver.h
-        picohttp/pico_webtransport.h
-        picohttp/wt_baton.h)
+     picohttp/h3zero.h
+     picohttp/h3zero_common.h
+     picohttp/h3zero_uri.h
+     picohttp/democlient.h
+     picohttp/demoserver.h
+     picohttp/pico_webtransport.h
+     picohttp/wt_baton.h)
 
 set(PICOHTTP_TEST_LIBRARY_FILES
-        picoquictest/h3zerotest.c
-        picoquictest/h3zero_uri_test.c
-        picoquictest/webtransport_test.c)
+    picoquictest/h3zerotest.c
+    picoquictest/h3zero_uri_test.c
+    picoquictest/webtransport_test.c)
 
 OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
 if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
-            GIT_REPOSITORY      https://github.com/h2o/picotls.git
-            GIT_TAG             7d294ab4f2e0ed749b4bcfaf533225a4e0c096f7)
+        GIT_REPOSITORY      https://github.com/h2o/picotls.git
+        GIT_TAG             af66fc4aa8853b0725fcb2c18a702e8f1c656cf1)
     FetchContent_MakeAvailable(picotls)
 endif()
 
@@ -238,40 +239,64 @@ else()
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
 
+
+
+OPTION(WITH_MBEDTLS "enable MBEDTLS" OFF)
+
+IF (WITH_MBEDTLS)
+    FIND_PACKAGE(MbedTLS)
+    IF (MbedTLS_FOUND)
+        message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+        message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
+        list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_MBEDTLS)
+# TODO:
+#       add mbedtls include dir to include path?
+#       maybe, create an mbed-ltls library in picoquic?
+#       either ADD_LIBRARY(picoquic-mbedtls lib/ptls_mbedtls.c)
+#       or ADD file to core libraries, easier for users?
+#       list(APPEND PICOQUIC_LIBRARY_FILES picoquic/ptls_mbedtls.c)
+    ELSE ()
+        message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+        message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
+        MESSAGE (FATAL_ERROR "MbedTLS not found")
+    ENDIF()
+ENDIF ()
+
+
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
 macro(set_picoquic_compile_settings)
     set_target_properties(${ARGV0}
-            PROPERTIES
+        PROPERTIES
             C_STANDARD 11
             C_STANDARD_REQUIRED YES
             C_EXTENSIONS YES)
     set_target_properties(${ARGV0}
-            PROPERTIES
+        PROPERTIES
             CXX_STANDARD 11
             CXX_STANDARD_REQUIRED YES
             CXX_EXTENSIONS YES)
     target_compile_options(${ARGV0}
-            PRIVATE
+        PRIVATE
             $<$<C_COMPILER_ID:Clang>: -O3 -Wall -fno-exceptions
-            -fno-signed-zeros -fno-trapping-math
-            ${PICOQUIC_ADDITIONAL_C_FLAGS}>
+                -fno-signed-zeros -fno-trapping-math
+                ${PICOQUIC_ADDITIONAL_C_FLAGS}>
             $<$<C_COMPILER_ID:AppleClang>: -O3 -Wall -fno-exceptions
-            -fno-signed-zeros -fno-trapping-math
-            ${PICOQUIC_ADDITIONAL_C_FLAGS}>
+                -fno-signed-zeros -fno-trapping-math
+                ${PICOQUIC_ADDITIONAL_C_FLAGS}>
             $<$<C_COMPILER_ID:GNU>: -O3 -Wall -fno-exceptions
-            -fno-signed-zeros -frename-registers -fno-trapping-math
-            ${PICOQUIC_ADDITIONAL_C_FLAGS}>
+                -fno-signed-zeros -frename-registers -fno-trapping-math
+                ${PICOQUIC_ADDITIONAL_C_FLAGS}>
             $<$<C_COMPILER_ID:MSVC>: >
             $<$<CXX_COMPILER_ID:Clang>: -O3 -Wall -fno-exceptions
-            -fno-signed-zeros -fno-trapping-math
-            ${PICOQUIC_ADDITIONAL_CXX_FLAGS}>
+                -fno-signed-zeros -fno-trapping-math
+                ${PICOQUIC_ADDITIONAL_CXX_FLAGS}>
             $<$<CXX_COMPILER_ID:AppleClang>: -O3 -Wall -fno-exceptions
-            -fno-signed-zeros -fno-trapping-math
-            ${PICOQUIC_ADDITIONAL_CXX_FLAGS}>
+                -fno-signed-zeros -fno-trapping-math
+                ${PICOQUIC_ADDITIONAL_CXX_FLAGS}>
             $<$<CXX_COMPILER_ID:GNU>: -O3 -Wall -fno-exceptions
-            -fno-signed-zeros -frename-registers -fno-trapping-math
-            ${PICOQUIC_ADDITIONAL_CXX_FLAGS}>
+                -fno-signed-zeros -frename-registers -fno-trapping-math
+                ${PICOQUIC_ADDITIONAL_CXX_FLAGS}>
             $<$<CXX_COMPILER_ID:MSVC>: >)
     target_compile_definitions(${ARGV0} PRIVATE ${PICOQUIC_COMPILE_DEFINITIONS})
     target_link_options(${ARGV0} PRIVATE ${PICOQUIC_LINKER_FLAGS})
@@ -280,50 +305,54 @@ endmacro()
 
 add_library(picoquic-core ${PICOQUIC_CORE_HEADERS} ${PICOQUIC_LIBRARY_FILES})
 target_include_directories(picoquic-core
-        PRIVATE
+    PRIVATE
         ${PTLS_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR}
-        PUBLIC
+        ${MBEDTLS_INCLUDE_DIRS}
+    PUBLIC
         picoquic)
 target_link_libraries(picoquic-core
-        PRIVATE
+    PRIVATE
         ${OPENSSL_LIBRARIES}
-        PUBLIC
+        ${MBEDTLS_LIBRARIES}
+    PUBLIC
         ${PTLS_LIBRARIES}
         Threads::Threads)
 set_picoquic_compile_settings(picoquic-core)
 
 add_library(picoquic-log ${LOGLIB_LIBRARY_FILES})
 target_include_directories(picoquic-log
-        PRIVATE
+    PRIVATE
         ${PTLS_INCLUDE_DIRS}
-        PUBLIC
+    PUBLIC
         picoquic
         loglib)
 set_picoquic_compile_settings(picoquic-log)
 
 add_library(picohttp-core ${PICOHTTP_LIBRARY_FILES})
 target_link_libraries(picohttp-core
-        PRIVATE
+    PRIVATE
         ${PTLS_LIBRARIES}
         ${OPENSSL_LIBRARIES}
-        PUBLIC
+        ${MBEDTLS_LIBRARIES}
+    PUBLIC
         picoquic-core)
 target_include_directories(picohttp-core
-        PRIVATE
+    PRIVATE
         ${PTLS_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR}
-        PUBLIC
+    PUBLIC
         picoquic)
 set_picoquic_compile_settings(picohttp-core)
 
 add_executable(picoquicdemo
-        picoquicfirst/picoquicdemo.c
-        picoquicfirst/getopt.c)
+    picoquicfirst/picoquicdemo.c
+    picoquicfirst/getopt.c)
 target_link_libraries(picoquicdemo
-        PRIVATE
+    PRIVATE
         ${PTLS_LIBRARIES}
         ${OPENSSL_LIBRARIES}
+        ${MBEDTLS_LIBRARIES}
         picoquic-log
         picoquic-core
         picohttp-core)
@@ -342,19 +371,21 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     add_library(picoquic-test STATIC ${PICOQUIC_TEST_LIBRARY_FILES})
     target_link_libraries(picoquic-test PUBLIC picoquic-core picoquic-log)
     target_include_directories(picoquic-test
-            PUBLIC
+        PRIVATE
+            ${MBEDTLS_INCLUDE_DIRS}
+        PUBLIC
             ${PTLS_INCLUDE_DIRS}
             picoquic
             picoquictest)
     set_picoquic_compile_settings(picoquic-test)
 
     add_executable(picoquic_ct picoquic_t/picoquic_t.c)
-    target_link_libraries(picoquic_ct PRIVATE picoquic-test)
+    target_link_libraries(picoquic_ct PRIVATE picoquic-test ${MBEDTLS_LIBRARIES})
     set_picoquic_compile_settings(picoquic_ct)
 
     add_executable(picohttp_ct
-            picohttp_t/picohttp_t.c
-            ${PICOHTTP_TEST_LIBRARY_FILES})
+        picohttp_t/picohttp_t.c
+        ${PICOHTTP_TEST_LIBRARY_FILES})
     target_link_libraries(picohttp_ct PRIVATE picohttp-core picoquic-test)
     target_include_directories(picohttp_ct PRIVATE picohttp)
     set_picoquic_compile_settings(picohttp_ct)
@@ -365,17 +396,17 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     set_picoquic_compile_settings(pico_baton)
 
     add_executable(picoquic_sample
-            sample/sample.c
-            sample/sample_client.c
-            sample/sample_server.c)
+        sample/sample.c
+        sample/sample_client.c
+        sample/sample_server.c)
     target_link_libraries(picoquic_sample PRIVATE picoquic-log picoquic-core)
     target_include_directories(picoquic_sample PRIVATE loglib picoquic)
     set_picoquic_compile_settings(picoquic_sample)
 
     add_test(NAME picoquic_ct
-            COMMAND picoquic_ct -S ${PROJECT_SOURCE_DIR} -n -r)
+             COMMAND picoquic_ct -S ${PROJECT_SOURCE_DIR} -n -r)
     add_test(NAME picohttp_ct
-            COMMAND picohttp_ct -S ${PROJECT_SOURCE_DIR} -n -r)
+             COMMAND picohttp_ct -S ${PROJECT_SOURCE_DIR} -n -r)
 endif()
 
 # get all project files for formatting
@@ -383,11 +414,11 @@ file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)
 
 # Adds clangformat as target that formats all source files
 add_custom_target(
-        clangformat
-        COMMAND clang-format
-        -style=Webkit
-        -i
-        ${CLANG_FORMAT_SOURCE_FILES})
+    clangformat
+    COMMAND clang-format
+    -style=Webkit
+    -i
+    ${CLANG_FORMAT_SOURCE_FILES})
 
 # Specify Install targets
 install(TARGETS picoquicdemo picolog_t picoquic-core picoquic-log picohttp-core

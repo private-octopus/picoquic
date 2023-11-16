@@ -27,12 +27,13 @@
 #include "picoquic_crypto_provider_api.h"
 #include "picotls/minicrypto.h"
 
-
 static int set_minicrypto_private_key_from_key_file(char const* keypem, ptls_context_t* ctx)
 {
     return ptls_minicrypto_load_private_key(ctx, keypem);
 }
 
+picoquic_set_private_key_from_file_t picoquic_minicrypto_set_key_fn =
+                                         set_minicrypto_private_key_from_key_file;
 
 void picoquic_clear_minicrypto()
 {

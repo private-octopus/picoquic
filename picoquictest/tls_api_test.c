@@ -1820,11 +1820,6 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
             nb_inactive = 0;
         } else {
             nb_inactive++;
-#if 1
-            if (nb_inactive >= 128) {
-                DBG_PRINTF("%s", "bug");
-            }
-#endif
         }
 
         if (test_ctx->test_finished) {
@@ -4653,7 +4648,7 @@ int mtu_required_test()
 
 int mtu_max_test()
 {
-    int ret = mtu_discovery_test_one(picoquic_pmtud_basic, 1392, 1392,
+    int ret = mtu_discovery_test_one(picoquic_pmtud_basic, 1420, 1392,
         test_scenario_mtu_discovery, sizeof(test_scenario_mtu_discovery), 1420);
     return ret;
 }
@@ -4749,7 +4744,7 @@ int mtu_drop_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        11100000,
+        11600000,
         9450000,
         9200000,
         11400000,

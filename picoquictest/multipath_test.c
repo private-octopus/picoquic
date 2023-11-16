@@ -438,7 +438,9 @@ typedef enum {
     multipath_test_stream_af,
     multipath_test_abandon,
     multipath_test_datagram,
-    multipath_test_dg_af
+    multipath_test_dg_af,
+    multipath_test_standby,
+    multipath_test_standup
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -783,16 +785,23 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     if (ret == 0) {
         ret = wait_multipath_ready(test_ctx, &simulated_time);
     }
-    if (ret == 0 && test_id == multipath_test_stream_af) {
-        ret = picoquic_set_stream_path_affinity(test_ctx->cnx_server, 4, 0);
-        if (ret != 0) {
-            DBG_PRINTF("Cannot set stream affinity, ret = %d", ret);
+    if (ret == 0){
+        if (test_id == multipath_test_stream_af) {
+            ret = picoquic_set_stream_path_affinity(test_ctx->cnx_server, 4, 0);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot set stream affinity, ret = %d", ret);
+            }
+        }
+        else if (test_id == multipath_test_standby ||
+            test_id == multipath_test_standup) {
+            ret = picoquic_set_path_status(test_ctx->cnx_client, 1, picoquic_path_status_standby);
         }
     }
 
     if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
         test_id == multipath_test_renew || test_id == multipath_test_nat ||
-        test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_back1 ||
+        test_id == multipath_test_break1 || test_id == multipath_test_break2 ||
+        test_id == multipath_test_back1 || test_id == multipath_test_standup ||
         test_id == multipath_test_abandon)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link */
@@ -824,7 +833,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 /* Trigger "destination unreachable" error on next socket call to link 1 */
                 multipath_test_set_unreachable(test_ctx, 1);
             } else {
-                multipath_test_kill_links(test_ctx, (test_id == multipath_test_drop_first) ? 0 : 1);
+                multipath_test_kill_links(test_ctx, 
+                    (test_id == multipath_test_drop_first ||
+                        test_id == multipath_test_standup) ? 0 : 1);
             }
         }
     }
@@ -927,11 +938,12 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             ret = -1;
         }
         else if (test_ctx->cnx_server->path[0]->delivered < 1400000) {
-            DBG_PRINTF("Not enough data delivered on server path 0 (%" PRIu64 ".\n", test_ctx->cnx_server->path[0]->delivered);
+            DBG_PRINTF("Not enough data delivered on server path 0 (%" PRIu64 ").\n", test_ctx->cnx_server->path[0]->delivered);
             ret = -1;
         }
         else if (test_ctx->cnx_server->path[1]->delivered > 600000) {
-            DBG_PRINTF("Too much data delivered on server path 1 (%" PRIu64 ".\n", test_ctx->cnx_server->path[0]->delivered);
+            DBG_PRINTF("Too much data delivered on server path 1 (%" PRIu64 ").\n",
+                test_ctx->cnx_server->path[1]->delivered);
             ret = -1;
         }
     }
@@ -939,6 +951,21 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     /* In the datagram scenarios, verify the datagram transmission */
     if (ret == 0 && (test_id == multipath_test_datagram || test_id == multipath_test_dg_af)) {
         ret = multipath_verify_datagram_sent(&dg_ctx, test_id);
+    }
+
+    /* In the standby scenario, verify that the flag is set
+    * correctly at the server, and that not too much data is
+    * sent on standby path.
+    */
+    if (ret == 0 && (test_id == multipath_test_standby)) {
+        if (!test_ctx->cnx_server->path[1]->path_is_standby) {
+            DBG_PRINTF("Standby not set on server path 1 (%d).\n", test_ctx->cnx_server->path[1]->path_is_standby);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->path[1]->delivered > 50000) {
+            DBG_PRINTF("Too much data delivered on server path 1 (%" PRIu64 ").\n", test_ctx->cnx_server->path[1]->delivered);
+            ret = -1;
+        }
     }
     /* Delete the context */
     if (test_ctx != NULL) {
@@ -1099,6 +1126,20 @@ int multipath_dg_af_test()
     uint64_t max_completion_microsec = 1100000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_dg_af, 0);
+}
+
+int multipath_standby_test()
+{
+    uint64_t max_completion_microsec = 2000000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_standby, 0);
+}
+
+int multipath_standup_test()
+{
+    uint64_t max_completion_microsec = 4500000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_standup, 0);
 }
 
 /* Monopath tests:
@@ -1743,3 +1784,37 @@ int path_packet_queue_test()
     /* And that's it */
     return ret;
 }
+
+/* Unit test of path selection.
+ * The input to path selections include the state of the path,
+ * the status set by the peer, the presence of losses, etc.
+ * Each test set up a connection context and two path contexts,
+ * with stated values for the key variables, then verify that
+ * the path selection is as expected.
+ * 
+ * Key values include:
+ * cnx->path[i]->status_set_by_peer
+ * cnx->path[i]->path_is_demoted
+ * cnx->path[i]->challenge_failed (leads to demotion)
+ * cnx->path[i]->response_required (set challenge path)
+ * cnx->path[i]->challenge_verified (and next challenge time)
+ * cnx->path[i]->challenge_repeat_count
+ * cnx->path[i]->nb_retransmit
+ * cnx->path[i]->rtt_min
+ * picoquic_is_sending_authorized_by_pacing
+ * affinity path for the next stream, or is_datagram_ready per path/cnx
+ * cnx->path[i]->bytes_in_transit < cnx->path[i]->cwin, cnx->quic->cwin_max
+ * then the selection:
+ * 1) challenge path;
+ * 2) if is_ack_needed, min rtt path for ACK
+ * 3) affinity_path, if cwin_ok
+ * 4) data path, if cwin ok
+ * 5) data path with pacing OK
+ * 6) path 0, after setting the timers.
+ * 
+ * TODO: break that into parts that can be verified!
+ */
+int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time,
+    uint64_t* next_wake_time);
+
+

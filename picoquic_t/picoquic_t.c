@@ -371,6 +371,11 @@ static const picoquic_test_def_t test_table[] = {
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
     { "minicrypto", minicrypto_test },
+    { "minicrypto_is_last", minicrypto_is_last_test },
+#ifdef PICOQUIC_WITH_MBEDTLS
+    { "mbedtls", mbedtls_test },
+    { "mbedtls_crypto", mbedtls_crypto_test },
+#endif
     { "monopath_basic", monopath_basic_test },
     { "monopath_hole", monopath_hole_test },
     { "monopath_rotation", monopath_rotation_test },
@@ -393,7 +398,9 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_quality", multipath_quality_test },
     { "multipath_stream_af", multipath_stream_af_test },
     { "multipath_datagram", multipath_datagram_test },
-    { "multipath_dg_af_test", multipath_dg_af_test },
+    { "multipath_dg_af", multipath_dg_af_test },
+    { "multipath_standby", multipath_standby_test },
+    { "multipath_standup", multipath_standup_test },
     { "multipath_qlog", multipath_qlog_test },
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },

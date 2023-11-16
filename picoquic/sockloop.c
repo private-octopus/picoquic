@@ -154,8 +154,8 @@ int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE 
         }
         else {
 
-            unsigned int tos = 0x88;
-            if(setsockopt(s_socket[i], IPPROTO_IP, IP_TOS, &tos, sizeof(tos)) < 0){
+            int tos = 0x88;
+            if(setsockopt(s_socket[i], IPPROTO_IP, IP_TOS, &tos, sizeof(tos)) < 0) {
                 DBG_PRINTF("setsockopt IPv4 IP_TOS (0x%x) fails, errno: %d\n", tos, errno);
             }
 

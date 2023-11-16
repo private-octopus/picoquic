@@ -374,6 +374,11 @@ int wifi_reno_long_test();
 int migration_controlled_test();
 int migration_mtu_drop_test();
 int minicrypto_test();
+int minicrypto_is_last_test();
+#ifdef PICOQUIC_WITH_MBEDTLS
+int mbedtls_crypto_test();
+#endif
+int mbedtls_test();
 int monopath_basic_test();
 int monopath_hole_test();
 int monopath_rotation_test();
@@ -397,6 +402,8 @@ int multipath_quality_test();
 int multipath_stream_af_test();
 int multipath_datagram_test();
 int multipath_dg_af_test();
+int multipath_standby_test();
+int multipath_standup_test();
 int multipath_qlog_test();
 int simple_multipath_basic_test();
 int simple_multipath_drop_first_test();
