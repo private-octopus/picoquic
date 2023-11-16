@@ -291,6 +291,7 @@ typedef struct st_picoquic_bbr_state_t {
     unsigned int last_loss_was_timeout : 1;
     unsigned int cycle_on_loss : 1;
     unsigned int is_suspended;
+    unsigned int is_suspension_nearly_over : 1; /* Suspension likely over, waiting for ACK before repeating data. */
 
 } picoquic_bbr_state_t;
 
@@ -1045,6 +1046,17 @@ void picoquic_bbr_notify_congestion(
         /* filter repeated loss events */
         return;
     }
+#if 1
+    if (is_timeout || path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
+        if (!bbr_state->is_suspended) {
+            bbr_state->is_suspended = 1;
+            bbr_state->cwin_before_suspension = path_x->cwin;
+        }
+        path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+    } else {
+        path_x->cwin = path_x->cwin / 2;
+    }
+#else
     path_x->cwin = path_x->cwin / 2;
     if (is_timeout || path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
         if (!bbr_state->is_suspended) {
@@ -1053,7 +1065,7 @@ void picoquic_bbr_notify_congestion(
         }
         path_x->cwin = PICOQUIC_CWIN_MINIMUM;
     }
-
+#endif
     bbr_state->loss_interval_start = current_time;
     bbr_state->last_loss_was_timeout = is_timeout;
     bbr_state->congestion_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
@@ -1074,22 +1086,36 @@ void picoquic_bbr_notify_congestion(
 /*
 * Exit from suspension, after notification of spurious repeat.
 */
-void picoquic_bbr_exit_suspension(
+void picoquic_bbr_suspension_almost_over(
     picoquic_bbr_state_t* bbr_state,
-    picoquic_cnx_t * cnx,
     picoquic_path_t* path_x,
     uint64_t lost_packet_number)
 {
     if (bbr_state->is_suspended &&
-        bbr_state->cwin_before_suspension > 0) {
-        if (bbr_state->congestion_sequence >= lost_packet_number) {
-            bbr_state->is_suspended = 0;
-            path_x->cwin = bbr_state->cwin_before_suspension;
-            /* Set the pacing rate in picoquic sender */
-            picoquic_update_pacing_rate(cnx, path_x, bbr_state->pacing_rate, bbr_state->send_quantum);
-        }
+        bbr_state->cwin_before_suspension > 0 &&
+        !bbr_state->is_suspension_nearly_over &&
+        bbr_state->congestion_sequence >= lost_packet_number) {
+        bbr_state->is_suspension_nearly_over = 1;
     }
 }
+
+void picoquic_bbr_suspension_exit(
+    picoquic_bbr_state_t* bbr_state,
+    picoquic_cnx_t * cnx,
+    picoquic_path_t* path_x)
+{
+    if (bbr_state->is_suspended &&
+        bbr_state->is_suspension_nearly_over) {
+        path_x->cwin = bbr_state->cwin_before_suspension;
+        /* Set the pacing rate in picoquic sender */
+        picoquic_update_pacing_rate(cnx, path_x, bbr_state->pacing_rate, bbr_state->send_quantum);
+    }
+    bbr_state->is_suspended = 0;
+    bbr_state->is_suspension_nearly_over = 0;
+}
+
+
+
 
 /*
  * In order to implement BBR, we map generic congestion notification
@@ -1116,7 +1142,7 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_acknowledgement:
             /* sum the amount of data acked per packet */
             if (bbr_state->is_suspended) {
-                bbr_state->is_suspended = 0;
+                picoquic_bbr_suspension_exit(bbr_state, cnx, path_x);
             }
             bbr_state->bytes_delivered += nb_bytes_acknowledged;
             break;
@@ -1137,7 +1163,7 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_spurious_repeat:
             if (bbr_state->is_suspended) {
-                picoquic_bbr_exit_suspension(bbr_state, cnx, path_x, lost_packet_number);
+                picoquic_bbr_suspension_almost_over(bbr_state, path_x, lost_packet_number);
             }
             break;
         case picoquic_congestion_notification_rtt_measurement:
