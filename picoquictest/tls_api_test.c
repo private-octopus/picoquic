@@ -11499,6 +11499,31 @@ int pacing_cc_test()
 * up and the transfer completes. 
  */
 
+test_api_stream_desc_t* heavy_loss_inter_scenario(size_t* scenario_size)
+{
+    size_t nb_rounds = 100;
+    size_t sc_z = sizeof(test_api_stream_desc_t) * nb_rounds;
+    test_api_stream_desc_t* sc;
+    uint64_t previous_stream_id = 0;
+    uint64_t next_stream_id = 4;
+
+    sc = (test_api_stream_desc_t*)malloc(sc_z);
+    if (sc != NULL) {
+        memset(sc, 0, sc_z);
+
+        for (int i = 0; i < nb_rounds; i++) {
+            sc[i].previous_stream_id = previous_stream_id;
+            sc[i].stream_id = next_stream_id;
+            sc[i].q_len = 255;
+            sc[i].r_len = 1000;
+            previous_stream_id = next_stream_id;
+            next_stream_id += 4;
+        }
+        *scenario_size = sc_z;
+    }
+    return sc;
+}
+
 int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
 {
     uint64_t simulated_time = 0;
@@ -11520,6 +11545,22 @@ int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
         test_ctx->qserver->use_long_log = 1;
     }
 
+    if (ret == 0 && scenario_id == 1) {
+        allocated_scenario = heavy_loss_inter_scenario(&scenario_size);
+        if (allocated_scenario == NULL) {
+            DBG_PRINTF("%s", "Could not allocate interactive scenario");
+            ret = -1;
+        }
+        else {
+            scenario = allocated_scenario;
+        }
+    }
+
+    if (ret == 0 && scenario_id == 2) {
+        test_ctx->qserver->default_tp.idle_timeout = 60000000;
+        test_ctx->cnx_client->local_parameters.idle_timeout = 60000000;
+    }
+
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
@@ -11535,11 +11576,12 @@ int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
     }
 
     /* Send for up to 30 seconds, with 50% packet loss rate.
-     * Stop earlier if somehin breaks, or if all the required
+     * Stop earlier if something breaks, or if all the required
      * data is sent.
+     * In scenario 2, simulate "total loss".
      */
     if (ret == 0) {
-        loss_mask = 0x13596ac77ca69531ull;
+        loss_mask = (scenario_id == 2)?UINT64_MAX:0x13596ac77ca69531ull;
         for (int i = 0; ret == 0 && !test_ctx->test_finished && i < 30; i++) {
             ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 1000000);
         }
@@ -11561,6 +11603,10 @@ int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
         test_ctx = NULL;
     }
 
+    if (allocated_scenario != NULL) {
+        free(allocated_scenario);
+    }
+
     return ret;
 }
 
@@ -11568,6 +11614,18 @@ int heavy_loss_test()
 {
     return heavy_loss_test_one(0, 33000000);
 }
+
+int heavy_loss_inter_test()
+{
+    return heavy_loss_test_one(1, 33000000);
+}
+
+int heavy_loss_total_test()
+{
+    return heavy_loss_test_one(2, 33000000);
+}
+
+
 
 int integrity_limit_test()
 {

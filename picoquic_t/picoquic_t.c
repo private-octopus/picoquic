@@ -191,6 +191,8 @@ static const picoquic_test_def_t test_table[] = {
     { "multi_segment", multi_segment_test },
     { "pacing_cc", pacing_cc_test },
     { "heavy_loss", heavy_loss_test },
+    { "heavy_loss_inter", heavy_loss_inter_test },
+    { "heavy_loss_total", heavy_loss_total_test },
     { "spurious_retransmit", spurious_retransmit_test },
     { "tls_zero_share", tls_zero_share_test },
     { "transport_param_log", transport_param_log_test },
