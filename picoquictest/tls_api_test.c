@@ -11512,7 +11512,7 @@ test_api_stream_desc_t* heavy_loss_inter_scenario(size_t* scenario_size)
     if (sc != NULL) {
         memset(sc, 0, sc_z);
 
-        for (int i = 0; i < nb_rounds; i++) {
+        for (size_t i = 0; i < nb_rounds; i++) {
             sc[i].previous_stream_id = previous_stream_id;
             sc[i].stream_id = next_stream_id;
             sc[i].q_len = 255;
