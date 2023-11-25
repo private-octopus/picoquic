@@ -518,9 +518,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                         * Max retransmission count was exceeded. Log.
                         */
                         DBG_PRINTF("Too many retransmits of packet number %d, disconnect", (int)old_p->sequence_number);
-#if 0
-                        length = 0;
-#endif
+
                         *continue_next = 0;
                     }
                 }

@@ -537,6 +537,8 @@ int ec9a_preemptive_amok_test()
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     uint64_t initial_losses = 0b100000000000;
     uint8_t test_case_id = 0x9a;
+    uint64_t cnx_server_idle_timeout = 0;
+    uint64_t cnx_server_nb_preemptive_repeat = 0;
     int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 12);
 
     if (ret == 0) {
@@ -570,10 +572,14 @@ int ec9a_preemptive_amok_test()
         uint64_t repeat_begin = simulated_time;
         uint64_t repeat_duration = 0;
 
+        cnx_server_idle_timeout = test_ctx->cnx_server->idle_timeout;
+        cnx_server_nb_preemptive_repeat = test_ctx->cnx_server->nb_preemptive_repeat;
+
         picoquic_reinsert_by_wake_time(test_ctx->qserver, test_ctx->cnx_server, simulated_time);
 
-        while (test_ctx->cnx_server->cnx_state == picoquic_state_ready && loop_count < 10000 && ret == 0) {
+        while (test_ctx->qserver->current_number_connections > 0 && test_ctx->cnx_server->cnx_state == picoquic_state_ready && loop_count < 10000 && ret == 0) {
             loop_count++;
+            cnx_server_nb_preemptive_repeat = test_ctx->cnx_server->nb_preemptive_repeat;
             simulated_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
             ret = picoquic_prepare_next_packet_ex(test_ctx->qserver, simulated_time, buffer,
                 sizeof(buffer), &send_length, &addr_to, &addr_from, &if_index, &log_id,
@@ -593,12 +599,12 @@ int ec9a_preemptive_amok_test()
                     send_count, send_count_max);
                 ret = -1;
             }
-            else if (repeat_duration > test_ctx->cnx_server->idle_timeout) {
+            else if (repeat_duration > cnx_server_idle_timeout) {
                 DBG_PRINTF("End at t=%" PRIu64 ", later than %" PRIu64,
-                    simulated_time, test_ctx->cnx_server->idle_timeout);
+                    simulated_time, cnx_server_idle_timeout);
                 ret = -1;
             }
-            else if (test_ctx->cnx_server->nb_preemptive_repeat == 0) {
+            else if (cnx_server_nb_preemptive_repeat == 0) {
                 DBG_PRINTF("%s", "No preemptive repeat");
                 ret = -1;
             }
