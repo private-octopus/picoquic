@@ -1020,6 +1020,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(heavy_loss)
+        {
+            int ret = heavy_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(heavy_loss_inter)
+        {
+            int ret = heavy_loss_inter_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(heavy_loss_total)
+        {
+            int ret = heavy_loss_total_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_spurious_retransmit)
         {
             int ret = spurious_retransmit_test();
