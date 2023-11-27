@@ -515,12 +515,10 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                     }
                     if (all_paths_bad) {
                         /*
-                        * Max retransmission count was exceeded. Disconnect.
+                        * Max retransmission count was exceeded. Log.
                         */
                         DBG_PRINTF("Too many retransmits of packet number %d, disconnect", (int)old_p->sequence_number);
-                        cnx->local_error = PICOQUIC_ERROR_REPEAT_TIMEOUT;
-                        picoquic_connection_disconnect(cnx);
-                        length = 0;
+
                         *continue_next = 0;
                     }
                 }

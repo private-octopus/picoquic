@@ -3404,6 +3404,7 @@ int immediate_close_test()
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
         if (test_ctx->cnx_client->cnx_state >= picoquic_state_disconnected) {
             /* Client has noticed the disconnect */
+            ret = 0;
             break;
         }
     }
@@ -11492,6 +11493,140 @@ int pacing_cc_test()
     return ret;
 }
 
+/* heavy loss test:
+* Simulate a connection experiencing heavy packet
+* loss, such as 50% packet loss, for a duration of
+* 5 seconds. The test succeeds if the connection stays
+* up and the transfer completes. 
+ */
+
+test_api_stream_desc_t* heavy_loss_inter_scenario(size_t* scenario_size)
+{
+    size_t nb_rounds = 100;
+    size_t sc_z = sizeof(test_api_stream_desc_t) * nb_rounds;
+    test_api_stream_desc_t* sc;
+    uint64_t previous_stream_id = 0;
+    uint64_t next_stream_id = 4;
+
+    sc = (test_api_stream_desc_t*)malloc(sc_z);
+    if (sc != NULL) {
+        memset(sc, 0, sc_z);
+
+        for (size_t i = 0; i < nb_rounds; i++) {
+            sc[i].previous_stream_id = previous_stream_id;
+            sc[i].stream_id = next_stream_id;
+            sc[i].q_len = 255;
+            sc[i].r_len = 1000;
+            previous_stream_id = next_stream_id;
+            next_stream_id += 4;
+        }
+        *scenario_size = sc_z;
+    }
+    return sc;
+}
+
+int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    test_api_stream_desc_t* scenario = test_scenario_sustained;
+    size_t scenario_size = sizeof(test_scenario_sustained);
+    test_api_stream_desc_t* allocated_scenario = NULL;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x8e, 0xfe, 0x10, 0x55, 0, 0, 0, 0}, 8 };
+    int ret;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+    if (ret == 0) {
+        /* Set the CC algorithm to selected value */
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, picoquic_bbr_algorithm);
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+    }
+
+    if (ret == 0 && scenario_id == 1) {
+        allocated_scenario = heavy_loss_inter_scenario(&scenario_size);
+        if (allocated_scenario == NULL) {
+            DBG_PRINTF("%s", "Could not allocate interactive scenario");
+            ret = -1;
+        }
+        else {
+            scenario = allocated_scenario;
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, scenario, scenario_size);
+    }
+
+    /* Send for 0.1 second, in order to ramp up transfer speed */
+    if (ret == 0) {
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 100000);
+    }
+
+    /* Send for up to 30 seconds, with 50% packet loss rate.
+     * Stop earlier if something breaks, or if all the required
+     * data is sent.
+     * In scenario 2, simulate "total loss".
+     */
+    if (ret == 0) {
+        loss_mask = (scenario_id == 2)?UINT64_MAX:0x13596ac77ca69531ull;
+        for (int i = 0; ret == 0 && !test_ctx->test_finished && i < 20; i++) {
+            ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 1000000);
+        }
+    }
+
+    /* Stop losing packets, try to complete the data sending loop */
+    if (ret == 0) {
+        loss_mask = 0;
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, completion_target);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    if (allocated_scenario != NULL) {
+        free(allocated_scenario);
+    }
+
+    return ret;
+}
+
+int heavy_loss_test()
+{
+    return heavy_loss_test_one(0, 23000000);
+}
+
+int heavy_loss_inter_test()
+{
+    return heavy_loss_test_one(1, 21000000);
+}
+
+int heavy_loss_total_test()
+{
+    return heavy_loss_test_one(2, 25000000);
+}
+
+
+
 int integrity_limit_test()
 {
     uint64_t simulated_time = 0;
@@ -11637,7 +11772,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
         int if_index = 0;
         picoquic_connection_id_t log_cid;
         picoquic_cnx_t* last_cnx;
-        uint64_t max_disconnected_time = simulated_time + 20000000;
+        uint64_t max_disconnected_time = simulated_time + 30000000;
         int nb_loops = 0;
 
         if (cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_DCUBIC ||
@@ -11649,7 +11784,9 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
             ret = -1;
         }
         else {
-            while (ret == 0 && test_ctx->cnx_server != NULL &&
+            while (ret == 0 &&
+                test_ctx->qserver->current_number_connections > 0 &&
+                test_ctx->cnx_server != NULL &&
                 test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
                 uint64_t old_time = simulated_time;
                 uint64_t delta_t;

@@ -1080,7 +1080,7 @@ int multipath_abandon_test()
  */
 int multipath_back1_test()
 {
-    uint64_t max_completion_microsec = 3000000;
+    uint64_t max_completion_microsec = 3050000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_back1, 0);
 }
@@ -1137,7 +1137,7 @@ int multipath_standby_test()
 
 int multipath_standup_test()
 {
-    uint64_t max_completion_microsec = 4500000;
+    uint64_t max_completion_microsec = 4750000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_standup, 0);
 }
