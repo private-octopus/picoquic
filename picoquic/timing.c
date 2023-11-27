@@ -43,7 +43,25 @@ uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_path_t 
 {
     uint64_t rto = path_x->retransmit_timer;
 
-    rto <<= (path_x->nb_retransmit < 3) ? path_x->nb_retransmit : 2;
+    if (path_x->nb_retransmit > 0) {
+        if (path_x->nb_retransmit < 3) {
+            rto <<= path_x->nb_retransmit;
+        }
+        else {
+            uint64_t n1 = path_x->nb_retransmit - 2;
+            if (n1 > 18) {
+                n1 = 18;
+            }
+            rto <<= (2 + (n1 / 4));
+            n1 &= 3;
+            rto += (n1*rto) >> 2;
+        }
+        if (cnx->idle_timeout > 15) {
+            if (rto > (cnx->idle_timeout >> 4)) {
+                rto = cnx->idle_timeout >> 4;
+            }
+        }
+    }
 
     if (cnx->cnx_state < picoquic_state_client_ready_start) {
         if (PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000 < cnx->local_parameters.idle_timeout) {
