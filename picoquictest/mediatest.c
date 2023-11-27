@@ -136,6 +136,8 @@ typedef struct st_mediatest_ctx_t {
     mediatest_cnx_ctx_t* client_cnx; /* client connection context */
     struct st_mediatest_cnx_ctx_t* first_cnx;
     struct st_mediatest_cnx_ctx_t* last_cnx;
+    /* Starting point of statistics -- after the initial disruption */
+    uint64_t disruption_clear;
     /* managemenent of datagram load */
     size_t datagram_data_requested;
     size_t datagram_data_sent;
@@ -293,18 +295,20 @@ mediatest_cnx_ctx_t* mediatest_create_cnx_context(mediatest_ctx_t* mt_ctx, picoq
 
 void mediatest_record_stats(mediatest_ctx_t* mt_ctx, mediatest_stream_ctx_t* stream_ctx)
 {
-    uint64_t delay = mt_ctx->simulated_time - stream_ctx->message_received.sent_time;
+    if (stream_ctx->message_received.sent_time > mt_ctx->disruption_clear) {
+        uint64_t delay = mt_ctx->simulated_time - stream_ctx->message_received.sent_time;
 
-    if (stream_ctx->message_received.message_type >= 0 && stream_ctx->message_received.message_type < media_test_nb_types) {
-        mediatest_media_stats_t* stats = mt_ctx->media_stats + stream_ctx->message_received.message_type;
-        stats->nb_frames++;
-        stats->sum_delays += delay;
-        stats->sum_square_delays += delay * delay;
-        if (stats->min_delay > delay) {
-            stats->min_delay = delay;
-        }
-        if (stats->max_delay < delay) {
-            stats->max_delay = delay;
+        if (stream_ctx->message_received.message_type >= 0 && stream_ctx->message_received.message_type < media_test_nb_types) {
+            mediatest_media_stats_t* stats = mt_ctx->media_stats + stream_ctx->message_received.message_type;
+            stats->nb_frames++;
+            stats->sum_delays += delay;
+            stats->sum_square_delays += delay * delay;
+            if (stats->min_delay > delay) {
+                stats->min_delay = delay;
+            }
+            if (stats->max_delay < delay) {
+                stats->max_delay = delay;
+            }
         }
     }
 }
@@ -318,7 +322,7 @@ int mediatest_check_stats(mediatest_ctx_t* mt_ctx, media_test_type_enum media_ty
         uint64_t period = (media_type == media_test_audio) ? MEDIATEST_AUDIO_PERIOD : MEDIATEST_VIDEO_PERIOD;
         uint64_t expected = MEDIATEST_DURATION / period;
 
-        if (stats->nb_frames != expected) {
+        if (stats->nb_frames != expected && mt_ctx->disruption_clear == 0) {
             ret = -1;
         }
         else if (stats->nb_frames != 0) {
@@ -697,7 +701,7 @@ int mediatest_callback(picoquic_cnx_t* cnx,
 
 
 /* Process arrival of a packet from a link */
-int mediatest_packet_arrival(mediatest_ctx_t* mt_ctx, int link_id, int * is_active)
+int mediatest_packet_arrival(mediatest_ctx_t* mt_ctx, int link_id, int is_losing_data, int * is_active)
 {
     int ret = 0;
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_dequeue(mt_ctx->link[link_id], mt_ctx->simulated_time);
@@ -709,11 +713,13 @@ int mediatest_packet_arrival(mediatest_ctx_t* mt_ctx, int link_id, int * is_acti
     else {
         *is_active = 1;
 
-        ret = picoquic_incoming_packet(mt_ctx->quic[link_id],
+        if (!is_losing_data) {
+            ret = picoquic_incoming_packet(mt_ctx->quic[link_id],
                 packet->bytes, (uint32_t)packet->length,
                 (struct sockaddr*)&packet->addr_from,
                 (struct sockaddr*)&packet->addr_to, 0, 0,
-            mt_ctx->simulated_time);
+                mt_ctx->simulated_time);
+        }
 
         free(packet);
     }
@@ -768,7 +774,7 @@ int mediatest_packet_departure(mediatest_ctx_t* mt_ctx, int node_id, int* is_act
 
 
 /* Simulation step */
-int mediatest_step(mediatest_ctx_t* mt_ctx, int* is_active)
+int mediatest_step(mediatest_ctx_t* mt_ctx, int is_losing_data, int* is_active)
 {
     int ret = 0;
     uint64_t next_arrival_time = UINT64_MAX;
@@ -850,7 +856,7 @@ int mediatest_step(mediatest_ctx_t* mt_ctx, int* is_active)
         /* Perform earliest action */
         if (next_arrival_time <= next_time) {
             /* Process next packet from simulated link */
-            ret = mediatest_packet_arrival(mt_ctx, arrival_index, is_active);
+            ret = mediatest_packet_arrival(mt_ctx, arrival_index, is_losing_data, is_active);
         }
         else {
             /* Prepare next packet from selected connection */
@@ -1078,6 +1084,29 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
     return mt_ctx;
 }
 
+int mediatest_loop(mediatest_ctx_t* mt_ctx, uint64_t simulated_time_max, int is_losing_data, int * is_finished)
+{
+    int ret = 0;
+    int nb_steps = 0;
+    int nb_inactive = 0;
+
+    /* Run the simulation until done */
+    while (ret == 0 && !(*is_finished) && nb_steps < 100000 && nb_inactive < 512 && mt_ctx->simulated_time < simulated_time_max) {
+        int is_active = 0;
+        nb_steps += 1;
+        ret = mediatest_step(mt_ctx, is_losing_data, &is_active);
+        if (is_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive += 1;
+        }
+        *is_finished = mediatest_is_finished(mt_ctx);
+    }
+
+    return ret;
+}
+
 /* One test */
 int mediatest_one(int media_test_id, mediatest_spec_t * spec)
 {
@@ -1091,18 +1120,22 @@ int mediatest_one(int media_test_id, mediatest_spec_t * spec)
     if (mt_ctx == NULL) {
         ret = -1;
     }
+    /* If running a worst case test, start the test first for a short time,
+     * then apply packet losses for another short time.
+     */
+    if (media_test_id == 4) {
+        /* Only collect statistics after expected end of disruption. */
+        mt_ctx->disruption_clear = 2300000;
+        /* Run the simulation for 1 second. */
+        ret = mediatest_loop(mt_ctx, 1000000, 0, &is_finished);
+        /* Lose data for 1 second */
+        if (ret == 0) {
+            ret = mediatest_loop(mt_ctx, 2000000, 1, &is_finished);
+        }
+    }
     /* Run the simulation until done */
-    while (ret == 0 && !is_finished && nb_steps < 100000 && nb_inactive < 512 && mt_ctx->simulated_time < 30000000) {
-        int is_active = 0;
-        nb_steps += 1;
-        ret = mediatest_step(mt_ctx, &is_active);
-        if (is_active) {
-            nb_inactive = 0;
-        }
-        else {
-            nb_inactive += 1;
-        }
-        is_finished = mediatest_is_finished(mt_ctx);
+    if (ret == 0) {
+        ret = mediatest_loop(mt_ctx, 30000000, 0, &is_finished);
     }
 
     /* Check that the simulation ran to the end. */
@@ -1117,7 +1150,6 @@ int mediatest_one(int media_test_id, mediatest_spec_t * spec)
         if (ret == 0 && spec->do_video) {
             ret = mediatest_check_stats(mt_ctx, media_test_video);
         }
-        
     }
     if (mt_ctx != NULL) {
         mediatest_delete_ctx(mt_ctx);
@@ -1173,7 +1205,7 @@ int mediatest_worst_test()
     spec.bandwidth = 0.01;
     spec.do_video = 1;
     spec.do_audio = 1;
-    spec.datagram_data_size = 10000000;
+    spec.data_size = 10000000;
     ret = mediatest_one(4, &spec);
 
     return ret;
