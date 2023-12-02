@@ -1001,7 +1001,7 @@ typedef struct st_picoquic_path_t {
     uint64_t demotion_time;
     uint64_t challenge_time_first;
     uint8_t challenge_repeat_count;
-    uint64_t last_non_validating_pn;
+    uint64_t last_non_path_probing_pn;
     /* Last time a packet was sent on this path. */
     uint64_t last_sent_time;
     /* Number of packets sent on this path*/

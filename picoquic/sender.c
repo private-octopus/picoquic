@@ -4125,13 +4125,13 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
              * On the client side, this is driven by the "probe/validate" sequence; the
              * assumption is that if the client probes a new path, it want to use it
              * as soon as confirmed. On the server side, this is enforced by observing
-             * incoming traffic: if a path is validated and "non path validating"
+             * incoming traffic: if a path is validated and "non path probing"
              * frames were received, then the path should be promoted. However, on
              * the server side, we have to be careful with packet reordering, and
              * verify that only the "most recent" packets trigger the validation
              * logic.
              */
-            if (cnx->client_mode || cnx->path[i]->last_non_validating_pn >=
+            if (cnx->client_mode || cnx->path[i]->last_non_path_probing_pn >=
                 picoquic_sack_list_last(&cnx->ack_ctx[picoquic_packet_context_application].sack_list) ||
                 cnx->path[i]->is_nat_challenge) {
                 /* This path becomes the new default */
