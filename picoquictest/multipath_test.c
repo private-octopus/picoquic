@@ -1093,19 +1093,35 @@ int multipath_perf_test()
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 0);
 }
 
+#if defined(_WINDOWS) && !defined(_WINDOWS64)
+int multipath_callback_test()
+{
+    /* we do not run this test on Win32 builds */
+    return 0;
+}
+#else
 int multipath_callback_test()
 {
     uint64_t max_completion_microsec = 1000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_callback, 0);
 }
+#endif
 
+#if defined(_WINDOWS) && !defined(_WINDOWS64)
+int multipath_quality_test()
+{
+    /* we do not run this test on Win32 builds */
+    return 0;
+}
+#else
 int multipath_quality_test()
 {
     uint64_t max_completion_microsec = 1000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_quality, 0);
 }
+#endif
 
 int multipath_stream_af_test()
 {
@@ -1656,6 +1672,13 @@ int simple_multipath_perf_test()
     return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
 }
 
+#if defined(_WINDOWS) && !defined(_WINDOWS64)
+int simple_multipath_quality_test()
+{
+    /* we do not run this test on Win32 builds */
+    return 0;
+}
+#else
 int simple_multipath_quality_test()
 {
     /* Compares with full multipath */
@@ -1663,6 +1686,7 @@ int simple_multipath_quality_test()
 
     return  multipath_test_one(max_completion_microsec, multipath_test_quality_server, 1);
 }
+#endif
 
 
 int simple_multipath_qlog_test()

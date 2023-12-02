@@ -8727,6 +8727,13 @@ static int perflog_compare(const char* fname1, const char* fname2)
     return ret;
 }
 
+#if defined(_WINDOWS) && !defined(_WINDOWS64)
+int perflog_test()
+{
+    /* we do not run this test on Win32 builds */
+    return 0;
+}
+#else
 int perflog_test()
 {
     uint64_t simulated_time = 0;
@@ -8806,7 +8813,7 @@ int perflog_test()
 
     return ret;
 }
-
+#endif
 
 /*
  * Testing the flow controlled sending scenario, or "direct sending".
@@ -12648,10 +12655,18 @@ int bdp_reno_test()
     return bdp_option_test_one(bdp_test_option_reno);
 }
 
+#if defined(_WINDOWS) && !defined(_WINDOWS64)
+int bdp_cubic_test()
+{
+    /* We do not run this test in Win32 builds. */
+    return 0;
+}
+#else
 int bdp_cubic_test()
 {
     return bdp_option_test_one(bdp_test_option_cubic);
 }
+#endif
 
 /* Test closing a connection with a specific error message.
  */

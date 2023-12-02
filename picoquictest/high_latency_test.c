@@ -303,6 +303,13 @@ int high_latency_bbr_test()
         expected_completion, latency, 10, 10, 0, 0, 0, 0);
 }
 
+#if defined(_WINDOWS) && !defined(_WINDOWS64)
+int high_latency_cubic_test()
+{
+    /* we do not run this test on Win32 builds */
+    return 0;
+}
+#else
 int high_latency_cubic_test()
 {
     /* Simple test. */
@@ -313,6 +320,7 @@ int high_latency_cubic_test()
         hilat_scenario_100mb, sizeof(hilat_scenario_100mb),
         expected_completion, latency, 10, 10, 0, 0, 0, 0);
 }
+#endif
 
 /* Test a long duration connection, to detect possible issues with
  * BBR transitioning to "probe RTT" after 10 seconds. No issue
