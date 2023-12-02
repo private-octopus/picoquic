@@ -398,7 +398,7 @@ typedef struct st_picoquic_packet_t {
     uint64_t data_repeat_priority;
     uint64_t data_repeat_stream_id;
     uint64_t data_repeat_stream_offset;
-    uint64_t data_repeat_stream_data_length;
+    size_t data_repeat_stream_data_length;
 
     size_t length;
     size_t checksum_overhead;
