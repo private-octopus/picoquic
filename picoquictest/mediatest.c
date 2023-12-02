@@ -1125,7 +1125,7 @@ int mediatest_one(int media_test_id, mediatest_spec_t * spec)
      */
     if (media_test_id == 4) {
         /* Only collect statistics after expected end of disruption. */
-        mt_ctx->disruption_clear = 2300000;
+        mt_ctx->disruption_clear = 2500000;
         /* Run the simulation for 1 second. */
         ret = mediatest_loop(mt_ctx, 1000000, 0, &is_finished);
         /* Lose data for 1 second */

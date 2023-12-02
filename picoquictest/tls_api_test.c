@@ -10795,10 +10795,10 @@ int cwin_max_test()
         picoquic_fastcc_algorithm };
     uint64_t max_completion_times[] = {
         11000000,
-        12000000,
         11000000,
         11000000,
-        13000000 };
+        11000000,
+        12000000 };
     int ret = 0;
 
     for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
@@ -11612,7 +11612,7 @@ int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
 
 int heavy_loss_test()
 {
-    return heavy_loss_test_one(0, 23000000);
+    return heavy_loss_test_one(0, 23500000);
 }
 
 int heavy_loss_inter_test()

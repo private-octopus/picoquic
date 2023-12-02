@@ -198,8 +198,8 @@
         "packet_size" : 1424}}],
 [83817, "transport", "spin_bit_updated", { "state": true }],
 [83817, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 1424, "packet_number": 16, "dcid": "0203040506070809" }, "frames": [{ 
-    "frame_type": "stream", "id": 4, "offset": 0, "length": 1402, "fin": false , "begins_with": "0001020304050607"}, { 
-    "frame_type": "ack_frequency", "sequence_number": 1, "packet_tolerance": 2, "max_ack_delay": 5021, "reordering_threshold": 0}]}],
+    "frame_type": "ack_frequency", "sequence_number": 1, "packet_tolerance": 2, "max_ack_delay": 5021, "reordering_threshold": 0}, { 
+    "frame_type": "stream", "id": 4, "offset": 0, "length": 1402, "fin": false , "begins_with": "0001020304050607"}]}],
 [83817, "recovery", "metrics_updated", {"smoothed_rtt": 21446}],
 [83817, "transport", "datagram_sent", { "byte_length": 1440}],
 [87289, "transport", "datagram_received", { "byte_length": 55}],

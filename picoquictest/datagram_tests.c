@@ -498,7 +498,7 @@ int datagram_rt_test()
     dg_ctx.next_gen_time[0] = 100000;
     dg_ctx.next_gen_time[1] = 100000;
     dg_ctx.dg_latency_target[0] = 18000;
-    dg_ctx.dg_latency_target[1] = 13000;
+    dg_ctx.dg_latency_target[1] = 18000;
 
     return datagram_test_one(2, &dg_ctx, 0);
 }
