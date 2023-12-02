@@ -5263,7 +5263,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
 {
     const uint8_t *bytes_max = bytes + bytes_maxsize;
     int ack_needed = 0;
-    int is_path_probing_packet = 1; /* Will be set to zero if non validating frame received */
+    int is_path_probing_packet = 1; /* Will be set to zero if non probing frame received */
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
     picoquic_packet_data_t packet_data;
 
