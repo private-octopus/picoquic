@@ -958,7 +958,9 @@ static int add_chunk_node(picoquic_quic_t * quic, picosplay_tree_t* tree, uint64
         }
         else {
             node->bytes = node->data;
-            memcpy(node->data, bytes, length);
+            /* Using memmove instead of memcpy, because the algorithm will
+             * sometimes try to "pack" frames from same packet. */
+            memmove(node->data, bytes, length);
             node->offset = offset;
             node->length = length;
         }
