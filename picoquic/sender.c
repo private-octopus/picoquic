@@ -163,6 +163,17 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     return ret;
 }
 
+
+void picoquic_set_default_datagram_priority(picoquic_quic_t* quic, uint8_t default_datagram_priority)
+{
+    quic->default_datagram_priority = default_datagram_priority;
+}
+
+void picoquic_set_datagram_priority(picoquic_cnx_t* cnx, uint8_t datagram_priority)
+{
+    cnx->datagram_priority = datagram_priority;
+}
+
 void picoquic_set_default_priority(picoquic_quic_t* quic, uint8_t default_stream_priority)
 {
     quic->default_stream_priority = default_stream_priority;

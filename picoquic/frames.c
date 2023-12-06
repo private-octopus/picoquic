@@ -1840,12 +1840,12 @@ void picoquic_queue_data_repeat_packet(
     picoquic_cnx_t* cnx, picoquic_packet_t* packet)
 {
     if (!packet->is_queued_for_data_repeat) {
-        /* TODO: find the stream frame, stream ID, priority */
+        /* The stream frame, stream ID, priority are reset in the packet
+         * header by the call to picoquic_queue_data_repeat_adjust */
         packet->data_repeat_frame = packet->offset;
         packet->data_repeat_index = packet->offset;
         if (picoquic_queue_data_repeat_adjust(cnx, packet) == 0 &&
             packet->data_repeat_frame < packet->length) {
-            /* TODO: detect duplicates? */
             picosplay_insert(&cnx->queue_data_repeat_tree, packet);
             packet->is_queued_for_data_repeat = 1;
         }
@@ -1975,7 +1975,7 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
     return bytes_next;
 }
 
-/* TODO: this logic is probably wrong. What we need:
+/* Copying a frame will:
 * 1- Copy the bytes from the stream frame.
 * 2- If this does not exhaust the frame, reset the "index", return.
 * 3- If this does exhaust the frame:
@@ -1984,8 +1984,10 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
 *    - If there is a second stream frame, re-insert the packet,
 *      if not, recycle it, exit the per packet logic.
 * 
-* We may consider repeating this for several queued packets, although the
-* repeat may be better done at a higher level.
+* The function picoquic_copy_stream_frames_for_retransmit will
+* make repeated calls to picoquic_copy_single_stream_frame_for_retransmit,
+* until the packet is full or all frames at the specified priority
+* level have been copied.
 */
 uint8_t* picoquic_copy_single_stream_frame_for_retransmit(picoquic_cnx_t* cnx, picoquic_packet_t* packet,
     uint8_t* bytes_next, uint8_t* bytes_max, uint64_t current_priority, int* more_data, int * packet_dequeued, int* is_pure_ack)

@@ -1148,6 +1148,31 @@ int picoquic_set_stream_priority(picoquic_cnx_t* cnx, uint64_t stream_id, uint8_
 int picoquic_mark_high_priority_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_high_priority);
 
+/* 
+* Handling of datagram priorities
+* 
+* All datagrams sent on a connection have the same priority.
+* The datagram priority value determines the relative priority of
+* streams and datagrams.
+* 
+* Streams with a higher priority than the datagram priority will be
+* scheduled before any datagram. Streams with a lower priority
+* will only be scheduled if no datagram needs to be sent. 
+* Streams with the same priority as the datagram priority will
+* be scheduled in a  "round robin" manner: datagram on one round,
+* then a stream on the next round, then back to datagrams, the general
+* idea being about equal share for the datagrams and all streams of
+* the same priority.
+* 
+* By default, the datagram priority is set to the value
+* PICOQUIC_DEFAULT_STREAM_PRIORITY, same as streams, so the default behavior
+* is a 50/50 share.
+*/
+
+void picoquic_set_default_datagram_priority(picoquic_quic_t* quic, uint8_t default_datagram_priority);
+
+void picoquic_set_datagram_priority(picoquic_cnx_t * cnx, uint8_t datagram_priority);
+
 /* If a stream is marked active, the application will receive a callback with
  * event type "picoquic_callback_prepare_to_send" when the transport is ready to
  * send data on a stream. The "length" argument in the call back indicates the
