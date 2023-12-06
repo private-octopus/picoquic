@@ -42,6 +42,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/select.h>
+#include <unistd.h>
 
 #ifndef SOCKET_TYPE
 #define SOCKET_TYPE int
@@ -73,7 +74,13 @@ typedef struct st_thread_test_context_t {
 #ifdef _WINDOWS
     HANDLE network_thread;
     HANDLE network_event;
+    HANDLE events[2];
+    picoquic_recvmsg_async_ctx_t* recv_ctx;
 #else
+    int network_pipe_fd[2];
+    SOCKET_TYPE n_socket;
+    uint8_t buffer[2048];
+    size_t buffer_max;
 #endif
     int is_ready;
     volatile int should_stop;
@@ -111,34 +118,34 @@ int network_wake_up(thread_test_context_t* ctx)
         ret = (int)err;
     }
 #else
+    /* TODO: write to network pipe */
+    ssize_t written = 0;
+    if ((written = write(ctx->network_pipe_fd[1], &ret, 1)) != 1) {
+        if (written == 0) {
+            ret = EPIPE;
+        }
+        else {
+            ret = errno;
+        }
+    }
 #endif
     return ret;
 }
 
-/* Network thread */
 #ifdef _WINDOWS
-DWORD WINAPI network_thread(LPVOID lpParam)
-#else
-int network_thread(void * lpParam)
-#endif
+int windows_events_init(thread_test_context_t* ctx)
 {
-    uint64_t current_time = 0;
-    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
-    thread_test_context_t* ctx = (thread_test_context_t*)lpParam;
-    int server_af = ctx->network_thread_addr.ss_family;
-#ifdef _WINDOWS
     DWORD ret = 0;
-    picoquic_recvmsg_async_ctx_t* recv_ctx;
-    HANDLE events[2] = { NULL, NULL };
+    int server_af = ctx->network_thread_addr.ss_family;
     /* Create an asynchronous socket */
-    recv_ctx = picoquic_create_async_socket(server_af, 0, 0);
-    if (recv_ctx == NULL) {
+    ctx->recv_ctx = picoquic_create_async_socket(server_af, 0, 0);
+    if (ctx->recv_ctx == NULL) {
         ret = GetLastError();
         DBG_PRINTF("Cannot create async socket in AF = %d, err = 0x%x", server_af, ret);
     }
     if (ret == 0) {
         /* Bind to specified port */
-        ret = picoquic_bind_to_port(recv_ctx->fd, server_af, ctx->server_port);
+        ret = picoquic_bind_to_port(ctx->recv_ctx->fd, server_af, ctx->server_port);
         if (ret != 0) {
             DBG_PRINTF("Cannot bind socket to port %d, err = %d (0x%x)", ctx->server_port, ret, ret);
         }
@@ -152,62 +159,223 @@ int network_thread(void * lpParam)
         }
         else {
             /* Set the event list */
-            events[0] = ctx->network_event;
-            events[1] = recv_ctx->overlap.hEvent;
+            ctx->events[0] = ctx->network_event;
+            ctx->events[1] = ctx->recv_ctx->overlap.hEvent;
         }
     }
     if (ret == 0) {
         /* Start receiving */
-        ret = picoquic_recvmsg_async_start(recv_ctx);
+        ret = picoquic_recvmsg_async_start(ctx->recv_ctx);
         if (ret != 0) {
             DBG_PRINTF("Cannot start recv on socket, err = %d (0x%x)", ret, ret);
         }
     }
+    return ret;
+}
+
+int windows_wait_multiple(thread_test_context_t* ctx, int * receive_ready)
+{
+    int ret = 0;
+    int event_rank = -1;
+    DWORD ret_event = WSAWaitForMultipleEvents(2, ctx->events, FALSE, 1000, TRUE);
+    if (ret_event == WSA_WAIT_FAILED) {
+        ret = WSAGetLastError();
+        DBG_PRINTF("WSAWaitForMultipleEvents fails, error 0x%x", ret);
+    }
+    else if (ret_event == WSA_WAIT_TIMEOUT) {
+        ctx->timeout_count++;
+        *receive_ready = 1;
+    }
+    else if (ret_event >= WSA_WAIT_EVENT_0) {
+        event_rank = ret_event - WSA_WAIT_EVENT_0;
+        if (event_rank > 0) {
+            ctx->msg_recv_count++;
+            *receive_ready = 1;
+        }
+        else {
+            /* Event number 0 is the wake signal */
+            ctx->event_wake_count++;
+            if (ResetEvent(ctx->network_event) == 0) {
+                ret = GetLastError();
+                DBG_PRINTF("Cannot reset network event, error 0x%x", ret);
+            }
+        }
+    }
+    return ret;
+}
+
+int windows_receive_async(thread_test_context_t* ctx, int* received_length, uint8_t** p_recv_buf)
+{
+    /* On windows, receive async */
+    int ret = picoquic_recvmsg_async_finish(ctx->recv_ctx);
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot finish async recv");
+    }
+    else if (ResetEvent(ctx->recv_ctx->overlap.hEvent) == 0) {
+        ret = GetLastError();
+        DBG_PRINTF("Cannot reset socket event, error 0x%x", ret);
+    }
+    else {
+        *received_length = (int)ctx->recv_ctx->bytes_recv;
+        *p_recv_buf = ctx->recv_ctx->recv_buffer;
+    }
+    return ret;
+}
+
+void windows_close_socket(thread_test_context_t* ctx)
+{
+    /* Close the socket */
+    if (ctx->recv_ctx != NULL) {
+        picoquic_delete_async_socket(ctx->recv_ctx);
+        ctx->recv_ctx = NULL;
+    }
+    /* Close the event handle */
+    if (ctx->network_event != NULL) {
+        CloseHandle(ctx->network_event);
+        ctx->network_event = NULL;
+    }
+}
 #else
-    SOCKET_TYPE n_socket;
-    /* Create an event */
+int unix_sockets_init(thread_test_context_t* ctx)
+{
+    int ret = 0;
+    ctx->buffer_max = sizeof(ctx->buffer);
+    ctx->n_socket = picoquic_open_client_socket(int af);
+
     /* Bind to specified port */
-    ret = picoquic_bind_to_port();
+    if (ret == 0) {
+        /* Bind to specified port */
+        ret = picoquic_bind_to_port(ctx->n_socket, server_af, ctx->server_port);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot bind socket to port %d, err = %d (0x%x)", ctx->server_port, ret, ret);
+        }
+    }
+    if (ret == 0) {
+        /* Create the pipe for network wake up */
+        ret = pipe(ctx->network_pipe_fd);
+    }
+    return ret;
+}
+
+int unix_select_multiple(thread_test_context_t* ctx, int * receive_ready))
+{
+    fd_set readfds;
+    int ret_select = 0;
+    int bytes_recv = 0;
+    int sockmax = 0;
+
+    FD_ZERO(&readfds);
+
+    FD_SET(ctx->n_socket);
+    sockmax = ctx->n_socket;
+    FD_SET(ctx->network_pipe_fd[0]);
+    if (sockmax < ctx->network_pipe_fd[0]) {
+        sockmax = ctx->network_pipe_fd[0];
+    }
+    ret_select = select(sockmax + 1, &readfds, NULL, NULL, NULL);
+
+    if (ret_select < 0) {
+        bytes_recv = -1;
+        ret = -1;
+        DBG_PRINTF("Error: select returns %d\n", ret_select);
+    }
+    else {
+        if (FD_ISSET(ctx->n_socket)) {
+            *receive_ready = 1;
+        }
+        if (FD_ISSET(ctx->network_pipe_fd[0])) {
+            /* Something was written on the "wakeup" pipe. Read it. */
+            uint8_t eventbuf[8];
+            if ((bytes_recv = read(ctx->network_pipe_fd[0], eventbuf, sizeof(eventbuf)) <= 0) {
+                if (bytes_recv == 0) {
+                    ret = EPIPE;
+                }
+                else {
+                    ret = errno;
+                }
+            }
+            else {
+                ctx->event_wake_count++;
+            }
+        }
+    }
+    return ret;
+}
+
+int picoquic_recvmsg(SOCKET_TYPE fd,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max);
+
+int unix_receive_from_socket(thread_test_context_t* ctx, int* received_length, uint8_t** p_recv_buf)
+{
+    int ret = 0;
+    struct sockaddr_storage addr_from;
+    struct sockaddr_storage addr_dest;
+    int dest_if;
+    unsigned char received_ecn;
+    int bytes_recv;
+
+    bytes_recv = picoquic_recvmsg(ctx->n_socket, addr_from,
+        addr_dest, &dest_if, &received_ecn,
+        ctx->buffer, ctx->buffer_max);
+
+    if (bytes_recv <= 0) {
+        ret = errno;
+        DBG_PRINTF("Could not receive packet on UDP socket[%d]= 0%x!\n",
+            (int)sockets[i], ret);
+    }
+    else {
+        *received_length = bytes_recv;
+        *p_recv_buf = ctx->buffer;
+    }
+    return ret;
+}
+
+void unix_close_socket(thread_test_context_t* ctx)
+{
+    /* Close the socket */
+    if (ctx->n_socket != INVALID_SOCKET) {
+        (void)close(n_socket);
+    }
+    /* Close the pipe */
+    for (int i = 0; i < 2; i++) {
+        (void)close(ctx->network_pipe_fd[i]);
+    }
+}
 #endif
 
-    printf("Starting network thread, state=%x.\n", ret);
-    ctx->is_ready = 1;
+
+/* Network thread */
+#ifdef _WINDOWS
+DWORD WINAPI network_thread(LPVOID lpParam)
+#else
+int network_thread(void * lpParam)
+#endif
+{
+    uint64_t current_time = 0;
+    thread_test_context_t* ctx = (thread_test_context_t*)lpParam;
+#ifdef _WINDOWS
+    int ret = windows_events_init(ctx);
+#else
+    int ret = unix_sockets_init(ctx);
+#endif
+    if (ret == 0) {
+        printf("Starting network thread, state=%x.\n", ret);
+        ctx->is_ready = 1;
+    }
     /* Loop on wait for socket or event */
     while (!ctx->should_stop && ret == 0) {
-        int event_rank = -1;
         int receive_ready = 0;
         uint64_t message_number = 0;
         uint8_t* recv_buf = NULL;
         /* wait for socket or event */
 #ifdef _WINDOWS
-        DWORD ret_event = WSAWaitForMultipleEvents(2, events, FALSE, 1000, TRUE);
-        if (ret_event == WSA_WAIT_FAILED) {
-            ret = WSAGetLastError();
-            DBG_PRINTF("WSAWaitForMultipleEvents fails, error 0x%x", ret);
-            break;
-        }
-        else if (ret_event == WSA_WAIT_TIMEOUT) {
-            ctx->timeout_count++;
-#if 1
-            receive_ready = 1;
-#endif
-        }
-        else if (ret_event >= WSA_WAIT_EVENT_0) {
-            event_rank = ret_event - WSA_WAIT_EVENT_0;
-            if (event_rank > 0) {
-                ctx->msg_recv_count++;
-                receive_ready = 1;
-            } else {
-                /* Event number 0 is the wake signal */
-                ctx->event_wake_count++;
-                if (ResetEvent(ctx->network_event) == 0) {
-                    ret = GetLastError();
-                    DBG_PRINTF("Cannot reset network event, error 0x%x", ret);
-                    break;
-                }
-            }
-        }
+        ret = windows_wait_multiple(ctx, &receive_ready);
 #else
+        ret = unix_select_multiple(ctx, &receive_ready);
 #endif
         /* get time */
         current_time = picoquic_current_time();
@@ -221,26 +389,14 @@ int network_thread(void * lpParam)
             int received_length = 0;
 #ifdef _WINDOWS
             /* On windows, receive async */
-            ret = picoquic_recvmsg_async_finish(recv_ctx);
-            if (ret != 0) {
-                DBG_PRINTF("%s", "Cannot finish async recv");
-                break;
-            }
-            else if (ResetEvent(recv_ctx->overlap.hEvent) == 0) {
-                ret = GetLastError();
-                DBG_PRINTF("Cannot reset socket event, error 0x%x", ret);
-                break;
-            }
-            else {
-                received_length = (int)recv_ctx->bytes_recv;
-            }
+            ret = windows_receive_async(ctx, &received_length, &recv_buf);
 #else
-            /* On linux, receive socket message */
+            /* receive message on unix */
 #endif
             if (ret == 0) {
                 if (received_length >= 8) {
                     /* Get the message number */
-                    message_number = PICOPARSE_64(recv_ctx->recv_buffer);
+                    message_number = PICOPARSE_64(recv_buf);
                     if (message_number > NB_THREAD_TEST_MSG) {
                         DBG_PRINTF("Unexpected message number: %" PRIx64, message_number);
                         ctx->message_error = ERROR_THREAD_TEST_MESSAGE;
@@ -265,7 +421,7 @@ int network_thread(void * lpParam)
 #ifdef _WINDOWS
             if (ret == 0) {
                 /* Start receiving */
-                ret = picoquic_recvmsg_async_start(recv_ctx);
+                ret = picoquic_recvmsg_async_start(ctx->recv_ctx);
                 if (ret != 0) {
                     DBG_PRINTF("Cannot start recv on socket, err = %d (0x%x)", ret, ret);
                 }
@@ -274,21 +430,12 @@ int network_thread(void * lpParam)
         }
     }
     ctx->network_exit_time = current_time;
-    printf("Network thread exits.\n");
 #ifdef _WINDOWS
-    /* Close the socket */
-    if (recv_ctx != NULL) {
-        picoquic_delete_async_socket(recv_ctx);
-        recv_ctx = NULL;
-    }
-    /* Close the event handle */
-    if (ctx->network_event != NULL) {
-        CloseHandle(ctx->network_event);
-        ctx->network_event = NULL;
-    }
+    windows_close_socket(ctx);
 #else
-    /* Close the socket */
+    unix_close_socket(ctx);
 #endif
+    printf("Network thread exits.\n");
     return ret;
 }
 
@@ -356,6 +503,7 @@ int network_loop_thread(void* lpParam)
     return ret;
 }
 
+#ifdef _WINDOWS
 /* Event loop thread -- event only */
 DWORD WINAPI event_loop_thread(LPVOID lpParam)
 {
@@ -379,6 +527,7 @@ DWORD WINAPI event_loop_thread(LPVOID lpParam)
 
     return (DWORD)ret;
 }
+#endif
 
 int main(int argc, char** argv)
 {
