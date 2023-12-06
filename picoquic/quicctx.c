@@ -653,6 +653,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         quic->stateless_reset_next_time = current_time;
         quic->stateless_reset_min_interval = PICOQUIC_MICROSEC_STATELESS_RESET_INTERVAL_DEFAULT;
         quic->default_stream_priority = PICOQUIC_DEFAULT_STREAM_PRIORITY;
+        quic->default_datagram_priority = PICOQUIC_DEFAULT_STREAM_PRIORITY;
         quic->cwin_max = UINT64_MAX;
         quic->sequence_hole_pseudo_period = PICOQUIC_DEFAULT_HOLE_PERIOD;
 
@@ -3359,6 +3360,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->rtt_update_delta = quic->rtt_update_delta;
         cnx->pacing_rate_update_delta = quic->pacing_rate_update_delta;
 
+        /* Initialize the stream data repeat queue */
+        picoquic_queue_data_repeat_init(cnx);
+
         /* Initialize the connection ID stash */
         ret = picoquic_create_path(cnx, start_time, NULL, addr_to);
         if (ret == 0) {
@@ -3379,6 +3383,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->path[0]->p_local_cnxid = cnxid0;
             cnx->path[0]->challenge_verified = 1;
 
+            cnx->datagram_priority = cnx->quic->default_datagram_priority;
             cnx->high_priority_stream_id = UINT64_MAX;
             for (int i = 0; i < 4; i++) {
                 cnx->next_stream_id[i] = i;
@@ -4271,9 +4276,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
         }
 
-        while (cnx->data_repeat_first != NULL) {
-            picoquic_dequeue_data_repeat_packet(cnx, cnx->data_repeat_first);
-        }
+        picosplay_empty_tree(&cnx->queue_data_repeat_tree);
 
         for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
             picoquic_clear_stream(&cnx->tls_stream[epoch]);
