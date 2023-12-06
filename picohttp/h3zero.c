@@ -458,9 +458,24 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                 }
                 break;
             case http_pseudo_header_path:
-                bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                    decoded_length, &parts->path, &parts->path_length);
+                if (parts->path != NULL) {
+                    /* Duplicate content type! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->path, &parts->path_length);
+                }
                 break;
+            case http_pseudo_header_protocol:
+                if (parts->protocol != NULL) {
+                    /* Duplicate content type! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->protocol, &parts->protocol_length);
+                }
                 break;
             default:
                 break;
@@ -478,10 +493,12 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
 int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int is_huffman)
 {
     char const  * interesting_header_name[] = {
-     ":method", ":path", ":status", "content-type", NULL };
+     ":method", ":path", ":status", "content-type", ":protocol", "origin", NULL};
     const http_header_enum_t interesting_header[] = {
         http_pseudo_header_method, http_pseudo_header_path,
-        http_pseudo_header_status, http_header_content_type };
+        http_pseudo_header_status, http_header_content_type,
+        http_pseudo_header_protocol, http_header_origin
+    };
     http_header_enum_t val = http_header_unknown;
     uint8_t deHuff[256];
 
@@ -574,6 +591,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
                         if (parts->path == NULL) {
                             /* internal error */
                             bytes = NULL;
+                            parts->path_length = 0;
                         }
                         else {
                             memcpy((uint8_t *)parts->path, qpack_static[s_index].content, parts->path_length);
@@ -581,6 +599,10 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
                         }
                     }
                     break;
+                case http_header_origin:
+                    /* TODO: parse origin value? */
+                case http_pseudo_header_protocol:
+                    /* TODO: parse protocol value? */
                 default:
                     break;
                 }
@@ -697,6 +719,67 @@ static uint8_t * h3zero_qpack_literal_plus_ref_encode(uint8_t * bytes, uint8_t *
     return bytes;
 }
 
+/* Example of literal plus literal: 
+0x20 | QPACK_TEST_HEADER_PATH_LEN, QPACK_TEST_HEADER_PATH,
+QPACK_TEST_HEADER_INDEX_HTML_LEN, QPACK_TEST_HEADER_INDEX_HTML
+This supposes that the literal is less than 127 bytes.
+
+*   0   1   2   3   4   5   6   7
+* +---+---+---+---+---+---+---+---+
+* | 0 | 0 | 1 | N | H |NameLen(3+)|
+* +---+---+---+---+---+-----------+
+* |  Name String (Length bytes)   |
+* +---+---------------------------+
+* | H |     Value Length (7+)     |
+* +---+---------------------------+
+* |  Value String (Length bytes)  |
+* +-------------------------------+
+*/
+
+static uint8_t * h3zero_qpack_name_encode(uint8_t * bytes, uint8_t * bytes_max,
+    uint8_t prefix, uint8_t mask, uint8_t const * name, size_t name_length) 
+{
+    if (bytes != NULL) {
+        if (bytes + 1 > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            *bytes = prefix;
+            bytes = h3zero_qpack_int_encode(bytes, bytes_max, mask, name_length);
+            if (bytes != NULL && name_length > 0) {
+                if (bytes + name_length > bytes_max) {
+                    bytes = NULL;
+                }
+                else {
+                    memcpy(bytes, name, name_length);
+                    bytes += name_length;
+                }
+            }
+        }
+    }
+
+    return bytes;
+}
+
+static uint8_t * h3zero_qpack_literal_plus_name_encode(uint8_t * bytes, uint8_t * bytes_max,
+    uint8_t const * name, size_t name_length, uint8_t const * val, size_t val_length)
+{
+
+    bytes = h3zero_qpack_name_encode(bytes, bytes_max, 0x20, 0x07, name, name_length);
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x00, 0x7F, val_length);
+    if (bytes != NULL && val_length > 0) {
+        if (bytes + val_length > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            memcpy(bytes, val, val_length);
+            bytes += val_length;
+        }
+    }
+
+    return bytes;
+}
+
 uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zero_content_type_enum content_type)
 {
     /* Content type header */
@@ -719,6 +802,37 @@ uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zer
         }
     }
 
+    return bytes;
+}
+
+uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
+    uint8_t const* path, size_t path_length, char const* protocol, char const * origin,
+    char const* ua_string)
+{
+    if (bytes == NULL || bytes + 2 > bytes_max) {
+        return NULL;
+    }
+    /* Push 2 NULL bytes for request header: base, and delta */
+    *bytes++ = 0;
+    *bytes++ = 0;
+    /* Method */
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_CONNECT);
+    /* Scheme: HTTPS */
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_SCHEME_HTTPS);
+    /* Path: doc_name. Use literal plus reference format */
+    bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_CODE_PATH, path, path_length);
+    /* Protocol. Use literal plus name format */
+    if (protocol != NULL) {
+        bytes = h3zero_qpack_literal_plus_name_encode(bytes, bytes_max, (uint8_t*)":protocol", 9, (uint8_t*)protocol, strlen(protocol));
+    }
+    /* Origin. Use literal plus ref format */
+    if (origin != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_ORIGIN, (uint8_t*)origin, strlen(origin));
+    }
+    /* User Agent */
+    if (ua_string != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_USER_AGENT, (uint8_t const*)ua_string, strlen(ua_string));
+    }
     return bytes;
 }
 
@@ -811,8 +925,10 @@ uint8_t * h3zero_create_response_header_frame_ex(uint8_t * bytes, uint8_t * byte
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_SERVER, (uint8_t const*)server_string, strlen(server_string));
     }
 
-    /* Content type header */
-    bytes = h3zero_encode_content_type(bytes, bytes_max, doc_type);
+    if (doc_type != h3zero_content_type_none) {
+        /* Content type header */
+        bytes = h3zero_encode_content_type(bytes, bytes_max, doc_type);
+    }
 
     return bytes;
 }
@@ -823,7 +939,7 @@ uint8_t* h3zero_create_response_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     return h3zero_create_response_header_frame_ex(bytes, bytes_max, doc_type, H3ZERO_USER_AGENT_STRING);
 }
 
-uint8_t * h3zero_create_not_found_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max, char const* server_string)
+uint8_t* h3zero_create_error_frame(uint8_t* bytes, uint8_t* bytes_max, char const* error_code, char const* server_string)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -832,14 +948,34 @@ uint8_t * h3zero_create_not_found_header_frame_ex(uint8_t * bytes, uint8_t * byt
     *bytes++ = 0;
     *bytes++ = 0;
     /* Status = 404 */
-    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_404);
+    if (strcmp(error_code, "404") == 0) {
+        bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_404);
+    }
+    else {
+        bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x50, 0x0F, H3ZERO_QPACK_CODE_404);
+        if (bytes != NULL && bytes + 4 <= bytes_max) {
+            *bytes++ = 3;
+            *bytes++ = error_code[0];
+            *bytes++ = error_code[1];
+            *bytes++ = error_code[2];
+        }
+    }
 
     /* Server string */
     if (server_string != NULL) {
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_SERVER, (uint8_t const*)server_string, strlen(server_string));
     }
-
+    /* Allowed methods */
+    if (strcmp(error_code, "405") == 0 && bytes != NULL) {
+        char const* allowed = "GET, POST, CONNECT";
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_ALLOW_GET, (uint8_t*)allowed, strlen(allowed));
+    }
     return bytes;
+}
+
+uint8_t * h3zero_create_not_found_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max, char const* server_string)
+{
+    return h3zero_create_error_frame(bytes, bytes_max, "404", server_string);
 }
 
 uint8_t* h3zero_create_not_found_header_frame(uint8_t* bytes, uint8_t* bytes_max)
@@ -849,30 +985,7 @@ uint8_t* h3zero_create_not_found_header_frame(uint8_t* bytes, uint8_t* bytes_max
 
 uint8_t * h3zero_create_bad_method_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max, char const* server_string)
 {
-    if (bytes == NULL || bytes + 2 > bytes_max) {
-        return NULL;
-    }
-    /* Push 2 NULL bytes for request header: base, and delta */
-    *bytes++ = 0;
-    *bytes++ = 0;
-    /* Status = 405 -- use 404 code to get reference to 'status' header */
-    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x50, 0x0F, H3ZERO_QPACK_CODE_404);
-    if (bytes != NULL) {
-        *bytes++ = 3;
-        *bytes++ = '4';
-        *bytes++ = '0';
-        *bytes++ = '5';
-    }
-
-    /* Server string */
-    if (server_string != NULL) {
-        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_SERVER, (uint8_t const*)server_string, strlen(server_string));
-    }
-
-    /* Allow GET and POST */
-    bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_ALLOW_GET, (uint8_t *)"GET, POST", 9);
-
-    return bytes;
+    return h3zero_create_error_frame(bytes, bytes_max, "405", server_string);
 }
 
 uint8_t* h3zero_create_bad_method_header_frame(uint8_t* bytes, uint8_t* bytes_max)
@@ -880,181 +993,65 @@ uint8_t* h3zero_create_bad_method_header_frame(uint8_t* bytes, uint8_t* bytes_ma
     return h3zero_create_bad_method_header_frame_ex(bytes, bytes_max, H3ZERO_USER_AGENT_STRING);
 }
 
-/* Parsing of a data stream. This is implemented as a filter, with a set of states:
+/* Read varint from stream.
+ * The H3 streams data structures often include series of varint for
+ * encoding of types, lengths, or property values. The size of
+ * the messages is not known in advance. Instead, the parser is called
+ * when bytes are received from the network.
  * 
- * - Reading frame length: obtaining the length and type of the next frame.
- * - Reading header frame: obtaining the bytes of the header frame.
- *   When all bytes are obtained, the header is parsed and the header
- *   structure is documented. State moves back to initial, with header-read
- *   flag set. Having two frame headers before a data frame is a bug.
- * - Reading unknown frame: unknown frames can happen at any point in
- *   the stream, and should just be ignored.
- * - Reading data frame: the frame header indicated a data frame of
- *   length N. Treat the following N bytes as data.
- * 
- * There may be several data frames in a stream. The application will pick
- * the bytes and treat them as data.
+ * The parser retains as state the number of bytes accumulated in 
+ * a buffer. If the first byte is read, this byte provides the
+ * length of the encoding. If there are zero bytes, the first byte
+ * to be read will be placed in the buffer.
  */
-
-uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
-    h3zero_data_stream_state_t * stream_state, size_t * available_data, uint16_t * error_found)
+uint8_t * h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t * result, uint8_t * buffer, size_t* buffer_length)
 {
-    *available_data = 0;
-    *error_found = 0;
+    uint8_t* bp = buffer + *buffer_length;
+    uint8_t* be;
 
-    if (bytes == NULL || bytes >= bytes_max) {
-        *error_found = H3ZERO_INTERNAL_ERROR;
-        return NULL;
+    if (bytes == bytes_max){
+        return bytes; /* continuing */
+    }
+    if (bp == buffer) {
+        *bp++ = *bytes++;
+    }
+    be = buffer + h3zero_varint_skip(buffer);
+
+    while (bytes < bytes_max && bp < be) {
+        *bp++ = *bytes++;
     }
 
-    if (!stream_state->frame_header_parsed) {
-        size_t frame_type_length;
-        size_t frame_header_length;
-
-        if (stream_state->frame_header_read < 1) {
-            stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
+    if (bp >= be) {
+        (void)h3zero_varint_decode(buffer, bp - buffer, result);
+        if ((*buffer_length = bp - be) > 0) {
+            memmove(buffer, be, *buffer_length);
         }
-        frame_type_length = h3zero_varint_skip(stream_state->frame_header);
-
-        while (stream_state->frame_header_read < frame_type_length && bytes < bytes_max) {
-            stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
-        }
-
-        if (stream_state->frame_header_read < frame_type_length) {
-            /* No change in state, wait for more bytes */
-            return bytes;
-        }
-
-        (void)h3zero_varint_decode(stream_state->frame_header, frame_type_length,
-            &stream_state->current_frame_type);
-
-        while (stream_state->frame_header_read < frame_type_length + 1 && bytes < bytes_max) {
-            stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
-        }
-
-        frame_header_length = h3zero_varint_skip(stream_state->frame_header + frame_type_length) + frame_type_length;
-
-        if (frame_header_length > sizeof(stream_state->frame_header)) {
-            *error_found = H3ZERO_INTERNAL_ERROR;
-            return NULL; /* This should never happen! */
-        }
-
-        while (stream_state->frame_header_read < frame_header_length && bytes < bytes_max) {
-            stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
-        }
-
-        if (stream_state->frame_header_read >= frame_header_length) {
-            (void)h3zero_varint_decode(stream_state->frame_header + frame_type_length, frame_header_length - frame_type_length,
-                &stream_state->current_frame_length);
-            stream_state->current_frame_read = 0;
-            stream_state->frame_header_parsed = 1;
-
-            if (stream_state->current_frame_type == h3zero_frame_data) {
-                if (!stream_state->header_found || stream_state->trailer_found) {
-                    /* protocol error */
-                    *error_found = H3ZERO_FRAME_UNEXPECTED;
-                    bytes = NULL;
-                }
-            }
-            else if (stream_state->current_frame_type == h3zero_frame_header) {
-                if (stream_state->header_found && (!stream_state->data_found || stream_state->trailer_found)) {
-                    /* protocol error */
-                    *error_found = H3ZERO_FRAME_UNEXPECTED;
-                    bytes = NULL;
-                }
-                else if (stream_state->current_frame_length > 0x10000) {
-                    /* error, excessive load */
-                    *error_found = H3ZERO_INTERNAL_ERROR;
-                    bytes = NULL;
-                }
-                else {
-                    stream_state->current_frame = (uint8_t *)malloc((size_t)stream_state->current_frame_length);
-                    if (stream_state->current_frame == NULL) {
-                        /* error, internal error */
-                        *error_found = H3ZERO_INTERNAL_ERROR;
-                        bytes = NULL;
-                    }
-                }
-            }
-            else if (stream_state->current_frame_type == h3zero_frame_cancel_push || 
-                stream_state->current_frame_type == h3zero_frame_goaway ||
-                stream_state->current_frame_type == h3zero_frame_max_push_id) {
-                *error_found = H3ZERO_GENERAL_PROTOCOL_ERROR;
-                bytes = NULL;
-            }
-            else if (stream_state->current_frame_type == h3zero_frame_settings) {
-                *error_found = H3ZERO_FRAME_UNEXPECTED;
-                bytes = NULL;
-            }
-        }
-        return bytes;
     }
-    else {
-        size_t available = bytes_max - bytes;
-
-        if (stream_state->current_frame_read + available > stream_state->current_frame_length) {
-            available = (size_t)(stream_state->current_frame_length - stream_state->current_frame_read);
-        }
-
-        if (stream_state->current_frame_type == h3zero_frame_header) {
-            memcpy(stream_state->current_frame + stream_state->current_frame_read, bytes, available);
-            stream_state->current_frame_read += available;
-            bytes += available;
-
-            if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-                uint8_t *parsed;
-                h3zero_header_parts_t * parts = (stream_state->header_found) ?
-                    &stream_state->trailer : &stream_state->header;
-                stream_state->trailer_found = stream_state->header_found;
-                stream_state->header_found = 1;
-                /* parse */
-                parsed = h3zero_parse_qpack_header_frame(stream_state->current_frame,
-                    stream_state->current_frame + stream_state->current_frame_length, parts);
-                if (parsed == NULL || (size_t)(parsed - stream_state->current_frame) != stream_state->current_frame_length) {
-                    /* protocol error */
-                    *error_found = H3ZERO_FRAME_ERROR;
-                    bytes = NULL;
-                }
-                /* free resource */
-                stream_state->frame_header_parsed = 0;
-                stream_state->frame_header_read = 0;
-                free(stream_state->current_frame);
-                stream_state->current_frame = NULL;
-            }
-        }
-        else if (stream_state->current_frame_type == h3zero_frame_data) {
-            *available_data = (size_t) available;
-            stream_state->current_frame_read += available; 
-            if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-                stream_state->frame_header_parsed = 0;
-                stream_state->frame_header_read = 0;
-                stream_state->data_found = 1;
-            }
-        }
-        else {
-            /* Unknown frame type, should just be ignored */
-            stream_state->current_frame_read += available;
-            bytes += available;
-            if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-                stream_state->frame_header_parsed = 0;
-                stream_state->frame_header_read = 0;
-            }
-        }     
-    }
-
     return bytes;
+}
+
+void h3zero_release_header_parts(h3zero_header_parts_t* header)
+{
+    if (header->path != NULL) {
+        free((uint8_t*)header->path);
+        *((uint8_t**)&header->path) = NULL;
+        header->path_length = 0;
+    }
+    if (header->protocol != NULL) {
+        free((uint8_t*)header->protocol);
+        *((uint8_t**)&header->protocol) = NULL;
+        header->protocol_length = 0;
+    }
 }
 
 void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 {
-    if (stream_state->header_found && stream_state->header.path != NULL) {
-        free((uint8_t*)stream_state->header.path);
-        *((uint8_t**)&stream_state->header.path) = NULL;
+    if (stream_state->header_found){
+        h3zero_release_header_parts(&stream_state->header);
     }
 
-    if (stream_state->trailer_found && stream_state->trailer.path != NULL) {
-        free((uint8_t*)stream_state->trailer.path);
-        *((uint8_t**)&stream_state->trailer.path) = NULL;
+    if (stream_state->trailer_found){
+        h3zero_release_header_parts(&stream_state->trailer);
     }
 
     if (stream_state->current_frame != NULL) {
@@ -1073,9 +1070,19 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 static uint8_t const h3zero_default_setting_frame_val[] = {
     0, /* Control Stream ID, varint = 0 */
     (uint8_t)h3zero_frame_settings, /* var int frame type ( < 64) */
-    4, /* Length of setting frame content */
+    17, /* Length of setting frame content */
     (uint8_t)h3zero_setting_header_table_size, 0, /* var int type ( < 64), then var int value (0) */
-    (uint8_t)h3zero_qpack_blocked_streams, 0 /* var int type ( < 64),  then var int value (0) Control*/
+    (uint8_t)h3zero_qpack_blocked_streams, 0, /* var int type ( < 64),  then var int value (0) Control*/
+    /* enable_connect_protocol = 0x8 */
+    (uint8_t)h3zero_settings_enable_connect_protocol, 1,
+    /* datagram support */
+    (uint8_t)h3zero_setting_h3_datagram, 1,
+    /* Declare max 1 web transport session */
+    (uint8_t)0xC0, 0, 0, 0,
+    ((h3zero_settings_webtransport_max_sessions >> 24)&0xff)|0x80,
+    (uint8_t)((h3zero_settings_webtransport_max_sessions >> 16)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions >> 8)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions)&0xff), 1
 };
 
 uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;

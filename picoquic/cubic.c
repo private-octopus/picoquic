@@ -61,10 +61,13 @@ static void picoquic_cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_p
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
 }
 
-static void picoquic_cubic_init(picoquic_path_t* path_x, uint64_t current_time)
+static void picoquic_cubic_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)malloc(sizeof(picoquic_cubic_state_t));
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
     path_x->congestion_alg_state = (void*)cubic_state;
     if (cubic_state != NULL) {
         picoquic_cubic_reset(cubic_state, path_x, current_time);
@@ -154,7 +157,6 @@ static void picoquic_cubic_enter_recovery(picoquic_cnx_t * cnx,
         path_x->cwin = PICOQUIC_CWIN_MINIMUM;
     }
     else {
-
         if (notification == picoquic_congestion_notification_timeout) {
             path_x->cwin = PICOQUIC_CWIN_MINIMUM;
             cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
@@ -295,7 +297,7 @@ static void picoquic_cubic_notify(
                 break;
             case picoquic_congestion_notification_bw_measurement: {
                 /* RTT measurements will happen after the bandwidth is estimated */
-                uint64_t max_win = path_x->max_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
                 uint64_t min_win = max_win /= 2;
                 if (path_x->cwin < min_win) {
                     path_x->cwin = min_win;

@@ -1127,7 +1127,7 @@ static int header_length_test_one(header_length_case_t * hlc)
         /* Reset the retransmit queue to simulate unack */
         if (hlc->sequence_unack != hlc->sequence_unack_after) {
             if (hlc->sequence_unack != UINT64_MAX) {
-                picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->retransmit_oldest, 1);
+                picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->pending_first, 1, 0);
             }
             if (hlc->sequence_unack_after != UINT64_MAX) {
                 ret = header_length_test_set_queue(cnx, hlc, hlc->sequence_unack_after, pc, pkt_ctx, simulated_time);

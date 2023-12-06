@@ -140,16 +140,26 @@
     <ClCompile Include="democlient.c" />
     <ClCompile Include="demoserver.c" />
     <ClCompile Include="h3zero.c" />
+    <ClCompile Include="h3zero_client.c" />
+    <ClCompile Include="h3zero_common.c" />
+    <ClCompile Include="h3zero_server.c" />
+    <ClCompile Include="h3zero_uri.c" />
     <ClCompile Include="quicperf.c" />
     <ClCompile Include="siduck.c" />
+    <ClCompile Include="webtransport.c" />
+    <ClCompile Include="wt_baton.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h" />
     <ClInclude Include="demoserver.h" />
     <ClInclude Include="h3zero.h" />
+    <ClInclude Include="h3zero_common.h" />
+    <ClInclude Include="h3zero_uri.h" />
+    <ClInclude Include="pico_webtransport.h" />
     <ClInclude Include="quicperf.h" />
     <ClInclude Include="siduck.h" />
     <ClInclude Include="wincompat.h" />
+    <ClInclude Include="wt_baton.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

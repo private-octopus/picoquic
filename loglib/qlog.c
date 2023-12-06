@@ -350,6 +350,9 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_enable_multipath:
                     qlog_vint_transport_extension(f, "enable_multipath", s, extension_length);
                     break;
+                case picoquic_tp_enable_simple_multipath:
+                    qlog_vint_transport_extension(f, "enable_simple_multipath", s, extension_length);
+                    break;
                 case picoquic_tp_version_negotiation:
                     fprintf(f, "\"version_negotiation\": ");
                     qlog_tp_version_negotiation(f, s, extension_length);
@@ -766,21 +769,14 @@ void qlog_time_stamp_frame(FILE* f, bytestream* s)
 
 void qlog_path_abandon_frame(FILE* f, bytestream* s)
 {
-    uint64_t path_id_type;
-    uint64_t path_id_value = 0;
+    uint64_t path_id;
     uint64_t reason;
     size_t phrase_length;
-
-    byteread_vint(s, &path_id_type);
-    if (path_id_type != 2) {
-        byteread_vint(s, &path_id_value);
-    }
+    
+    byteread_vint(s, &path_id);
     byteread_vint(s, &reason);
     byteread_vlen(s, &phrase_length);
-    fprintf(f, ", \"path_id_type\": %"PRIu64, path_id_type);
-    if (path_id_type != 2) {
-        fprintf(f, ", \"path_id_value\": %"PRIu64, path_id_value);
-    }
+    fprintf(f, ", \"path_id\": %"PRIu64, path_id);
     fprintf(f, ", \"reason\": %"PRIu64, reason);
     if (phrase_length > 0) {
         fprintf(f, ", \"phrase\": \"");
@@ -794,6 +790,28 @@ void qlog_path_abandon_frame(FILE* f, bytestream* s)
         }
         fprintf(f, "\"");
     }
+}
+
+void qlog_path_standby_frame(FILE* f, bytestream* s)
+{
+    uint64_t path_id = 0;
+    uint64_t sequence;
+
+    byteread_vint(s, &path_id);
+    byteread_vint(s, &sequence);
+    fprintf(f, ", \"path_id\": %"PRIu64, path_id);
+    fprintf(f, ", \"sequence\": %"PRIu64, sequence);
+}
+
+void qlog_path_available_frame(FILE* f, bytestream* s)
+{
+    uint64_t path_id = 0;
+    uint64_t sequence;
+
+    byteread_vint(s, &path_id);
+    byteread_vint(s, &sequence);
+    fprintf(f, ", \"path_id\": %"PRIu64, path_id);
+    fprintf(f, ", \"sequence\": %"PRIu64, sequence);
 }
 
 void qlog_reset_stream_frame(FILE* f, bytestream* s)
@@ -993,15 +1011,15 @@ void qlog_ack_frequency_frame(FILE* f, bytestream* s)
     uint64_t sequence_number = 0;
     uint64_t packet_tolerance = 0;
     uint64_t max_ack_delay = 0;
-    uint8_t ignore_order = 0;
+    uint64_t reordering_threshold = 0;
     byteread_vint(s, &sequence_number);
     fprintf(f, ", \"sequence_number\": %"PRIu64"", sequence_number);
     byteread_vint(s, &packet_tolerance);
     fprintf(f, ", \"packet_tolerance\": %"PRIu64"", packet_tolerance);
     byteread_vint(s, &max_ack_delay);
     fprintf(f, ", \"max_ack_delay\": %"PRIu64"", max_ack_delay);
-    byteread_int8(s, &ignore_order);
-    fprintf(f, ", \"ignore_order\": %d", ignore_order);
+    byteread_vint(s, &reordering_threshold);
+    fprintf(f, ", \"reordering_threshold\": %"PRIu64"", reordering_threshold);
 }
 
 void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
@@ -1215,11 +1233,19 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     case picoquic_frame_type_ack_frequency:
         qlog_ack_frequency_frame(f, s);
         break;
+    case picoquic_frame_type_immediate_ack:
+        break;
     case picoquic_frame_type_time_stamp:
         qlog_time_stamp_frame(f, s);
         break;
     case picoquic_frame_type_path_abandon:
         qlog_path_abandon_frame(f, s);
+        break;
+    case picoquic_frame_type_path_standby:
+        qlog_path_standby_frame(f, s);
+        break;
+    case picoquic_frame_type_path_available:
+        qlog_path_available_frame(f, s);
         break;
     case picoquic_frame_type_bdp:
         qlog_bdp_frame(f, s);
@@ -1265,7 +1291,7 @@ int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     int ret = 0;
     uint64_t sequence = 0;
     uint64_t packet_rcvd = 0;
-    uint64_t highest_ack = (uint64_t)(int64_t)-1;
+    uint64_t highest_ack = UINT64_MAX;
     uint64_t high_ack_time = 0;
     uint64_t last_time_ack = 0;
     uint64_t cwin = 0;

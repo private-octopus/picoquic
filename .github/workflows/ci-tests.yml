@@ -42,4 +42,5 @@ jobs:
         run: |
             sudo apt-get update
             sudo apt-get install -y valgrind
-            valgrind -v --error-exitcode=1  --track-origins=yes build/picoquic_ct zero_rtt_many_losses
+            # Remove, until the picotls/openssl issue is resolved.
+            # valgrind -v --error-exitcode=1  --track-origins=yes build/picoquic_ct zero_rtt_many_losses

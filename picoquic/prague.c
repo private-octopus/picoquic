@@ -116,15 +116,18 @@ typedef struct st_picoquic_prague_state_t {
 static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
 {
     pr_state->alg_state = picoquic_prague_alg_slow_start;
-    pr_state->ssthresh = (uint64_t)((int64_t)-1);
+    pr_state->ssthresh = UINT64_MAX;
     pr_state->alpha = 0;
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
 }
 
-void picoquic_prague_init(picoquic_path_t* path_x, uint64_t current_time)
+void picoquic_prague_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_prague_state_t* pr_state = (picoquic_prague_state_t*)malloc(sizeof(picoquic_prague_state_t));
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
 
     if (pr_state != NULL) {
         memset(pr_state, 0, sizeof(picoquic_prague_state_t));
@@ -399,7 +402,7 @@ void picoquic_prague_notify(
             if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
                 pr_state->ssthresh == UINT64_MAX) {
                 /* RTT measurements will happen after the bandwidth is estimated */
-                uint64_t max_win = path_x->max_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
                 uint64_t min_win = max_win /= 2;
                 if (path_x->cwin < min_win) {
                     path_x->cwin = min_win;

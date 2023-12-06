@@ -22,6 +22,8 @@
 #ifndef DEMO_SERVER_H
 #define DEMO_SERVER_H
 
+#include "h3zero_common.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,117 +37,36 @@ extern "C" {
  /* Defining first the Http 3.0 variant of the server 
   */
 
-#define PICOHTTP_SERVER_FRAME_MAX 1024
 #define PICOHTTP_FIRST_COMMAND_MAX 256
 #define PICOHTTP_RESPONSE_MAX (1 << 20)
 
 #define PICOHTTP_ALPN_H3_LATEST "h3-32"
 #define PICOHTTP_ALPN_HQ_LATEST "hq-32"
 
-  /* Define the per URL callback used to implement POST and other
-   * REST-like interactions
-   */
-
-typedef enum {
-    picohttp_callback_get, /* Received a get command */
-    picohttp_callback_post, /* Received a post command */
-    picohttp_callback_post_data, /* Data received from peer on stream N */
-    picohttp_callback_post_fin, /* All posted data have been received */
-    picohttp_callback_provide_data, /* Stack is ready to send chunk of response */
-    picohttp_callback_reset /* Stream has been abandoned. */
-} picohttp_call_back_event_t;
-
-struct st_picohttp_server_stream_ctx_t;
-
-typedef int (*picohttp_post_data_cb_fn)(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t fin_or_event, struct st_picohttp_server_stream_ctx_t* stream_ctx);
-
-/* Define the table of special-purpose paths used for POST or REST queries */
-typedef struct st_picohttp_server_path_item_t {
-    char* path;
-    size_t path_length;
-    picohttp_post_data_cb_fn path_callback;
-} picohttp_server_path_item_t;
-
-typedef struct st_picohttp_server_parameters_t {
-    char const* web_folder;
-    picohttp_server_path_item_t* path_table;
-    size_t path_table_nb;
-} picohttp_server_parameters_t;
-
 /* Identify the path item based on the incoming path in GET or POST */
 
 int picohttp_find_path_item(const uint8_t* path, size_t path_length, const picohttp_server_path_item_t* path_table, size_t path_table_nb);
 
-/* Define stream context common to http 3 and http 09 callbacks
- */
-typedef enum {
-    picohttp_server_stream_status_none = 0,
-    picohttp_server_stream_status_header,
-    picohttp_server_stream_status_crlf,
-    picohttp_server_stream_status_receiving,
-    picohttp_server_stream_status_finished
-} picohttp_server_stream_status_t;
+/* Define value for default pages */
 
-typedef struct st_picohttp_server_stream_ctx_t {
-    /* TODO-POST: identification of URL to process POST or GET? */
-    /* TODO-POST: provide content-type */
-    picosplay_node_t http_stream_node;
-    struct st_picohttp_server_stream_ctx_t* next_stream;
-    int is_h3;
-    union {
-        h3zero_data_stream_state_t stream_state; /* h3 only */
-        struct {
-            picohttp_server_stream_status_t status; 
-            int proto; 
-            uint8_t* path; 
-            size_t path_length;
-            size_t command_length;
-        } hq; /* h09 only */
-    } ps; /* Protocol specific state */
-    uint64_t stream_id;
-    size_t response_length;
-    size_t echo_length;
-    size_t echo_sent;
-    size_t post_received;
-    uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
-    int method;
-    picohttp_post_data_cb_fn path_callback;
-    void* path_callback_ctx;
-    char* file_path;
-    FILE* F;
-} picohttp_server_stream_ctx_t;
+extern char const* h3zero_server_default_page;
+extern char const* h3zero_server_post_response_page;
 
-/* Define the H3Zero server callback */
-
-typedef struct st_h3zero_server_callback_ctx_t {
-    picosplay_tree_t h3_stream_tree;
-    picohttp_server_path_item_t * path_table;
-    size_t path_table_nb;
-    char const* web_folder;
-} h3zero_server_callback_ctx_t;
-
-int h3zero_server_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
-
+void h3zero_init_stream_tree(picosplay_tree_t* h3_stream_tree);
+int h3zero_server_parse_path(const uint8_t* path, size_t path_length, uint64_t* echo_size,
+    char** file_path, char const* web_folder, int* file_error);
+int h3zero_server_prepare_to_send(void* context, size_t space, h3zero_stream_ctx_t* stream_ctx);
 
 /* Defining then the Http 0.9 variant of the server
  */
+#define picoquic_h09_server_callback_ctx_t h3zero_callback_ctx_t
 
-typedef struct st_picoquic_h09_server_callback_ctx_t {
-    picosplay_tree_t h09_stream_tree;
-    picohttp_server_path_item_t * path_table;
-    size_t path_table_nb;
-    char const* web_folder;
-} picoquic_h09_server_callback_ctx_t;
-
-int picoquic_h09_server_process_data_header(const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, picohttp_server_stream_ctx_t* stream_ctx, size_t* r_processed);
+int picoquic_h09_server_process_data_header(const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx, size_t* r_processed);
 
 int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
+
 
 /* The generic server callback will call either http3 or http0.9,
  * according to the ALPN selected by the client
@@ -159,7 +80,7 @@ size_t picoquic_demo_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iov
 
 int demo_server_is_path_sane(const uint8_t* path, size_t path_length);
 
-int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size, 
+int demo_server_try_file_path(const uint8_t* path, size_t path_length, uint64_t* echo_size, 
     char ** file_path,char const* web_folder, int* file_error);
 
 #ifdef __cplusplus

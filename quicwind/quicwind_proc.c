@@ -15,6 +15,7 @@
 #include <ws2tcpip.h>
 #include "picoquic.h"
 #include "h3zero.h"
+#include "h3zero_common.h"
 #include "democlient.h"
 #include "quicwind.h"
 #include "autoqlog.h"
@@ -30,7 +31,7 @@
 #include "picoquic_internal.h"
 #include "picosocks.h"
 #include "picoquic_utils.h"
-#include "h3zero.c"
+#include "h3zero.h"
 #include "democlient.h"
 #include "picoquic_packet_loop.h"
 
@@ -177,7 +178,7 @@ int quicwind_callback(picoquic_cnx_t* cnx,
             if (length > 0) {
                 switch (ctx->alpn) {
                 case picoquic_alpn_http_3: {
-                    uint16_t error_found = 0;
+                    uint64_t error_found = 0;
                     size_t available_data = 0;
                     uint8_t * bytes_max = bytes + length;
                     while (bytes < bytes_max) {
@@ -497,7 +498,7 @@ int quicwind_start_connection(picoquic_quic_t * qclient,
                 if (ret == 0) {
                     switch (ctx->alpn) {
                     case picoquic_alpn_http_3:
-                        ret = h3zero_client_init(cnx_client);
+                        ret = h3zero_protocol_init(cnx_client);
                         break;
                     default:
                         break;
