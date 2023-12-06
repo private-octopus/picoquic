@@ -72,6 +72,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PerfAndStressTest", "PerfAn
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "thread_tester", "thread_tester\thread_tester.vcxproj", "{57341DB3-B498-4E7B-9CB2-E897A562C15F}"
+	ProjectSection(ProjectDependencies) = postProject
+		{B3DDD196-3D03-4396-97BD-E5DE733E9D24} = {B3DDD196-3D03-4396-97BD-E5DE733E9D24}
+		{63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F} = {63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F}
+		{998765EE-64DF-49C1-8471-A79E2DA7CD21} = {998765EE-64DF-49C1-8471-A79E2DA7CD21}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "baton_app", "baton_app\baton_app.vcxproj", "{C0F21D3F-ECC3-4AB5-A3E3-E2D48965EBA5}"
 	ProjectSection(ProjectDependencies) = postProject
