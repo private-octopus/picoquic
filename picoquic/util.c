@@ -1025,7 +1025,7 @@ int picoquic_wait_thread(picoquic_thread_t thread)
 #else
     ret = pthread_join(thread, NULL);
 #endif
-    return 0;
+    return ret;
 }
 
 void picoquic_delete_thread(picoquic_thread_t * thread)
