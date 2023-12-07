@@ -458,6 +458,7 @@ void* network_load_thread(void* lpParam)
     SOCKET_TYPE l_socket;
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     uint64_t current_time;
+    int nb_sent = 0;
 
     printf("Starting load thread.\n");
 
@@ -470,14 +471,16 @@ void* network_load_thread(void* lpParam)
     /* Loop on send to socket */
     for (uint64_t i = 0; i < NB_THREAD_TEST_MSG && !ctx->should_stop && ret == 0; i++)
     {
+        size_t bytes_sent = 0;
         /* Wait some amount of time */
         SLEEP(1 + ((int)(i%7))*3);
         current_time = picoquic_current_time();
+        nb_sent++;
         /* send the message */
         picoformat_64(buffer, i);
-        ret = (int)sendto(l_socket, buffer, 256,
+        bytes_sent = (int)sendto(l_socket, buffer, 256,
             0, (struct sockaddr*)&ctx->network_thread_addr, ctx->network_thread_addr_len);
-        if (ret != 256) {
+        if (bytes_sent != 256) {
             /* Error. Document and exit */
             int err_ret = 0;
 #ifdef _WINDOWS
@@ -496,8 +499,8 @@ void* network_load_thread(void* lpParam)
         }
     }
 
-
-    printf("load thread ends.\n");
+    printf("load thread ends after %d loops (%d, 0x%x).\n", nb_sent,
+        ctx->should_stop, ret);
 
     ctx->message_loop_exit_time = picoquic_current_time();
     /* Close the socket */
