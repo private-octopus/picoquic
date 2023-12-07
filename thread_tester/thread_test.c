@@ -30,7 +30,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
-
+#include <pthread.h>
 #ifndef __USE_XOPEN2K
 #define __USE_XOPEN2K
 #endif
@@ -239,8 +239,9 @@ void windows_close_socket(thread_test_context_t* ctx)
 int unix_sockets_init(thread_test_context_t* ctx)
 {
     int ret = 0;
+    int server_af = ctx->network_thread_addr.ss_family;
     ctx->buffer_max = sizeof(ctx->buffer);
-    ctx->n_socket = picoquic_open_client_socket(int af);
+    ctx->n_socket = picoquic_open_client_socket(server_af);
 
     /* Bind to specified port */
     if (ret == 0) {
@@ -257,18 +258,19 @@ int unix_sockets_init(thread_test_context_t* ctx)
     return ret;
 }
 
-int unix_select_multiple(thread_test_context_t* ctx, int * receive_ready))
+int unix_select_multiple(thread_test_context_t* ctx, int * receive_ready)
 {
     fd_set readfds;
     int ret_select = 0;
     int bytes_recv = 0;
     int sockmax = 0;
+    int ret = 0;
 
     FD_ZERO(&readfds);
 
-    FD_SET(ctx->n_socket);
+    FD_SET(ctx->n_socket, &readfds);
     sockmax = ctx->n_socket;
-    FD_SET(ctx->network_pipe_fd[0]);
+    FD_SET(ctx->network_pipe_fd[0], &readfds);
     if (sockmax < ctx->network_pipe_fd[0]) {
         sockmax = ctx->network_pipe_fd[0];
     }
@@ -280,13 +282,13 @@ int unix_select_multiple(thread_test_context_t* ctx, int * receive_ready))
         DBG_PRINTF("Error: select returns %d\n", ret_select);
     }
     else {
-        if (FD_ISSET(ctx->n_socket)) {
+        if (FD_ISSET(ctx->n_socket, &readfds)) {
             *receive_ready = 1;
         }
-        if (FD_ISSET(ctx->network_pipe_fd[0])) {
+        if (FD_ISSET(ctx->network_pipe_fd[0], &readfds)) {
             /* Something was written on the "wakeup" pipe. Read it. */
             uint8_t eventbuf[8];
-            if ((bytes_recv = read(ctx->network_pipe_fd[0], eventbuf, sizeof(eventbuf)) <= 0) {
+            if ((bytes_recv = read(ctx->network_pipe_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
                 if (bytes_recv == 0) {
                     ret = EPIPE;
                 }
@@ -318,14 +320,14 @@ int unix_receive_from_socket(thread_test_context_t* ctx, int* received_length, u
     unsigned char received_ecn;
     int bytes_recv;
 
-    bytes_recv = picoquic_recvmsg(ctx->n_socket, addr_from,
-        addr_dest, &dest_if, &received_ecn,
+    bytes_recv = picoquic_recvmsg(ctx->n_socket, &addr_from,
+        &addr_dest, &dest_if, &received_ecn,
         ctx->buffer, ctx->buffer_max);
 
     if (bytes_recv <= 0) {
         ret = errno;
         DBG_PRINTF("Could not receive packet on UDP socket[%d]= 0%x!\n",
-            (int)sockets[i], ret);
+            (int)ctx->n_socket, ret);
     }
     else {
         *received_length = bytes_recv;
@@ -338,7 +340,8 @@ void unix_close_socket(thread_test_context_t* ctx)
 {
     /* Close the socket */
     if (ctx->n_socket != INVALID_SOCKET) {
-        (void)close(n_socket);
+        (void)close(ctx->n_socket);
+        ctx->n_socket = INVALID_SOCKET;
     }
     /* Close the pipe */
     for (int i = 0; i < 2; i++) {
@@ -352,7 +355,7 @@ void unix_close_socket(thread_test_context_t* ctx)
 #ifdef _WINDOWS
 DWORD WINAPI network_thread(LPVOID lpParam)
 #else
-int network_thread(void * lpParam)
+void* network_thread(void * lpParam)
 #endif
 {
     uint64_t current_time = 0;
@@ -392,6 +395,7 @@ int network_thread(void * lpParam)
             ret = windows_receive_async(ctx, &received_length, &recv_buf);
 #else
             /* receive message on unix */
+            ret = unix_receive_from_socket(ctx, &received_length, &recv_buf);
 #endif
             if (ret == 0) {
                 if (received_length >= 8) {
@@ -430,23 +434,26 @@ int network_thread(void * lpParam)
         }
     }
     ctx->network_exit_time = current_time;
+    printf("Network thread exits.\n");
 #ifdef _WINDOWS
     windows_close_socket(ctx);
+    return (DWORD)ret;
 #else
     unix_close_socket(ctx);
+    pthread_exit((void*)&ret);
 #endif
-    printf("Network thread exits.\n");
-    return ret;
 }
 
-/* Network loop thread -- socket only */
+/* Network load thread -- socket only */
 #ifdef _WINDOWS
+#define SLEEP(x) Sleep(x)
 DWORD WINAPI network_load_thread(LPVOID lpParam)
 #else
-int network_loop_thread(void* lpParam)
+#define SLEEP(x) usleep((x)*1000)
+void* network_load_thread(void* lpParam)
 #endif
 {
-    DWORD ret = 0;
+    int ret = 0;
     thread_test_context_t* ctx = (thread_test_context_t*)lpParam;
     SOCKET_TYPE l_socket;
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
@@ -463,9 +470,8 @@ int network_loop_thread(void* lpParam)
     /* Loop on send to socket */
     for (uint64_t i = 0; i < NB_THREAD_TEST_MSG && !ctx->should_stop && ret == 0; i++)
     {
-        int ret = 0;
         /* Wait some amount of time */
-        Sleep(1 + ((int)(i%7))*3);
+        SLEEP(1 + ((int)(i%7))*3);
         current_time = picoquic_current_time();
         /* send the message */
         picoformat_64(buffer, i);
@@ -479,7 +485,7 @@ int network_loop_thread(void* lpParam)
 #else
             err_ret = (int)errno;
 #endif
-            DBG_PRINTF("Network loop returns %d (0x%x), %d (0x%x)", ret, ret, err_ret, err_ret);
+            DBG_PRINTF("Network load loop returns %d (0x%x), %d (0x%x)", ret, ret, err_ret, err_ret);
             ctx->message_loop_error = ret;
             ctx->message_loop_error_index = i;
             break;
@@ -500,12 +506,19 @@ int network_loop_thread(void* lpParam)
         l_socket = INVALID_SOCKET;
     }
     /* exit the thread */
-    return ret;
+#ifdef _WINDOWS
+    return (DWORD)ret;
+#else
+    pthread_exit((void*)&ret);
+#endif
 }
 
 #ifdef _WINDOWS
 /* Event loop thread -- event only */
 DWORD WINAPI event_loop_thread(LPVOID lpParam)
+#else
+void* event_loop_thread(void* lpParam)
+#endif
 {
     int ret = 0;
     thread_test_context_t* ctx = (thread_test_context_t*)lpParam;
@@ -514,7 +527,7 @@ DWORD WINAPI event_loop_thread(LPVOID lpParam)
 
     for (int i = 0; i < NB_THREAD_TEST_EVENT && !ctx->should_stop && ret == 0; i++)
     {
-        Sleep(5);
+        SLEEP(5);
         ctx->event_sent_at[i] = picoquic_current_time();
         ctx->event_sent_count++;
         if ((ret = network_wake_up(ctx)) != 0) {
@@ -524,10 +537,12 @@ DWORD WINAPI event_loop_thread(LPVOID lpParam)
     }
 
     printf("End event thread after %d events.\n", ctx->event_sent_count);
-
+#ifdef _WINDOWS
     return (DWORD)ret;
-}
+#else
+    pthread_exit((void*)&ret);
 #endif
+}
 
 int main(int argc, char** argv)
 {
@@ -563,7 +578,7 @@ int main(int argc, char** argv)
         }
         else {
             for (int i = 0; i < 2000 && !ctx.is_ready; i++) {
-                Sleep(1);
+                SLEEP(1);
             }
             if (ctx.is_ready) {
                 printf("Network thread is ready.\n");
@@ -585,7 +600,7 @@ int main(int argc, char** argv)
         printf("thread3: network thread, sends at random intervals.\n");
         ret = picoquic_create_thread(&t_load, network_load_thread, &ctx);
         if (ret != 0) {
-            DBG_PRINTF("Cannot create event thread, ret= 0x%x", ret);
+            DBG_PRINTF("Cannot create network load thread, ret= 0x%x", ret);
         }
     }
     /* Wait first on the message load thread. */
@@ -612,12 +627,13 @@ int main(int argc, char** argv)
     }
     printf("Load and wake thread are closed.\n");
     /* Wait explicitly for some time, to give the program a chance to receive data */
-    Sleep(100);
+    SLEEP(100);
     /* Set the termination flag */
     ctx.should_stop = 1;
     /* Wait for the network thread */
     if (ret == 0) {
         printf("Waiting for net thread.\n");
+        (void)network_wake_up(&ctx);
         ret = picoquic_wait_thread(t_net);
         if (ret != 0) {
             DBG_PRINTF("Cannot close wake thread, ret= 0x%x", ret);
