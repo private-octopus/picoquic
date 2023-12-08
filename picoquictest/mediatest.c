@@ -1111,8 +1111,6 @@ int mediatest_loop(mediatest_ctx_t* mt_ctx, uint64_t simulated_time_max, int is_
 int mediatest_one(int media_test_id, mediatest_spec_t * spec)
 {
     int ret = 0;
-    int nb_steps = 0;
-    int nb_inactive = 0;
     int is_finished = 0;
 
     /* set the configuration */
