@@ -139,7 +139,7 @@ int minicrypto_is_last_test()
         ret = -1;
     }
     if (using_aes128gcm_sha256_low != expected_aes128gcm_sha256_low) {
-        DBG_PRINTF("Wrong aes gcm 128 sha 256. Expected: %s, actual: %s",
+        DBG_PRINTF("Wrong aes gcm 128 sha 256 low. Expected: %s, actual: %s",
             (expected_aes128gcm_sha256_low) ? "minicrypto" : "other",
             (using_aes128gcm_sha256_low) ? "minicrypto" : "other");
         ret = -1;
