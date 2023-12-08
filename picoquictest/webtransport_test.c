@@ -124,6 +124,7 @@ static int picowt_baton_test_one(
             ret = 1;
         }
         else {
+            h3zero_cb->no_print = 1;
             picoquic_set_callback(test_ctx->cnx_client, h3zero_callback, h3zero_cb);
             /* Initialize the callback context. First, create a bidir stream */
             wt_baton_ctx_init(&baton_ctx, h3zero_cb, NULL, NULL);
