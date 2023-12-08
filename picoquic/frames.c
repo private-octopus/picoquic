@@ -2041,7 +2041,6 @@ uint8_t* picoquic_copy_single_stream_frame_for_retransmit(picoquic_cnx_t* cnx, p
 uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
     uint8_t* bytes_next, uint8_t* bytes_max, uint64_t current_priority, int* more_data, int* is_pure_ack)
 {
-    uint8_t* bytes_first;
     int more_retransmit = 0;
     int packet_dequeued = 0;
     picoquic_packet_t* packet = NULL;
@@ -2055,7 +2054,6 @@ uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
             break;
         }
         else {
-            bytes_first = bytes_next;
             more_retransmit = 0;
             bytes_next = picoquic_copy_single_stream_frame_for_retransmit(cnx, packet, 
                 bytes_next, bytes_max, current_priority, &more_retransmit, &packet_dequeued, is_pure_ack);

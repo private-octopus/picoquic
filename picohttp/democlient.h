@@ -61,9 +61,9 @@ typedef struct st_picoquic_demo_stream_ctx_t {
     uint64_t post_sent;
     char* f_name;
     FILE* F; /* NULL if stream is closed or no_disk. */
-    int is_open : 1;
-    int is_file_open : 1;
-    int flow_opened : 1;
+    unsigned int is_open : 1;
+    unsigned int is_file_open : 1;
+    unsigned int flow_opened : 1;
 } picoquic_demo_client_stream_ctx_t;
 
 typedef struct st_picoquic_demo_client_callback_ctx_t {
