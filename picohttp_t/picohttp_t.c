@@ -268,6 +268,7 @@ int main(int argc, char** argv)
             if (optind >= argc) {
                 for (size_t i = 0; i < nb_tests; i++) {
                     if (test_status[i] == test_not_run) {
+                        fprintf(stdout, "Test number %d: %s\n", (int)i, test_table[i].test_name);
                         nb_test_tried++;
                         if (do_one_test(i, stdout) != 0) {
                             test_status[i] = test_failed;
@@ -293,6 +294,7 @@ int main(int argc, char** argv)
                     }
                     else {
                         nb_test_tried++;
+                        fprintf(stdout, "Test number %d: %s\n", (int)test_number, test_table[test_number].test_name);
                         if (do_one_test(test_number, stdout) != 0) {
                             test_status[test_number] = test_failed;
                             nb_test_failed++;
