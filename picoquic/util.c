@@ -1015,6 +1015,19 @@ int picoquic_create_thread(picoquic_thread_t * thread, picoquic_thread_fn thread
     return ret;
 }
 
+int picoquic_wait_thread(picoquic_thread_t thread)
+{
+    int ret = 0;
+#ifdef _WINDOWS
+    if (WaitForSingleObject(thread, INFINITE) == WAIT_TIMEOUT) {
+        ret = -1;
+    }
+#else
+    ret = pthread_join(thread, NULL);
+#endif
+    return ret;
+}
+
 void picoquic_delete_thread(picoquic_thread_t * thread)
 {
 #ifdef _WINDOWS
@@ -1032,6 +1045,7 @@ void picoquic_delete_thread(picoquic_thread_t * thread)
     }
 #endif
 }
+
 
 int picoquic_create_mutex(picoquic_mutex_t * mutex)
 {
