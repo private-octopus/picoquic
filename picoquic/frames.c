@@ -958,7 +958,9 @@ static int add_chunk_node(picoquic_quic_t * quic, picosplay_tree_t* tree, uint64
         }
         else {
             node->bytes = node->data;
-            memcpy(node->data, bytes, length);
+            /* Using memmove instead of memcpy, because the algorithm will
+             * sometimes try to "pack" frames from same packet. */
+            memmove(node->data, bytes, length);
             node->offset = offset;
             node->length = length;
         }
@@ -1665,7 +1667,8 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
  * Update is_pure_ack if formated frames require ack
  * Set stream_tried_and_failed if there was nothing to send, indicating the app limited condition.
  */
-uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes_next, uint8_t* bytes_max, int* more_data,
+uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes_next, uint8_t* bytes_max,
+    uint64_t current_priority, int* more_data,
     int* is_pure_ack, int* stream_tried_and_failed, int* ret)
 {
     uint8_t* bytes_previous = bytes_next;
@@ -1673,15 +1676,14 @@ uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_p
         (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)?path_x: NULL);
     int more_stream_data = 0;
 
-    while (*ret == 0 && stream != NULL && bytes_next < bytes_max) {
+    while (*ret == 0 && stream != NULL && stream->stream_priority <= current_priority && bytes_next < bytes_max) {
         int is_still_active = 0;
         bytes_next = picoquic_format_stream_frame(cnx, stream, bytes_next, bytes_max, &more_stream_data, is_pure_ack, &is_still_active, ret);
 
         if (*ret == 0) {
-            if (bytes_next + 17 < bytes_max) {
-                stream = picoquic_find_ready_stream(cnx);
-            }
-            else {
+            stream = picoquic_find_ready_stream_path(cnx,
+                (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)?path_x: NULL);
+            if (stream != NULL && bytes_next + 17 >= bytes_max) {
                 more_stream_data = 1;
                 break;
             }
@@ -1692,58 +1694,169 @@ uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_p
     }
 
     *stream_tried_and_failed = (!more_stream_data && bytes_next == bytes_previous);
+
+    if (!more_stream_data && current_priority != UINT64_MAX) {
+        more_stream_data |= (picoquic_find_ready_stream_path(cnx, NULL) != NULL);
+    }
+
     *more_data |= more_stream_data;
 
     return bytes_next;
 }
 
-/* Handling of queue of packets containing data frames that 
- * should be resent, unless somehow acknowledged before that.
+/* Organize the queue of packets containing stream data as a splay.
+* TODO: replace cnx->data_repeat_last and cnx->data_repeat_first by
+* root of splay.
+* Replace packet->data_repeat_next and packet->data_repeat_previous
+* by leaf of splay.
  */
 
-void picoquic_queue_data_repeat_packet(
-    picoquic_cnx_t* cnx, picoquic_packet_t* packet)
+ /* When packets containing stream data are deemed lost, they are
+ * chained in the "steam data queue". The queue is managed as
+ * a splay, ordered by stream priority, stream id and offset.
+ */
+static picosplay_node_t*picoquic_queue_data_repeat_node_create(void* value)
 {
-    packet->data_repeat_next = NULL;
-    packet->data_repeat_previous = NULL;
-    if (cnx->data_repeat_last == NULL) {
-        cnx->data_repeat_first = packet;
-        cnx->data_repeat_last = packet;
-    }
-    else {
-        packet->data_repeat_previous = cnx->data_repeat_last;
-        cnx->data_repeat_last->data_repeat_next = packet;
-        cnx->data_repeat_last = packet;
-    }
-    packet->data_repeat_frame = packet->offset;
-    packet->data_repeat_index = packet->offset;
-    packet->is_queued_for_data_repeat = 1;
+    return &((picoquic_packet_t*)value)->queue_data_repeat_node;
 }
 
-void picoquic_dequeue_data_repeat_packet(
-    picoquic_cnx_t* cnx, picoquic_packet_t* packet)
+void* picoquic_queue_data_repeat_node_value(picosplay_node_t* node)
 {
-    if (packet->data_repeat_previous == NULL) {
-        cnx->data_repeat_first = packet->data_repeat_next;
+    return (void*)((char*)node - offsetof(struct st_picoquic_packet_t, queue_data_repeat_node));
+}
+
+
+int64_t picoquic_queue_data_repeat_compare(void* l, void* r)
+{
+    picoquic_packet_t* lp = (picoquic_packet_t*)picoquic_queue_data_repeat_node_value(l);
+    picoquic_packet_t* rp = (picoquic_packet_t*)picoquic_queue_data_repeat_node_value(r);
+    int64_t ret = 0;
+    /* TODO: comparison function is wrong, because the "data_repeat_frame" value
+     * varies over time. Also, the result may not be unique.
+     */
+
+    /* Lower means more urgent, goes in front */
+    if (lp->data_repeat_priority > rp->data_repeat_priority) {
+        ret = 1;
+    }
+    else if (lp->data_repeat_priority < rp->data_repeat_priority) {
+        ret = -1;
     }
     else {
-        packet->data_repeat_previous->data_repeat_next = packet->data_repeat_next;
+        ret = lp->data_repeat_stream_id - rp->data_repeat_stream_id;
+        if (ret == 0) {
+            ret = lp->data_repeat_stream_offset - rp->data_repeat_stream_offset;
+            if (ret == 0) {
+                /* largest length goes in front */
+                ret = rp->data_repeat_stream_data_length - lp->data_repeat_stream_data_length;
+            }
+        }
     }
 
-    if (packet->data_repeat_next == NULL) {
-        cnx->data_repeat_last = packet->data_repeat_previous;
-    }
-    else {
-        packet->data_repeat_next->data_repeat_previous = packet->data_repeat_previous;
-    }
+    return ret;
+}
 
+void picoquic_queue_data_repeat_delete(void* tree, picosplay_node_t* node)
+{
     /* Packets can be queued simultaneously for data repeat and 
-     * for detection of spurious losses, so should only be recycled
-     * when removed from both queues */
+    * for detection of spurious losses, so should only be recycled
+    * when removed from both queues */
+    picoquic_packet_t* packet = (picoquic_packet_t*)picoquic_queue_data_repeat_node_value(node);
+    picoquic_cnx_t * cnx = (picoquic_cnx_t *)((void *)((char*)tree - offsetof(struct st_picoquic_cnx_t, queue_data_repeat_tree)));
+
     packet->is_queued_for_data_repeat = 0;
     if (!packet->is_queued_for_spurious_detection) {
         picoquic_recycle_packet(cnx->quic, packet);
     }
+}
+
+void picoquic_queue_data_repeat_init(picoquic_cnx_t* cnx) {
+    picosplay_init_tree(&cnx->queue_data_repeat_tree, picoquic_queue_data_repeat_compare,
+        picoquic_queue_data_repeat_node_create, picoquic_queue_data_repeat_delete, picoquic_queue_data_repeat_node_value);
+} 
+
+/* Handling of queue of packets containing data frames that 
+ * should be resent, unless somehow acknowledged before that.
+ */
+
+void picoquic_dequeue_data_repeat_packet(
+    picoquic_cnx_t* cnx, picoquic_packet_t* packet)
+{
+    picosplay_delete_hint(&cnx->queue_data_repeat_tree, &packet->queue_data_repeat_node);
+}
+
+int picoquic_queue_data_repeat_adjust(picoquic_cnx_t* cnx, picoquic_packet_t* packet)
+{
+    int ret = 0;
+    while (packet->data_repeat_frame < packet->length) {
+        uint8_t* data_byte = packet->bytes + packet->data_repeat_frame;
+        if (*data_byte >= picoquic_frame_type_stream_range_min && *data_byte <= picoquic_frame_type_stream_range_max) {
+            /* next frame is a stream data frame. Make sure that the pointers point to it,
+            * and adjust the packet priority */
+            size_t consumed;
+            int fin;
+
+            packet->data_repeat_priority = 0;
+            packet->data_repeat_stream_id = 0;
+            packet->data_repeat_stream_offset = 0;
+            packet->data_repeat_stream_data_length = 0;
+
+            if (picoquic_parse_stream_header(data_byte, packet->length - packet->data_repeat_frame,
+                &packet->data_repeat_stream_id, &packet->data_repeat_stream_offset, 
+                &packet->data_repeat_stream_data_length, &fin, &consumed) == 0) {
+                /* Find the stream and its priority */
+                picoquic_stream_head_t* stream = picoquic_find_stream(cnx, packet->data_repeat_stream_id);
+                if (stream == NULL) {
+                    packet->data_repeat_priority = 0;
+                }
+                else {
+                    packet->data_repeat_priority = stream->stream_priority;
+                }
+            }
+            else {
+                /* Malformed packet, internal error */
+                ret = -1;
+            }
+            break;
+        }
+        else {
+            int forget_about_ack = 0;
+            size_t consumed = 0;
+            if (picoquic_skip_frame(data_byte, packet->length - packet->data_repeat_frame, &consumed, &forget_about_ack) != 0) {
+                /* Malformed frame, internal error! */
+                ret = -1;
+                break;
+            }
+            else {
+                packet->data_repeat_frame += consumed;
+                packet->data_repeat_index = packet->data_repeat_frame;
+            }
+        }
+    }
+    return ret;
+}
+
+void picoquic_queue_data_repeat_packet(
+    picoquic_cnx_t* cnx, picoquic_packet_t* packet)
+{
+    if (!packet->is_queued_for_data_repeat) {
+        /* The stream frame, stream ID, priority are reset in the packet
+         * header by the call to picoquic_queue_data_repeat_adjust */
+        packet->data_repeat_frame = packet->offset;
+        packet->data_repeat_index = packet->offset;
+        if (picoquic_queue_data_repeat_adjust(cnx, packet) == 0 &&
+            packet->data_repeat_frame < packet->length) {
+            picosplay_insert(&cnx->queue_data_repeat_tree, packet);
+            packet->is_queued_for_data_repeat = 1;
+        }
+    }
+}
+
+picoquic_packet_t* picoquic_first_data_repeat_packet(picoquic_cnx_t* cnx)
+{
+    picosplay_node_t * first_node = picosplay_first(&cnx->queue_data_repeat_tree);
+    picoquic_packet_t* first_packet = (first_node == NULL) ? NULL : picoquic_queue_data_repeat_node_value(first_node);
+    return first_packet;
 }
 
 /* Copy stream frame from packet to specified buffer, and update the
@@ -1862,61 +1975,100 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
     return bytes_next;
 }
 
-uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
-    uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack)
+/* Copying a frame will:
+* 1- Copy the bytes from the stream frame.
+* 2- If this does not exhaust the frame, reset the "index", return.
+* 3- If this does exhaust the frame:
+*    - Remove the packet from the splay, because the order will change
+*    - Try to adjust the packet.
+*    - If there is a second stream frame, re-insert the packet,
+*      if not, recycle it, exit the per packet logic.
+* 
+* The function picoquic_copy_stream_frames_for_retransmit will
+* make repeated calls to picoquic_copy_single_stream_frame_for_retransmit,
+* until the packet is full or all frames at the specified priority
+* level have been copied.
+*/
+uint8_t* picoquic_copy_single_stream_frame_for_retransmit(picoquic_cnx_t* cnx, picoquic_packet_t* packet,
+    uint8_t* bytes_next, uint8_t* bytes_max, uint64_t current_priority, int* more_data, int * packet_dequeued, int* is_pure_ack)
 {
     /* Assume that the "data_repeat_frame" and "data_repeat_index are
-     * properly initialized when the packet is placed in the queue */
-    picoquic_packet_t* packet = cnx->data_repeat_first;
-
-    while (packet != NULL && bytes_next < bytes_max) {
-        if (packet->data_repeat_frame < packet->length) {
-            size_t last_frame = packet->data_repeat_frame;
-            size_t last_index = packet->data_repeat_index;
-            uint8_t* data_byte = packet->bytes + packet->data_repeat_frame;
-            if (*data_byte >= picoquic_frame_type_stream_range_min && *data_byte <= picoquic_frame_type_stream_range_max) {
-                /* next frame is a stream data frame. Try to add its content */
-                uint8_t* bytes_first = bytes_next;
-                bytes_next = picoquic_copy_stream_frame_for_retransmit(cnx, packet, bytes_next, bytes_max);
-                if (bytes_next == NULL) {
-                    /* Something bad happened */
-                    break;
-                }
-                else if (bytes_next > bytes_first) {
-                    /* added something */
-                    *is_pure_ack &= 0;
-                }
-                else if (packet->data_repeat_frame == last_frame && packet->data_repeat_index == last_index) {
-                    /* Nothing added, no progress means there was not enough space */
-                    *more_data |= 1;
-                    break;
-                }
+    * properly initialized when the packet is placed in the queue */
+    size_t last_frame = packet->data_repeat_frame;
+    if (packet->data_repeat_frame < packet->length) {
+        /* Copy the current stream frame. */
+        uint8_t* data_byte = packet->bytes + packet->data_repeat_frame;
+        if (*data_byte >= picoquic_frame_type_stream_range_min && *data_byte <= picoquic_frame_type_stream_range_max) {
+            /* next frame is a stream data frame. Try to add its content */
+            uint8_t* bytes_first = bytes_next;
+            bytes_next = picoquic_copy_stream_frame_for_retransmit(cnx, packet, bytes_next, bytes_max);
+            if (bytes_next != NULL && bytes_next > bytes_first) {
+                /* added something */
+                *is_pure_ack &= 0;
             }
-            else {
-                int forget_about_ack = 0;
-                size_t consumed = 0;
-                if (picoquic_skip_frame(data_byte, packet->length - packet->data_repeat_frame, &consumed, &forget_about_ack) != 0) {
-                    /* Internal error! */
-                    bytes_next = NULL;
-                    break;
-                }
-                else {
-                    packet->data_repeat_frame += consumed;
-                    packet->data_repeat_index = packet->data_repeat_frame;
-                }
-            }
-        }
-        if (packet->data_repeat_frame >= packet->length) {
-            /* This packet is fully consumed */
-            picoquic_dequeue_data_repeat_packet(cnx, packet);
-            packet = cnx->data_repeat_first;
         }
     }
+    /* Adjust to the next stream data boundary */
+    if (packet->data_repeat_frame < packet->length &&
+        picoquic_queue_data_repeat_adjust(cnx, packet) != 0) {
+        /* signal an error */
+        bytes_next = NULL;
+    }
+    /* Check whether the packet is completely processed, and can be dequeued */
+    if (packet->data_repeat_frame >= packet->length) {
+        /* Nothing left in this pasket. It can be safely dequeued */
+        picoquic_dequeue_data_repeat_packet(cnx, packet);
+        *packet_dequeued = 1;
+    }
+    else if (packet->data_repeat_frame > last_frame) {
+        /* There is another stream frame after this one.  Dequeue with
+        * caution, then requeue */
+        int was_queued = packet->is_queued_for_spurious_detection;
+        packet->is_queued_for_spurious_detection = 1;
+        picosplay_delete_hint(&cnx->queue_data_repeat_tree, &packet->queue_data_repeat_node);
+        packet->is_queued_for_spurious_detection = was_queued;
+        (void)picosplay_insert(&cnx->queue_data_repeat_tree, packet);
+        packet->is_queued_for_data_repeat = 1;
+        *more_data |= 1;
+    }
+    else {
+        *more_data |= 1;
+    }
 
-    *more_data |= (cnx->data_repeat_first != NULL);
+    return (bytes_next);
+}
+
+uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
+    uint8_t* bytes_next, uint8_t* bytes_max, uint64_t current_priority, int* more_data, int* is_pure_ack)
+{
+    int more_retransmit = 0;
+    int packet_dequeued = 0;
+    picoquic_packet_t* packet = NULL;
+    do {
+        packet_dequeued = 0;
+        packet = picoquic_first_data_repeat_packet(cnx);
+        if (packet == NULL) {
+            break;
+        } else if (packet->data_repeat_priority > current_priority) {
+            more_retransmit = 1;
+            break;
+        }
+        else {
+            more_retransmit = 0;
+            bytes_next = picoquic_copy_single_stream_frame_for_retransmit(cnx, packet, 
+                bytes_next, bytes_max, current_priority, &more_retransmit, &packet_dequeued, is_pure_ack);
+        }
+    } while (bytes_next != NULL && packet_dequeued /* bytes_first < bytes_next */ && bytes_next < bytes_max);
+
+    if (packet_dequeued) {
+        more_retransmit = (picoquic_first_data_repeat_packet(cnx) != NULL);
+    }
+
+    *more_data |= more_retransmit;
 
     return bytes_next;
 }
+
 
 /*
  * Crypto HS frames
@@ -5263,7 +5415,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
 {
     const uint8_t *bytes_max = bytes + bytes_maxsize;
     int ack_needed = 0;
-    int is_path_validating_packet = 1; /* Will be set to zero if non validating frame received */
+    int is_path_probing_packet = 1; /* Will be set to zero if non probing frame received */
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
     picoquic_packet_data_t packet_data;
 
@@ -5271,7 +5423,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
 
     while (bytes != NULL && bytes < bytes_max) {
         uint8_t first_byte = bytes[0];
-        int is_path_validating_frame = 0;
+        int is_path_probing_frame = 0;
 
         if (PICOQUIC_IN_RANGE(first_byte, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             if (epoch != picoquic_epoch_0rtt && epoch != picoquic_epoch_1rtt) {
@@ -5330,7 +5482,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
         else {
             switch (first_byte) {
             case picoquic_frame_type_padding:
-                is_path_validating_frame = 1;
+                is_path_probing_frame = 1;
                 bytes = picoquic_skip_0len_frame(bytes, bytes_max);
                 break;
             case picoquic_frame_type_reset_stream:
@@ -5376,7 +5528,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_new_connection_id:
-                is_path_validating_frame = 1;
+                is_path_probing_frame = 1;
                 bytes = picoquic_decode_new_connection_id_frame(cnx, bytes, bytes_max, current_time);
                 ack_needed = 1;
                 break;
@@ -5385,12 +5537,12 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_path_challenge:
-                is_path_validating_frame = 1;
+                is_path_probing_frame = 1;
                 bytes = picoquic_decode_path_challenge_frame(cnx, bytes, bytes_max, 
                     (path_is_not_allocated)?NULL:path_x, addr_from, addr_to);
                 break;
             case picoquic_frame_type_path_response:
-                is_path_validating_frame = 1;
+                is_path_probing_frame = 1;
                 bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max,
                     (path_is_not_allocated) ? NULL : path_x, current_time);
                 break;
@@ -5496,8 +5648,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 break;
             }
             }
-            is_path_validating_packet &= is_path_validating_frame;
         }
+        is_path_probing_packet &= is_path_probing_frame;
     }
 
     if (bytes != NULL) {
@@ -5508,8 +5660,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
             picoquic_set_ack_needed(cnx, current_time, pc, path_x->p_local_cnxid, 0);
         }
 
-        if (epoch == picoquic_epoch_1rtt && !is_path_validating_packet && pn64 > path_x->last_non_validating_pn) {
-            path_x->last_non_validating_pn = pn64;
+        if (epoch == picoquic_epoch_1rtt && !is_path_probing_packet && pn64 > path_x->last_non_path_probing_pn) {
+            path_x->last_non_path_probing_pn = pn64;
         }
     }
 
