@@ -2306,7 +2306,7 @@ int dataqueue_packet_test_iterate(int test_id, picoquic_cnx_t* cnx, size_t buffe
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     int more_data = 0;
     int is_pure_ack = 1;
-    uint8_t* next_bytes = picoquic_copy_stream_frames_for_retransmit(cnx, buffer, buffer + buffer_size, &more_data, &is_pure_ack);
+    uint8_t* next_bytes = picoquic_copy_stream_frames_for_retransmit(cnx, buffer, buffer + buffer_size, UINT64_MAX, &more_data, &is_pure_ack);
 
     if (next_bytes == NULL) {
         DBG_PRINTF("Test %d, returns NULL", test_id);

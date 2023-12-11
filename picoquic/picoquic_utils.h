@@ -210,6 +210,7 @@ typedef struct st_picoquic_event_t {
 #endif
 
 int picoquic_create_thread(picoquic_thread_t* thread, picoquic_thread_fn thread_fn, void* arg);
+int picoquic_wait_thread(picoquic_thread_t thread);
 void picoquic_delete_thread(picoquic_thread_t* thread);
 
 int picoquic_create_mutex(picoquic_mutex_t* mutex);
