@@ -819,7 +819,6 @@ void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max)
 void picoquic_set_cwin_min(picoquic_quic_t* quic, uint64_t cwin_min)
 {
     quic->cwin_min = (cwin_min > quic->cwin_max || cwin_min < PICOQUIC_MAX_PACKET_SIZE) ? PICOQUIC_CWIN_MINIMUM : cwin_min;
-    fprintf(stderr, "cwin value: %" PRIu64 "\n", quic->cwin_min);
 }
 
 void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data)
