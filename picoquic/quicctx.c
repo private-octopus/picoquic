@@ -835,10 +835,9 @@ void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data)
     }
 }
 
-void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout)
+void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout_ms)
 {
-    quic->default_idle_timeout = idle_timeout;
-    quic->default_tp.idle_timeout = idle_timeout;
+    quic->default_tp.idle_timeout = idle_timeout_ms;
 }
 
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max)

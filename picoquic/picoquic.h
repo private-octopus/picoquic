@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.16.0"
+#define PICOQUIC_VERSION "1.1.16.1"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -642,7 +642,7 @@ void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max);
 void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data);
 
 /* Set the idle timeout parameter for the context. Value is in milliseconds. */
-void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout);
+void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout_ms);
 
 /* Set the length of a crypto epoch -- force rotation after that many packets sent */
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max);

@@ -618,3 +618,124 @@ int ec9a_preemptive_amok_test()
 
     return ret;
 }
+
+/* testing the negotiation of the idle timeout.
+*/
+int idle_timeout_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t server_timeout, uint64_t expected_timeout)
+{
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_connection_id_t initial_cid = { { 0x41, 0x9e, 0x00, 0x94, 0, 0, 0, 0}, 8 };
+    uint64_t latency = 17000;
+    uint64_t half_time = (expected_timeout == UINT64_MAX) ? 20000000 : (expected_timeout / 2);
+    uint64_t full_time = (expected_timeout == UINT64_MAX) ? 600000000 : (half_time + 100000);
+    int ret = 0;
+
+    initial_cid.id[4] = test_id;
+
+    /* Create the test context */
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    }
+    /* Set the binlog */
+    if (ret == 0) {
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        /* Set the timeout */
+        picoquic_set_default_idle_timeout(test_ctx->qclient, client_timeout);
+        picoquic_set_default_idle_timeout(test_ctx->qserver, server_timeout);
+        /* Directly set the timeout in the client parameters,
+           because the connection context is already created */
+        test_ctx->cnx_client->local_parameters.idle_timeout = client_timeout;
+    }
+
+    /* Do the connection */
+    if (ret == 0) {
+        test_ctx->cnx_client->max_early_data_size = 0;
+
+        if ((ret = picoquic_start_client_cnx(test_ctx->cnx_client)) == 0) {
+            ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        }
+    }
+
+    /* Verify the timer negotiation */
+    if (ret == 0) {
+        if (test_ctx->cnx_client->local_parameters.idle_timeout != client_timeout) {
+            DBG_PRINTF("Idle timeout test %d. Client parameter set to %" PRIu64 " instead of %" PRIu64 "\n",
+                test_id, test_ctx->cnx_client->local_parameters.idle_timeout, client_timeout);
+            ret = -1;
+        }
+        if (test_ctx->cnx_server->local_parameters.idle_timeout != server_timeout) {
+            DBG_PRINTF("Idle timeout test %d. Server parameter set to %" PRIu64 " instead of %" PRIu64 "\n",
+                test_id, test_ctx->cnx_server->local_parameters.idle_timeout, server_timeout);
+            ret = -1;
+        }
+        if (test_ctx->cnx_client->idle_timeout != expected_timeout) {
+            DBG_PRINTF("Idle timeout test %d. Client negotiated %" PRIu64 " instead of %" PRIu64 "\n",
+                test_id, test_ctx->cnx_client->idle_timeout, expected_timeout);
+            ret = -1;
+        }
+        if (test_ctx->cnx_server->idle_timeout != expected_timeout) {
+            DBG_PRINTF("Idle timeout test %d. Server negotiated %" PRIu64 " instead of %" PRIu64 "\n",
+                test_id, test_ctx->cnx_server->idle_timeout, expected_timeout);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Wait for half time. Expectation: connections are still up */
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, half_time);
+        if (ret != 0 || !((TEST_CLIENT_READY && TEST_SERVER_READY))) {
+            DBG_PRINTF("Idle timeout test %d. Broke early, time = %" PRIu64 "\n", test_id, simulated_time);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Wait for full time. Expectation: connections are down, unless timeout == 0 */
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, full_time);
+
+        if (ret == 0){
+            if (TEST_CLIENT_READY && TEST_SERVER_READY) {
+                if (expected_timeout != UINT64_MAX) {
+                    DBG_PRINTF("Idle timeout test %d. Waited too long, time = %" PRIu64 "\n", test_id, simulated_time);
+                    ret = -1;
+                }
+            }
+            else {
+                if (expected_timeout == UINT64_MAX) {
+                    DBG_PRINTF("Idle timeout test %d. Broke early, time = %" PRIu64 "\n", test_id, simulated_time);
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int idle_timeout_test()
+{
+    int ret = 0;
+
+    if ((ret = idle_timeout_test_one(1, 30000, 30000, 30000000)) == 0 &&
+        (ret = idle_timeout_test_one(2, 60000, 20000, 20000000)) == 0 &&
+        (ret = idle_timeout_test_one(3, 20000, 60000, 20000000)) == 0 &&
+        (ret = idle_timeout_test_one(4, 5000, 300000, 5000000)) == 0 &&
+        (ret = idle_timeout_test_one(5, 300000, 5000, 5000000)) == 0 &&
+        (ret = idle_timeout_test_one(6, 0, 5000, 5000000)) == 0 &&
+        (ret = idle_timeout_test_one(7, 0, 60000, 60000000)) == 0 &&
+        (ret = idle_timeout_test_one(8, 5000, 0, 5000000)) == 0 &&
+        (ret = idle_timeout_test_one(9, 60000, 0, 60000000)) == 0 &&
+        (ret = idle_timeout_test_one(10, 0, 0, UINT64_MAX)) == 0) {
+        DBG_PRINTF("All idle timeout tests pass.\n");
+    }
+    return ret;
+}
