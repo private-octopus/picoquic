@@ -738,3 +738,118 @@ int idle_timeout_test()
     }
     return ret;
 }
+
+/* Testing that connection attempt against a non responding server
+ * finishes after the timeout value.
+ */
+
+int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t expected_timeout)
+{
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_connection_id_t initial_cid = { { 0x41, 0x9e, 0xc0, 0x99, 0, 0, 0, 0}, 8 };
+    uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
+    int ret = 0;
+
+    initial_cid.id[4] = test_id;
+
+    /* Create the test context */
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    }
+
+    /* Set the binlog */
+    if (ret == 0) {
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        /* Set the timeout */
+        picoquic_set_default_idle_timeout(test_ctx->qclient, client_timeout);
+        /* Directly set the timeout in the client parameters,
+        because the connection context is already created */
+        test_ctx->cnx_client->local_parameters.max_idle_timeout = client_timeout;
+        /* Start the client */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* Run a simulation loop -- the server never responds. */
+    if (ret == 0) {
+        int nb_trials = 0;
+        while (ret == 0 && simulated_time < expected_timeout) {
+            size_t send_length = 0;
+            struct sockaddr_storage addr_to;
+            struct sockaddr_storage addr_from;
+
+            ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time,
+                send_buffer, sizeof(send_buffer), &send_length,
+                &addr_to, &addr_from, 0, NULL);
+            if (ret != 0) {
+                break;
+            }
+            else if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected) {
+                break;
+            }
+            else if (simulated_time > test_ctx->cnx_client->next_wake_time) {
+                DBG_PRINTF("Idle server test %d. Bug, simulation is walking back in time.", test_id);
+                ret = -1;
+            }
+            else if (nb_trials >= 512) {
+                DBG_PRINTF("Idle server test %d. Bug, simulation exceeds %d steps.", test_id, nb_trials);
+                ret = -1;
+            }
+            else {
+                nb_trials++;
+                simulated_time = test_ctx->cnx_client->next_wake_time;
+            }
+        }
+    }
+
+    if ((ret == 0 && test_ctx->cnx_client->cnx_state == picoquic_state_disconnected) ||
+        ret == PICOQUIC_ERROR_DISCONNECTED) {
+        if (client_timeout == 0) {
+            if (simulated_time < PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
+                DBG_PRINTF("Idle server test %d. Client broke early, time = %" PRIu64 "\n", test_id, simulated_time);
+                ret = -1;
+            }
+            else {
+                ret = 0;
+            }
+        }
+        else if (simulated_time < client_timeout) {
+            DBG_PRINTF("Idle server test %d. Client broke early, time = %" PRIu64 "\n", test_id, simulated_time);
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+    else if (ret == 0){
+        if (client_timeout != 0 || simulated_time >= PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
+            DBG_PRINTF("Idle server test %d. Client did not disconnect, time = %" PRIu64 "\n", test_id, simulated_time);
+            ret = -1;
+        }
+    }
+    else {
+        DBG_PRINTF("Idle server test %d. ret=0x%x, time = %" PRIu64 "\n", ret, test_id, simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int idle_server_test()
+{
+    int ret = 0;
+
+    if ((ret = idle_server_test_one(1, 30000, 30100000)) == 0 &&
+        (ret = idle_server_test_one(2, 60000, 60100000)) == 0 &&
+        (ret = idle_server_test_one(3, 5000, 5100000)) == 0 &&
+        (ret = idle_server_test_one(4, 0, 30100000)) == 0) {
+        DBG_PRINTF("%s", "All idle timeout tests pass.\n");
+    }
+    return ret;
+}

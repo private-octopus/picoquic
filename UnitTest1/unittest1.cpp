@@ -1607,6 +1607,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(idle_server)
+        {
+            int ret = idle_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(idle_timeout)
         {
             int ret = idle_timeout_test();
