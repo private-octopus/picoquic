@@ -837,7 +837,7 @@ void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data)
 
 void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout_ms)
 {
-    quic->default_tp.idle_timeout = idle_timeout_ms;
+    quic->default_tp.max_idle_timeout = idle_timeout_ms;
 }
 
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max)
@@ -1223,7 +1223,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->initial_max_data = 0x100000;
     tp->initial_max_stream_id_bidir = 512;
     tp->initial_max_stream_id_unidir = 512;
-    tp->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000;
+    tp->max_idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000;
     tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
     tp->max_datagram_frame_size = 0;
     tp->ack_delay_exponent = 3;
@@ -4554,7 +4554,7 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
         uint64_t idle_timeout = cnx->idle_timeout;
         if (idle_timeout == 0) {
             /* Idle timeout is only initialized after parameters are negotiated  */
-            idle_timeout = cnx->local_parameters.idle_timeout * 1000ull;
+            idle_timeout = cnx->local_parameters.max_idle_timeout * 1000ull;
         }
         /* Ensure at least 3 PTO*/
         if (idle_timeout < 3 * cnx->path[0]->retransmit_timer) {

@@ -627,7 +627,6 @@ int idle_timeout_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t ser
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_connection_id_t initial_cid = { { 0x41, 0x9e, 0x00, 0x94, 0, 0, 0, 0}, 8 };
-    uint64_t latency = 17000;
     uint64_t half_time = (expected_timeout == UINT64_MAX) ? 20000000 : (expected_timeout / 2);
     uint64_t full_time = (expected_timeout == UINT64_MAX) ? 600000000 : (half_time + 100000);
     int ret = 0;
@@ -648,7 +647,7 @@ int idle_timeout_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t ser
         picoquic_set_default_idle_timeout(test_ctx->qserver, server_timeout);
         /* Directly set the timeout in the client parameters,
            because the connection context is already created */
-        test_ctx->cnx_client->local_parameters.idle_timeout = client_timeout;
+        test_ctx->cnx_client->local_parameters.max_idle_timeout = client_timeout;
     }
 
     /* Do the connection */
@@ -662,14 +661,14 @@ int idle_timeout_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t ser
 
     /* Verify the timer negotiation */
     if (ret == 0) {
-        if (test_ctx->cnx_client->local_parameters.idle_timeout != client_timeout) {
+        if (test_ctx->cnx_client->local_parameters.max_idle_timeout != client_timeout) {
             DBG_PRINTF("Idle timeout test %d. Client parameter set to %" PRIu64 " instead of %" PRIu64 "\n",
-                test_id, test_ctx->cnx_client->local_parameters.idle_timeout, client_timeout);
+                test_id, test_ctx->cnx_client->local_parameters.max_idle_timeout, client_timeout);
             ret = -1;
         }
-        if (test_ctx->cnx_server->local_parameters.idle_timeout != server_timeout) {
+        if (test_ctx->cnx_server->local_parameters.max_idle_timeout != server_timeout) {
             DBG_PRINTF("Idle timeout test %d. Server parameter set to %" PRIu64 " instead of %" PRIu64 "\n",
-                test_id, test_ctx->cnx_server->local_parameters.idle_timeout, server_timeout);
+                test_id, test_ctx->cnx_server->local_parameters.max_idle_timeout, server_timeout);
             ret = -1;
         }
         if (test_ctx->cnx_client->idle_timeout != expected_timeout) {
@@ -735,7 +734,7 @@ int idle_timeout_test()
         (ret = idle_timeout_test_one(8, 5000, 0, 5000000)) == 0 &&
         (ret = idle_timeout_test_one(9, 60000, 0, 60000000)) == 0 &&
         (ret = idle_timeout_test_one(10, 0, 0, UINT64_MAX)) == 0) {
-        DBG_PRINTF("All idle timeout tests pass.\n");
+        DBG_PRINTF("%s", "All idle timeout tests pass.\n");
     }
     return ret;
 }
