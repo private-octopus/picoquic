@@ -840,6 +840,11 @@ void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_time
     quic->default_tp.max_idle_timeout = idle_timeout_ms;
 }
 
+void picoquic_set_default_handshake_timeout(picoquic_quic_t* quic, uint64_t handshake_timeout_us)
+{
+    quic->default_handshake_timeout = handshake_timeout_us;
+}
+
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max)
 {
     quic->crypto_epoch_length_max = (crypto_epoch_length_max == 0) ?

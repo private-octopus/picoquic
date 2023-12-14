@@ -3860,6 +3860,9 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
             idle_timer = UINT64_MAX;
         }
     }
+    else if (cnx->quic->default_handshake_timeout > 0) {
+        idle_timer = cnx->start_time + cnx->quic->default_handshake_timeout;
+    }
     else if (cnx->local_parameters.max_idle_timeout > 0) {
         idle_timer = cnx->start_time + cnx->local_parameters.max_idle_timeout*1000ull;
     }

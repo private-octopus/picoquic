@@ -743,16 +743,26 @@ int idle_timeout_test()
  * finishes after the timeout value.
  */
 
-int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t expected_timeout)
+int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t handshake_timeout, uint64_t expected_timeout)
 {
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     uint64_t simulated_time = 0;
+    uint64_t target_timeout;
     uint64_t loss_mask = 0;
     picoquic_connection_id_t initial_cid = { { 0x41, 0x9e, 0xc0, 0x99, 0, 0, 0, 0}, 8 };
     uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
     int ret = 0;
 
     initial_cid.id[4] = test_id;
+
+    /* derive target timeout form spec */
+    target_timeout = handshake_timeout;
+    if (handshake_timeout == 0) {
+        target_timeout = client_timeout * 1000;
+        if (client_timeout == 0) {
+            target_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX;
+        }
+    }
 
     /* Create the test context */
     if (ret == 0) {
@@ -765,6 +775,9 @@ int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t expe
         picoquic_set_binlog(test_ctx->qclient, ".");
         /* Set the timeout */
         picoquic_set_default_idle_timeout(test_ctx->qclient, client_timeout);
+        if (handshake_timeout > 0) {
+            picoquic_set_default_handshake_timeout(test_ctx->qclient, handshake_timeout);
+        }
         /* Directly set the timeout in the client parameters,
         because the connection context is already created */
         test_ctx->cnx_client->local_parameters.max_idle_timeout = client_timeout;
@@ -806,28 +819,17 @@ int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t expe
 
     if ((ret == 0 && test_ctx->cnx_client->cnx_state == picoquic_state_disconnected) ||
         ret == PICOQUIC_ERROR_DISCONNECTED) {
-        if (client_timeout == 0) {
-            if (simulated_time < PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
-                DBG_PRINTF("Idle server test %d. Client broke early, time = %" PRIu64 "\n", test_id, simulated_time);
-                ret = -1;
-            }
-            else {
-                ret = 0;
-            }
-        }
-        else if (simulated_time < client_timeout) {
-            DBG_PRINTF("Idle server test %d. Client broke early, time = %" PRIu64 "\n", test_id, simulated_time);
+        if (simulated_time < target_timeout) {
+            DBG_PRINTF("Idle server test %d. Client gave up too soon, time = %" PRIu64 "\n", test_id, simulated_time);
             ret = -1;
         }
         else {
             ret = 0;
         }
     }
-    else if (ret == 0){
-        if (client_timeout != 0 || simulated_time >= PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
-            DBG_PRINTF("Idle server test %d. Client did not disconnect, time = %" PRIu64 "\n", test_id, simulated_time);
-            ret = -1;
-        }
+    else if (ret == 0) {
+        DBG_PRINTF("Idle server test %d. Client did not disconnect, time = %" PRIu64 "\n", test_id, simulated_time);
+        ret = -1;
     }
     else {
         DBG_PRINTF("Idle server test %d. ret=0x%x, time = %" PRIu64 "\n", ret, test_id, simulated_time);
@@ -845,10 +847,13 @@ int idle_server_test()
 {
     int ret = 0;
 
-    if ((ret = idle_server_test_one(1, 30000, 30100000)) == 0 &&
-        (ret = idle_server_test_one(2, 60000, 60100000)) == 0 &&
-        (ret = idle_server_test_one(3, 5000, 5100000)) == 0 &&
-        (ret = idle_server_test_one(4, 0, 30100000)) == 0) {
+    if ((ret = idle_server_test_one(1, 30000, 0, 30100000)) == 0 &&
+        (ret = idle_server_test_one(2, 60000, 0, 60100000)) == 0 &&
+        (ret = idle_server_test_one(3, 5000, 0, 5100000)) == 0 &&
+        (ret = idle_server_test_one(4, 0, 0, 30100000)) == 0 &&
+        (ret = idle_server_test_one(5, 0, 10000, 10100000)) == 0 &&
+        (ret = idle_server_test_one(6, 20000, 60000, 60100000)) == 0 &&
+        (ret = idle_server_test_one(7, 60000, 5000, 5100000)) == 0){
         DBG_PRINTF("%s", "All idle timeout tests pass.\n");
     }
     return ret;
