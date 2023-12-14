@@ -2805,6 +2805,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     uint64_t server_time = 0;
     uint64_t random_context = picohttp_random_stress_context;
     size_t nb_stress_clients = picohttp_nb_stress_clients;
+    int nb_loops = 0;
 
     ret = picoquic_store_text_addr(&server_address, "1::1", 443);
 
@@ -2873,6 +2874,13 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
         size_t client_id = nb_stress_clients;
         picoquic_quic_t* qready = NULL;
         struct sockaddr* ready_from = NULL;
+
+        nb_loops++;
+        if (nb_loops > 10000000) {
+            DBG_PRINTF("Loop detected after %d iterations", nb_loops);
+            ret = -1;
+            break;
+        }
 
         if (is_lan_ready) {
             next_time = picoquictest_sim_link_next_arrival(lan, next_time);
