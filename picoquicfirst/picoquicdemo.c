@@ -277,9 +277,6 @@ picohttp_server_path_item_t path_item_list[2] =
     }
 };
 
-
-
-
 int quic_server(const char* server_name, picoquic_quic_config_t * config, int just_once)
 {
     /* Start: start the QUIC process with cert and key files */

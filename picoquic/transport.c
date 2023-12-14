@@ -403,9 +403,9 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             cnx->local_parameters.initial_max_stream_id_bidir);
     }
 
-    if (cnx->local_parameters.idle_timeout > 0) {
+    if (cnx->local_parameters.max_idle_timeout > 0) {
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_idle_timeout,
-            cnx->local_parameters.idle_timeout);
+            cnx->local_parameters.max_idle_timeout);
     }
 
     bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_max_packet_size,
@@ -595,7 +595,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
     cnx->remote_parameters.initial_max_stream_id_bidir = 0;
     cnx->max_stream_id_bidir_remote = 0;
-    cnx->remote_parameters.idle_timeout = 0;
+    cnx->remote_parameters.max_idle_timeout = 0;
     cnx->remote_parameters.max_packet_size = 1500;
     cnx->remote_parameters.ack_delay_exponent = 3;
     cnx->remote_parameters.initial_max_stream_id_unidir = 0;
@@ -703,7 +703,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     break;
                 }
                 case picoquic_tp_idle_timeout:
-                    cnx->remote_parameters.idle_timeout = 
+                    cnx->remote_parameters.max_idle_timeout = 
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     break;
 
@@ -928,11 +928,11 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
      * If the keep alive interval was set to a too short value,
      * reset it.
      */
-    cnx->idle_timeout = cnx->local_parameters.idle_timeout*1000ull;
-    if (cnx->local_parameters.idle_timeout == 0 ||
-        (cnx->remote_parameters.idle_timeout > 0 && cnx->remote_parameters.idle_timeout < 
-            cnx->local_parameters.idle_timeout)) {
-        cnx->idle_timeout = cnx->remote_parameters.idle_timeout*1000ull;
+    cnx->idle_timeout = cnx->local_parameters.max_idle_timeout*1000ull;
+    if (cnx->local_parameters.max_idle_timeout == 0 ||
+        (cnx->remote_parameters.max_idle_timeout > 0 && cnx->remote_parameters.max_idle_timeout < 
+            cnx->local_parameters.max_idle_timeout)) {
+        cnx->idle_timeout = cnx->remote_parameters.max_idle_timeout*1000ull;
     }
     if (cnx->idle_timeout == 0) {
         cnx->idle_timeout = UINT64_MAX;
