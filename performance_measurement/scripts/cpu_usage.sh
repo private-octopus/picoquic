@@ -91,4 +91,4 @@ do
     echo -e "Killed the server \n"
 done
 
-echo -e "Experiment completed \n \m"
+echo -e "Experiment completed!! \n \n"

@@ -1,11 +1,12 @@
 '''
 File to plot the output of the dl_throughput experiment
+Authors: Milind Kumar V
 '''
 
 import pandas as pd
 import numpy as np 
 import matplotlib.pyplot as plt 
-import csv
+
 
 files = ['../throughput_dl/transfer_test_100M_results.csv',
         '../throughput_dl/transfet_test_1G_results.csv',
