@@ -23,3 +23,6 @@ Release
 *.b
 /picoquic/qlogger.c
 /picohttp_t/h3-m-www
+*.csv
+*.bin
+*.htm

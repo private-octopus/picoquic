@@ -1,7 +1,8 @@
+#!/bin/bash
+
 # Script to run the client n_iterations times for a given file 
 # (file_request) and output the results in a csv at a specified location
-
-#!/bin/bash
+# Authors: Milind Kumar V, ChatGPT
 
 # Define the number of iterations and the file request
 n_iterations=$1
