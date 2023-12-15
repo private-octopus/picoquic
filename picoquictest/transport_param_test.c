@@ -427,9 +427,9 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
             param->initial_max_stream_id_unidir, ref->initial_max_stream_id_unidir);
         ret = -1;
     }
-    else if (param->idle_timeout != ref->idle_timeout) {
+    else if (param->max_idle_timeout != ref->max_idle_timeout) {
         DBG_PRINTF("idle_timeout: got %d, expected %d\n",
-            param->idle_timeout, ref->idle_timeout);
+            param->max_idle_timeout, ref->max_idle_timeout);
         ret = -1;
     }
     else if (param->prefered_address.is_defined != ref->prefered_address.is_defined) {

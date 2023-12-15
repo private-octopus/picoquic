@@ -1266,7 +1266,7 @@ void warptest_init_transport_parameters(picoquic_tp_t* tp, int client_mode, warp
     else {
         tp->initial_max_stream_id_unidir = spec->max_streams_client;
     }
-    tp->idle_timeout = 30000;
+    tp->max_idle_timeout = 30000;
     tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE;
     tp->ack_delay_exponent = 3;
     tp->active_connection_id_limit = 4;

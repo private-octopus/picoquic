@@ -82,7 +82,7 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
     client_parameters.enable_time_stamp = 3;
-    client_parameters.idle_timeout = (uint32_t)((spec->latency * 5)/1000);
+    client_parameters.max_idle_timeout = (uint32_t)((spec->latency * 5)/1000);
     if (spec->initial_flow_control_credit > client_parameters.initial_max_data) {
         client_parameters.initial_max_data = spec->initial_flow_control_credit;
     }
@@ -95,7 +95,7 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&server_parameters, 0);
     server_parameters.enable_time_stamp = 3;
-    server_parameters.idle_timeout = client_parameters.idle_timeout;
+    server_parameters.max_idle_timeout = client_parameters.max_idle_timeout;
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
 

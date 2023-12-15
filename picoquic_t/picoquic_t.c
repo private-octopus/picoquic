@@ -271,6 +271,8 @@ static const picoquic_test_def_t test_table[] = {
     { "ec5c_silly_cid", ec5c_silly_cid_test },
     { "ec9a_preemptive_amok", ec9a_preemptive_amok_test },
     { "error_reason", error_reason_test },
+    { "idle_server", idle_server_test },
+    { "idle_timeout", idle_timeout_test },
     { "ready_to_send", ready_to_send_test },
     { "ready_to_skip", ready_to_skip_test },
     { "ready_to_zfin", ready_to_zfin_test },
