@@ -320,7 +320,7 @@ int picoquic_process_ack_of_reset_stream_frame(picoquic_cnx_t * cnx, const uint8
     } else {
         *consumed = bytes - byte_first;
         /* Find the stream */
-        if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 0)) != NULL) {
+        if ((stream = picoquic_find_or_create_stream(cnx, stream_id, !IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode))) != NULL) {
             /* mark reset as acked by peer */
             stream->reset_acked = 1;
             /* Delete stream if closed. */

@@ -876,7 +876,7 @@ int idle_server_test()
  */
 
 static test_api_stream_desc_t test_scenario_edge_reset[] = {
-     { 4, 0, 128, 1000000 }
+     { 4, 0, 1000000, 1000000 }
  };
 
 int picoquic_process_ack_of_reset_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_size, size_t* consumed);
@@ -888,7 +888,7 @@ int reset_repeat_test_one(uint8_t test_id)
     uint64_t loss_mask = 0;
     uint64_t data_stream_id = 4;
     uint64_t loop1_time = 15000;
-    uint64_t loop2_time = 100000;
+    uint64_t loop2_time = 1000000;
     picoquic_connection_id_t initial_cid = { { 0x8e, 0x5e, 0x48, 0xe9, 0, 0, 0, 0}, 8 };
     int ret = 0;
 
@@ -935,8 +935,9 @@ int reset_repeat_test_one(uint8_t test_id)
             nb_inactive < 64 &&
             ret == 0) {
             int was_active = 0;
-            picoquic_stream_head_t* stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
-            if (stream != NULL && stream->sent_offset > 10000) {
+            picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
+            picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
+            if (c_stream != NULL && c_stream->sent_offset > 10000 && s_stream != NULL) {
                 break;
             }
 
@@ -955,7 +956,7 @@ int reset_repeat_test_one(uint8_t test_id)
      * transmission has not stopped.
      */
     if (ret == 0) {
-        picoquic_stream_head_t* stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
+        picoquic_stream_head_t* stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
         if (stream == NULL || stream->fin_sent) {
             DBG_PRINTF("Waited too long, stream is %s\n", (stream == NULL) ? "deleted" : "finished");
             ret = -1;
@@ -964,17 +965,36 @@ int reset_repeat_test_one(uint8_t test_id)
     /* Reset the stream, then run the connection for a short time.
      */
     if (ret == 0) {
+        ret = picoquic_reset_stream(test_ctx->cnx_client, data_stream_id, 0);
+    }
+    if (ret == 0) {
         ret = picoquic_reset_stream(test_ctx->cnx_server, data_stream_id, 0);
     }
     if (ret == 0) {
-        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, loop2_time);
-    }
-    /* Verify that the stream #4 is now gone.
-    */
-    if (ret == 0) {
-        picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
-        picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
-        if (s_stream != NULL || c_stream != NULL) {
+        int was_active = 0;
+        int nb_inactive = 0;
+        int client_stream_gone = 0;
+        uint64_t time_out = simulated_time + loop2_time;
+        while (ret == 0 && simulated_time < time_out &&
+            TEST_CLIENT_READY &&
+            TEST_SERVER_READY &&
+            nb_inactive < 64) {
+            int was_active = 0;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+            if (picoquic_find_stream(test_ctx->cnx_client, data_stream_id) == NULL) {
+                client_stream_gone = 1;
+                break;
+            }
+        }
+        if (!client_stream_gone) {
             DBG_PRINTF("%s", "Did not wait long enough, stream is still there.");
             ret = -1;
         }
@@ -983,16 +1003,15 @@ int reset_repeat_test_one(uint8_t test_id)
      */
     switch (test_id) {
     case 1: /* spurious ack of reset frame. */ {
-        picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
         uint8_t reset_frame[4] = {
             (uint8_t)picoquic_frame_type_reset_stream,
             (uint8_t)data_stream_id,
             1,
             1 };
         size_t consumed = 0;
-        ret = picoquic_process_ack_of_reset_stream_frame(test_ctx->cnx_server, reset_frame, sizeof(reset_frame), &consumed);
+        ret = picoquic_process_ack_of_reset_stream_frame(test_ctx->cnx_client, reset_frame, sizeof(reset_frame), &consumed);
 
-        if (ret != 0 || test_ctx->cnx_server->cnx_state != picoquic_state_ready) {
+        if (ret != 0 || test_ctx->cnx_client->cnx_state > picoquic_state_ready) {
             DBG_PRINTF("Test %d. Error after ack of reset, ret = 0x%x.", test_id, ret);
             ret = -1;
         }
