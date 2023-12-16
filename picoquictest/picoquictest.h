@@ -224,6 +224,7 @@ int ec9a_preemptive_amok_test();
 int error_reason_test();
 int idle_server_test();
 int idle_timeout_test();
+int reset_repeat_ack_test();
 int ready_to_send_test();
 int ready_to_skip_test();
 int ready_to_zero_test();
