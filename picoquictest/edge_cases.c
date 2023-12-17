@@ -948,7 +948,6 @@ int reset_loop_wait_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t data_stream_id, uint64_t loop1_time)
 {
     int ret = 0;
-    int was_active = 0;
     int nb_inactive = 0;
     uint64_t time_out = *simulated_time + loop1_time;
     int is_opened = 0;
@@ -958,6 +957,7 @@ int reset_loop_wait_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx,
         TEST_SERVER_READY &&
         nb_inactive < 64 &&
         ret == 0) {
+        int was_active = 0;
         if (test_ctx->cnx_client != NULL && test_ctx->cnx_server != NULL) {
             picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
             if (c_stream != NULL && c_stream->sent_offset > 10000) {
@@ -968,7 +968,6 @@ int reset_loop_wait_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx,
                 }
             }
         }
-        was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
@@ -1041,39 +1040,11 @@ int reset_repeat_test_one(uint8_t test_id)
 
     /* Run for a short time, so the stream is created and the transfer started */
     if (ret == 0) {
-#if 1
         ret = reset_loop_wait_stream_opened(test_ctx, &simulated_time, data_stream_id, loop1_time);
         if (ret != 0) {
             DBG_PRINTF("Test #%d. Loop wait stream failed!", test_id);
             ret = -1;
         }
-#else
-        int was_active = 0;
-        int nb_inactive = 0;
-        uint64_t time_out = simulated_time + loop1_time;
-
-        while (simulated_time < time_out &&
-            TEST_CLIENT_READY &&
-            TEST_SERVER_READY &&
-            nb_inactive < 64 &&
-            ret == 0) {
-            picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
-            picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
-            if (c_stream != NULL && c_stream->sent_offset > 10000 && s_stream != NULL) {
-                break;
-            }
-            was_active = 0;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
-
-            if (was_active) {
-                nb_inactive = 0;
-            }
-            else {
-                nb_inactive++;
-            }
-        }
-#endif
     }
 
     /* Verify that the stream #4 is present, and the
