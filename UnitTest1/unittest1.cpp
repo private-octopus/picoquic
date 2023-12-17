@@ -1621,9 +1621,55 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(reset_repeat_ack)
+        TEST_METHOD(reset_ack_max)
         {
-            int ret = reset_repeat_ack_test();
+            int ret = reset_ack_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(reset_ack_reset)
+        {
+            int ret = reset_ack_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_extra_max)
+        {
+            int ret = reset_extra_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_extra_reset)
+        {
+            int ret = reset_extra_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(reset_extra_stop)
+        {
+            int ret = reset_extra_stop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_need_max)
+        {
+            int ret = reset_need_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(reset_need_reset)
+        {
+            int ret = reset_need_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_need_stop)
+        {
+            int ret = reset_need_stop_test();
 
             Assert::AreEqual(ret, 0);
         }
