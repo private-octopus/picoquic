@@ -965,19 +965,22 @@ int reset_loop_wait_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx,
     int ret = 0;
     int nb_inactive = 0;
     uint64_t time_out = *simulated_time + loop1_time;
+    int guard1 = 0xdeadbeef;
+    int was_active = 0;
     int is_opened = 0;
+    int guard2 = 0xdeadbeef;
 
-    while (*simulated_time < time_out &&
+    while (ret == 0 && *simulated_time < time_out &&
         TEST_CLIENT_READY &&
         TEST_SERVER_READY &&
-        nb_inactive < 64 &&
-        ret == 0) {
-        int was_active = 0;
+        nb_inactive < 64) {
 
         if (reset_loop_check_stream_opened(test_ctx, data_stream_id)) {
             is_opened = 1;
             break;
         }
+
+        was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
@@ -998,8 +1001,9 @@ int reset_repeat_test_one(uint8_t test_id)
 {
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
     uint64_t data_stream_id = 4;
-    uint64_t loop1_time = 1000000;
+    uint64_t loop1_time = 50000;
     uint64_t loop2_time = 1000000;
     picoquic_connection_id_t initial_cid = { { 0x8e, 0x5e, 0x48, 0xe9, 0, 0, 0, 0}, 8 };
     int ret = 0;
@@ -1028,6 +1032,12 @@ int reset_repeat_test_one(uint8_t test_id)
     /* Set the binlog */
     if (ret == 0) {
         picoquic_set_binlog(test_ctx->qclient, ".");
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* set the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
     /* Prepare to send data */
@@ -1037,14 +1047,6 @@ int reset_repeat_test_one(uint8_t test_id)
         if (ret != 0)
         {
             DBG_PRINTF("Init send receive scenario returns %d\n", ret);
-        }
-    }
-
-    if (ret == 0) {
-        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
-        if (ret != 0)
-        {
-            DBG_PRINTF("Connection loop returns %d\n", ret);
         }
     }
 
