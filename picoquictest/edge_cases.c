@@ -1013,7 +1013,8 @@ int reset_repeat_test_one(uint8_t test_id)
             ret == 0) {
             int was_active = 0;
             picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
-            picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
+            picoquic_stream_head_t* s_stream = (test_ctx->cnx_server == NULL)?NULL:
+                picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
             if (c_stream != NULL && c_stream->sent_offset > 10000 && s_stream != NULL) {
                 break;
             }
