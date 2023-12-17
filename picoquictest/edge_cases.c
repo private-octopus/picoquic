@@ -748,7 +748,6 @@ int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t hand
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     uint64_t simulated_time = 0;
     uint64_t target_timeout;
-    uint64_t loss_mask = 0;
     picoquic_connection_id_t initial_cid = { { 0x41, 0x9e, 0xc0, 0x99, 0, 0, 0, 0}, 8 };
     uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
     int ret = 0;
@@ -949,7 +948,6 @@ int reset_repeat_test_one(uint8_t test_id)
 {
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0;
     uint64_t data_stream_id = 4;
     uint64_t loop1_time = 15000;
     uint64_t loop2_time = 1000000;
@@ -1011,12 +1009,12 @@ int reset_repeat_test_one(uint8_t test_id)
             TEST_SERVER_READY &&
             nb_inactive < 64 &&
             ret == 0) {
-            int was_active = 0;
             picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
             picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
             if (c_stream != NULL && c_stream->sent_offset > 10000 && s_stream != NULL) {
                 break;
             }
+            was_active = 0;
 
             ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
 
@@ -1060,7 +1058,7 @@ int reset_repeat_test_one(uint8_t test_id)
             TEST_CLIENT_READY &&
             TEST_SERVER_READY &&
             nb_inactive < 64) {
-            int was_active = 0;
+            was_active = 0;
 
             ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
 
