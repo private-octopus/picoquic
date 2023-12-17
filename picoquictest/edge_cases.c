@@ -1013,8 +1013,7 @@ int reset_repeat_test_one(uint8_t test_id)
             ret == 0) {
             int was_active = 0;
             picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
-            picoquic_stream_head_t* s_stream = (test_ctx->cnx_server == NULL)?NULL:
-                picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
+            picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
             if (c_stream != NULL && c_stream->sent_offset > 10000 && s_stream != NULL) {
                 break;
             }
@@ -1033,6 +1032,10 @@ int reset_repeat_test_one(uint8_t test_id)
     /* Verify that the stream #4 is present, and the
      * transmission has not stopped.
      */
+    if (!(TEST_CLIENT_READY) || !(TEST_SERVER_READY)) {
+        DBG_PRINTF("%s", "Sevrer or client not ready!");
+        ret = -1;
+    }
     if (ret == 0) {
         picoquic_stream_head_t* stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
         if (stream == NULL || stream->fin_sent) {
