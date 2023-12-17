@@ -965,10 +965,8 @@ int reset_loop_wait_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx,
     int ret = 0;
     int nb_inactive = 0;
     uint64_t time_out = *simulated_time + loop1_time;
-    int guard1 = 0xdeadbeef;
     int was_active = 0;
     int is_opened = 0;
-    int guard2 = 0xdeadbeef;
 
     while (ret == 0 && *simulated_time < time_out &&
         TEST_CLIENT_READY &&
