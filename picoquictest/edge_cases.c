@@ -944,6 +944,21 @@ int reset_repeat_test_need_repeat(int test_id, picoquic_cnx_t* cnx, const uint8_
     return ret;
 }
 
+int reset_loop_check_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t data_stream_id)
+{
+    int is_opened = 0;
+    if (test_ctx->cnx_client != NULL && test_ctx->cnx_server != NULL) {
+        picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
+        if (c_stream != NULL && c_stream->sent_offset > 10000) {
+            picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
+            if (s_stream != NULL) {
+                is_opened = 1;
+            }
+        }
+    }
+    return is_opened;
+}
+
 int reset_loop_wait_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t data_stream_id, uint64_t loop1_time)
 {
@@ -958,15 +973,10 @@ int reset_loop_wait_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx,
         nb_inactive < 64 &&
         ret == 0) {
         int was_active = 0;
-        if (test_ctx->cnx_client != NULL && test_ctx->cnx_server != NULL) {
-            picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
-            if (c_stream != NULL && c_stream->sent_offset > 10000) {
-                picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
-                if (s_stream != NULL) {
-                    is_opened = 1;
-                    break;
-                }
-            }
+
+        if (reset_loop_check_stream_opened(test_ctx, data_stream_id)) {
+            is_opened = 1;
+            break;
         }
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
