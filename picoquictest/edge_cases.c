@@ -958,11 +958,15 @@ int reset_loop_wait_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx,
         TEST_SERVER_READY &&
         nb_inactive < 64 &&
         ret == 0) {
-        picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
-        picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
-        if (c_stream != NULL && c_stream->sent_offset > 10000 && s_stream != NULL) {
-            is_opened = 1;
-            break;
+        if (test_ctx->cnx_client != NULL && test_ctx->cnx_server != NULL) {
+            picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
+            if (c_stream != NULL && c_stream->sent_offset > 10000) {
+                picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
+                if (s_stream != NULL) {
+                    is_opened = 1;
+                    break;
+                }
+            }
         }
         was_active = 0;
 
