@@ -1040,7 +1040,7 @@ int reset_repeat_test_one(uint8_t test_id)
 #if 1
         ret = reset_loop_wait_stream_opened(test_ctx, &simulated_time, data_stream_id, loop1_time);
         if (ret != 0) {
-            DBG_PRINTF("Test #%d. Loop wait stream failed!");
+            DBG_PRINTF("Test #%d. Loop wait stream failed!", test_id);
             ret = -1;
         }
 #else
@@ -1075,7 +1075,7 @@ int reset_repeat_test_one(uint8_t test_id)
     /* Verify that the stream #4 is present, and the
      * transmission has not stopped.
      */
-    if (!(TEST_CLIENT_READY) || !(TEST_SERVER_READY)) {
+    if (ret == 0 && (!(TEST_CLIENT_READY) || !(TEST_SERVER_READY))) {
         DBG_PRINTF("%s", "Server or client not ready!");
         ret = -1;
     }
