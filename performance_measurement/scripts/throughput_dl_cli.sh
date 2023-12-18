@@ -2,6 +2,11 @@
 
 # Script to run the client n_iterations times for a given file 
 # (file_request) and output the results in a csv at a specified location
+# 
+# Usage:
+# This does not start the server. The server needs to be started manually to 
+# in the root folder /picoquic in order for the client started by this script to 
+# connect to it. The server must listen on port 4433.
 # Authors: Milind Kumar V, ChatGPT
 
 # Define the number of iterations and the file request

@@ -7,9 +7,15 @@ import pandas as pd
 import numpy as np 
 import matplotlib.pyplot as plt 
 
-folders = ['../cpu_usage/1GB/',
-        '../cpu_usage/5GB/',
-        '../cpu_usage/100MB/'] 
+# Plotting the cpu usage without throughput limit
+# folders = ['../cpu_usage/1GB/',
+#         '../cpu_usage/5GB/',
+#         '../cpu_usage/100MB/'] 
+
+# Plotting the cpu usage with throughput limit of 100 Mbps
+folders = ['../cpu_usage/1GB_100Mbps/',
+        '../cpu_usage/5GB_100Mbps/',
+        '../cpu_usage/100MB_100Mbps/'] 
 
 
 
