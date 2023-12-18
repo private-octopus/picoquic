@@ -160,7 +160,7 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_varints)
+        TEST_METHOD(varints)
         {
             int ret = varint_test();
 
@@ -1617,6 +1617,59 @@ namespace UnitTest1
         TEST_METHOD(idle_timeout)
         {
             int ret = idle_timeout_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_ack_max)
+        {
+            int ret = reset_ack_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(reset_ack_reset)
+        {
+            int ret = reset_ack_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_extra_max)
+        {
+            int ret = reset_extra_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_extra_reset)
+        {
+            int ret = reset_extra_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(reset_extra_stop)
+        {
+            int ret = reset_extra_stop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_need_max)
+        {
+            int ret = reset_need_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(reset_need_reset)
+        {
+            int ret = reset_need_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_need_stop)
+        {
+            int ret = reset_need_stop_test();
 
             Assert::AreEqual(ret, 0);
         }

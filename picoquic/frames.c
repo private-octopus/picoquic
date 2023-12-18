@@ -267,8 +267,15 @@ const uint8_t* picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, const uin
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_reset_stream);
     } else if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 1)) == NULL) {
-        bytes = NULL;  // error already signaled
-
+        /* Not finding the stream is only an error if the stream
+         * was expected to be present, or created on demand. If the
+         * stream was already created and then deleted, there is no harm.
+         * If the "return NULL" is in a normal scenario, the connection state
+         * will remain "ready" or "almost ready"
+         */
+        if (cnx->cnx_state > picoquic_state_ready) {
+            bytes = NULL;  /* error already signaled */
+        }
     } else if ((stream->fin_received || stream->reset_received) && final_offset != stream->fin_offset) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR,
             picoquic_frame_type_reset_stream);
@@ -319,8 +326,8 @@ int picoquic_process_ack_of_reset_stream_frame(picoquic_cnx_t * cnx, const uint8
         ret = -1;
     } else {
         *consumed = bytes - byte_first;
-        /* Find the stream */
-        if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 0)) != NULL) {
+        /* Find the stream, if it exists. If it was already deleted, do nothing. */
+        if ((stream = picoquic_find_stream(cnx, stream_id)) != NULL) {
             /* mark reset as acked by peer */
             stream->reset_acked = 1;
             /* Delete stream if closed. */
@@ -347,7 +354,7 @@ int picoquic_check_reset_stream_needs_repeat(picoquic_cnx_t* cnx, const uint8_t*
         /* Internal error -- cannot parse the stored packet */
         ret = -1;
     }
-    else if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 0)) == NULL ||
+    else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL ||
         stream->reset_acked) {
         *no_need_to_repeat = 1;
     }
@@ -834,6 +841,35 @@ const uint8_t* picoquic_skip_stop_sending_frame(const uint8_t* bytes, const uint
         bytes = picoquic_frames_varint_skip(bytes, bytes_max);
     }
     return bytes;
+}
+
+
+int picoquic_check_stop_sending_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_size, int* no_need_to_repeat)
+{
+    uint64_t stream_id = 0;
+    uint64_t error_code = 0;
+    const uint8_t* bytes_max = bytes + bytes_size;
+    picoquic_stream_head_t* stream;
+    int ret = 0;
+
+    *no_need_to_repeat = 0;
+
+    if ((bytes = picoquic_frames_varint_decode(bytes+1, bytes_max, &stream_id))  == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes,   bytes_max, &error_code)) == NULL)
+    {
+        /* If the frame cannot be decoded, do not repeat it */
+        *no_need_to_repeat = 1;
+    }
+    else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL) {
+        /* If the stream is deleted, no need to repeat this frame. */
+        *no_need_to_repeat = 1;
+    }
+    else if (stream->fin_received || stream->reset_received) {
+        /* No point repeating if the stream is closed by the peer */
+        *no_need_to_repeat = 1;
+    }
+
+    return ret;
 }
 
 
@@ -3122,6 +3158,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
             break;
         case picoquic_frame_type_reset_stream:
             ret = picoquic_check_reset_stream_needs_repeat(cnx, bytes, bytes_max, no_need_to_repeat);
+            break;
+        case picoquic_frame_type_stop_sending:
+            ret = picoquic_check_stop_sending_needs_repeat(cnx, bytes, bytes_max, no_need_to_repeat);
             break;
         default: {
             uint64_t frame_id64;
