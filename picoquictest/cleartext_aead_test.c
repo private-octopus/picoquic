@@ -329,8 +329,11 @@ int pn_ctr_test()
     uint8_t in_bytes[16];
     uint8_t out_bytes[16];
     uint8_t decoded[16];
+
+    picoquic_tls_api_init();
+
     ptls_aead_algorithm_t* aead = (ptls_aead_algorithm_t*)picoquic_get_aes128gcm_v(0);
-    ptls_cipher_context_t *pn_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
+    ptls_cipher_context_t *pn_enc = (aead == NULL)?NULL:ptls_cipher_new(aead->ctr_cipher, 1, key);
 
     if (pn_enc == NULL) {
         ret = -1;

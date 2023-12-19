@@ -249,21 +249,25 @@ static size_t nb_varint_test_cases = sizeof(varint_test_cases) / sizeof(picoquic
 int varint_test()
 {
     int ret = 0;
+    uint8_t test_buf[16];
     const picoquic_varintformat_test_t* max_test = varint_test_cases + nb_varint_test_cases;
+    memset(test_buf, 0xcc, 16);
 
     for (picoquic_varintformat_test_t* test = varint_test_cases; ret == 0 && test < max_test; test++) {
         for (int is_new_decode = 0; ret == 0 && is_new_decode <= 1; is_new_decode++) {
-            for (size_t buf_size = 0; ret == 0 && buf_size <= test->length + 2; buf_size++) {
+            for (size_t buf_size = 0; ret == 0 && buf_size <= test->length + 2 && buf_size < 16; buf_size++) {
                 int test_ret = 0;
                 uint64_t n64 = 0;
                 size_t length;
 
+                memcpy(test_buf, test->encoding, test->length);
+
                 if (is_new_decode) {
-                    const uint8_t* bytes = picoquic_frames_varint_decode(test->encoding, test->encoding + buf_size, &n64);
-                    length = bytes != NULL ? bytes - test->encoding : 0;
+                    const uint8_t* bytes = picoquic_frames_varint_decode(test_buf, test_buf + buf_size, &n64);
+                    length = bytes != NULL ? bytes - test_buf : 0;
                 }
                 else {
-                    length = picoquic_varint_decode(test->encoding, buf_size, &n64);
+                    length = picoquic_varint_decode(test_buf, buf_size, &n64);
                 }
 
                 if (length != (buf_size < test->length ? 0 : test->length)) {

@@ -539,7 +539,7 @@ static picosplay_node_t* picoquic_registered_token_create(void* value)
 
 static void* picoquic_registered_token_value(picosplay_node_t* node)
 {
-    return (void*)((char*)node - offsetof(struct st_picoquic_registered_token_t, registered_token_node));
+    return (void*)((node == NULL)?NULL:((char*)node - offsetof(struct st_picoquic_registered_token_t, registered_token_node)));
 }
 
 static void picoquic_registered_token_delete(void* tree, picosplay_node_t* node)

@@ -748,7 +748,6 @@ int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t hand
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     uint64_t simulated_time = 0;
     uint64_t target_timeout;
-    uint64_t loss_mask = 0;
     picoquic_connection_id_t initial_cid = { { 0x41, 0x9e, 0xc0, 0x99, 0, 0, 0, 0}, 8 };
     uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
     int ret = 0;
@@ -857,4 +856,379 @@ int idle_server_test()
         DBG_PRINTF("%s", "All idle timeout tests pass.\n");
     }
     return ret;
+}
+
+/*
+* Testing issues caused by frame events after a stream is reset.
+* 
+* We are concerned with possible errors when copies of "old"
+* frames cause processing of a stream after the stream has been
+* closed. This includes:
+* 
+* - reset stream frames,
+* - stop sending frames,
+* - max stream data frames.
+* 
+* We are concerned with three events:
+* 
+* - processing the ACK of a packet that contained the frame, because
+*   the ACK may be received after the reset after the stream context
+*   was deleted,
+* - receiving extra copies of the frames after the stream is deleted.
+*   These extra copies shall be ignored with no side effect.
+* - processing of frames in packets detected as lost after the
+*   stream was deleted. The stack whether the packets needs to
+*   be repeated.
+* 
+* The combination of "ack/extra/need" with three frame types produces
+* 9 possible tests. However, there is no acking processing for
+* stop sending frames, so we do not implement a test for
+* "reset_ack_stop_sending".
+ */
+
+typedef enum {
+    reset_ack_max_stream = 0,
+    reset_ack_reset,
+    reset_ack_stop_sending,
+    reset_extra_max_stream,
+    reset_extra_reset,
+    reset_extra_stop_sending,
+    reset_need_max_stream,
+    reset_need_reset,
+    reset_need_stop_sending
+} reset_test_enum;
+
+static test_api_stream_desc_t test_scenario_edge_reset[] = {
+    { 4, 0, 1000000, 1000000 }
+};
+
+int picoquic_process_ack_of_reset_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_size, size_t* consumed);
+int picoquic_process_ack_of_max_stream_data_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_size, size_t* consumed);
+
+int reset_repeat_test_receive_frame(int test_id, picoquic_cnx_t * cnx, const uint8_t * frame, size_t frame_size,
+    uint64_t simulated_time, uint64_t stream_id, int do_not_create)
+{
+    picoquic_stream_data_node_t dn;
+    int ret = picoquic_decode_frames(cnx, cnx->path[0], frame, frame_size,
+        &dn, picoquic_epoch_1rtt,
+        (struct sockaddr*)&cnx->path[0]->peer_addr,
+        (struct sockaddr*)&cnx->path[0]->local_addr,
+        123, 0, simulated_time);
+
+    if (ret != 0 || cnx->cnx_state > picoquic_state_ready) {
+        DBG_PRINTF("Test %d. Error after stop sending, ret = 0x%x.", test_id, ret);
+        ret = -1;
+    }
+    else if (ret == 0 && stream_id != UINT64_MAX && do_not_create && picoquic_find_stream(cnx, stream_id) != NULL) {
+        DBG_PRINTF("Test %d. Stream %" PRIu64 " was created.", test_id, stream_id);
+        ret = -1;
+    }
+    return ret;
+}
+
+int reset_repeat_test_need_repeat(int test_id, picoquic_cnx_t* cnx, const uint8_t* frame, size_t frame_size,
+    uint64_t simulated_time, uint64_t stream_id, int do_not_create)
+{
+    int no_need_to_repeat = 0;
+    int do_not_detect_spurious = 0;
+    int is_preemptive_needed = 0;
+
+    int ret = picoquic_check_frame_needs_repeat(cnx, frame, frame_size, picoquic_packet_1rtt_protected,
+        &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed);
+
+    if (ret != 0 || cnx->cnx_state > picoquic_state_ready || !no_need_to_repeat) {
+        DBG_PRINTF("Test %d. Error after ack of frame 0x%x, ret = 0x%x.", test_id, frame[0], ret);
+        ret = -1;
+    }
+    return ret;
+}
+
+int reset_loop_check_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t data_stream_id)
+{
+    int is_opened = 0;
+    if (test_ctx->cnx_client != NULL && test_ctx->cnx_server != NULL) {
+        picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
+        if (c_stream != NULL && c_stream->sent_offset > 10000) {
+            picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
+            if (s_stream != NULL) {
+                is_opened = 1;
+            }
+        }
+    }
+    return is_opened;
+}
+
+int reset_loop_wait_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, uint64_t data_stream_id, uint64_t loop1_time)
+{
+    int ret = 0;
+    int nb_inactive = 0;
+    uint64_t time_out = *simulated_time + loop1_time;
+    int was_active = 0;
+    int is_opened = 0;
+
+    while (ret == 0 && *simulated_time < time_out &&
+        TEST_CLIENT_READY &&
+        TEST_SERVER_READY &&
+        nb_inactive < 64) {
+
+        if (reset_loop_check_stream_opened(test_ctx, data_stream_id)) {
+            is_opened = 1;
+            break;
+        }
+
+        was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+    }
+    if (!is_opened) {
+        ret = -1;
+    }
+    return ret;
+}
+
+int reset_repeat_test_one(uint8_t test_id)
+{
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t data_stream_id = 4;
+    uint64_t loop1_time = 50000;
+    uint64_t loop2_time = 1000000;
+    picoquic_connection_id_t initial_cid = { { 0x8e, 0x5e, 0x48, 0xe9, 0, 0, 0, 0}, 8 };
+    int ret = 0;
+    uint8_t stop_sending_frame[3] = {
+        (uint8_t)picoquic_frame_type_stop_sending,
+        (uint8_t)data_stream_id,
+        0x17 };
+    uint8_t max_stream_data_frame[3] = {
+        (uint8_t)picoquic_frame_type_max_stream_data,
+        (uint8_t)data_stream_id,
+        63 };
+    uint8_t reset_frame[4] = {
+        (uint8_t)picoquic_frame_type_reset_stream,
+        (uint8_t)data_stream_id,
+        1,
+        1 };
+
+    initial_cid.id[4] = test_id;
+
+    /* Create the test context */
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    }
+
+    /* Set the binlog */
+    if (ret == 0) {
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* set the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_edge_reset, sizeof(test_scenario_edge_reset));
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Init send receive scenario returns %d\n", ret);
+        }
+    }
+
+    /* Run for a short time, so the stream is created and the transfer started */
+    if (ret == 0) {
+        ret = reset_loop_wait_stream_opened(test_ctx, &simulated_time, data_stream_id, loop1_time);
+        if (ret != 0) {
+            DBG_PRINTF("Test #%d. Loop wait stream failed!", test_id);
+            ret = -1;
+        }
+    }
+
+    /* Verify that the stream #4 is present, and the
+     * transmission has not stopped.
+     */
+    if (ret == 0 && (!(TEST_CLIENT_READY) || !(TEST_SERVER_READY))) {
+        DBG_PRINTF("%s", "Server or client not ready!");
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_stream_head_t* stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
+        if (stream == NULL || stream->fin_sent) {
+            DBG_PRINTF("Waited too long, stream is %s\n", (stream == NULL) ? "deleted" : "finished");
+            ret = -1;
+        }
+    }
+    /* Reset the stream, then run the connection for a short time.
+     */
+    if (ret == 0) {
+        ret = picoquic_reset_stream(test_ctx->cnx_client, data_stream_id, 0);
+    }
+    if (ret == 0) {
+        ret = picoquic_reset_stream(test_ctx->cnx_server, data_stream_id, 0);
+    }
+    if (ret == 0) {
+        int was_active = 0;
+        int nb_inactive = 0;
+        int client_stream_gone = 0;
+        uint64_t time_out = simulated_time + loop2_time;
+        while (ret == 0 && simulated_time < time_out &&
+            TEST_CLIENT_READY &&
+            TEST_SERVER_READY &&
+            nb_inactive < 64) {
+            was_active = 0;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+            if (picoquic_find_stream(test_ctx->cnx_client, data_stream_id) == NULL) {
+                client_stream_gone = 1;
+                break;
+            }
+        }
+        if (!client_stream_gone) {
+            DBG_PRINTF("%s", "Did not wait long enough, stream is still there.");
+            ret = -1;
+        }
+    }
+    /* Perform the specified test.
+     */
+    switch (test_id) {
+    case reset_ack_max_stream: {
+        size_t consumed = 0;
+        ret = picoquic_process_ack_of_max_stream_data_frame(test_ctx->cnx_client, reset_frame, sizeof(reset_frame), &consumed);
+
+        if (ret != 0 || test_ctx->cnx_client->cnx_state > picoquic_state_ready) {
+            DBG_PRINTF("Test %d. Error after ack of max stream, ret = 0x%x.", test_id, ret);
+            ret = -1;
+        }
+        break;
+    }
+    case reset_ack_reset:/* spurious ack of reset frame. */ {
+        size_t consumed = 0;
+        ret = picoquic_process_ack_of_reset_stream_frame(test_ctx->cnx_client, reset_frame, sizeof(reset_frame), &consumed);
+
+        if (ret != 0 || test_ctx->cnx_client->cnx_state > picoquic_state_ready) {
+            DBG_PRINTF("Test %d. Error after ack of reset, ret = 0x%x.", test_id, ret);
+            ret = -1;
+        }
+        break;
+    }
+    case reset_ack_stop_sending:
+        /* TODO: there is no code yet for processing acks of stop sending frame. */
+        ret = -1;
+        break;
+    case reset_extra_max_stream:
+        /* arrival of stream related frame on a non existing stream.
+        * this is a bit more subtle than the ACK test.
+        * - if this is a remotely created stream:
+        *     - if it is bidir, this could be an out of order request to
+        *       not send response, or it could be an old stream that was
+        *       already deleted.
+        *     - if it is monodir, it does not make sense.
+        * - if it is locally created:
+        *     - if it is closed, just ignore it.
+        *     - if it is not created yet, this is a protocol error.
+        */
+        ret = reset_repeat_test_receive_frame(test_id, test_ctx->cnx_client, max_stream_data_frame, sizeof(max_stream_data_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    case reset_extra_reset:
+        /* arrival of extra reset frame.
+        * see, arrival of stop sending.
+        */
+        ret = reset_repeat_test_receive_frame(test_id, test_ctx->cnx_client, reset_frame, sizeof(reset_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    case reset_extra_stop_sending:
+        ret = reset_repeat_test_receive_frame(test_id, test_ctx->cnx_client, stop_sending_frame, sizeof(stop_sending_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    case reset_need_max_stream:
+        /* Check whether a frame needs to be repeated.
+        * this should never cause an error! If the stream is not
+        * there any more, this means the original reset was
+        * successful, there is no need to resend it.
+        */
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, max_stream_data_frame, sizeof(max_stream_data_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    case reset_need_reset:
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, reset_frame, sizeof(reset_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    case reset_need_stop_sending:
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, stop_sending_frame, sizeof(stop_sending_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    default:
+        DBG_PRINTF("What test is that: %d?", test_id);
+        ret = -1;
+        break;
+    }
+
+    /* Clean up */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int reset_ack_max_test()
+{
+    return reset_repeat_test_one(reset_ack_max_stream);
+}
+
+int reset_ack_reset_test()
+{
+    return reset_repeat_test_one(reset_ack_reset);
+}
+
+int reset_extra_max_test()
+{
+    return reset_repeat_test_one(reset_extra_max_stream);
+}
+
+int reset_extra_reset_test()
+{
+    return reset_repeat_test_one(reset_extra_reset);
+}
+
+int reset_extra_stop_test()
+{
+    return reset_repeat_test_one(reset_extra_stop_sending);
+}
+
+int reset_need_max_test()
+{
+    return reset_repeat_test_one(reset_need_max_stream);
+}
+
+int reset_need_reset_test()
+{
+    return reset_repeat_test_one(reset_need_reset);
+}
+
+int reset_need_stop_test()
+{
+    return reset_repeat_test_one(reset_need_stop_sending);
 }
