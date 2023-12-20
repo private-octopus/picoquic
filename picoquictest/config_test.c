@@ -172,7 +172,7 @@ static picoquic_quic_config_t param2 = {
     "/data/w_out", /* char const* out_dir; */
     "data/certs/root.pem", /* char const* root_trust_file; */
     20, /* int cipher_suite_id; */
-    0xFf000020, /* uint32_t proposed_version; */
+    0xff000020, /* uint32_t proposed_version; */
     0x00000002, /* uint32_t desired_version; */
     1,/* unsigned int force_zero_share : 1; */
     1, /* unsigned int no_disk : 1; */
@@ -185,7 +185,7 @@ static const char* config_argv2[] = {
     "-o", "/data/w_out",
     "-t", "data/certs/root.pem",
     "-C", "20",
-    "-v", "ff000020",
+    "-v", "fF000020",
     "-z",
     "-d", "1234567",
     "-D",
@@ -198,6 +198,48 @@ static const char* config_argv2[] = {
     "-W", "1000000",
     NULL
 };
+
+typedef struct st_config_error_test_t {
+    int nb_args;
+    char const* err_args[2];
+} config_error_test_t;
+
+static config_error_test_t config_errors[] = {
+    { 1, { "-A"}},
+    { 1, { "-S" }},
+    { 1, { "-c"}},
+    { 1, { "-k"}},
+    { 1, { "-x"}},
+    { 2, { "-x", "-1024"}},
+    { 1, { "-l"}},
+    { 1, { "-b"}},
+    { 1, { "-q"}},
+    { 2, { "-p", "-443"}},
+    { 1, { "-p" }},
+    { 1, { "-e", }},
+    { 2, { "-e", "a" }},
+    { 1, { "-m" }},
+    { 1, { "-m", "-1"}},
+    { 2, { "-m", "15360"}},
+    { 2, { "-P", "-3"}},
+    { 2, { "-O", "-2"}},
+    { 2, { "-M", "5"}},
+    { 2, { "-R", "17"}},
+    { 1, { "-w" }},
+    { 2, { "-s", "0123456789abcdexyedcba9876543210"}},
+    { 2, { "-s", "0123456789abcdeffedcba987654321"}},
+    { 2, { "-s", "0123456789abcdeffedcba98765432"}},
+    { 2, { "-B", "-1"}},
+    { 1, { "-F" }},
+    { 2, { "-j", "3" }},
+    { 1, { "-i" }},
+    { 2, { "-I", "-1" }},
+    { 2, { "-I", "255" }},
+    { 2, { "-U", "XY000002" }},
+    { 2, { "-W", "-1" }}
+};
+
+static size_t nb_config_errors = sizeof(config_errors) / sizeof(config_error_test_t);
 
 int config_test_compare_string(const char* title, const char* expected, const char* actual)
 {
@@ -299,11 +341,66 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     return ret;
 }
 
-int config_test_parse_command_line(const picoquic_quic_config_t* expected, const char** argv, int argc)
+static int config_parse_command_line(picoquic_quic_config_t* actual, const char** argv, int argc, int expect_error)
+{
+    int ret = 0;
+    int opt_ind = 0;
+
+    picoquic_config_init(actual);
+
+    while (opt_ind < argc && ret == 0) {
+        const char* x = argv[opt_ind];
+        const char* optval = NULL;
+        int opt;
+        if (x == NULL) {
+            /* could not parse to the end! */
+            if (!expect_error) {
+                DBG_PRINTF("Unexpected stop after %d arguments, expected %d", opt_ind, argc);
+            }
+            ret = -1;
+            break;
+        }
+        else if (x[0] != '-' || x[1] == 0 || x[2] != 0) {
+            /* could not parse to the end! */
+            if (!expect_error) {
+                DBG_PRINTF("Unexpected argument: %s", x);
+            }
+            ret = -1;
+            break;
+        }
+        opt = x[1];
+        opt_ind++;
+        if (opt_ind < argc) {
+            optval = argv[opt_ind];
+            if (optval[0] == '-') {
+                optval = NULL;
+            }
+            else {
+                opt_ind++;
+            }
+        }
+        ret = picoquic_config_command_line(opt, &opt_ind, argc, argv, optval, actual);
+        if (ret != 0) {
+            if (!expect_error) {
+                DBG_PRINTF("Could not parse opt -%c", opt);
+            }
+        }
+    }
+
+    return (ret);
+}
+
+
+static int config_parse_command_line_test(const picoquic_quic_config_t* expected, const char** argv, int argc)
 {
     int ret = 0;
     int opt_ind = 0;
     picoquic_quic_config_t actual;
+
+#if 1
+    ret = config_parse_command_line(&actual, argv, argc, 0);
+#else
+
 
     picoquic_config_init(&actual);
 
@@ -339,6 +436,7 @@ int config_test_parse_command_line(const picoquic_quic_config_t* expected, const
             DBG_PRINTF("Could not parse opt -%c", opt);
         }
     }
+#endif
 
     if (ret == 0) {
         ret = config_test_compare(expected, &actual);
@@ -377,13 +475,13 @@ int config_set_option_test_one()
 
 int config_option_test()
 {
-    int ret = config_test_parse_command_line(&param1, config_argv1, (int)(sizeof(config_argv1) / sizeof(char const*)) - 1);
+    int ret = config_parse_command_line_test(&param1, config_argv1, (int)(sizeof(config_argv1) / sizeof(char const*)) - 1);
     if (ret != 0) {
         DBG_PRINTF("First config option test returns %d", ret);
     }
     
     if (ret == 0){
-        ret = config_test_parse_command_line(&param2, config_argv2, (int)(sizeof(config_argv2) / sizeof(char const*)) - 1);
+        ret = config_parse_command_line_test(&param2, config_argv2, (int)(sizeof(config_argv2) / sizeof(char const*)) - 1);
         if (ret != 0) {
             DBG_PRINTF("Second config option test returns %d", ret);
         }
@@ -393,6 +491,15 @@ int config_option_test()
         ret = config_set_option_test_one();
         if (ret != 0) {
             DBG_PRINTF("Config set option test returns %d", ret);
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_config_errors; i++) {
+        picoquic_quic_config_t config = { 0 };
+        if (config_parse_command_line(&config, config_errors[i].err_args,
+            config_errors[i].nb_args, 1) == 0) {
+            DBG_PRINTF("Did not detect config error %zu, %s", i, config_errors[i].err_args[0]);
+            ret = -1;
         }
     }
 

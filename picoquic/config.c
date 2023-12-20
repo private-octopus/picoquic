@@ -267,6 +267,7 @@ int config_atoi(const option_param_t* params, int nb_param, int x, int* ret)
             int c = params[x].param[i] - '0';
             if (c < 0 || c > 9) {
                 v = -1;
+                *ret = -1;
                 break;
             }
             else {
