@@ -156,7 +156,6 @@ static int parse_line_params(const char* line, int offset, option_param_t* param
     *nb_params = nb_found;
     return offset;
 }
-#endif
 
 static int compare_option_name(const char * line, int offset, size_t length, char const* option_name)
 {
@@ -168,6 +167,7 @@ static int compare_option_name(const char * line, int offset, size_t length, cha
 
     return ret;
 }
+#endif
 
 static uint32_t config_parse_target_version(char const* v_arg)
 {
