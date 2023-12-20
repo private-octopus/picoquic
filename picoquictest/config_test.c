@@ -24,7 +24,6 @@
 
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
-#include "demoserver.h"
 #include "picoquic_config.h"
 #include "picoquictest_internal.h"
 
