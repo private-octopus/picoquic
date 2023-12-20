@@ -2446,6 +2446,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(config_quic) {
+            int ret = config_quic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(config_usage) {
+            int ret= config_usage_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_integer) {
             int ret = h3zero_integer_test();
 

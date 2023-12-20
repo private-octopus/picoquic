@@ -24,7 +24,9 @@
 
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
+#include "demoserver.h"
 #include "picoquic_config.h"
+#include "picoquictest_internal.h"
 
 static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:M:e:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:h";
 
@@ -75,12 +77,13 @@ static picoquic_quic_config_t param1 = {
     0, /* disable port blocking */
     /* Server only */
     "/data/www/", /* char const* www_dir; */
-    { 0x012345678abcdef, 0xfedcba9876543210}, /* uint64_t reset_seed[2]; */
-    NULL, /* const uint8_t* ticket_encryption_key; */
+    { 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+      0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10}, /* uint8_t reset_seed[16]; */
+    { 0 }, /* const uint8_t* ticket_encryption_key; */
     0, /* size_t ticket_encryption_key_length; */
     /* Server flags */
     1, /* unsigned int do_retry : 1; */
-
+    1, /* unsigned int has_reset_seed : 1;*/
     /* Client only */
     NULL, /* char const* ticket_file_name; */
     NULL, /* char const* token_file_name; */
@@ -115,7 +118,7 @@ static char const* config_argv1[] = {
     "-L",
     "-w", "/data/www/",
     "-r",
-    "-s", "012345678abcdef", "0xfedcba9876543210",
+    "-s", "0123456789abcdeffedcba9876543210",
     "-B", "655360",
     "-F", "/data/performance_log.csv",
     "-V",
@@ -156,12 +159,12 @@ static picoquic_quic_config_t param2 = {
     1, /* disable port blocking */
     /* Server only */
     NULL, /* char const* www_dir; */
-    {0, 0}, /* uint64_t reset_seed[2]; */
+    { 0 }, /* Reset seed */
     NULL, /* const uint8_t* ticket_encryption_key; */
     0, /* size_t ticket_encryption_key_length; */
     /* Server flags */
     0, /* unsigned int do_retry : 1; */
-
+    0, /* unsigned int  has reset seed : 1; */
     /* Client only */
     "/data/tickets.bin", /* char const* ticket_file_name; */
     "/data/tokens.bin", /* char const* token_file_name; */
@@ -170,7 +173,7 @@ static picoquic_quic_config_t param2 = {
     "/data/w_out", /* char const* out_dir; */
     "data/certs/root.pem", /* char const* root_trust_file; */
     20, /* int cipher_suite_id; */
-    0xff000020, /* uint32_t proposed_version; */
+    0xFf000020, /* uint32_t proposed_version; */
     0x00000002, /* uint32_t desired_version; */
     1,/* unsigned int force_zero_share : 1; */
     1, /* unsigned int no_disk : 1; */
@@ -347,17 +350,156 @@ int config_test_parse_command_line(const picoquic_quic_config_t* expected, const
     return (ret);
 }
 
+int config_set_option_test_one()
+{
+    int ret = 0;
+    char const* ticket_store = "ticket_store.bin";
+    char const* token_store = "ticket_store.bin";
+
+    picoquic_quic_config_t config = { 0 };
+    if (ret == 0 && config.ticket_file_name == NULL) {
+        ret = picoquic_config_set_option(&config, picoquic_option_Ticket_File_Name, ticket_store);
+    }
+    if (ret == 0 && config.token_file_name == NULL) {
+        ret = picoquic_config_set_option(&config, picoquic_option_Token_File_Name, token_store);
+    }
+    if (ret == 0 &&
+        (config.ticket_file_name == NULL || strcmp(config.ticket_file_name, ticket_store) != 0)) {
+        ret = -1;
+    }
+    if (ret == 0 &&
+        (config.token_file_name == NULL || strcmp(config.token_file_name, token_store) != 0)) {
+        ret = -1;
+    }
+    picoquic_config_clear(&config);
+
+    return (ret);
+}
+
 int config_option_test()
 {
     int ret = config_test_parse_command_line(&param1, config_argv1, (int)(sizeof(config_argv1) / sizeof(char const*)) - 1);
     if (ret != 0) {
         DBG_PRINTF("First config option test returns %d", ret);
     }
-    else {
+    
+    if (ret == 0){
         ret = config_test_parse_command_line(&param2, config_argv2, (int)(sizeof(config_argv2) / sizeof(char const*)) - 1);
         if (ret != 0) {
             DBG_PRINTF("Second config option test returns %d", ret);
         }
+    }
+
+    if (ret == 0) {
+        ret = config_set_option_test_one();
+        if (ret != 0) {
+            DBG_PRINTF("Config set option test returns %d", ret);
+        }
+    }
+
+    return ret;
+}
+
+int config_quic_test_one(picoquic_quic_config_t* config)
+{
+    int ret = 0;
+    picoquic_quic_t * quic;
+    uint64_t current_time = 0;
+
+    char const* server_cert_file = NULL;
+    char test_server_cert_file[512];
+    char const* server_key_file = NULL;
+    char test_server_key_file[512];
+    char const* root_trust_file = NULL;
+    char test_root_trust_file[512];
+
+    if (ret == 0 && config->server_cert_file != NULL) {
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_CERT);
+        if (ret == 0) {
+            server_cert_file = config->server_cert_file;
+            config->server_cert_file = test_server_cert_file;
+        }
+    }
+
+    if (ret == 0 && config->server_key_file) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+        if (ret == 0) {
+            server_key_file = config->server_key_file;
+            config->server_key_file = test_server_key_file;
+        }
+    }
+
+    if (ret == 0 && config->root_trust_file) {
+        ret = picoquic_get_input_path(test_root_trust_file, sizeof(test_root_trust_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+        if (ret == 0) {
+            root_trust_file = config->root_trust_file;
+            config->root_trust_file = root_trust_file;
+        }
+    }
+
+    quic = picoquic_create_and_configure(config, NULL, NULL, current_time, NULL);
+    if (quic == NULL) {
+        ret = 1;
+    }
+    else {
+        /* Check that at least some parameters are what we expect */
+        if (config->nb_connections > 0 && config->nb_connections != quic->max_number_connections) {
+            ret = -1;
+        }
+        if (config->alpn != NULL &&
+            (quic->default_alpn == NULL || strcmp(quic->default_alpn, config->alpn) != 0)) {
+            ret = -1;
+        }
+        if (config->has_reset_seed &&
+            memcmp(quic->reset_seed, config->reset_seed, sizeof(config->reset_seed)) != 0) {
+            ret = -1;
+        }
+        picoquic_free(quic);
+    }
+
+    if (server_key_file != NULL) {
+        config->server_key_file = server_key_file;
+    }
+    if (server_cert_file != NULL) {
+        config->server_cert_file = server_cert_file;
+    }
+    if (root_trust_file != NULL) {
+        config->root_trust_file = root_trust_file;
+    }
+
+    return(ret);
+}
+
+int config_quic_test()
+{
+    int ret = 0;
+    if (config_quic_test_one(&param1) != 0 ||
+        config_quic_test_one(&param2) != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
+#define CONFIG_USAGE_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "config_usage_ref.txt"
+#define CONFIG_USAGE_TXT "config_usage.txt"
+
+int config_usage_test()
+{
+
+    FILE* F = NULL;
+    char config_usage_ref[512];
+    int ret = picoquic_get_input_path(config_usage_ref, sizeof(config_usage_ref), picoquic_solution_dir, CONFIG_USAGE_REF);
+
+    if (ret == 0 && (F = picoquic_file_open(CONFIG_USAGE_TXT, "wt")) != NULL){
+        picoquic_config_usage_file(F);
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_test_compare_text_files(CONFIG_USAGE_TXT, config_usage_ref);
     }
 
     return ret;
