@@ -12,11 +12,18 @@ import matplotlib.pyplot as plt
 #         '../cpu_usage/5GB/',
 #         '../cpu_usage/100MB/'] 
 
-# Plotting the cpu usage with throughput limit of 100 Mbps
-folders = ['../cpu_usage/1GB_100Mbps/',
-        '../cpu_usage/5GB_100Mbps/',
-        '../cpu_usage/100MB_100Mbps/'] 
+# # Plotting the cpu usage with throughput limit of 100 Mbps
+# folders = ['../cpu_usage/1GB_100Mbps/',
+#         '../cpu_usage/5GB_100Mbps/',
+#         '../cpu_usage/100MB_100Mbps/'] 
 
+# Plotting the cpu usage with throughput limit of 100 Mbps for TCP
+folders = ['../cpu_usage/1GB_100Mbps_TCP/',
+        '../cpu_usage/5GB_100Mbps_TCP/',
+        '../cpu_usage/100MB_100Mbps_TCP/'] 
+
+
+n_iterations_used = 21
 
 
 for folder in folders:
@@ -25,7 +32,7 @@ for folder in folders:
     for node in nodes:
         # server graph
         dataframes = []
-        for i in range(25):
+        for i in range(n_iterations_used):
             iter = i + 1
             filename = folder + node + "_usage_" + str(iter) + ".csv"
             # df = pd.read_csv(server_filename) 

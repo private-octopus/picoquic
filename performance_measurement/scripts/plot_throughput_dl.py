@@ -8,9 +8,21 @@ import numpy as np
 import matplotlib.pyplot as plt 
 
 
-files = ['../throughput_dl/transfer_test_100M_results.csv',
-        '../throughput_dl/transfet_test_1G_results.csv',
-        '../throughput_dl/transfet_test_5G_results.csv']
+# files = ['../throughput_dl/transfer_test_100M_results.csv',
+#         '../throughput_dl/transfet_test_1G_results.csv',
+#         '../throughput_dl/transfet_test_5G_results.csv']
+
+# output_file_name_png = "../throughput_dl/mean_throughputs.png"
+# output_file_name_pdf = "../throughput_dl/mean_throughputs.pdf"
+
+files = ['../throughput_dl/transfer_test_100MB_100Mbps_results.csv',
+        '../throughput_dl/transfer_test_1GB_100Mbps_results.csv',
+        '../throughput_dl/transfer_test_5GB_100Mbps_results.csv']
+
+output_file_name_png = "../throughput_dl/mean_throughputs_100Mbps.png"
+output_file_name_pdf = "../throughput_dl/mean_throughputs_100Mbps.pdf"
+
+
 
 mean_throughputs = []
 
@@ -38,5 +50,5 @@ plt.bar(file_sizes, mean_throughputs, color ='maroon',
         width = 0.4)
 
 
-plt.savefig("../throughput_dl/mean_throughputs.pdf")
-plt.savefig("../throughput_dl/mean_throughputs.png")
+plt.savefig(output_file_name_pdf)
+plt.savefig(output_file_name_png)
