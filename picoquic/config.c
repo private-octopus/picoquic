@@ -595,13 +595,15 @@ int picoquic_config_command_line(int opt, int * p_optind, int argc, char const *
     else {
         if (option_table[option_index].nb_params_required > 0) {
             params[0].param = optarg;
-            if (optarg == NULL) {
+            if (optarg == NULL || option_table[option_index].nb_params_required > 1) {
                 fprintf(stderr, "option -%c requires %d arguments\n", opt, option_table[option_index].nb_params_required);
                 ret = -1;
             }
             else {
                 params[0].length = strlen(optarg);
                 nb_params++;
+#if 0
+                /* Removing this code as no options have more than one parameter */
                 while (nb_params < option_table[option_index].nb_params_required) {
                     if (*p_optind + 1 > argc) {
                         fprintf(stderr, "option -%c requires %d arguments\n", opt, option_table[option_index].nb_params_required);
@@ -615,6 +617,7 @@ int picoquic_config_command_line(int opt, int * p_optind, int argc, char const *
                         *p_optind += 1;
                     }
                 }
+#endif
             }
         }
     }

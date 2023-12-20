@@ -45,6 +45,8 @@ int config_option_letters_test()
     return ret;
 }
 
+const uint8_t null_key[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
 static picoquic_quic_config_t param1 = {
     1024, /*uint32_t nb_connections; */
     "/data/github/picoquic", /* char const* solution_dir; */
@@ -78,7 +80,7 @@ static picoquic_quic_config_t param1 = {
     "/data/www/", /* char const* www_dir; */
     { 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
       0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10}, /* uint8_t reset_seed[16]; */
-    { 0 }, /* const uint8_t* ticket_encryption_key; */
+    null_key, /* const uint8_t* ticket_encryption_key; */
     0, /* size_t ticket_encryption_key_length; */
     /* Server flags */
     1, /* unsigned int do_retry : 1; */
@@ -210,33 +212,34 @@ static config_error_test_t config_errors[] = {
     { 1, { "-c"}},
     { 1, { "-k"}},
     { 1, { "-x"}},
-    { 2, { "-x", "-1024"}},
+    { 2, { "-x", "nb_cnx"}},
     { 1, { "-l"}},
     { 1, { "-b"}},
     { 1, { "-q"}},
-    { 2, { "-p", "-443"}},
+    { 2, { "-p", "port"}},
     { 1, { "-p" }},
     { 1, { "-e", }},
     { 2, { "-e", "a" }},
     { 1, { "-m" }},
     { 1, { "-m", "-1"}},
     { 2, { "-m", "15360"}},
-    { 2, { "-P", "-3"}},
-    { 2, { "-O", "-2"}},
+    { 2, { "-P", "33"}},
+    { 2, { "-O", "22"}},
     { 2, { "-M", "5"}},
     { 2, { "-R", "17"}},
     { 1, { "-w" }},
     { 2, { "-s", "0123456789abcdexyedcba9876543210"}},
     { 2, { "-s", "0123456789abcdeffedcba987654321"}},
     { 2, { "-s", "0123456789abcdeffedcba98765432"}},
-    { 2, { "-B", "-1"}},
+    { 2, { "-B", "buffer"}},
     { 1, { "-F" }},
     { 2, { "-j", "3" }},
     { 1, { "-i" }},
     { 2, { "-I", "-1" }},
     { 2, { "-I", "255" }},
     { 2, { "-U", "XY000002" }},
-    { 2, { "-W", "-1" }}
+    { 2, { "-W", "cwin" }},
+    { 2, { "-d", "idle" }}
 };
 
 static size_t nb_config_errors = sizeof(config_errors) / sizeof(config_error_test_t);
@@ -368,17 +371,23 @@ static int config_parse_command_line(picoquic_quic_config_t* actual, const char*
             ret = -1;
             break;
         }
-        opt = x[1];
-        opt_ind++;
         if (opt_ind < argc) {
-            optval = argv[opt_ind];
-            if (optval[0] == '-') {
-                optval = NULL;
-            }
-            else {
-                opt_ind++;
+            opt = x[1];
+            opt_ind++;
+            if (opt_ind < argc) {
+                optval = argv[opt_ind];
+                if (optval[0] == '-') {
+                    optval = NULL;
+                }
+                else {
+                    opt_ind++;
+                }
             }
         }
+        else {
+            optval = NULL;
+        }
+
         ret = picoquic_config_command_line(opt, &opt_ind, argc, argv, optval, actual);
         if (ret != 0) {
             if (!expect_error) {
@@ -394,49 +403,9 @@ static int config_parse_command_line(picoquic_quic_config_t* actual, const char*
 static int config_parse_command_line_test(const picoquic_quic_config_t* expected, const char** argv, int argc)
 {
     int ret = 0;
-    int opt_ind = 0;
     picoquic_quic_config_t actual;
 
-#if 1
     ret = config_parse_command_line(&actual, argv, argc, 0);
-#else
-
-
-    picoquic_config_init(&actual);
-
-    while (opt_ind < argc && ret == 0) {
-        const char* x = argv[opt_ind];
-        const char* optval = NULL;
-        int opt;
-        if (x == NULL) {
-            /* could not parse to the end! */
-            DBG_PRINTF("Unexpected stop after %d arguments, expected %d", opt_ind, argc);
-            ret = -1;
-            break;
-        }
-        else if (x[0] != '-' || x[1] == 0 || x[2] != 0) {
-            /* could not parse to the end! */
-            DBG_PRINTF("Unexpected argument: %s", x);
-            ret = -1;
-            break;
-        }
-        opt = x[1];
-        opt_ind++;
-        if (opt_ind < argc) {
-            optval = argv[opt_ind];
-            if (optval[0] == '-') {
-                optval = NULL;
-            }
-            else {
-                opt_ind++;
-            }
-        }
-        ret = picoquic_config_command_line(opt, &opt_ind, argc, argv, optval, &actual);
-        if (ret != 0) {
-            DBG_PRINTF("Could not parse opt -%c", opt);
-        }
-    }
-#endif
 
     if (ret == 0) {
         ret = config_test_compare(expected, &actual);
