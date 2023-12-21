@@ -1103,6 +1103,87 @@ uint8_t log_test_ticket[] = {
 static const picoquic_connection_id_t logger_test_cid =
 { { 11, 12, 13, 14, 15, 16, 17, 18, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
 
+static uint8_t logger_ini_packet[] = {
+    picoquic_frame_type_crypto_hs,
+    0,
+    0x10,
+    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
+    0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF,
+    0, 0, 0, 0, 0, 0
+};
+
+static uint8_t logger_hnds_packet[] = {
+    1,
+    picoquic_frame_type_crypto_hs,
+    0,
+    0x10,
+    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
+    0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
+};
+
+static uint8_t logger_0rtt_packet[] = {
+    picoquic_frame_type_stream_range_min | 2, 0x00, 0x40, 7,
+    1, 2, 3, 4, 5, 6, 7
+};
+
+static uint8_t logger_1rtt_packet[] = {
+    picoquic_frame_type_ack,
+    0xC0, 0, 0, 1, 2, 3, 4, 5,
+    0x44, 0,
+    2,
+    5,
+    0, 0,
+    5, 12
+};
+
+static uint8_t logger_vnego_packet[] = {
+    1, 2, 3, 4, 5, 6, 7, 8, 
+};
+
+static uint8_t logger_retry_packet[] = {
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+};
+
+typedef struct st_logger_sample_packet_t {
+    picoquic_packet_type_enum p_type;
+    size_t p_size;
+    uint8_t * p_bytes;
+} logger_sample_packet_t;
+
+#define LOGGER_SAMPLE_PACKET( p_type, p_sample ) { p_type, sizeof(p_sample), p_sample }
+
+static const logger_sample_packet_t logger_sample_packets[] = {
+    LOGGER_SAMPLE_PACKET(picoquic_packet_initial, logger_ini_packet),
+    LOGGER_SAMPLE_PACKET(picoquic_packet_handshake, logger_hnds_packet),
+    LOGGER_SAMPLE_PACKET(picoquic_packet_0rtt_protected, logger_0rtt_packet),
+    LOGGER_SAMPLE_PACKET(picoquic_packet_1rtt_protected, logger_1rtt_packet),
+    LOGGER_SAMPLE_PACKET(picoquic_packet_version_negotiation, logger_vnego_packet),
+    LOGGER_SAMPLE_PACKET(picoquic_packet_retry, logger_retry_packet),
+};
+
+static size_t nb_logger_sample_packets = sizeof(logger_sample_packets) / sizeof(logger_sample_packet_t);
+
+
+void logger_test_packets(picoquic_cnx_t* cnx)
+{
+    uint64_t current_time = 1234567890ull;
+    picoquic_connection_id_t srce_cnx_id = { { 0 }, 0 };
+
+    for (size_t i = 0; i < nb_logger_sample_packets; i++) {
+        struct st_picoquic_packet_header_t ph = { 0 };
+
+        ph.ptype = logger_sample_packets[i].p_type;
+        ph.dest_cnx_id = logger_test_cid;
+        ph.srce_cnx_id = srce_cnx_id;
+        ph.pn64 = i;
+        ph.pn = (uint32_t)i;
+        ph.payload_length = logger_sample_packets[i].p_size;
+
+        picoquic_log_packet(cnx, cnx->path[0], (int)i & 1, current_time, &ph,
+            logger_sample_packets[i].p_bytes, logger_sample_packets[i].p_size);
+    }
+}
+
 int logger_test()
 {
     FILE* F = NULL;
@@ -1110,30 +1191,46 @@ int logger_test()
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     uint8_t fuzz_buffer[PICOQUIC_MAX_PACKET_SIZE];
     uint64_t random_context = 0xF00BAB;
-    picoquic_cnx_t cnx;
-    picoquic_quic_t quic;
-    memset(&cnx, 0, sizeof(cnx));
-    memset(&quic, 0, sizeof(quic));
+    struct sockaddr_in6 saddr = { 0 };
+    picoquic_cnx_t * cnx = NULL;
+    picoquic_quic_t * quic = NULL;
+    uint64_t simulated_time = 0;
 
-    cnx.quic = &quic;
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
 
-    if (picoquic_set_textlog(&quic, log_test_file) != 0) {
+    saddr.sin6_family = AF_INET6;
+    saddr.sin6_port = 443;
+    memset(&saddr.sin6_addr, 0x20, 16);
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+    else if ((cnx = picoquic_create_cnx(quic, logger_test_cid, logger_test_cid, (struct sockaddr*)&saddr,
+        simulated_time, 0, "test-sni", "test-alpn", 1)) == NULL) {
+        DBG_PRINTF("%s", "Cannot create CNX context\n");
+        ret = -1;
+    }
+    else if (picoquic_set_textlog(quic, log_test_file) != 0) {
         DBG_PRINTF("failed to open file:%s\n", log_test_file);
         ret = -1;
     }
     else {
-        cnx.initial_cnxid = logger_test_cid;
-
         for (size_t i = 0; i < nb_test_skip_list; i++) {
-            picoquic_textlog_frames(quic.F_log, 0, test_skip_list[i].val, test_skip_list[i].len);
+            picoquic_textlog_frames(quic->F_log, 0, test_skip_list[i].val, test_skip_list[i].len);
         }
-        picoquic_log_tls_ticket(&cnx,
+        picoquic_log_tls_ticket(cnx,
             log_test_ticket, (uint16_t) sizeof(log_test_ticket));
 
-        picoquic_log_app_message(&cnx, "%s.", "This is an app message test");
-        picoquic_log_app_message(&cnx, "This is app message test #%d, severity %d.", 1, 2);
+        picoquic_log_app_message(cnx, "%s.", "This is an app message test");
+        picoquic_log_app_message(cnx, "This is app message test #%d, severity %d.", 1, 2);
 
-        quic.F_log = picoquic_file_close(quic.F_log);
+        fprintf(quic->F_log, "\n");
+        logger_test_packets(cnx);
+
+        quic->F_log = picoquic_file_close(quic->F_log);
     }
 
     if (ret == 0) {
@@ -1156,14 +1253,14 @@ int logger_test()
         char log_line[1024];
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context, -1);
 
-        if (picoquic_set_textlog(&quic, log_packet_test_file) != 0) {
+        if (picoquic_set_textlog(quic, log_packet_test_file) != 0) {
             DBG_PRINTF("failed to open file:%s\n", log_packet_test_file);
             ret = -1;
         }
         else {
-            ret &= fprintf(quic.F_log, "Log packet test #%d\n", (int)i);
-            picoquic_textlog_frames(quic.F_log, 0, buffer, bytes_max);
-            quic.F_log = picoquic_file_close(quic.F_log);
+            ret &= fprintf(quic->F_log, "Log packet test #%d\n", (int)i);
+            picoquic_textlog_frames(quic->F_log, 0, buffer, bytes_max);
+            quic->F_log = picoquic_file_close(quic->F_log);
         }
 
         if ((F = picoquic_file_open(log_packet_test_file, "r")) == NULL) {
@@ -1199,7 +1296,7 @@ int logger_test()
             uint8_t extra_bytes[4] = { 0, 0, 0, 0 };
             size_t bytes_max = 0;
 
-            if (picoquic_set_textlog(&quic, log_error_test_file) != 0) {
+            if (picoquic_set_textlog(quic, log_error_test_file) != 0) {
                 DBG_PRINTF("failed to open file:%s\n", log_error_test_file);
                 ret = -1;
                 break;
@@ -1213,9 +1310,9 @@ int logger_test()
                 bytes_max += sizeof(extra_bytes);
             }
 
-            picoquic_textlog_frames(quic.F_log, 0, buffer, bytes_max);
+            picoquic_textlog_frames(quic->F_log, 0, buffer, bytes_max);
 
-            quic.F_log = picoquic_file_close(quic.F_log);
+            quic->F_log = picoquic_file_close(quic->F_log);
         }
     }
 
@@ -1223,23 +1320,27 @@ int logger_test()
     for (size_t i = 0; ret == 0 && i < 100; i++) {
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context, -1);
 
-        if (picoquic_set_textlog(&quic, log_fuzz_test_file) != 0) {
+        if (picoquic_set_textlog(quic, log_fuzz_test_file) != 0) {
             DBG_PRINTF("failed to open file:%s\n", log_fuzz_test_file);
             ret = PICOQUIC_ERROR_INVALID_FILE;
             break;
         }
 
-        ret &= fprintf(quic.F_log, "Log fuzz test #%d\n", (int)i);
-        picoquic_textlog_frames(quic.F_log, 0, buffer, bytes_max);
+        ret &= fprintf(quic->F_log, "Log fuzz test #%d\n", (int)i);
+        picoquic_textlog_frames(quic->F_log, 0, buffer, bytes_max);
 
         /* Attempt to log fuzzed packets, and hope nothing crashes */
         for (size_t j = 0; j < 100; j++) {
-            ret &= fprintf(quic.F_log, "Log fuzz test #%d, packet %d\n", (int)i, (int)j);
-            fflush(quic.F_log);
+            ret &= fprintf(quic->F_log, "Log fuzz test #%d, packet %d\n", (int)i, (int)j);
+            fflush(quic->F_log);
             skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
-            picoquic_textlog_frames(quic.F_log, 0, fuzz_buffer, bytes_max);
+            picoquic_textlog_frames(quic->F_log, 0, fuzz_buffer, bytes_max);
         }
-        quic.F_log = picoquic_file_close(quic.F_log);
+        quic->F_log = picoquic_file_close(quic->F_log);
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
     }
 
     return ret;

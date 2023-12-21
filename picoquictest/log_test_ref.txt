@@ -42,3 +42,35 @@
 0b0c0d0e0f101112: ticket extensions: 42(ED: ffffffff),
 0b0c0d0e0f101112: This is an app message test.
 0b0c0d0e0f101112: This is app message test #1, severity 2.
+
+0b0c0d0e0f101112: Sending packet type: 2 (initial), S0, Q1, Version 0,
+0b0c0d0e0f101112:     <0b0c0d0e0f101112>, <>, Seq: 0, pl: 0
+0b0c0d0e0f101112:     Token length: 0
+0b0c0d0e0f101112:     Prepared 25 bytes
+0b0c0d0e0f101112:     Crypto HS frame, offset 0, length 16: a0a1a2a3a4a5a6a7...
+0b0c0d0e0f101112:     padding, 6 bytes
+
+0b0c0d0e0f101112: Receiving packet type: 4 (handshake), S0, Q1, Version 0,
+0b0c0d0e0f101112:     <0b0c0d0e0f101112>, <>, Seq: 1, pl: 0
+0b0c0d0e0f101112:     Decrypted 20 bytes
+0b0c0d0e0f101112:     ping, 1 bytes
+0b0c0d0e0f101112:     Crypto HS frame, offset 0, length 16: a0a1a2a3a4a5a6a7...
+
+0b0c0d0e0f101112: Sending packet type: 5 (0rtt protected), S0, Q1, Version 0,
+0b0c0d0e0f101112:     <0b0c0d0e0f101112>, <>, Seq: 2, pl: 0
+0b0c0d0e0f101112:     Prepared 11 bytes
+0b0c0d0e0f101112:     Stream 0, offset 0, length 7, fin = 0: 01020304050607
+
+0b0c0d0e0f101112: Receiving packet type: 6 (1rtt protected), S0, Q1,
+0b0c0d0e0f101112:     <0b0c0d0e0f101112>, Seq: 3 (3), Phi: 0,
+0b0c0d0e0f101112:     Decrypted 17 bytes
+0b0c0d0e0f101112:     ACK (nb=2), 4328719360-4328719365, 4328719358, 4328719339-4328719351
+
+0b0c0d0e0f101112: Sending packet type: 1 (version negotiation), S0, Q1,
+0b0c0d0e0f101112:     <0b0c0d0e0f101112>, <>
+0b0c0d0e0f101112:     versions: 1020304, 5060708, 
+
+0b0c0d0e0f101112: Receiving packet type: 3 (retry), S0, Q1, Version 0,
+0b0c0d0e0f101112:     <0b0c0d0e0f101112>, <>, Seq: 5, pl: 0
+0b0c0d0e0f101112:     packet too short, checksum: 16 bytes, only 16 bytes available.
+

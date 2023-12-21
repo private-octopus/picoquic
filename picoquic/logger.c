@@ -547,7 +547,7 @@ static void textlog_negotiation_packet(FILE* F, uint64_t log_cnxid64,
     while (byte_index + 4 <= length) {
         vn = PICOPARSE_32(bytes + byte_index);
         byte_index += 4;
-        fprintf(F, "%x, ", vn);
+        fprintf(F, "%02x, ", vn);
     }
     fprintf(F, "\n");
 }
@@ -1343,47 +1343,6 @@ size_t textlog_time_stamp_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
         fprintf(F, "    Time Stamp: %" PRIu64 "\n",
             time_stamp);
         byte_index = bytes - bytes0;
-    }
-
-    return byte_index;
-}
-
-size_t textlog_qoe_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
-{
-    const uint8_t* bytes_end = bytes + bytes_max;
-    const uint8_t* bytes0 = bytes;
-    uint64_t path_id;
-    size_t length;
-    size_t byte_index = 0;
-
-
-    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
-        (bytes = picoquic_frames_varlen_decode(bytes, bytes_end, &length)) == NULL ||
-        length > bytes_max - (bytes - bytes0)) {
-        fprintf(F, "    Malformed QOE frame: ");
-        /* log format error */
-        for (size_t i = 0; i < bytes_max && i < 8; i++) {
-            fprintf(F, "%02x", bytes0[i]);
-        }
-        if (bytes_max > 8) {
-            fprintf(F, "...");
-        }
-        fprintf(F, "\n");
-        byte_index = bytes_max;
-    }
-    else {
-        fprintf(F, "    QOE, path: %" PRIu64 ", length: %zu, v: ",
-            path_id, length);
-        for (size_t i = 0; i < 10 && i < length; i++) {
-            fprintf(F, "%02x", bytes[i]);
-        }
-        if (length > 10) {
-            fprintf(F, "...");
-        }
-        fprintf(F, "\n");
-
-        byte_index = (bytes - bytes0) + (size_t)length;
     }
 
     return byte_index;
