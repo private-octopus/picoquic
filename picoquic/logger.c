@@ -1258,7 +1258,6 @@ size_t textlog_crypto_hs_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 
 size_t textlog_datagram_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint64_t frame_id)
 {
-    uint8_t frame_id = bytes[0];
     unsigned int has_length = frame_id & 1;
     size_t l_l = 0;
     uint64_t length = 0;
@@ -1276,7 +1275,7 @@ size_t textlog_datagram_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, u
 
     if ((has_length && l_l == 0) || byte_index + length > bytes_max) {
         /* log format error */
-        fprintf(F, "    Malformed %s frame: ", textlog_frame_names(frame_id));
+        fprintf(F, "    Malformed %s: ", textlog_frame_names(frame_id));
         for (size_t i = 0; i < bytes_max && i < 8; i++) {
             fprintf(F, "%02x", bytes[i]);
         }
@@ -1288,7 +1287,7 @@ size_t textlog_datagram_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, u
         byte_index = bytes_max;
     }
     else {
-        fprintf(F, "    %s frame", textlog_frame_names(frame_id));
+        fprintf(F, "    %s", textlog_frame_names(frame_id));
         fprintf(F, ", length: %d: ", (int)length);
         for (size_t i = 0; i < 8 && i < length; i++) {
             fprintf(F, "%02x", bytes[byte_index + i]);
