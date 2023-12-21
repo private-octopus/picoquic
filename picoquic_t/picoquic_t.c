@@ -441,8 +441,11 @@ static const picoquic_test_def_t test_table[] = {
     { "fuzz_initial", fuzz_initial_test},
     { "cnx_stress", cnx_stress_unit_test },
     { "cnx_ddos", cnx_ddos_unit_test },
+    { "config_option", config_option_test },
     { "config_option_letters", config_option_letters_test },
-    { "config_option", config_option_test }
+    { "config_quic", config_quic_test },
+    { "config_usage", config_usage_test }
+    
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

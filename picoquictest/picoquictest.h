@@ -447,6 +447,8 @@ int netperf_bbr_test();
 int nat_attack_test();
 int config_option_letters_test();
 int config_option_test();
+int config_quic_test();
+int config_usage_test();
 int h3zero_post_test();
 int h09_post_test();
 int demo_alpn_test();
