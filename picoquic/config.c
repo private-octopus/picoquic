@@ -591,7 +591,7 @@ int picoquic_config_command_line(int opt, int * p_optind, int argc, char const *
 
     if (option_index == -1 || option_table[option_index].nb_params_required > 1) {
         /* No options have more than one parameter */
-        fprintf(stderr, "Unknown option: -%c\n", opt);
+        fprintf(stderr, "Unknown or incorrect option: -%c\n", opt);
         ret = -1;
     }
     else {
@@ -604,9 +604,12 @@ int picoquic_config_command_line(int opt, int * p_optind, int argc, char const *
             else {
                 params[0].length = strlen(optarg);
                 nb_params++;
-                ret = config_set_option(&option_table[option_index], params, nb_params, config);
             }
         }
+    }
+
+    if (ret == 0) {
+        ret = config_set_option(&option_table[option_index], params, nb_params, config);
     }
 
     return ret;
