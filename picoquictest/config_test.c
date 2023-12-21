@@ -364,7 +364,7 @@ static int config_parse_command_line(picoquic_quic_config_t* actual, const char*
             break;
         }
         else if (x[0] != '-' || x[1] == 0 || x[2] != 0) {
-            /* could not parse to the end! */
+            /* Either next argument, or single "-", or more than one char ! */
             if (!expect_error) {
                 DBG_PRINTF("Unexpected argument: %s", x);
             }
