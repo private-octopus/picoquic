@@ -151,6 +151,7 @@ static uint8_t test_frame_type_ack[] = {
     0, 0,
     5, 12
 };
+
 static uint8_t test_frame_type_ack_ecn[] = {
     picoquic_frame_type_ack_ecn,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
@@ -267,6 +268,35 @@ static uint8_t test_frame_type_bdp[] = {
     (uint8_t)(picoquic_frame_type_bdp >> 8), (uint8_t)(picoquic_frame_type_bdp & 0xFF),
     0x01, 0x02, 0x03, 
     0x04, 0x0A, 0x0, 0x0, 0x01
+};
+
+static uint8_t test_frame_type_ack_mp[] = {
+    (uint8_t)(0x80|(picoquic_frame_type_ack_mp>>24)),
+    (uint8_t)(picoquic_frame_type_ack_mp>>16),
+    (uint8_t)(picoquic_frame_type_ack_mp>>8),
+    (uint8_t)(picoquic_frame_type_ack_mp),
+    0,
+    0xC0, 0, 0, 1, 2, 3, 4, 5,
+    0x44, 0,
+    2,
+    5,
+    0, 0,
+    5, 12
+};
+
+static uint8_t test_frame_type_ack_mp_ecn[] = {
+    (uint8_t)(0x80|(picoquic_frame_type_ack_mp_ecn>>24)),
+    (uint8_t)(picoquic_frame_type_ack_mp_ecn>>16),
+    (uint8_t)(picoquic_frame_type_ack_mp_ecn>>8),
+    (uint8_t)(picoquic_frame_type_ack_mp_ecn),
+    0,
+    0xC0, 0, 0, 1, 2, 3, 4, 5,
+    0x44, 0,
+    2,
+    5,
+    0, 0,
+    5, 12,
+    3, 0, 1
 };
 
 #define TEST_SKIP_ITEM(n, x, a, l, e, err, skip_err) \
@@ -576,6 +606,16 @@ test_skip_frames_t test_frame_error_list[] = {
 };
 
 size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_skip_frames_t);
+
+/* Log list:
+* List of frames that are interesting when testing the log, but
+* should not be added to the "skip list" 
+ */
+test_skip_frames_t test_log_list[] = {
+    TEST_SKIP_ITEM("ack_mp", test_frame_type_ack_mp, 1, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("ack_mp_ecn", test_frame_type_ack_mp_ecn, 1, 0, 3, 0, 0),
+};
+size_t nb_test_log_list = sizeof(test_log_list) / sizeof(test_skip_frames_t);
 
 static size_t format_random_packet(uint8_t * bytes, size_t bytes_max, uint64_t * random_context, int epoch)
 {
@@ -1221,6 +1261,10 @@ int logger_test()
         for (size_t i = 0; i < nb_test_skip_list; i++) {
             picoquic_textlog_frames(quic->F_log, 0, test_skip_list[i].val, test_skip_list[i].len);
         }
+        for (size_t i = 0; i < nb_test_log_list; i++) {
+            picoquic_textlog_frames(quic->F_log, 0, test_log_list[i].val, test_log_list[i].len);
+        }
+        fprintf(quic->F_log, "\n");
         picoquic_log_tls_ticket(cnx,
             log_test_ticket, (uint16_t) sizeof(log_test_ticket));
 
