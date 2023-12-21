@@ -75,5 +75,10 @@
 
 0b0c0d0e0f101112: Receiving packet type: 3 (retry), S0, Q1, Version 0,
 0b0c0d0e0f101112:     <0b0c0d0e0f101112>, <>, Seq: 5, pl: 0
-0b0c0d0e0f101112:     packet too short, checksum: 16 bytes, only 16 bytes available.
+0b0c0d0e0f101112:     Token length: 8, Checksum length: 16
+0b0c0d0e0f101112:     Token: 1f20212223242526
 
+0b0c0d0e0f101112: Receiving 1234 bytes from [2020:2020:2020:2020:2020:2020:2020:2020]:443 at T=12.345000 (8182bbd)
+0b0c0d0e0f101112: Sending 55 bytes to 1.1.1.1:443 at T=12.345000 (8182bbd)
+123456789abcdef0: Receiving 1234 bytes from [2020:2020:2020:2020:2020:2020:2020:2020]:443 at T=135.801789 (8182bbd)
+123456789abcdef0: Sending 55 bytes to 1.1.1.1:443 at T=135.801789 (8182bbd)

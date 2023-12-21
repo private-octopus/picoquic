@@ -43,6 +43,8 @@ static void textlog_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
         (unsigned long long)time_sec, time_usec, label2);
 }
 
+#if 0
+/* Does not appear needed. If needed, move to loglib common file. */
 const char * textlog_fin_or_event_name(picoquic_call_back_event_t ev)
 {
     char const * text = "unknown";
@@ -86,7 +88,7 @@ const char * textlog_fin_or_event_name(picoquic_call_back_event_t ev)
 
     return text;
 }
-
+#endif
 static void textlog_prefix_initial_cid64(FILE* F, uint64_t log_cnxid64)
 {
     if (log_cnxid64 != 0) {
@@ -144,12 +146,18 @@ static void textlog_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t
         time_sec = delta_t / 1000000;
         time_usec = (uint32_t)(delta_t % 1000000);
     }
+    else {
+        time_sec = current_time / 1000000;
+        time_usec = (uint32_t)(current_time % 1000000);
+    }
 
     fprintf(F, " at T=%llu.%06d (%llx)\n",
         (unsigned long long)time_sec, time_usec,
         (unsigned long long)current_time);
 }
 
+#if 0
+/* If useful, this should move to a common module for logging */
 char const* textlog_state_name(picoquic_state_enum state)
 {
     char const* state_name = "unknown";
@@ -220,6 +228,7 @@ char const* textlog_state_name(picoquic_state_enum state)
     }
     return state_name;
 }
+#endif
 
 char const* textlog_ptype_name(picoquic_packet_type_enum ptype)
 {
@@ -1247,7 +1256,7 @@ size_t textlog_crypto_hs_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-size_t textlog_datagram_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+size_t textlog_datagram_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint64_t frame_id)
 {
     uint8_t frame_id = bytes[0];
     unsigned int has_length = frame_id & 1;
@@ -1267,7 +1276,7 @@ size_t textlog_datagram_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 
     if ((has_length && l_l == 0) || byte_index + length > bytes_max) {
         /* log format error */
-        fprintf(F, "    Malformed Datagram frame: ");
+        fprintf(F, "    Malformed %s frame: ", textlog_frame_names(frame_id));
         for (size_t i = 0; i < bytes_max && i < 8; i++) {
             fprintf(F, "%02x", bytes[i]);
         }
@@ -1279,7 +1288,7 @@ size_t textlog_datagram_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
         byte_index = bytes_max;
     }
     else {
-        fprintf(F, "    Datagram frame");
+        fprintf(F, "    %s frame", textlog_frame_names(frame_id));
         fprintf(F, ", length: %d: ", (int)length);
         for (size_t i = 0; i < 8 && i < length; i++) {
             fprintf(F, "%02x", bytes[byte_index + i]);
@@ -1624,7 +1633,7 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
             break;
         case picoquic_frame_type_datagram:
         case picoquic_frame_type_datagram_l:
-            byte_index += textlog_datagram_frame(F, bytes + byte_index, length - byte_index);
+            byte_index += textlog_datagram_frame(F, bytes + byte_index, length - byte_index, frame_id);
             break;
         case picoquic_frame_type_ack_frequency:
             byte_index += textlog_ack_frequency_frame(F, bytes + byte_index, length - byte_index);

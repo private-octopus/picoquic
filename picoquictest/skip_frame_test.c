@@ -1181,7 +1181,7 @@ static uint8_t logger_vnego_packet[] = {
 };
 
 static uint8_t logger_retry_packet[] = {
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+    31, 32, 33, 34, 35, 36, 37, 38, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
 
 typedef struct st_logger_sample_packet_t {
@@ -1221,7 +1221,42 @@ void logger_test_packets(picoquic_cnx_t* cnx)
 
         picoquic_log_packet(cnx, cnx->path[0], (int)i & 1, current_time, &ph,
             logger_sample_packets[i].p_bytes, logger_sample_packets[i].p_size);
+
     }
+}
+
+void logger_test_pdus(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
+{
+    uint64_t current_time = cnx->start_time + 12345000;
+    uint64_t val64 = 0x123456789abcdef0ull;
+    struct sockaddr_in6 s6_1 = { 0 };
+    struct sockaddr_in6 s6_2 = { 0 };
+    struct sockaddr_in s4_1 = { 0 };
+    struct sockaddr_in s4_2 = { 0 };
+
+    s6_1.sin6_family = AF_INET6;
+    s6_1.sin6_port = htons(443);
+    memset(&s6_1.sin6_addr, 0x20, 16);
+    s6_2.sin6_family = AF_INET6;
+    s6_2.sin6_port = htons(12345);
+    memset(&s6_2.sin6_addr, 0x21, 16);
+    s4_1.sin_family = AF_INET;
+    s4_1.sin_port = htons(443);
+    memset(&s4_1.sin_addr, 0x01, 4);
+    s4_2.sin_family = AF_INET;
+    s4_2.sin_port = htons(12345);
+    memset(&s4_2.sin_addr, 0x22, 4);
+
+
+    picoquic_log_pdu(cnx, 1, current_time,
+        (struct sockaddr*)&s6_1, (struct sockaddr*)&s6_2, 1234);
+    picoquic_log_pdu(cnx, 0, current_time,
+        (struct sockaddr*)&s4_1, (struct sockaddr*)&s4_2, 55);
+
+    picoquic_log_quic_pdu(quic, 1, current_time, val64,
+        (struct sockaddr*)&s6_1, (struct sockaddr*)&s6_2, 1234);
+    picoquic_log_quic_pdu(quic, 0, current_time, val64,
+        (struct sockaddr*)&s4_1, (struct sockaddr*)&s4_2, 55);
 }
 
 int logger_test()
@@ -1234,7 +1269,7 @@ int logger_test()
     struct sockaddr_in6 saddr = { 0 };
     picoquic_cnx_t * cnx = NULL;
     picoquic_quic_t * quic = NULL;
-    uint64_t simulated_time = 0;
+    uint64_t simulated_time = 123456789;
 
     quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, simulated_time,
@@ -1273,6 +1308,7 @@ int logger_test()
 
         fprintf(quic->F_log, "\n");
         logger_test_packets(cnx);
+        logger_test_pdus(quic, cnx);
 
         quic->F_log = picoquic_file_close(quic->F_log);
     }
