@@ -638,6 +638,7 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
     uint64_t ack_delay;
     uint64_t ecnx3[3];
     int suspended = debug_printf_reset(1);
+    int error_detected = 0;
     int ret;
 
     ret = picoquic_parse_ack_header(bytes, bytes_max, &num_block, (has_path_id) ? &path_id : NULL,
@@ -657,7 +658,7 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
 
     /* decoding the acks */
 
-    for (;;) {
+    for (;!error_detected;) {
         uint64_t range;
         uint64_t block_to_block;
 
@@ -666,7 +667,8 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
             if (cnx_id64 != 0) {
                 fprintf(F, "%" PRIx64 ": ", cnx_id64);
             }
-            fprintf(F, "    Malformed ACK RANGE, %d blocks remain.", (int)num_block);
+            fprintf(F, "        Malformed ACK RANGE, %d blocks remain.", (int)num_block);
+            error_detected = 1;
             break;
         }
 
@@ -688,7 +690,7 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
             if (cnx_id64 != 0) {
                 fprintf(F, "%" PRIx64 ": ", cnx_id64);
             }
-            fprintf(F, "    ack range error: largest=%" PRIu64 ", range=%" PRIu64, largest, range);
+            fprintf(F, "        ack range error: largest=%" PRIu64 ", range=%" PRIu64, largest, range);
             byte_index = bytes_max;
             break;
         }
@@ -708,8 +710,9 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
             if (cnx_id64 != 0) {
                 fprintf(F, "%" PRIx64 ": ", cnx_id64);
             }
-            fprintf(F, "    Malformed ACK GAP, %d blocks remain.", (int)num_block);
+            fprintf(F, "        Malformed ACK GAP, %d blocks remain.", (int)num_block);
             byte_index = bytes_max;
+            error_detected = 1;
             break;
         }
         else {
@@ -720,8 +723,9 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
                 if (cnx_id64 != 0) {
                     fprintf(F, "%" PRIx64 ": ", cnx_id64);
                 }
-                fprintf(F, "    Malformed ACK GAP, requires %d bytes out of %d", (int)picoquic_varint_skip(bytes),
+                fprintf(F, "        Malformed ACK GAP, requires %d bytes out of %d", (int)picoquic_varint_skip(bytes),
                     (int)(bytes_max - byte_index));
+                error_detected = 1;
                 break;
             }
             else {
@@ -736,7 +740,7 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
             if (cnx_id64 != 0) {
                 fprintf(F, "%" PRIx64 ": ", cnx_id64);
             }
-            fprintf(F, "    ack gap error: largest=%" PRIu64 ", range=%" PRIu64 ", gap=%" PRIu64,
+            fprintf(F, "        ack gap error: largest=%" PRIu64 ", range=%" PRIu64 ", gap=%" PRIu64,
                 largest, range, block_to_block - range);
             byte_index = bytes_max;
             break;
@@ -747,7 +751,7 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
 
     if (is_ecn) {
         /* Decode the ecn counts */
-        for (int ecnx = 0; ecnx < 3; ecnx++) {
+        for (int ecnx = 0; ecnx < 3 && !error_detected; ecnx++) {
             size_t l_ecnx = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &ecnx3[ecnx]);
 
             if (l_ecnx == 0) {
@@ -755,17 +759,22 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
                 if (cnx_id64 != 0) {
                     fprintf(F, "%" PRIx64 ": ", cnx_id64);
                 }
-                fprintf(F, "    incorrect ECN encoding");
+                fprintf(F, "        incorrect ECN encoding");
                 byte_index = bytes_max;
+                error_detected = 1;
                 break;
             }
             else {
                 byte_index += l_ecnx;
             }
         }
-
-        fprintf(F, ", ect0=%llu, ect1=%llu, ce=%llu\n",
-            (unsigned long long)ecnx3[0], (unsigned long long)ecnx3[1], (unsigned long long)ecnx3[2]);
+        if (!error_detected) {
+            fprintf(F, ", ect0=%llu, ect1=%llu, ce=%llu\n",
+                (unsigned long long)ecnx3[0], (unsigned long long)ecnx3[1], (unsigned long long)ecnx3[2]);
+        }
+        else {
+            fprintf(F, "\n");
+        }
     }
     else {
         fprintf(F, "\n");

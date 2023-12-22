@@ -60,14 +60,13 @@
     Malformed STOP SENDING, requires more than 2 bytes
     Malformed new_token, requires 8 bytes out of 26
     ack (nb=2), 4328719360-4328719365
-    ack gap error: largest=4328719365, range=6, gap=4611686018427387904
+        ack gap error: largest=4328719365, range=6, gap=4611686018427387904
     ack (nb=1)
-    ack range error: largest=2, range=4
+        ack range error: largest=2, range=4
     ack (nb=2), 4328719360-4328719365
-    ack range error: largest=4328719358, range=4611686018427387904
+        ack range error: largest=4328719358, range=4611686018427387904
     ack_ecn (nb=4294967295), 4328719360-4328719365, 4328719358, 4328719339-4328719351, 4328719334
-    Malformed ACK RANGE, -5 blocks remain.
-    incorrect ECN encoding, ect0=0, ect1=14757395258967641292, ce=14757395258967641292
+        Malformed ACK RANGE, -5 blocks remain.
     Malformed crypto_hs frame.
     Malformed datagram: 318fffffffa0a1a2...
     ping, 1 bytes
