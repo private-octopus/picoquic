@@ -795,11 +795,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     cnx->remote_parameters.max_datagram_frame_size = (uint32_t)
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     break;
-#if 0
-                case picoquic_tp_enable_loss_bit_old:
-                    /* The old loss bit definition is obsolete */
-                    break;
-#endif
                 case picoquic_tp_enable_loss_bit: {
                     uint64_t enabled = picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     if (ret == 0) {

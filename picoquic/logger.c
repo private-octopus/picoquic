@@ -440,11 +440,6 @@ char const* textlog_tp_name(picoquic_tp_enum tp_number)
     case picoquic_tp_test_large_chello:
         tp_name = "large_chello";
         break;
-#if 0
-    case picoquic_tp_enable_loss_bit_old:
-        tp_name = "enable_loss_bit(old)";
-        break;
-#endif
     case picoquic_tp_enable_loss_bit:
         tp_name = "enable_loss_bit";
         break;
@@ -655,14 +650,6 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
 
     /* Now that the size is good, print it */
     fprintf(F, "    %s (nb=%u)", textlog_frame_names(frame_id), (int)num_block);
-#if 0
-    if (is_ecn) {
-        fprintf(F, "    ACK_ECN (nb=%u)", (int)num_block);
-    }
-    else {
-        fprintf(F, "    ACK (nb=%u)", (int)num_block);
-    }
-#endif
 
     if (has_path_id) {
         fprintf(F, ", path=%" PRIu64, path_id);
@@ -933,22 +920,11 @@ size_t textlog_generic_close_frame(FILE* F, const uint8_t* bytes, size_t bytes_m
     return byte_index;
 }
 
-#if 1
 #define textlog_connection_close_frame(F, bytes_val, bytes_max, cnx_id64) \
   textlog_generic_close_frame(F, bytes_val, bytes_max, picoquic_frame_type_connection_close, cnx_id64)
 #define textlog_application_close_frame(F, bytes_val, bytes_max, cnx_id64) \
   textlog_generic_close_frame(F, bytes_val, bytes_max, picoquic_frame_type_application_close, cnx_id64)
-#else
-size_t textlog_connection_close_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint64_t cnx_id64)
-{
-    return textlog_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_connection_close, cnx_id64);
-}
 
-size_t textlog_application_close_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint64_t cnx_id64)
-{
-    return textlog_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_application_close, cnx_id64);
-}
-#endif
 size_t textlog_max_data_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
