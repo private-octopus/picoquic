@@ -1138,20 +1138,20 @@ size_t textlog_retire_connection_id_frame(FILE* F, const uint8_t* bytes, size_t 
 size_t textlog_new_token_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
-    size_t min_size = 1;
+    uint64_t min_size = 1;
     size_t l_toklen = 0;
     uint64_t toklen = 0;
 
     l_toklen = picoquic_varint_decode(&bytes[byte_index], bytes_max, &toklen);
 
-    min_size += l_toklen + (size_t)toklen;
+    min_size += l_toklen + toklen;
 
     if (l_toklen == 0 || min_size > bytes_max) {
         fprintf(F, "    Malformed %s, requires %d bytes out of %d\n",
             textlog_frame_names(picoquic_frame_type_new_token), (int)min_size, (int)bytes_max);
         return bytes_max;
     } else {
-        byte_index += l_toklen;
+        byte_index += (size_t)l_toklen;
         fprintf(F, "    %s[%d]: 0x",
             textlog_frame_names(picoquic_frame_type_new_token), (int)toklen);
         for (uint64_t x = 0; x < toklen && x < 16u; x++) {
