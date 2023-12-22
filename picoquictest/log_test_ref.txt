@@ -41,8 +41,10 @@
     ack_mp_ecn (nb=2), path=0, 4328719360-4328719365, 4328719358, 4328719339-4328719351, ect0=3, ect1=0, ce=1
     reset_stream 17, Error 0x00000001, Offset 0x3fffffffffffffff.
     reset_stream 4611686018427387903, Error 0x00000001, Offset 0x1.
+    Malformed RESET STREAM, requires 12 bytes out of 7
     connection_close, Error 0xcfff, Reason length 4611686018427387903
     Malformed connection_close, requires 4611686018427387917 bytes out of 23
+    Malformed connection_close, requires 9 bytes out of 4
     application_close, Error 0x0404, Reason length 4611686018427387903
     Malformed application_close, requires 4611686018427387914 bytes out of 15
     max_stream_data, Stream: 4611686018427387903, max data: 0x10000.
@@ -55,6 +57,7 @@
     new_token[8]: 0x090001a0a1a2a3a4
     Unknown frame, type: 631678888 (0xa5a6a7a8a9aaabac... + 3 bytes)
     stop_sending: Stream 19 (0x13), Error 0x17.
+    Malformed STOP SENDING, requires more than 2 bytes
     Malformed new_token, requires 8 bytes out of 26
     ack (nb=2), 4328719360-4328719365
     ack gap error: largest=4328719365, range=6, gap=4611686018427387904

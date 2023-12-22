@@ -931,6 +931,12 @@ size_t textlog_generic_close_frame(FILE* F, const uint8_t* bytes, size_t bytes_m
     return byte_index;
 }
 
+#if 1
+#define textlog_connection_close_frame(F, bytes_val, bytes_max, cnx_id64) \
+  textlog_generic_close_frame(F, bytes_val, bytes_max, picoquic_frame_type_connection_close, cnx_id64)
+#define textlog_application_close_frame(F, bytes_val, bytes_max, cnx_id64) \
+  textlog_generic_close_frame(F, bytes_val, bytes_max, picoquic_frame_type_application_close, cnx_id64)
+#else
 size_t textlog_connection_close_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint64_t cnx_id64)
 {
     return textlog_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_connection_close, cnx_id64);
@@ -940,7 +946,7 @@ size_t textlog_application_close_frame(FILE* F, const uint8_t* bytes, size_t byt
 {
     return textlog_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_application_close, cnx_id64);
 }
-
+#endif
 size_t textlog_max_data_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
