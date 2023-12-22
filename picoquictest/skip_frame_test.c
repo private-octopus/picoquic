@@ -613,7 +613,7 @@ size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_sk
  */
 test_skip_frames_t test_log_list[] = {
     TEST_SKIP_ITEM("ack_mp", test_frame_type_ack_mp, 1, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("ack_mp_ecn", test_frame_type_ack_mp_ecn, 1, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("ack_mp_ecn", test_frame_type_ack_mp_ecn, 1, 0, 3, 0, 0)
 };
 size_t nb_test_log_list = sizeof(test_log_list) / sizeof(test_skip_frames_t);
 
@@ -1239,7 +1239,7 @@ void logger_test_pdus(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
     memset(&s6_1.sin6_addr, 0x20, 16);
     s6_2.sin6_family = AF_INET6;
     s6_2.sin6_port = htons(12345);
-    memset(&s6_2.sin6_addr, 0x21, 16);
+    memset(&s6_2.sin6_addr, 0x01, 16);
     s4_1.sin_family = AF_INET;
     s4_1.sin_port = htons(443);
     memset(&s4_1.sin_addr, 0x01, 4);
@@ -1298,6 +1298,9 @@ int logger_test()
         }
         for (size_t i = 0; i < nb_test_log_list; i++) {
             picoquic_textlog_frames(quic->F_log, 0, test_log_list[i].val, test_log_list[i].len);
+        }
+        for (size_t i = 0; i < nb_test_frame_error_list; i++) {
+            picoquic_textlog_frames(quic->F_log, 0, test_frame_error_list[i].val, test_frame_error_list[i].len);
         }
         fprintf(quic->F_log, "\n");
         picoquic_log_tls_ticket(cnx,
@@ -1368,7 +1371,6 @@ int logger_test()
             (void)picoquic_file_close(F);
         }
     }
-
 
     /* Log a series of known bad packets  */
     for (size_t i = 0; ret == 0 && i < nb_test_frame_error_list; i++) {

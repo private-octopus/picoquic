@@ -569,49 +569,22 @@ static void textlog_retry_packet(FILE* F, uint64_t log_cnxid64,
 {
     size_t byte_index = ph->offset;
     int token_length = 0;
-    uint8_t odcil;
     int payload_length = (int)(ph->payload_length);
     int is_err = 0;
-    int has_checksum = picoquic_supported_versions[ph->version_index].version_retry_key != NULL;
+    int checksum_length = 16;
 
-    if (!has_checksum) {
-        odcil = bytes[byte_index];
-        byte_index++;
-        payload_length--;
-
-        if ((int)odcil > payload_length) {
-            textlog_prefix_initial_cid64(F, log_cnxid64);
-            fprintf(F, "    packet too short, ODCIL: %d, only %d bytes available.\n",
-                odcil, payload_length);
-            is_err = 1;
-        }
-        else {
-            /* Dump the old connection ID */
-            textlog_prefix_initial_cid64(F, log_cnxid64);
-            fprintf(F, "    ODCIL: <");
-            for (uint8_t i = 0; i < odcil; i++) {
-                fprintf(F, "%02x", bytes[byte_index++]);
-            }
-            token_length = payload_length - odcil;
-            fprintf(F, ">, Token length: %d\n", token_length);
-        }
+    if (checksum_length >= payload_length) {
+        textlog_prefix_initial_cid64(F, log_cnxid64);
+        fprintf(F, "    packet too short, checksum: %d bytes, only %d bytes available.\n",
+            checksum_length, payload_length);
+        is_err = 1;
     }
     else {
-        int checksum_length = 16;
+        token_length = payload_length - checksum_length;
 
-        if (checksum_length >= payload_length) {
-            textlog_prefix_initial_cid64(F, log_cnxid64);
-            fprintf(F, "    packet too short, checksum: %d bytes, only %d bytes available.\n",
-                checksum_length, payload_length);
-            is_err = 1;
-        }
-        else {
-            token_length = payload_length - checksum_length;
-
-            textlog_prefix_initial_cid64(F, log_cnxid64);
-            fprintf(F, "    Token length: %d, Checksum length: %d\n",
-                token_length, checksum_length);
-        }
+        textlog_prefix_initial_cid64(F, log_cnxid64);
+        fprintf(F, "    Token length: %d, Checksum length: %d\n",
+            token_length, checksum_length);
     }
 
     /* Print the token if there was no error */
@@ -646,7 +619,8 @@ size_t textlog_stream_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
     if (ret != 0)
         return bytes_max;
 
-    fprintf(F, "    Stream %" PRIu64 ", offset %" PRIu64 ", length %d, fin = %d", stream_id,
+    fprintf(F, "    %s %" PRIu64 ", offset %" PRIu64 ", length %d, fin = %d",
+        textlog_frame_names(bytes[0]), stream_id,
         offset, (int)data_length, fin);
 
     fprintf(F, ": ");
@@ -699,7 +673,11 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
         uint64_t block_to_block;
 
         if (byte_index >= bytes_max) {
-            fprintf(F, ", Malformed ACK RANGE, %d blocks remain.\n", (int)num_block);
+            fprintf(F, "\n");
+            if (cnx_id64 != 0) {
+                fprintf(F, "%" PRIx64 ": ", cnx_id64);
+            }
+            fprintf(F, "    Malformed ACK RANGE, %d blocks remain.", (int)num_block);
             break;
         }
 
@@ -784,7 +762,11 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
             size_t l_ecnx = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &ecnx3[ecnx]);
 
             if (l_ecnx == 0) {
-                fprintf(F, ", incorrect ECN encoding");
+                fprintf(F, "\n");
+                if (cnx_id64 != 0) {
+                    fprintf(F, "%" PRIx64 ": ", cnx_id64);
+                }
+                fprintf(F, "    incorrect ECN encoding");
                 byte_index = bytes_max;
                 break;
             }
