@@ -1142,6 +1142,23 @@ int picoquic_test_compare_binary_files(char const* fname1, char const* fname2)
     return picoquic_test_compare_files(fname1, fname2, "rb", picoquic_compare_binary_files);
 }
 
+uint64_t picoquic_sum_text_file(char const* fname)
+{
+    uint64_t sum = 0x10000000000ull;
+    FILE* F = picoquic_file_open(fname, "rt");
+    if (F != NULL) {
+        uint8_t buf[512];
+        size_t nb_read;
+        while ((nb_read = fread(buf, 1, 512, F)) > 0) {
+            for (size_t i = 0; i < nb_read; i++) {
+                sum += buf[i];
+            }
+        }
+        F = picoquic_file_close(F);
+    }
+    return sum;
+}
+
 uint8_t log_test_ticket[] = {
     0x00, 0x00, 0x01, 0x68, 0x87, 0x88, 0x91, 0x60,
     0x00, 0x17, 0x13, 0x02, 0x00, 0x00, 0x3d, 0x00,
@@ -1291,6 +1308,7 @@ int logger_test()
     picoquic_cnx_t * cnx = NULL;
     picoquic_quic_t * quic = NULL;
     uint64_t simulated_time = 123456789;
+    uint64_t running_sum = 0;
 
     quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, simulated_time,
@@ -1404,7 +1422,7 @@ int logger_test()
                 ret = -1;
                 break;
             }
-
+            fprintf(quic->F_log, "Running_sum: %" PRIx64 "\n", running_sum);
             memcpy(buffer, test_frame_error_list[i].val, test_frame_error_list[i].len);
             bytes_max = test_frame_error_list[i].len;
             if (test_frame_error_list[i].must_be_last == 0 && sharp_end == 0) {
@@ -1416,6 +1434,7 @@ int logger_test()
             picoquic_textlog_frames(quic->F_log, 0, buffer, bytes_max);
 
             quic->F_log = picoquic_file_close(quic->F_log);
+            running_sum += picoquic_sum_text_file(log_error_test_file);
         }
     }
 
@@ -1429,7 +1448,8 @@ int logger_test()
             break;
         }
 
-        ret &= fprintf(quic->F_log, "Log fuzz test #%d\n", (int)i);
+        ret &= (fprintf(quic->F_log, "Log fuzz test #%d, sum: %" PRIx64 "\n",
+            (int)i, running_sum) > 0);
         picoquic_textlog_frames(quic->F_log, 0, buffer, bytes_max);
 
         /* Attempt to log fuzzed packets, and hope nothing crashes */
@@ -1440,6 +1460,7 @@ int logger_test()
             picoquic_textlog_frames(quic->F_log, 0, fuzz_buffer, bytes_max);
         }
         quic->F_log = picoquic_file_close(quic->F_log);
+        running_sum += picoquic_sum_text_file(log_fuzz_test_file);
     }
 
     if (quic != NULL) {
