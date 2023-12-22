@@ -489,8 +489,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         /* Do not use a purely random value, so we can repetitive tests */
         int n = 31 * (cnx->initial_cnxid.id[0] + cnx->client_mode) + 27;
         uint64_t v = cnx->initial_cnxid.id[1];
-        while (n == picoquic_tp_test_large_chello ||
-            n == picoquic_tp_enable_loss_bit_old) {
+        while (n == picoquic_tp_test_large_chello) {
             n += 31;
         }
         v = (v << 8) + cnx->initial_cnxid.id[2];
@@ -795,9 +794,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 case picoquic_tp_max_datagram_frame_size:
                     cnx->remote_parameters.max_datagram_frame_size = (uint32_t)
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    break;
-                case picoquic_tp_enable_loss_bit_old:
-                    /* The old loss bit definition is obsolete */
                     break;
                 case picoquic_tp_enable_loss_bit: {
                     uint64_t enabled = picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
