@@ -440,9 +440,11 @@ char const* textlog_tp_name(picoquic_tp_enum tp_number)
     case picoquic_tp_test_large_chello:
         tp_name = "large_chello";
         break;
+#if 0
     case picoquic_tp_enable_loss_bit_old:
         tp_name = "enable_loss_bit(old)";
         break;
+#endif
     case picoquic_tp_enable_loss_bit:
         tp_name = "enable_loss_bit";
         break;

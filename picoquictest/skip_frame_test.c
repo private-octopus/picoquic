@@ -1259,7 +1259,8 @@ void logger_test_pdus(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
     memset(&s6_1.sin6_addr, 0x20, 16);
     s6_2.sin6_family = AF_INET6;
     s6_2.sin6_port = htons(12345);
-    memset(&s6_2.sin6_addr, 0x01, 16);
+    memset(&s6_2.sin6_addr, 0x20, 2);
+    memset(((uint8_t*)&s6_2.sin6_addr)+14, 0xFF, 2);
     s4_1.sin_family = AF_INET;
     s4_1.sin_port = htons(443);
     memset(&s4_1.sin_addr, 0x01, 4);

@@ -585,7 +585,9 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_retry_connection_id 16 
 #define picoquic_tp_max_datagram_frame_size 32 /* per draft-pauly-quic-datagram-05 */ 
 #define picoquic_tp_test_large_chello 3127 
+#if 0
 #define picoquic_tp_enable_loss_bit_old 0x1055 
+#endif
 #define picoquic_tp_enable_loss_bit 0x1057 
 #define picoquic_tp_min_ack_delay 0xff04de1aull 
 #define picoquic_tp_enable_time_stamp 0x7158  /* x&1 */
