@@ -116,8 +116,8 @@ int sample_server_open_stream(sample_server_ctx_t* server_ctx, sample_server_str
     int ret = 0;
     char file_path[1024];
 
-    // printf("Hello! This a print statement at line 119!");
-    // fflush(stdout);
+    printf("Hello! This a print statement at line 119! new!");
+    fflush(stdout);
 
     /* Keep track that the full file name was acquired. */
     stream_ctx->is_name_read = 1;
@@ -318,6 +318,7 @@ int sample_server_callback(picoquic_cnx_t* cnx,
                 buffer = picoquic_provide_stream_data_buffer(bytes, available, is_fin, !is_fin);
                 if (buffer != NULL) {
                     size_t nb_read = fread(buffer, 1, available, stream_ctx->F);
+                    // printf("%s buffer line 321 sample_server.c", buffer);
 
                     if (nb_read != available) {
                         /* Error while reading the file */
@@ -393,7 +394,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     default_context.default_dir_len = strlen(default_dir);
 
     printf("Starting Picoquic Sample server on port %d\n", server_port);
-    printf("Hello!");
+
 
     /* Create the QUIC context for the server */
     current_time = picoquic_current_time();

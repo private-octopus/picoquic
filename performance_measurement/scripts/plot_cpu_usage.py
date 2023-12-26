@@ -17,13 +17,29 @@ import matplotlib.pyplot as plt
 #         '../cpu_usage/5GB_100Mbps/',
 #         '../cpu_usage/100MB_100Mbps/'] 
 
+# # Plotting the cpu usage with throughput limit of 100 Mbps for TCP
+# folders = ['../cpu_usage/1GB_100Mbps_TCP/',
+#         '../cpu_usage/5GB_100Mbps_TCP/',
+#         '../cpu_usage/100MB_100Mbps_TCP/'] 
+
+# n_iterations_used = 21
+
 # Plotting the cpu usage with throughput limit of 100 Mbps for TCP
-folders = ['../cpu_usage/1GB_100Mbps_TCP/',
-        '../cpu_usage/5GB_100Mbps_TCP/',
-        '../cpu_usage/100MB_100Mbps_TCP/'] 
+# folders = ['../cpu_usage/1GB_TCP/',
+#         '../cpu_usage/5GB_TCP/',
+#         '../cpu_usage/100MB_TCP/'] 
 
+# n_iterations_used = 25
 
-n_iterations_used = 21
+# folders = ['../cpu_usage/iperf/',
+#         '../cpu_usage/iperf_100Mbps/'] 
+
+# n_iterations_used = 25
+
+folders = ['../cpu_usage/iperf_100Mbps/'] 
+
+n_iterations_used = 25
+yrange = np.arange(0, 10, 1)
 
 
 for folder in folders:
@@ -68,7 +84,7 @@ for folder in folders:
         ax.grid(True, linestyle='--')
         ax.set_xlabel("time (s)")
         ax.set_ylabel("CPU usage %")
-        ax.yaxis.set_ticks(np.arange(0, 100, 10))
+        ax.yaxis.set_ticks(yrange)
 
 
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
