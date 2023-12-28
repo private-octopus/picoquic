@@ -747,8 +747,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
 
 int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name)
 {
-    uint64_t current_time = picoquic_get_quic_time(quic);
-    int ret = picoquic_load_tokens(&quic->p_first_token, current_time, token_file_name);
+    int ret = picoquic_load_tokens(quic, token_file_name);
 
     if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
         DBG_PRINTF("Ticket file <%s> not created yet.\n", token_file_name);

@@ -508,21 +508,18 @@ typedef struct st_picoquic_stored_token_t {
     unsigned int was_used : 1;
 } picoquic_stored_token_t;
 
-int picoquic_store_token(picoquic_stored_token_t** p_first_token,
-    uint64_t current_time,
+int picoquic_store_token(picoquic_quic_t * quic,
     char const* sni, uint16_t sni_length,
     uint8_t const* ip_addr, uint8_t ip_addr_length,
     uint8_t const* token, uint16_t token_length);
-int picoquic_get_token(picoquic_stored_token_t* p_first_token,
-    uint64_t current_time,
+int picoquic_get_token(picoquic_quic_t * quic,
     char const* sni, uint16_t sni_length,
     uint8_t const* ip_addr, uint8_t ip_addr_length,
     uint8_t** token, uint16_t* token_length, int mark_used);
 
-int picoquic_save_tokens(const picoquic_stored_token_t* first_token,
-    uint64_t current_time, char const* token_file_name);
-int picoquic_load_tokens(picoquic_stored_token_t** pp_first_token,
-    uint64_t current_time, char const* token_file_name);
+int picoquic_save_tokens(picoquic_quic_t* quic,
+    char const* token_file_name);
+int picoquic_load_tokens(picoquic_quic_t* quic, char const* token_file_name);
 void picoquic_free_tokens(picoquic_stored_token_t** pp_first_token);
 
 /* Remember the tickets issued by a server, and the last

@@ -3441,11 +3441,18 @@ static char const* token_file_name = "retry_tests_tokens.bin";
 
 int tls_retry_token_test_one(int token_mode, int dup_token)
 {
+    int ret = 0;
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     /* ensure that the token file is empty */
-    int ret = picoquic_save_tokens(NULL, simulated_time, token_file_name);
+    FILE* F = picoquic_file_open(token_file_name, "wb");
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        F = picoquic_file_close(F);
+    }
     
     if (ret == 0) {
         ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
@@ -3482,7 +3489,7 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
             uint8_t * token = NULL;
             uint16_t token_length = 0;
 
-            ret = picoquic_get_token(test_ctx->qclient->p_first_token, simulated_time,
+            ret = picoquic_get_token(test_ctx->qclient,
                 PICOQUIC_TEST_SNI, (uint16_t)strlen(PICOQUIC_TEST_SNI),
                 NULL, 0,
                 &token, &token_length, 0);
@@ -3563,7 +3570,7 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
     }
     if (ret == 0) {
         /* Not strictly needed, but allows for inspection */
-        ret = picoquic_save_tokens(test_ctx->qclient->p_first_token, simulated_time, token_file_name);
+        ret = picoquic_save_tokens(test_ctx->qclient, token_file_name);
     }
 
     if (test_ctx != NULL) {

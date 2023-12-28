@@ -515,12 +515,12 @@ int picoquic_save_session_tickets(picoquic_quic_t* quic, char const* ticket_stor
 
 int picoquic_load_retry_tokens(picoquic_quic_t* quic, char const* token_store_filename)
 {
-    return picoquic_load_tokens(&quic->p_first_token, picoquic_get_tls_time(quic)*1000, token_store_filename);
+    return picoquic_load_tokens(quic, token_store_filename);
 }
 
 int picoquic_save_retry_tokens(picoquic_quic_t* quic, char const* ticket_store_filename)
 {
-    return picoquic_save_tokens(quic->p_first_token, picoquic_get_tls_time(quic)*1000, ticket_store_filename);
+    return picoquic_save_tokens(quic, ticket_store_filename);
 }
 
 void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint64_t current_time)
