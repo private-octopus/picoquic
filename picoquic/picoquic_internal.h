@@ -473,32 +473,27 @@ typedef struct st_picoquic_stored_ticket_t {
     unsigned int was_used : 1;
 } picoquic_stored_ticket_t;
 
-int picoquic_store_ticket(picoquic_stored_ticket_t** p_first_ticket,
-    uint64_t current_time,
+int picoquic_store_ticket(picoquic_quic_t* quic,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     uint32_t version, const uint8_t* ip_addr, uint8_t ip_addr_length,
     const uint8_t* ip_addr_client, uint8_t ip_addr_client_length,
-    uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const * tp);
-picoquic_stored_ticket_t* picoquic_get_stored_ticket(picoquic_stored_ticket_t* p_first_ticket,
-    uint64_t current_time, char const* sni, uint16_t sni_length, 
+    uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const* tp);
+picoquic_stored_ticket_t* picoquic_get_stored_ticket(picoquic_quic_t* quic,
+    char const* sni, uint16_t sni_length,
     char const* alpn, uint16_t alpn_length, uint32_t version, int need_unused, uint64_t ticket_id);
-int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
-    uint64_t current_time,
+int picoquic_get_ticket(picoquic_quic_t * quic,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     uint32_t version,
     uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t * tp, int mark_used);
-int picoquic_get_ticket_and_version(picoquic_stored_ticket_t* p_first_ticket,
-    uint64_t current_time,
+int picoquic_get_ticket_and_version(picoquic_quic_t * quic,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     uint32_t version, uint32_t* ticket_version,
     uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t* tp, int mark_used);
-
 int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
     uint64_t current_time, char const* ticket_file_name);
-int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
-    uint64_t current_time, char const* ticket_file_name);
+int picoquic_load_tickets(picoquic_quic_t* quic, char const* ticket_file_name);
 void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket);
-void picoquic_seed_ticket(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+void picoquic_seed_ticket(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 
 typedef struct st_picoquic_stored_token_t {
@@ -533,7 +528,6 @@ void picoquic_free_tokens(picoquic_stored_token_t** pp_first_token);
 /* Remember the tickets issued by a server, and the last
  * congestion control parameters for the corresponding connection
  */
-
 
 typedef struct st_picoquic_issued_ticket_t {
     struct st_picoquic_issued_ticket_t* next_ticket;

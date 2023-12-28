@@ -665,19 +665,8 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         if (cnx_id_callback != NULL) {
             quic->unconditional_cnx_id = 1;
         }
-
         if (ticket_file_name != NULL) {
             quic->ticket_file_name = ticket_file_name;
-            ret = picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);
-
-            if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
-                DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
-                ret = 0;
-            }
-            else if (ret != 0) {
-                DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
-                ret = 0;
-            }
         }
 
         if (ret == 0) {
@@ -731,6 +720,19 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
                 picoquic_crypto_random(quic, quic->retry_seed, sizeof(quic->retry_seed));
 
                 /* If there is no root certificate context specified, use a null certifier. */
+                /* Load tickets */
+                if (quic->ticket_file_name != NULL) {
+                    ret = picoquic_load_tickets(quic, ticket_file_name);
+
+                    if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
+                        DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
+                        ret = 0;
+                    }
+                    else if (ret != 0) {
+                        DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
+                        ret = 0;
+                    }
+                }
             }
         }
         
@@ -4393,7 +4395,7 @@ picoquic_cnx_t* picoquic_cnx_by_icid(picoquic_quic_t* quic, picoquic_connection_
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
-    picoquic_cnx_t dummy_cnx;
+    picoquic_cnx_t dummy_cnx = { 0 };
 
     picoquic_store_addr(&dummy_cnx.registered_icid_addr, addr);
     dummy_cnx.initial_cnxid = *icid;

@@ -118,20 +118,31 @@ int ticket_store_test()
     uint64_t too_late_time = 150000000000ull;
     uint32_t ttl = 100000;
     uint8_t ticket[128];
+    uint64_t simulated_time = current_time;
 
-    /* Writing an empty file */
-    ret = picoquic_save_tickets(p_first_ticket, current_time, test_ticket_file_name);
+    picoquic_quic_t * quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        /* Writing an empty file */
+        ret = picoquic_save_tickets(p_first_ticket, current_time, test_ticket_file_name);
+    }
 
     /* Load the empty file again */
     if (ret == 0) {
-        ret = picoquic_load_tickets(&p_first_ticket_empty, retrieve_time, test_ticket_file_name);
+        simulated_time = retrieve_time;
+        ret = picoquic_load_tickets(quic, test_ticket_file_name);
 
         /* Verify that the content is empty */
-        if (p_first_ticket_empty != NULL) {
+        if (quic->p_first_ticket != NULL) {
             if (ret == 0) {
                 ret = -1;
             }
-            picoquic_free_tickets(&p_first_ticket_empty);
+            picoquic_free_tickets(&quic->p_first_ticket);
         }
     }
 
@@ -172,8 +183,7 @@ int ticket_store_test()
                     ip_addr_client = ipv4_test;
                 }
             }
-
-            ret = picoquic_store_ticket(&p_first_ticket, current_time,
+            ret = picoquic_store_ticket(quic,
                 test_sni[i], (uint16_t)strlen(test_sni[i]),
                 test_alpn[j], (uint16_t)strlen(test_alpn[j]),
                 test_version[j], ip_addr, ip_addr_length,
@@ -183,6 +193,7 @@ int ticket_store_test()
                 break;
             }
         }
+        p_first_ticket = quic->p_first_ticket;
     }
 
     /* Verify that they can be retrieved */
@@ -191,7 +202,7 @@ int ticket_store_test()
             uint16_t ticket_length = 0;
             uint16_t expected_length = (uint16_t)(64 + j * nb_test_sni + i);
             uint8_t* ticket = NULL;
-            ret = picoquic_get_ticket(p_first_ticket, current_time,
+            ret = picoquic_get_ticket(quic,
                 test_sni[i], (uint16_t)strlen(test_sni[i]),
                 test_alpn[j], (uint16_t)strlen(test_alpn[j]),
                 test_version[j],
@@ -207,22 +218,30 @@ int ticket_store_test()
     }
     /* Store them on a file */
     if (ret == 0) {
-        ret = picoquic_save_tickets(p_first_ticket, current_time, test_ticket_file_name);
+        ret = picoquic_save_tickets(quic->p_first_ticket, current_time, test_ticket_file_name);
     }
     /* Load the file again */
     if (ret == 0) {
-        ret = picoquic_load_tickets(&p_first_ticket_bis, retrieve_time, test_ticket_file_name);
+        p_first_ticket = quic->p_first_ticket;
+        quic->p_first_ticket = NULL;
+
+        simulated_time = retrieve_time;
+        ret = picoquic_load_tickets(quic, test_ticket_file_name);
     }
 
     /* Verify that the two contents match */
     if (ret == 0) {
+        p_first_ticket_bis = quic->p_first_ticket;
         ret = ticket_store_compare(p_first_ticket, p_first_ticket_bis);
     }
 
     /* Reload after a long time */
     if (ret == 0) {
-        ret = picoquic_load_tickets(&p_first_ticket_ter, too_late_time, test_ticket_file_name);
-
+        quic->p_first_ticket = NULL;
+        simulated_time = too_late_time;
+        ret = picoquic_load_tickets(quic, test_ticket_file_name);
+        p_first_ticket_ter = quic->p_first_ticket;
+        quic->p_first_ticket = NULL;
         if (ret == 0 && p_first_ticket_ter != NULL) {
             ret = -1;
         }
@@ -231,6 +250,10 @@ int ticket_store_test()
     picoquic_free_tickets(&p_first_ticket);
     picoquic_free_tickets(&p_first_ticket_bis);
     picoquic_free_tickets(&p_first_ticket_ter);
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
 
     return ret;
 }
@@ -556,8 +579,7 @@ int ticket_seed_test_one(int bdp_option)
     if (ret == 0) {
         /* Check the ticket store at the client. */
         picoquic_stored_ticket_t* client_ticket;
-
-        client_ticket = picoquic_get_stored_ticket(test_ctx->qclient->p_first_ticket, simulated_time,
+        client_ticket = picoquic_get_stored_ticket(test_ctx->qclient,
             PICOQUIC_TEST_SNI, (uint16_t)strlen(PICOQUIC_TEST_SNI),
             PICOQUIC_TEST_ALPN, (uint16_t)strlen(PICOQUIC_TEST_ALPN),
             0, 0, test_ctx->cnx_client->issued_ticket_id);
