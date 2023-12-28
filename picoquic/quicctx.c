@@ -3836,13 +3836,8 @@ uint64_t picoquic_current_time()
     * Use CLOCK_MONOTONIC if exists (more accurate)
     */
     struct timespec currentTime;
-    if (clock_gettime(CLOCK_MONOTONIC, &currentTime) == 0) {
-        now = (currentTime.tv_sec * 1000000ull) + currentTime.tv_nsec / 1000ull;
-    }
-    else {
-        DBG_PRINTF("clock_gettime returns error 0x%x", errno);
-        now = 0;
-    }
+    (void)clock_gettime(CLOCK_MONOTONIC, &currentTime);
+    now = (currentTime.tv_sec * 1000000ull) + currentTime.tv_nsec / 1000ull;
 #else
     struct timeval tv;
     (void)gettimeofday(&tv, NULL);
