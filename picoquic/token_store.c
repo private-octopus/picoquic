@@ -161,7 +161,7 @@ int picoquic_store_token(picoquic_quic_t * quic,
 {
     int ret = 0;
     picoquic_stored_token_t** pp_first_token = &quic->p_first_token;
-    uint64_t current_time = picoquic_get_tls_time(quic) * 1000;
+    uint64_t current_time = picoquic_get_tls_time(quic);
 
     if (token_length < 1 || sni == NULL || sni_length == 0) {
         ret = PICOQUIC_ERROR_INVALID_TOKEN;
@@ -208,7 +208,7 @@ int picoquic_get_token(picoquic_quic_t * quic,
 {
     int ret = 0;
 
-    uint64_t current_time = picoquic_get_tls_time(quic) * 1000;
+    uint64_t current_time = picoquic_get_tls_time(quic);
     picoquic_stored_token_t* p_first_token = quic->p_first_token;
     picoquic_stored_token_t* next = p_first_token;
     picoquic_stored_token_t* best_match = NULL;
@@ -250,7 +250,7 @@ int picoquic_save_tokens(picoquic_quic_t * quic,
     FILE* F = NULL;
     const picoquic_stored_token_t* first_token = quic->p_first_token;
     const picoquic_stored_token_t* next = first_token;
-    uint64_t current_time = picoquic_get_tls_time(quic) * 1000;
+    uint64_t current_time = picoquic_get_tls_time(quic);
 
     if ((F = picoquic_file_open(token_file_name, "wb")) == NULL) {
         ret = -1;
@@ -288,7 +288,7 @@ int picoquic_load_tokens(picoquic_quic_t* quic, char const* token_file_name)
     picoquic_stored_token_t* next = NULL;
     uint32_t record_size;
     uint32_t storage_size;
-    uint64_t current_time = picoquic_get_tls_time(quic)*1000;
+    uint64_t current_time = picoquic_get_tls_time(quic);
     picoquic_stored_token_t** pp_first_token = &quic->p_first_token;
 
     if ((F = picoquic_file_open_ex(token_file_name, "rb", &file_ret)) == NULL) {

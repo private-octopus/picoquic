@@ -5099,7 +5099,6 @@ int virtual_time_test()
         DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
     }
     else {
-
         qsimul = picoquic_create(8, NULL, NULL, test_server_cert_store_file,
             NULL, test_api_callback,
             (void*)callback_ctx, NULL, NULL, NULL, simulated_time,
@@ -5117,7 +5116,7 @@ int virtual_time_test()
         {
             /* Check that the simulated time follows the simulation */
             for (int i = 0; ret == 0 && i < 5; i++) {
-                simulated_time += 12345678;
+                simulated_time += 12345000;
                 test_time = picoquic_get_quic_time(qsimul);
                 ptls_time = picoquic_get_tls_time(qsimul);
                 if (test_time != simulated_time) {
@@ -5126,7 +5125,7 @@ int virtual_time_test()
                         (unsigned long long)simulated_time);
                     ret = -1;
                 }
-                else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
+                else if (ptls_time < test_time || ptls_time > test_time + 1000) {
                     DBG_PRINTF("Test time: %llu does match ptls time: %llu",
                         (unsigned long long)test_time,
                         (unsigned long long)ptls_time);
@@ -5160,7 +5159,7 @@ int virtual_time_test()
                         (unsigned long long)current_time);
                     ret = -1;
                 }
-                else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
+                else if (ptls_time + 1000 < test_time || ptls_time > test_time + 1000) {
                     DBG_PRINTF("Test current time: %llu does match ptls time: %llu",
                         (unsigned long long)test_time,
                         (unsigned long long)ptls_time);

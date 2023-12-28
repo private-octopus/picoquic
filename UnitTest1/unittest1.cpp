@@ -1132,7 +1132,7 @@ namespace UnitTest1
           Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_virtual_time)
+        TEST_METHOD(virtual_time)
         {
             int ret = virtual_time_test();
 

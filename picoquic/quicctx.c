@@ -30,6 +30,8 @@
 #include <string.h>
 #ifndef _WINDOWS
 #include <sys/time.h>
+#include <time.h>
+#include <errno.h>
 #endif
 
 
@@ -3829,6 +3831,18 @@ uint64_t picoquic_current_time()
     * Account for microseconds elapsed between 1601 and 1970.
     */
     now -= 11644473600000000ULL;
+#elif defined(CLOCK_MONOTONIC)
+    /*
+    * Use CLOCK_MONOTONIC if exists (more accurate)
+    */
+    struct timespec currentTime;
+    if (clock_gettime(CLOCK_MONOTONIC, &currentTime) == 0) {
+        now = (currentTime.tv_sec * 1000000ull) + currentTime.tv_nsec / 1000ull;
+    }
+    else {
+        DBG_PRINTF("clock_gettime returns error 0x%x", errno);
+        now = 0;
+    }
 #else
     struct timeval tv;
     (void)gettimeofday(&tv, NULL);
