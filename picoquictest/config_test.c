@@ -371,21 +371,17 @@ static int config_parse_command_line(picoquic_quic_config_t* actual, const char*
             ret = -1;
             break;
         }
+
+        opt = x[1];
+        opt_ind++;
         if (opt_ind < argc) {
-            opt = x[1];
-            opt_ind++;
-            if (opt_ind < argc) {
-                optval = argv[opt_ind];
-                if (optval[0] == '-') {
-                    optval = NULL;
-                }
-                else {
-                    opt_ind++;
-                }
+            optval = argv[opt_ind];
+            if (optval[0] == '-') {
+                optval = NULL;
             }
-        }
-        else {
-            optval = NULL;
+            else {
+                opt_ind++;
+            }
         }
 
         ret = picoquic_config_command_line(opt, &opt_ind, argc, argv, optval, actual);
