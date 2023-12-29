@@ -108,7 +108,6 @@ int ticket_store_test()
     picoquic_stored_ticket_t* p_first_ticket = NULL;
     picoquic_stored_ticket_t* p_first_ticket_bis = NULL;
     picoquic_stored_ticket_t* p_first_ticket_ter = NULL;
-    picoquic_stored_ticket_t* p_first_ticket_empty = NULL;
     uint8_t ipv4_test[4] = { 10, 0, 0, 1 };
     uint8_t ipv6_test[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
 
@@ -342,7 +341,6 @@ int token_store_test()
     picoquic_stored_token_t* p_first_token = NULL;
     picoquic_stored_token_t* p_first_token_bis = NULL;
     picoquic_stored_token_t* p_first_token_ter = NULL;
-    picoquic_stored_token_t* p_first_token_empty = NULL;
 
     uint64_t token_time = 40000000000ull;
     uint64_t current_time = 50000000000ull;
