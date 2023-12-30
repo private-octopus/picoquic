@@ -61,7 +61,6 @@ typedef struct st_sockloop_test_cb_t {
     int zero_rtt_available;
     int socket_buffer_size;
     int multipath_probe_done;
-    char const* saved_alpn;
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
     struct sockaddr_storage client_alt_address[PICOQUIC_NB_PATH_TARGET];
@@ -70,6 +69,7 @@ typedef struct st_sockloop_test_cb_t {
     picoquic_connection_id_t server_cid_before_migration;
     picoquic_connection_id_t client_cid_before_migration;
 } sockloop_test_cb_t;
+
 
 int sockloop_test_received_finished(picoquic_test_tls_api_ctx_t* test_ctx)
 {
@@ -140,7 +140,6 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
 
                 if (cnx_client->alpn != NULL) {
                     DBG_PRINTF("Negotiated ALPN: %s", cnx_client->alpn);
-                    cb_ctx->saved_alpn = picoquic_string_duplicate(cnx_client->alpn);
                 }
                 DBG_PRINTF("%s", "Almost ready!");
                 cb_ctx->notified_ready = 1;
