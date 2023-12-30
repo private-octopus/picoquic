@@ -279,6 +279,7 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t cwin_before_suspension; /* So it can be restored if suspension stops. */
 
     uint64_t wifi_shadow_rtt; /* Shadow RTT used for wifi connections. */
+    double quantum_ratio; /* Fraction of pacing rate used for Quantum, or zero if not set*/
     unsigned int filled_pipe : 1;
     unsigned int round_start : 1;
     unsigned int rt_prop_expired : 1;
@@ -330,16 +331,33 @@ void BBREnterStartup(picoquic_bbr_state_t* bbr_state)
 
 void BBRSetSendQuantum(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
-    if (bbr_state->pacing_rate < BBR_PACING_RATE_LOW) {
-        bbr_state->send_quantum = 1ull * path_x->send_mtu;
-    } 
-    else if (bbr_state->pacing_rate < BBR_PACING_RATE_MEDIUM) {
-        bbr_state->send_quantum = 2ull * path_x->send_mtu;
+    if (bbr_state->quantum_ratio == 0) {
+        if (bbr_state->pacing_rate < BBR_PACING_RATE_LOW) {
+            bbr_state->send_quantum = 1ull * path_x->send_mtu;
+        } 
+        else if (bbr_state->pacing_rate < BBR_PACING_RATE_MEDIUM) {
+            bbr_state->send_quantum = 2ull * path_x->send_mtu;
+        }
+        else {
+            bbr_state->send_quantum = (uint64_t)(bbr_state->pacing_rate * 0.001);
+            if (bbr_state->send_quantum > 0x10000) {
+                bbr_state->send_quantum = 0x10000;
+            }
+        }
     }
     else {
-        bbr_state->send_quantum = (uint64_t)(bbr_state->pacing_rate * 0.001);
+        bbr_state->send_quantum = (uint64_t)(bbr_state->pacing_rate * bbr_state->quantum_ratio);
+
         if (bbr_state->send_quantum > 0x10000) {
             bbr_state->send_quantum = 0x10000;
+        }
+        else if (bbr_state->send_quantum < 2ull * path_x->send_mtu) {
+            if (bbr_state->send_quantum < 1ull * path_x->send_mtu) {
+                bbr_state->send_quantum = 1ull * path_x->send_mtu;
+            }
+            else {
+                bbr_state->send_quantum = 2ull * path_x->send_mtu;
+            }
         }
     }
 }
@@ -366,12 +384,14 @@ void BBRUpdateTargetCwnd(picoquic_bbr_state_t* bbr_state)
     bbr_state->target_cwnd = BBRInflight(bbr_state, bbr_state->cwnd_gain);
 }
 
-static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time, uint64_t wifi_shadow_rtt)
+static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time, 
+    uint64_t wifi_shadow_rtt, double quantum_ratio)
 {
     memset(bbr_state, 0, sizeof(picoquic_bbr_state_t));
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
     bbr_state->rt_prop = UINT64_MAX;
     bbr_state->wifi_shadow_rtt = wifi_shadow_rtt;
+    bbr_state->quantum_ratio = quantum_ratio;
 
     bbr_state->rt_prop_stamp = current_time;
     bbr_state->cycle_stamp = current_time;
@@ -390,7 +410,7 @@ static void picoquic_bbr_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uin
 
     path_x->congestion_alg_state = (void*)bbr_state;
     if (bbr_state != NULL) {
-        picoquic_bbr_reset(bbr_state, path_x, current_time, cnx->quic->wifi_shadow_rtt);
+        picoquic_bbr_reset(bbr_state, path_x, current_time, cnx->quic->wifi_shadow_rtt, cnx->quic->bbr_quantum_ratio);
     }
 }
 
@@ -1211,7 +1231,7 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_cwin_blocked:
             break;
         case picoquic_congestion_notification_reset:
-            picoquic_bbr_reset(bbr_state, path_x, current_time, cnx->quic->wifi_shadow_rtt);
+            picoquic_bbr_reset(bbr_state, path_x, current_time, cnx->quic->wifi_shadow_rtt, cnx->quic->bbr_quantum_ratio);
             break;
         case picoquic_congestion_notification_seed_cwin:
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
