@@ -386,7 +386,7 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     if (ret == 0) {
         loop_cb.test_ctx = test_ctx;
         picoquic_start_client_cnx(test_ctx->cnx_client);
-#ifdef _WINDOWS
+#ifdef _WINDOWS_BUT_MAYBE_NOT
         ret = picoquic_packet_loop_win(test_ctx->qserver, spec->port, 0, 0,
             spec->socket_buffer_size, sockloop_test_cb, &loop_cb);
 #else

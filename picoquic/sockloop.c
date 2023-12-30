@@ -265,6 +265,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
 
     /* Wait for packets */
     /* TODO: add stopping condition, was && (!just_once || !connection_done) */
+    /* Actually, no, rely on the callback return code for that? */
     while (ret == 0) {
         int socket_rank = -1;
         int64_t delta_t = 0;
@@ -347,6 +348,14 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                         send_msg_ptr);
 
                     if (ret == 0 && send_length > 0) {
+/* TODO: assume that we have multiple sockets, with support for
+* either IPv6, or IPv4, or both, and binding to a port number.
+* Find the first socket where:
+* - the destination AF is supported.
+* - either the source port is not specified, or it matches the local port.
+* 
+* Special case for NAT transition test: do a source port override.
+ */
                         SOCKET_TYPE send_socket = INVALID_SOCKET;
                         bytes_sent += send_length;
 
@@ -379,6 +388,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                         }
 
                         if (sock_ret <= 0) {
+/* TODO: add a test in which the socket fails. */
                             if (last_cnx == NULL) {
                                 picoquic_log_context_free_app_message(quic, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
                                     peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
@@ -393,6 +403,11 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                                         sock_err);
                                 }
                                 else if (sock_err == EIO) {
+/* TODO: this is an error encountered if the system supports GSO, but
+ * the specific interface driver does not. Main example is Mininet. 
+ * Not sure that we can treat that correctly. Try to minimize the
+ * amount of untested code? Rely on config flag? Rely on error
+ * recovery? */
                                     size_t packet_index = 0;
                                     size_t packet_size = send_msg_size;
 
@@ -436,6 +451,10 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
             }
         }
 
+/* TODO: do we really need that?
+ * Could we export it to an optional callback?
+ */
+
         if (ret == PICOQUIC_NO_ERROR_SIMULATE_NAT || ret == PICOQUIC_NO_ERROR_SIMULATE_MIGRATION) {
             /* Two pseudo error codes used for testing migration!
              * What follows is really test code, which we write here because it has to handle
@@ -445,6 +464,11 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
             int s_mig_af;
             int sock_ret;
             int testing_nat = (ret == PICOQUIC_NO_ERROR_SIMULATE_NAT);
+
+/* This code is creating a second socket. Maybe simpler to just create two
+* sockets from the beginning, with two port numbers. Testing organized
+* migration becomes trivial: just create a path from the second socket.
+ */
 
             sock_ret = picoquic_packet_loop_open_sockets(0, sock_af[0], &s_mig, &s_mig_af,
                 &next_port, socket_buffer_size, 1);
@@ -483,6 +507,9 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                     sock_ports[nb_sockets] = next_port;
                     nb_sockets++;
                     testing_migration = 1;
+/* Probe new path could be called from the loop callback instead of
+* embedded here. 
+ */
                     ret = picoquic_probe_new_path(last_cnx, (struct sockaddr*)&last_cnx->path[0]->peer_addr,
                         (struct sockaddr*) &local_address, current_time);
                 }
