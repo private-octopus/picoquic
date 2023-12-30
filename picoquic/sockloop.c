@@ -199,14 +199,10 @@ int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE 
     return nb_sockets;
 }
 
-int picoquic_packet_loop(picoquic_quic_t* quic,
-    int local_port,
-    int local_af,
-    int dest_if,
-    int socket_buffer_size,
-    int do_not_use_gso,
+int picoquic_packet_loop_v2(picoquic_quic_t* quic,
+    picoquic_packet_loop_param_t * param,
     picoquic_packet_loop_cb_fn loop_callback,
-    void* loop_callback_ctx)
+    void * loop_callback_ctx)
 {
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(quic);
@@ -239,8 +235,8 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     memset(sock_af, 0, sizeof(sock_af));
     memset(sock_ports, 0, sizeof(sock_ports));
 
-    if ((nb_sockets = picoquic_packet_loop_open_sockets(local_port, local_af, s_socket, sock_af, 
-        sock_ports, socket_buffer_size, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
+    if ((nb_sockets = picoquic_packet_loop_open_sockets(param->local_port, param->local_af, s_socket, sock_af, 
+        sock_ports, param->socket_buffer_size, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (loop_callback != NULL) {
@@ -253,7 +249,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     }
 
     if (ret == 0) {
-        if (udp_gso_available && !do_not_use_gso) {
+        if (udp_gso_available && !param->do_not_use_gso) {
             send_buffer_size = 0xFFFF;
             send_msg_ptr = &send_msg_size;
         }
@@ -338,7 +334,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
                 while (ret == 0) {
                     struct sockaddr_storage peer_addr;
                     struct sockaddr_storage local_addr;
-                    int if_index = dest_if;
+                    int if_index = param->dest_if;
                     int sock_ret = 0;
                     int sock_err = 0;
 
@@ -471,7 +467,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
  */
 
             sock_ret = picoquic_packet_loop_open_sockets(0, sock_af[0], &s_mig, &s_mig_af,
-                &next_port, socket_buffer_size, 1);
+                &next_port, param->socket_buffer_size, 1);
             if (sock_ret != 1 || s_mig == INVALID_SOCKET) {
                 if (last_cnx != NULL) {
                     picoquic_log_app_message(last_cnx, "Could not create socket for migration test, port=%d, af=%d, err=%d",
@@ -538,4 +534,24 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     }
 
     return ret;
+}
+
+int picoquic_packet_loop(picoquic_quic_t* quic,
+    int local_port,
+    int local_af,
+    int dest_if,
+    int socket_buffer_size,
+    int do_not_use_gso,
+    picoquic_packet_loop_cb_fn loop_callback,
+    void* loop_callback_ctx)
+{
+    picoquic_packet_loop_param_t param = { 0 };
+
+    param.local_port = local_port;
+    param.local_af = local_af;
+    param.dest_if = dest_if;
+    param.socket_buffer_size = socket_buffer_size;
+    param.do_not_use_gso = do_not_use_gso;
+
+    return picoquic_packet_loop_v2(quic, &param, loop_callback, loop_callback_ctx);
 }

@@ -62,6 +62,23 @@ typedef struct st_packet_loop_time_check_arg_t {
     int64_t delta_t;
 } packet_loop_time_check_arg_t;
 
+/* Version 2 of packet loop, works in progress.
+* Parameters are set in a struct, for future
+* extensibility.
+ */
+typedef struct st_picoquic_packet_loop_param_t {
+    int local_port;
+    int local_af;
+    int dest_if;
+    int socket_buffer_size;
+    int do_not_use_gso;
+} picoquic_packet_loop_param_t;
+
+int picoquic_packet_loop_v2(picoquic_quic_t* quic,
+    picoquic_packet_loop_param_t * param,
+    picoquic_packet_loop_cb_fn loop_callback,
+    void * loop_callback_ctx);
+
 /* Two versions of the packet loop, one portable and one speciailezed
  * for winsock.
  */
