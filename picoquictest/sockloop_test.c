@@ -49,6 +49,7 @@ typedef struct st_sockloop_test_spec_t {
 
 typedef struct st_sockloop_test_cb_t {
     picoquic_test_tls_api_ctx_t* test_ctx;
+    uint8_t test_id;
     int notified_ready;
     int established;
     int migration_to_preferred_started;
@@ -118,9 +119,14 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
     else {
         picoquic_cnx_t* cnx_client = (cb_ctx->test_ctx == NULL)?NULL:cb_ctx->test_ctx->cnx_client;
         switch (cb_mode) {
-        case picoquic_packet_loop_ready:
+        case picoquic_packet_loop_ready: {
+            picoquic_packet_loop_options_t* options = (picoquic_packet_loop_options_t*)callback_arg;
+            if (cb_ctx->test_id > 1) {
+                options->do_time_check = 1;
+            }
             DBG_PRINTF("%s", "Waiting for packets.\n");
             break;
+        }
         case picoquic_packet_loop_after_receive:
             /* Post receive callback */
             if (cnx_client->cnx_state == picoquic_state_disconnected) {
@@ -171,6 +177,13 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
         case picoquic_packet_loop_port_update:
             break;
             /* TODO: consider adding the delay computation callback! */
+        case picoquic_packet_loop_time_check: {
+            packet_loop_time_check_arg_t* time_check_arg = (packet_loop_time_check_arg_t*) callback_arg;
+            if (time_check_arg->delta_t > 5000) {
+                time_check_arg->delta_t = 5000;
+            }
+            break;
+        }
         default:
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
             break;
@@ -385,6 +398,7 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
      */
     if (ret == 0) {
         loop_cb.test_ctx = test_ctx;
+        loop_cb.test_id = spec->test_id;
         picoquic_start_client_cnx(test_ctx->cnx_client);
 #ifdef _WINDOWS_BUT_MAYBE_NOT
         ret = picoquic_packet_loop_win(test_ctx->qserver, spec->port, 0, 0,
@@ -410,7 +424,6 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     return ret;
 }
 
-
 static test_api_stream_desc_t sockloop_test_scenario_basic[] = {
     { 4, 0, 257, 2000 },
     { 8, 0, 531, 11000 }
@@ -431,6 +444,25 @@ int sockloop_basic_test()
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 1);
+
+    return(sockloop_test_one(&spec));
+}
+
+static test_api_stream_desc_t sockloop_test_scenario_5M[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 4, 257, 1000000 },
+    { 12, 8, 257, 1000000 },
+    { 16, 12, 257, 1000000 },
+    { 20, 16, 257, 1000000 },
+};
+
+int sockloop_ipv4_test()
+{
+    sockloop_test_spec_t spec;
+    sockloop_test_set_spec(&spec, 2);
+    spec.af = AF_INET;
+    spec.scenario = sockloop_test_scenario_5M;
+    spec.scenario_size = sizeof(sockloop_test_scenario_5M);
 
     return(sockloop_test_one(&spec));
 }

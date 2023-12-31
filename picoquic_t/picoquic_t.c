@@ -52,6 +52,7 @@ static const picoquic_test_def_t test_table[] = {
     { "picohash_embedded", picohash_embedded_test },
     { "bytestream", bytestream_test },
     { "sockloop_basic", sockloop_basic_test },
+    { "sockloop_ipv4", sockloop_ipv4_test },
     { "splay", splay_test },
     { "cnxcreation", cnxcreation_test },
     { "parseheader", parseheadertest },

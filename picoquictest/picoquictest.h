@@ -165,6 +165,7 @@ int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report);
 int cnx_ddos_unit_test();
 int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* qlogdir);
 int sockloop_basic_test();
+int sockloop_ipv4_test();
 int splay_test();
 int TlsStreamFrameTest();
 int draft17_vector_test();
