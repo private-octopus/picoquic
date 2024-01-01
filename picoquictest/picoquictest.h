@@ -166,6 +166,7 @@ int cnx_ddos_unit_test();
 int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* qlogdir);
 int sockloop_basic_test();
 int sockloop_eio_test();
+int sockloop_errsock_test();
 int sockloop_ipv4_test();
 int splay_test();
 int TlsStreamFrameTest();

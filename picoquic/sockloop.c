@@ -168,32 +168,29 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, SOCKET_
                 int opt_ret;
                 int so_sndbuf;
                 int so_rcvbuf;
+                int last_op = SO_SNDBUF;
+                char const* last_op_name = "SO_SNDBUF";
 
                 opt_len = sizeof(int);
                 so_sndbuf = socket_buffer_size;
                 opt_ret = setsockopt(s_socket[i], SOL_SOCKET, SO_SNDBUF, (const char*)&so_sndbuf, opt_len);
-                if (opt_ret != 0) {
-#ifdef _WINDOWS
-                    int sock_error = WSAGetLastError();
-#else
-                    int sock_error = errno;
-#endif
-                    opt_ret = getsockopt(s_socket[i], SOL_SOCKET, SO_SNDBUF, (char*)&so_sndbuf, &opt_len);
-                    DBG_PRINTF("Cannot set SO_SNDBUF to %d, err=%d, so_sndbuf=%d (%d)",
-                        socket_buffer_size, sock_error, so_sndbuf, opt_ret);
+                if (opt_ret == 0) {
+                    last_op = SO_RCVBUF;
+                    last_op_name = "SO_RECVBUF";
+                    opt_len = sizeof(int);
+                    so_rcvbuf = socket_buffer_size;
+                    opt_ret = setsockopt(s_socket[i], SOL_SOCKET, SO_RCVBUF, (const char*)&so_rcvbuf, opt_len);
                 }
-                opt_len = sizeof(int);
-                so_rcvbuf = socket_buffer_size;
-                opt_ret = setsockopt(s_socket[i], SOL_SOCKET, SO_RCVBUF, (const char*)&so_rcvbuf, opt_len);
                 if (opt_ret != 0) {
+                    int so_errbuf = 0;
 #ifdef _WINDOWS
                     int sock_error = WSAGetLastError();
 #else
                     int sock_error = errno;
 #endif
-                    opt_ret = getsockopt(s_socket[i], SOL_SOCKET, SO_RCVBUF, (char*)&so_rcvbuf, &opt_len);
-                    DBG_PRINTF("Cannot set SO_RCVBUF to %d, err=%d, so_rcvbuf=%d (%d)",
-                        socket_buffer_size, sock_error, so_rcvbuf, opt_ret);
+                    opt_ret = getsockopt(s_socket[i], SOL_SOCKET, last_op, (char*)&so_errbuf, &opt_len);
+                    DBG_PRINTF("Cannot set %s to %d, err=%d, so_sndbuf=%d (%d)",
+                        last_op_name, socket_buffer_size, sock_error, so_errbuf, opt_ret);
                 }
             }
         }

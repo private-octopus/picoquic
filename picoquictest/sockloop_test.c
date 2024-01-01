@@ -28,6 +28,7 @@
 #include "picoquictest_internal.h"
 #include "autoqlog.h"
 #include "picoquic_packet_loop.h"
+#include "picosocks.h"
 
 /* 
 * Testing the socket loop.
@@ -47,6 +48,7 @@ typedef struct st_sockloop_test_spec_t {
     int ipv6_only;
     int do_not_use_gso;
     int simulate_eio;
+    int double_bind;
 } sockloop_test_spec_t;
 
 typedef struct st_sockloop_test_cb_t {
@@ -72,7 +74,6 @@ typedef struct st_sockloop_test_cb_t {
     picoquic_connection_id_t server_cid_before_migration;
     picoquic_connection_id_t client_cid_before_migration;
 } sockloop_test_cb_t;
-
 
 int sockloop_test_received_finished(picoquic_test_tls_api_ctx_t* test_ctx)
 {
@@ -208,44 +209,6 @@ int sockloop_test_create_ctx(picoquic_test_tls_api_ctx_t** p_test_ctx)
         /* Init to NULL */
         memset(test_ctx, 0, sizeof(picoquic_test_tls_api_ctx_t));
         test_ctx->client_callback.client_mode = 1;
-
-#if 0
-        /* Init of the IP addresses */
-        memset(&test_ctx->client_addr, 0, sizeof(struct sockaddr_in));
-        test_ctx->client_addr.sin_family = AF_INET;
-#ifdef _WINDOWS
-        test_ctx->client_addr.sin_addr.S_un.S_addr = htonl(0x0A000002);
-#else
-        test_ctx->client_addr.sin_addr.s_addr = htonl(0x0A000002);
-#endif
-        test_ctx->client_addr.sin_port = htons(1234);
-
-        memset(&test_ctx->server_addr, 0, sizeof(struct sockaddr_in));
-        test_ctx->server_addr.sin_family = AF_INET;
-#ifdef _WINDOWS
-        test_ctx->server_addr.sin_addr.S_un.S_addr = htonl(0x0A000001);
-#else
-        test_ctx->server_addr.sin_addr.s_addr = htonl(0x0A000001);
-#endif
-        test_ctx->server_addr.sin_port = htons(4321);
-#endif
-
-#if 0
-        if (ret == 0) {
-            /* Create the send buffer as requested */
-            if (send_buffer_size == 0) {
-                test_ctx->send_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
-            }
-            else {
-                test_ctx->send_buffer_size = send_buffer_size;
-                test_ctx->use_udp_gso = 1;
-            }
-            test_ctx->send_buffer = (uint8_t*)malloc(test_ctx->send_buffer_size);
-            if (test_ctx->send_buffer == NULL) {
-                ret = -1;
-            }
-        }
-#endif
     }
 
     return ret;
@@ -357,6 +320,8 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     struct sockaddr_storage server_address = { 0 };
     sockloop_test_cb_t loop_cb = { 0 };
     uint64_t current_time = picoquic_current_time();
+    picoquic_server_sockets_t double_bind = { INVALID_SOCKET, INVALID_SOCKET };
+
 
     /* Create test context
     * TODO: this creates the client and server addresses. We probably
@@ -386,6 +351,11 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     if (ret == 0) {
         ret = test_api_init_send_recv_scenario(test_ctx, spec->scenario, spec->scenario_size);
     }
+    /* If testing a socket fault, bind sockets to the desired port */
+    if (ret == 0 && spec->double_bind) {
+        ret = picoquic_open_server_sockets(&double_bind, spec->port);
+    }
+
     /* Run the loop 
      * TODO: unify windows and linux.
      * TODO: option to start the connection in a background thread.
@@ -427,7 +397,17 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     /* Verify that the scenario worked. */
     /* TODO: verify scenario assumes qclient and qserver are defined. Fix that. */
     if (ret == 0) {
-        ret = tls_api_one_scenario_verify(test_ctx);
+        if (spec->double_bind) {
+            ret = -1;
+        }
+        else {
+            ret = tls_api_one_scenario_verify(test_ctx);
+        }
+    }
+    else {
+        if (spec->double_bind) {
+            ret = 0;
+        }
     }
     /* Free the config */
     if (test_ctx != NULL) {
@@ -437,6 +417,8 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
         }
         tls_api_delete_ctx(test_ctx);
     }
+    /* Free the sockets used in double blind test */
+    picoquic_close_server_sockets(&double_bind);
     return ret;
 }
 
@@ -477,7 +459,7 @@ static test_api_stream_desc_t sockloop_test_scenario_5M[] = {
 int sockloop_eio_test()
 {
     sockloop_test_spec_t spec;
-    sockloop_test_set_spec(&spec, 3);
+    sockloop_test_set_spec(&spec, 2);
     spec.socket_buffer_size = 0xffff;
     spec.scenario = sockloop_test_scenario_5M;
     spec.scenario_size = sizeof(sockloop_test_scenario_5M);
@@ -486,10 +468,19 @@ int sockloop_eio_test()
     return(sockloop_test_one(&spec));
 }
 
+int sockloop_errsock_test()
+{
+    sockloop_test_spec_t spec;
+    sockloop_test_set_spec(&spec, 3);
+    spec.double_bind = 1;
+
+    return(sockloop_test_one(&spec));
+}
+
 int sockloop_ipv4_test()
 {
     sockloop_test_spec_t spec;
-    sockloop_test_set_spec(&spec, 2);
+    sockloop_test_set_spec(&spec, 4);
     spec.af = AF_INET;
     spec.socket_buffer_size = 0xffff;
     spec.scenario = sockloop_test_scenario_5M;

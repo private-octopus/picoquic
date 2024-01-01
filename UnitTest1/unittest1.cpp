@@ -125,6 +125,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_errsock)
+        {
+            int ret = sockloop_errsock_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(sockloop_ipv4)
         {
             int ret = sockloop_ipv4_test();
