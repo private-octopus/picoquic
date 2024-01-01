@@ -44,7 +44,9 @@ typedef struct st_sockloop_test_spec_t {
     test_api_stream_desc_t* scenario;
     size_t scenario_size;
     int use_background_thread;
+    int ipv6_only;
     int do_not_use_gso;
+    int simulate_eio;
 } sockloop_test_spec_t;
 
 typedef struct st_sockloop_test_cb_t {
@@ -400,13 +402,27 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
         loop_cb.test_ctx = test_ctx;
         loop_cb.test_id = spec->test_id;
         picoquic_start_client_cnx(test_ctx->cnx_client);
+        if (spec->test_id == 1) {
 #ifdef _WINDOWS_BUT_MAYBE_NOT
-        ret = picoquic_packet_loop_win(test_ctx->qserver, spec->port, 0, 0,
-            spec->socket_buffer_size, sockloop_test_cb, &loop_cb);
+            ret = picoquic_packet_loop_win(test_ctx->qserver, spec->port, 0, 0,
+                spec->socket_buffer_size, sockloop_test_cb, &loop_cb);
 #else
-        ret = picoquic_packet_loop(test_ctx->qserver, spec->port, 0, 0,
-            spec->socket_buffer_size, spec->do_not_use_gso, sockloop_test_cb, &loop_cb);
+            ret = picoquic_packet_loop(test_ctx->qserver, spec->port,
+                (spec->ipv6_only) ? AF_INET6 : 0, 0,
+                spec->socket_buffer_size, spec->do_not_use_gso, sockloop_test_cb, &loop_cb);
 #endif
+        }
+        else {
+            picoquic_packet_loop_param_t param = { 0 };
+
+            param.local_port = spec->port;
+            param.local_af = (spec->ipv6_only) ? AF_INET6 : 0;
+            param.socket_buffer_size = spec->socket_buffer_size;
+            param.do_not_use_gso = spec->do_not_use_gso;
+            param.simulate_eio = spec->simulate_eio;
+
+            ret = picoquic_packet_loop_v2(test_ctx->qserver, &param, sockloop_test_cb, &loop_cb);
+        }
     }
     /* Verify that the scenario worked. */
     /* TODO: verify scenario assumes qclient and qserver are defined. Fix that. */
@@ -444,6 +460,8 @@ int sockloop_basic_test()
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 1);
+    spec.ipv6_only = 1;
+    spec.do_not_use_gso = 1;
 
     return(sockloop_test_one(&spec));
 }
@@ -456,11 +474,24 @@ static test_api_stream_desc_t sockloop_test_scenario_5M[] = {
     { 20, 16, 257, 1000000 },
 };
 
+int sockloop_eio_test()
+{
+    sockloop_test_spec_t spec;
+    sockloop_test_set_spec(&spec, 3);
+    spec.socket_buffer_size = 0xffff;
+    spec.scenario = sockloop_test_scenario_5M;
+    spec.scenario_size = sizeof(sockloop_test_scenario_5M);
+    spec.simulate_eio = 1;
+
+    return(sockloop_test_one(&spec));
+}
+
 int sockloop_ipv4_test()
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 2);
     spec.af = AF_INET;
+    spec.socket_buffer_size = 0xffff;
     spec.scenario = sockloop_test_scenario_5M;
     spec.scenario_size = sizeof(sockloop_test_scenario_5M);
 

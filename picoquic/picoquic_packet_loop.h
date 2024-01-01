@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 2
+#define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 4
 #define PICOQUIC_PACKET_LOOP_SEND_MAX 10
 #define PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX 2500
 
@@ -67,11 +67,13 @@ typedef struct st_packet_loop_time_check_arg_t {
 * extensibility.
  */
 typedef struct st_picoquic_packet_loop_param_t {
-    int local_port;
+    uint16_t local_port;
     int local_af;
     int dest_if;
     int socket_buffer_size;
     int do_not_use_gso;
+    int extra_socket_required;
+    int simulate_eio;
 } picoquic_packet_loop_param_t;
 
 int picoquic_packet_loop_v2(picoquic_quic_t* quic,

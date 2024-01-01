@@ -100,7 +100,7 @@
 #include "picoquic_unified_log.h"
 
 #if defined(_WINDOWS)
-static int udp_gso_available = 0;
+static int udp_gso_available = 1;
 #else
 # if defined(UDP_SEGMENT)
 static int udp_gso_available = 1;
@@ -109,25 +109,27 @@ static int udp_gso_available = 0;
 #endif
 #endif
 
-int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af, 
-    uint16_t * sock_ports, int socket_buffer_size, int nb_sockets_max)
+int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af, 
+    uint16_t * sock_ports, int socket_buffer_size, int extra_socket_required)
 {
-    int nb_sockets = (local_af == AF_UNSPEC) ? 2 : 1;
+    int nb_sockets = 0;
 
-    /* Compute how many sockets are necessary */
-    if (nb_sockets > nb_sockets_max) {
-        DBG_PRINTF("Cannot open %d sockets, max set to %d\n", nb_sockets, nb_sockets_max);
-        nb_sockets = 0;
-    } else if (local_af == AF_UNSPEC) {
-        sock_af[0] = AF_INET;
-        sock_af[1] = AF_INET6;
-    }
-    else if (local_af == AF_INET || local_af == AF_INET6) {
-        sock_af[0] = local_af;
-    }
-    else {
-        DBG_PRINTF("Cannot open socket(AF=%d), unsupported AF\n", local_af);
-        nb_sockets = 0;
+    /* Compute how many sockets are necessary, and set the intial value of AF and port per socket */
+    for (int iteration = 0; iteration < 1 + (extra_socket_required); iteration++) {
+        uint16_t current_port = (iteration == 0) ? local_port : 0;
+        if (local_af == AF_UNSPEC) {
+            sock_af[nb_sockets] = AF_INET;
+            sock_ports[nb_sockets] = current_port;
+            nb_sockets++;
+            sock_af[nb_sockets] = AF_INET6;
+            sock_ports[nb_sockets] = current_port;
+            nb_sockets++;
+        }
+        else {
+            sock_af[nb_sockets] = local_af;
+            sock_ports[nb_sockets] = current_port;
+            nb_sockets++;
+        }
     }
 
     for (int i = 0; i < nb_sockets; i++) {
@@ -136,6 +138,7 @@ int picoquic_packet_loop_open_sockets(int local_port, int local_af, SOCKET_TYPE 
         int send_set = 0;
         
         if ((s_socket[i] = socket(sock_af[i], SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET ||
+            /* TODO: set option IPv6 only */
             picoquic_socket_set_ecn_options(s_socket[i], sock_af[i], &recv_set, &send_set) != 0 ||
             picoquic_socket_set_pkt_info(s_socket[i], sock_af[i]) != 0 ||
             picoquic_bind_to_port(s_socket[i], sock_af[i], local_port) != 0 ||
@@ -214,7 +217,7 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     uint8_t* send_buffer = NULL;
     size_t send_length = 0;
     size_t send_msg_size = 0;
-    size_t send_buffer_size = 1536;
+    size_t send_buffer_size = param->socket_buffer_size;
     size_t* send_msg_ptr = NULL;
     int bytes_recv;
     picoquic_connection_id_t log_cid;
@@ -234,9 +237,8 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
 #endif
     memset(sock_af, 0, sizeof(sock_af));
     memset(sock_ports, 0, sizeof(sock_ports));
-
     if ((nb_sockets = picoquic_packet_loop_open_sockets(param->local_port, param->local_af, s_socket, sock_af, 
-        sock_ports, param->socket_buffer_size, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
+        sock_ports, param->socket_buffer_size, param->extra_socket_required)) == 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (loop_callback != NULL) {
@@ -353,12 +355,17 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
 * Special case for NAT transition test: do a source port override.
  */
                         SOCKET_TYPE send_socket = INVALID_SOCKET;
+                        uint16_t send_port = (local_addr.ss_family == AF_INET) ?
+                            ((struct sockaddr_in*)&local_addr)->sin_port :
+                            ((struct sockaddr_in6*)&local_addr)->sin6_port;
+
                         bytes_sent += send_length;
 
                         for (int i = 0; i < nb_sockets; i++) {
                             if (sock_af[i] == peer_addr.ss_family) {
                                 send_socket = s_socket[i];
-                                break;
+                                if (send_port != 0 && sock_ports[i] == send_port)
+                                    break;
                             }
                         }
 
@@ -366,7 +373,14 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
                             sock_ret = -1;
                             sock_err = -1;
                         }
+                        else if (param->simulate_eio && send_length > PICOQUIC_MAX_PACKET_SIZE) {
+                            /* Test hook, simulating a driver that does not support GSO */
+                            sock_ret = -1;
+                            sock_err = EIO;
+                            param->simulate_eio = 0;
+                        }
                         else {
+#if 0
                             if (testing_migration) {
                                 /* This code path is only used in the migration tests */
                                 uint16_t send_port = (local_addr.ss_family == AF_INET) ?
@@ -377,7 +391,7 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
                                     send_socket = s_socket[nb_sockets - 1];
                                 }
                             }
-
+#endif
                             sock_ret = picoquic_sendmsg(send_socket,
                                 (struct sockaddr*)&peer_addr, (struct sockaddr*)&local_addr, if_index,
                                 (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
@@ -446,7 +460,7 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
                 }
             }
         }
-
+#if 0
 /* TODO: do we really need that?
  * Could we export it to an optional callback?
  */
@@ -514,6 +528,7 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
                 }
             }
         }
+#endif
     }
 
     if (ret == PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP) {
@@ -547,7 +562,7 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
 {
     picoquic_packet_loop_param_t param = { 0 };
 
-    param.local_port = local_port;
+    param.local_port = (uint16_t)local_port;
     param.local_af = local_af;
     param.dest_if = dest_if;
     param.socket_buffer_size = socket_buffer_size;
