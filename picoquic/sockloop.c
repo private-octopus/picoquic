@@ -100,7 +100,7 @@
 #include "picoquic_unified_log.h"
 
 #if defined(_WINDOWS)
-static int udp_gso_available = 1;
+static int udp_gso_available = 0;
 #else
 # if defined(UDP_SEGMENT)
 static int udp_gso_available = 1;
