@@ -49,6 +49,8 @@ typedef struct st_sockloop_test_spec_t {
     int do_not_use_gso;
     int simulate_eio;
     int double_bind;
+    int extra_socket_required;
+    int force_migration;
 } sockloop_test_spec_t;
 
 typedef struct st_sockloop_test_cb_t {
@@ -56,16 +58,11 @@ typedef struct st_sockloop_test_cb_t {
     uint8_t test_id;
     int notified_ready;
     int established;
-    int migration_to_preferred_started;
-    int migration_to_preferred_finished;
+    int force_migration;
     int migration_started;
     int address_updated;
-    int force_migration;
-    int nb_packets_before_key_update;
-    int key_update_done;
     int zero_rtt_available;
     int socket_buffer_size;
-    int multipath_probe_done;
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
     struct sockaddr_storage client_alt_address[PICOQUIC_NB_PATH_TARGET];
@@ -73,6 +70,7 @@ typedef struct st_sockloop_test_cb_t {
     int nb_alt_paths;
     picoquic_connection_id_t server_cid_before_migration;
     picoquic_connection_id_t client_cid_before_migration;
+    picoquic_packet_loop_param_t* param;
 } sockloop_test_cb_t;
 
 int sockloop_test_received_finished(picoquic_test_tls_api_ctx_t* test_ctx)
@@ -101,14 +99,19 @@ int sockloop_test_received_finished(picoquic_test_tls_api_ctx_t* test_ctx)
             }
         }
     }
-#if 1
-    if (ret == 1) {
-        ret = 1;
-    }
-#endif
     return ret;
 }
 
+int sockloop_test_verify_extra_socket(picoquic_cnx_t* cnx_client, struct sockaddr* server_address)
+{
+    int ret = 0;
+    if (picoquic_compare_addr((struct sockaddr*)&cnx_client->path[0]->peer_addr, server_address) != 0 ||
+        picoquic_compare_addr((struct sockaddr*)&cnx_client->path[0]->local_addr, server_address) == 0) {
+        ret = -1;
+    }
+
+    return ret;
+}
 
 int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
     void* callback_ctx, void * callback_arg)
@@ -153,9 +156,27 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                 DBG_PRINTF("%s", "Almost ready!");
                 cb_ctx->notified_ready = 1;
             }
-            else if (ret == 0 && (picoquic_get_cnx_state(cnx_client) == picoquic_state_ready ||
-                picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready_start)) {
-                /* Consider adding here something to handle migration tests */
+            else if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_ready) {
+                /* Handle migration tests */
+                if (cb_ctx->force_migration){
+                    if (!cb_ctx->migration_started &&
+                        cnx_client->cnxid_stash_first != NULL) {
+                        if (sockloop_test_verify_extra_socket(cnx_client, (struct sockaddr*)&cb_ctx->server_address) != 0) {
+                            ret = -1;
+                        }
+                        else {
+                            cb_ctx->migration_started = 1;
+                            ret = picoquic_probe_new_path(cnx_client, (struct sockaddr*)&cb_ctx->server_address,
+                                (struct sockaddr*)&cb_ctx->server_address,
+                                picoquic_get_quic_time(cb_ctx->test_ctx->qserver));
+                        }
+                    }
+                    else if (cb_ctx->migration_started && !cb_ctx->address_updated) {
+                        if (picoquic_compare_addr((struct sockaddr*)&cnx_client->path[0]->local_addr, (struct sockaddr*)&cb_ctx->server_address) == 0) {
+                            cb_ctx->address_updated = 1;
+                        }
+                    }
+                }
                 /* TODO: check if the receive is complete */
                 if (sockloop_test_received_finished(cb_ctx->test_ctx) != 0) {
                     ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
@@ -317,10 +338,9 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t icid = { 0 };
-    struct sockaddr_storage server_address = { 0 };
     sockloop_test_cb_t loop_cb = { 0 };
     uint64_t current_time = picoquic_current_time();
-    picoquic_server_sockets_t double_bind = { INVALID_SOCKET, INVALID_SOCKET };
+    picoquic_server_sockets_t double_bind = { 0 };
 
 
     /* Create test context
@@ -336,16 +356,13 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     if (ret == 0) {
         picoquic_set_qlog(test_ctx->qserver, ".");
     }
-    /* Create connection context
-    * TODO: this may be the place for testing different server addresses,
-    * e.g. ::1 and 127.0.0.1.
-     */
+    /* Create connection context */
     if (ret == 0) {
-        ret = sockloop_test_addr_config(&server_address, spec->af, spec->port);
+        ret = sockloop_test_addr_config(&loop_cb.server_address, spec->af, spec->port);
     }
     if (ret == 0){
         sockloop_test_set_icid(&icid, spec->test_id);
-        ret = sockloop_test_cnx_config(test_ctx, (struct sockaddr*) &server_address, &icid, current_time);
+        ret = sockloop_test_cnx_config(test_ctx, (struct sockaddr*) &loop_cb.server_address, &icid, current_time);
     }
     /* Program connection scenario */
     if (ret == 0) {
@@ -354,6 +371,11 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     /* If testing a socket fault, bind sockets to the desired port */
     if (ret == 0 && spec->double_bind) {
         ret = picoquic_open_server_sockets(&double_bind, spec->port);
+    }
+    else {
+        for (int i = 0; i < PICOQUIC_NB_SERVER_SOCKETS; i++) {
+            double_bind.s_socket[i] = INVALID_SOCKET;
+        }
     }
 
     /* Run the loop 
@@ -390,6 +412,10 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
             param.socket_buffer_size = spec->socket_buffer_size;
             param.do_not_use_gso = spec->do_not_use_gso;
             param.simulate_eio = spec->simulate_eio;
+            param.extra_socket_required = spec->extra_socket_required;
+
+            loop_cb.force_migration = spec->force_migration;
+            loop_cb.param = &param;
 
             ret = picoquic_packet_loop_v2(test_ctx->qserver, &param, sockloop_test_cb, &loop_cb);
         }
@@ -485,6 +511,20 @@ int sockloop_ipv4_test()
     spec.socket_buffer_size = 0xffff;
     spec.scenario = sockloop_test_scenario_5M;
     spec.scenario_size = sizeof(sockloop_test_scenario_5M);
+
+    return(sockloop_test_one(&spec));
+}
+
+int sockloop_migration_test()
+{
+    sockloop_test_spec_t spec;
+    sockloop_test_set_spec(&spec, 5);
+    spec.af = AF_INET;
+    spec.socket_buffer_size = 0xffff;
+    spec.scenario = sockloop_test_scenario_5M;
+    spec.scenario_size = sizeof(sockloop_test_scenario_5M);
+    spec.extra_socket_required = 1;
+    spec.force_migration = 1;
 
     return(sockloop_test_one(&spec));
 }

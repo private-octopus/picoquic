@@ -55,6 +55,7 @@ static const picoquic_test_def_t test_table[] = {
     { "sockloop_eio", sockloop_eio_test },
     { "sockloop_errsock", sockloop_errsock_test },
     { "sockloop_ipv4", sockloop_ipv4_test },
+    { "sockloop_migration", sockloop_migration_test },
     { "splay", splay_test },
     { "cnxcreation", cnxcreation_test },
     { "parseheader", parseheadertest },

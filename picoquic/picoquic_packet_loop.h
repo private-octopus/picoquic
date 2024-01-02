@@ -33,6 +33,41 @@ extern "C" {
 #define PICOQUIC_PACKET_LOOP_SEND_MAX 10
 #define PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX 2500
 
+typedef struct st_picoquic_socket_ctx_t {
+    SOCKET_TYPE fd;
+    int af;
+    uint16_t port;
+
+    /* Flags */
+    unsigned int is_started : 1;
+    unsigned int supports_udp_send_coalesced : 1;
+    unsigned int supports_udp_recv_coalesced : 1;
+    /* Receive data buffer and fields */
+    size_t recv_buffer_size;
+    uint8_t* recv_buffer;
+    struct sockaddr_storage addr_from;
+    struct sockaddr_storage addr_dest;
+    socklen_t from_length;
+    socklen_t dest_length;
+    int dest_if;
+    unsigned char received_ecn;
+    int bytes_recv;
+    /* Management of sendmsg */
+    char cmsg_buffer[1024];
+    size_t udp_coalesced_size;
+#ifdef _WINDOWS
+    /* Windows specific */
+    WSAOVERLAPPED overlap;
+    LPFN_WSARECVMSG WSARecvMsg;
+    LPFN_WSASENDMSG WSASendMsg;
+    WSABUF dataBuf;
+    WSAMSG msg;
+    int nb_immediate_receive;
+    int so_sndbuf;
+    int so_rcvbuf;
+#endif
+} picoquic_socket_ctx_t;
+
 /* The packet loop will call the application back after specific events.
  */
 typedef enum {

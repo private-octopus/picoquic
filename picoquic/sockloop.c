@@ -109,6 +109,109 @@ static int udp_gso_available = 0;
 #endif
 #endif
 
+
+int picoquic_packet_loop_open_socket(int socket_buffer_size, picoquic_socket_ctx_t* s_ctx)
+{
+    int ret = 0;
+    struct sockaddr_storage local_address;
+    int recv_set = 0;
+    int send_set = 0;
+
+    if ((s_ctx->fd = socket(s_ctx->af, SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET ||
+        /* TODO: set option IPv6 only */
+        picoquic_socket_set_ecn_options(s_ctx->fd, s_ctx->af, &recv_set, &send_set) != 0 ||
+        picoquic_socket_set_pkt_info(s_ctx->fd, s_ctx->af) != 0 ||
+        picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0 ||
+        picoquic_get_local_address(s_ctx->fd, &local_address) != 0 ||
+        picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
+    {
+        DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
+        ret = -1;
+    }
+    else {
+        if (local_address.ss_family == AF_INET6) {
+            s_ctx->port = ntohs(((struct sockaddr_in6*)&local_address)->sin6_port);
+        }
+        else if (local_address.ss_family == AF_INET) {
+            s_ctx->port = ntohs(((struct sockaddr_in*)&local_address)->sin_port);
+        }
+
+        if (socket_buffer_size > 0) {
+            socklen_t opt_len;
+            int opt_ret;
+            int so_sndbuf;
+            int so_rcvbuf;
+            int last_op = SO_SNDBUF;
+            char const* last_op_name = "SO_SNDBUF";
+
+            opt_len = sizeof(int);
+            so_sndbuf = socket_buffer_size;
+            opt_ret = setsockopt(s_ctx->fd, SOL_SOCKET, SO_SNDBUF, (const char*)&so_sndbuf, opt_len);
+            if (opt_ret == 0) {
+                last_op = SO_RCVBUF;
+                last_op_name = "SO_RECVBUF";
+                opt_len = sizeof(int);
+                so_rcvbuf = socket_buffer_size;
+                opt_ret = setsockopt(s_ctx->fd, SOL_SOCKET, SO_RCVBUF, (const char*)&so_rcvbuf, opt_len);
+            }
+            if (opt_ret != 0) {
+                int so_errbuf = 0;
+#ifdef _WINDOWS
+                int sock_error = WSAGetLastError();
+#else
+                int sock_error = errno;
+#endif
+                opt_ret = getsockopt(s_ctx->fd, SOL_SOCKET, last_op, (char*)&so_errbuf, &opt_len);
+                DBG_PRINTF("Cannot set %s to %d, err=%d, so_sndbuf=%d (%d)",
+                    last_op_name, socket_buffer_size, sock_error, so_errbuf, opt_ret);
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
+}
+
+int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int socket_buffer_size, int extra_socket_required,
+    picoquic_socket_ctx_t* s_ctx)
+{
+    int nb_sockets = 0;
+
+    /* Compute how many sockets are necessary, and set the intial value of AF and port per socket */
+    for (int iteration = 0; iteration < 1 + (extra_socket_required); iteration++) {
+        uint16_t current_port = (iteration == 0) ? local_port : 0;
+        if (local_af == AF_UNSPEC) {
+            s_ctx[nb_sockets].af = AF_INET;
+            s_ctx[nb_sockets].port = current_port;
+            nb_sockets++;
+            s_ctx[nb_sockets].af = AF_INET6;
+            s_ctx[nb_sockets].port = current_port;
+            nb_sockets++;
+        }
+        else {
+            s_ctx[nb_sockets].af = local_af;
+            s_ctx[nb_sockets].port = current_port;
+            nb_sockets++;
+        }
+    }
+    for (int i = 0; i < nb_sockets; i++) {
+        if (picoquic_packet_loop_open_socket(socket_buffer_size, &s_ctx[i]) != 0) {
+            DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", s_ctx[i].af, s_ctx[i].port);
+            for (int j = 0; j < i; j++) {
+                if (s_ctx[i].fd != INVALID_SOCKET) {
+                    SOCKET_CLOSE(s_ctx[i].fd);
+                    s_ctx[i].fd = INVALID_SOCKET;
+                }
+            }
+            nb_sockets = 0;
+            break;
+        }
+    }
+
+    return nb_sockets;
+}
+
+#if 0
 int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af, 
     uint16_t * sock_ports, int socket_buffer_size, int extra_socket_required)
 {
@@ -141,7 +244,7 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, SOCKET_
             /* TODO: set option IPv6 only */
             picoquic_socket_set_ecn_options(s_socket[i], sock_af[i], &recv_set, &send_set) != 0 ||
             picoquic_socket_set_pkt_info(s_socket[i], sock_af[i]) != 0 ||
-            picoquic_bind_to_port(s_socket[i], sock_af[i], local_port) != 0 ||
+            picoquic_bind_to_port(s_socket[i], sock_af[i], sock_ports[i]) != 0 ||
             picoquic_get_local_address(s_socket[i], &local_address) != 0 ||
             picoquic_socket_set_pmtud_options(s_socket[i], sock_af[i]) != 0)
         {
@@ -198,6 +301,96 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, SOCKET_
 
     return nb_sockets;
 }
+#endif
+
+
+int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
+    int nb_sockets,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char * received_ecn,
+    uint8_t* buffer, int buffer_max,
+    int64_t delta_t,
+    int * socket_rank,
+    uint64_t* current_time)
+{
+    fd_set readfds;
+    struct timeval tv;
+    int ret_select = 0;
+    int bytes_recv = 0;
+    int sockmax = 0;
+
+    if (received_ecn != NULL) {
+        *received_ecn = 0;
+    }
+
+    FD_ZERO(&readfds);
+
+    for (int i = 0; i < nb_sockets; i++) {
+        if (sockmax < (int)s_ctx[i].fd) {
+            sockmax = (int)s_ctx[i].fd;
+        }
+        FD_SET(s_ctx[i].fd, &readfds);
+    }
+
+    if (delta_t <= 0) {
+        tv.tv_sec = 0;
+        tv.tv_usec = 0;
+    } else {
+        if (delta_t > 10000000) {
+            tv.tv_sec = (long)10;
+            tv.tv_usec = 0;
+        } else {
+            tv.tv_sec = (long)(delta_t / 1000000);
+            tv.tv_usec = (long)(delta_t % 1000000);
+        }
+    }
+
+    ret_select = select(sockmax + 1, &readfds, NULL, NULL, &tv);
+
+    if (ret_select < 0) {
+        bytes_recv = -1;
+        DBG_PRINTF("Error: select returns %d\n", ret_select);
+    } else if (ret_select > 0) {
+        for (int i = 0; i < nb_sockets; i++) {
+            if (FD_ISSET(s_ctx[i].fd, &readfds)) {
+                *socket_rank = i;
+                bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
+                    addr_dest, dest_if, received_ecn,
+                    buffer, buffer_max);
+
+                if (bytes_recv <= 0) {
+#ifdef _WINDOWS
+                    int last_error = WSAGetLastError();
+
+                    if (last_error == WSAECONNRESET || last_error == WSAEMSGSIZE) {
+                        bytes_recv = 0;
+                        continue;
+                    }
+#endif
+                    DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
+                        i, (int)s_ctx[i].fd);
+
+                    break;
+                } else {
+                    /* Document incoming port */
+                    if (addr_dest->ss_family == AF_INET6) {
+                        ((struct sockaddr_in6*) addr_dest)->sin6_port = htons(s_ctx[i].port);
+                    }
+                    else if (addr_dest->ss_family == AF_INET) {
+                        ((struct sockaddr_in*) addr_dest)->sin_port =  htons(s_ctx[i].port);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    *current_time = picoquic_current_time();
+
+    return bytes_recv;
+}
 
 int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     picoquic_packet_loop_param_t * param,
@@ -218,12 +411,12 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     size_t* send_msg_ptr = NULL;
     int bytes_recv;
     picoquic_connection_id_t log_cid;
-    SOCKET_TYPE s_socket[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
-    int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
-    uint16_t sock_ports[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
+    picoquic_socket_ctx_t s_ctx[4];
     int nb_sockets = 0;
+#if 0
     int testing_migration = 0; /* Hook for the migration test */
     uint16_t next_port = 0; /* Data for the migration test */
+#endif
     picoquic_cnx_t* last_cnx = NULL;
     int loop_immediate = 0;
     picoquic_packet_loop_options_t options = { 0 };
@@ -232,17 +425,16 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
-    memset(sock_af, 0, sizeof(sock_af));
-    memset(sock_ports, 0, sizeof(sock_ports));
-    if ((nb_sockets = picoquic_packet_loop_open_sockets(param->local_port, param->local_af, s_socket, sock_af, 
-        sock_ports, param->socket_buffer_size, param->extra_socket_required)) == 0) {
+
+    memset(s_ctx, 0, sizeof(s_ctx));
+    if ((nb_sockets = picoquic_packet_loop_open_sockets(param->local_port, param->local_af, param->socket_buffer_size, param->extra_socket_required, s_ctx)) <= 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (loop_callback != NULL) {
         struct sockaddr_storage l_addr;
         ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx, &options);
 
-        if (picoquic_store_loopback_addr(&l_addr, sock_af[0], sock_ports[0]) == 0) {
+        if (picoquic_store_loopback_addr(&l_addr, s_ctx[0].af, s_ctx[0].port) == 0) {
             ret = loop_callback(quic, picoquic_packet_loop_port_update, loop_callback_ctx, &l_addr);
         }
     }
@@ -281,8 +473,7 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
             }
         }
         loop_immediate = 0;
-
-        bytes_recv = picoquic_select_ex(s_socket, nb_sockets,
+        bytes_recv = picoquic_packet_loop_select(s_ctx, nb_sockets,
             &addr_from,
             &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
@@ -294,20 +485,6 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
             uint64_t loop_time = current_time;
 
             if (bytes_recv > 0) {
-                uint16_t current_recv_port = 0;
-
-                if (testing_migration && socket_rank == 0) {
-                    current_recv_port = next_port;
-                } else {
-                    current_recv_port = sock_ports[socket_rank];
-                }
-                /* Document incoming port */
-                if (addr_to.ss_family == AF_INET6) {
-                    ((struct sockaddr_in6*) & addr_to)->sin6_port = current_recv_port;
-                }
-                else if (addr_to.ss_family == AF_INET) {
-                    ((struct sockaddr_in*) & addr_to)->sin_port = current_recv_port;
-                }
                 /* Submit the packet to the server */
                 (void)picoquic_incoming_packet_ex(quic, buffer,
                     (size_t)bytes_recv, (struct sockaddr*) & addr_from,
@@ -332,7 +509,7 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
 
                 while (ret == 0) {
                     struct sockaddr_storage peer_addr;
-                    struct sockaddr_storage local_addr;
+                    struct sockaddr_storage local_addr = { 0 };
                     int if_index = param->dest_if;
                     int sock_ret = 0;
                     int sock_err = 0;
@@ -352,16 +529,19 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
 * Special case for NAT transition test: do a source port override.
  */
                         SOCKET_TYPE send_socket = INVALID_SOCKET;
-                        uint16_t send_port = (local_addr.ss_family == AF_INET) ?
+                        uint16_t send_port = (peer_addr.ss_family == AF_INET) ?
                             ((struct sockaddr_in*)&local_addr)->sin_port :
                             ((struct sockaddr_in6*)&local_addr)->sin6_port;
 
                         bytes_sent += send_length;
 
+                        /* TODO: verify htons/ntohs */
+                        int selected_socket = -1;
                         for (int i = 0; i < nb_sockets; i++) {
-                            if (sock_af[i] == peer_addr.ss_family) {
-                                send_socket = s_socket[i];
-                                if (send_port != 0 && sock_ports[i] == send_port)
+                            if (s_ctx[i].af == peer_addr.ss_family) {
+                                send_socket = s_ctx[i].fd;
+                                selected_socket = i;
+                                if (send_port != 0 && htons(s_ctx[i].port) == send_port)
                                     break;
                             }
                         }
@@ -377,18 +557,6 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
                             param->simulate_eio = 0;
                         }
                         else {
-#if 0
-                            if (testing_migration) {
-                                /* This code path is only used in the migration tests */
-                                uint16_t send_port = (local_addr.ss_family == AF_INET) ?
-                                    ((struct sockaddr_in*)&local_addr)->sin_port :
-                                    ((struct sockaddr_in6*)&local_addr)->sin6_port;
-
-                                if (send_port == next_port) {
-                                    send_socket = s_socket[nb_sockets - 1];
-                                }
-                            }
-#endif
                             sock_ret = picoquic_sendmsg(send_socket,
                                 (struct sockaddr*)&peer_addr, (struct sockaddr*)&local_addr, if_index,
                                 (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
@@ -535,9 +703,9 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
 
     /* Close the sockets */
     for (int i = 0; i < nb_sockets; i++) {
-        if (s_socket[i] != INVALID_SOCKET) {
-            SOCKET_CLOSE(s_socket[i]);
-            s_socket[i] = INVALID_SOCKET;
+        if (s_ctx[i].fd != INVALID_SOCKET) {
+            SOCKET_CLOSE(s_ctx[i].fd);
+            s_ctx[i].fd = INVALID_SOCKET;
         }
     }
 

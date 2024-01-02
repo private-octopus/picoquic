@@ -168,6 +168,7 @@ int sockloop_basic_test();
 int sockloop_eio_test();
 int sockloop_errsock_test();
 int sockloop_ipv4_test();
+int sockloop_migration_test();
 int splay_test();
 int TlsStreamFrameTest();
 int draft17_vector_test();
