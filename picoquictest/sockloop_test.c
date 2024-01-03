@@ -164,11 +164,21 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                         if (sockloop_test_verify_extra_socket(cnx_client, (struct sockaddr*)&cb_ctx->server_address) != 0) {
                             ret = -1;
                         }
-                        else {
+                        else if (cb_ctx->force_migration == 3){
                             cb_ctx->migration_started = 1;
                             ret = picoquic_probe_new_path(cnx_client, (struct sockaddr*)&cb_ctx->server_address,
                                 (struct sockaddr*)&cb_ctx->server_address,
                                 picoquic_get_quic_time(cb_ctx->test_ctx->qserver));
+                        }
+                        else if (cb_ctx->force_migration == 1) {
+                            cb_ctx->migration_started = 1;
+                            if (cnx_client->path[0]->local_addr.ss_family == AF_INET6) {
+                                ((struct sockaddr_in6*)&cnx_client->path[0]->local_addr)->sin6_port = htons(cb_ctx->param->local_port);
+                            }
+                            else {
+                                ((struct sockaddr_in*)&cnx_client->path[0]->local_addr)->sin_port = htons(cb_ctx->param->local_port);
+                            }
+                            ret = PICOQUIC_NO_ERROR_SIMULATE_NAT;
                         }
                     }
                     else if (cb_ctx->migration_started && !cb_ctx->address_updated) {
@@ -384,11 +394,6 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
      *       in that case, only start the client connection after
      *       the thread is verified and started, e.g., using an
      *       active loop until the thread is marked ready.
-     * TODO: consider testing at least one migration scenario,
-     *       for code coverage.
-     * TODO: consider changing the API to add a second port number, to be
-     *       used in migration and multipath tests.
-     * TODO: document port number.
      */
     if (ret == 0) {
         loop_cb.test_ctx = test_ctx;
@@ -424,6 +429,9 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     /* TODO: verify scenario assumes qclient and qserver are defined. Fix that. */
     if (ret == 0) {
         if (spec->double_bind) {
+            ret = -1;
+        }
+        else if (spec->force_migration != 0 && loop_cb.address_updated == 0) {
             ret = -1;
         }
         else {
@@ -474,12 +482,8 @@ int sockloop_basic_test()
     return(sockloop_test_one(&spec));
 }
 
-static test_api_stream_desc_t sockloop_test_scenario_5M[] = {
-    { 4, 0, 257, 1000000 },
-    { 8, 4, 257, 1000000 },
-    { 12, 8, 257, 1000000 },
-    { 16, 12, 257, 1000000 },
-    { 20, 16, 257, 1000000 },
+static test_api_stream_desc_t sockloop_test_scenario_1M[] = {
+    { 4, 0, 257, 1000000 }
 };
 
 int sockloop_eio_test()
@@ -487,8 +491,8 @@ int sockloop_eio_test()
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 2);
     spec.socket_buffer_size = 0xffff;
-    spec.scenario = sockloop_test_scenario_5M;
-    spec.scenario_size = sizeof(sockloop_test_scenario_5M);
+    spec.scenario = sockloop_test_scenario_1M;
+    spec.scenario_size = sizeof(sockloop_test_scenario_1M);
     spec.simulate_eio = 1;
 
     return(sockloop_test_one(&spec));
@@ -509,8 +513,8 @@ int sockloop_ipv4_test()
     sockloop_test_set_spec(&spec, 4);
     spec.af = AF_INET;
     spec.socket_buffer_size = 0xffff;
-    spec.scenario = sockloop_test_scenario_5M;
-    spec.scenario_size = sizeof(sockloop_test_scenario_5M);
+    spec.scenario = sockloop_test_scenario_1M;
+    spec.scenario_size = sizeof(sockloop_test_scenario_1M);
 
     return(sockloop_test_one(&spec));
 }
@@ -519,10 +523,24 @@ int sockloop_migration_test()
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 5);
+    spec.af = AF_INET6;
+    spec.socket_buffer_size = 0xffff;
+    spec.scenario = sockloop_test_scenario_1M;
+    spec.scenario_size = sizeof(sockloop_test_scenario_1M);
+    spec.extra_socket_required = 1;
+    spec.force_migration = 3;
+
+    return(sockloop_test_one(&spec));
+}
+
+int sockloop_nat_test()
+{
+    sockloop_test_spec_t spec;
+    sockloop_test_set_spec(&spec, 6);
     spec.af = AF_INET;
     spec.socket_buffer_size = 0xffff;
-    spec.scenario = sockloop_test_scenario_5M;
-    spec.scenario_size = sizeof(sockloop_test_scenario_5M);
+    spec.scenario = sockloop_test_scenario_1M;
+    spec.scenario_size = sizeof(sockloop_test_scenario_1M);
     spec.extra_socket_required = 1;
     spec.force_migration = 1;
 

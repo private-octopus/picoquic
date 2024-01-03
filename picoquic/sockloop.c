@@ -413,6 +413,7 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     picoquic_connection_id_t log_cid;
     picoquic_socket_ctx_t s_ctx[4];
     int nb_sockets = 0;
+    int nb_sockets_available = 0;
 #if 0
     int testing_migration = 0; /* Hook for the migration test */
     uint16_t next_port = 0; /* Data for the migration test */
@@ -440,6 +441,8 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     }
 
     if (ret == 0) {
+        nb_sockets_available = nb_sockets;
+
         if (udp_gso_available && !param->do_not_use_gso) {
             send_buffer_size = 0xFFFF;
             send_msg_ptr = &send_msg_size;
@@ -473,7 +476,7 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
             }
         }
         loop_immediate = 0;
-        bytes_recv = picoquic_packet_loop_select(s_ctx, nb_sockets,
+        bytes_recv = picoquic_packet_loop_select(s_ctx, nb_sockets_available,
             &addr_from,
             &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
@@ -504,6 +507,24 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
                     next_send_time = current_time + PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX;
                 }
             }
+
+            if (ret == PICOQUIC_NO_ERROR_SIMULATE_NAT) {
+                if (param->extra_socket_required) {
+                    /* Stop using the extra socket.
+                     * This will simulate a NAT:
+                     * - on the receive side, packets arriving to the old address will be ignored.
+                     * - on the send side, client packets will be sent through the main socket,
+                     *   and appear to come from that port instead of the extra port.
+                     * - since the CID does not change, the server will execute the NAT behavior.
+                     * The client will have to update its path -- but that can be avoided if the
+                     * test code overrides the value of the "local" address that the client
+                     * memorized for that path.
+                     */
+                    nb_sockets_available = nb_sockets / 2;
+                }
+                ret = 0;
+            }
+
             if (ret != PICOQUIC_NO_ERROR_SIMULATE_NAT && ret != PICOQUIC_NO_ERROR_SIMULATE_MIGRATION) {
                 size_t bytes_sent = 0;
 
