@@ -6,9 +6,6 @@ See the 'Building Picoquic' section [README](../README.md) for building picoquic
 
 - [Picotls implementation of TLS 1.3](https://github.com/h2o/picotls)
 
-## How to provide your own crypto library
-
-
 
 ## Picoquic as a Dependency
 
