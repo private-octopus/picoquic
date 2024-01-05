@@ -819,11 +819,6 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
 
                     /* TODO: verify htons/ntohs */
                     int selected_socket = -1;
-#if 1
-                    if (param->extra_socket_required && nb_sockets != nb_sockets_available) {
-                        DBG_PRINTF("%s", "Bug");
-                    }
-#endif
                     for (int i = 0; i < nb_sockets_available; i++) {
                         if (s_ctx[i].af == peer_addr.ss_family) {
                             send_socket = s_ctx[i].fd;

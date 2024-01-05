@@ -589,9 +589,8 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                     if (simulate_multipath) {
 #if 1
                         ret = simulate_migration(cb_ctx);
-                        cb_ctx->migration_started = 1;
 #else
-                        ret = PICOQUIC_NO_ERROR_SIMULATE_MIGRATION;
+                        cb_ctx->migration_started = 1;
 #endif
                     }
                 }
@@ -659,12 +658,8 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                         break;
                     case 3:
                         fprintf(stdout, "Will test migration to new port.\n");
-#if 1
                         ret = simulate_migration(cb_ctx);
                         cb_ctx->migration_started = 1;
-#else
-                        ret = PICOQUIC_NO_ERROR_SIMULATE_MIGRATION;
-#endif
                         break;
                     default:
                         cb_ctx->migration_started = -1;
@@ -957,7 +952,7 @@ int quic_client(const char* ip_address_text, int server_port,
         else if (!is_quicperf) {
             loop_cb.demo_callback_ctx = &callback_ctx;
         }
-#if 1
+
         /* In case needed, program an extra path, so we can simulate multipath or migration */
         param.local_af = loop_cb.server_address.ss_family;
         param.socket_buffer_size = config->socket_buffer_size;
@@ -970,15 +965,6 @@ int quic_client(const char* ip_address_text, int server_port,
         loop_cb.local_port = param.local_port;
 
         ret = picoquic_packet_loop_v2(qclient, &param, client_loop_cb, &loop_cb);
-#else
-#ifdef _WINDOWS_BUT_WE_ARE_UNIFYING
-        ret = picoquic_packet_loop_win(qclient, 0, loop_cb.server_address.ss_family, 0, 
-            config->socket_buffer_size, client_loop_cb, &loop_cb);
-#else
-        ret = picoquic_packet_loop(qclient, 0, loop_cb.server_address.ss_family, 0,
-            config->socket_buffer_size, config->do_not_use_gso, client_loop_cb, &loop_cb);
-#endif
-#endif
     }
 
     if (ret == 0) {
