@@ -100,7 +100,11 @@
 #include "picoquic_unified_log.h"
 
 #if defined(_WINDOWS)
+#ifdef UDP_SEND_MSG_SIZE
+static int udp_gso_available = 1;
+#else
 static int udp_gso_available = 0;
+#endif
 #else
 # if defined(UDP_SEGMENT)
 static int udp_gso_available = 1;
@@ -125,14 +129,17 @@ void picoquic_sockloop_win_coalescing_test(int * recv_coalesced, int * send_coal
 
     if (fd != INVALID_SOCKET) {
 #ifdef UDP_SEND_MSG_SIZE
-        option_length = (int)sizeof(option_value);
+        if (udp_gso_available) {
+            option_length = (int)sizeof(option_value);
 
-        if ((ret = getsockopt(fd, IPPROTO_UDP, UDP_SEND_MSG_SIZE, (char *)&option_value, &option_length)) != 0) {
-            last_error = GetLastError();
-            DBG_PRINTF("UDP_SEND_MSG_SIZE not supported, returns %d (%d)", ret, last_error);
-        }
-        else {
-            *send_coalesced = 1;
+            if ((ret = getsockopt(fd, IPPROTO_UDP, UDP_SEND_MSG_SIZE, (char*)&option_value, &option_length)) != 0) {
+                last_error = GetLastError();
+                DBG_PRINTF("UDP_SEND_MSG_SIZE not supported, returns %d (%d)", ret, last_error);
+                udp_gso_available = 0;
+            }
+            else {
+                *send_coalesced = 1;
+            }
         }
 #endif
 #ifdef UDP_RECV_MAX_COALESCED_SIZE
@@ -288,7 +295,7 @@ int picoquic_win_recvmsg_async_finish(
         ret = WSAGetLastError();
         if (ret == WSAECONNRESET) {
             s_ctx->bytes_recv = 0;
-            ret = 0;
+            ret = picoquic_win_recvmsg_async_start(s_ctx);
         }
         else {
             DBG_PRINTF("Could not complete async call (WSARecvMsg) on UDP socket %d = %d!\n",
@@ -661,6 +668,10 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
 
+    if (send_buffer_size == 0) {
+        send_buffer_size = 0xffff;
+    }
+
     memset(s_ctx, 0, sizeof(s_ctx));
     if ((nb_sockets = picoquic_packet_loop_open_sockets(param->local_port,
         param->local_af, param->socket_buffer_size,
@@ -790,14 +801,15 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
                     send_msg_ptr);
 
                 if (ret == 0 && send_length > 0) {
-                    /* TODO: assume that we have multiple sockets, with support for
+                    if (send_length > param->send_length_max) {
+                        param->send_length_max = send_length;
+                    }
+                    /* We have multiple sockets, with support for
                     * either IPv6, or IPv4, or both, and binding to a port number.
                     * Find the first socket where:
                     * - the destination AF is supported.
-                    * - either the source port is not specified, or it matches the local port.
-                    *
-                    * Special case for NAT transition test: do a source port override.
-                     */
+                    * - either the source port is not specified, or it matches the local port.       
+                    */
                     SOCKET_TYPE send_socket = INVALID_SOCKET;
                     uint16_t send_port = (peer_addr.ss_family == AF_INET) ?
                         ((struct sockaddr_in*)&local_addr)->sin_port :
@@ -807,7 +819,12 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
 
                     /* TODO: verify htons/ntohs */
                     int selected_socket = -1;
-                    for (int i = 0; i < nb_sockets; i++) {
+#if 1
+                    if (param->extra_socket_required && nb_sockets != nb_sockets_available) {
+                        DBG_PRINTF("%s", "Bug");
+                    }
+#endif
+                    for (int i = 0; i < nb_sockets_available; i++) {
                         if (s_ctx[i].af == peer_addr.ss_family) {
                             send_socket = s_ctx[i].fd;
                             selected_socket = i;

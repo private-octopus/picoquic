@@ -155,6 +155,11 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                 }
                 DBG_PRINTF("%s", "Almost ready!");
                 cb_ctx->notified_ready = 1;
+                /* Store the initial versions of address and CID */
+                picoquic_store_addr(&cb_ctx->client_address, (struct sockaddr*)&cnx_client->path[0]->local_addr);
+                picoquic_store_addr(&cb_ctx->server_address, (struct sockaddr*)&cnx_client->path[0]->peer_addr);
+                cb_ctx->client_cid_before_migration = cnx_client->path[0]->p_local_cnxid->cnx_id;
+                cb_ctx->server_cid_before_migration = cnx_client->path[0]->p_remote_cnxid->cnx_id;
             }
             else if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_ready) {
                 /* Handle migration tests */
@@ -343,6 +348,51 @@ int sockloop_test_cnx_config(picoquic_test_tls_api_ctx_t* test_ctx, struct socka
     return ret;
 }
 
+int sockloop_test_verify_migration(sockloop_test_cb_t * loop_cb, picoquic_cnx_t* cnx_client)
+{
+    int ret = 0;
+    if (!loop_cb->migration_started) {
+        DBG_PRINTF("%s", "Could not start testing migration.\n");
+        ret = -1;
+    }
+    else {
+        int source_addr_cmp = picoquic_compare_addr(
+            (struct sockaddr*) & cnx_client->path[0]->local_addr,
+            (struct sockaddr*) & loop_cb->client_address);
+        int dest_cid_cmp = picoquic_compare_connection_id(
+            &cnx_client->path[0]->p_remote_cnxid->cnx_id,
+            &loop_cb->server_cid_before_migration);
+        if (cnx_client->path[0]->p_local_cnxid == NULL) {
+            DBG_PRINTF("%s", "Local CID is NULL!\n");
+            ret = -1;
+        }
+        else {
+            int source_cid_cmp = picoquic_compare_connection_id(
+                &cnx_client->path[0]->p_local_cnxid->cnx_id,
+                &loop_cb->client_cid_before_migration);
+
+            if (loop_cb->force_migration == 1 || loop_cb->force_migration == 3) {
+                if (source_addr_cmp == 0) {
+                    DBG_PRINTF("%s", "Client source address did not change");
+                    ret = -1;
+                }
+            }
+            if (loop_cb->force_migration == 3) {
+                if (dest_cid_cmp == 0) {
+                    DBG_PRINTF("%s", "Remode CID did not change");
+                    ret = -1;
+                }
+                if (source_cid_cmp == 0) {
+                    DBG_PRINTF("%s", "Local CID did not change");
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
 int sockloop_test_one(sockloop_test_spec_t *spec)
 {
     int ret = 0;
@@ -432,6 +482,9 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
             ret = -1;
         }
         else if (spec->force_migration != 0 && loop_cb.address_updated == 0) {
+            ret = -1;
+        }
+        else if (spec->force_migration != 0 && sockloop_test_verify_migration(&loop_cb, test_ctx->cnx_client) != 0) {
             ret = -1;
         }
         else {

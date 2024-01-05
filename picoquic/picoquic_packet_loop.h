@@ -109,6 +109,7 @@ typedef struct st_picoquic_packet_loop_param_t {
     int do_not_use_gso;
     int extra_socket_required;
     int simulate_eio;
+    size_t send_length_max;
 } picoquic_packet_loop_param_t;
 
 int picoquic_packet_loop_v2(picoquic_quic_t* quic,
