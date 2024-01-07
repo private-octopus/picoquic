@@ -4,13 +4,40 @@ See the 'Building Picoquic' section [README](../README.md) for building picoquic
 
 ## Dependencies
 
+Direct dependencies
 - [Picotls implementation of TLS 1.3](https://github.com/h2o/picotls)
 
+Inherited dependencies
+- [OpenSSL through PicoTLS]()
+
+TODO: Current issues and ongoing work
+
+There is a current issue trying to enable the use
 
 ## Picoquic as a Dependency
 
-TODO:
-_describe how to include picoquic in other projects?_
+When using CMake [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html) can be used to fetch the `picoquic` repository from github.
+A snipped that does this can be seen in the [quicrq](https://github.com/Quicr/quicrq) directory in the `dependencies` subdirectory and is shown below.
+
+```cmake
+# Enable fetching content
+include(FetchContent)
+
+# Fetch the picoquic library, which brings in picotls with it
+FetchContent_Declare(
+    picoquic
+    GIT_REPOSITORY  https://github.com/private-octopus/picoquic.git
+    GIT_TAG         master
+)
+
+# Set the option to force picoquic to fetch the picotls
+set(PICOQUIC_FETCH_PTLS ON)
+
+# Make dependencies available
+FetchContent_MakeAvailable(picoquic)
+```
+
+FetchContent can be used to fetch a specific release or tag.
 
 ## Targets
 
