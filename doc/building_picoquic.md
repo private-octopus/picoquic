@@ -7,12 +7,22 @@ See the 'Building Picoquic' section [README](../README.md) for building picoquic
 Direct dependencies
 - [Picotls implementation of TLS 1.3](https://github.com/h2o/picotls)
 
+Fetching and installing this package can be done through an option in the CMake.
+
+```shell
+ cmake -DPICOQUIC_FETCH_PTLS=Y .
+```
+
+This can be set in the cmake file as well by setting the `PICOQUIC_FETCH_PTLS` cmake property to `ON`.
+
 Inherited dependencies
 - [OpenSSL through PicoTLS]()
 
 TODO: Current issues and ongoing work
 
-There is a current issue trying to enable the use
+There is a current issue trying to enable the use of crypto libraries provided by the user.
+
+
 
 ## Picoquic as a Dependency
 
