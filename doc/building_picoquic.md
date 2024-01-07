@@ -37,7 +37,18 @@ set(PICOQUIC_FETCH_PTLS ON)
 FetchContent_MakeAvailable(picoquic)
 ```
 
-FetchContent can be used to fetch a specific release or tag.
+FetchContent can be used to fetch a specific release or tag, if a certain version or release is desired.
+This can be used as fine grain as choosing a single commit, be specifying the commit hash.
+
+In the main `CMakeLists.txt` the subdirectory can be added using the `add_subdirectory(<directory_name>)` directive.
+
+```cmake
+# Add the subdirectory dependencies, where dependencies/CMakeLists.txt looks as above
+add_subdirectory(dependencies)
+
+# check if the package was loaded/is available and stop the build if it was not
+find_package(picoquic REQUIRED)
+```
 
 ## Targets
 
