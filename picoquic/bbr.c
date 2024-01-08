@@ -277,7 +277,9 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t loss_interval_start; /* Time in microsec when last loss considered */
     uint64_t congestion_sequence; /* sequence number after congestion notification */
     uint64_t cwin_before_suspension; /* So it can be restored if suspension stops. */
-
+#if 1
+    uint64_t epoch_start_stamp;
+#endif
     uint64_t wifi_shadow_rtt; /* Shadow RTT used for wifi connections. */
     double quantum_ratio; /* Fraction of pacing rate used for Quantum, or zero if not set*/
     unsigned int filled_pipe : 1;
@@ -552,6 +554,18 @@ void BBRltbwSampling(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, u
 void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
 {
     uint64_t bandwidth_estimate = path_x->bandwidth_estimate;
+#if 1
+    if (path_x->delivered_last_packet >= bbr_state->next_round_delivered &&
+        bbr_state->epoch_start_stamp < current_time)
+    {
+        uint64_t delivered_this_round = path_x->delivered_last_packet - bbr_state->next_round_delivered;
+        uint64_t epoch_length = current_time - bbr_state->epoch_start_stamp;
+        uint64_t alt_estimate = delivered_this_round*1000000 / epoch_length;
+        if (alt_estimate > bandwidth_estimate) {
+            bandwidth_estimate = alt_estimate;
+        }
+    }
+#endif
 
     if (bbr_state->state == picoquic_bbr_alg_startup &&
         bandwidth_estimate < (path_x->peak_bandwidth_estimate / 2)) {
@@ -579,6 +593,9 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, ui
     BBRltbwSampling(bbr_state, path_x, current_time);
 
     if (bbr_state->round_start) {
+#if 1
+        bbr_state->epoch_start_stamp = current_time;
+#endif
         if (bandwidth_estimate > bbr_state->btl_bw ||
             !path_x->last_bw_estimate_path_limited) {
             /* Forget the oldest BW round, shift by 1, compute the max BTL_BW for
@@ -628,6 +645,11 @@ void BBRUpdateRTprop(picoquic_bbr_state_t* bbr_state, uint64_t rtt_sample, uint6
         if (20 * delta < bbr_state->rt_prop) {
             bbr_state->rt_prop_stamp = current_time;
         }
+#if 1
+        if (bbr_state->rt_prop < 1000 && rtt_sample < 5000){
+            bbr_state->rt_prop_stamp = current_time;
+        }
+#endif
     }
 }
 
