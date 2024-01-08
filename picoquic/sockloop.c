@@ -741,11 +741,11 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
             ret = -1;
         }
         else {
-#ifdef _WINDOWS
             uint64_t loop_time = current_time;
             size_t bytes_sent = 0;
 
             if (bytes_recv > 0) {
+#ifdef _WINDOWS
                 size_t recv_bytes = 0;
                 while (recv_bytes < (size_t)bytes_recv && ret == 0) {
                     size_t recv_length = (size_t)(bytes_recv - recv_bytes);
