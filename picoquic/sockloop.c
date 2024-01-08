@@ -348,7 +348,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
     /* Assess whether coalescing is supported */
     if (!do_not_use_gso) {
         picoquic_sockloop_win_coalescing_test(&recv_coalesced, &send_coalesced);
-#if 1
+#if 0
         /* TODO: remove temporary fix, after we figure how to work that out. */
         recv_coalesced = 0;
 #endif
@@ -496,7 +496,7 @@ int picoquic_packet_loop_wait(picoquic_socket_ctx_t* s_ctx,
     HANDLE events[4];
     DWORD ret_event;
     DWORD nb_events = 0;
-    DWORD dwDeltaT = (DWORD)((delta_t <= 0)? 0: ((delta_t + 999) / 1000));
+    DWORD dwDeltaT = (DWORD)((delta_t <= 0)? 0: (delta_t / 1000));
 
     for (int i = 0; i < 4 && i < nb_sockets; i++) {
         events[i] = s_ctx[i].overlap.hEvent;
@@ -741,21 +741,38 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
             ret = -1;
         }
         else {
+#ifdef _WINDOWS
             uint64_t loop_time = current_time;
             size_t bytes_sent = 0;
 
             if (bytes_recv > 0) {
+                size_t recv_bytes = 0;
+                while (recv_bytes < (size_t)bytes_recv && ret == 0) {
+                    size_t recv_length = (size_t)(bytes_recv - recv_bytes);
+
+                    if (s_ctx[socket_rank].udp_coalesced_size > 0 &&
+                        recv_length > s_ctx[socket_rank].udp_coalesced_size) {
+                        recv_length = s_ctx[socket_rank].udp_coalesced_size;
+                    }
+                    /* Submit the packet to the client */
+                    ret = picoquic_incoming_packet_ex(quic, s_ctx[socket_rank].recv_buffer + recv_bytes,
+                        recv_length, (struct sockaddr*)&s_ctx[socket_rank].addr_from,
+                        (struct sockaddr*)&s_ctx[socket_rank].addr_dest,
+                        s_ctx[socket_rank].dest_if,
+                        s_ctx[socket_rank].received_ecn, &last_cnx, current_time);
+                    recv_bytes += recv_length;
+                }
+                if (ret == 0) {
+                    ret = picoquic_win_recvmsg_async_start(&s_ctx[socket_rank]);
+                }
+#else
                 /* Submit the packet to the server */
                 ret = picoquic_incoming_packet_ex(quic, received_buffer,
                     (size_t)bytes_recv, (struct sockaddr*)&addr_from,
                     (struct sockaddr*)&addr_to, if_index_to, received_ecn,
                     &last_cnx, current_time);
-
-#ifdef _WINDOWS
-                if (ret == 0) {
-                    ret = picoquic_win_recvmsg_async_start(&s_ctx[socket_rank]);
-                }
 #endif
+
 
                 if (loop_callback != NULL) {
                     size_t b_recvd = (size_t)bytes_recv;
