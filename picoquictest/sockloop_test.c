@@ -400,8 +400,8 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     picoquic_connection_id_t icid = { 0 };
     sockloop_test_cb_t loop_cb = { 0 };
     uint64_t current_time = picoquic_current_time();
-    picoquic_server_sockets_t double_bind = { 0 };
-
+    picoquic_socket_ctx_t double_bind[2];
+    int nb_double_bind = 0;
 
     /* Create test context
     * TODO: this creates the client and server addresses. We probably
@@ -429,12 +429,13 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
         ret = test_api_init_send_recv_scenario(test_ctx, spec->scenario, spec->scenario_size);
     }
     /* If testing a socket fault, bind sockets to the desired port */
-    if (ret == 0 && spec->double_bind) {
-        ret = picoquic_open_server_sockets(&double_bind, spec->port);
+    for (int i = 0; i < 2; i++) {
+        double_blind[i].fd = INVALID_SOCKET;
     }
-    else {
-        for (int i = 0; i < PICOQUIC_NB_SERVER_SOCKETS; i++) {
-            double_bind.s_socket[i] = INVALID_SOCKET;
+    if (ret == 0 && spec->double_bind) {
+        if ((nb_double_bind = picoquic_packet_loop_open_sockets(spec->port,
+            0, PICOQUIC_MAX_PACKET_SIZE, 0, 1, double_bind)) <= 0) {
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
         }
     }
 
@@ -505,7 +506,9 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
         tls_api_delete_ctx(test_ctx);
     }
     /* Free the sockets used in double blind test */
-    picoquic_close_server_sockets(&double_bind);
+    for (int i = 0; i < 2; i++) {
+        picoquic_packet_loop_close_socket(&double_bind[i]);
+    }
     return ret;
 }
 
