@@ -207,6 +207,7 @@
     <ClInclude Include="picosocks.h" />
     <ClInclude Include="picosplay.h" />
     <ClInclude Include="picoquic.h" />
+    <ClInclude Include="sockloop.h" />
     <ClInclude Include="tls_api.h" />
     <ClInclude Include="picoquic_utils.h" />
     <ClInclude Include="wincompat.h" />

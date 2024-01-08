@@ -430,7 +430,7 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     }
     /* If testing a socket fault, bind sockets to the desired port */
     for (int i = 0; i < 2; i++) {
-        double_blind[i].fd = INVALID_SOCKET;
+        double_bind[i].fd = INVALID_SOCKET;
     }
     if (ret == 0 && spec->double_bind) {
         if ((nb_double_bind = picoquic_packet_loop_open_sockets(spec->port,
