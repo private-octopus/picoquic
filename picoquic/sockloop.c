@@ -835,11 +835,9 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
                     bytes_sent += send_length;
 
                     /* TODO: verify htons/ntohs */
-                    int selected_socket = -1;
                     for (int i = 0; i < nb_sockets_available; i++) {
                         if (s_ctx[i].af == peer_addr.ss_family) {
                             send_socket = s_ctx[i].fd;
-                            selected_socket = i;
                             if (send_port != 0 && htons(s_ctx[i].port) == send_port)
                                 break;
                         }
