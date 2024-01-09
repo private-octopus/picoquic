@@ -400,7 +400,7 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     picoquic_connection_id_t icid = { 0 };
     sockloop_test_cb_t loop_cb = { 0 };
     uint64_t current_time = picoquic_current_time();
-    picoquic_socket_ctx_t double_bind[2];
+    picoquic_socket_ctx_t double_bind[2] = { 0 };
     int nb_double_bind = 0;
 
     /* Create test context
@@ -434,7 +434,7 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     }
     if (ret == 0 && spec->double_bind) {
         if ((nb_double_bind = picoquic_packet_loop_open_sockets(spec->port,
-            0, PICOQUIC_MAX_PACKET_SIZE, 0, 1, double_bind)) <= 0) {
+            AF_INET6, PICOQUIC_MAX_PACKET_SIZE, 0, 1, double_bind)) <= 0) {
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
         }
     }
@@ -539,7 +539,8 @@ int sockloop_basic_test()
 }
 
 static test_api_stream_desc_t sockloop_test_scenario_1M[] = {
-    { 4, 0, 257, 1000000 }
+    { 4, 0, 257, 1000000 },
+    { 8, 4, 257, 1000000 }
 };
 
 int sockloop_eio_test()

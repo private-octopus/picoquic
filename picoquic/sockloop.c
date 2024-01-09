@@ -445,10 +445,7 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int soc
         if (picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, &s_ctx[i]) != 0) {
             DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", s_ctx[i].af, s_ctx[i].port);
             for (int j = 0; j < i; j++) {
-                if (s_ctx[i].fd != INVALID_SOCKET) {
-                    SOCKET_CLOSE(s_ctx[i].fd);
-                    s_ctx[i].fd = INVALID_SOCKET;
-                }
+                picoquic_packet_loop_close_socket(&s_ctx[j]);
             }
             nb_sockets = 0;
             break;
@@ -756,8 +753,8 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
                     }
                     /* Submit the packet to the client */
                     ret = picoquic_incoming_packet_ex(quic, s_ctx[socket_rank].recv_buffer + recv_bytes,
-                        recv_length, (struct sockaddr*)&s_ctx[socket_rank].addr_from,
-                        (struct sockaddr*)&s_ctx[socket_rank].addr_dest,
+                        recv_length, (struct sockaddr*)&addr_from,
+                        (struct sockaddr*)&addr_to,
                         s_ctx[socket_rank].dest_if,
                         s_ctx[socket_rank].received_ecn, &last_cnx, current_time);
                     recv_bytes += recv_length;
