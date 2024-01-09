@@ -3441,11 +3441,18 @@ static char const* token_file_name = "retry_tests_tokens.bin";
 
 int tls_retry_token_test_one(int token_mode, int dup_token)
 {
+    int ret = 0;
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     /* ensure that the token file is empty */
-    int ret = picoquic_save_tokens(NULL, simulated_time, token_file_name);
+    FILE* F = picoquic_file_open(token_file_name, "wb");
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        F = picoquic_file_close(F);
+    }
     
     if (ret == 0) {
         ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
@@ -3482,7 +3489,7 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
             uint8_t * token = NULL;
             uint16_t token_length = 0;
 
-            ret = picoquic_get_token(test_ctx->qclient->p_first_token, simulated_time,
+            ret = picoquic_get_token(test_ctx->qclient,
                 PICOQUIC_TEST_SNI, (uint16_t)strlen(PICOQUIC_TEST_SNI),
                 NULL, 0,
                 &token, &token_length, 0);
@@ -3563,7 +3570,7 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
     }
     if (ret == 0) {
         /* Not strictly needed, but allows for inspection */
-        ret = picoquic_save_tokens(test_ctx->qclient->p_first_token, simulated_time, token_file_name);
+        ret = picoquic_save_tokens(test_ctx->qclient, token_file_name);
     }
 
     if (test_ctx != NULL) {
@@ -5092,7 +5099,6 @@ int virtual_time_test()
         DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
     }
     else {
-
         qsimul = picoquic_create(8, NULL, NULL, test_server_cert_store_file,
             NULL, test_api_callback,
             (void*)callback_ctx, NULL, NULL, NULL, simulated_time,
@@ -5110,7 +5116,7 @@ int virtual_time_test()
         {
             /* Check that the simulated time follows the simulation */
             for (int i = 0; ret == 0 && i < 5; i++) {
-                simulated_time += 12345678;
+                simulated_time += 12345678000;
                 test_time = picoquic_get_quic_time(qsimul);
                 ptls_time = picoquic_get_tls_time(qsimul);
                 if (test_time != simulated_time) {
@@ -5119,7 +5125,7 @@ int virtual_time_test()
                         (unsigned long long)simulated_time);
                     ret = -1;
                 }
-                else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
+                else if (ptls_time < test_time || ptls_time > test_time + 1000) {
                     DBG_PRINTF("Test time: %llu does match ptls time: %llu",
                         (unsigned long long)test_time,
                         (unsigned long long)ptls_time);
@@ -5128,35 +5134,34 @@ int virtual_time_test()
             }
         }
 
-        /* Check that the non simulated time follows the current time */
-        for (int i = 0; ret == 0 && i < 5; i++) {
-#ifdef _WINDOWS
-            Sleep(1);
-#else
-            usleep(1000);
-#endif
-            current_time = picoquic_current_time();
-            test_time = picoquic_get_quic_time(qdirect);
-            ptls_time = picoquic_get_tls_time(qdirect);
+        if (ret == 0) {
+            int64_t delta, delta_low, delta_high;
+            uint64_t current_previous = picoquic_current_time();
+            uint64_t test_previous = picoquic_current_time();
+            uint64_t ptls_previous = picoquic_get_tls_time(qdirect);
 
-            if (test_time < current_time) {
-                DBG_PRINTF("Test time: %llu < previous current time: %llu",
-                    (unsigned long long)test_time,
-                    (unsigned long long)current_time);
-                ret = -1;
-            }
-            else {
+            /* Check that the non simulated time follows the current time */
+            for (int i = 0; ret == 0 && i < 5; i++) {
+#ifdef _WINDOWS
+                Sleep(1);
+#else
+                usleep(1000);
+#endif
                 current_time = picoquic_current_time();
-                if (test_time > current_time) {
-                    DBG_PRINTF("Test time: %llu > next current time: %llu",
-                        (unsigned long long)test_time,
-                        (unsigned long long)current_time);
+                test_time = picoquic_get_quic_time(qdirect);
+                ptls_time = picoquic_get_tls_time(qdirect);
+
+                delta = current_time - current_previous;
+                delta_low = delta - 1000;
+                delta_high = delta + 1000;
+                if (test_time < test_previous + delta_low || test_time > test_previous + delta_high ) {
+                    DBG_PRINTF("Test time: %" PRIu64 " does not match previous test time : %" PRIu64 " + delta : %" PRId64,
+                        test_time, test_previous, delta);
                     ret = -1;
                 }
-                else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
-                    DBG_PRINTF("Test current time: %llu does match ptls time: %llu",
-                        (unsigned long long)test_time,
-                        (unsigned long long)ptls_time);
+                else if (ptls_time < ptls_previous + delta_low || ptls_time > ptls_previous + delta_high) {
+                    DBG_PRINTF("Test time: %" PRIu64 " does not match previous test time : %" PRIu64 " + delta : %" PRId64,
+                        ptls_time, ptls_previous, delta);
                     ret = -1;
                 }
             }

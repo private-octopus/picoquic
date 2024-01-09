@@ -1,4 +1,3 @@
-#include "picoquic_internal.h"
 /*
 * Author: Christian Huitema
 * Copyright (c) 2017, Private Octopus, Inc.
@@ -20,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "tls_api.h"
 #include "picoquic_internal.h"
 #include <stddef.h>
 #include <stdlib.h>
@@ -256,13 +256,14 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
     return ret;
 }
 
-int picoquic_store_ticket(picoquic_stored_ticket_t** pp_first_ticket,
-    uint64_t current_time,
+int picoquic_store_ticket(picoquic_quic_t* quic,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     uint32_t version, const uint8_t* ip_addr, uint8_t ip_addr_length,
     const uint8_t* ip_addr_client, uint8_t ip_addr_client_length,
     uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const * tp)
 {
+    uint64_t current_time = picoquic_get_tls_time(quic);
+    picoquic_stored_ticket_t** pp_first_ticket = &quic->p_first_ticket;
     int ret = 0;
 
     if (ticket_length < 17) {
@@ -324,11 +325,12 @@ int picoquic_store_ticket(picoquic_stored_ticket_t** pp_first_ticket,
     return ret;
 }
 
-picoquic_stored_ticket_t* picoquic_get_stored_ticket(picoquic_stored_ticket_t* p_first_ticket,
-    uint64_t current_time, char const* sni, uint16_t sni_length,
+picoquic_stored_ticket_t* picoquic_get_stored_ticket(picoquic_quic_t * quic,
+    char const* sni, uint16_t sni_length,
     char const* alpn, uint16_t alpn_length, uint32_t version, int need_unused, uint64_t ticket_id)
 {
-    picoquic_stored_ticket_t* next = p_first_ticket;
+    picoquic_stored_ticket_t* next = quic->p_first_ticket;
+    uint64_t current_time = picoquic_get_tls_time(quic);
 
     while (next != NULL) {
         if (next->time_valid_until > current_time&&
@@ -349,15 +351,14 @@ picoquic_stored_ticket_t* picoquic_get_stored_ticket(picoquic_stored_ticket_t* p
     return next;
 }
 
-int picoquic_get_ticket_and_version(picoquic_stored_ticket_t* p_first_ticket,
-    uint64_t current_time,
+int picoquic_get_ticket_and_version(picoquic_quic_t * quic,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     uint32_t version, uint32_t * ticket_version,
     uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t * tp, int mark_used)
 {
     int ret = 0;
     picoquic_stored_ticket_t* next = picoquic_get_stored_ticket(
-        p_first_ticket, current_time, sni, sni_length, alpn, alpn_length, version, mark_used, 0);
+        quic, sni, sni_length, alpn, alpn_length, version, mark_used, 0);
 
     if (next == NULL) {
         *ticket = NULL;
@@ -381,15 +382,13 @@ int picoquic_get_ticket_and_version(picoquic_stored_ticket_t* p_first_ticket,
     return ret;
 }
 
-int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
-    uint64_t current_time,
+int picoquic_get_ticket(picoquic_quic_t * quic,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     uint32_t version,
-    uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t* tp, int mark_used)
+    uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t * tp, int mark_used)
 {
     uint32_t ticket_version = 0;
-
-    int ret = picoquic_get_ticket_and_version(p_first_ticket, current_time,
+    int ret = picoquic_get_ticket_and_version(quic,
         sni, sni_length, alpn, alpn_length, version, &ticket_version,
         ticket, ticket_length, tp, mark_used);
 
@@ -431,9 +430,10 @@ int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
     return ret;
 }
 
-int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
-    uint64_t current_time, char const* ticket_file_name)
+int picoquic_load_tickets(picoquic_quic_t* quic, char const* ticket_file_name)
 {
+    picoquic_stored_ticket_t** pp_first_ticket = &quic->p_first_ticket;
+    uint64_t current_time = picoquic_get_tls_time(quic);
     int ret = 0;
     int file_err = 0;
     FILE* F = NULL;
@@ -510,17 +510,17 @@ void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket)
 
 int picoquic_save_session_tickets(picoquic_quic_t* quic, char const* ticket_store_filename)
 {
-    return picoquic_save_tickets(quic->p_first_ticket, picoquic_get_quic_time(quic), ticket_store_filename);
+    return picoquic_save_tickets(quic->p_first_ticket, picoquic_get_tls_time(quic), ticket_store_filename);
 }
 
 int picoquic_load_retry_tokens(picoquic_quic_t* quic, char const* token_store_filename)
 {
-    return picoquic_load_tokens(&quic->p_first_token, picoquic_get_quic_time(quic), token_store_filename);
+    return picoquic_load_tokens(quic, token_store_filename);
 }
 
 int picoquic_save_retry_tokens(picoquic_quic_t* quic, char const* ticket_store_filename)
 {
-    return picoquic_save_tokens(quic->p_first_token, picoquic_get_quic_time(quic), ticket_store_filename);
+    return picoquic_save_tokens(quic, ticket_store_filename);
 }
 
 void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint64_t current_time)
@@ -537,7 +537,7 @@ void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x
 
     if (ip_addr != NULL && ip_addr_length <= PICOQUIC_STORED_IP_MAX) {
         picoquic_stored_ticket_t* next = picoquic_get_stored_ticket(
-            cnx->quic->p_first_ticket, current_time, sni, (uint16_t)sni_length,
+            cnx->quic, sni, (uint16_t)sni_length,
             alpn, (uint16_t)alpn_length, version, 0, cnx->issued_ticket_id);
         while (next != NULL) {
             if (next->sni_length == sni_length &&
@@ -567,8 +567,9 @@ void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x
     }
 }
 
-void picoquic_seed_ticket(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
+void picoquic_seed_ticket(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
+    uint64_t current_time = picoquic_get_tls_time(cnx->quic);
     if (cnx->client_mode) {
         picoquic_update_stored_ticket(cnx, path_x, current_time);
     }

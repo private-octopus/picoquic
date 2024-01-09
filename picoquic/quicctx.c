@@ -30,6 +30,8 @@
 #include <string.h>
 #ifndef _WINDOWS
 #include <sys/time.h>
+#include <time.h>
+#include <errno.h>
 #endif
 
 
@@ -665,19 +667,8 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         if (cnx_id_callback != NULL) {
             quic->unconditional_cnx_id = 1;
         }
-
         if (ticket_file_name != NULL) {
             quic->ticket_file_name = ticket_file_name;
-            ret = picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);
-
-            if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
-                DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
-                ret = 0;
-            }
-            else if (ret != 0) {
-                DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
-                ret = 0;
-            }
         }
 
         if (ret == 0) {
@@ -731,6 +722,19 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
                 picoquic_crypto_random(quic, quic->retry_seed, sizeof(quic->retry_seed));
 
                 /* If there is no root certificate context specified, use a null certifier. */
+                /* Load tickets */
+                if (quic->ticket_file_name != NULL) {
+                    ret = picoquic_load_tickets(quic, ticket_file_name);
+
+                    if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
+                        DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
+                        ret = 0;
+                    }
+                    else if (ret != 0) {
+                        DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
+                        ret = 0;
+                    }
+                }
             }
         }
         
@@ -745,8 +749,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
 
 int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name)
 {
-    uint64_t current_time = picoquic_get_quic_time(quic);
-    int ret = picoquic_load_tokens(&quic->p_first_token, current_time, token_file_name);
+    int ret = picoquic_load_tokens(quic, token_file_name);
 
     if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
         DBG_PRINTF("Ticket file <%s> not created yet.\n", token_file_name);
@@ -3828,6 +3831,13 @@ uint64_t picoquic_current_time()
     * Account for microseconds elapsed between 1601 and 1970.
     */
     now -= 11644473600000000ULL;
+#elif defined(CLOCK_MONOTONIC)
+    /*
+    * Use CLOCK_MONOTONIC if exists (more accurate)
+    */
+    struct timespec currentTime;
+    (void)clock_gettime(CLOCK_MONOTONIC, &currentTime);
+    now = (currentTime.tv_sec * 1000000ull) + currentTime.tv_nsec / 1000ull;
 #else
     struct timeval tv;
     (void)gettimeofday(&tv, NULL);
@@ -4393,7 +4403,7 @@ picoquic_cnx_t* picoquic_cnx_by_icid(picoquic_quic_t* quic, picoquic_connection_
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
-    picoquic_cnx_t dummy_cnx;
+    picoquic_cnx_t dummy_cnx = { 0 };
 
     picoquic_store_addr(&dummy_cnx.registered_icid_addr, addr);
     dummy_cnx.initial_cnxid = *icid;

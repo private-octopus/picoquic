@@ -107,7 +107,7 @@ picoquic_alpn_enum picoquic_parse_alpn_nz(char const* alpn, size_t len)
 }
 
 int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic,
-    char const* sni, char const* alpn, uint32_t proposed_version, uint64_t current_time, 
+    char const* sni, char const* alpn, uint32_t proposed_version,
     char const ** ticket_alpn, uint32_t * ticket_version)
 {
     int ret = -1;
@@ -125,7 +125,7 @@ int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic
                 if ((alpn_list[i].alpn_code == picoquic_alpn_http_3 ||
                     alpn_list[i].alpn_code == picoquic_alpn_http_0_9) &&
                     alpn_list[i].alpn_val != NULL) {
-                    if (picoquic_get_ticket_and_version(quic->p_first_ticket, current_time,
+                    if (picoquic_get_ticket_and_version(quic,
                         sni, sni_length, alpn_list[i].alpn_val, (uint16_t)strlen(alpn_list[i].alpn_val), proposed_version, ticket_version,
                         &ticket, &ticket_length, &tp, 0) == 0){
                         ret = 0;
@@ -136,7 +136,7 @@ int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic
             }
         }
         else if (proposed_version == 0) {
-            if (picoquic_get_ticket_and_version(quic->p_first_ticket, current_time,
+            if (picoquic_get_ticket_and_version(quic,
                 sni, sni_length, alpn, (uint16_t)strlen(alpn), proposed_version, ticket_version,
                 &ticket, &ticket_length, &tp, 0) == 0) {
                 ret = 0;

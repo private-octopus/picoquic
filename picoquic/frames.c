@@ -754,7 +754,7 @@ const uint8_t* picoquic_decode_new_token_frame(picoquic_cnx_t* cnx, const uint8_
         uint8_t * ip_addr;
         uint8_t ip_addr_length;
         picoquic_get_ip_addr(addr_to, &ip_addr, &ip_addr_length);
-        (void)picoquic_store_token(&cnx->quic->p_first_token, current_time, cnx->sni, (uint16_t)strlen(cnx->sni),
+        (void)picoquic_store_token(cnx->quic, cnx->sni, (uint16_t)strlen(cnx->sni),
             ip_addr, ip_addr_length, token, (uint16_t)length);
     }
 
@@ -2798,7 +2798,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     }
 
     if (cnx->path[0]->is_ssthresh_initialized && !cnx->path[0]->is_ticket_seeded) {
-        picoquic_seed_ticket(cnx, cnx->path[0], current_time);
+        picoquic_seed_ticket(cnx, cnx->path[0]);
     }
 }
 
@@ -5357,7 +5357,7 @@ const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                 /* TODO: this has the side effect of storing the local CWIN in the ticket,
                  * even if it is not yet updated. Need to consider side effects. */
                 int is_ticket_seed = path_x->is_ticket_seeded;
-                picoquic_seed_ticket(cnx, path_x, current_time);
+                picoquic_seed_ticket(cnx, path_x);
                 path_x->is_ticket_seeded = is_ticket_seed; 
             }
             else {
@@ -5386,7 +5386,6 @@ uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t*
     picoquic_path_t* path_x, int* more_data, int * is_pure_ack)
 {
     uint8_t* bytes0 = bytes;
-    uint64_t current_time = picoquic_get_quic_time(cnx->quic);
     /* There is no explicit TTL for bdps. We assume they are OK for 24 hours */
     uint64_t lifetime = (uint64_t)(24 * 3600) * ((uint64_t)1000000); 
     uint64_t recon_bytes_in_flight = 0;
@@ -5409,8 +5408,8 @@ uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t*
     }
     else {
         /* Client sends bdp back to the server */
-        picoquic_stored_ticket_t* stored_ticket = picoquic_get_stored_ticket(cnx->quic->p_first_ticket,
-            current_time, cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
+        picoquic_stored_ticket_t* stored_ticket = picoquic_get_stored_ticket(cnx->quic,
+            cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
             picoquic_supported_versions[cnx->version_index].version, 1, 0);
         if (stored_ticket != NULL) {
             recon_bytes_in_flight = stored_ticket->tp_0rtt[picoquic_tp_0rtt_cwin_remote];
