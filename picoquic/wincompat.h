@@ -33,6 +33,8 @@
 #define __attribute__(X)
 #endif
 
+#pragma warning(disable : 4214)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
