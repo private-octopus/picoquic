@@ -1995,8 +1995,8 @@ int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id)
 }
 
 /* Create a new path in order to trigger a migration */
-int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address)
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, int if_index, uint64_t current_time, int to_preferred_address)
 {
     int ret = 0;
     int partial_match_path = -1;
@@ -2008,11 +2008,11 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
         ret = PICOQUIC_ERROR_MIGRATION_DISABLED;
         DBG_PRINTF("Tried to create probe with migration disabled = %d", cnx->remote_parameters.migration_disabled);
     }
-    else if ((path_id = picoquic_find_path_by_address(cnx, addr_to, addr_from, &partial_match_path)) >= 0) {
+    else if ((path_id = picoquic_find_path_by_address(cnx, addr_local, addr_peer, &partial_match_path)) >= 0) {
         /* This path already exists. Will not create it, but will restore it in working order if disabled. */
         ret = -1;
     }
-    else if (partial_match_path >= 0 && addr_from->sa_family == 0) {
+    else if (partial_match_path >= 0 && addr_peer->sa_family == 0) {
         /* This path already exists. Will not create it, but will restore it in working order if disabled. */
         ret = -1;
     }
@@ -2024,7 +2024,7 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
         /* Too many paths created already */
         ret = -1;
     }
-    else if (picoquic_create_path(cnx, current_time, addr_to, addr_from) > 0) {
+    else if (picoquic_create_path(cnx, current_time, addr_local, addr_peer) > 0) {
         path_id = cnx->nb_paths - 1;
         ret = picoquic_assign_peer_cnxid_to_path(cnx, path_id);
 
@@ -2082,10 +2082,10 @@ int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void
     return ret;
 }
 
-int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, uint64_t current_time)
+int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, uint64_t current_time)
 {
-    return picoquic_probe_new_path_ex(cnx, addr_from, addr_to, 0, current_time, 0);
+    return picoquic_probe_new_path_ex(cnx, addr_peer, addr_local, 0, current_time, 0);
 }
 
 /* TODO: the "unique_path_id" should really be a unique ID, managed by the stack.
@@ -4688,3 +4688,10 @@ int picoquic_process_version_upgrade(picoquic_cnx_t* cnx, int old_version_index,
     }
     return ret;
 }
+
+/* Simple portable number generation. */
+uint64_t picoquic_uniform_random(uint64_t rnd_max)
+{
+    return picoquic_public_uniform_random(rnd_max);
+}
+

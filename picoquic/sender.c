@@ -3184,34 +3184,36 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
     /* Verify first that there is no need for retransmit or ack
      * on initial or handshake context. */
-    if (cnx->crypto_context[picoquic_epoch_initial].aead_encrypt != NULL) {
-        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
-            path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
-    }
-    else {
-        length = 0;
-    }
-
-    if (length == 0) {
-        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
-            path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
-        if (length > 0) {
-            checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
-            bytes_max = bytes + send_buffer_min_max - checksum_overhead;
+    if (path_x->p_local_cnxid != NULL) {
+        if (cnx->crypto_context[picoquic_epoch_initial].aead_encrypt != NULL) {
+            length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
+                path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
         }
-    }
-    else {
-        checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_initial);
-        bytes_max = bytes + send_buffer_min_max - checksum_overhead;
+        else {
+            length = 0;
+        }
 
-        *is_initial_sent = 1;
-    }
+        if (length == 0) {
+            length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
+                path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
+            if (length > 0) {
+                checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
+                bytes_max = bytes + send_buffer_min_max - checksum_overhead;
+            }
+        }
+        else {
+            checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_initial);
+            bytes_max = bytes + send_buffer_min_max - checksum_overhead;
 
-    if (length > 0) {
-        cnx->initial_repeat_needed = 0;
+            *is_initial_sent = 1;
+        }
 
-        if (cnx->client_mode && *is_initial_sent && send_buffer_min_max < length + checksum_overhead + PICOQUIC_MIN_SEGMENT_SIZE) {
-            length = picoquic_pad_to_target_length(packet->bytes, length, send_buffer_min_max - checksum_overhead);
+        if (length > 0) {
+            cnx->initial_repeat_needed = 0;
+
+            if (cnx->client_mode && *is_initial_sent && send_buffer_min_max < length + checksum_overhead + PICOQUIC_MIN_SEGMENT_SIZE) {
+                length = picoquic_pad_to_target_length(packet->bytes, length, send_buffer_min_max - checksum_overhead);
+            }
         }
     }
 
@@ -4227,7 +4229,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
             picoquic_demote_path(cnx, i, current_time);
             continue;
         }
-        else if (cnx->path[i]->challenge_verified) {
+        else if (cnx->path[i]->challenge_verified && cnx->cnx_state == picoquic_state_ready) {
             /* logic to synchronize path selection between server and client:
              * On the client side, this is driven by the "probe/validate" sequence; the
              * assumption is that if the client probes a new path, it want to use it

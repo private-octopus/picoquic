@@ -111,6 +111,48 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_basic)
+        {
+            int ret = sockloop_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_eio)
+        {
+            int ret = sockloop_eio_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_errsock)
+        {
+            int ret = sockloop_errsock_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_ipv4)
+        {
+            int ret = sockloop_ipv4_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_migration)
+        {
+            int ret = sockloop_migration_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_nat)
+        {
+            int ret = sockloop_nat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(splay)
         {
             int ret = splay_test();

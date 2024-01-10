@@ -849,10 +849,10 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * connection data harder in case of NAT traversal.
  */
 
-int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, uint64_t current_time);
-int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address);
+int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, uint64_t current_time);
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, int if_index, uint64_t current_time, int to_preferred_address);
 void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
 void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
 int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
