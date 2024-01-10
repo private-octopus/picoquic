@@ -587,11 +587,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                     }
 
                     if (simulate_multipath) {
-#if 1
                         ret = simulate_migration(cb_ctx);
-#else
-                        cb_ctx->migration_started = 1;
-#endif
                     }
                 }
 
