@@ -2211,8 +2211,8 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 0);
                     }
 
-                    /* If present, send misc frame */
-                    while (cnx->first_misc_frame != NULL) {
+                    /* If present, send misc frame -- but only if packet is 1RTT */
+                    while (pc == picoquic_packet_context_application && cnx->first_misc_frame != NULL) {
                         uint8_t* bytes_misc = bytes_next;
                         bytes_next = picoquic_format_first_misc_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
                         if (bytes_next == bytes_misc) {
@@ -3301,71 +3301,72 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     }
 
                     length = bytes_next - bytes;
+                    if (pc == picoquic_packet_context_application) {
+                        if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required ||
+                            send_buffer_max <= path_x->send_mtu) {
+                            /* No need or no way to do pmtu discovery */
+                            /* If present, send misc frame */
+                            while (cnx->first_misc_frame != NULL) {
+                                uint8_t* bytes_misc = bytes_next;
+                                bytes_next = picoquic_format_first_misc_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+                                if (bytes_next == bytes_misc) {
+                                    break;
+                                }
+                            }
 
-                    if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required ||
-                        send_buffer_max <= path_x->send_mtu) {
-                        /* No need or no way to do pmtu discovery */
-                        /* If present, send misc frame */
-                        while (cnx->first_misc_frame != NULL) {
-                            uint8_t* bytes_misc = bytes_next;
-                            bytes_next = picoquic_format_first_misc_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
-                            if (bytes_next == bytes_misc) {
-                                break;
+                            /* If there are not enough published CID, create and advertise */
+                            if (ret == 0) {
+                                bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max,
+                                    current_time, next_wake_time, &more_data, &is_pure_ack);
+                            }
+                            if (cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
+                                bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);
+                            }
+                            if (ret == 0) {
+                                bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+                                    &more_data, &is_pure_ack, &no_data_to_send, &ret);
+                            }
+                            /* TODO: replace this by posting of frame when CWIN estimated */
+                            /* Send bdp frames if there are no stream frames to send
+                             * and if client wishes to receive bdp frames */
+                            if (!cnx->client_mode && cnx->send_receive_bdp_frame) {
+                                bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
+                            }
+
+                            length = bytes_next - bytes;
+                            if (length <= header_length) {
+                                /* Mark the bandwidth estimation as application limited */
+                                path_x->delivered_limited_index = path_x->delivered;
+                                /* Notify the peer if something is blocked */
+                                bytes_next = picoquic_format_blocked_frames(cnx, &bytes[length], bytes_max, &more_data, &is_pure_ack);
+                                length = bytes_next - bytes;
+                            }
+
+                            if (no_data_to_send) {
+                                path_x->last_sender_limited_time = current_time;
+                            }
+                        } /* end of PMTU not required */
+
+                        if (ret == 0 && length <= header_length
+                            && path_x->cwin > path_x->bytes_in_transit && cnx->quic->cwin_max > path_x->bytes_in_transit
+                            && pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
+                            if (send_buffer_max > path_x->send_mtu) {
+                                /* Since there is no data to send, this is an opportunity to send an MTU probe */
+                                length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes, send_buffer_max);
+                                packet->length = length;
+                                packet->send_path = path_x;
+                                packet->is_mtu_probe = 1;
+                                path_x->mtu_probe_sent = 1;
+                                is_pure_ack = 0;
+                            }
+                            else if (cnx->is_sending_large_buffer) {
+                                /* Should attempt PMTU discovery at next opportunity */
+                                *next_wake_time = current_time;
+                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                             }
                         }
-
-                        /* If there are not enough published CID, create and advertise */
-                        if (ret == 0) {
-                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max,
-                                current_time, next_wake_time, &more_data, &is_pure_ack);
-                        }
-                        if (cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
-                            bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);
-                        }
-                        if (ret == 0) {
-                            bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                                &more_data, &is_pure_ack, &no_data_to_send, &ret);
-                        }
-                        /* TODO: replace this by posting of frame when CWIN estimated */
-                        /* Send bdp frames if there are no stream frames to send 
-                         * and if client wishes to receive bdp frames */
-                        if(!cnx->client_mode && cnx->send_receive_bdp_frame) {
-                           bytes_next = picoquic_format_bdp_frame(cnx, bytes_next, bytes_max, path_x, &more_data, &is_pure_ack);
-                        }
-           
-                        length = bytes_next - bytes;
-                        if (length <= header_length) {
-                            /* Mark the bandwidth estimation as application limited */
-                            path_x->delivered_limited_index = path_x->delivered;
-                            /* Notify the peer if something is blocked */
-                            bytes_next = picoquic_format_blocked_frames(cnx, &bytes[length], bytes_max, &more_data, &is_pure_ack);
-                            length = bytes_next - bytes;
-                        }
-
-                        if (no_data_to_send) {
-                            path_x->last_sender_limited_time = current_time;
-                        }
-                    } /* end of PMTU not required */
-
-                    if (ret == 0 && length <= header_length 
-                        && path_x->cwin > path_x->bytes_in_transit && cnx->quic->cwin_max > path_x->bytes_in_transit
-                        && pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
-                        if (send_buffer_max > path_x->send_mtu) {
-                            /* Since there is no data to send, this is an opportunity to send an MTU probe */
-                            length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes, send_buffer_max);
-                            packet->length = length;
-                            packet->send_path = path_x;
-                            packet->is_mtu_probe = 1;
-                            path_x->mtu_probe_sent = 1;
-                            is_pure_ack = 0;
-                        }
-                        else if (cnx->is_sending_large_buffer) {
-                            /* Should attempt PMTU discovery at next opportunity */
-                            *next_wake_time = current_time;
-                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                        }
                     }
-                } /* end of PMTU references */
+                } /* end of congestion blocked */
             } /* end of CC */
         } /* End of pacing */
         if (length <= header_length) {
