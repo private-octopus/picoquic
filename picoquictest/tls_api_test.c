@@ -6178,7 +6178,7 @@ int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char
     return ret;
 }
 
-int transmit_cnxid_test_one(int retire_before, int disable_migration)
+int transmit_cnxid_test_one(int retire_before, int disable_migration, int retire_number_zero)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -6203,6 +6203,25 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration)
         picoquic_set_default_connection_id_ttl(test_ctx->qserver, default_connection_id_ttl);
     }
 
+    if (retire_number_zero) {
+        /* Do a short loop until the server connection is created */
+        int nb_trials = 0;
+        while (ret == 0 && nb_trials < 16 && test_ctx->cnx_server == NULL) {
+            int was_active = 0;
+            nb_trials++;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        }
+        if (test_ctx->cnx_server == NULL) {
+            DBG_PRINTF("Cannot create the server connection after %d trials", nb_trials);
+            ret = -1;
+        }
+        else {
+            /* force the retire prior to 1 so it be set in the first batch of CID. */
+            test_ctx->cnx_server->local_cnxid_retire_before = 1;
+        }
+    }
+
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
@@ -6210,6 +6229,14 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration)
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
         ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
+    }
+
+    if (ret == 0 && retire_number_zero) {
+        /* verify that the path 0 on client uses CID number > 1 */
+        if (test_ctx->cnx_client->path[0]->p_remote_cnxid->sequence == 0) {
+            DBG_PRINTF("First path still has CNX_ID=%d", test_ctx->cnx_client->path[0]->p_remote_cnxid->sequence);
+            ret = -1;
+        }
     }
 
     if (ret == 0 && retire_before) {
@@ -6269,22 +6296,27 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration)
 
 int transmit_cnxid_test()
 {
-    return transmit_cnxid_test_one(0, 0);
+    return transmit_cnxid_test_one(0, 0, 0);
 }
 
 int transmit_cnxid_disable_test()
 {
-    return transmit_cnxid_test_one(0, 1);
+    return transmit_cnxid_test_one(0, 1, 0);
 }
 
 int transmit_cnxid_retire_before_test()
 {
-    return transmit_cnxid_test_one(1, 0);
+    return transmit_cnxid_test_one(1, 0, 0);
 }
 
 int transmit_cnxid_retire_disable_test()
 {
-    return transmit_cnxid_test_one(1, 1);
+    return transmit_cnxid_test_one(1, 1, 0);
+}
+
+int transmit_cnxid_retire_early_test()
+{
+    return transmit_cnxid_test_one(0, 0, 1);
 }
 
 /*
@@ -6877,11 +6909,11 @@ int retire_cnxid_test()
 
     if (ret == 0) {
         if (test_ctx->cnx_client->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Only %d paths created on client.\n", test_ctx->cnx_client->nb_paths);
+            DBG_PRINTF("Only %d cids created on client.\n", test_ctx->cnx_client->nb_local_cnxid);
             ret = -1;
         }
         else if (test_ctx->cnx_server->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Only %d paths created on server.\n", test_ctx->cnx_server->nb_paths);
+            DBG_PRINTF("Only %d cids created on server.\n", test_ctx->cnx_server->nb_local_cnxid);
             ret = -1;
         }
     }
@@ -6924,8 +6956,8 @@ int retire_cnxid_test()
         }
 
         if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
+            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough cids (%d & %d).\n",
+                nb_rounds, test_ctx->cnx_client->nb_local_cnxid, test_ctx->cnx_server->nb_local_cnxid);
         }
     }
 
@@ -6933,7 +6965,7 @@ int retire_cnxid_test()
 
     if (ret == 0) {
         if (test_ctx->cnx_server->nb_local_cnxid != PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Found %d paths active on server instead of %d.\n", test_ctx->cnx_server->nb_paths, PICOQUIC_NB_PATH_TARGET);
+            DBG_PRINTF("Found %d cids active on server instead of %d.\n", test_ctx->cnx_server->nb_local_cnxid, PICOQUIC_NB_PATH_TARGET);
             ret = -1;
         }
     }
