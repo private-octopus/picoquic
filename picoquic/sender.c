@@ -3219,7 +3219,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
     if (length == 0 && cnx->local_parameters.max_idle_timeout == 30001 && cnx->client_mode &&
         cnx->pkt_ctx[picoquic_packet_context_handshake].pending_first != NULL) {
-        picoquic_log_app_message(cnx, "Not repeating handshake, t = %" PRIu64", cnxid: %s, nb_retrans: %d, wake: %" PRIu64,
+        picoquic_log_app_message(cnx, "Not repeating handshake, t = %" PRIu64", cnxid: %s, nb_retrans: %" PRIu64 ", wake: % " PRIu64,
             (current_time - cnx->start_time), (path_x->p_local_cnxid == NULL)?"absent":"present",
             cnx->path[0]->nb_retransmit, cnx->next_wake_time - cnx->start_time);
     }
