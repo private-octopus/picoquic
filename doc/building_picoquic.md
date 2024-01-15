@@ -46,6 +46,8 @@ Targets defined in the `CMakeLists.txt`, listed above for convenience, can be bu
 
 This also works if `picoquic` has not been built as a whole before.
 
+## Exported and Installed Targets
+
 ## Picoquic as a Dependency
 
 When using CMake [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html) can be used to fetch the `picoquic` repository from github.
@@ -63,7 +65,10 @@ FetchContent_Declare(
 )
 
 # Set the option to force picoquic to fetch the picotls
+find_package(PTLS)
+if(NOT PTLS_FOUND)
 set(PICOQUIC_FETCH_PTLS ON)
+end_if()
 
 # Make dependencies available
 FetchContent_MakeAvailable(picoquic)
@@ -82,3 +87,13 @@ add_subdirectory(dependencies)
 find_package(picoquic REQUIRED)
 ```
 
+Additionally `cmake` needs to be told where to find the imported dependency, using hints defined in a `cmake/Find<DependencyName>.cmake` file placed in the top-most directory in the repository.
+The cmake documentation describes how to [Create CMake Package Configuration Files](https://cmake.org/cmake/help/book/mastering-cmake/chapter/Finding%20Packages.html).
+
+TODO:
+demo how to write find_module, to add hints
+
+```cmake
+#TODO
+
+```
