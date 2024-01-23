@@ -110,7 +110,7 @@ This will do the following 25 times
     - close client and monitor process
     - wait and then close server and monitor process (not necessarily in that order)
 
-- From ```picoquic/scripts``` run
+- From ```picoquic/performance_measurement/scripts``` run
 
 ```
 python3 plot_cpu_usage.py
@@ -195,3 +195,83 @@ which should print out the mean latency for each message.
 
 - Repeat with different file sizes.
 
+
+
+## TCP code
+
+
+The code is present in ```picoquic/mp1```. It can be compiled by running ```make``` from
+the same directory.
+
+### Throughputs
+
+- This was done in a rather ad hoc way by using the latency measurements, measuring average latency
+and then dividing file size by that. Fixing this is a **TODO**.
+
+### CPU measurements
+
+The method is very similar to that of Picoquic. 
+
+- Use the ```master branch```.
+- Make sure that no picoquic server or client is running
+- Create a nested directory named ```cpu_usage/1GB_TCP``` in ```picoquic/performance_measurement```
+- From the ```scripts``` directory, run
+
+```
+./cpu_usage_tcp.sh 25 transfer_test_1G.htm ../performance_measurement/cpu_usage/1GB_TCP/
+```
+This will do the following 25 times
+    - start the server and start measuring cpu usage
+    - start the client and start measuring cpu usage
+    - record those in ```server_usage_<iter_num>.csv``` and ```client_usage_<iter_num>.csv``` files
+    in ```performance_measurement/cpu_usage/1GB/``` at intervals of 1s 
+        - **Note**: this 1s is hard coded both into the top command how the time measurement is 
+        recorded using a counter
+    - close client and monitor process
+    - wait and then close server and monitor process (not necessarily in that order). Note that the
+    server dies immediately after sending the file once and doesn't produce any child processes using 
+    fork. This was done for easier monitoring with top.
+
+- From ```picoquic/performance_measurements/scripts``` run
+
+```
+python3 plot_cpu_usage.py
+```
+
+The ```folders``` and ```n_iterations_used``` variables need to be set correctly. ```n_iterations_used```
+restricts how many iterations of the experiment are used for plotting. The ```yrange``` variable needs
+to be set depending on what the range of CPU usage variation is going to be.
+
+- Repeat experiment for other file sizes or with TC rules set.
+
+### Latency measurement 
+
+- Switch to the ```latency_measurement``` branch.
+- Create a directory named ```latency_dl``` in ```picoquic/performance_measurement```
+- Create a directory named ```server_files``` in ```picoquic/mp1``` and populate it with files
+whose size corresponds to the message size (as described for picoquic).
+- Run the server as 
+
+```
+./http_server 5000 ../performance_measurement/latency_dl/TCPserver_1MB.csv 25
+```
+
+and the client as 
+
+```
+./http_client http://localhost:5000/server_files/transfer_test_1M.htm ../performance_measurement/latency_dl/TCPclient_1MB.csv <filesize>
+```
+
+where ```filesize``` should be set to the size of the file you are transferring (obtain using ```ls -al```). Sizes
+can be varied from 1 B, 10 B, 10 KB, ..., 1 MB, etc.
+
+- This will produce two files ```TCPserver_1MB.csv``` and ```TCPclient_1MB.csv``` in 
+```picoquic/performance_measurement/latency_dl```. Each should have ```n_iterations = 25``` number of entries. The server timestamps are recorded every time the message is begun to be sent anew (i.e per iteration). The client timestamp is recorded everytime ```filesize``` number of bytes are received.
+
+- From ```picoquic/performance_measurement/scripts/``` run
+
+```
+python3 tcp_latency_average.py
+```
+
+- This should print the average latency of sending a message.
