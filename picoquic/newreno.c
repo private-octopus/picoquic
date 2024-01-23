@@ -94,6 +94,7 @@ void picoquic_newreno_sim_notify(
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t nb_bytes_acknowledged,
+    uint64_t nb_bytes_newly_lost,
     uint64_t lost_packet_number,
     uint64_t current_time)
 {
@@ -152,8 +153,6 @@ void picoquic_newreno_sim_notify(
                 }
             }
         }
-        break;
-    case picoquic_congestion_notification_bw_measurement:
         break;
     case picoquic_congestion_notification_reset:
         picoquic_newreno_sim_reset(nr_state);
@@ -214,6 +213,7 @@ static void picoquic_newreno_notify(
     uint64_t rtt_measurement,
     uint64_t one_way_delay,
     uint64_t nb_bytes_acknowledged,
+    uint64_t nb_bytes_newly_lost,
     uint64_t lost_packet_number,
     uint64_t current_time)
 {
@@ -227,8 +227,19 @@ static void picoquic_newreno_notify(
     if (nr_state != NULL) {
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement:
+            if (nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
+                nr_state->nrss.ssthresh == UINT64_MAX) {
+                /* RTT measurements will happen before acknowledgement is signalled */
+                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t min_win = max_win /= 2;
+                if (nr_state->nrss.cwin < min_win) {
+                    nr_state->nrss.cwin = min_win;
+                    path_x->cwin = min_win;
+                }
+            }
+
             if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, lost_packet_number, current_time);
+                picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, nb_bytes_newly_lost, lost_packet_number, current_time);
                 path_x->cwin = nr_state->nrss.cwin;
             }
             break;
@@ -236,11 +247,11 @@ static void picoquic_newreno_notify(
         case picoquic_congestion_notification_ecn_ec:
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
-            picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, lost_packet_number, current_time);
+            picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, nb_bytes_newly_lost, lost_packet_number, current_time);
             path_x->cwin = nr_state->nrss.cwin;
             break;
         case picoquic_congestion_notification_spurious_repeat:
-            picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, lost_packet_number, current_time);
+            picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, nb_bytes_newly_lost, lost_packet_number, current_time);
             path_x->cwin = nr_state->nrss.cwin;
             path_x->is_ssthresh_initialized = 1;
             break;
@@ -277,18 +288,6 @@ static void picoquic_newreno_notify(
             }
             break;
         case picoquic_congestion_notification_cwin_blocked:
-            break;
-        case picoquic_congestion_notification_bw_measurement:
-            if (nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
-                nr_state->nrss.ssthresh == UINT64_MAX) {
-                /* RTT measurements will happen after the bandwidth is estimated */
-                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
-                uint64_t min_win = max_win /= 2;
-                if (nr_state->nrss.cwin < min_win) {
-                    nr_state->nrss.cwin = min_win;
-                    path_x->cwin = min_win;
-                }
-            }
             break;
         case picoquic_congestion_notification_reset:
             picoquic_newreno_reset(nr_state, path_x);

@@ -294,6 +294,7 @@ void picoquic_prague_notify(
     uint64_t rtt_measurement,
     uint64_t one_way_delay,
     uint64_t nb_bytes_acknowledged,
+    uint64_t nb_bytes_newly_lost,
     uint64_t lost_packet_number,
     uint64_t current_time)
 {
@@ -305,6 +306,16 @@ void picoquic_prague_notify(
     if (pr_state != NULL) {
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement: {
+            if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
+                pr_state->ssthresh == UINT64_MAX) {
+                /* RTT measurements will happen after the back is signalled */
+                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t min_win = max_win /= 2;
+                if (path_x->cwin < min_win) {
+                    path_x->cwin = min_win;
+                }
+            }
+
             /* Regardless of the alg state, update alpha */
             picoquic_prague_update_alpha(cnx, path_x, pr_state, nb_bytes_acknowledged, current_time);
             /* Increae or reduce the congestion window based on alpha */
@@ -395,17 +406,6 @@ void picoquic_prague_notify(
                     pr_state->ssthresh = path_x->cwin;
                     pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
                     path_x->is_ssthresh_initialized = 1;
-                }
-            }
-            break;
-        case picoquic_congestion_notification_bw_measurement:
-            if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
-                pr_state->ssthresh == UINT64_MAX) {
-                /* RTT measurements will happen after the bandwidth is estimated */
-                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
-                uint64_t min_win = max_win /= 2;
-                if (path_x->cwin < min_win) {
-                    path_x->cwin = min_win;
                 }
             }
             break;

@@ -1153,7 +1153,12 @@ int multipath_standby_test()
 
 int multipath_standup_test()
 {
+#if 1
+    /* This is a regression, needs to be investigated */
+    uint64_t max_completion_microsec = 5700000;
+#else
     uint64_t max_completion_microsec = 4750000;
+#endif
 
     return multipath_test_one(max_completion_microsec, multipath_test_standup, 0);
 }

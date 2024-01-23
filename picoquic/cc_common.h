@@ -38,6 +38,8 @@ typedef struct st_picoquic_min_max_rtt_t {
     int sample_current;
     int is_init;
     double smoothed_drop_rate;
+    uint64_t smoothed_bytes_sent_16;
+    uint64_t smoothed_bytes_lost_16;
     uint64_t last_lost_packet_number;
     uint64_t sample_min;
     uint64_t sample_max;
@@ -53,6 +55,8 @@ uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* pat
 void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt);
 
 int picoquic_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event, uint64_t lost_packet_number);
+
+int picoquic_hystart_loss_volume_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event, uint64_t nb_bytes_newly_acked, uint64_t nb_bytes_newly_lost);
 
 int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t packet_time, uint64_t current_time, int is_one_way_delay_enabled);
 
@@ -87,6 +91,7 @@ void picoquic_newreno_sim_notify(
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t nb_bytes_acknowledged,
+    uint64_t nb_bytes_newly_lost,
     uint64_t lost_packet_number,
     uint64_t current_time);
 

@@ -1392,7 +1392,6 @@ typedef enum {
     picoquic_congestion_notification_timeout,
     picoquic_congestion_notification_spurious_repeat,
     picoquic_congestion_notification_rtt_measurement,
-    picoquic_congestion_notification_bw_measurement,
     picoquic_congestion_notification_ecn_ec,
     picoquic_congestion_notification_cwin_blocked,
     picoquic_congestion_notification_seed_cwin,
@@ -1407,6 +1406,7 @@ typedef void (*picoquic_congestion_algorithm_notify)(
     uint64_t rtt_measurement,
     uint64_t one_way_delay,
     uint64_t nb_bytes_acknowledged,
+    uint64_t nb_bytes_newly_lost,
     uint64_t lost_packet_number,
     uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);

@@ -105,7 +105,7 @@ static void picoquic_validate_bdp_seed(picoquic_cnx_t* cnx, picoquic_path_t* pat
                 picoquic_congestion_notification_seed_cwin,
                 0, 0,
                 (uint64_t)cnx->seed_cwin,
-                0, current_time);
+                0, 0, current_time);
         }
     }
 }
@@ -340,7 +340,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
             cnx->congestion_alg->alg_notify(cnx, old_path,
                 picoquic_congestion_notification_rtt_measurement,
                 rtt_estimate, (cnx->is_time_stamp_enabled)?old_path->one_way_delay_sample:0,
-                0, 0, current_time);
+                0, 0, 0, current_time);
         }
 
         /* On very first sample, apply the saved BDP */

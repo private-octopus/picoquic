@@ -203,6 +203,16 @@ static void picoquic_cubic_correct_spurious(picoquic_path_t* path_x,
     }
 }
 
+static void cubic_update_bandwidth(picoquic_path_t* path_x)
+{
+    /* RTT measurements will happen after the bandwidth is estimated */
+    uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+    uint64_t min_win = max_win /= 2;
+    if (path_x->cwin < min_win) {
+        path_x->cwin = min_win;
+    }
+}
+
 /*
  * Properly implementing Cubic requires managing a number of
  * signals, such as packet losses or acknowledgements. We attempt
@@ -215,6 +225,7 @@ static void picoquic_cubic_notify(
     uint64_t rtt_measurement,
     uint64_t one_way_delay,
     uint64_t nb_bytes_acknowledged,
+    uint64_t nb_bytes_newly_lost,
     uint64_t lost_packet_number,
     uint64_t current_time)
 {
@@ -229,6 +240,7 @@ static void picoquic_cubic_notify(
         case picoquic_cubic_alg_slow_start:
             switch (notification) {
             case picoquic_congestion_notification_acknowledgement:
+                cubic_update_bandwidth(path_x);
                 if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                     picoquic_hystart_increase(path_x, &cubic_state->rtt_filter, nb_bytes_acknowledged);
                     /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
@@ -295,15 +307,6 @@ static void picoquic_cubic_notify(
                 break;
             case picoquic_congestion_notification_cwin_blocked:
                 break;
-            case picoquic_congestion_notification_bw_measurement: {
-                /* RTT measurements will happen after the bandwidth is estimated */
-                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
-                uint64_t min_win = max_win /= 2;
-                if (path_x->cwin < min_win) {
-                    path_x->cwin = min_win;
-                }
-                break;
-            }
             case picoquic_congestion_notification_reset:
                 picoquic_cubic_reset(cubic_state, path_x, current_time);
                 break;
@@ -471,6 +474,7 @@ static void picoquic_dcubic_notify(
     uint64_t rtt_measurement,
     uint64_t one_way_delay,
     uint64_t nb_bytes_acknowledged,
+    uint64_t nb_bytes_newly_lost,
     uint64_t lost_packet_number,
     uint64_t current_time)
 {

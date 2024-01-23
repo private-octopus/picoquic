@@ -105,6 +105,35 @@ int picoquic_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_conge
     return ret;
 }
 
+int picoquic_hystart_loss_volume_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event,  uint64_t nb_bytes_newly_acked, uint64_t nb_bytes_newly_lost)
+{
+    int ret = 0;
+
+    rtt_track->smoothed_bytes_lost_16 -= rtt_track->smoothed_bytes_lost_16 / 16;
+    rtt_track->smoothed_bytes_lost_16 += nb_bytes_newly_lost;
+    rtt_track->smoothed_bytes_sent_16 -= rtt_track->smoothed_bytes_sent_16 / 16;
+    rtt_track->smoothed_bytes_sent_16 += nb_bytes_newly_acked + nb_bytes_newly_lost;
+
+    if (rtt_track->smoothed_bytes_sent_16 > 0) {
+        rtt_track->smoothed_drop_rate = ((double)rtt_track->smoothed_bytes_lost_16) / ((double)rtt_track->smoothed_bytes_sent_16);
+    }
+    else {
+        rtt_track->smoothed_drop_rate = 0;
+    }
+
+    switch (event) {
+    case picoquic_congestion_notification_acknowledgement:
+        ret = rtt_track->smoothed_drop_rate > PICOQUIC_SMOOTHED_LOSS_THRESHOLD;
+        break;
+    case picoquic_congestion_notification_timeout:
+        ret = 1;
+    default:
+        break;
+    }
+
+    return ret;
+}
+
 int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t packet_time, uint64_t current_time, int is_one_way_delay_enabled)
 {
     int ret = 0;

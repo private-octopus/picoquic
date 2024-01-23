@@ -389,6 +389,7 @@ typedef struct st_picoquic_packet_t {
     uint64_t delivered_prior;
     uint64_t delivered_time_prior;
     uint64_t delivered_sent_prior;
+    uint64_t lost_prior;
     size_t data_repeat_frame;
     size_t data_repeat_index;
 
@@ -1506,6 +1507,7 @@ void picoquic_empty_path_packet_queue(picoquic_path_t* path_x);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);

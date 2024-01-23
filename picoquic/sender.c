@@ -1945,7 +1945,7 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
         if (old_path != NULL && cnx->congestion_alg != NULL && p->send_time < cnx->start_time + PICOQUIC_INITIAL_RTT) {
             cnx->congestion_alg->alg_notify(cnx, old_path,
                 picoquic_congestion_notification_acknowledgement,
-                0, 0, p->length, 0, current_time);
+                old_path->rtt_sample, 0, p->length, 0, 0, current_time);
         }
         /* Update the number of bytes in transit and remove old packet from queue */
         /* The packet will not be placed in the "retransmitted" queue */
@@ -3282,7 +3282,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(cnx, path_x,
                             picoquic_congestion_notification_cwin_blocked,
-                            0, 0, 0, 0, current_time);
+                            0, 0, 0, 0, 0, current_time);
                     }
                 }
                 else {
@@ -3628,7 +3628,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(cnx, path_x,
                             picoquic_congestion_notification_cwin_blocked,
-                            0, 0, 0, 0, current_time);
+                            0, 0, 0, 0, 0, current_time);
                     }
                 }
                 else {

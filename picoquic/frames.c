@@ -2425,7 +2425,7 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
 
                 if (cnx->congestion_alg != NULL) {
                     cnx->congestion_alg->alg_notify(cnx, old_path, picoquic_congestion_notification_spurious_repeat,
-                        0, 0, 0, p->sequence_number, current_time);
+                        0, 0, 0, 0, p->sequence_number, current_time);
                 }
             }
 
@@ -2772,9 +2772,12 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
  */
 
 void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
-    uint64_t current_time, picoquic_packet_data_t* packet_data)
+    int epoch, uint64_t current_time, picoquic_packet_data_t* packet_data)
 {
     for (int i = 0; i < packet_data->nb_path_ack; i++) {
+        uint64_t lost_before_ack = path_x->total_bytes_lost;
+        uint64_t nb_bytes_newly_lost = 0;
+
         picoquic_update_path_rtt(cnx, packet_data->path_ack[i].acked_path, path_x,
             packet_data->path_ack[i].largest_sent_time, current_time, packet_data->last_ack_delay,
             packet_data->last_time_stamp_received);
@@ -2788,12 +2791,16 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             (packet_data->last_time_stamp_received == 0) ? current_time : packet_data->last_time_stamp_received,
             current_time);
 
+        if (epoch == picoquic_epoch_1rtt && cnx->cnx_state >= picoquic_state_client_ready_start) {
+            picoquic_queue_retransmit_on_ack(cnx, path_x, current_time);
+            nb_bytes_newly_lost = path_x->total_bytes_lost - lost_before_ack;
+        }
         if (cnx->congestion_alg != NULL && packet_data->path_ack[i].acked_path->rtt_sample > 0) {
             cnx->congestion_alg->alg_notify(cnx, packet_data->path_ack[i].acked_path,
-                picoquic_congestion_notification_bw_measurement,
+                picoquic_congestion_notification_acknowledgement,
                 packet_data->path_ack[i].acked_path->rtt_sample,
                 packet_data->path_ack[i].acked_path->one_way_delay_sample,
-                0, 0, current_time);
+                packet_data->path_ack[i].data_acked, nb_bytes_newly_lost, 0, current_time);
         }
     }
 
@@ -3405,6 +3412,8 @@ static int picoquic_process_ack_range(
 
                     picoquic_record_ack_packet_data(packet_data, p);
 
+#if 1
+#else
                     /* In theory this is not needed, the congestion window increases could just
                      * as well be performed once per packet. However, we keep this code here in
                      * order to maintain the same schedule of CWIN increase as the previous
@@ -3412,9 +3421,9 @@ static int picoquic_process_ack_range(
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(cnx, old_path,
                             picoquic_congestion_notification_acknowledgement,
-                            0, 0, p->length, 0, current_time);
+                            0, 0, p->length, 0, 0, current_time);
                     }
-
+#endif
                     /* If packet is larger than the current MTU, update the MTU */
                     if ((p->length + p->checksum_overhead) == old_path->send_mtu) {
                         old_path->nb_mtu_losses = 0;
@@ -3588,7 +3597,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
             pkt_ctx->ecn_ce_total_remote = ecnx3[2];
             cnx->congestion_alg->alg_notify(cnx, ack_path,
                 picoquic_congestion_notification_ecn_ec,
-                0, 0, 0, largest_in_path, current_time);
+                0, 0, 0, 0, largest_in_path, current_time);
         }
     }
 
@@ -5691,7 +5700,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
     }
 
     if (bytes != NULL) {
-        process_decoded_packet_data(cnx, path_x, current_time, &packet_data);
+        process_decoded_packet_data(cnx, path_x, epoch, current_time, &packet_data);
 
         if (ack_needed) {
             cnx->latest_receive_time = current_time;
