@@ -206,6 +206,13 @@ int picoquic_select_ex(SOCKET_TYPE* sockets,
     int* socket_rank,
     uint64_t* current_time);
 
+int picoquic_recvmsg(SOCKET_TYPE fd,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max);
+
 int picoquic_sendmsg(SOCKET_TYPE fd,
     struct sockaddr* addr_dest,
     struct sockaddr* addr_from,

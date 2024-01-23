@@ -416,7 +416,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
             *continue_next = 0;
         }
     }
-    else if (cnx->cnx_state < picoquic_state_client_ready_start) {
+    else if (cnx->cnx_state <= picoquic_state_client_ready_start) {
         /* We do not follow the PTO logic before the connection is complete */
         int packet_is_pure_ack;
         if (old_path != NULL &&

@@ -8,7 +8,7 @@
 0102030405060708:         Extension type: 14 (active_connection_id_limit), length 1, 08
 0102030405060708:         Extension type: 15 (hcid), length 8, 0203040506070809
 
-0102030405060708:     Extension list (56 bytes):
+0102030405060708:     Extension list (59 bytes):
 0102030405060708:         Extension type: 5 (max_stream_data_bidi_local), length 4, 81000000
 0102030405060708:         Extension type: 4 (initial_max_data), length 4, 81000000
 0102030405060708:         Extension type: 8 (max_streams_bidi), length 1, 01
@@ -18,6 +18,7 @@
 0102030405060708:         Extension type: 32 (max_datagram_frame_size), length 2, 45c8
 0102030405060708:         Extension type: 4183 (enable_loss_bit), length 1, 01
 0102030405060708:         Extension type: 29016 (enable_time_stamp), length 1, 03
+0102030405060708:         Extension type: 10930 (grease_quic_bit), length 0
 0102030405060708:         Extension type: 1113404765106498822 (enable_multipath), length 0
 
 0102030405060708:     Extension list (52 bytes):

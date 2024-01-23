@@ -194,5 +194,8 @@
     <ClInclude Include="picoquic_crypto_provider_api.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="sockloop.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

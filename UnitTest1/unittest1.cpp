@@ -111,6 +111,48 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_basic)
+        {
+            int ret = sockloop_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_eio)
+        {
+            int ret = sockloop_eio_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_errsock)
+        {
+            int ret = sockloop_errsock_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_ipv4)
+        {
+            int ret = sockloop_ipv4_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_migration)
+        {
+            int ret = sockloop_migration_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_nat)
+        {
+            int ret = sockloop_nat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(splay)
         {
             int ret = splay_test();
@@ -160,7 +202,7 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_varints)
+        TEST_METHOD(varints)
         {
             int ret = varint_test();
 
@@ -1132,7 +1174,7 @@ namespace UnitTest1
           Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_virtual_time)
+        TEST_METHOD(virtual_time)
         {
             int ret = virtual_time_test();
 
@@ -1312,7 +1354,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-        
+
+        TEST_METHOD(cnxid_transmit_r_early){
+            int ret = transmit_cnxid_retire_early_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_probe_api)
         {
             int ret = probe_api_test();
@@ -1603,6 +1651,73 @@ namespace UnitTest1
         TEST_METHOD(error_reason)
         {
             int ret = error_reason_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(idle_server)
+        {
+            int ret = idle_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(idle_timeout)
+        {
+            int ret = idle_timeout_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_ack_max)
+        {
+            int ret = reset_ack_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(reset_ack_reset)
+        {
+            int ret = reset_ack_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_extra_max)
+        {
+            int ret = reset_extra_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_extra_reset)
+        {
+            int ret = reset_extra_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(reset_extra_stop)
+        {
+            int ret = reset_extra_stop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_need_max)
+        {
+            int ret = reset_need_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(reset_need_reset)
+        {
+            int ret = reset_need_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_need_stop)
+        {
+            int ret = reset_need_stop_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2375,6 +2490,18 @@ namespace UnitTest1
 
         TEST_METHOD(config_option) {
             int ret = config_option_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(config_quic) {
+            int ret = config_quic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(config_usage) {
+            int ret= config_usage_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.16.0"
+#define PICOQUIC_VERSION "1.1.17.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -287,7 +287,7 @@ typedef struct st_picoquic_tp_t {
     uint64_t initial_max_data;
     uint64_t initial_max_stream_id_bidir;
     uint64_t initial_max_stream_id_unidir;
-    uint64_t idle_timeout;
+    uint64_t max_idle_timeout;
     uint32_t max_packet_size;
     uint32_t max_ack_delay; /* stored in in microseconds for convenience */
     uint32_t active_connection_id_limit;
@@ -641,8 +641,33 @@ void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max);
 */
 void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data);
 
+/*
+* Idle timeout and handshake timeout
+* 
+* The max idle timeout determines how long to wait for sign of activity from
+* the peer before giving up on a connection. It is set by default to 
+* PICOQUIC_MICROSEC_HANDSHAKE_MAX, coverted in milliseconds (30 seconds).
+* It can be set per quic context using `picoquic_set_default_idle_timeout`,
+* before creating new connections in that context. The value is expressed
+* in milliseconds, with zero meaning "infinity". The value used for the
+* connection is the lowest of the value proposed by the client and the server,
+* as specified in RFC 9000.
+* 
+* The handshake timeout determines how long to wait for the completion
+* of a connection. It can be specified per QUIC context using
+* `picoquic_set_default_handshake_timeout`. The value is expressed
+* in microseconds, with `0` meaning unspecified.
+* 
+* If the handshake timeout is not specified, the wait time is determined by the
+* value of the default idle timeout specified for the QUIC context. If that
+* value is zero, the system uses the value of PICOQUIC_MICROSEC_HANDSHAKE_MAX,
+* i.e., 30 seconds.
+*/
+
 /* Set the idle timeout parameter for the context. Value is in milliseconds. */
-void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout);
+void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout_ms);
+/* Set the default handshake timeout parameter for the context.*/
+void picoquic_set_default_handshake_timeout(picoquic_quic_t* quic, uint64_t handshake_timeout_us);
 
 /* Set the length of a crypto epoch -- force rotation after that many packets sent */
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max);
@@ -824,10 +849,10 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * connection data harder in case of NAT traversal.
  */
 
-int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, uint64_t current_time);
-int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address);
+int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, uint64_t current_time);
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, int if_index, uint64_t current_time, int to_preferred_address);
 void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
 void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
 int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);

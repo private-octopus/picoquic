@@ -909,9 +909,9 @@ static int verify_transport_extension(picoquic_cnx_t* cnx_client, picoquic_cnx_t
     int ret = 0;
 
     /* verify that local parameters have a sensible value */
-    if (cnx_client->local_parameters.idle_timeout == 0 || cnx_client->local_parameters.initial_max_data == 0 || cnx_client->local_parameters.initial_max_stream_data_bidi_local == 0 || cnx_client->local_parameters.max_packet_size == 0) {
+    if (cnx_client->local_parameters.max_idle_timeout == 0 || cnx_client->local_parameters.initial_max_data == 0 || cnx_client->local_parameters.initial_max_stream_data_bidi_local == 0 || cnx_client->local_parameters.max_packet_size == 0) {
         ret = -1;
-    } else if (cnx_server->local_parameters.idle_timeout == 0 || cnx_server->local_parameters.initial_max_data == 0 || cnx_server->local_parameters.initial_max_stream_data_bidi_remote == 0 || cnx_server->local_parameters.max_packet_size == 0) {
+    } else if (cnx_server->local_parameters.max_idle_timeout == 0 || cnx_server->local_parameters.initial_max_data == 0 || cnx_server->local_parameters.initial_max_stream_data_bidi_remote == 0 || cnx_server->local_parameters.max_packet_size == 0) {
         ret = -1;
     }
     /* Verify that the negotiation completed */
@@ -3441,11 +3441,18 @@ static char const* token_file_name = "retry_tests_tokens.bin";
 
 int tls_retry_token_test_one(int token_mode, int dup_token)
 {
+    int ret = 0;
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     /* ensure that the token file is empty */
-    int ret = picoquic_save_tokens(NULL, simulated_time, token_file_name);
+    FILE* F = picoquic_file_open(token_file_name, "wb");
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        F = picoquic_file_close(F);
+    }
     
     if (ret == 0) {
         ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
@@ -3482,7 +3489,7 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
             uint8_t * token = NULL;
             uint16_t token_length = 0;
 
-            ret = picoquic_get_token(test_ctx->qclient->p_first_token, simulated_time,
+            ret = picoquic_get_token(test_ctx->qclient,
                 PICOQUIC_TEST_SNI, (uint16_t)strlen(PICOQUIC_TEST_SNI),
                 NULL, 0,
                 &token, &token_length, 0);
@@ -3563,7 +3570,7 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
     }
     if (ret == 0) {
         /* Not strictly needed, but allows for inspection */
-        ret = picoquic_save_tokens(test_ctx->qclient->p_first_token, simulated_time, token_file_name);
+        ret = picoquic_save_tokens(test_ctx->qclient, token_file_name);
     }
 
     if (test_ctx != NULL) {
@@ -5092,7 +5099,6 @@ int virtual_time_test()
         DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
     }
     else {
-
         qsimul = picoquic_create(8, NULL, NULL, test_server_cert_store_file,
             NULL, test_api_callback,
             (void*)callback_ctx, NULL, NULL, NULL, simulated_time,
@@ -5110,7 +5116,7 @@ int virtual_time_test()
         {
             /* Check that the simulated time follows the simulation */
             for (int i = 0; ret == 0 && i < 5; i++) {
-                simulated_time += 12345678;
+                simulated_time += 12345678000;
                 test_time = picoquic_get_quic_time(qsimul);
                 ptls_time = picoquic_get_tls_time(qsimul);
                 if (test_time != simulated_time) {
@@ -5119,7 +5125,7 @@ int virtual_time_test()
                         (unsigned long long)simulated_time);
                     ret = -1;
                 }
-                else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
+                else if (ptls_time < test_time || ptls_time > test_time + 1000) {
                     DBG_PRINTF("Test time: %llu does match ptls time: %llu",
                         (unsigned long long)test_time,
                         (unsigned long long)ptls_time);
@@ -5128,35 +5134,34 @@ int virtual_time_test()
             }
         }
 
-        /* Check that the non simulated time follows the current time */
-        for (int i = 0; ret == 0 && i < 5; i++) {
-#ifdef _WINDOWS
-            Sleep(1);
-#else
-            usleep(1000);
-#endif
-            current_time = picoquic_current_time();
-            test_time = picoquic_get_quic_time(qdirect);
-            ptls_time = picoquic_get_tls_time(qdirect);
+        if (ret == 0) {
+            int64_t delta, delta_low, delta_high;
+            uint64_t current_previous = picoquic_current_time();
+            uint64_t test_previous = picoquic_current_time();
+            uint64_t ptls_previous = picoquic_get_tls_time(qdirect);
 
-            if (test_time < current_time) {
-                DBG_PRINTF("Test time: %llu < previous current time: %llu",
-                    (unsigned long long)test_time,
-                    (unsigned long long)current_time);
-                ret = -1;
-            }
-            else {
+            /* Check that the non simulated time follows the current time */
+            for (int i = 0; ret == 0 && i < 5; i++) {
+#ifdef _WINDOWS
+                Sleep(1);
+#else
+                usleep(1000);
+#endif
                 current_time = picoquic_current_time();
-                if (test_time > current_time) {
-                    DBG_PRINTF("Test time: %llu > next current time: %llu",
-                        (unsigned long long)test_time,
-                        (unsigned long long)current_time);
+                test_time = picoquic_get_quic_time(qdirect);
+                ptls_time = picoquic_get_tls_time(qdirect);
+
+                delta = current_time - current_previous;
+                delta_low = delta - 1000;
+                delta_high = delta + 1000;
+                if (test_time < test_previous + delta_low || test_time > test_previous + delta_high ) {
+                    DBG_PRINTF("Test time: %" PRIu64 " does not match previous test time : %" PRIu64 " + delta : %" PRId64,
+                        test_time, test_previous, delta);
                     ret = -1;
                 }
-                else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
-                    DBG_PRINTF("Test current time: %llu does match ptls time: %llu",
-                        (unsigned long long)test_time,
-                        (unsigned long long)ptls_time);
+                else if (ptls_time < ptls_previous + delta_low || ptls_time > ptls_previous + delta_high) {
+                    DBG_PRINTF("Test time: %" PRIu64 " does not match previous test time : %" PRIu64 " + delta : %" PRId64,
+                        ptls_time, ptls_previous, delta);
                     ret = -1;
                 }
             }
@@ -6173,7 +6178,7 @@ int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char
     return ret;
 }
 
-int transmit_cnxid_test_one(int retire_before, int disable_migration)
+int transmit_cnxid_test_one(int retire_before, int disable_migration, int retire_number_zero)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -6198,6 +6203,25 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration)
         picoquic_set_default_connection_id_ttl(test_ctx->qserver, default_connection_id_ttl);
     }
 
+    if (retire_number_zero) {
+        /* Do a short loop until the server connection is created */
+        int nb_trials = 0;
+        while (ret == 0 && nb_trials < 16 && test_ctx->cnx_server == NULL) {
+            int was_active = 0;
+            nb_trials++;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        }
+        if (test_ctx->cnx_server == NULL) {
+            DBG_PRINTF("Cannot create the server connection after %d trials", nb_trials);
+            ret = -1;
+        }
+        else {
+            /* force the retire prior to 1 so it be set in the first batch of CID. */
+            test_ctx->cnx_server->local_cnxid_retire_before = 1;
+        }
+    }
+
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
@@ -6205,6 +6229,14 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration)
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
         ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
+    }
+
+    if (ret == 0 && retire_number_zero) {
+        /* verify that the path 0 on client uses CID number > 1 */
+        if (test_ctx->cnx_client->path[0]->p_remote_cnxid->sequence == 0) {
+            DBG_PRINTF("First path still has CNX_ID=%d", test_ctx->cnx_client->path[0]->p_remote_cnxid->sequence);
+            ret = -1;
+        }
     }
 
     if (ret == 0 && retire_before) {
@@ -6264,22 +6296,27 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration)
 
 int transmit_cnxid_test()
 {
-    return transmit_cnxid_test_one(0, 0);
+    return transmit_cnxid_test_one(0, 0, 0);
 }
 
 int transmit_cnxid_disable_test()
 {
-    return transmit_cnxid_test_one(0, 1);
+    return transmit_cnxid_test_one(0, 1, 0);
 }
 
 int transmit_cnxid_retire_before_test()
 {
-    return transmit_cnxid_test_one(1, 0);
+    return transmit_cnxid_test_one(1, 0, 0);
 }
 
 int transmit_cnxid_retire_disable_test()
 {
-    return transmit_cnxid_test_one(1, 1);
+    return transmit_cnxid_test_one(1, 1, 0);
+}
+
+int transmit_cnxid_retire_early_test()
+{
+    return transmit_cnxid_test_one(0, 0, 1);
 }
 
 /*
@@ -6872,11 +6909,11 @@ int retire_cnxid_test()
 
     if (ret == 0) {
         if (test_ctx->cnx_client->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Only %d paths created on client.\n", test_ctx->cnx_client->nb_paths);
+            DBG_PRINTF("Only %d cids created on client.\n", test_ctx->cnx_client->nb_local_cnxid);
             ret = -1;
         }
         else if (test_ctx->cnx_server->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Only %d paths created on server.\n", test_ctx->cnx_server->nb_paths);
+            DBG_PRINTF("Only %d cids created on server.\n", test_ctx->cnx_server->nb_local_cnxid);
             ret = -1;
         }
     }
@@ -6919,8 +6956,8 @@ int retire_cnxid_test()
         }
 
         if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
+            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough cids (%d & %d).\n",
+                nb_rounds, test_ctx->cnx_client->nb_local_cnxid, test_ctx->cnx_server->nb_local_cnxid);
         }
     }
 
@@ -6928,7 +6965,7 @@ int retire_cnxid_test()
 
     if (ret == 0) {
         if (test_ctx->cnx_server->nb_local_cnxid != PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Found %d paths active on server instead of %d.\n", test_ctx->cnx_server->nb_paths, PICOQUIC_NB_PATH_TARGET);
+            DBG_PRINTF("Found %d cids active on server instead of %d.\n", test_ctx->cnx_server->nb_local_cnxid, PICOQUIC_NB_PATH_TARGET);
             ret = -1;
         }
     }

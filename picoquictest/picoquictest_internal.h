@@ -349,6 +349,8 @@ int picoquic_compare_lines(char const* b1, char const* b2);
 int picoquic_test_compare_text_files(char const* fname1, char const* fname2);
 int picoquic_test_compare_binary_files(char const* fname1, char const* fname2);
 
+uint64_t picoquic_sum_text_file(char const* fname);
+
 int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     size_t sizeof_scenario, size_t stream0_target,
     uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,

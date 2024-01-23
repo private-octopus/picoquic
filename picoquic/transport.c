@@ -403,9 +403,9 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             cnx->local_parameters.initial_max_stream_id_bidir);
     }
 
-    if (cnx->local_parameters.idle_timeout > 0) {
+    if (cnx->local_parameters.max_idle_timeout > 0) {
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_idle_timeout,
-            cnx->local_parameters.idle_timeout);
+            cnx->local_parameters.max_idle_timeout);
     }
 
     bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_max_packet_size,
@@ -489,8 +489,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         /* Do not use a purely random value, so we can repetitive tests */
         int n = 31 * (cnx->initial_cnxid.id[0] + cnx->client_mode) + 27;
         uint64_t v = cnx->initial_cnxid.id[1];
-        while (n == picoquic_tp_test_large_chello ||
-            n == picoquic_tp_enable_loss_bit_old) {
+        while (n == picoquic_tp_test_large_chello) {
             n += 31;
         }
         v = (v << 8) + cnx->initial_cnxid.id[2];
@@ -595,7 +594,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
     cnx->remote_parameters.initial_max_stream_id_bidir = 0;
     cnx->max_stream_id_bidir_remote = 0;
-    cnx->remote_parameters.idle_timeout = 0;
+    cnx->remote_parameters.max_idle_timeout = 0;
     cnx->remote_parameters.max_packet_size = 1500;
     cnx->remote_parameters.ack_delay_exponent = 3;
     cnx->remote_parameters.initial_max_stream_id_unidir = 0;
@@ -703,7 +702,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     break;
                 }
                 case picoquic_tp_idle_timeout:
-                    cnx->remote_parameters.idle_timeout = 
+                    cnx->remote_parameters.max_idle_timeout = 
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     break;
 
@@ -795,9 +794,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 case picoquic_tp_max_datagram_frame_size:
                     cnx->remote_parameters.max_datagram_frame_size = (uint32_t)
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    break;
-                case picoquic_tp_enable_loss_bit_old:
-                    /* The old loss bit definition is obsolete */
                     break;
                 case picoquic_tp_enable_loss_bit: {
                     uint64_t enabled = picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
@@ -928,11 +924,11 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
      * If the keep alive interval was set to a too short value,
      * reset it.
      */
-    cnx->idle_timeout = cnx->local_parameters.idle_timeout*1000ull;
-    if (cnx->local_parameters.idle_timeout == 0 ||
-        (cnx->remote_parameters.idle_timeout > 0 && cnx->remote_parameters.idle_timeout < 
-            cnx->local_parameters.idle_timeout)) {
-        cnx->idle_timeout = cnx->remote_parameters.idle_timeout*1000ull;
+    cnx->idle_timeout = cnx->local_parameters.max_idle_timeout*1000ull;
+    if (cnx->local_parameters.max_idle_timeout == 0 ||
+        (cnx->remote_parameters.max_idle_timeout > 0 && cnx->remote_parameters.max_idle_timeout < 
+            cnx->local_parameters.max_idle_timeout)) {
+        cnx->idle_timeout = cnx->remote_parameters.max_idle_timeout*1000ull;
     }
     if (cnx->idle_timeout == 0) {
         cnx->idle_timeout = UINT64_MAX;

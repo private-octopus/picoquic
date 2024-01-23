@@ -51,6 +51,12 @@ static const picoquic_test_def_t test_table[] = {
     { "picohash", picohash_test },
     { "picohash_embedded", picohash_embedded_test },
     { "bytestream", bytestream_test },
+    { "sockloop_basic", sockloop_basic_test },
+    { "sockloop_eio", sockloop_eio_test },
+    { "sockloop_errsock", sockloop_errsock_test },
+    { "sockloop_ipv4", sockloop_ipv4_test },
+    { "sockloop_migration", sockloop_migration_test },
+    { "sockloop_nat", sockloop_nat_test },
     { "splay", splay_test },
     { "cnxcreation", cnxcreation_test },
     { "parseheader", parseheadertest },
@@ -228,6 +234,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cnxid_transmit_disable", transmit_cnxid_disable_test },
     { "cnxid_transmit_r_before", transmit_cnxid_retire_before_test },
     { "cnxid_transmit_r_disable", transmit_cnxid_retire_disable_test },
+    { "cnxid_transmit_r_early", transmit_cnxid_retire_early_test },
     { "probe_api", probe_api_test },
     { "migration" , migration_test },
     { "migration_long", migration_test_long },
@@ -271,6 +278,16 @@ static const picoquic_test_def_t test_table[] = {
     { "ec5c_silly_cid", ec5c_silly_cid_test },
     { "ec9a_preemptive_amok", ec9a_preemptive_amok_test },
     { "error_reason", error_reason_test },
+    { "idle_server", idle_server_test },
+    { "idle_timeout", idle_timeout_test },
+    { "reset_ack_max", reset_ack_max_test },
+    { "reset_ack_reset", reset_ack_reset_test },
+    { "reset_extra_max", reset_extra_max_test },
+    { "reset_extra_reset", reset_extra_reset_test },
+    { "reset_extra_stop", reset_extra_stop_test },
+    { "reset_need_max", reset_need_max_test },
+    { "reset_need_reset", reset_need_reset_test },
+    { "reset_need_stop", reset_need_stop_test },
     { "ready_to_send", ready_to_send_test },
     { "ready_to_skip", ready_to_skip_test },
     { "ready_to_zfin", ready_to_zfin_test },
@@ -431,8 +448,11 @@ static const picoquic_test_def_t test_table[] = {
     { "fuzz_initial", fuzz_initial_test},
     { "cnx_stress", cnx_stress_unit_test },
     { "cnx_ddos", cnx_ddos_unit_test },
+    { "config_option", config_option_test },
     { "config_option_letters", config_option_letters_test },
-    { "config_option", config_option_test }
+    { "config_quic", config_quic_test },
+    { "config_usage", config_usage_test }
+    
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
