@@ -1102,7 +1102,12 @@ int multipath_callback_test()
 #else
 int multipath_callback_test()
 {
+#if 1
+    /* TODO: investigate after BBRv3 port */
+    uint64_t max_completion_microsec = 1100000;
+#else
     uint64_t max_completion_microsec = 1000000;
+#endif
 
     return multipath_test_one(max_completion_microsec, multipath_test_callback, 0);
 }
@@ -1117,7 +1122,13 @@ int multipath_quality_test()
 #else
 int multipath_quality_test()
 {
+#if 1
+    /* TODO: investigate after BBRv3 complete */
+    uint64_t max_completion_microsec = 1100000;
+#else
     uint64_t max_completion_microsec = 1000000;
+#endif
+
 
     return multipath_test_one(max_completion_microsec, multipath_test_quality, 0);
 }

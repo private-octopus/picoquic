@@ -2424,8 +2424,10 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                 }
 
                 if (cnx->congestion_alg != NULL) {
+                    picoquic_per_ack_state_t ack_state = { 0 };
+                    ack_state.lost_packet_number = p->sequence_number;
                     cnx->congestion_alg->alg_notify(cnx, old_path, picoquic_congestion_notification_spurious_repeat,
-                        0, 0, 0, 0, p->sequence_number, current_time);
+                       &ack_state, current_time);
                 }
             }
 
@@ -2760,6 +2762,7 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
             packet_data->path_ack[path_i].delivered_prior = acked_packet->delivered_prior;
             packet_data->path_ack[path_i].delivered_time_prior = acked_packet->delivered_time_prior;
             packet_data->path_ack[path_i].delivered_sent_prior = acked_packet->delivered_sent_prior;
+            packet_data->path_ack[path_i].lost_prior = acked_packet->lost_prior;
             packet_data->path_ack[path_i].rs_is_path_limited = acked_packet->delivered_app_limited;
             packet_data->path_ack[path_i].is_set = 1;
         }
@@ -2796,11 +2799,16 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             nb_bytes_newly_lost = path_x->total_bytes_lost - lost_before_ack;
         }
         if (cnx->congestion_alg != NULL && packet_data->path_ack[i].acked_path->rtt_sample > 0) {
+            picoquic_per_ack_state_t ack_state = { 0 };
+            ack_state.rtt_measurement = packet_data->path_ack[i].acked_path->rtt_sample;
+            ack_state.one_way_delay = packet_data->path_ack[i].acked_path->one_way_delay_sample;
+            ack_state.nb_bytes_acknowledged = packet_data->path_ack[i].data_acked;
+            ack_state.nb_bytes_newly_lost = nb_bytes_newly_lost;
+            ack_state.nb_bytes_lost_since_packet_sent = path_x->total_bytes_lost - packet_data->path_ack[i].lost_prior;
+            ack_state.nb_bytes_delivered_since_packet_sent = path_x->delivered - packet_data->path_ack[i].delivered_prior;
             cnx->congestion_alg->alg_notify(cnx, packet_data->path_ack[i].acked_path,
                 picoquic_congestion_notification_acknowledgement,
-                packet_data->path_ack[i].acked_path->rtt_sample,
-                packet_data->path_ack[i].acked_path->one_way_delay_sample,
-                packet_data->path_ack[i].data_acked, nb_bytes_newly_lost, 0, current_time);
+                &ack_state, current_time);
         }
     }
 
@@ -3594,10 +3602,12 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
             pkt_ctx->ecn_ect1_total_remote = ecnx3[1];
         }
         if (ecnx3[2] > pkt_ctx->ecn_ce_total_remote) {
+            picoquic_per_ack_state_t ack_state = { 0 };
+            ack_state.lost_packet_number = largest_in_path;
             pkt_ctx->ecn_ce_total_remote = ecnx3[2];
             cnx->congestion_alg->alg_notify(cnx, ack_path,
                 picoquic_congestion_notification_ecn_ec,
-                0, 0, 0, 0, largest_in_path, current_time);
+                &ack_state, current_time);
         }
     }
 

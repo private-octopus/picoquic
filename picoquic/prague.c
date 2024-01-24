@@ -291,16 +291,9 @@ void picoquic_prague_notify(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
-    uint64_t rtt_measurement,
-    uint64_t one_way_delay,
-    uint64_t nb_bytes_acknowledged,
-    uint64_t nb_bytes_newly_lost,
-    uint64_t lost_packet_number,
+    picoquic_per_ack_state_t * ack_state,
     uint64_t current_time)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(lost_packet_number);
-#endif
     picoquic_prague_state_t* pr_state = (picoquic_prague_state_t*)path_x->congestion_alg_state;
 
     if (pr_state != NULL) {
@@ -317,15 +310,15 @@ void picoquic_prague_notify(
             }
 
             /* Regardless of the alg state, update alpha */
-            picoquic_prague_update_alpha(cnx, path_x, pr_state, nb_bytes_acknowledged, current_time);
+            picoquic_prague_update_alpha(cnx, path_x, pr_state, ack_state->nb_bytes_acknowledged, current_time);
             /* Increae or reduce the congestion window based on alpha */
             switch (pr_state->alg_state) {
             case picoquic_prague_alg_slow_start:
                 if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
-                    path_x->cwin += (nb_bytes_acknowledged * (1024 - pr_state->alpha)) / 1024;
+                    path_x->cwin += (ack_state->nb_bytes_acknowledged * (1024 - pr_state->alpha)) / 1024;
                 }
                 else {
-                    uint64_t delta = nb_bytes_acknowledged;
+                    uint64_t delta = ack_state->nb_bytes_acknowledged;
                     delta *= path_x->smoothed_rtt;
                     delta *= (1024 - pr_state->alpha);
                     delta /= PICOQUIC_TARGET_RENO_RTT;
@@ -339,7 +332,7 @@ void picoquic_prague_notify(
                 break;
             case picoquic_prague_alg_congestion_avoidance:
             default: {
-                uint64_t complete_delta = nb_bytes_acknowledged * path_x->send_mtu + pr_state->residual_ack;
+                uint64_t complete_delta = ack_state->nb_bytes_acknowledged * path_x->send_mtu + pr_state->residual_ack;
                 pr_state->residual_ack = complete_delta % path_x->cwin;
                 uint64_t delta = complete_delta / path_x->cwin;
                 delta = (delta * (1024 - pr_state->alpha)) / 1024;
@@ -399,7 +392,7 @@ void picoquic_prague_notify(
                     }
                 }
 
-                if (picoquic_hystart_test(&pr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
+                if (picoquic_hystart_test(&pr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                     cnx->path[0]->pacing_packet_time_microsec, current_time,
                     cnx->is_time_stamp_enabled)) {
                     /* RTT increased too much, get out of slow start! */

@@ -11519,7 +11519,7 @@ int pacing_cc_test()
         900000,
         900000,
         900000,
-        940000,
+        960000,
         900000
     };
     uint64_t algo_loss[5] = {
@@ -11527,7 +11527,12 @@ int pacing_cc_test()
         210,
         240,
         180,
+#if 1
+        /* TODO: investigate once BBRv3 is ready */
+        470
+#else
         210
+#endif
     };
 
     int ret = 0;

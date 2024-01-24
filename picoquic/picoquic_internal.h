@@ -1478,6 +1478,7 @@ typedef struct st_picoquic_packet_data_t {
         uint64_t delivered_prior; /* Amount delivered prior to that packet */
         uint64_t delivered_time_prior; /* Time last delivery before acked packet sent */
         uint64_t delivered_sent_prior; /* Time this last delivery packet was sent */
+        uint64_t lost_prior; /* Value of nb_bytes_lost when packet was sent */
         int rs_is_path_limited; /* Whether the path was app limited when packet was sent */
         int is_set;
         uint64_t data_acked;

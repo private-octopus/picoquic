@@ -1398,16 +1398,33 @@ typedef enum {
     picoquic_congestion_notification_reset
 } picoquic_congestion_notification_t;
 
+typedef struct st_picoquic_per_ack_state_t {
+    uint64_t rtt_measurement; /* RTT as measured when receiving the ACK */
+    uint64_t one_way_delay; /* One way delay when receiving the ACK, 0 if unknown */
+    uint64_t nb_bytes_acknowledged; /* Number of bytes acknowledged by this ACK */
+    uint64_t nb_bytes_newly_lost; /* Number of bytes in packets found lost because of this ACK */
+    uint64_t nb_bytes_lost_since_packet_sent; /* Number of bytes lost between the time the packet was sent and now */
+    uint64_t nb_bytes_delivered_since_packet_sent; /* Number of bytes acked between the time the packet was sent and now */
+    uint64_t lost_packet_number;
+    unsigned int is_app_limited : 1; /* App marked limited at time of ACK? */
+} picoquic_per_ack_state_t;
+
 typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
+#if 1
+    picoquic_per_ack_state_t * ack_state,
+#else
     uint64_t rtt_measurement,
     uint64_t one_way_delay,
     uint64_t nb_bytes_acknowledged,
     uint64_t nb_bytes_newly_lost,
+    uint64_t nb_bytes_lost_since_packet_sent,
+    uint64_t nb_bytes_delivered_since_packet_sent,
     uint64_t lost_packet_number,
+#endif
     uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
 typedef void (*picoquic_congestion_algorithm_observe)(
