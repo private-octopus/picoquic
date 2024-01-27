@@ -46,7 +46,17 @@ Targets defined in the `CMakeLists.txt`, listed above for convenience, can be bu
 
 This also works if `picoquic` has not been built as a whole before.
 
-## Exported and Installed Targets
+## Picoquic options
+
+- building and fetching PTLS `-DPICOQUIC_FETCH_PTLS=Y`
+- building with exported debug information `-DCMAKE_BUILD_TYPE=Debug`
+
+These two options can be set when configuring cmake.
+
+- adress sanitation `ASAN`
+- undefined behaviour sanitation `UBSAN`
+
+`ASAN` and `UBSAN` need to be set in the `CMakeLists.txt` using the `ENABLE_ASAN` and `ENABLE_UBSAN` options.
 
 ## Picoquic as a Dependency
 
@@ -90,10 +100,3 @@ find_package(picoquic REQUIRED)
 Additionally `cmake` needs to be told where to find the imported dependency, using hints defined in a `cmake/Find<DependencyName>.cmake` file placed in the top-most directory in the repository.
 The cmake documentation describes how to [Create CMake Package Configuration Files](https://cmake.org/cmake/help/book/mastering-cmake/chapter/Finding%20Packages.html).
 
-TODO:
-demo how to write find_module, to add hints
-
-```cmake
-#TODO
-
-```
