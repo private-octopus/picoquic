@@ -7,13 +7,11 @@ See the 'Building Picoquic' section [README](../README.md) for building picoquic
 Direct dependencies
 - [Picotls implementation of TLS 1.3](https://github.com/h2o/picotls)
 
-Fetching and installing this package can be done through an option in the CMake.
+Fetching and installing this package can be done through an option when invoking cmake, as follows.
 
 ```shell
  cmake -DPICOQUIC_FETCH_PTLS=Y .
 ```
-
-This can be set in the cmake file as well by setting the `PICOQUIC_FETCH_PTLS` cmake property to `ON`.
 
 Inherited dependencies
 - [OpenSSL through PicoTLS](https://github.com/openssl/openssl)
@@ -56,7 +54,9 @@ These two options can be set when configuring cmake.
 - adress sanitation `ASAN`
 - undefined behaviour sanitation `UBSAN`
 
-`ASAN` and `UBSAN` need to be set in the `CMakeLists.txt` using the `ENABLE_ASAN` and `ENABLE_UBSAN` options.
+`ASAN` and `UBSAN` are C/C++ compiler features and can be set by setting compiler flags when using the `cmake`.
+`cmake "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -DCMAKE_CXX_FLAGS=-fsanitize=address,undefined"` sets both the `ASAN/UBSAN` options for C and C++.
+Alternatively these options can be set using `ccmake` as well by setting the flieds `DCMAKE_C_FLAGS & DCMAKE_CXX_FLAGS` to `-fsanitize=address,undefined`.
 
 ## Picoquic as a Dependency
 
@@ -85,7 +85,7 @@ FetchContent_MakeAvailable(picoquic)
 ```
 
 FetchContent can be used to fetch a specific release or tag, if a certain version or release is desired.
-This can be used as fine grain as choosing a single commit, be specifying the commit hash.
+This can be used as fine grain as choosing a single commit, by specifying the commit hash.
 
 In the main `CMakeLists.txt` the subdirectory can be added using the `add_subdirectory(<directory_name>)` directive.
 
