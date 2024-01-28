@@ -107,6 +107,8 @@ commits changed the Picotls API by removing code for the now obsolete
 ESNI draft; prior versions will not work with Picoquic.)
 The code can use OpenSSL version 1.1.1 or OpenSSL version 3.0.
 
+More information can be found in the [docs](doc/building_picoquic.md)
+
 ## Picoquic on Windows
 
 To build Picoquic on Windows, you need to:
