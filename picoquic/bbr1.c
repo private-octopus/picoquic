@@ -1114,67 +1114,60 @@ static void picoquic_bbr1_notify(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
-    uint64_t rtt_measurement,
-    uint64_t one_way_delay,
-    uint64_t nb_bytes_acknowledged,
-    uint64_t lost_packet_number,
+    picoquic_per_ack_state_t* ack_state,
     uint64_t current_time)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(lost_packet_number);
-#endif
     picoquic_bbr1_state_t* bbr1_state = (picoquic_bbr1_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
 
     if (bbr1_state != NULL) {
         switch (notification) {
-        case picoquic_congestion_notification_acknowledgement:
-            /* sum the amount of data acked per packet */
-            if (bbr1_state->is_suspended) {
-                picoquic_bbr1_suspension_exit(bbr1_state, cnx, path_x);
-            }
-            bbr1_state->bytes_delivered += nb_bytes_acknowledged;
-            break;
         case picoquic_congestion_notification_ecn_ec:
             /* Non standard code to react on ECN_EC */
-            if (lost_packet_number >= bbr1_state->congestion_sequence) {
+            if (ack_state->lost_packet_number >= bbr1_state->congestion_sequence) {
                 picoquic_bbr1_notify_congestion(bbr1_state, cnx, path_x, current_time, 0);
             }
             break;
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
             /* Non standard code to react to high rate of packet loss, or timeout loss */
-            if (lost_packet_number >= bbr1_state->congestion_sequence &&
-                picoquic_hystart_loss_test(&bbr1_state->rtt_filter, notification, lost_packet_number)) {
+            if (ack_state->lost_packet_number >= bbr1_state->congestion_sequence &&
+                picoquic_hystart_loss_test(&bbr1_state->rtt_filter, notification, ack_state->lost_packet_number, 0.20)) {
                 picoquic_bbr1_notify_congestion(bbr1_state, cnx, path_x, current_time,
                     (notification == picoquic_congestion_notification_timeout) ? 1 : 0);
             }
             break;
         case picoquic_congestion_notification_spurious_repeat:
             if (bbr1_state->is_suspended) {
-                picoquic_bbr1_suspension_almost_over(bbr1_state, path_x, lost_packet_number);
+                picoquic_bbr1_suspension_almost_over(bbr1_state, path_x, ack_state->lost_packet_number);
             }
             break;
-        case picoquic_congestion_notification_rtt_measurement:
+        case picoquic_congestion_notification_acknowledgement:
+            /* sum the amount of data acked per packet */
+            if (bbr1_state->is_suspended) {
+                picoquic_bbr1_suspension_exit(bbr1_state, cnx, path_x);
+            }
+            bbr1_state->bytes_delivered += ack_state->nb_bytes_acknowledged;
+
             if (bbr1_state->state == picoquic_bbr1_alg_startup && path_x->rtt_min > BBR1_HYSTART_THRESHOLD_RTT) {
                 BBR1EnterStartupLongRTT(bbr1_state, path_x);
             }
+
             if (bbr1_state->state == picoquic_bbr1_alg_startup_long_rtt) {
-                if (picoquic_hystart_test(&bbr1_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
+                if (picoquic_hystart_test(&bbr1_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                     cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     BBR1ExitStartupLongRtt(bbr1_state, path_x, current_time);
                 }
             }
-            break;
-        case picoquic_congestion_notification_bw_measurement:
+
             /* RTT measurements will happen after the bandwidth is estimated */
             if (bbr1_state->state == picoquic_bbr1_alg_startup_long_rtt) {
                 uint64_t max_win;
                 uint64_t min_win;
 
                 BBR1UpdateBtlBw(bbr1_state, path_x, current_time);
-                if (rtt_measurement <= bbr1_state->rt_prop) {
-                    bbr1_state->rt_prop = rtt_measurement;
+                if (ack_state->rtt_measurement <= bbr1_state->rt_prop) {
+                    bbr1_state->rt_prop = ack_state->rtt_measurement;
                     bbr1_state->rt_prop_stamp = current_time;
                 }
                 if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
@@ -1195,7 +1188,7 @@ static void picoquic_bbr1_notify(
                 picoquic_update_pacing_data(cnx, path_x, 1);
             } else {
                 BBR1UpdateOnACK(bbr1_state, path_x,
-                    rtt_measurement, path_x->bytes_in_transit, 0 /* packets_lost */, bbr1_state->bytes_delivered,
+                    ack_state->rtt_measurement, path_x->bytes_in_transit, 0 /* packets_lost */, bbr1_state->bytes_delivered,
                     current_time);
                 /* Remember the number in flight before the next ACK -- TODO: update after send instead. */
                 bbr1_state->prior_in_flight = path_x->bytes_in_transit;
@@ -1215,12 +1208,12 @@ static void picoquic_bbr1_notify(
             break;
         case picoquic_congestion_notification_seed_cwin:
             if (bbr1_state->state == picoquic_bbr1_alg_startup_long_rtt) {
-                BBR1ExitStartupSeedBDP(bbr1_state, path_x, nb_bytes_acknowledged, current_time);
+                BBR1ExitStartupSeedBDP(bbr1_state, path_x, ack_state->nb_bytes_acknowledged, current_time);
                 picoquic_update_pacing_data(cnx, path_x, 1);
             }
             else if (bbr1_state->state == picoquic_bbr1_alg_startup){
                 /* If in initial startup phase, do something */
-                double seed_bw_estimate = (double)nb_bytes_acknowledged;
+                double seed_bw_estimate = (double)ack_state->nb_bytes_acknowledged;
                 uint64_t bwe;
                 seed_bw_estimate /= (double)path_x->smoothed_rtt;
                 seed_bw_estimate *= 1000000;

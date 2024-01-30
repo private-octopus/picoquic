@@ -9084,7 +9084,7 @@ int bbr_long_test()
 
 int bbr1_test()
 {
-    return congestion_control_test(picoquic_bbr_algorithm, 3600000, 0, 0);
+    return congestion_control_test(picoquic_bbr1_algorithm, 3600000, 0, 0);
 }
 
 /* Performance test.
