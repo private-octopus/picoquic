@@ -306,6 +306,7 @@ static const picoquic_test_def_t test_table[] = {
     { "bbr_asym100", bbr_asym100_test },
     { "bbr_asym100_nodelay", bbr_asym100_nodelay_test },
     { "bbr_asym400", bbr_asym400_test },
+    { "bbr1", bbr1_test },
     { "l4s_reno", l4s_reno_test },
     { "l4s_prague", l4s_prague_test },
     { "long_rtt", long_rtt_test },

@@ -1847,6 +1847,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(bbr1)
+        {
+            int ret = bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(l4s_reno)
         {
             int ret = l4s_reno_test();
