@@ -815,7 +815,7 @@ void BBR1ExitProbeRTT(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x
     }
 }
 
-int InLossRecovery(picoquic_bbr1_state_t* bbr1_state)
+static int InLossRecovery1(picoquic_bbr1_state_t* bbr1_state)
 {
     return bbr1_state->packet_conservation;
 }
@@ -823,7 +823,7 @@ int InLossRecovery(picoquic_bbr1_state_t* bbr1_state)
 uint64_t BBR1SaveCwnd(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x) {
     uint64_t w = path_x->cwin;
 
-    if ((InLossRecovery(bbr1_state) || bbr1_state->state == picoquic_bbr1_alg_probe_bw) &&
+    if ((InLossRecovery1(bbr1_state) || bbr1_state->state == picoquic_bbr1_alg_probe_bw) &&
         (path_x->cwin < bbr1_state->prior_cwnd)){
         w = bbr1_state->prior_cwnd;
     }
