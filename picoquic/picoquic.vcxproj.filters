@@ -132,6 +132,9 @@
     <ClCompile Include="picoquic_mbedtls.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="bbr1.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
