@@ -931,7 +931,13 @@ static void picoquic_count_and_notify_loss(
 
     if (old_p->send_path != NULL) {
         old_p->send_path->nb_losses_found++;
-        old_p->send_path->total_bytes_lost += old_p->length;
+        if ((old_p->send_path->smoothed_rtt != PICOQUIC_INITIAL_RTT ||
+            old_p->send_path->rtt_variant != 0) &&
+            old_p->send_time > cnx->start_time + old_p->send_path->smoothed_rtt) {
+            /* we do not count losses occruring before ready state, because the 
+             * timers are not reliable yet */
+            old_p->send_path->total_bytes_lost += old_p->length;
+        }
 
         if (cnx->congestion_alg != NULL && cnx->cnx_state >= picoquic_state_ready && old_p->send_path != NULL) {
             picoquic_per_ack_state_t ack_state = { 0 };

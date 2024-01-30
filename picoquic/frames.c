@@ -2763,7 +2763,9 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
             packet_data->path_ack[path_i].delivered_time_prior = acked_packet->delivered_time_prior;
             packet_data->path_ack[path_i].delivered_sent_prior = acked_packet->delivered_sent_prior;
             packet_data->path_ack[path_i].lost_prior = acked_packet->lost_prior;
+            packet_data->path_ack[path_i].inflight_prior = acked_packet->inflight_prior;
             packet_data->path_ack[path_i].rs_is_path_limited = acked_packet->delivered_app_limited;
+            packet_data->path_ack[path_i].rs_is_cwnd_limited = acked_packet->sent_cwin_limited;
             packet_data->path_ack[path_i].is_set = 1;
         }
         packet_data->path_ack[path_i].data_acked += acked_packet->length;
@@ -2804,8 +2806,26 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             ack_state.one_way_delay = packet_data->path_ack[i].acked_path->one_way_delay_sample;
             ack_state.nb_bytes_acknowledged = packet_data->path_ack[i].data_acked;
             ack_state.nb_bytes_newly_lost = nb_bytes_newly_lost;
-            ack_state.nb_bytes_lost_since_packet_sent = path_x->total_bytes_lost - packet_data->path_ack[i].lost_prior;
+            if (cnx->cnx_state == picoquic_state_ready) {
+                ack_state.nb_bytes_lost_since_packet_sent = path_x->total_bytes_lost - packet_data->path_ack[i].lost_prior;
+            }
+            else {
+                /* the count of lost bytes is very unreliable before the handshake completes.
+                * for example, if the RTT is high, it includes initial packets declared lost,
+                * although the loss is declaration is spurious. These extra losses can throw
+                * the CC algorithm off track. Hence the need to be conservative.
+                 */
+                ack_state.nb_bytes_lost_since_packet_sent = nb_bytes_newly_lost;
+            }
             ack_state.nb_bytes_delivered_since_packet_sent = path_x->delivered - packet_data->path_ack[i].delivered_prior;
+            ack_state.inflight_prior = packet_data->path_ack[i].inflight_prior;
+#if 1
+            ack_state.is_app_limited = packet_data->path_ack[i].rs_is_path_limited;
+            ack_state.is_cwnd_limited = packet_data->path_ack[i].rs_is_cwnd_limited;
+#else
+            ack_state.is_app_limited = (path_x->last_time_acked_data_frame_sent <= path_x->last_sender_limited_time) || (cnx->cnx_state < picoquic_state_ready);
+            ack_state.is_cwnd_limited = (path_x->last_time_acked_data_frame_sent <= path_x->last_cwin_blocked_time);
+#endif
             cnx->congestion_alg->alg_notify(cnx, packet_data->path_ack[i].acked_path,
                 picoquic_congestion_notification_acknowledgement,
                 &ack_state, current_time);

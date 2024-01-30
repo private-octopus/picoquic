@@ -235,12 +235,7 @@ int limited_batch_test()
     limited_test_config_t config;
     limited_config_set_default(&config, 4);
     config.ccalgo = picoquic_bbr_algorithm;
-#if 1
-    /* TODO: rerun this test after finalizing BBRv3, check for regression */
-    config.max_completion_time = 6600000;
-#else
-    config.max_completion_time = 6400000;
-#endif
+    config.max_completion_time = 6200000;
     config.nb_initial_steps = 10;
 
     return limited_client_test_one(&config);

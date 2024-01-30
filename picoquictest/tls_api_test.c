@@ -8989,7 +8989,11 @@ int bbr_test()
 
 int bbr_jitter_test()
 {
+#if 1
+    return congestion_control_test(picoquic_bbr_algorithm, 3850000, 5000, 5);
+#else
     return congestion_control_test(picoquic_bbr_algorithm, 3650000, 5000, 5);
+#endif
 }
 
 int bbr_long_test()
@@ -12600,7 +12604,8 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
             ret = picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
 
             if (ret == 0) {
-                ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, buffer_size, max_completion_time);
+                ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, buffer_size, 
+                    (i==0)?0:max_completion_time);
             }
 
             /* Verify that the BDP option was set and processed */

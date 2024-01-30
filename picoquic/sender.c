@@ -973,7 +973,11 @@ void picoquic_update_pacing_rate(picoquic_cnx_t * cnx, picoquic_path_t* path_x, 
     double packet_time = (double)path_x->send_mtu / pacing_rate;
     double quantum_time = (double)quantum / pacing_rate;
     uint64_t rtt_nanosec = path_x->smoothed_rtt * 1000;
-
+#if 1
+    if (path_x->pacing_rate > (uint64_t)pacing_rate) {
+        DBG_PRINTF("%s", "bug");
+    }
+#endif
     path_x->pacing_rate = (uint64_t)pacing_rate;
 
     if (quantum > path_x->pacing_quantum_max) {
@@ -1306,7 +1310,11 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
         packet->delivered_time_prior = path_x->delivered_time_last;
         packet->delivered_sent_prior = path_x->delivered_sent_last;
         packet->lost_prior = path_x->total_bytes_lost;
+        packet->inflight_prior = path_x->bytes_in_transit;
         packet->delivered_app_limited = (cnx->cnx_state < picoquic_state_ready || path_x->delivered_limited_index != 0);
+        if (path_x->bytes_in_transit >= path_x->cwin && cnx->cnx_state == picoquic_state_ready) {
+            packet->sent_cwin_limited = 1;
+        }
 
         switch (packet->ptype) {
         case picoquic_packet_version_negotiation:
@@ -1947,6 +1955,9 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
             picoquic_per_ack_state_t ack_state = { 0 };
             ack_state.rtt_measurement = old_path->rtt_sample;
             ack_state.nb_bytes_acknowledged = p->length;
+            old_path->delivered += p->length;
+            ack_state.nb_bytes_delivered_since_packet_sent = old_path->delivered - p->delivered_prior;
+            ack_state.is_app_limited = 1;
 
             cnx->congestion_alg->alg_notify(cnx, old_path,
                 picoquic_congestion_notification_acknowledgement,
@@ -3285,6 +3296,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                 if (path_x->cwin < path_x->bytes_in_transit) {
                     picoquic_per_ack_state_t ack_state = { 0 };
                     cnx->cwin_blocked = 1;
+                    path_x->last_cwin_blocked_time = current_time;
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(cnx, path_x,
                             picoquic_congestion_notification_cwin_blocked,
@@ -3631,6 +3643,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 if ((path_x->cwin < path_x->bytes_in_transit || cnx->quic->cwin_max < path_x->bytes_in_transit)
                     &&!path_x->is_pto_required) {
                     cnx->cwin_blocked = 1;
+                    path_x->last_cwin_blocked_time = current_time;
                     if (cnx->congestion_alg != NULL) {
                         picoquic_per_ack_state_t ack_state = { 0 };
 

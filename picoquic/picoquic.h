@@ -876,7 +876,7 @@ int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoq
 * 
 * The application subscribes to the path quality update
 * using "picoquic_subscribe_to_quality_update" API
-* for the connection, or "picoquic_subscribe_to_quality_update" API
+* for the connection, or "picoquic_subscribe_to_quality_update_per_path" API
 * for a specific path, setting the "change" thresholds
 * for the datarate and the rtt. 
 * The function call "picoquic_default_quality_update"
@@ -1405,8 +1405,11 @@ typedef struct st_picoquic_per_ack_state_t {
     uint64_t nb_bytes_newly_lost; /* Number of bytes in packets found lost because of this ACK */
     uint64_t nb_bytes_lost_since_packet_sent; /* Number of bytes lost between the time the packet was sent and now */
     uint64_t nb_bytes_delivered_since_packet_sent; /* Number of bytes acked between the time the packet was sent and now */
+    uint64_t inflight_prior;
     uint64_t lost_packet_number;
+    uint64_t lost_packet_sent_time;
     unsigned int is_app_limited : 1; /* App marked limited at time of ACK? */
+    unsigned int is_cwnd_limited: 1; /* path marked CWIN limited after packet was sent. */
 } picoquic_per_ack_state_t;
 
 typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
