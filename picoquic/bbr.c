@@ -1426,11 +1426,6 @@ static void BBRSetCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x,
         else if (path_x->cwin < bbr_state->max_inflight || path_x->delivered < PICOQUIC_CWIN_INITIAL) {
             path_x->cwin = path_x->cwin+ rs->newly_acked;
         }
-#if 1
-        else {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
         if (path_x->cwin < BBRMinPipeCwnd * path_x->send_mtu) {
             path_x->cwin = BBRMinPipeCwnd * path_x->send_mtu;
         }
@@ -1709,11 +1704,6 @@ static void  BBRBoundBWForModel(picoquic_bbr_state_t* bbr_state) {
     if (bbr_state->bw > bbr_state->bw_hi && bbr_state->bw_hi != 0) {
         bbr_state->bw = bbr_state->bw_hi;
     }
-#if 1
-    if (bbr_state->state == picoquic_bbr_alg_startup && bbr_state->bw < bbr_state->max_bw) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
 }
 
 
@@ -1722,11 +1712,6 @@ static void BBRUpdateMaxBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pat
 {
     BBRUpdateRound(bbr_state, path_x);
     if (rs->delivery_rate >= bbr_state->max_bw || !rs->is_app_limited) {
-#if 1
-        if (rs->delivery_rate < bbr_state->max_bw) {
-            DBG_PRINTF("%s", "bug");
-        }
-#endif
         bbr_state->max_bw = update_windowed_max_filter(
             bbr_state->MaxBwFilter, rs->delivery_rate, bbr_state->cycle_count, BBRMaxBwFilterLen);
     }
