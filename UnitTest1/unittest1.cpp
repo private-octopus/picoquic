@@ -1041,9 +1041,37 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(red_cc)
+        TEST_METHOD(red_bbr)
         {
-            int ret = red_cc_test();
+            int ret = red_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_cubic)
+        {
+            int ret = red_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_dcubic)
+        {
+            int ret = red_dcubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_fast)
+        {
+            int ret = red_fast_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_newreno)
+        {
+            int ret = red_newreno_test();
 
             Assert::AreEqual(ret, 0);
         }

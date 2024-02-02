@@ -11310,39 +11310,33 @@ static int red_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t ta
     return ret;
 }
 
-int red_cc_test()
+int red_newreno_test()
 {
-    picoquic_congestion_algorithm_t* algo_list[5] = {
-        picoquic_newreno_algorithm,
-        picoquic_cubic_algorithm,
-        picoquic_dcubic_algorithm,
-        picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
-    };
-    uint64_t algo_time[5] = {
-        500000,
-        500000,
-        500000,
-        500000,
-        500000
-    };
-    uint64_t algo_loss[5] = {
-        150,
-        225,
-        275,
-        250,
-        170
-    };
+    int ret = red_cc_algotest(picoquic_newreno_algorithm, 500000, 150);
+    return ret;
+}
 
-    int ret = 0;
+int red_cubic_test()
+{
+    int ret = red_cc_algotest(picoquic_cubic_algorithm, 500000, 225);
+    return ret;
+}
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
-        ret = red_cc_algotest(algo_list[i], algo_time[i], algo_loss[i]);
-        if (ret != 0) {
-            DBG_PRINTF("RED cc test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
-        }
-    }
+int red_dcubic_test()
+{
+    int ret = red_cc_algotest(picoquic_dcubic_algorithm, 500000, 275);
+    return ret;
+}
 
+int red_fast_test()
+{
+    int ret = red_cc_algotest(picoquic_fastcc_algorithm, 500000, 250);
+    return ret;
+}
+
+int red_bbr_test()
+{
+    int ret = red_cc_algotest(picoquic_newreno_algorithm, 50000, 170);
     return ret;
 }
 
