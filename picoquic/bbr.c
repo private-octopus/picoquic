@@ -278,11 +278,13 @@ typedef enum {
 #define BBRProbeBwDownCwndGain 2.0
 #define BBRProbeBwCruisePacingGain 1.0
 #define BBRProbeBwCruiseCwndGain 2.0
-#define BBRProbeBwRefillPacingGain 1.25
+#define BBRProbeBwRefillPacingGain 1.0
 #define BBRProbeBwRefillCwndGain 2.0
 #define BBRProbeBwUpPacingGain 1.25
 #define BBRProbeBwUpCwndGain 2.0
 #if 1
+#define BBRMinRttMarginPercent 20 /* Margin factor of 20% for avoiding firing RTT Probe too often */
+#else
 #define BBRMinRttMarginPercent 2 /* Margin factor of 2% for avoiding firing RTT Probe too often */
 #endif
 
@@ -293,6 +295,7 @@ static const double bbr_pacing_gain_cycle[BBR_GAIN_CYCLE_LEN] = { 1.0, 1.0, 1.0,
 typedef struct st_picoquic_bbr_state_t {
     /* Algorithm state: */
     picoquic_bbr_alg_state_t state;
+    uint64_t round_start_pn;
     int round_count;
     int rounds_since_probe;
     unsigned int round_start : 1;
@@ -313,7 +316,6 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t bw_hi; /* long term maximum -- new in BBRv3 */
     uint64_t bw_lo; /* short term maximum -- new in BBRv3 */
     uint64_t bw; /* max bw for current cycle, min(max_bw, bw_hi, bw_lo) -- new in BBRv3 */
-    uint64_t btl_bw; /* Not used in BBRv3, superced by "bw"? */
 
     /* Data volume parameters:*/
     uint64_t min_rtt; /* minimum RTT measured over last 10sec */
@@ -445,7 +447,7 @@ static void BBRSetRsFromAckState(picoquic_path_t* path_x, picoquic_per_ack_state
 static int IsInflightTooHigh(picoquic_path_t * path_x, bbr_per_ack_state_t* rs);
 static void BBRHandleInflightTooHigh(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, bbr_per_ack_state_t* rs, uint64_t current_time);
 static uint64_t BBRTargetInflight(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x);
-static void BBRInitRoundCounting(picoquic_bbr_state_t* bbr_state);
+static void BBRInitRoundCounting(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 static void BBRCheckProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time);
 static void BBRUpdateMaxBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs);
 static void BBRInitPacingRate(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
@@ -555,7 +557,7 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
      */
     BBRResetCongestionSignals(bbr_state);
     BBRResetLowerBounds(bbr_state);
-    BBRInitRoundCounting(bbr_state);
+    BBRInitRoundCounting(bbr_state, path_x);
     BBRInitFullPipe(bbr_state);
     BBRInitPacingRate(bbr_state, path_x);
     BBREnterStartup(bbr_state);
@@ -954,12 +956,8 @@ static void  BBRBoundBWForModel(picoquic_bbr_state_t* bbr_state) {
 static void BBRUpdateMaxBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs)
 {
     BBRUpdateRound(bbr_state, path_x);
-    if (rs->delivery_rate >= bbr_state->max_bw || !rs->is_app_limited) {
-#if 1
-        if (rs->delivery_rate < bbr_state->max_bw && !path_x->cnx->client_mode) {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
+
+    if (rs->delivery_rate >= bbr_state->MaxBwFilter[bbr_state->cycle_count%BBRMaxBwFilterLen] || !rs->is_app_limited) {
         bbr_state->max_bw = update_windowed_max_filter(
             bbr_state->MaxBwFilter, rs->delivery_rate, bbr_state->cycle_count, BBRMaxBwFilterLen);
     }
@@ -968,6 +966,8 @@ static void BBRUpdateMaxBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pat
 static void BBRAdvanceMaxBwFilter(picoquic_bbr_state_t* bbr_state)
 {
     bbr_state->cycle_count++;
+    bbr_state->ack_phase = picoquic_bbr_acks_probe_starting;
+
     /* Should the current cycle value be set to zero? Or do we simply rely on the
      * natural rythm of updates, keeping the old value if we only see app limited updates?
      */
@@ -1002,13 +1002,9 @@ static void BBRUpdateACKAggregation(picoquic_bbr_state_t* bbr_state, picoquic_pa
 * happens once every 50 RTT. Decisions made because of that would be wrong.
 */
 static int IsInflightTooHigh(picoquic_path_t * path_x, bbr_per_ack_state_t* rs)
-{
-#if 0
+{ 
     return (rs->lost > (uint64_t)(((double)rs->tx_in_flight) * BBRLossThresh) &&
-        rs->tx_in_flight > path_x->send_mtu * 50);
-#else
-    return (rs->lost > (uint64_t)(((double)rs->tx_in_flight) * BBRLossThresh));
-#endif
+        rs->lost > 3*path_x->send_mtu);
 }
 
 static void BBRHandleInflightTooHigh(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
@@ -1041,25 +1037,24 @@ static int CheckInflightTooHigh(picoquic_bbr_state_t* bbr_state, picoquic_path_t
 }
 
 /* BBR Round counting functions */
-static void BBRInitRoundCounting(picoquic_bbr_state_t* bbr_state)
+static void BBRInitRoundCounting(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
     bbr_state->next_round_delivered = 0;
     bbr_state->round_start = 0;
     bbr_state->round_count = 0;
+    bbr_state->round_start_pn = picoquic_cc_get_sequence_number(path_x->cnx, path_x);
 }
 
 static void BBRStartRound(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
-#if 1
-    bbr_state->next_round_delivered = path_x->delivered + path_x->bytes_in_transit;
-#else
+    bbr_state->round_start_pn = picoquic_cc_get_sequence_number(path_x->cnx, path_x);
+
     bbr_state->next_round_delivered = path_x->delivered;
-#endif
 }
 
 static void BBRUpdateRound(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x)
 {
-    if (path_x->delivered >= bbr_state->next_round_delivered) {
+    if (picoquic_cc_get_ack_number(path_x->cnx, path_x) >= bbr_state->round_start_pn) {
         BBRStartRound(bbr_state, path_x);
         bbr_state->round_count++;
         bbr_state->rounds_since_probe++;
@@ -1348,6 +1343,11 @@ static void BBRAdaptUpperBounds(picoquic_bbr_state_t* bbr_state, picoquic_path_t
             BBRProbeInflightHiUpward(bbr_state, path_x, rs);
         }
     }
+#if 1
+    else {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
 }
 
 /* Time to transition from DOWN to CRUISE? */
@@ -1520,7 +1520,6 @@ static void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path
     bbr_state->state = picoquic_bbr_alg_drain;
     bbr_state->pacing_gain = 1.0 / BBRStartupCwndGain;  /* pace slowly */
     bbr_state->cwnd_gain = BBRStartupCwndGain;   /* maintain cwnd */
-    bbr_state->cycle_count++; /* Trying to fix an issue */
 }
 
 static void BBRCheckDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
@@ -1906,7 +1905,7 @@ static void picoquic_bbr_notify(
 #if 0
     /* Debug code -- when it is useful to put a break after a particular 
      * pattern is found in the traces, to see what caused it. */
-    if (!cnx->client_mode && current_time > 40000 && path_x->cwin == 29576) {
+    if (!cnx->client_mode && current_time > 190000 && bbr_state->bw <= 811657) {
         DBG_PRINTF("%s", "Bug");
     }
 #endif
@@ -1918,7 +1917,7 @@ void picoquic_bbr_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t*
 {
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)path_x->congestion_alg_state;
     *cc_state = (uint64_t)bbr_state->state;
-    *cc_param = bbr_state->btl_bw;
+    *cc_param = bbr_state->bw;
 }
 
 #define picoquic_bbr_ID "bbr" /* BBR */
