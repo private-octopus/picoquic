@@ -260,7 +260,11 @@ typedef enum {
 #define BBRPacingMarginPercent 1 /* discount factor of 1% used to scale BBR.bw to produce BBR.pacing_rate */
 #define BBRStartupPacingGain 2.77 /* constant, 4*ln(2), approx 2.77 */
 #define BBRStartupCwndGain 2.0 /* constant */
+#if 1
+#define BBRLossThresh 0.2 /* maximum tolerated packet loss (default: 20%) */
+#else
 #define BBRLossThresh 0.02 /* maximum tolerated packet loss (default: 2%) */
+#endif
 #define BBRLossAlpha 0.125
 #define BBRBeta 0.7 /* Multiplicative decrease on packet loss (default: 0.7) */
 #define BBRHeadroom 0.15 /* Realive amount of headroom left for other flows. (default: 0.15). (Erroneously set to 0.85 in draft-bbr-02) */
