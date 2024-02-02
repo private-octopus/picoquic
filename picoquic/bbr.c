@@ -955,6 +955,11 @@ static void BBRUpdateMaxBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pat
 {
     BBRUpdateRound(bbr_state, path_x);
     if (rs->delivery_rate >= bbr_state->max_bw || !rs->is_app_limited) {
+#if 1
+        if (rs->delivery_rate < bbr_state->max_bw && !path_x->cnx->client_mode) {
+            DBG_PRINTF("%s", "Bug");
+        }
+#endif
         bbr_state->max_bw = update_windowed_max_filter(
             bbr_state->MaxBwFilter, rs->delivery_rate, bbr_state->cycle_count, BBRMaxBwFilterLen);
     }
@@ -1045,7 +1050,11 @@ static void BBRInitRoundCounting(picoquic_bbr_state_t* bbr_state)
 
 static void BBRStartRound(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
+#if 1
+    bbr_state->next_round_delivered = path_x->delivered + path_x->bytes_in_transit;
+#else
     bbr_state->next_round_delivered = path_x->delivered;
+#endif
 }
 
 static void BBRUpdateRound(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x)
@@ -1124,8 +1133,8 @@ static void BBRAdaptMinRttMargin(picoquic_bbr_state_t* bbr_state, picoquic_path_
     }
     bbr_state->min_rtt_margin = margin;
 }
-
 #endif
+
 static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
 {
 #if 1
@@ -1824,7 +1833,7 @@ static void BBRSetRsFromAckState(picoquic_path_t* path_x, picoquic_per_ack_state
     rs->newly_lost = ack_state->nb_bytes_newly_lost; /* volume of data marked lost on ack received */
     rs->lost = ack_state->nb_bytes_lost_since_packet_sent;
     rs->tx_in_flight = ack_state->inflight_prior;
-    rs->is_app_limited = ack_state->is_app_limited; /*Checked that this is properly implemented */
+    rs->is_app_limited = ack_state->is_app_limited; /*Checked that this is properly implemented */   
     rs->is_cwnd_limited = ack_state->is_cwnd_limited; 
 }
 
@@ -1897,7 +1906,7 @@ static void picoquic_bbr_notify(
 #if 0
     /* Debug code -- when it is useful to put a break after a particular 
      * pattern is found in the traces, to see what caused it. */
-    if (!cnx->client_mode && current_time > 1400000 && path_x->cwin < 8000) {
+    if (!cnx->client_mode && current_time > 40000 && path_x->cwin == 29576) {
         DBG_PRINTF("%s", "Bug");
     }
 #endif
