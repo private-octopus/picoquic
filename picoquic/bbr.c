@@ -371,14 +371,14 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t bw_probe_up_acks;
     picoquic_bbr_ack_phase_t ack_phase;
 
-    /* Management of packet losses */
+    /* Management of packet losses and recovery */
     unsigned int loss_in_round : 1;
     unsigned int loss_round_start : 1;
     uint64_t loss_round_delivered;
 
-    double loss_rate_smoothed;
-    double delivered_smoothed;
-    double lost_smoothed;
+    unsigned int is_in_recovery;
+    unsigned int is_pto_recovery;
+    uint64_t recovery_packet_number;
 
     /* Per connection random state.*/
     uint64_t random_context;
@@ -439,8 +439,6 @@ static void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path
 #if 0
 static void BBRHandleRestartFromIdle(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
 #endif
-void BBRltbwSampling(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
-static void BBRResetProbeBwMode(picoquic_bbr_state_t* bbr_state, uint64_t current_time);
 static void BBRStartProbeBW_DOWN(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, uint64_t current_time);
 static void BBRStartProbeBW_CRUISE(picoquic_bbr_state_t* bbr_state);
 static void BBRStartProbeBW_REFILL(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x);
@@ -461,6 +459,7 @@ static uint64_t BBRInflightWithBw(picoquic_bbr_state_t* bbr_state, picoquic_path
 static void BBRUpdateMaxInflight(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 static uint64_t BBRInflightWithHeadroom(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 static uint64_t BBRBDPMultiple(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, double gain);
+static int InLossRecovery(picoquic_bbr_state_t* bbr_state);
 
 /* Init processes for BBRv3 */
 
@@ -664,6 +663,7 @@ static void BBRBoundCwndForProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_pa
 static void BBRSetCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs)
 {
     BBRUpdateMaxInflight(bbr_state, path_x);
+    /* TODO: check whether this should be done in every state */
     BBRModulateCwndForRecovery(bbr_state, path_x, rs);
     if (!bbr_state->packet_conservation) {
         if (bbr_state->filled_pipe) {
@@ -686,11 +686,8 @@ static void BBRSetCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x,
 
 static uint64_t BBRSaveCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
-    /* The original test was:
-    *  if (!InLossRecovery(bbr_state) && bbr_state->state != picoquic_bbr_alg_probe_rtt)
-    * We are not handling a loss recovery state, so we don't need to test for it.
-    */
-    if ( /*!InLossRecovery(bbr_state) && */ bbr_state->state != picoquic_bbr_alg_probe_rtt) {
+
+    if ( !InLossRecovery(bbr_state) && bbr_state->state != picoquic_bbr_alg_probe_rtt) {
         return path_x->cwin;
     }
     else {
@@ -713,12 +710,9 @@ static uint64_t BBRRestoreCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t*
     }
 }
 
-/* The draft includes this "enter fast recovery" notion, but does not actually
-* define a "fast recovery" state. The QUIC implementation is doing RACK, and does not
-* treat "recevery from packet losses" as a special state.
-* The draft pseudo code has "packet_conservation" set here, but there is
-* no example of setting it to zero. In traditional TCP, this is done when
-* the packet sent after the enter recovery event is acknowledged.
+/* 
+* Entering recovery sets the "packet_conservation" bit on.
+* It is reset to 0 after one round trip. 
  */
 static void BBROnEnterFastRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs)
 {
@@ -728,16 +722,73 @@ static void BBROnEnterFastRecovery(picoquic_bbr_state_t* bbr_state, picoquic_pat
         additional_cwnd = rs->newly_acked;
     }
     path_x->cwin = path_x->bytes_in_transit + additional_cwnd;
+    bbr_state->recovery_packet_number = picoquic_cc_get_sequence_number(path_x->cnx, path_x);
     bbr_state->packet_conservation = 1;
+    bbr_state->is_in_recovery = 1;
+    bbr_state->is_pto_recovery = 0;
 }
 
 /* In picoquic, the arrival of an RTO maps to a "timer based" packet loss.
+* Question: do we want this on a loss signal, or simply when observing
+* loss data in ack notification?
  */
-static void BBROnEnterRTO(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
+static void BBROnEnterRTO(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t lost_packet_number)
 {
     bbr_state->prior_cwnd = BBRSaveCwnd(bbr_state, path_x);
     path_x->cwin = path_x->bytes_in_transit + path_x->send_mtu;
+
+    bbr_state->recovery_packet_number = lost_packet_number;
+    bbr_state->is_in_recovery = 1;
+    bbr_state->is_pto_recovery = 1;
 }
+
+static void BBROnExitRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
+{
+    path_x->cwin = BBRRestoreCwnd(bbr_state, path_x);
+    bbr_state->recovery_packet_number = UINT64_MAX;
+    bbr_state->packet_conservation = 0;
+    bbr_state->is_in_recovery = 0;
+    bbr_state->is_pto_recovery = 0;
+}
+
+static void BBROnSpuriousLoss(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t lost_packet_number)
+{
+    if (bbr_state->recovery_packet_number == lost_packet_number && bbr_state->is_pto_recovery) {
+        BBROnExitRecovery(bbr_state, path_x);
+    }
+}
+
+static int InLossRecovery(picoquic_bbr_state_t* bbr_state)
+{
+    return (bbr_state->is_in_recovery);
+}
+
+/* Exit loss recovery
+* Could be either on end of the recovery period,
+* or in the case of PTO if the loss is declared spurious.
+ */
+static void BBRExitRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
+{
+    bbr_state->packet_conservation = 0;
+    path_x->cwin = BBRRestoreCwnd(bbr_state, path_x);
+}
+
+static void BBRCheckRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs)
+{
+    if (InLossRecovery(bbr_state)) {
+        /* Exit loss recovery if full roundtrip expired */
+        if (picoquic_cc_get_ack_number(path_x->cnx, path_x) >= bbr_state->recovery_packet_number) {
+            BBROnExitRecovery(bbr_state, path_x);
+        }
+    }
+    else {
+        /* Enter loss recovery if new losses */
+        if (IsInflightTooHigh(path_x, rs)) {
+            BBROnEnterFastRecovery(bbr_state, path_x, rs);
+        }
+    }
+}
+
 
 /* Computing the congestion window */
 static uint64_t BBRBDPMultipleWithBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, double gain, uint64_t bw)
@@ -913,15 +964,6 @@ static void BBRAdaptLowerBoundsFromCongestion(picoquic_bbr_state_t* bbr_state, p
         BBRLossLowerBounds(bbr_state);
     }
 }
-#if 1
-/* Update loss rate tracker on every ACK */
-static void BBRTrackLossRate(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs)
-{
-    bbr_state->delivered_smoothed = (1.0 - BBRLossAlpha) * bbr_state->delivered_smoothed + BBRLossAlpha * (double)(rs->newly_acked + rs->newly_lost);
-    bbr_state->lost_smoothed = (1.0 - BBRLossAlpha) * bbr_state->lost_smoothed + BBRLossAlpha * (double)(rs->newly_lost);
-    bbr_state->loss_rate_smoothed = bbr_state->lost_smoothed / bbr_state->delivered_smoothed;
-}
-#endif
 
 /* Update congestion state on every ACK */
 static void  BBRUpdateCongestionSignals(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs)
@@ -1141,8 +1183,16 @@ static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
 #endif
     /* TODO: replace constants by state variables, computed as function of
      * min RTT */
-    bbr_state->probe_rtt_expired =
-        current_time > bbr_state->probe_rtt_min_stamp + BBRProbeRTTInterval;
+    if (bbr_state->min_rtt < UINT64_MAX) {
+        if (bbr_state->min_rtt <= PICOQUIC_TARGET_RENO_RTT) {
+            bbr_state->probe_rtt_expired =
+                current_time > bbr_state->probe_rtt_min_stamp + BBRProbeRTTInterval;
+        }
+        else {
+            bbr_state->probe_rtt_expired =
+                current_time > bbr_state->probe_rtt_min_stamp + bbr_state->min_rtt * 100;
+        }
+    }
     if (rs->rtt_sample >= 0 &&
         (rs->rtt_sample < bbr_state->probe_rtt_min_delay ||
             bbr_state->probe_rtt_expired)) {
@@ -1391,8 +1441,14 @@ static void BBRPickProbeWait(picoquic_bbr_state_t* bbr_state)
         (uint32_t)BBRRandomIntBetween(bbr_state, 0, 1); /* 0 or 1 */
     
     /* Decide the random wall clock bound for wait: */
-    bbr_state->bw_probe_wait =
-        2000000 + BBRRandomIntBetween(bbr_state, 0, 1000000); /* 0..1 sec, in usec */
+    if (bbr_state->min_rtt < 250000) {
+        bbr_state->bw_probe_wait =
+            2000000 + BBRRandomIntBetween(bbr_state, 0, 1000000); /* 0..1 sec, in usec */
+    }
+    else {
+        bbr_state->bw_probe_wait =
+            8*bbr_state->min_rtt + BBRRandomIntBetween(bbr_state, 0, 4*bbr_state->min_rtt); /* 0..1 sec, in usec */
+    }
 }
 
 /* How much data do we want in flight?
@@ -1776,6 +1832,9 @@ static void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_pat
     BBRUpdateProbeBWCyclePhase(bbr_state, path_x, rs, current_time);
     BBRUpdateMinRTT(bbr_state, path_x, rs, current_time);
     BBRCheckProbeRTT(bbr_state, path_x, rs, current_time);
+#if 0
+    BBRCheckRecovery(bbr_state, path_x, rs);
+#endif
     BBRAdvanceLatestDeliverySignals(bbr_state, rs);
     BBRBoundBWForModel(bbr_state);
 }
@@ -1872,12 +1931,18 @@ static void picoquic_bbr_notify(
             /* TODO */
             break;
         case picoquic_congestion_notification_repeat:
+            break;
         case picoquic_congestion_notification_timeout:
-            BBRUpdateOnLoss(bbr_state, path_x, ack_state, current_time);
-            /* TODO: if loss is PTO, we should start the OnPto processing */
+#if 0
+            /* if loss is PTO, we should start the OnPto processing */
+            BBROnEnterRTO(bbr_state, path_x, ack_state->lost_packet_number);
+#endif
             break;
         case picoquic_congestion_notification_spurious_repeat:
-            /* TODO: handling of suspension */
+#if 0
+            /* handling of suspension */
+            BBROnSpuriousLoss(bbr_state, path_x, ack_state->lost_packet_number);
+#endif
             break;
         case picoquic_congestion_notification_rtt_measurement:
             /* TODO: this call is subsumed by the acknowledgement notification.

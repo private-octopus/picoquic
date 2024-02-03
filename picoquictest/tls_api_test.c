@@ -11336,7 +11336,7 @@ int red_fast_test()
 
 int red_bbr_test()
 {
-    int ret = red_cc_algotest(picoquic_newreno_algorithm, 50000, 170);
+    int ret = red_cc_algotest(picoquic_bbr_algorithm, 500000, 170);
     return ret;
 }
 
