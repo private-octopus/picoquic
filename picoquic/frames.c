@@ -2516,7 +2516,7 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
                 path_x->delivered_sent_last = send_time;
                 path_x->delivered_last_packet = delivered_prior;
                 path_x->last_bw_estimate_path_limited = rs_is_path_limited;
-                if (path_x->delivered > path_x->delivered_limited_index) {
+                if (path_x->delivered_last_packet > path_x->delivered_limited_index) {
                     path_x->delivered_limited_index = 0;
                 }
                 /* Statistics */

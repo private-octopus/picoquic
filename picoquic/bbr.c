@@ -26,78 +26,10 @@
 #include "picoquic_utils.h"
 
 /*
-Implementation of the BBR algorithm, tuned for Picoquic.
-
-The main idea of BBR is to track the "bottleneck bandwidth", and to tune the
-transport stack to send exactly at that speed. This ensures good network
-utilisation while avoiding the building of queues. To do that the stack
-needs to constantly estimate the available data rate. It does that by
-measuring the rate at which acknowledgements come back, providing what it
-calls the delivery rate.
-
-That approach includes an implicit feedback loop. The delivery rate can never
-exceed the sending rate. That will effectively detects a transmission slow
-down due to partial congestion, but if the algorithm just did that the
-sending rate will remain constant when the network is lightly loaded
-and ratchet down during time of congestion, leading to very low efficiency.
-The available bandwidth can only be tested by occasionally sending faster
-than the measured delivery rate.
-
-BBR does that by following a cycle of "send, test and drain". During the
-sending period, the stack sends at the measured rate. During the testing
-period, it sends faster, 25% faster with recommended parameters. This
-risk creating a queue if the bandwidth had not increased, so the test
-period is followed by a drain period during which the stack sends 25%
-slower than the measured rate. If the test is successful, the new bandwidth
-measurement will be available at the end of the draining period, and
-the increased bandwidth will be used in the next cycle.
-
-Tuning the sending rate does not guarantee a short queue, it only
-guarantees a stable queue. BBR controls the queue by limiting the
-amount of data "in flight" (congestion window, CWIN) to the product
-of the bandwidth estimate by the RTT estimate, plus a safety marging to ensure
-continuous transmission. Using the average RTT there would lead to a runaway
-loop in which oversized windows lead to increased queues and then increased
-average RTT. Instead of average RTT, BBR uses a minimum RTT. Since the
-mimimum RTT might vary with routing changes, the minimum RTT is measured
-on a sliding window of 10 seconds.
-
-The bandwidth estimation needs to be robust against short term variations
-common in wireless networks. BBR retains the maximum
-delivery rate observed over a series of probing intervals. Each interval
-starts with a specific packet transmission and ends when that packet
-or a later transmission is acknowledged. BBR does that by tracking
-the delivered counter associated with packets and comparing it to
-the delivered counter at start of period.
-
-During start-up, BBR performs its own equivalent of Reno's slow-start.
-It does that by using a pacing gain of 2.89, i.e. sending 2.89 times
-faster than the measured maximum. It exits slow start when it found
-a bandwidth sufficient to fill the pipe.
-
-The bandwidth measurements can be wrong if the application is not sending
-enough data to fill the pipe. BBR tracks that, and does not reduce bandwidth
-or exit slow start if the application is limiting transmission.
-
-This implementation follows draft-cardwell-iccrg-bbr-congestion-control,
-with a couple of changes for handling the multipath nature of quic.
-There is a BBR control state per path.
-Most of BBR the variables defined in the draft are implemented
-in the "BBR state" structure, with a few exceptions:
-
-* BBR.delivered is represented by path_x.delivered, and is maintained
-  as part of ACK processing
-
-* We use "bytes_in_transit", which is already maintained by the stack.
-
-* Compute bytes_delivered by summing all calls to ACK(bytes) before
-  the call to RTT update.
-
-* In the Probe BW mode, the draft suggests cwnd_gain = 2. We observed
-  that this results in queue sizes of 2, which is too high, so we
-  reset that to 1.125.
-
-The "packet" variables are defined in the picoquic_packet_t.
+Implementation of the BBR3 algorithm, tuned for Picoquic.
+Based on https://datatracker.ietf.org/doc/html/draft-cardwell-iccrg-bbr-congestion-control-02,
+which describes BBR2 but incorporates the "bug fixes" that
+differentiate BBR3 from BBR2.
 
 Early testing showed that BBR startup phase requires several more RTT
 than the Hystart process used in modern versions of Reno or Cubic. BBR
@@ -116,34 +48,6 @@ Hystart instead of startup if the RTT is above the Reno target of
 100 ms. 
 
 */
-
-/* Detection of leaky-bucket pacers.
- * This is based on code added to BBR after the IETF draft was published.
- * The code detect whether the connection is being "policed" by a leaky-bucket based
- * parser, and introduces state variables:
- * - lt_use_bw, boolean: check whether the connection is currently constrained
- *   to use a limited bandwidth.
- * - lt_rtt_cnt: number of RTT during which the bandwidth has been limited. Exit the
- *   limited bandwidth state when this reaches the maximum value.
- * - lt_is_sampling: whether the connection is sampling the number of loss
- *   intervals. This starts when the first losses are noticed. It is reset if
- *   the bandwidth is app limited.
- * Sampling lasts for a number of rounds, as counted by the round_start
- * variable. No action taken except updating counters in that state.
- * Sampling can only ends on an interval when losses are detected, to avoid
- * undercounting. If no loss, sampling continues after the min required
- * interval. If no losses for too long, sampling state is reset.
- * At the end of the sampling interval compute the ratio of packets lost
- * to packet delivered. If it is below threshold, continue sampling, i.e.,
- * extend the interval.
- * If loss rate exceed the threshold, compute the duration of the interval.
- * If it is too short, extend. If is is too long, reset the sampling.
- * Else, compute the delivery rate for the interval. Check whether this
- * is the first detection, in which case do nothing but remember the estimated
- * rate in "lt_bw". Else, check whether the new rate is "close enough" to
- * the previous rate, which indicates active policing. If that is true,
- * activate policing to the average rate between current and previous sample.
- */
 
 /* Reaction to losses and ECN
  * This code is an implementation of BBRv1, which pretty much ignores packet
