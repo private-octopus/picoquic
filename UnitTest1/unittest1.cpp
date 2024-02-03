@@ -1083,9 +1083,37 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(pacing_cc)
+        TEST_METHOD(pacing_bbr)
         {
-            int ret = pacing_cc_test();
+            int ret = pacing_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_cubic)
+        {
+            int ret = pacing_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_dcubic)
+        {
+            int ret = pacing_dcubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_fast)
+        {
+            int ret = pacing_fast_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_newreno)
+        {
+            int ret = pacing_newreno_test();
 
             Assert::AreEqual(ret, 0);
         }

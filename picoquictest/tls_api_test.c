@@ -11509,44 +11509,42 @@ static int pacing_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t
     return ret;
 }
 
-int pacing_cc_test()
+int pacing_bbr_test()
 {
-    picoquic_congestion_algorithm_t* algo_list[5] = {
-        picoquic_newreno_algorithm,
-        picoquic_cubic_algorithm,
-        picoquic_dcubic_algorithm,
-        picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
-    };
-    uint64_t algo_time[5] = {
-        900000,
-        900000,
-        900000,
-        960000,
-        900000
-    };
-    uint64_t algo_loss[5] = {
-        100,
-        210,
-        240,
-        180,
-#if 1
-        /* TODO: investigate once BBRv3 is ready */
-        470
-#else
-        210
-#endif
-    };
+    /* TODO: With BBRv3, the 1MB transfer in this test takes more than 1sec,
+     * approximately an 80% path utilisation. This compares to less than
+     * 900ms for the same test using Cubic. On the other hand, there are
+     * way fewer retransmission than when using Cubic, less than 50 versus
+     * more than 200. The 80% path utilisation is because BBRv3 tests the
+     * bandwidth during startup, exits as soon as excessive packet
+     * losses are detected, and waits 2 to 3 seconds before pushing again.
+     * TODO: consider a post startup "push" similare to the second phase of
+     * Hystart++ */
+    int ret = pacing_cc_algotest(picoquic_bbr_algorithm, 1010000, 50);
+    return ret;
+}
 
-    int ret = 0;
+int pacing_cubic_test()
+{
+    int ret = pacing_cc_algotest(picoquic_cubic_algorithm, 900000, 210);
+    return ret;
+}
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
-        ret = pacing_cc_algotest(algo_list[i], algo_time[i], algo_loss[i]);
-        if (ret != 0) {
-            DBG_PRINTF("Pacing cc test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
-        }
-    }
+int pacing_dcubic_test()
+{
+    int ret = pacing_cc_algotest(picoquic_dcubic_algorithm, 900000, 240);
+    return ret;
+}
 
+int pacing_fast_test()
+{
+    int ret = pacing_cc_algotest(picoquic_fastcc_algorithm, 960000, 180);
+    return ret;
+}
+
+int pacing_newreno_test()
+{
+    int ret = pacing_cc_algotest(picoquic_newreno_algorithm, 900000, 100);
     return ret;
 }
 
