@@ -320,7 +320,7 @@ static void BBRStartProbeBW_DOWN(picoquic_bbr_state_t* bbr_state, picoquic_path_
 static void BBRStartProbeBW_CRUISE(picoquic_bbr_state_t* bbr_state);
 static void BBRStartProbeBW_REFILL(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x);
 static void BBREnterStartup(picoquic_bbr_state_t* bbr_state);
-static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state);
+static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
 static void BBRUpdateRound(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 static void BBRStartRound(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 static void BBRSetRsFromAckState(picoquic_path_t* path_x, picoquic_per_ack_state_t* ack_state, bbr_per_ack_state_t* rs);
@@ -631,7 +631,7 @@ static void BBROnEnterRTO(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path
 * Could be either on end of the recovery period,
 * or in the case of PTO if the loss is declared spurious.
 */
-static void BBROnExitRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
+static void BBROnExitRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
 {
     if (bbr_state->is_in_recovery) {
         path_x->cwin = BBRRestoreCwnd(bbr_state, path_x);
@@ -639,18 +639,21 @@ static void BBROnExitRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
         bbr_state->packet_conservation = 0;
 
         if (bbr_state->is_pto_recovery) {
-            BBRReEnterStartup(bbr_state);
+            BBRReEnterStartup(bbr_state, path_x, current_time);
         }
         bbr_state->recovery_delivered = path_x->delivered;
         bbr_state->is_in_recovery = 0;
         bbr_state->is_pto_recovery = 0;
+        /* Reset the RTT time stamp, to avoid going into probe RTT during loss events */
+        bbr_state->probe_rtt_min_stamp = current_time;
+        bbr_state->min_rtt_stamp = current_time;
     }
 }
 
-static void BBROnSpuriousLoss(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t lost_packet_number)
+static void BBROnSpuriousLoss(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t lost_packet_number, uint64_t current_time)
 {
-    if (bbr_state->recovery_packet_number == lost_packet_number && bbr_state->is_pto_recovery) {
-        BBROnExitRecovery(bbr_state, path_x);
+    if (bbr_state->recovery_packet_number <= lost_packet_number && bbr_state->is_pto_recovery) {
+        BBROnExitRecovery(bbr_state, path_x, current_time);
     }
 }
 
@@ -659,12 +662,12 @@ static int InLossRecovery(picoquic_bbr_state_t* bbr_state)
     return (bbr_state->is_in_recovery);
 }
 
-static void BBRCheckRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs)
+static void BBRCheckRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
 {
     if (InLossRecovery(bbr_state)) {
         /* Exit loss recovery if full roundtrip expired */
         if (picoquic_cc_get_ack_number(path_x->cnx, path_x) >= bbr_state->recovery_packet_number) {
-            BBROnExitRecovery(bbr_state, path_x);
+            BBROnExitRecovery(bbr_state, path_x, current_time);
         }
     }
     else {
@@ -1571,11 +1574,14 @@ static void BBREnterStartup(picoquic_bbr_state_t* bbr_state)
     bbr_state->cwnd_gain = BBRStartupCwndGain;
 }
 
-static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state)
+static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
 {
     bbr_state->full_bw = 0;
     bbr_state->filled_pipe = 0;
     bbr_state->full_bw_count = 0;
+    bbr_state->min_rtt = path_x->rtt_sample;
+    bbr_state->min_rtt_stamp = current_time;
+    bbr_state->probe_rtt_min_stamp = current_time;
     BBREnterStartup(bbr_state);
 }
 
@@ -1698,6 +1704,28 @@ static uint64_t BBRInflightHiFromLostPacket(bbr_per_ack_state_t * rs, picoquic_p
     return inflight;
 }
 
+#if 1
+/* TODO: reconcile this direct handling of path->cwin with the handling
+* of the "inflight too high" variable. 
+ */
+static void BBRUpdateRecoveryOnLoss(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, uint64_t newly_lost)
+{
+    if (path_x->nb_retransmit >= 1 && bbr_state->is_in_recovery && bbr_state->is_pto_recovery) {
+        if (path_x->cwin > newly_lost) {
+            path_x->cwin -= newly_lost;
+            if (path_x->cwin < 2 * path_x->send_mtu) {
+                path_x->cwin = 2 * path_x->send_mtu;
+            }
+        }
+    }
+}
+#else
+/* This is the handling specified in the draft.
+* It is mostly not needed, because:
+* 
+* - timeout losses are covered by "BBROnRTO",
+* - no timeout losses are handled as part of ACK processing.
+ */
 static void BBRHandleLostPacket(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, picoquic_per_ack_state_t* packet_state, uint64_t current_time)
 {
     if (bbr_state->bw_probe_samples == 0) {
@@ -1716,6 +1744,7 @@ static void BBRUpdateOnLoss(picoquic_bbr_state_t* bbr_state, picoquic_path_t * p
 {
     BBRHandleLostPacket(bbr_state, path_x, packet_state, current_time);
 }
+#endif
 
 /* BBRv3 per ACK steps
 * The function BBRUpdateOnACK is executed for each ACK notification on the API 
@@ -1730,7 +1759,7 @@ static void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_pat
 #endif
     BBRCheckStartupDone(bbr_state, path_x, rs, current_time);
 #if 1
-    BBRCheckRecovery(bbr_state, path_x, rs);
+    BBRCheckRecovery(bbr_state, path_x, rs, current_time);
 #endif
     BBRCheckDrain(bbr_state, path_x, current_time);
     BBRUpdateProbeBWCyclePhase(bbr_state, path_x, rs, current_time);
@@ -1825,8 +1854,8 @@ static void picoquic_bbr_notify(
 {
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
-#if 1
-    if (!cnx->client_mode && current_time > 1700000) {
+#if 0
+    if (!cnx->client_mode && current_time > 20000000) {
         DBG_PRINTF("%s", "bug");
     }
 #endif
@@ -1837,6 +1866,9 @@ static void picoquic_bbr_notify(
             /* TODO */
             break;
         case picoquic_congestion_notification_repeat:
+#if 1
+            BBRUpdateRecoveryOnLoss(bbr_state, path_x, ack_state->nb_bytes_newly_lost);
+#endif
             break;
         case picoquic_congestion_notification_timeout:
 #if 1
@@ -1845,9 +1877,9 @@ static void picoquic_bbr_notify(
 #endif
             break;
         case picoquic_congestion_notification_spurious_repeat:
-#if 0
+#if 1
             /* handling of suspension */
-            BBROnSpuriousLoss(bbr_state, path_x, ack_state->lost_packet_number);
+            BBROnSpuriousLoss(bbr_state, path_x, ack_state->lost_packet_number, current_time);
 #endif
             break;
         case picoquic_congestion_notification_rtt_measurement:

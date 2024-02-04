@@ -942,6 +942,7 @@ static void picoquic_count_and_notify_loss(
         if (cnx->congestion_alg != NULL && cnx->cnx_state >= picoquic_state_ready && old_p->send_path != NULL) {
             picoquic_per_ack_state_t ack_state = { 0 };
             ack_state.lost_packet_number = old_p->path_packet_number;
+            ack_state.nb_bytes_newly_lost = old_p->length;
             cnx->congestion_alg->alg_notify(cnx, old_p->send_path,
                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
                 &ack_state, current_time);

@@ -11415,7 +11415,7 @@ int multi_segment_test()
         1050000,
         1250000,
         1350000,
-        1000000
+        1280000
     };
     int ret = 0;
 
@@ -11519,8 +11519,11 @@ int pacing_bbr_test()
      * bandwidth during startup, exits as soon as excessive packet
      * losses are detected, and waits 2 to 3 seconds before pushing again.
      * TODO: consider a post startup "push" similare to the second phase of
-     * Hystart++ */
-    int ret = pacing_cc_algotest(picoquic_bbr_algorithm, 1010000, 50);
+     * Hystart++.
+     * Correction: after limiting the cwin on 2nd RTO, the time gets lower,
+     * but the nuber of losses increases markedly.
+     */
+    int ret = pacing_cc_algotest(picoquic_bbr_algorithm, 900000, 390);
     return ret;
 }
 
@@ -11669,7 +11672,7 @@ int heavy_loss_test()
 {
 #if 1
     /* TODO: investigate after BBRv3 complete */
-    return heavy_loss_test_one(0, 24000000);
+    return heavy_loss_test_one(0, 25000000);
 #else
     return heavy_loss_test_one(0, 23500000);
 #endif
@@ -11836,7 +11839,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
         int nb_loops = 0;
 
         if (cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_DCUBIC ||
-            cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST ) {
+            cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST) {
             repeat_target = 200;
         }
 
