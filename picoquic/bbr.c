@@ -261,6 +261,9 @@ typedef struct st_picoquic_bbr_state_t {
     /* manage startup long_rtt */
     picoquic_min_max_rtt_t rtt_filter;
     uint64_t bdp_seed;
+    
+    /* Experimental extensions, may or maynot be a good idea. */
+    uint64_t wifi_shadow_rtt; /* Shadow RTT used for wifi connections. */
 #endif
 
 } picoquic_bbr_state_t;
@@ -430,6 +433,8 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
     bbr_state->min_rtt_stamp = current_time;
     bbr_state->extra_acked_interval_start = current_time;
     bbr_state->extra_acked_delivered = 0;
+    /* Support for the wifi_shadow_rtt hack */
+    bbr_state->wifi_shadow_rtt = path_x->cnx->quic->wifi_shadow_rtt;
 
     /* TODO, maybe: plug in the "shadow RTT".
      */
@@ -727,6 +732,10 @@ static void BBRUpdateMaxInflight(picoquic_bbr_state_t* bbr_state, picoquic_path_
     * call here. */
     uint64_t inflight = BBRBDPMultiple(bbr_state, path_x, bbr_state->cwnd_gain);
     inflight += bbr_state->extra_acked;
+
+    if (bbr_state->min_rtt < bbr_state->wifi_shadow_rtt && bbr_state->min_rtt > 0){
+        inflight = (uint64_t)(((double)inflight) * ((double)bbr_state->wifi_shadow_rtt) / ((double)bbr_state->min_rtt));
+    }
     bbr_state->max_inflight = BBRQuantizationBudget(bbr_state, path_x, inflight);
 }
 
