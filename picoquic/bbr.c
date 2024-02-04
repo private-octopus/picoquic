@@ -132,34 +132,6 @@ typedef enum {
     picoquic_bbr_acks_probe_feedback,
 } picoquic_bbr_ack_phase_t;
 
-#if 0
-/* Constants in pre-v3 BBR*/
-#define BBR_BTL_BW_FILTER_LENGTH 10
-#define BBR_min_rtt_FILTER_LENGTH 10
-#define BBR_HIGH_GAIN 2.8853900817779 /* 2/ln(2) */
-#define BBR_MIN_PIPE_CWND(mss) ((mss)*4)
-#define BBR_GAIN_CYCLE_LEN 8
-#define BBR_PROBE_RTT_INTERVAL 10000000 /* 10 sec, 10000000 microsecs */
-#define BBR_PROBE_RTT_DURATION 200000 /* 200msec, 200000 microsecs */
-#define BBR_PACING_RATE_LOW 150000.0 /* 150000 B/s = 1.2 Mbps */
-#define BBR_PACING_RATE_MEDIUM 3000000.0 /* 3000000 B/s = 24 Mbps */
-#define BBR_GAIN_CYCLE_LEN 8
-#define BBR_GAIN_CYCLE_MAX_START 5
-#define BBR_LT_BW_INTERVAL_MIN_RTT 4
-#define BBR_LT_BW_RATIO_SCALE 1024
-#define BBR_LT_BW_RATIO_SCALED_TARGET 205 /* 205/1024 is very close 20% */
-
-#define BBR_LT_BW_INTERVAL_MAX_RTT (4*BBR_LT_BW_INTERVAL_MIN_RTT)
-#define BBR_LT_BW_RATIO_INVERSE 8
-#define BBR_LT_BW_BYTES_PER_SEC_DIFF 4000
-#define BBR_LT_BW_MAX_RTTS 48
-#if 0
-/* Use this setting when debugging BBR slow start */
-#define BBR_HYSTART_THRESHOLD_RTT 1000000
-#else
-#define BBR_HYSTART_THRESHOLD_RTT 50000
-#endif
-#endif
 /* Constants in BBRv3 */
 #define BBRPacingMarginPercent 1 /* discount factor of 1% used to scale BBR.bw to produce BBR.pacing_rate */
 #define BBRStartupPacingGain 2.77 /* constant, 4*ln(2), approx 2.77 */
@@ -195,11 +167,8 @@ typedef enum {
 #else
 #define BBRMinRttMarginPercent 2 /* Margin factor of 2% for avoiding firing RTT Probe too often */
 #endif
+#define BBRLongRttThreshold 250000
 
-
-#if 0
-static const double bbr_pacing_gain_cycle[BBR_GAIN_CYCLE_LEN] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.25, 0.75};
-#endif
 typedef struct st_picoquic_bbr_state_t {
     /* Algorithm state: */
     picoquic_bbr_alg_state_t state;
@@ -283,6 +252,7 @@ typedef struct st_picoquic_bbr_state_t {
     unsigned int is_in_recovery;
     unsigned int is_pto_recovery;
     uint64_t recovery_packet_number;
+    uint64_t recovery_delivered;
 
     /* Per connection random state.*/
     uint64_t random_context;
@@ -347,10 +317,11 @@ static void BBRStartProbeBW_DOWN(picoquic_bbr_state_t* bbr_state, picoquic_path_
 static void BBRStartProbeBW_CRUISE(picoquic_bbr_state_t* bbr_state);
 static void BBRStartProbeBW_REFILL(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x);
 static void BBREnterStartup(picoquic_bbr_state_t* bbr_state);
+static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state);
 static void BBRUpdateRound(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 static void BBRStartRound(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 static void BBRSetRsFromAckState(picoquic_path_t* path_x, picoquic_per_ack_state_t* ack_state, bbr_per_ack_state_t* rs);
-static int IsInflightTooHigh(picoquic_path_t * path_x, bbr_per_ack_state_t* rs);
+static int IsInflightTooHigh(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, bbr_per_ack_state_t* rs);
 static void BBRHandleInflightTooHigh(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, bbr_per_ack_state_t* rs, uint64_t current_time);
 static uint64_t BBRTargetInflight(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x);
 static void BBRInitRoundCounting(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
@@ -630,6 +601,7 @@ static void BBROnEnterFastRecovery(picoquic_bbr_state_t* bbr_state, picoquic_pat
     bbr_state->packet_conservation = 1;
     bbr_state->is_in_recovery = 1;
     bbr_state->is_pto_recovery = 0;
+    bbr_state->recovery_delivered = path_x->delivered;
 }
 
 /* In picoquic, the arrival of an RTO maps to a "timer based" packet loss.
@@ -638,21 +610,36 @@ static void BBROnEnterFastRecovery(picoquic_bbr_state_t* bbr_state, picoquic_pat
  */
 static void BBROnEnterRTO(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t lost_packet_number)
 {
-    bbr_state->prior_cwnd = BBRSaveCwnd(bbr_state, path_x);
-    path_x->cwin = path_x->bytes_in_transit + path_x->send_mtu;
-
-    bbr_state->recovery_packet_number = lost_packet_number;
-    bbr_state->is_in_recovery = 1;
-    bbr_state->is_pto_recovery = 1;
+    if (!bbr_state->is_in_recovery) {
+        bbr_state->prior_cwnd = BBRSaveCwnd(bbr_state, path_x);
+        bbr_state->is_in_recovery = 1;
+    }
+    if (!bbr_state->is_pto_recovery) {
+        path_x->cwin = path_x->bytes_in_transit + path_x->send_mtu;
+        bbr_state->recovery_packet_number = lost_packet_number;
+        bbr_state->is_pto_recovery = 1;
+        bbr_state->recovery_delivered = path_x->delivered;
+    }
 }
 
+/* Exit loss recovery
+* Could be either on end of the recovery period,
+* or in the case of PTO if the loss is declared spurious.
+*/
 static void BBROnExitRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
-    path_x->cwin = BBRRestoreCwnd(bbr_state, path_x);
-    bbr_state->recovery_packet_number = UINT64_MAX;
-    bbr_state->packet_conservation = 0;
-    bbr_state->is_in_recovery = 0;
-    bbr_state->is_pto_recovery = 0;
+    if (bbr_state->is_in_recovery) {
+        path_x->cwin = BBRRestoreCwnd(bbr_state, path_x);
+        bbr_state->recovery_packet_number = UINT64_MAX;
+        bbr_state->packet_conservation = 0;
+
+        if (bbr_state->is_pto_recovery) {
+            BBRReEnterStartup(bbr_state);
+        }
+        bbr_state->recovery_delivered = path_x->delivered;
+        bbr_state->is_in_recovery = 0;
+        bbr_state->is_pto_recovery = 0;
+    }
 }
 
 static void BBROnSpuriousLoss(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t lost_packet_number)
@@ -667,16 +654,6 @@ static int InLossRecovery(picoquic_bbr_state_t* bbr_state)
     return (bbr_state->is_in_recovery);
 }
 
-/* Exit loss recovery
-* Could be either on end of the recovery period,
-* or in the case of PTO if the loss is declared spurious.
- */
-static void BBRExitRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
-{
-    bbr_state->packet_conservation = 0;
-    path_x->cwin = BBRRestoreCwnd(bbr_state, path_x);
-}
-
 static void BBRCheckRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs)
 {
     if (InLossRecovery(bbr_state)) {
@@ -687,7 +664,7 @@ static void BBRCheckRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* p
     }
     else {
         /* Enter loss recovery if new losses */
-        if (IsInflightTooHigh(path_x, rs)) {
+        if (IsInflightTooHigh(bbr_state, path_x, rs)) {
             BBROnEnterFastRecovery(bbr_state, path_x, rs);
         }
     }
@@ -951,9 +928,12 @@ static void BBRUpdateACKAggregation(picoquic_bbr_state_t* bbr_state, picoquic_pa
 * test assumes a loss rate of 50%, but this could be a random event that
 * happens once every 50 RTT. Decisions made because of that would be wrong.
 */
-static int IsInflightTooHigh(picoquic_path_t * path_x, bbr_per_ack_state_t* rs)
-{ 
-    return (rs->lost > (uint64_t)(((double)rs->tx_in_flight) * BBRLossThresh) &&
+static int IsInflightTooHigh(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, bbr_per_ack_state_t* rs)
+{
+    uint64_t rs_delivered = path_x->delivered - rs->delivered;
+    return (
+        rs_delivered > bbr_state->recovery_delivered &&
+        rs->lost > (uint64_t)(((double)rs->tx_in_flight) * BBRLossThresh) &&
         rs->lost > 3*path_x->send_mtu);
 }
 
@@ -973,7 +953,7 @@ static void BBRHandleInflightTooHigh(picoquic_bbr_state_t* bbr_state, picoquic_p
 
 static int CheckInflightTooHigh(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
 {
-    if (IsInflightTooHigh(path_x, rs))
+    if (IsInflightTooHigh(bbr_state, path_x, rs))
     {
         if (bbr_state->bw_probe_samples)
         {
@@ -1507,7 +1487,7 @@ static void BBRCheckStartupHighLoss(picoquic_bbr_state_t* bbr_state, picoquic_pa
 
     If these criteria are all met, then BBRCheckStartupHighLoss() sets BBR.filled_pipe = true, which will cause exit Startup and enters Drain
     */
-    if (IsInflightTooHigh(path_x, rs)) {
+    if (IsInflightTooHigh(bbr_state, path_x, rs)) {
         bbr_state->filled_pipe = 1;
     }
 }
@@ -1582,6 +1562,14 @@ static void BBREnterStartup(picoquic_bbr_state_t* bbr_state)
     bbr_state->cwnd_gain = BBRStartupCwndGain;
 }
 
+static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state)
+{
+    bbr_state->full_bw = 0;
+    bbr_state->filled_pipe = 0;
+    bbr_state->full_bw_count = 0;
+    BBREnterStartup(bbr_state);
+}
+
 /* End of BBRv3 startup specific */
 #if 1
 /* Startup long RTT -- in that state, the code uses Hystart rather than BBR Startup */
@@ -1631,7 +1619,7 @@ static void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path
 void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
 {
     if (bbr_state->state == picoquic_bbr_alg_startup &&
-        path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
+        path_x->rtt_min > BBRLongRttThreshold) {
         BBREnterStartupLongRTT(bbr_state, path_x);
     }
     else if (bbr_state->state != picoquic_bbr_alg_startup_long_rtt) {
@@ -1709,7 +1697,7 @@ static void BBRHandleLostPacket(picoquic_bbr_state_t* bbr_state, picoquic_path_t
     bbr_per_ack_state_t rs = { 0 };
     BBRSetRsFromAckState(path_x, packet_state, &rs);
 
-    if (IsInflightTooHigh(path_x, &rs)) {
+    if (IsInflightTooHigh(bbr_state, path_x, &rs)) {
         rs.tx_in_flight = BBRInflightHiFromLostPacket(&rs, packet_state);
         BBRHandleInflightTooHigh(bbr_state, path_x, &rs, current_time);
     }
@@ -1732,13 +1720,13 @@ static void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_pat
     BBRCheckStartupLongRtt(bbr_state, path_x, rs, current_time);
 #endif
     BBRCheckStartupDone(bbr_state, path_x, rs, current_time);
+#if 1
+    BBRCheckRecovery(bbr_state, path_x, rs);
+#endif
     BBRCheckDrain(bbr_state, path_x, current_time);
     BBRUpdateProbeBWCyclePhase(bbr_state, path_x, rs, current_time);
     BBRUpdateMinRTT(bbr_state, path_x, rs, current_time);
     BBRCheckProbeRTT(bbr_state, path_x, rs, current_time);
-#if 0
-    BBRCheckRecovery(bbr_state, path_x, rs);
-#endif
     BBRAdvanceLatestDeliverySignals(bbr_state, rs);
     BBRBoundBWForModel(bbr_state);
 }
@@ -1828,6 +1816,11 @@ static void picoquic_bbr_notify(
 {
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
+#if 1
+    if (!cnx->client_mode && current_time > 1700000) {
+        DBG_PRINTF("%s", "bug");
+    }
+#endif
 
     if (bbr_state != NULL) {
         switch (notification) {
@@ -1837,7 +1830,7 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_repeat:
             break;
         case picoquic_congestion_notification_timeout:
-#if 0
+#if 1
             /* if loss is PTO, we should start the OnPto processing */
             BBROnEnterRTO(bbr_state, path_x, ack_state->lost_packet_number);
 #endif

@@ -1034,9 +1034,37 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(mtu_drop)
+        TEST_METHOD(mtu_drop_bbr)
         {
-            int ret = mtu_drop_test();
+            int ret = mtu_drop_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop_cubic)
+        {
+            int ret = mtu_drop_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop_dcubic)
+        {
+            int ret = mtu_drop_dcubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop_fast)
+        {
+            int ret = mtu_drop_fast_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop_newreno)
+        {
+            int ret = mtu_drop_newreno_test();
 
             Assert::AreEqual(ret, 0);
         }

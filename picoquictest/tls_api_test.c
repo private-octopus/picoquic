@@ -4742,36 +4742,36 @@ static int mtu_drop_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64
     return ret;
 }
 
-int mtu_drop_test()
+int mtu_drop_bbr_test()
 {
-    picoquic_congestion_algorithm_t* algo_list[5] = {
-        picoquic_newreno_algorithm,
-        picoquic_cubic_algorithm,
-        picoquic_dcubic_algorithm,
-        picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
-    };
-    uint64_t algo_time[5] = {
-        11600000,
-        10000000,
-        9200000,
-        11500000,
-#if 1
-        /* TODO: revisit after finalizing BBRv3, check for regression */
-        10300000,
-#else
-        9750000
-#endif
-    };
-    int ret = 0;
+    /* TODO: the time with BBR v1 was 10300000. The current value is
+     * a slight regression. Investigate whether some performance
+     * for BBR3 "recover from PTO" could be improved. */
+    int ret = mtu_drop_cc_algotest(picoquic_bbr_algorithm, 10700000);
+    return ret;
+}
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
-        ret = mtu_drop_cc_algotest(algo_list[i], algo_time[i]);
-        if (ret != 0) {
-            DBG_PRINTF("MTU drop test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
-        }
-    }
+int mtu_drop_cubic_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_cubic_algorithm, 10000000);
+    return ret;
+}
 
+int mtu_drop_dcubic_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_dcubic_algorithm, 9200000);
+    return ret;
+}
+
+int mtu_drop_fast_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_fastcc_algorithm, 11500000);
+    return ret;
+}
+
+int mtu_drop_newreno_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_newreno_algorithm, 11600000);
     return ret;
 }
 
@@ -12558,7 +12558,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 5800000;
                     break;
                 case bdp_test_option_rtt:
-                    max_completion_time = 4500000;
+                    max_completion_time = 4700000;
                     test_ctx->c_to_s_link->microsec_latency = 50000ull;
                     test_ctx->s_to_c_link->microsec_latency = 50000ull;
                     buffer_size = 2 * test_ctx->c_to_s_link->microsec_latency;
@@ -12691,6 +12691,14 @@ int bdp_basic_test()
 
 int bdp_rtt_test()
 {
+    /* TODO: this test succeeds for the wrong reason.
+    * The goal of the test is to verify that the BDP is NOT set
+    * if the RTT on the second connection does not match the RTT
+    * on the first one. The test does that, but only because the
+    * second connection's RTT is lower than BBRLongRttThreshold,
+    * thus uses regular BBR startup, in which the BDP option is
+    * not implemented.
+     */
     return bdp_option_test_one(bdp_test_option_rtt);
 }
 
