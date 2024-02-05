@@ -1537,21 +1537,6 @@ static void BBRCheckStartupHighLoss(picoquic_bbr_state_t* bbr_state, picoquic_pa
     }
 }
 
-#if 1
-static void BBRCheckStartupHighRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, bbr_per_ack_state_t* rs)
-{
-    /* We have to be careful, because the RTT may get to very high values if the
-    * trnasport is only sending ACKs.
-     */
-    if (!bbr_state->filled_pipe && bbr_state->min_rtt > 0 && rs->is_cwnd_limited) {
-        uint64_t delay_cap = (bbr_state->min_rtt / 4) + 2 * path_x->rtt_variant;
-        if (rs->rtt_sample > bbr_state->min_rtt + delay_cap) {
-            bbr_state->filled_pipe = 1;
-        }
-    }
-}
-#endif
-
 static void BBRCheckStartupFullBandwidth(picoquic_bbr_state_t* bbr_state,
     bbr_per_ack_state_t * rs)
 {
@@ -1577,13 +1562,10 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
 {
     BBRCheckStartupFullBandwidth(bbr_state, rs);
     BBRCheckStartupHighLoss(bbr_state, path_x, rs);
-#if 1
-    BBRCheckStartupHighRTT(bbr_state, path_x, rs);
-#endif
 
     if (bbr_state->state == picoquic_bbr_alg_startup &&
         bbr_state->filled_pipe) {
-#if 1
+#if 0
         /* Deviation from draft: the "inflight_hi" value is not set yet.
         * The next update will be on the cycle transition, and will set inflight hi
         * to the low "transit" value used in ProbeDown.
