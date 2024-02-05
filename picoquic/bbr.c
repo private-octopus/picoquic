@@ -1565,19 +1565,6 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
 
     if (bbr_state->state == picoquic_bbr_alg_startup &&
         bbr_state->filled_pipe) {
-#if 0
-        /* Deviation from draft: the "inflight_hi" value is not set yet.
-        * The next update will be on the cycle transition, and will set inflight hi
-        * to the low "transit" value used in ProbeDown.
-         */
-        if (bbr_state->inflight_hi == 0) {
-#if 1
-            bbr_state->inflight_hi = bbr_state->bdp;
-#else
-            bbr_state->inflight_hi = bbr_state->inflight_latest;
-#endif
-        }
-#endif
         if (bbr_state->full_bw_count > 0) {
             bbr_state->probe_probe_bw_quickly = 1;
             bbr_state->full_bw_count = 0;
