@@ -8984,16 +8984,12 @@ int fastcc_jitter_test()
 
 int bbr_test()
 {
-    return congestion_control_test(picoquic_bbr_algorithm, 3600000, 0, 0);
+    return congestion_control_test(picoquic_bbr_algorithm, 3500000, 0, 0);
 }
 
 int bbr_jitter_test()
 {
-#if 1
     return congestion_control_test(picoquic_bbr_algorithm, 3550000, 5000, 5);
-#else
-    return congestion_control_test(picoquic_bbr_algorithm, 3650000, 5000, 5);
-#endif
 }
 
 int bbr_long_test()

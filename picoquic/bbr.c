@@ -1189,7 +1189,7 @@ static void BBRProbeInflightHiUpward(picoquic_bbr_state_t* bbr_state, picoquic_p
         return;  /* not fully using inflight_hi, so don't grow it */
     }
     bbr_state->bw_probe_up_acks += rs->newly_acked;
-    if (bbr_state->bw_probe_up_acks >= bbr_state->bw_probe_up_cnt) {
+    if (bbr_state->bw_probe_up_acks >= bbr_state->bw_probe_up_cnt*path_x->send_mtu) {
         uint64_t delta = (bbr_state->bw_probe_up_acks / bbr_state->bw_probe_up_cnt);
         bbr_state->bw_probe_up_acks -= delta * bbr_state->bw_probe_up_cnt;
         bbr_state->inflight_hi += delta;
