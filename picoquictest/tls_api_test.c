@@ -9266,7 +9266,7 @@ int bbr_asym100_nodelay_test()
  */
 int bbr_asym400_test()
 {
-    uint64_t max_completion_time = 2200000;
+    uint64_t max_completion_time = 2350000;
     uint64_t latency = 1000;
     uint64_t jitter = 750;
     uint64_t buffer = 50000;

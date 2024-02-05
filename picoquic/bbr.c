@@ -161,12 +161,8 @@ typedef enum {
 #define BBRProbeBwRefillPacingGain 1.0
 #define BBRProbeBwRefillCwndGain 2.0
 #define BBRProbeBwUpPacingGain 1.25
-#define BBRProbeBwUpCwndGain 2.0
-#if 1
+#define BBRProbeBwUpCwndGain 2.25
 #define BBRMinRttMarginPercent 20 /* Margin factor of 20% for avoiding firing RTT Probe too often */
-#else
-#define BBRMinRttMarginPercent 2 /* Margin factor of 2% for avoiding firing RTT Probe too often */
-#endif
 #define BBRLongRttThreshold 250000
 
 typedef struct st_picoquic_bbr_state_t {
@@ -235,6 +231,7 @@ typedef struct st_picoquic_bbr_state_t {
     unsigned int path_is_app_limited : 1;
 
     /* probe BW parameters */
+    unsigned int probe_probe_bw_quickly : 1;
     uint32_t rounds_since_bw_probe;
     uint64_t bw_probe_wait;
     uint64_t cycle_stamp;
@@ -1337,7 +1334,7 @@ static void BBRPickProbeWait(picoquic_bbr_state_t* bbr_state)
         (uint32_t)BBRRandomIntBetween(bbr_state, 0, 1); /* 0 or 1 */
     
     /* Decide the random wall clock bound for wait: */
-    if (bbr_state->min_rtt < 250000) {
+    if (bbr_state->min_rtt < BBRLongRttThreshold) {
         bbr_state->bw_probe_wait =
             2000000 + BBRRandomIntBetween(bbr_state, 0, 1000000); /* 0..1 sec, in usec */
     }
@@ -1347,6 +1344,22 @@ static void BBRPickProbeWait(picoquic_bbr_state_t* bbr_state)
     }
 }
 
+static void BBRPickProbeWaitEarly(picoquic_bbr_state_t* bbr_state)
+{
+    /* Decide random round-trip bound for wait: */
+    bbr_state->rounds_since_bw_probe =
+        (uint32_t)BBRRandomIntBetween(bbr_state, 0, 1); /* 0 or 1 */
+
+    /* Decide the random wall clock bound for wait: */
+    if (bbr_state->min_rtt < BBRLongRttThreshold) {
+        bbr_state->bw_probe_wait =
+            bbr_state->min_rtt + BBRRandomIntBetween(bbr_state, 0, BBRLongRttThreshold);
+    }
+    else {
+        bbr_state->bw_probe_wait =
+            bbr_state->min_rtt + BBRRandomIntBetween(bbr_state, 0, bbr_state->min_rtt);
+    }
+}
 /* How much data do we want in flight?
 * Our estimated BDP, unless congestion cut cwnd. */
 static uint64_t BBRTargetInflight(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x)
@@ -1356,7 +1369,7 @@ static uint64_t BBRTargetInflight(picoquic_bbr_state_t* bbr_state, picoquic_path
 
 static int BBRIsRenoCoexistenceProbeTime(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x)
 {
-    uint64_t reno_rounds = BBRTargetInflight(bbr_state, path_x);
+    uint64_t reno_rounds = (BBRTargetInflight(bbr_state, path_x)/path_x->send_mtu);
     uint64_t rounds = (reno_rounds < 63) ? reno_rounds : 63;
     return (bbr_state->rounds_since_bw_probe >= rounds);
 }
@@ -1384,7 +1397,12 @@ static void BBRStartProbeBW_DOWN(picoquic_bbr_state_t* bbr_state, picoquic_path_
     bbr_state->cwnd_gain = BBRProbeBwDownCwndGain;   /* maintain cwnd */
     BBRResetCongestionSignals(bbr_state);
     bbr_state->bw_probe_up_cnt = UINT32_MAX; /* not growing inflight_hi */
-    BBRPickProbeWait(bbr_state);
+    if (bbr_state->probe_probe_bw_quickly) {
+        BBRPickProbeWaitEarly(bbr_state);
+    }
+    else {
+        BBRPickProbeWait(bbr_state);
+    }
     bbr_state->cycle_stamp = current_time;  /* start wall clock */
     bbr_state->ack_phase = picoquic_bbr_acks_probe_stopping;
     BBRStartRound(bbr_state, path_x);
@@ -1405,6 +1423,7 @@ static void BBRStartProbeBW_REFILL(picoquic_bbr_state_t* bbr_state, picoquic_pat
     BBRResetLowerBounds(bbr_state);
     bbr_state->bw_probe_up_rounds = 0;
     bbr_state->bw_probe_up_acks = 0;
+    bbr_state->full_bw = bbr_state->max_bw;
     bbr_state->ack_phase = picoquic_bbr_acks_refilling;
     BBRStartRound(bbr_state, path_x);
     bbr_state->state = picoquic_bbr_alg_probe_bw_refill;
@@ -1433,8 +1452,22 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
     case picoquic_bbr_alg_probe_bw_down:
         if (BBRCheckTimeToProbeBW(bbr_state, path_x, current_time))
             return; /* already decided state transition */
-        if (BBRCheckTimeToCruise(bbr_state, path_x))
+        if (BBRCheckTimeToCruise(bbr_state, path_x)) {
+            if (15 * bbr_state->max_bw >= 16 * bbr_state->full_bw) {
+                /* still growing? */
+                bbr_state->full_bw = bbr_state->max_bw;    /* record new baseline level */
+                bbr_state->full_bw_count = 0;
+                bbr_state->probe_probe_bw_quickly = 1;
+            }
+            else {
+                bbr_state->full_bw_count++;
+                if (bbr_state->full_bw_count > 3) {
+                    bbr_state->probe_probe_bw_quickly = 0;
+                    bbr_state->full_bw_count = 0;
+                }
+            }
             BBRStartProbeBW_CRUISE(bbr_state);
+        }
         break;
 
     case picoquic_bbr_alg_probe_bw_cruise:
@@ -1563,6 +1596,10 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
 #endif
         }
 #endif
+        if (bbr_state->full_bw_count > 0) {
+            bbr_state->probe_probe_bw_quickly = 1;
+            bbr_state->full_bw_count = 0;
+        }
         BBREnterDrain(bbr_state, path_x, current_time);
     }
 }
@@ -1582,6 +1619,7 @@ static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
     bbr_state->min_rtt = path_x->rtt_sample;
     bbr_state->min_rtt_stamp = current_time;
     bbr_state->probe_rtt_min_stamp = current_time;
+    bbr_state->probe_probe_bw_quickly = 1;
     BBREnterStartup(bbr_state);
 }
 
