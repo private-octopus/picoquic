@@ -247,12 +247,8 @@ int limited_safe_test()
     limited_config_set_default(&config, 5);
     config.ccalgo = picoquic_cubic_algorithm;
     config.max_completion_time = 5400000;
-#if 1
-    /* Bug. Should investigate later */
-    config.nb_losses_max = 6;
-#else
-    config.nb_losses_max = 1;
-#endif
+    /* Bug. Should investigate later -- there should be 0 or maybe 1 losses */
+    config.nb_losses_max = 5;
     config.flow_control_max = 57344;
 
     return limited_client_test_one(&config);

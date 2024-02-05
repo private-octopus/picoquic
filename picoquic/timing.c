@@ -181,11 +181,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         uint64_t rtt_estimate = 0;
         int is_first = (old_path->path_packet_previous_period == 0) ||
             (old_path == cnx->path[0] && old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT);
-#if 1
-        if (old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT && !is_first) {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
+
         if (current_time > send_time) {
             rtt_estimate = current_time - send_time;
             /* We cannot blindly trust the ack delay.. */

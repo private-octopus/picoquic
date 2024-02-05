@@ -8990,7 +8990,7 @@ int bbr_test()
 int bbr_jitter_test()
 {
 #if 1
-    return congestion_control_test(picoquic_bbr_algorithm, 3850000, 5000, 5);
+    return congestion_control_test(picoquic_bbr_algorithm, 3550000, 5000, 5);
 #else
     return congestion_control_test(picoquic_bbr_algorithm, 3650000, 5000, 5);
 #endif
@@ -12561,7 +12561,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 5800000;
                     break;
                 case bdp_test_option_rtt:
-                    max_completion_time = 4700000;
+                    max_completion_time = 4600000;
                     test_ctx->c_to_s_link->microsec_latency = 50000ull;
                     test_ctx->s_to_c_link->microsec_latency = 50000ull;
                     buffer_size = 2 * test_ctx->c_to_s_link->microsec_latency;

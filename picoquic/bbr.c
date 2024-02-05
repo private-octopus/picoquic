@@ -37,7 +37,7 @@ only ramps up the data rate after the first bandwidth measurement is
 available, 2*RTT after start, while Reno or Cubic start ramping up
 after just 1 RTT. BBR only exits startup if three consecutive RTT
 pass without significant BW measurement increase, which not only
-adds delay but also creates big queues as data is sent at 2.89 times
+adds delay but also creates big queues as data is sent at 2.77 times
 the bottleneck rate. This is a tradeoff: longer search for bandwidth in
 slow start is less likely to stop too early because of transient
 issues, but one high bandwidth and long delay links this translates
@@ -45,72 +45,27 @@ to long delays and a big batch of packet losses.
 
 This BBR implementation addresses these issues by switching to
 Hystart instead of startup if the RTT is above the Reno target of
-100 ms. 
-
+250 ms. 
 */
 
 /* Reaction to losses and ECN
- * This code is an implementation of BBRv1, which pretty much ignores packet
- * losses or ECN marks. Google has still developed BBRv2, which is generally
- * considered much more robust. Once the BBRv2 specification is available,
- * we should develop it. However, before BBRv2 is there, we need to fix the
- * most egregious issues in BBR v1. For example, in a test, we show that if
- * a receiver starts a high speed download and then disappears, the sender
- * will only close the connection after repeating over 1000 packets,
- * compared to only 32 with New Reno or Cubic. This is because BBR does
- * not slow down or reduce the CWIN on loss indication, even when there
- * are many loss indications. 
- *
- * We implement the following fixes:
- *
- * - On basic loss indication, run a filter to determine whether the loss
- *   rate is getting too high. This will allow the code to continue
- *   ignoring low loss rates, but somehow react to high loss rates.
- *
- * - If high loss rate is detected, halve the congestion window. Do
- *   the same if an EC mark is received.
- *
- * - If a timeout loss is detected, reduce the window to the minimum
- *   value.
- *
- * This needs to be coordinated with the BBR state machine. We implement
- * it as such:
- *
- * - if the state is start-up or start-up-long-rtt, exit startup
- *   and move to a drain state.
- * - if the state is probe-bw, start the new period with a conservative
- *   packet window (trigger by cycle_on_loss state variable)
- * - if the state is probe-RTT, do nothing special...
- *
- * The packet losses and congestion signals should be used only once per
- * RTT. We filter with a "loss period start time" value, and only
- * take signals into account if they happen 1-RTT after the current
- * loss start time. However, if the previous loss was not due to
- * timeout, the timeout will still be handled.
+* 
+* TODO: port the BBRv1 code.
  */
 
 /*
 * Handling of suspension
 * 
-* After a timeout, the path is suspended, and the congestion window is
-* immediately reduced. If do not do anything in particular, the
-* suspended state will be cleared on the first next acknowledgement,
-* and the congestion window will be restored gradually.
+* Suspension is handled "almost" as specified in BBRv3. On an RTO (or PTO)
+* timer, the "revovery" and "pto" flags are set, and the CWIN is reduced
+* to "bytes in transit + 1 packet". If a second timer occurs, the
+* CWIN is progressively reduced to 1 packet.
 * 
-* This is correct in general, when the timeout is due to some series
-* of packet loss events. It is not so good in the particular case of
-* Wi-Fi suspension, when the timeout is caused by the Wi-Fi link
-* being "suspended" for the time needed to scan other channels. In that
-* case, the code will receive a "spurious time out" notification,
-* typically triggered when an ACK queued "in the network" is delivered
-* when transmission resume. Waiting for the next ACK has two
-* downsides:
-* 
-* - it comes some times later, something like 1/2 RTT to 1 full RTT.
-* - the CWIND is lower than if the suspension had not happened.
-*
-* The reasonable solution is to exit the suspended state upon
-* notification of spurious reset, and restore the prior cwin.
+* The code exits the PTO situation if the packet that triggered the PTO
+* is acknowledged -- or if a later packet is acknowledged. The flags are reset,
+* the old version of the CWIN is restored, and BBR re-enters "startup" mode.
+* TODO: remember the prior bandwidth, and use the "BDP seed" mechanism to
+* accelerate the start-up phase.
 */
 
 typedef enum {
@@ -136,12 +91,8 @@ typedef enum {
 #define BBRPacingMarginPercent 1 /* discount factor of 1% used to scale BBR.bw to produce BBR.pacing_rate */
 #define BBRStartupPacingGain 2.77 /* constant, 4*ln(2), approx 2.77 */
 #define BBRStartupCwndGain 2.0 /* constant */
-#if 1
+
 #define BBRLossThresh 0.2 /* maximum tolerated packet loss (default: 20%) */
-#else
-#define BBRLossThresh 0.02 /* maximum tolerated packet loss (default: 2%) */
-#endif
-#define BBRLossAlpha 0.125
 #define BBRBeta 0.7 /* Multiplicative decrease on packet loss (default: 0.7) */
 #define BBRHeadroom 0.15 /* Realive amount of headroom left for other flows. (default: 0.15). (Erroneously set to 0.85 in draft-bbr-02) */
 #define BBRMinPipeCwnd 4 /* Default to 4*SMSS, i.e, 4*PMTU */
@@ -162,7 +113,7 @@ typedef enum {
 #define BBRProbeBwRefillCwndGain 2.0
 #define BBRProbeBwUpPacingGain 1.25
 #define BBRProbeBwUpCwndGain 2.25
-#define BBRMinRttMarginPercent 20 /* Margin factor of 20% for avoiding firing RTT Probe too often */
+#define BBRMinRttMarginPercent 5 /* Margin factor of 20% for avoiding firing RTT Probe too often */
 #define BBRLongRttThreshold 250000
 
 typedef struct st_picoquic_bbr_state_t {
@@ -222,9 +173,7 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t probe_rtt_min_delay; /* rtt sample in last interval */
     uint64_t probe_rtt_min_stamp; /* time when probe_rtt_min_delay was obtained */
     uint64_t probe_rtt_done_stamp;
-#if 1
     uint64_t min_rtt_margin; /* Margin of error for min RTT, to avoid spurious expiry of probe RTT timer. */
-#endif
     unsigned int probe_rtt_expired; /* indicates whether min rtt is due for a refresh */
     unsigned int probe_rtt_round_done;
     unsigned int idle_restart : 1;
@@ -254,14 +203,12 @@ typedef struct st_picoquic_bbr_state_t {
     /* Per connection random state.*/
     uint64_t random_context;
 
-#if 1
     /* manage startup long_rtt */
     picoquic_min_max_rtt_t rtt_filter;
     uint64_t bdp_seed;
     
     /* Experimental extensions, may or maynot be a good idea. */
     uint64_t wifi_shadow_rtt; /* Shadow RTT used for wifi connections. */
-#endif
 
 } picoquic_bbr_state_t;
 
@@ -1039,7 +986,11 @@ static void BBRHandleRestartFromIdle(picoquic_bbr_state_t* bbr_state, picoquic_p
 }
 
 
-/* TODO: check definition of app limited. Why is it expressed here? */
+/* TODO: check definition of app limited. Why is it expressed here?
+* The name should really be, check whether transmission has started.
+* It is used to differentiate "started and then idle" from "has not
+* sent anything yet."
+ */
 static void MarkConnectionAppLimited(picoquic_bbr_state_t* bbr_state)
 {
     bbr_state->path_is_app_limited =
@@ -1057,7 +1008,6 @@ void BBROnTransmit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uin
 
 /* ProbeRTT processes for BBv3 */
 
-#if 1
 /* Adapt RTT min margin based on packet transmission time */
 static void BBRAdaptMinRttMargin(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
@@ -1067,13 +1017,10 @@ static void BBRAdaptMinRttMargin(picoquic_bbr_state_t* bbr_state, picoquic_path_
     }
     bbr_state->min_rtt_margin = margin;
 }
-#endif
 
 static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
 {
-#if 1
     BBRAdaptMinRttMargin(bbr_state, path_x);
-#endif
     /* TODO: replace constants by state variables, computed as function of
      * min RTT */
     if (bbr_state->min_rtt < UINT64_MAX) {
@@ -1092,7 +1039,6 @@ static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
         bbr_state->probe_rtt_min_delay = rs->rtt_sample;
         bbr_state->probe_rtt_min_stamp = current_time;
     }
-#if 1
     else {
         /* Deviation from BBRv3: test whether the new measurment does not differ from min_rtt
          * by more than a "margin of error, and in that case delay the need to reevaluate min_rtt */
@@ -1101,7 +1047,6 @@ static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
             bbr_state->min_rtt_stamp = current_time;
         }
     }
-#endif
     int min_rtt_expired =
         current_time > bbr_state->min_rtt_stamp + BBRMinRTTFilterLen;
     if (bbr_state->probe_rtt_min_delay < bbr_state->min_rtt ||
@@ -1290,11 +1235,6 @@ static void BBRAdaptUpperBounds(picoquic_bbr_state_t* bbr_state, picoquic_path_t
             BBRProbeInflightHiUpward(bbr_state, path_x, rs);
         }
     }
-#if 1
-    else {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
 }
 
 /* Time to transition from DOWN to CRUISE? */
@@ -1593,7 +1533,7 @@ static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
 }
 
 /* End of BBRv3 startup specific */
-#if 1
+
 /* Startup long RTT -- in that state, the code uses Hystart rather than BBR Startup */
 void BBREnterStartupLongRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
@@ -1663,9 +1603,6 @@ void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
 
 void BBRUpdateStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
 {
-#if 0
-    BBRUpdateBtlBw(bbr_state, path_x, current_time);
-#endif
     if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
         picoquic_hystart_increase(path_x, &bbr_state->rtt_filter, rs->newly_acked);
     }
@@ -1687,9 +1624,6 @@ void BBRSetBdpSeed(picoquic_bbr_state_t* bbr_state, uint64_t bdp_seed)
 {
     bbr_state->bdp_seed = bdp_seed;
 }
-#endif
-
-
 
 /* BBRv3 per loss steps.
 * TODO: this is part of "path" model
@@ -1761,13 +1695,9 @@ static void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_pat
     BBRUpdateLatestDeliverySignals(bbr_state, path_x, rs);
     BBRUpdateCongestionSignals(bbr_state, path_x, rs);
     BBRUpdateACKAggregation(bbr_state, path_x, rs, current_time);
-#if 1
     BBRCheckStartupLongRtt(bbr_state, path_x, rs, current_time);
-#endif
     BBRCheckStartupDone(bbr_state, path_x, rs, current_time);
-#if 1
     BBRCheckRecovery(bbr_state, path_x, rs, current_time);
-#endif
     BBRCheckDrain(bbr_state, path_x, current_time);
     BBRUpdateProbeBWCyclePhase(bbr_state, path_x, rs, current_time);
     BBRUpdateMinRTT(bbr_state, path_x, rs, current_time);
@@ -1861,11 +1791,6 @@ static void picoquic_bbr_notify(
 {
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
-#if 0
-    if (!cnx->client_mode && current_time > 20000000) {
-        DBG_PRINTF("%s", "bug");
-    }
-#endif
 
     if (bbr_state != NULL) {
         switch (notification) {
@@ -1873,21 +1798,15 @@ static void picoquic_bbr_notify(
             /* TODO */
             break;
         case picoquic_congestion_notification_repeat:
-#if 1
             BBRUpdateRecoveryOnLoss(bbr_state, path_x, ack_state->nb_bytes_newly_lost);
-#endif
             break;
         case picoquic_congestion_notification_timeout:
-#if 1
             /* if loss is PTO, we should start the OnPto processing */
             BBROnEnterRTO(bbr_state, path_x, ack_state->lost_packet_number);
-#endif
             break;
         case picoquic_congestion_notification_spurious_repeat:
-#if 1
             /* handling of suspension */
             BBROnSpuriousLoss(bbr_state, path_x, ack_state->lost_packet_number, current_time);
-#endif
             break;
         case picoquic_congestion_notification_rtt_measurement:
             /* TODO: this call is subsumed by the acknowledgement notification.
@@ -1916,13 +1835,6 @@ static void picoquic_bbr_notify(
             break;
         }
     }
-#if 0
-    /* Debug code -- when it is useful to put a break after a particular 
-     * pattern is found in the traces, to see what caused it. */
-    if (!cnx->client_mode && current_time > 190000 && bbr_state->bw <= 811657) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
 }
 
 /* Observe the state of congestion control */

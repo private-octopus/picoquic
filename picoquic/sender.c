@@ -973,11 +973,7 @@ void picoquic_update_pacing_rate(picoquic_cnx_t * cnx, picoquic_path_t* path_x, 
     double packet_time = (double)path_x->send_mtu / pacing_rate;
     double quantum_time = (double)quantum / pacing_rate;
     uint64_t rtt_nanosec = path_x->smoothed_rtt * 1000;
-#if 1
-    if (path_x->pacing_rate > (uint64_t)pacing_rate) {
-        DBG_PRINTF("%s", "bug");
-    }
-#endif
+
     path_x->pacing_rate = (uint64_t)pacing_rate;
 
     if (quantum > path_x->pacing_quantum_max) {

@@ -261,7 +261,7 @@ int wifi_bbr_hard_test()
         3000,
         suspension_hard,
         picoquic_bbr_algorithm,
-        4100000,
+        4050000,
         0 };
     int ret = wifi_test_one(wifi_test_bbr_hard, &spec);
 
@@ -303,7 +303,7 @@ int wifi_bbr_long_test()
         50000,
         suspension_basic,
         picoquic_bbr_algorithm,
-        3300000,
+        3250000,
         1 };
     int ret = wifi_test_one(wifi_test_bbr_long, &spec);
 

@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.17.0"
+#define PICOQUIC_VERSION "1.1.18.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1417,17 +1417,7 @@ typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
-#if 1
     picoquic_per_ack_state_t * ack_state,
-#else
-    uint64_t rtt_measurement,
-    uint64_t one_way_delay,
-    uint64_t nb_bytes_acknowledged,
-    uint64_t nb_bytes_newly_lost,
-    uint64_t nb_bytes_lost_since_packet_sent,
-    uint64_t nb_bytes_delivered_since_packet_sent,
-    uint64_t lost_packet_number,
-#endif
     uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
 typedef void (*picoquic_congestion_algorithm_observe)(

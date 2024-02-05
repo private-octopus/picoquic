@@ -2819,13 +2819,8 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             }
             ack_state.nb_bytes_delivered_since_packet_sent = path_x->delivered - packet_data->path_ack[i].delivered_prior;
             ack_state.inflight_prior = packet_data->path_ack[i].inflight_prior;
-#if 1
             ack_state.is_app_limited = packet_data->path_ack[i].rs_is_path_limited;
             ack_state.is_cwnd_limited = packet_data->path_ack[i].rs_is_cwnd_limited;
-#else
-            ack_state.is_app_limited = (path_x->last_time_acked_data_frame_sent <= path_x->last_sender_limited_time) || (cnx->cnx_state < picoquic_state_ready);
-            ack_state.is_cwnd_limited = (path_x->last_time_acked_data_frame_sent <= path_x->last_cwin_blocked_time);
-#endif
             cnx->congestion_alg->alg_notify(cnx, packet_data->path_ack[i].acked_path,
                 picoquic_congestion_notification_acknowledgement,
                 &ack_state, current_time);
@@ -3439,19 +3434,6 @@ static int picoquic_process_ack_range(
                     }
 
                     picoquic_record_ack_packet_data(packet_data, p);
-
-#if 1
-#else
-                    /* In theory this is not needed, the congestion window increases could just
-                     * as well be performed once per packet. However, we keep this code here in
-                     * order to maintain the same schedule of CWIN increase as the previous
-                     * non-1WD version */
-                    if (cnx->congestion_alg != NULL) {
-                        cnx->congestion_alg->alg_notify(cnx, old_path,
-                            picoquic_congestion_notification_acknowledgement,
-                            0, 0, p->length, 0, 0, current_time);
-                    }
-#endif
                     /* If packet is larger than the current MTU, update the MTU */
                     if ((p->length + p->checksum_overhead) == old_path->send_mtu) {
                         old_path->nb_mtu_losses = 0;
