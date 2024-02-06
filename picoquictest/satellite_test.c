@@ -206,7 +206,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 int satellite_basic_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6700000, 250, 3, 0, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 5300000, 250, 3, 0, 0, 0, 0, 0, 0);
 }
 
 int satellite_seeded_test()
