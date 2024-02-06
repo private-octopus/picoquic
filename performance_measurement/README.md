@@ -64,7 +64,7 @@ This is where your resulting csv files will go.
 ```
 ./picoquicdemo -w server_files/ -p 4433
 ```
-- Run the ```throughput_dl_cli.sh``` script from  ```picoquic/performance_measurement_scripts``` as 
+- Run the ```throughput_dl_cli.sh``` script from  ```picoquic/performance_measurement/scripts``` as 
 
 ```
 ./throughput_dl_cli.sh 25 transfer_test_1G.htm ../throughput_dl/transfer_test_1G_results.csv
