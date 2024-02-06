@@ -1034,16 +1034,72 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(mtu_drop)
+        TEST_METHOD(mtu_drop_bbr)
         {
-            int ret = mtu_drop_test();
+            int ret = mtu_drop_bbr_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(red_cc)
+        TEST_METHOD(mtu_drop_cubic)
         {
-            int ret = red_cc_test();
+            int ret = mtu_drop_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop_dcubic)
+        {
+            int ret = mtu_drop_dcubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop_fast)
+        {
+            int ret = mtu_drop_fast_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop_newreno)
+        {
+            int ret = mtu_drop_newreno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_bbr)
+        {
+            int ret = red_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_cubic)
+        {
+            int ret = red_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_dcubic)
+        {
+            int ret = red_dcubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_fast)
+        {
+            int ret = red_fast_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_newreno)
+        {
+            int ret = red_newreno_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1055,9 +1111,37 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(pacing_cc)
+        TEST_METHOD(pacing_bbr)
         {
-            int ret = pacing_cc_test();
+            int ret = pacing_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_cubic)
+        {
+            int ret = pacing_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_dcubic)
+        {
+            int ret = pacing_dcubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_fast)
+        {
+            int ret = pacing_fast_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_newreno)
+        {
+            int ret = pacing_newreno_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2119,6 +2203,12 @@ namespace UnitTest1
 
         TEST_METHOD(mediatest_video_data_audio) {
             int ret = mediatest_video_data_audio_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mediatest_video2_down) {
+            int ret = mediatest_video2_down_test();
 
             Assert::AreEqual(ret, 0);
         }

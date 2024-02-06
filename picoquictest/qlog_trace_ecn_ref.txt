@@ -172,7 +172,6 @@
 [81515, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 55, "packet_number": 6, "dcid": "030405060708090a" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[7, 7], [0, 4]], "ect0": 6, "ect1": 0, "ce": 0}, { 
     "frame_type": "padding"}]}],
-[81515, "recovery", "metrics_updated", {"bytes_in_flight": 11929,"smoothed_rtt": 21294,"latest_rtt": 22345}],
 [81515, "recovery", "packet_lost", {
     "packet_type" : "1RTT",
     "packet_number" : 5,
@@ -182,11 +181,11 @@
         "packet_number" : 5,
         "dcid" : "0203040506070809",
         "packet_size" : 39}}],
+[81515, "recovery", "metrics_updated", {"cwnd": 7680,"pacing_rate": 11520000000,"bytes_in_flight": 11874,"smoothed_rtt": 21294,"latest_rtt": 22345}],
 [83817, "transport", "datagram_received", { "byte_length": 55}],
 [83817, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 55, "packet_number": 7, "dcid": "030405060708090a" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[7, 9], [0, 4]], "ect0": 8, "ect1": 0, "ce": 0}, { 
     "frame_type": "padding"}]}],
-[83817, "recovery", "metrics_updated", {"cwnd": 7680,"pacing_rate": 11520000000,"bytes_in_flight": 8994,"smoothed_rtt": 21446,"latest_rtt": 22516}],
 [83817, "recovery", "packet_lost", {
     "packet_type" : "1RTT",
     "packet_number" : 6,
@@ -196,11 +195,12 @@
         "packet_number" : 6,
         "dcid" : "0203040506070809",
         "packet_size" : 1424}}],
+[83817, "recovery", "metrics_updated", {"bytes_in_flight": 7554,"smoothed_rtt": 21446,"latest_rtt": 22516}],
 [83817, "transport", "spin_bit_updated", { "state": true }],
 [83817, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 1424, "packet_number": 16, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "ack_frequency", "sequence_number": 1, "packet_tolerance": 2, "max_ack_delay": 5021, "reordering_threshold": 0}, { 
     "frame_type": "stream", "id": 4, "offset": 0, "length": 1402, "fin": false , "begins_with": "0001020304050607"}]}],
-[83817, "recovery", "metrics_updated", {"smoothed_rtt": 21446}],
+[83817, "recovery", "metrics_updated", {"bytes_in_flight": 8994,"smoothed_rtt": 21446}],
 [83817, "transport", "datagram_sent", { "byte_length": 1440}],
 [87289, "transport", "datagram_received", { "byte_length": 55}],
 [87289, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 55, "packet_number": 8, "dcid": "030405060708090a" }, "frames": [{ 
@@ -211,7 +211,6 @@
 [90485, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 55, "packet_number": 9, "dcid": "030405060708090a" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[12, 14], [7, 10], [0, 4]], "ect0": 12, "ect1": 0, "ce": 0}, { 
     "frame_type": "padding"}]}],
-[90485, "recovery", "metrics_updated", {"bytes_in_flight": 3234,"smoothed_rtt": 21386}],
 [90485, "recovery", "packet_lost", {
     "packet_type" : "1RTT",
     "packet_number" : 11,
@@ -221,9 +220,10 @@
         "packet_number" : 11,
         "dcid" : "0203040506070809",
         "packet_size" : 1424}}],
+[90485, "recovery", "metrics_updated", {"bytes_in_flight": 1794,"smoothed_rtt": 21386}],
 [90485, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 1424, "packet_number": 17, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "stream", "id": 8, "offset": 5038, "length": 1409, "fin": false , "has_length": false, "begins_with": "aeafb0b1b2b3b4b5"}]}],
-[90485, "recovery", "metrics_updated", {"smoothed_rtt": 21386}],
+[90485, "recovery", "metrics_updated", {"bytes_in_flight": 3234,"smoothed_rtt": 21386}],
 [90485, "transport", "datagram_sent", { "byte_length": 1440}],
 [90485, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 39, "packet_number": 18, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "stream", "id": 8, "offset": 6447, "length": 1, "fin": false , "begins_with": "2f"}, { 

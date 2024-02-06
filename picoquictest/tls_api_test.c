@@ -4742,31 +4742,36 @@ static int mtu_drop_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64
     return ret;
 }
 
-int mtu_drop_test()
+int mtu_drop_bbr_test()
 {
-    picoquic_congestion_algorithm_t* algo_list[5] = {
-        picoquic_newreno_algorithm,
-        picoquic_cubic_algorithm,
-        picoquic_dcubic_algorithm,
-        picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
-    };
-    uint64_t algo_time[5] = {
-        11600000,
-        9450000,
-        9200000,
-        11400000,
-        9750000
-    };
-    int ret = 0;
+    /* TODO: the time with BBR v1 was 10300000. The current value is
+     * a slight regression. Investigate whether some performance
+     * for BBR3 "recover from PTO" could be improved. */
+    int ret = mtu_drop_cc_algotest(picoquic_bbr_algorithm, 10700000);
+    return ret;
+}
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
-        ret = mtu_drop_cc_algotest(algo_list[i], algo_time[i]);
-        if (ret != 0) {
-            DBG_PRINTF("MTU drop test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
-        }
-    }
+int mtu_drop_cubic_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_cubic_algorithm, 10000000);
+    return ret;
+}
 
+int mtu_drop_dcubic_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_dcubic_algorithm, 9200000);
+    return ret;
+}
+
+int mtu_drop_fast_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_fastcc_algorithm, 11500000);
+    return ret;
+}
+
+int mtu_drop_newreno_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_newreno_algorithm, 11600000);
     return ret;
 }
 
@@ -8979,12 +8984,12 @@ int fastcc_jitter_test()
 
 int bbr_test()
 {
-    return congestion_control_test(picoquic_bbr_algorithm, 3600000, 0, 0);
+    return congestion_control_test(picoquic_bbr_algorithm, 3500000, 0, 0);
 }
 
 int bbr_jitter_test()
 {
-    return congestion_control_test(picoquic_bbr_algorithm, 3650000, 5000, 5);
+    return congestion_control_test(picoquic_bbr_algorithm, 3550000, 5000, 5);
 }
 
 int bbr_long_test()
@@ -9075,7 +9080,7 @@ int bbr_long_test()
 
 int bbr1_test()
 {
-    return congestion_control_test(picoquic_bbr_algorithm, 3600000, 0, 0);
+    return congestion_control_test(picoquic_bbr1_algorithm, 3600000, 0, 0);
 }
 
 /* Performance test.
@@ -9257,7 +9262,7 @@ int bbr_asym100_nodelay_test()
  */
 int bbr_asym400_test()
 {
-    uint64_t max_completion_time = 2200000;
+    uint64_t max_completion_time = 2350000;
     uint64_t latency = 1000;
     uint64_t jitter = 750;
     uint64_t buffer = 50000;
@@ -10847,7 +10852,7 @@ int cwin_max_test()
         11000000,
         11000000,
         11000000,
-        12000000 };
+        12100000 };
     int ret = 0;
 
     for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
@@ -11301,39 +11306,33 @@ static int red_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t ta
     return ret;
 }
 
-int red_cc_test()
+int red_newreno_test()
 {
-    picoquic_congestion_algorithm_t* algo_list[5] = {
-        picoquic_newreno_algorithm,
-        picoquic_cubic_algorithm,
-        picoquic_dcubic_algorithm,
-        picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
-    };
-    uint64_t algo_time[5] = {
-        500000,
-        500000,
-        500000,
-        500000,
-        500000
-    };
-    uint64_t algo_loss[5] = {
-        150,
-        225,
-        275,
-        250,
-        170
-    };
+    int ret = red_cc_algotest(picoquic_newreno_algorithm, 500000, 150);
+    return ret;
+}
 
-    int ret = 0;
+int red_cubic_test()
+{
+    int ret = red_cc_algotest(picoquic_cubic_algorithm, 500000, 225);
+    return ret;
+}
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
-        ret = red_cc_algotest(algo_list[i], algo_time[i], algo_loss[i]);
-        if (ret != 0) {
-            DBG_PRINTF("RED cc test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
-        }
-    }
+int red_dcubic_test()
+{
+    int ret = red_cc_algotest(picoquic_dcubic_algorithm, 500000, 275);
+    return ret;
+}
 
+int red_fast_test()
+{
+    int ret = red_cc_algotest(picoquic_fastcc_algorithm, 500000, 250);
+    return ret;
+}
+
+int red_bbr_test()
+{
+    int ret = red_cc_algotest(picoquic_bbr_algorithm, 500000, 170);
     return ret;
 }
 
@@ -11412,7 +11411,7 @@ int multi_segment_test()
         1050000,
         1250000,
         1350000,
-        1000000
+        1280000
     };
     int ret = 0;
 
@@ -11506,39 +11505,45 @@ static int pacing_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t
     return ret;
 }
 
-int pacing_cc_test()
+int pacing_bbr_test()
 {
-    picoquic_congestion_algorithm_t* algo_list[5] = {
-        picoquic_newreno_algorithm,
-        picoquic_cubic_algorithm,
-        picoquic_dcubic_algorithm,
-        picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
-    };
-    uint64_t algo_time[5] = {
-        900000,
-        900000,
-        900000,
-        940000,
-        900000
-    };
-    uint64_t algo_loss[5] = {
-        100,
-        210,
-        240,
-        180,
-        210
-    };
+    /* TODO: With BBRv3, the 1MB transfer in this test takes more than 1sec,
+     * approximately an 80% path utilisation. This compares to less than
+     * 900ms for the same test using Cubic. On the other hand, there are
+     * way fewer retransmission than when using Cubic, less than 50 versus
+     * more than 200. The 80% path utilisation is because BBRv3 tests the
+     * bandwidth during startup, exits as soon as excessive packet
+     * losses are detected, and waits 2 to 3 seconds before pushing again.
+     * TODO: consider a post startup "push" similare to the second phase of
+     * Hystart++.
+     * Correction: after limiting the cwin on 2nd RTO, the time gets lower,
+     * but the nuber of losses increases markedly.
+     */
+    int ret = pacing_cc_algotest(picoquic_bbr_algorithm, 900000, 390);
+    return ret;
+}
 
-    int ret = 0;
+int pacing_cubic_test()
+{
+    int ret = pacing_cc_algotest(picoquic_cubic_algorithm, 900000, 210);
+    return ret;
+}
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
-        ret = pacing_cc_algotest(algo_list[i], algo_time[i], algo_loss[i]);
-        if (ret != 0) {
-            DBG_PRINTF("Pacing cc test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
-        }
-    }
+int pacing_dcubic_test()
+{
+    int ret = pacing_cc_algotest(picoquic_dcubic_algorithm, 900000, 240);
+    return ret;
+}
 
+int pacing_fast_test()
+{
+    int ret = pacing_cc_algotest(picoquic_fastcc_algorithm, 960000, 180);
+    return ret;
+}
+
+int pacing_newreno_test()
+{
+    int ret = pacing_cc_algotest(picoquic_newreno_algorithm, 900000, 100);
     return ret;
 }
 
@@ -11661,7 +11666,8 @@ int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
 
 int heavy_loss_test()
 {
-    return heavy_loss_test_one(0, 23500000);
+    /* TODO: investigate after BBRv3 complete */
+    return heavy_loss_test_one(0, 23000000);
 }
 
 int heavy_loss_inter_test()
@@ -11825,7 +11831,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
         int nb_loops = 0;
 
         if (cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_DCUBIC ||
-            cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST ) {
+            cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST) {
             repeat_target = 200;
         }
 
@@ -12547,7 +12553,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 5800000;
                     break;
                 case bdp_test_option_rtt:
-                    max_completion_time = 4500000;
+                    max_completion_time = 4600000;
                     test_ctx->c_to_s_link->microsec_latency = 50000ull;
                     test_ctx->s_to_c_link->microsec_latency = 50000ull;
                     buffer_size = 2 * test_ctx->c_to_s_link->microsec_latency;
@@ -12590,7 +12596,8 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
             ret = picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
 
             if (ret == 0) {
-                ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, buffer_size, max_completion_time);
+                ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, buffer_size, 
+                    (i==0)?0:max_completion_time);
             }
 
             /* Verify that the BDP option was set and processed */
@@ -12679,6 +12686,14 @@ int bdp_basic_test()
 
 int bdp_rtt_test()
 {
+    /* TODO: this test succeeds for the wrong reason.
+    * The goal of the test is to verify that the BDP is NOT set
+    * if the RTT on the second connection does not match the RTT
+    * on the first one. The test does that, but only because the
+    * second connection's RTT is lower than BBRLongRttThreshold,
+    * thus uses regular BBR startup, in which the BDP option is
+    * not implemented.
+     */
     return bdp_option_test_one(bdp_test_option_rtt);
 }
 

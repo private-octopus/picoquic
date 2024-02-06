@@ -223,7 +223,7 @@ void picoquic_delete_event(picoquic_event_t* event);
 int picoquic_signal_event(picoquic_event_t* event);
 int picoquic_wait_for_event(picoquic_event_t* event, uint64_t microsec_wait);
 
-/* Simple potable random number generation
+/* Simple portable random number generation
  */
 uint64_t picoquic_uniform_random(uint64_t rnd_max);
 

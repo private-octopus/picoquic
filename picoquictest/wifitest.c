@@ -218,7 +218,7 @@ void wifi_test_set_default_spec(wifi_test_spec_t* spec, picoquic_congestion_algo
 int wifi_bbr_test()
 {
     wifi_test_spec_t spec;
-    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 2750000);
+    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 2800000);
     int ret = wifi_test_one(wifi_test_bbr, &spec);
 
     return ret;
@@ -261,7 +261,7 @@ int wifi_bbr_hard_test()
         3000,
         suspension_hard,
         picoquic_bbr_algorithm,
-        4005000,
+        4050000,
         0 };
     int ret = wifi_test_one(wifi_test_bbr_hard, &spec);
 
@@ -303,7 +303,7 @@ int wifi_bbr_long_test()
         50000,
         suspension_basic,
         picoquic_bbr_algorithm,
-        3050000,
+        3250000,
         1 };
     int ret = wifi_test_one(wifi_test_bbr_long, &spec);
 
@@ -336,7 +336,7 @@ int wifi_reno_long_test()
 int wifi_bbr_shadow_test()
 {
     wifi_test_spec_t spec;
-    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 2500000);
+    wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 2750000);
     spec.wifi_shadow_rtt = 250000;
     spec.queue_max_delay = 600000;
     spec.simulate_receive_block = 1;

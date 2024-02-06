@@ -715,7 +715,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
         if (old_p->send_path != NULL) {
             /* MTU probe was lost, presumably because of packet too big */
             old_p->send_path->mtu_probe_sent = 0;
-            if (!force_queue) {
+            if (!force_queue || force_queue == 2) {
                 old_p->send_path->send_mtu_max_tried = old_p->length + old_p->checksum_overhead;
             }
         }
@@ -781,9 +781,17 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
                                 old_p->ptype == picoquic_packet_1rtt_protected)) {
                             ret = picoquic_queue_misc_frame(cnx, &old_p->bytes[byte_index], frame_length, 0);
                         }
-                        else {
+                        else if (frame_length <= send_buffer_max_minus_checksum - *length) {
                             memcpy(&new_bytes[*length], &old_p->bytes[byte_index], frame_length);
                             *length += frame_length;
+                        }
+                        else {
+                            uint64_t error_frame_type = 0;
+                            (void)picoquic_varint_decode(&old_p->bytes[byte_index], frame_length, &error_frame_type);
+                            picoquic_log_app_message(cnx, "Cannot copy frame 0x%" PRIu64 ", packet type = % d, force queue = % d, repeat buffer : % zu, previous length : % zu.",
+                                error_frame_type, old_p->ptype, force_queue);
+                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
+                                error_frame_type, "Cannot copy frame for retransmit");
                         }
                     }
                     *packet_is_pure_ack = 0;
@@ -806,9 +814,11 @@ static picoquic_packet_t* picoquic_process_lost_packet(picoquic_cnx_t* cnx, pico
 {
     int do_not_detect_spurious = 1;
     int add_to_data_repeat_queue = 0;
-    uint8_t* new_bytes = packet->bytes;
+    uint8_t* new_bytes = NULL;
     size_t checksum_length = 0;
+    size_t available_buffer = 0;
     int ret = 0;
+    int force_queue = 0;
 
     /* Manage the path MTU issues */
     picoquic_check_path_mtu_on_losses(cnx, old_p, is_timer_expired);
@@ -817,39 +827,46 @@ static picoquic_packet_t* picoquic_process_lost_packet(picoquic_cnx_t* cnx, pico
 
     /* Prepare the packet copy */
     *packet_is_pure_ack = 1;
-    packet->sequence_number = pkt_ctx->send_sequence;
-    packet->send_path = path_x;
-    packet->pc = pc;
-    packet->ptype = (old_p->ptype == picoquic_packet_0rtt_protected) ? picoquic_packet_1rtt_protected : old_p->ptype;
 
-    *length = picoquic_predict_packet_header_length(cnx, packet->ptype, pkt_ctx);
-    packet->offset = *length;
-    *header_length = *length;
+    if (packet == NULL) {
+        force_queue = 2;
+    } else {
+        new_bytes = packet->bytes;
+        packet->sequence_number = pkt_ctx->send_sequence;
+        packet->send_path = path_x;
+        packet->pc = pc;
+        packet->ptype = (old_p->ptype == picoquic_packet_0rtt_protected) ? picoquic_packet_1rtt_protected : old_p->ptype;
 
-    switch (packet->ptype) {
-    case picoquic_packet_1rtt_protected:
-        checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
-        break;
-    case picoquic_packet_initial:
-        checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_initial);
-        break;
-    case picoquic_packet_handshake:
-        checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
-        break;
-    case picoquic_packet_0rtt_protected:
-        checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_0rtt);
-        break;
-    default:
-        DBG_PRINTF("Trying to retransmit packet type %d", old_p->ptype);
-        checksum_length = 0;
-        break;
+        *length = picoquic_predict_packet_header_length(cnx, packet->ptype, pkt_ctx);
+        packet->offset = *length;
+        *header_length = *length;
+
+        switch (packet->ptype) {
+        case picoquic_packet_1rtt_protected:
+            checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
+            break;
+        case picoquic_packet_initial:
+            checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_initial);
+            break;
+        case picoquic_packet_handshake:
+            checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
+            break;
+        case picoquic_packet_0rtt_protected:
+            checksum_length = picoquic_get_checksum_length(cnx, picoquic_epoch_0rtt);
+            break;
+        default:
+            DBG_PRINTF("Trying to retransmit packet type %d", old_p->ptype);
+            checksum_length = 0;
+            break;
+        }
+        available_buffer = send_buffer_max - checksum_length;
     }
 
     ret = picoquic_copy_before_retransmit(old_p, cnx,
         new_bytes,
-        send_buffer_max - checksum_length,
+        available_buffer,
         packet_is_pure_ack,
-        &do_not_detect_spurious, 0,
+        &do_not_detect_spurious, force_queue,
         length,
         &add_to_data_repeat_queue);
 
@@ -874,7 +891,6 @@ static picoquic_packet_t* picoquic_process_lost_packet(picoquic_cnx_t* cnx, pico
         add_to_data_repeat_queue);
 
     return old_p;
-
 }
 
 static void picoquic_check_path_mtu_on_losses(
@@ -915,12 +931,21 @@ static void picoquic_count_and_notify_loss(
 
     if (old_p->send_path != NULL) {
         old_p->send_path->nb_losses_found++;
-        old_p->send_path->total_bytes_lost += old_p->length;
+        if ((old_p->send_path->smoothed_rtt != PICOQUIC_INITIAL_RTT ||
+            old_p->send_path->rtt_variant != 0) &&
+            old_p->send_time > cnx->start_time + old_p->send_path->smoothed_rtt) {
+            /* we do not count losses occruring before ready state, because the 
+             * timers are not reliable yet */
+            old_p->send_path->total_bytes_lost += old_p->length;
+        }
 
         if (cnx->congestion_alg != NULL && cnx->cnx_state >= picoquic_state_ready && old_p->send_path != NULL) {
+            picoquic_per_ack_state_t ack_state = { 0 };
+            ack_state.lost_packet_number = old_p->path_packet_number;
+            ack_state.nb_bytes_newly_lost = old_p->length;
             cnx->congestion_alg->alg_notify(cnx, old_p->send_path,
                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
-                0, 0, 0, old_p->path_packet_number, current_time);
+                &ack_state, current_time);
         }
     }
 }
@@ -1013,5 +1038,53 @@ void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path
         if (pkt_ctx != NULL) {
             picoquic_retransmit_path_packet_queue(cnx, path_x, pkt_ctx, current_time);
         }
+    }
+}
+
+
+void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    uint64_t current_time)
+{
+    picoquic_packet_context_t* pkt_ctx = NULL;
+    picoquic_packet_t* old_p;
+    uint64_t next_retransmit_time = UINT64_MAX;
+
+    /* If multipath, pick the packet context associated with the current path,
+     * else, pick the default 1RTT context */
+    if (cnx->is_multipath_enabled) {
+        pkt_ctx = &path_x->p_remote_cnxid->pkt_ctx;
+    }
+    else {
+        pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+    }
+    /* For all packets in this context:
+    * Check whether it needs retransmit.
+    * if yes, call "picoquic_process_lost_packet".
+    * else, stop. */
+    old_p = pkt_ctx->pending_first;
+
+    /* Call the per packet routine in a loop */
+    while (old_p != NULL) {
+        picoquic_packet_t* p_next = old_p->packet_next;
+        int packet_is_pure_ack = 0;
+        size_t header_length = 0;
+        int is_timer_expired = 0;
+        int is_probably_lost = cnx->initial_repeat_needed || old_p->send_path == NULL ||
+            picoquic_is_packet_probably_lost(cnx, old_p, current_time, &next_retransmit_time, &is_timer_expired);
+        size_t length = 0;
+
+        if (is_probably_lost) {
+            if (old_p->is_ack_trap) {
+                picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, 1, 0);
+            }
+            else {
+                (void)picoquic_process_lost_packet(cnx, pkt_ctx, old_p, is_timer_expired, old_p->pc,
+                    path_x, current_time, NULL, 0, &length, &packet_is_pure_ack, &header_length);
+            }
+            old_p = p_next;
+        }
+        else {
+            break;
+        }   
     }
 }

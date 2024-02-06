@@ -389,6 +389,8 @@ typedef struct st_picoquic_packet_t {
     uint64_t delivered_prior;
     uint64_t delivered_time_prior;
     uint64_t delivered_sent_prior;
+    uint64_t lost_prior;
+    uint64_t inflight_prior;
     size_t data_repeat_frame;
     size_t data_repeat_index;
 
@@ -411,6 +413,7 @@ typedef struct st_picoquic_packet_t {
     unsigned int is_multipath_probe : 1;
     unsigned int is_ack_trap : 1;
     unsigned int delivered_app_limited : 1;
+    unsigned int sent_cwin_limited : 1;
     unsigned int is_preemptive_repeat : 1;
     unsigned int was_preemptively_repeated : 1;
     unsigned int is_queued_to_path : 1;
@@ -1111,6 +1114,7 @@ typedef struct st_picoquic_path_t {
     uint64_t cwin;
     uint64_t bytes_in_transit;
     uint64_t last_sender_limited_time;
+    uint64_t last_cwin_blocked_time;
     uint64_t last_time_acked_data_frame_sent;
     void* congestion_alg_state;
 
@@ -1477,8 +1481,11 @@ typedef struct st_picoquic_packet_data_t {
         uint64_t delivered_prior; /* Amount delivered prior to that packet */
         uint64_t delivered_time_prior; /* Time last delivery before acked packet sent */
         uint64_t delivered_sent_prior; /* Time this last delivery packet was sent */
-        int rs_is_path_limited; /* Whether the path was app limited when packet was sent */
-        int is_set;
+        uint64_t lost_prior; /* Value of nb_bytes_lost when packet was sent */
+        uint64_t inflight_prior; /* Value of bytes_in_flight when packet was sent */
+        unsigned int rs_is_path_limited; /* Whether the path was app limited when packet was sent */
+        unsigned int rs_is_cwnd_limited;
+        unsigned int is_set;
         uint64_t data_acked;
     } path_ack[PICOQUIC_NB_PATH_TARGET];
 } picoquic_packet_data_t;
@@ -1506,6 +1513,7 @@ void picoquic_empty_path_packet_queue(picoquic_path_t* path_x);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);
