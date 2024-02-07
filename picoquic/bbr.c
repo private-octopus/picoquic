@@ -206,6 +206,7 @@ typedef struct st_picoquic_bbr_state_t {
     /* manage startup long_rtt */
     picoquic_min_max_rtt_t rtt_filter;
     uint64_t bdp_seed;
+    unsigned int probe_bdp_seed;
     
     /* Experimental extensions, may or maynot be a good idea. */
     uint64_t wifi_shadow_rtt; /* Shadow RTT used for wifi connections. */
@@ -496,6 +497,10 @@ static void BBRSetCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x,
                 path_x->cwin = bbr_state->max_inflight;
             }
         }
+        else if (bbr_state->state == picoquic_bbr_alg_startup &&
+            bbr_state->bdp_seed > 2*path_x->cwin) {
+            path_x->cwin = bbr_state->bdp_seed;
+        }
         else if (path_x->cwin < bbr_state->max_inflight || path_x->delivered < PICOQUIC_CWIN_INITIAL) {
             path_x->cwin = path_x->cwin+ rs->newly_acked;
         }
@@ -678,12 +683,19 @@ static void BBRUpdateMaxInflight(picoquic_bbr_state_t* bbr_state, picoquic_path_
     * BBRUpdateModelAndState(). There is probably no need to do an extra
     * call here. */
     uint64_t inflight = BBRBDPMultiple(bbr_state, path_x, bbr_state->cwnd_gain);
+
     inflight += bbr_state->extra_acked;
 
     if (bbr_state->min_rtt < bbr_state->wifi_shadow_rtt && bbr_state->min_rtt > 0){
         inflight = (uint64_t)(((double)inflight) * ((double)bbr_state->wifi_shadow_rtt) / ((double)bbr_state->min_rtt));
     }
     bbr_state->max_inflight = BBRQuantizationBudget(bbr_state, path_x, inflight);
+#if 0
+    if (bbr_state->state == picoquic_bbr_alg_startup &&
+        bbr_state->bdp_seed > bbr_state->max_inflight) {
+        bbr_state->max_inflight = bbr_state->bdp_seed;
+    }
+#endif
 }
 
 /* Pacing rate functions */
@@ -701,6 +713,16 @@ static void BBRInitPacingRate(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
 static void BBRSetPacingRateWithGain(picoquic_bbr_state_t* bbr_state, double pacing_gain)
 {
     double rate = pacing_gain * ((double)(bbr_state->bw * (100 - BBRPacingMarginPercent))) / (double)100;
+
+    if (bbr_state->state == picoquic_bbr_alg_startup &&
+        !bbr_state->filled_pipe &&
+        bbr_state->bdp_seed > 0) {
+        double bdp_rate = (((double)bbr_state->bdp_seed*1000000.0) / (double)bbr_state->min_rtt);
+        if (bdp_rate > rate) {
+            rate = bdp_rate;
+        }
+    }
+
     if (bbr_state->filled_pipe || rate > bbr_state->pacing_rate) {
         bbr_state->pacing_rate = rate;
     }
