@@ -669,6 +669,7 @@ typedef struct st_picoquic_quic_t {
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;
     uint64_t wifi_shadow_rtt;
+    double bbr_quantum_ratio;
 
     struct st_picoquic_cnx_t* cnx_list;
     struct st_picoquic_cnx_t* cnx_last;

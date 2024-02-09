@@ -221,6 +221,7 @@ typedef struct st_picoquic_bbr_state_t {
     
     /* Experimental extensions, may or maynot be a good idea. */
     uint64_t wifi_shadow_rtt; /* Shadow RTT used for wifi connections. */
+    double quantum_ratio; /* allow application to use a different default than 0.1% of bandwidth (or 1ms of traffic) */
 
 } picoquic_bbr_state_t;
 
@@ -392,6 +393,11 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
     bbr_state->extra_acked_delivered = 0;
     /* Support for the wifi_shadow_rtt hack */
     bbr_state->wifi_shadow_rtt = path_x->cnx->quic->wifi_shadow_rtt;
+    /* Support for experimenting with the send_quantum ratio */
+    bbr_state->quantum_ratio = path_x->cnx->quic->bbr_quantum_ratio;
+    if (bbr_state->quantum_ratio == 0) {
+        bbr_state->quantum_ratio = 0.001;
+    }
 
     /* TODO, maybe: plug in the "shadow RTT".
      */
@@ -753,7 +759,7 @@ static void BBRSetSendQuantum(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
         floor = 1 * path_x->send_mtu;
     }
     /* 1 ms = 1000000us/1000 */
-    bbr_state->send_quantum = (uint64_t)(bbr_state->pacing_rate / 1000.0); 
+    bbr_state->send_quantum = (uint64_t)(bbr_state->pacing_rate * bbr_state->quantum_ratio); 
     if (bbr_state->send_quantum > 0x10000) {
         bbr_state->send_quantum = 0x10000;
     }
