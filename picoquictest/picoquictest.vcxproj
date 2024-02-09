@@ -148,30 +148,39 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ack_of_ack_test.c" />
+    <ClCompile Include="app_limited.c" />
     <ClCompile Include="bytestream_test.c" />
     <ClCompile Include="cert_verify_test.c" />
     <ClCompile Include="cleartext_aead_test.c" />
     <ClCompile Include="cnxstress.c" />
     <ClCompile Include="cnx_creation_test.c" />
+    <ClCompile Include="code_version_test.c" />
     <ClCompile Include="config_test.c" />
+    <ClCompile Include="cpu_limited.c" />
     <ClCompile Include="datagram_tests.c" />
+    <ClCompile Include="delay_tolerant_test.c" />
     <ClCompile Include="edge_cases.c" />
     <ClCompile Include="h3zerotest.c" />
+    <ClCompile Include="h3zero_uri_test.c" />
     <ClCompile Include="hashtest.c" />
     <ClCompile Include="high_latency_test.c" />
     <ClCompile Include="intformattest.c" />
     <ClCompile Include="l4s_test.c" />
+    <ClCompile Include="mbedtls_test.c" />
     <ClCompile Include="mediatest.c" />
+    <ClCompile Include="minicrypto_test.c" />
     <ClCompile Include="multipath_test.c" />
     <ClCompile Include="netperf_test.c" />
     <ClCompile Include="parseheadertest.c" />
     <ClCompile Include="picoquic_lb_test.c" />
     <ClCompile Include="pn2pn64test.c" />
+    <ClCompile Include="quic_tester.c" />
     <ClCompile Include="sacktest.c" />
     <ClCompile Include="satellite_test.c" />
     <ClCompile Include="skip_frame_test.c" />
     <ClCompile Include="socket_test.c" />
     <ClCompile Include="cplusplus.cpp" />
+    <ClCompile Include="sockloop_test.c" />
     <ClCompile Include="splay_test.c" />
     <ClCompile Include="stream0_frame_test.c" />
     <ClCompile Include="stresstest.c" />
@@ -180,6 +189,8 @@
     <ClCompile Include="transport_param_test.c" />
     <ClCompile Include="util_test.c" />
     <ClCompile Include="warptest.c" />
+    <ClCompile Include="webtransport_test.c" />
+    <ClCompile Include="wifitest.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h" />

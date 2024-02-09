@@ -24,17 +24,12 @@
 #include <stdio.h>
 #include "picoquic_internal.h"
 #include "h3zero.h"
+#include "h3zero_common.h"
 #include "quicperf.h"
 #include "democlient.h"
 
 /* List of supported protocols 
  */
-
-typedef struct st_picoquic_alpn_list_t {
-    picoquic_alpn_enum alpn_code;
-    char const* alpn_val;
-    size_t len;
-} picoquic_alpn_list_t;
 
 static picoquic_alpn_list_t alpn_list[] = {
     { picoquic_alpn_http_3, "h3", 2 },
@@ -112,7 +107,7 @@ picoquic_alpn_enum picoquic_parse_alpn_nz(char const* alpn, size_t len)
 }
 
 int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic,
-    char const* sni, char const* alpn, uint32_t proposed_version, uint64_t current_time, 
+    char const* sni, char const* alpn, uint32_t proposed_version,
     char const ** ticket_alpn, uint32_t * ticket_version)
 {
     int ret = -1;
@@ -130,7 +125,7 @@ int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic
                 if ((alpn_list[i].alpn_code == picoquic_alpn_http_3 ||
                     alpn_list[i].alpn_code == picoquic_alpn_http_0_9) &&
                     alpn_list[i].alpn_val != NULL) {
-                    if (picoquic_get_ticket_and_version(quic->p_first_ticket, current_time,
+                    if (picoquic_get_ticket_and_version(quic,
                         sni, sni_length, alpn_list[i].alpn_val, (uint16_t)strlen(alpn_list[i].alpn_val), proposed_version, ticket_version,
                         &ticket, &ticket_length, &tp, 0) == 0){
                         ret = 0;
@@ -141,7 +136,7 @@ int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic
             }
         }
         else if (proposed_version == 0) {
-            if (picoquic_get_ticket_and_version(quic->p_first_ticket, current_time,
+            if (picoquic_get_ticket_and_version(quic,
                 sni, sni_length, alpn, (uint16_t)strlen(alpn), proposed_version, ticket_version,
                 &ticket, &ticket_length, &tp, 0) == 0) {
                 ret = 0;
@@ -167,153 +162,6 @@ static picoquic_demo_client_stream_ctx_t* picoquic_demo_client_find_stream(
     return stream_ctx;
 }
 
-
-int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length, size_t * echo_sent, FILE * F)
-{
-    int ret = 0;
-
-    if (*echo_sent < echo_length) {
-        uint8_t * buffer;
-        size_t available = echo_length - *echo_sent;
-        int is_fin = 1;
-
-        if (available > space) {
-            available = space;
-            is_fin = 0;
-        }
-
-        buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, !is_fin);
-        if (buffer != NULL) {
-            if (F) {
-                size_t nb_read = fread(buffer, 1, available, F);
-
-                if (nb_read != available) {
-                    ret = -1;
-                }
-                else {
-                    *echo_sent += (uint32_t)available;
-                    ret = 0;
-                }
-            }
-            else {
-                /* TODO: fill buffer with some text */
-                memset(buffer, 0x5A, available);
-                *echo_sent += (uint32_t)available;
-                ret = 0;
-            }
-        }
-        else {
-            ret = -1;
-        }
-    }
-
-    return ret;
-}
-
-/*
- * H3Zero client. This is a simple client that conforms to HTTP 3.0,
- * but the client implementation is barebone.
- */
-
-int h3zero_client_create_stream_request(
-    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, size_t post_size, const char * host, size_t * consumed)
-{
-    int ret = 0;
-    uint8_t * o_bytes = buffer;
-    uint8_t * o_bytes_max = o_bytes + max_bytes;
-
-    *consumed = 0;
-
-    if (max_bytes < 3) {
-        o_bytes = NULL;
-    }
-    else if (host == NULL) {
-        o_bytes = NULL;
-    }
-    else {
-        /* Create the request frame for the specified document */
-        *o_bytes++ = h3zero_frame_header;
-        o_bytes += 2; /* reserve two bytes for frame length */
-        if (post_size == 0) {
-            o_bytes = h3zero_create_request_header_frame(o_bytes, o_bytes_max,
-                (const uint8_t *)path, path_len, host);
-        }
-        else {
-            o_bytes = h3zero_create_post_header_frame(o_bytes, o_bytes_max,
-                (const uint8_t *)path, path_len, host, h3zero_content_type_text_plain);
-        }
-    }
-
-    if (o_bytes == NULL) {
-        ret = -1;
-    }
-    else {
-        size_t header_length = o_bytes - &buffer[3];
-        if (header_length < 64) {
-            buffer[1] = (uint8_t)(header_length);
-            memmove(&buffer[2], &buffer[3], header_length);
-            o_bytes--;
-        }
-        else {
-            buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
-            buffer[2] = (uint8_t)(header_length & 0xFF);
-        }
-
-        if (post_size > 0) {
-            /* Add initial DATA frame for POST */
-            size_t ll = 0;
-
-            if (o_bytes < o_bytes_max) {
-                *o_bytes++ = h3zero_frame_data;
-                ll = picoquic_varint_encode(o_bytes, o_bytes_max - o_bytes, post_size);
-                o_bytes += ll;
-            }
-            if (ll == 0) {
-                ret = -1;
-            }
-            else {
-                *consumed = o_bytes - buffer;
-            }
-        }
-        else {
-            *consumed = o_bytes - buffer;
-        }
-    }
-
-    return ret;
-}
-
-int h3zero_client_init(picoquic_cnx_t* cnx)
-{
-    uint8_t decoder_stream_head = 0x03;
-    uint8_t encoder_stream_head = 0x02;
-    int ret = picoquic_add_to_stream(cnx, 2, h3zero_default_setting_frame, h3zero_default_setting_frame_size, 0);
-
-    if (ret == 0) {
-		/* set the stream #2 to be the next stream to write! */
-        ret = picoquic_set_stream_priority(cnx, 2, 0);
-    }
-
-    if (ret == 0) {
-        /* set the stream 6 as the encoder stream, although we do not actually create dynamic codes. */
-        ret = picoquic_add_to_stream(cnx, 6, &encoder_stream_head, 1, 0);
-        if (ret == 0) {
-            ret = picoquic_set_stream_priority(cnx, 6, 1);
-        }
-    }
-
-    if (ret == 0) {
-        /* set the stream 10 as the decoder stream, although we do not actually create dynamic codes. */
-        ret = picoquic_add_to_stream(cnx, 10, &decoder_stream_head, 1, 0);
-        if (ret == 0) {
-            ret = picoquic_set_stream_priority(cnx, 10, 1);
-        }
-    }
-
-
-    return ret;
-}
-
 /* HTTP 0.9 client. 
  * This is the client that was used for QUIC interop testing prior
  * to availability of HTTP 3.0. It allows for testing transport
@@ -323,7 +171,7 @@ int h3zero_client_init(picoquic_cnx_t* cnx)
  */
 
 int h09_demo_client_prepare_stream_open_command(
-    uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, size_t post_size, char const * host, size_t * consumed)
+    uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, uint64_t post_size, char const * host, size_t * consumed)
 {
 
     if (post_size == 0) {
@@ -378,7 +226,7 @@ int h09_demo_client_prepare_stream_open_command(
 
 static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx,
-    uint64_t stream_id, char const* doc_name, char const* fname, size_t post_size, uint64_t nb_repeat)
+    uint64_t stream_id, char const* doc_name, char const* fname, uint64_t post_size, uint64_t nb_repeat)
 {
     int ret = 0;
     uint8_t buffer[1024];
@@ -533,7 +381,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
     if (fin_stream_id == PICOQUIC_DEMO_STREAM_ID_INITIAL) {
         switch (ctx->alpn) {
         case picoquic_alpn_http_3:
-            ret = h3zero_client_init(cnx);
+            ret = h3zero_protocol_init(cnx);
             break;
         default:
             break;
@@ -615,7 +463,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             if (ret == 0 && length > 0) {
                 switch (ctx->alpn) {
                 case picoquic_alpn_http_3: {
-                    uint16_t error_found = 0;
+                    uint64_t error_found = 0;
                     size_t available_data = 0;
                     uint8_t * bytes_max = bytes + length;
                     while (bytes < bytes_max) {
@@ -672,12 +520,12 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                 if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
                     fin_stream_id = stream_id;
                     if (stream_id <= 64 && !ctx->no_print) {
-                        fprintf(stdout, "Stream %d ended after %d bytes\n",
-                            (int)stream_id, (int)stream_ctx->received_length);
+                        fprintf(stdout, "Stream %" PRIu64 " ended after %" PRIu64 " bytes\n",
+                            stream_id, stream_ctx->received_length);
                     }
                     if (stream_ctx->received_length == 0) {
-                        picoquic_log_app_message(cnx, "Stream %d ended after %d bytes, ret=0x%x",
-                            (int)stream_id, (int)stream_ctx->received_length, ret);
+                        picoquic_log_app_message(cnx, "Stream %" PRIu64 " ended after %" PRIu64 " bytes, ret=0x%x",
+                            stream_id, stream_ctx->received_length, ret);
                     }
                 }
             }
@@ -692,7 +540,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
             fin_stream_id = stream_id;
             if (!ctx->no_print) {
-                fprintf(stdout, "Stream %" PRIu64 " reset after %zu bytes\n",
+                fprintf(stdout, "Stream %" PRIu64 " reset after %" PRIu64 " bytes\n",
                     stream_id, stream_ctx->received_length);
             }
         }
@@ -749,7 +597,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             return 0;
         }
         else {
-            return demo_client_prepare_to_send((void*)bytes, length, stream_ctx->post_size, &stream_ctx->post_sent, NULL);
+            return h3zero_prepare_and_send_data((void*)bytes, length, stream_ctx->post_size, &stream_ctx->post_sent, NULL);
         }
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:
@@ -999,9 +847,15 @@ char const * demo_client_parse_post_size(char const * text, uint64_t * post_size
     else {
         *post_size = 0;
         do {
-            int delta = *text++ - '0';
+            int delta = *text - '0';
             *post_size *= 10;
             *post_size += delta;
+            if (*post_size > (UINT64_MAX >> 4)) {
+                break;
+            }
+            else {
+                text++;
+            }
         } while (text[0] >= '0' && text[0] <= '9');
 
         text = demo_client_parse_stream_spaces(text);

@@ -279,7 +279,7 @@ static int stress_client_start_streams(picoquic_cnx_t* cnx,
         ctx->next_bidir <= ctx->max_bidir) {
         int stream_index = -1;
         for (size_t i = 0; i < ctx->max_open_streams; i++) {
-            if (ctx->stream_id[i] == (uint64_t)((int64_t) -1)) {
+            if (ctx->stream_id[i] == UINT64_MAX) {
                 stream_index = (int) i;
                 break;
             }
@@ -368,7 +368,7 @@ static int stress_client_callback(picoquic_cnx_t* cnx,
                     ret = stress_debug_break(0);
                 }
 
-                ctx->stream_id[stream_index] =(uint64_t)((int64_t)-1);
+                ctx->stream_id[stream_index] = UINT64_MAX;
 
                 if (ctx->next_bidir >= ctx->max_bidir) {
                     /* This was the last stream */
@@ -413,7 +413,7 @@ int stress_client_set_callback(picoquic_cnx_t* cnx)
             ctx->max_open_streams = picoquic_stress_max_open_streams;
             ctx->next_bidir = 4; /* TODO: change to zero when cream/crack gets done */
             for (size_t i = 0; i < ctx->max_open_streams; i++) {
-                ctx->stream_id[i] = (uint64_t)((int64_t)-1);
+                ctx->stream_id[i] = UINT64_MAX;
             }
             picoquic_set_callback(cnx, stress_client_callback, ctx);
 

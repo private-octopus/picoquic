@@ -117,6 +117,48 @@
     <ClCompile Include="warptest.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="code_version_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="delay_tolerant_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="webtransport_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="code_version_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="delay_tolerant_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="webtransport_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="h3zero_uri_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="wifitest.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="quic_tester.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="cpu_limited.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="minicrypto_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="app_limited.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mbedtls_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="sockloop_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

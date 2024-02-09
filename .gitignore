@@ -22,3 +22,4 @@ Release
 */*.ilk
 *.b
 /picoquic/qlogger.c
+/picohttp_t/h3-m-www

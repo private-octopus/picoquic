@@ -249,21 +249,25 @@ static size_t nb_varint_test_cases = sizeof(varint_test_cases) / sizeof(picoquic
 int varint_test()
 {
     int ret = 0;
+    uint8_t test_buf[16];
     const picoquic_varintformat_test_t* max_test = varint_test_cases + nb_varint_test_cases;
+    memset(test_buf, 0xcc, 16);
 
     for (picoquic_varintformat_test_t* test = varint_test_cases; ret == 0 && test < max_test; test++) {
         for (int is_new_decode = 0; ret == 0 && is_new_decode <= 1; is_new_decode++) {
-            for (size_t buf_size = 0; ret == 0 && buf_size <= test->length + 2; buf_size++) {
+            for (size_t buf_size = 0; ret == 0 && buf_size <= test->length + 2 && buf_size < 16; buf_size++) {
                 int test_ret = 0;
                 uint64_t n64 = 0;
                 size_t length;
 
+                memcpy(test_buf, test->encoding, test->length);
+
                 if (is_new_decode) {
-                    const uint8_t* bytes = picoquic_frames_varint_decode(test->encoding, test->encoding + buf_size, &n64);
-                    length = bytes != NULL ? bytes - test->encoding : 0;
+                    const uint8_t* bytes = picoquic_frames_varint_decode(test_buf, test_buf + buf_size, &n64);
+                    length = bytes != NULL ? bytes - test_buf : 0;
                 }
                 else {
-                    length = picoquic_varint_decode(test->encoding, buf_size, &n64);
+                    length = picoquic_varint_decode(test_buf, buf_size, &n64);
                 }
 
                 if (length != (buf_size < test->length ? 0 : test->length)) {
@@ -321,5 +325,63 @@ int varint_test()
         }
     }
  
+    return ret;
+}
+
+/* Simple implementation of SQRT using UINT64, so we do not have to link 
+ * the math library
+ */
+
+uint64_t picoquic_sqrt_for_tests(uint64_t y)
+{
+    const uint64_t sqrt_6[16] = { 0, 1, 1, 1, 2, 2 };
+    uint64_t x = 0;
+    if (y < 6) {
+        x = sqrt_6[y];
+    }
+    else {
+        uint64_t x_min = 2;
+        uint64_t x_max = ((y / 2) > 0xffffffff) ? 0xffffffff : y / 2;
+
+        for (int i = 0; i < 64; i++) {
+            uint64_t x2;
+            x = (x_min + x_max) / 2;
+            if (x_min + 1 >= x_max) {
+                break;
+            }
+            x2 = x * x;
+            if (x2 < y) {
+                x_min = x;
+            }
+            else if (x2 > y) {
+                x_max = x;
+            }
+            else
+            {
+                x_min = x;
+                x_max = x;
+                break;
+            }
+        }
+    }
+    return x;
+}
+
+int sqrt_for_test_test()
+{
+    int ret = 0;
+    uint64_t x_base = 0;
+
+    while (x_base < 0xffffffff && ret == 0) {
+        for (uint64_t i = 0; i < 2; i++) {
+            uint64_t y = x_base * (x_base+i);
+            uint64_t x = picoquic_sqrt_for_tests(y);
+            if (x != x_base) {
+                ret = -1;
+                break;
+            }
+        }
+        x_base = 2 * x_base + 1;
+    }
     return ret;
 }

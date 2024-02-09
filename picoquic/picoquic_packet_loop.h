@@ -29,9 +29,44 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 2
+#define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 4
 #define PICOQUIC_PACKET_LOOP_SEND_MAX 10
 #define PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX 2500
+
+typedef struct st_picoquic_socket_ctx_t {
+    SOCKET_TYPE fd;
+    int af;
+    uint16_t port;
+
+    /* Flags */
+    unsigned int is_started : 1;
+    unsigned int supports_udp_send_coalesced : 1;
+    unsigned int supports_udp_recv_coalesced : 1;
+    /* Receive data buffer and fields */
+    size_t recv_buffer_size;
+    uint8_t* recv_buffer;
+    struct sockaddr_storage addr_from;
+    struct sockaddr_storage addr_dest;
+    socklen_t from_length;
+    socklen_t dest_length;
+    int dest_if;
+    unsigned char received_ecn;
+    int bytes_recv;
+    /* Management of sendmsg */
+    char cmsg_buffer[1024];
+    size_t udp_coalesced_size;
+#ifdef _WINDOWS
+    /* Windows specific */
+    WSAOVERLAPPED overlap;
+    LPFN_WSARECVMSG WSARecvMsg;
+    LPFN_WSASENDMSG WSASendMsg;
+    WSABUF dataBuf;
+    WSAMSG msg;
+    int nb_immediate_receive;
+    int so_sndbuf;
+    int so_rcvbuf;
+#endif
+} picoquic_socket_ctx_t;
 
 /* The packet loop will call the application back after specific events.
  */
@@ -62,6 +97,26 @@ typedef struct st_packet_loop_time_check_arg_t {
     int64_t delta_t;
 } packet_loop_time_check_arg_t;
 
+/* Version 2 of packet loop, works in progress.
+* Parameters are set in a struct, for future
+* extensibility.
+ */
+typedef struct st_picoquic_packet_loop_param_t {
+    uint16_t local_port;
+    int local_af;
+    int dest_if;
+    int socket_buffer_size;
+    int do_not_use_gso;
+    int extra_socket_required;
+    int simulate_eio;
+    size_t send_length_max;
+} picoquic_packet_loop_param_t;
+
+int picoquic_packet_loop_v2(picoquic_quic_t* quic,
+    picoquic_packet_loop_param_t * param,
+    picoquic_packet_loop_cb_fn loop_callback,
+    void * loop_callback_ctx);
+
 /* Two versions of the packet loop, one portable and one speciailezed
  * for winsock.
  */
@@ -83,6 +138,11 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx);
 #endif
+
+/* Following declarations are used for unit tests. */
+void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx);
+int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int socket_buffer_size, int extra_socket_required,
+    int do_not_use_gso, picoquic_socket_ctx_t* s_ctx);
 
 #ifdef __cplusplus
 }

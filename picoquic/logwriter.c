@@ -409,6 +409,16 @@ static const uint8_t* picoquic_log_path_abandon_frame(FILE* f, const uint8_t* by
     return bytes;
 }
 
+static const uint8_t* picoquic_log_path_available_or_standby_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
+    bytes = picoquic_skip_path_available_or_standby_frame(bytes, bytes_max); /* skip available or standby frame */
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
 
 static const uint8_t* picoquic_log_ack_frequency_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
@@ -418,8 +428,18 @@ static const uint8_t* picoquic_log_ack_frequency_frame(FILE* f, const uint8_t* b
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Seq num */
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Packet tolerance */
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Max ACK delay */
-    bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1); /* Ignore order */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Reordering threshold */
 
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
+static const uint8_t* picoquic_log_immediate_ack_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
     picoquic_binlog_frame(f, bytes_begin, bytes);
 
     return bytes;
@@ -557,11 +577,18 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         case picoquic_frame_type_ack_frequency:
             bytes = picoquic_log_ack_frequency_frame(f, bytes, bytes_max);
             break;
+        case picoquic_frame_type_immediate_ack:
+            bytes = picoquic_log_immediate_ack_frame(f, bytes, bytes_max);
+            break;
         case picoquic_frame_type_time_stamp:
             bytes = picoquic_log_time_stamp_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_path_abandon:
             bytes = picoquic_log_path_abandon_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_path_standby:
+        case picoquic_frame_type_path_available:
+            bytes = picoquic_log_path_available_or_standby_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_bdp:
             bytes = picoquic_log_bdp_frame(f, bytes, bytes_max);
@@ -963,7 +990,7 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
 
     if (ret == 0) {
         cnx->f_binlog = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic),
-            cnx->local_parameters.enable_multipath);
+            cnx->local_parameters.enable_multipath | cnx->local_parameters.enable_simple_multipath);
         if (cnx->f_binlog == NULL) {
             cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
             ret = -1;
@@ -1091,7 +1118,7 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 
         bytewrite_vint(ps_msg, pkt_ctx->send_sequence);
 
-        if (pkt_ctx->highest_acknowledged != (uint64_t)(int64_t)-1) {
+        if (pkt_ctx->highest_acknowledged != UINT64_MAX) {
             bytewrite_vint(ps_msg, 1);
             bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged);
             bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged_time - cnx->start_time);
@@ -1111,7 +1138,7 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         bytewrite_vint(ps_msg, path->send_mtu);
         bytewrite_vint(ps_msg, path->pacing_packet_time_microsec);
         if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
-            bytewrite_vint(ps_msg, path->retrans_count);
+            bytewrite_vint(ps_msg, path->nb_losses_found);
             bytewrite_vint(ps_msg, path->nb_spurious);
         }
         else {
@@ -1137,7 +1164,7 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
             bytewrite_vint(ps_msg, cc_param);
         }
 
-        bytewrite_vint(ps_msg, path->max_bandwidth_estimate);
+        bytewrite_vint(ps_msg, path->peak_bandwidth_estimate);
         bytewrite_vint(ps_msg, path->bytes_in_transit);
 
         bytestream_buf stream_head;

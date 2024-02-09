@@ -61,6 +61,7 @@ typedef enum {
     picoquic_option_FORCE_ZERO_SHARE,
     picoquic_option_CNXID_LENGTH,
     picoquic_option_NO_DISK,
+    picoquic_option_Idle_Timeout,
     picoquic_option_LARGE_CLIENT_HELLO,
     picoquic_option_Ticket_File_Name,
     picoquic_option_Token_File_Name,
@@ -70,6 +71,7 @@ typedef enum {
     picoquic_option_Version_Upgrade,
     picoquic_option_No_GSO,
     picoquic_option_BDP_frame,
+    picoquic_option_CWIN_MAX,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -86,6 +88,7 @@ typedef struct st_picoquic_quic_config_t {
     int dest_if;
     int mtu_max;
     int cnx_id_length;
+    int idle_timeout;
     int socket_buffer_size;
     char const* cc_algo_id;
     char const * cnx_id_cbdata;
@@ -95,6 +98,7 @@ typedef struct st_picoquic_quic_config_t {
     int multipath_option;
     char *multipath_alt_config;
     int bdp_frame_option;
+    uint64_t cwin_max;
     /* TODO: control other extensions, e.g. time stamp, ack delay */
     /* Common flags */
     unsigned int initial_random;
@@ -104,11 +108,12 @@ typedef struct st_picoquic_quic_config_t {
     unsigned int disable_port_blocking : 1;
     /* Server only */
     char const* www_dir;
-    uint64_t reset_seed[2];
+    uint8_t reset_seed[16];
     const uint8_t* ticket_encryption_key; /* TODO: allocate key. Or maybe consider this a PEM file */
     size_t ticket_encryption_key_length;
     /* Server flags */
     unsigned int do_retry : 1;
+    unsigned int has_reset_seed : 1;
     /* Client only */
     char const* ticket_file_name; /* TODO: allocate key */
     char const* token_file_name; /* TODO: allocate key */
@@ -125,12 +130,16 @@ typedef struct st_picoquic_quic_config_t {
 } picoquic_quic_config_t;
 
 int picoquic_config_option_letters(char* option_string, size_t string_max, size_t* string_length);
+void picoquic_config_usage_file(FILE* F);
 void picoquic_config_usage();
 int picoquic_config_set_option(picoquic_quic_config_t* config, picoquic_option_enum_t option_num, const char* opt_val);
 
 int picoquic_config_command_line(int opt, int* p_optind, int argc, char const** argv, char const* optarg, picoquic_quic_config_t* config);
 
+#if 0
+/* It does not seem anyone uses this, and it is not tested */
 int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config);
+#endif
 
 picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
     picoquic_stream_data_cb_fn default_callback_fn,

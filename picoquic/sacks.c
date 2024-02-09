@@ -45,6 +45,9 @@ static picoquic_sack_item_t* picoquic_sack_item_value(picosplay_node_t* node)
 }
 
 static int64_t picoquic_sack_item_compare(void* l, void* r) {
+    /* ranges are expressed in packet numbers, lower than 2^62,
+     * which implies no risk of integer overflow in 64 bit integers
+     */
     int64_t delta = ((picoquic_sack_item_t*)l)->start_of_sack_range - ((picoquic_sack_item_t*)r)->start_of_sack_range;
     return delta;
 }

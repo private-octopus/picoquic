@@ -61,10 +61,12 @@ extern "C" {
 #define PICOQUIC_PACKET 2
 #define PICOQUIC_QUICCTX 3
 #define PICOQUIC_FRAME 4
+#define PICOQUIC_LOSS_RECOVERY 5
 #define SET_LAST_WAKE(quic, file_id) ((quic)->wake_file = file_id, (quic)->wake_line = __LINE__)
 
 
 void debug_set_stream(FILE *F);
+void debug_set_callback(void (*cb)(const char *msg, void *argp), void *argp);
 void debug_printf(const char* fmt, ...);
 void debug_printf_push_stream(FILE* f);
 void debug_printf_pop_stream(void);
@@ -208,6 +210,7 @@ typedef struct st_picoquic_event_t {
 #endif
 
 int picoquic_create_thread(picoquic_thread_t* thread, picoquic_thread_fn thread_fn, void* arg);
+int picoquic_wait_thread(picoquic_thread_t thread);
 void picoquic_delete_thread(picoquic_thread_t* thread);
 
 int picoquic_create_mutex(picoquic_mutex_t* mutex);
@@ -219,6 +222,10 @@ int picoquic_create_event(picoquic_event_t* event);
 void picoquic_delete_event(picoquic_event_t* event);
 int picoquic_signal_event(picoquic_event_t* event);
 int picoquic_wait_for_event(picoquic_event_t* event, uint64_t microsec_wait);
+
+/* Simple portable random number generation
+ */
+uint64_t picoquic_uniform_random(uint64_t rnd_max);
 
 /* Set of random number generation functions, designed for tests.
  * The random numbers are defined by a 64 bit context, initialized to a seed.
@@ -256,6 +263,7 @@ typedef struct st_picoquictest_sim_packet_t {
 typedef struct st_picoquictest_sim_link_t {
     uint64_t next_send_time;
     uint64_t queue_time;
+    uint64_t resume_time;
     uint64_t queue_delay_max;
     uint64_t picosec_per_byte;
     uint64_t microsec_latency;
@@ -297,6 +305,17 @@ picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t
 void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
     uint64_t current_time);
 
+/* picoquic_test_simlink_suspend simulates and interuption of transmission until the
+* specified "end of interval" time. There are two modes:
+* 
+* - simulate_receive = 1: receive side. Simulate suspension of reception until the
+*   specified end of interval. All rpending packets are delivered at this point.
+* - simulate_receive = 0: sender side. Simulate suspension of transmission until the
+*   specified end of interval. Packets are queued as if transmitted in sequence
+*   after that interval.
+ */
+void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_end_of_interval, int simulate_receive);
+
 /* SNI, Stores and Certificates used for test
  */
 
@@ -307,11 +326,15 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
 #define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs\\badcert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_KEY "certs\\key.pem"
 #define PICOQUIC_TEST_FILE_CERT_STORE "certs\\test-ca.crt"
+#define PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA "certs\\ecdsa\\cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY_ECDSA "certs\\ecdsa\\key.pem"
 #else
 #define PICOQUIC_TEST_FILE_SERVER_CERT "certs/cert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs/badcert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_KEY "certs/key.pem"
 #define PICOQUIC_TEST_FILE_CERT_STORE "certs/test-ca.crt"
+#define PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA "certs/ecdsa/cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY_ECDSA "certs/ecdsa/key.pem"
 #endif
 
  /* To set the solution directory for tests */

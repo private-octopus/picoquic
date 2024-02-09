@@ -111,35 +111,71 @@ char* picoquic_strip_endofline(char* buf, size_t bufmax, char const* line)
 }
 
 static FILE* debug_out = NULL;
+void (*debug_callback)(const char *msg, void *arg) = NULL;
+void *debug_callback_argp = NULL;
 static int debug_suspended = 0;
 
 void debug_set_stream(FILE *F)
 {
     debug_out = F;
+    debug_callback = NULL;
+    debug_callback_argp = NULL;
+}
+
+void debug_set_callback(void (*cb)(const char *msg, void *argp), void *argp)
+{
+    debug_callback = cb;
+    debug_callback_argp = argp;
+    debug_out = NULL;
 }
 
 void debug_printf(const char* fmt, ...)
 {
-    if (debug_suspended == 0 && debug_out != NULL) {
-        va_list args;
-        va_start(args, fmt);
-        vfprintf(debug_out, fmt, args);
-        va_end(args);
+    if (debug_suspended == 0 && (debug_out != NULL || debug_callback != NULL)) {
+        if (debug_out) {
+            va_list args;
+            va_start(args, fmt);
+            vfprintf(debug_out, fmt, args);
+            va_end(args);
+        } else {
+            char message[1024];
+            size_t message_length;
+            va_list args;
+            va_start(args, fmt);
+            vsnprintf(message, sizeof(message), fmt, args);
+            va_end(args);
+            message_length = strnlen(message, sizeof(message));
+            if (message_length > 0) {
+                // Strip any trailing newline
+                if (message[message_length - 1] == '\n') {
+                    message[message_length - 1] = '\0';
+                }
+            }
+            debug_callback(message, debug_callback_argp);
+        }
     }
 }
 
 void debug_dump(const void * x, int len)
 {
-    if (debug_suspended == 0 && debug_out != NULL) {
+    if (debug_suspended == 0 && (debug_out != NULL || debug_callback != NULL)) {
+        char msg[64];
+        size_t mlen;
         uint8_t * bytes = (uint8_t *)x;
 
         for (int i = 0; i < len;) {
-            fprintf(debug_out, "%04x:  ", (int)i);
+            snprintf(msg, sizeof(msg), "%04x:  ", (int) i);
+            mlen = strnlen(msg, sizeof(msg));
 
             for (int j = 0; j < 16 && i < len; j++, i++) {
-                fprintf(debug_out, "%02x ", bytes[i]);
+                snprintf(msg + mlen, sizeof(msg) - mlen, "%02x ", bytes[i]);
+                mlen = strnlen(msg, sizeof(msg));
             }
-            fprintf(debug_out, "\n");
+            if (debug_out) {
+                fprintf(debug_out, "%s\n", msg);
+            } else {
+                debug_callback(msg, debug_callback_argp);
+            }
         }
     }
 }
@@ -531,7 +567,7 @@ int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_
 {
     int ret = -1;
     if (addr_family == AF_INET) {
-        ret = picoquic_store_text_addr(stored_addr, "128.0.0.1", port);
+        ret = picoquic_store_text_addr(stored_addr, "127.0.0.1", port);
     }
     else if (addr_family == AF_INET6) {
         ret = picoquic_store_text_addr(stored_addr, "::1", port);
@@ -979,6 +1015,19 @@ int picoquic_create_thread(picoquic_thread_t * thread, picoquic_thread_fn thread
     return ret;
 }
 
+int picoquic_wait_thread(picoquic_thread_t thread)
+{
+    int ret = 0;
+#ifdef _WINDOWS
+    if (WaitForSingleObject(thread, INFINITE) == WAIT_TIMEOUT) {
+        ret = -1;
+    }
+#else
+    ret = pthread_join(thread, NULL);
+#endif
+    return ret;
+}
+
 void picoquic_delete_thread(picoquic_thread_t * thread)
 {
 #ifdef _WINDOWS
@@ -996,6 +1045,7 @@ void picoquic_delete_thread(picoquic_thread_t * thread)
     }
 #endif
 }
+
 
 int picoquic_create_mutex(picoquic_mutex_t * mutex)
 {
@@ -1162,7 +1212,7 @@ uint64_t picoquic_test_uniform_random(uint64_t* random_context, uint64_t rnd_max
     uint64_t rnd = 0;
 
     if (rnd_max > 0) {
-        uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
+        uint64_t rnd_min = UINT64_MAX % rnd_max;
 
         do {
             rnd = picoquic_test_random(random_context);

@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.0.0
+        VERSION 1.1.18.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -72,6 +72,7 @@ endif()
 
 set(PICOQUIC_LIBRARY_FILES
     picoquic/bbr.c
+    picoquic/bbr1.c
     picoquic/bytestream.c
     picoquic/cc_common.c
     picoquic/config.c
@@ -81,11 +82,16 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/intformat.c
     picoquic/logger.c
     picoquic/logwriter.c
+    picoquic/loss_recovery.c
     picoquic/newreno.c
     picoquic/packet.c
     picoquic/performance_log.c
     picoquic/picohash.c
     picoquic/picoquic_lb.c
+    picoquic/picoquic_ptls_fusion.c
+    picoquic/picoquic_ptls_minicrypto.c
+    picoquic/picoquic_ptls_openssl.c
+    picoquic/picoquic_mbedtls.c
     picoquic/picosocks.c
     picoquic/picosplay.c
     picoquic/port_blocking.c
@@ -97,6 +103,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sockloop.c
     picoquic/spinbit.c
     picoquic/ticket_store.c
+    picoquic/timing.c
     picoquic/token_store.c
     picoquic/tls_api.c
     picoquic/transport.c
@@ -127,29 +134,37 @@ set(PICOQUIC_LOGLIB_HEADERS loglib/autoqlog.h)
 
 set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
+    picoquictest/app_limited.c
     picoquictest/bytestream_test.c
     picoquictest/cert_verify_test.c
     picoquictest/cleartext_aead_test.c
+    picoquictest/code_version_test.c
     picoquictest/config_test.c
     picoquictest/cnx_creation_test.c
     picoquictest/cnxstress.c
     picoquictest/cplusplus.cpp
+    picoquictest/cpu_limited.c
     picoquictest/datagram_tests.c
+    picoquictest/delay_tolerant_test.c
     picoquictest/edge_cases.c
     picoquictest/hashtest.c
     picoquictest/high_latency_test.c
     picoquictest/intformattest.c
     picoquictest/l4s_test.c
+    picoquictest/mbedtls_test.c
     picoquictest/mediatest.c
+    picoquictest/minicrypto_test.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
     picoquictest/parseheadertest.c
     picoquictest/picoquic_lb_test.c
     picoquictest/pn2pn64test.c
+    picoquictest/quic_tester.c
     picoquictest/sacktest.c
     picoquictest/satellite_test.c
     picoquictest/skip_frame_test.c
     picoquictest/socket_test.c
+    picoquictest/sockloop_test.c
     picoquictest/splay_test.c
     picoquictest/stream0_frame_test.c
     picoquictest/stresstest.c
@@ -157,29 +172,42 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/tls_api_test.c
     picoquictest/transport_param_test.c
     picoquictest/util_test.c
-    picoquictest/warptest.c)
+    picoquictest/warptest.c
+    picoquictest/wifitest.c )
 
 set(PICOHTTP_LIBRARY_FILES
     picohttp/democlient.c
     picohttp/demoserver.c
     picohttp/h3zero.c
+    picohttp/h3zero_client.c
+    picohttp/h3zero_common.c
+    picohttp/h3zero_server.c
+     picohttp/h3zero_uri.c
     picohttp/quicperf.c
-    picohttp/siduck.c)
+    picohttp/siduck.c
+    picohttp/webtransport.c
+    picohttp/wt_baton.c)
 
 set(PICOHTTP_HEADERS
      picohttp/h3zero.h
+     picohttp/h3zero_common.h
+     picohttp/h3zero_uri.h
      picohttp/democlient.h
-     picohttp/demoserver.h)
+     picohttp/demoserver.h
+     picohttp/pico_webtransport.h
+     picohttp/wt_baton.h)
 
-
-set(PICOHTTP_TEST_LIBRARY_FILES picoquictest/h3zerotest.c)
+set(PICOHTTP_TEST_LIBRARY_FILES
+    picoquictest/h3zerotest.c
+    picoquictest/h3zero_uri_test.c
+    picoquictest/webtransport_test.c)
 
 OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
 if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
         GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             7d294ab4f2e0ed749b4bcfaf533225a4e0c096f7)
+        GIT_TAG             af66fc4aa8853b0725fcb2c18a702e8f1c656cf1)
     FetchContent_MakeAvailable(picotls)
 endif()
 
@@ -196,13 +224,43 @@ else()
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_FUSION)
 endif()
 
-find_package(OpenSSL REQUIRED)
-message(STATUS "root: ${OPENSSL_ROOT_DIR}")
-message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
-message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
-message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
-message(STATUS "CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
-message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+OPTION(WITH_OPENSSL "build with OpenSSL" ON)
+
+if(WITH_OPENSSL)
+    find_package(OpenSSL REQUIRED)
+    message(STATUS "root: ${OPENSSL_ROOT_DIR}")
+    message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
+    message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
+    message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
+    message(STATUS "CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
+    message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+else()
+    message(STATUS "Building without picotls-openssl")
+    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
+endif()
+
+
+OPTION(WITH_MBEDTLS "enable MBEDTLS" OFF)
+
+IF (WITH_MBEDTLS)
+    FIND_PACKAGE(MbedTLS)
+    IF (MbedTLS_FOUND)
+        message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+        message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
+        list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_MBEDTLS)
+# TODO:
+#       add mbedtls include dir to include path?
+#       maybe, create an mbed-ltls library in picoquic?
+#       either ADD_LIBRARY(picoquic-mbedtls lib/ptls_mbedtls.c)
+#       or ADD file to core libraries, easier for users?
+#       list(APPEND PICOQUIC_LIBRARY_FILES picoquic/ptls_mbedtls.c)
+    ELSE ()
+        message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+        message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
+        MESSAGE (FATAL_ERROR "MbedTLS not found")
+    ENDIF()
+ENDIF ()
+
 
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
@@ -249,11 +307,13 @@ target_include_directories(picoquic-core
     PRIVATE
         ${PTLS_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR}
+        ${MBEDTLS_INCLUDE_DIRS}
     PUBLIC
         picoquic)
 target_link_libraries(picoquic-core
     PRIVATE
         ${OPENSSL_LIBRARIES}
+        ${MBEDTLS_LIBRARIES}
     PUBLIC
         ${PTLS_LIBRARIES}
         Threads::Threads)
@@ -273,6 +333,7 @@ target_link_libraries(picohttp-core
     PRIVATE
         ${PTLS_LIBRARIES}
         ${OPENSSL_LIBRARIES}
+        ${MBEDTLS_LIBRARIES}
     PUBLIC
         picoquic-core)
 target_include_directories(picohttp-core
@@ -290,6 +351,7 @@ target_link_libraries(picoquicdemo
     PRIVATE
         ${PTLS_LIBRARIES}
         ${OPENSSL_LIBRARIES}
+        ${MBEDTLS_LIBRARIES}
         picoquic-log
         picoquic-core
         picohttp-core)
@@ -308,6 +370,8 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     add_library(picoquic-test STATIC ${PICOQUIC_TEST_LIBRARY_FILES})
     target_link_libraries(picoquic-test PUBLIC picoquic-core picoquic-log)
     target_include_directories(picoquic-test
+        PRIVATE
+            ${MBEDTLS_INCLUDE_DIRS}
         PUBLIC
             ${PTLS_INCLUDE_DIRS}
             picoquic
@@ -315,7 +379,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     set_picoquic_compile_settings(picoquic-test)
 
     add_executable(picoquic_ct picoquic_t/picoquic_t.c)
-    target_link_libraries(picoquic_ct PRIVATE picoquic-test)
+    target_link_libraries(picoquic_ct PRIVATE picoquic-test ${MBEDTLS_LIBRARIES})
     set_picoquic_compile_settings(picoquic_ct)
 
     add_executable(picohttp_ct
@@ -324,6 +388,11 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     target_link_libraries(picohttp_ct PRIVATE picohttp-core picoquic-test)
     target_include_directories(picohttp_ct PRIVATE picohttp)
     set_picoquic_compile_settings(picohttp_ct)
+
+    add_executable(pico_baton baton_app/baton_app.c)
+    target_link_libraries(pico_baton PRIVATE picoquic-log picoquic-core picohttp-core)
+    target_include_directories(pico_baton PRIVATE loglib picoquic picohttp)
+    set_picoquic_compile_settings(pico_baton)
 
     add_executable(picoquic_sample
         sample/sample.c
@@ -336,7 +405,14 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     add_test(NAME picoquic_ct
              COMMAND picoquic_ct -S ${PROJECT_SOURCE_DIR} -n -r)
     add_test(NAME picohttp_ct
-             COMMAND picohttp_ct -S ${PROJECT_SOURCE_DIR} -n -r -x http_corrupt)
+             COMMAND picohttp_ct -S ${PROJECT_SOURCE_DIR} -n -r)
+
+    add_executable(thread_test
+        thread_tester/thread_test.c)
+    target_link_libraries(thread_test PRIVATE picoquic-log picoquic-core)
+    target_include_directories(thread_test PRIVATE loglib picoquic)
+    set_picoquic_compile_settings(thread_test)
+
 endif()
 
 # get all project files for formatting

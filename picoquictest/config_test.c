@@ -25,8 +25,9 @@
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
+#include "picoquictest_internal.h"
 
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:M:e:C:i:l:Lb:q:m:n:a:t:zI:DQT:N:B:F:VU:0j:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:M:e:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:h";
 
 int config_option_letters_test()
 {
@@ -44,6 +45,8 @@ int config_option_letters_test()
     return ret;
 }
 
+const uint8_t null_key[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
 static picoquic_quic_config_t param1 = {
     1024, /*uint32_t nb_connections; */
     "/data/github/picoquic", /* char const* solution_dir; */
@@ -57,6 +60,7 @@ static picoquic_quic_config_t param1 = {
     1, /* int dest_if; */
     1536, /* int mtu_max; */
     -1, /* int cnx_id_length; */
+    0, /* int idle_timeout */
     655360, /* Socket buffer size */
     "cubic", /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     "0N8C-000123", /* char const* cnx_id_cbdata; */
@@ -65,6 +69,7 @@ static picoquic_quic_config_t param1 = {
     3,
     "127.0.0.1",
     1,
+    UINT64_MAX, /* Do not limit CWIN */
     /* Common flags */
     1, /* unsigned int initial_random : 1; */
     1, /* unsigned int use_long_log : 1; */
@@ -73,12 +78,13 @@ static picoquic_quic_config_t param1 = {
     0, /* disable port blocking */
     /* Server only */
     "/data/www/", /* char const* www_dir; */
-    { 0x012345678abcdef, 0xfedcba9876543210}, /* uint64_t reset_seed[2]; */
-    NULL, /* const uint8_t* ticket_encryption_key; */
+    { 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+      0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10}, /* uint8_t reset_seed[16]; */
+    null_key, /* const uint8_t* ticket_encryption_key; */
     0, /* size_t ticket_encryption_key_length; */
     /* Server flags */
     1, /* unsigned int do_retry : 1; */
-
+    1, /* unsigned int has_reset_seed : 1;*/
     /* Client only */
     NULL, /* char const* ticket_file_name; */
     NULL, /* char const* token_file_name; */
@@ -113,7 +119,7 @@ static char const* config_argv1[] = {
     "-L",
     "-w", "/data/www/",
     "-r",
-    "-s", "012345678abcdef", "0xfedcba9876543210",
+    "-s", "0123456789abcdeffedcba9876543210",
     "-B", "655360",
     "-F", "/data/performance_log.csv",
     "-V",
@@ -136,6 +142,7 @@ static picoquic_quic_config_t param2 = {
     0, /* int dest_if; */
     0, /* int mtu_max; */
     5, /* int cnx_id_length; */
+    1234567, /* int idle_timeout */
     0, /* socket_buffer_size */
     NULL, /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     NULL, /* char const* cnx_id_cbdata; */
@@ -144,6 +151,7 @@ static picoquic_quic_config_t param2 = {
     0,
     "127.0.0.1",
     0,
+    1000000, /* Limit CWIN to 1 million bytes */
     /* Common flags */
     3, /* unsigned int initial_random : 1; */
     0, /* unsigned int use_long_log : 1; */
@@ -152,12 +160,12 @@ static picoquic_quic_config_t param2 = {
     1, /* disable port blocking */
     /* Server only */
     NULL, /* char const* www_dir; */
-    {0, 0}, /* uint64_t reset_seed[2]; */
+    { 0 }, /* Reset seed */
     NULL, /* const uint8_t* ticket_encryption_key; */
     0, /* size_t ticket_encryption_key_length; */
     /* Server flags */
     0, /* unsigned int do_retry : 1; */
-
+    0, /* unsigned int  has reset seed : 1; */
     /* Client only */
     "/data/tickets.bin", /* char const* ticket_file_name; */
     "/data/tokens.bin", /* char const* token_file_name; */
@@ -179,8 +187,9 @@ static const char* config_argv2[] = {
     "-o", "/data/w_out",
     "-t", "data/certs/root.pem",
     "-C", "20",
-    "-v", "ff000020",
+    "-v", "fF000020",
     "-z",
+    "-d", "1234567",
     "-D",
     "-Q",
     "-X",
@@ -188,8 +197,52 @@ static const char* config_argv2[] = {
     "-T", "/data/tickets.bin",
     "-N", "/data/tokens.bin",
     "-U", "00000002",
+    "-W", "1000000",
     NULL
 };
+
+typedef struct st_config_error_test_t {
+    int nb_args;
+    char const* err_args[2];
+} config_error_test_t;
+
+static config_error_test_t config_errors[] = {
+    { 1, { "-A"}},
+    { 1, { "-S" }},
+    { 1, { "-c"}},
+    { 1, { "-k"}},
+    { 1, { "-x"}},
+    { 2, { "-x", "nb_cnx"}},
+    { 1, { "-l"}},
+    { 1, { "-b"}},
+    { 1, { "-q"}},
+    { 2, { "-p", "port"}},
+    { 1, { "-p" }},
+    { 1, { "-e", }},
+    { 2, { "-e", "a" }},
+    { 1, { "-m" }},
+    { 1, { "-m", "-1"}},
+    { 2, { "-m", "15360"}},
+    { 2, { "-P", "33"}},
+    { 2, { "-O", "22"}},
+    { 2, { "-M", "5"}},
+    { 2, { "-R", "17"}},
+    { 1, { "-w" }},
+    { 2, { "-s", "0123456789abcdexyedcba9876543210"}},
+    { 2, { "-s", "0123456789abcdeffedcba987654321"}},
+    { 2, { "-s", "0123456789abcdeffedcba98765432"}},
+    { 2, { "-B", "buffer"}},
+    { 1, { "-F" }},
+    { 2, { "-j", "3" }},
+    { 1, { "-i" }},
+    { 2, { "-I", "-1" }},
+    { 2, { "-I", "255" }},
+    { 2, { "-U", "XY000002" }},
+    { 2, { "-W", "cwin" }},
+    { 2, { "-d", "idle" }}
+};
+
+static size_t nb_config_errors = sizeof(config_errors) / sizeof(config_error_test_t);
 
 int config_test_compare_string(const char* title, const char* expected, const char* actual)
 {
@@ -223,7 +276,16 @@ int config_test_compare_int(const char* title, int expected, int actual)
     return ret;
 }
 
+int config_test_compare_uint64(const char* title, uint64_t expected, uint64_t actual)
+{
+    int ret = 0;
 
+    if (expected != actual) {
+        DBG_PRINTF("Expected %s = %" PRIu64 ", got %" PRIu64, title, actual, expected);
+        ret = -1;
+    }
+    return ret;
+}
 
 int config_test_compare_uint32(const char* title, uint32_t expected, uint32_t actual)
 {
@@ -277,17 +339,17 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_int("large_client_hello", expected->large_client_hello, actual->large_client_hello);
     ret |= config_test_compare_int("cnx_id_length", expected->cnx_id_length, actual->cnx_id_length);
     ret |= config_test_compare_int("bdp", expected->bdp_frame_option, actual->bdp_frame_option);
-
+    ret |= config_test_compare_int("idle_timeout", expected->idle_timeout, actual->idle_timeout);
+    ret |= config_test_compare_uint64("cwin_max", expected->cwin_max, actual->cwin_max);
     return ret;
 }
 
-int config_test_parse_command_line(const picoquic_quic_config_t* expected, const char** argv, int argc)
+static int config_parse_command_line(picoquic_quic_config_t* actual, const char** argv, int argc, int expect_error)
 {
     int ret = 0;
     int opt_ind = 0;
-    picoquic_quic_config_t actual;
 
-    picoquic_config_init(&actual);
+    picoquic_config_init(actual);
 
     while (opt_ind < argc && ret == 0) {
         const char* x = argv[opt_ind];
@@ -295,16 +357,21 @@ int config_test_parse_command_line(const picoquic_quic_config_t* expected, const
         int opt;
         if (x == NULL) {
             /* could not parse to the end! */
-            DBG_PRINTF("Unexpected stop after %d arguments, expected %d", opt_ind, argc);
+            if (!expect_error) {
+                DBG_PRINTF("Unexpected stop after %d arguments, expected %d", opt_ind, argc);
+            }
             ret = -1;
             break;
         }
         else if (x[0] != '-' || x[1] == 0 || x[2] != 0) {
-            /* could not parse to the end! */
-            DBG_PRINTF("Unexpected argument: %s", x);
+            /* Either next argument, or single "-", or more than one char ! */
+            if (!expect_error) {
+                DBG_PRINTF("Unexpected argument: %s", x);
+            }
             ret = -1;
             break;
         }
+
         opt = x[1];
         opt_ind++;
         if (opt_ind < argc) {
@@ -316,11 +383,25 @@ int config_test_parse_command_line(const picoquic_quic_config_t* expected, const
                 opt_ind++;
             }
         }
-        ret = picoquic_config_command_line(opt, &opt_ind, argc, argv, optval, &actual);
+
+        ret = picoquic_config_command_line(opt, &opt_ind, argc, argv, optval, actual);
         if (ret != 0) {
-            DBG_PRINTF("Could not parse opt -%c", opt);
+            if (!expect_error) {
+                DBG_PRINTF("Could not parse opt -%c", opt);
+            }
         }
     }
+
+    return (ret);
+}
+
+
+static int config_parse_command_line_test(const picoquic_quic_config_t* expected, const char** argv, int argc)
+{
+    int ret = 0;
+    picoquic_quic_config_t actual;
+
+    ret = config_parse_command_line(&actual, argv, argc, 0);
 
     if (ret == 0) {
         ret = config_test_compare(expected, &actual);
@@ -331,17 +412,165 @@ int config_test_parse_command_line(const picoquic_quic_config_t* expected, const
     return (ret);
 }
 
+int config_set_option_test_one()
+{
+    int ret = 0;
+    char const* ticket_store = "ticket_store.bin";
+    char const* token_store = "ticket_store.bin";
+
+    picoquic_quic_config_t config = { 0 };
+    if (ret == 0 && config.ticket_file_name == NULL) {
+        ret = picoquic_config_set_option(&config, picoquic_option_Ticket_File_Name, ticket_store);
+    }
+    if (ret == 0 && config.token_file_name == NULL) {
+        ret = picoquic_config_set_option(&config, picoquic_option_Token_File_Name, token_store);
+    }
+    if (ret == 0 &&
+        (config.ticket_file_name == NULL || strcmp(config.ticket_file_name, ticket_store) != 0)) {
+        ret = -1;
+    }
+    if (ret == 0 &&
+        (config.token_file_name == NULL || strcmp(config.token_file_name, token_store) != 0)) {
+        ret = -1;
+    }
+    picoquic_config_clear(&config);
+
+    return (ret);
+}
+
 int config_option_test()
 {
-    int ret = config_test_parse_command_line(&param1, config_argv1, (int)(sizeof(config_argv1) / sizeof(char const*)) - 1);
+    int ret = config_parse_command_line_test(&param1, config_argv1, (int)(sizeof(config_argv1) / sizeof(char const*)) - 1);
     if (ret != 0) {
         DBG_PRINTF("First config option test returns %d", ret);
     }
-    else {
-        ret = config_test_parse_command_line(&param2, config_argv2, (int)(sizeof(config_argv2) / sizeof(char const*)) - 1);
+    
+    if (ret == 0){
+        ret = config_parse_command_line_test(&param2, config_argv2, (int)(sizeof(config_argv2) / sizeof(char const*)) - 1);
         if (ret != 0) {
             DBG_PRINTF("Second config option test returns %d", ret);
         }
+    }
+
+    if (ret == 0) {
+        ret = config_set_option_test_one();
+        if (ret != 0) {
+            DBG_PRINTF("Config set option test returns %d", ret);
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_config_errors; i++) {
+        picoquic_quic_config_t config = { 0 };
+        if (config_parse_command_line(&config, config_errors[i].err_args,
+            config_errors[i].nb_args, 1) == 0) {
+            DBG_PRINTF("Did not detect config error %zu, %s", i, config_errors[i].err_args[0]);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+int config_quic_test_one(picoquic_quic_config_t* config)
+{
+    int ret = 0;
+    picoquic_quic_t * quic;
+    uint64_t current_time = 0;
+
+    char const* server_cert_file = NULL;
+    char test_server_cert_file[512];
+    char const* server_key_file = NULL;
+    char test_server_key_file[512];
+    char const* root_trust_file = NULL;
+    char test_root_trust_file[512];
+
+    if (ret == 0 && config->server_cert_file != NULL) {
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_CERT);
+        if (ret == 0) {
+            server_cert_file = config->server_cert_file;
+            config->server_cert_file = test_server_cert_file;
+        }
+    }
+
+    if (ret == 0 && config->server_key_file) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+        if (ret == 0) {
+            server_key_file = config->server_key_file;
+            config->server_key_file = test_server_key_file;
+        }
+    }
+
+    if (ret == 0 && config->root_trust_file) {
+        ret = picoquic_get_input_path(test_root_trust_file, sizeof(test_root_trust_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+        if (ret == 0) {
+            root_trust_file = config->root_trust_file;
+            config->root_trust_file = root_trust_file;
+        }
+    }
+
+    quic = picoquic_create_and_configure(config, NULL, NULL, current_time, NULL);
+    if (quic == NULL) {
+        ret = 1;
+    }
+    else {
+        /* Check that at least some parameters are what we expect */
+        if (config->nb_connections > 0 && config->nb_connections != quic->max_number_connections) {
+            ret = -1;
+        }
+        if (config->alpn != NULL &&
+            (quic->default_alpn == NULL || strcmp(quic->default_alpn, config->alpn) != 0)) {
+            ret = -1;
+        }
+        if (config->has_reset_seed &&
+            memcmp(quic->reset_seed, config->reset_seed, sizeof(config->reset_seed)) != 0) {
+            ret = -1;
+        }
+        picoquic_free(quic);
+    }
+
+    if (server_key_file != NULL) {
+        config->server_key_file = server_key_file;
+    }
+    if (server_cert_file != NULL) {
+        config->server_cert_file = server_cert_file;
+    }
+    if (root_trust_file != NULL) {
+        config->root_trust_file = root_trust_file;
+    }
+
+    return(ret);
+}
+
+int config_quic_test()
+{
+    int ret = 0;
+    if (config_quic_test_one(&param1) != 0 ||
+        config_quic_test_one(&param2) != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
+#define CONFIG_USAGE_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "config_usage_ref.txt"
+#define CONFIG_USAGE_TXT "config_usage.txt"
+
+int config_usage_test()
+{
+
+    FILE* F = NULL;
+    char config_usage_ref[512];
+    int ret = picoquic_get_input_path(config_usage_ref, sizeof(config_usage_ref), picoquic_solution_dir, CONFIG_USAGE_REF);
+
+    if (ret == 0 && (F = picoquic_file_open(CONFIG_USAGE_TXT, "wt")) != NULL){
+        picoquic_config_usage_file(F);
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_test_compare_text_files(CONFIG_USAGE_TXT, config_usage_ref);
     }
 
     return ret;

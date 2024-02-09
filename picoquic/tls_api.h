@@ -121,21 +121,8 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx);
 void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret, const char *prefix_label);
 void * picoquic_pn_enc_create_for_test(const uint8_t * secret, const char *prefix_label);
 
-#if 0
-/* TODO: find replacement for this test */
-int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_t* cnx2);
-#endif
-
 int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE]);
-
-#if 0
-void picoquic_provide_received_transport_extensions(picoquic_cnx_t* cnx,
-    uint8_t** ext_received,
-    size_t* ext_received_length,
-    int* ext_received_return,
-    int* client_mode);
-#endif
 
 char const* picoquic_tls_get_negotiated_alpn(picoquic_cnx_t* cnx);
 char const* picoquic_tls_get_sni(picoquic_cnx_t* cnx);
@@ -177,7 +164,10 @@ size_t picoquic_hash_get_length(char const* algorithm_name);
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context);
 void picoquic_hash_finalize(uint8_t* output, void* hash_context);
 
-uint8_t* picoquic_get_private_key_from_key_file(char const* file_name, int* key_length);
+#if 0
+uint8_t* picoquic_get_private_key_from_file(char const* file_name, int* key_length);
+#endif
+int picoquic_set_private_key_from_file(picoquic_quic_t* quic, char const* file_name);
 ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count);
 
 
@@ -203,7 +193,9 @@ void picoquic_aes128_ecb_free(void* v_aesecb);
 
 void picoquic_aes128_ecb_encrypt(void* v_aesecb, uint8_t* output, const uint8_t* input, size_t len);
 
-void picoquic_clear_openssl();
+void picoquic_tls_api_init();
+void picoquic_tls_api_unload();
+void picoquic_tls_api_reset(uint64_t init_flags);
 
 #ifdef __cplusplus
 }

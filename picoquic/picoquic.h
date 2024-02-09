@@ -40,8 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.0.0"
-
+#define PICOQUIC_VERSION "1.1.18.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -125,7 +124,9 @@ extern "C" {
 #define PICOQUIC_TRANSPORT_CRYPTO_ERROR(Alert) (((uint16_t)0x100) | ((uint16_t)((Alert)&0xFF)))
 #define PICOQUIC_TLS_ALERT_WRONG_ALPN (0x178)
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
-#define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x53F8)
+#define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x11)
+
+#define PICOQUIC_ERROR_MP_PROTOCOL_VIOLATION (0x1001d76d3ded42f3ull)
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
@@ -137,6 +138,12 @@ extern "C" {
 #define PICOQUIC_LOG_PACKET_MAX_SEQUENCE 100
 
 #define FOURCC(a, b, c, d) ((((uint32_t)(d)<<24) | ((c)<<16) | ((b)<<8) | (a)))
+
+#define PICOQUIC_AES_128_GCM_SHA256 0x1301
+#define PICOQUIC_AES_256_GCM_SHA384 0x1302
+#define PICOQUIC_CHACHA20_POLY1305_SHA256 0x1303
+
+#define PICOQUIC_GROUP_SECP256R1 23
 
 /*
 * Connection states, useful to expose the state to the application.
@@ -195,6 +202,15 @@ typedef enum {
 } picoquic_lossbit_version_enum;
 
 /*
+* Path statuses
+*/
+
+typedef enum {
+    picoquic_path_status_available = 0, /* Path available for sending */
+    picoquic_path_status_standby = 1 /* Do not use if other path available */
+} picoquic_path_status_enum;
+
+/*
  * Provisional definition of the connection ID.
  */
 #define PICOQUIC_CONNECTION_ID_MIN_SIZE 0
@@ -238,7 +254,11 @@ typedef enum {
     picoquic_callback_prepare_datagram, /* Prepare the next datagram */
     picoquic_callback_datagram_acked, /* Ack for packet carrying datagram-frame received from peer */
     picoquic_callback_datagram_lost, /* Packet carrying datagram-frame probably lost */
-    picoquic_callback_datagram_spurious /* Packet carrying datagram-frame was not really lost */
+    picoquic_callback_datagram_spurious, /* Packet carrying datagram-frame was not really lost */
+    picoquic_callback_path_available, /* A new path is available, or a suspended path is available again */
+    picoquic_callback_path_suspended, /* An available path is suspended */
+    picoquic_callback_path_deleted, /* An existing path has been deleted */
+    picoquic_callback_path_quality_changed /* Some path quality parameters have changed */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -267,7 +287,7 @@ typedef struct st_picoquic_tp_t {
     uint64_t initial_max_data;
     uint64_t initial_max_stream_id_bidir;
     uint64_t initial_max_stream_id_unidir;
-    uint32_t idle_timeout;
+    uint64_t max_idle_timeout;
     uint32_t max_packet_size;
     uint32_t max_ack_delay; /* stored in in microseconds for convenience */
     uint32_t active_connection_id_limit;
@@ -282,6 +302,7 @@ typedef struct st_picoquic_tp_t {
     int enable_multipath;
     picoquic_tp_version_negotiation_t version_negotiation;
     int enable_bdp_frame;
+    int enable_simple_multipath;
 } picoquic_tp_t;
 
 /*
@@ -515,25 +536,27 @@ int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int low_memory_mode);
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
 
 /* Set cipher suite, for tests. 
- * 0: default values
- * 20: chacha20poly1305sha256
- * 128: aes128gcmsha256
- * 256: aes256gcmsha384
+ * use cipher_suite_id = 0 for default values, or one 
+ * of the values defined by IANA for cipher suites, 
+ * including: 
+ *     PICOQUIC_AES_128_GCM_SHA256
+ *     PICOQUIC_AES_256_GCM_SHA384
+ *     PICOQUIC_CHACHA20_POLY1305_SHA256
  * returns 0 if OK, -1 if the specified ciphersuite is not supported.
  */
 int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id);
 
 /* Set key exchange algorithms, for tests.
- * 0: default values
- * 20: x25519
- * 128: secp256r1
- * 256: secp256r1
- * returns 0 if OK, -1 if the specified ciphersuite is not supported.
+ * use key_exchange_id = 0 for default values,
+ * or PICOQUIC_GROUP_SECP256R1 for supporting only secp256r1
+ * returns 0 if OK, -1 if the specified cipher suite is not supported.
  */
 int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id);
 
 /* Init of transport parameters per quic context */
 int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t* tp);
+/* Read default parameters per quic context */
+picoquic_tp_t const* picoquic_get_default_tp(picoquic_quic_t* quic);
 /* Set the transport parameters per connection */
 void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const * tp);
 /* Get the transport parameters per connection */
@@ -581,6 +604,70 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 
 /* Set the multipath option for the context */
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option);
+
+/** picoquic_set_cwin_max:
+ * Set a maximum value for the congestion window (default: UINT64_MAX)
+ * This option can be used to limit the amount of memory that the sender
+ * will use to manage packet transmission. The main part of that memory
+ * is the queue of packets not yet acknowledged, which size is mostly
+ * similar to "cwin_max". Other components include the queue of packets
+ * that have already been declared lost, and temporary copies of
+ * data waiting to be resent. The copies of packets are kept for some time
+ * in case the loss was "spurious"; the size of that queue is a fraction
+ * of "cwin_max". The temporary copies of data are kept until data can
+ * be sent, which is nor mally a very short delay but can become
+ * longer if the congestion window shrunk after losses were detected.
+ * 
+ * This control is imperfect, because the maximum packet size is always
+ * reserved for each packet.
+ * 
+ * The CWIN value is normally limited by the congestion control algorithm.
+ * The "cwin_max" limit only licks in if the congestion control
+ * algorithm would have authorized a larger value.
+ */
+void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max);
+
+/* picoquic_set_max_data_limit: 
+* set a maximum value for the "max data" option, thus limiting the
+* amount of data that the peer will be able to send before data is
+* acknowledged.
+* This option can be used to control the amount of memory that the
+* receiver will use to reorder received data frames. This control is
+* indirect: the receiver always allocate a full packet size for incoming
+* packets, even if they are small. In tests, we see the allocated memory
+* per connection vary between 2 and 3 times the max data value.
+* Setting the value to 0 (default) means that the "max data" limit
+* will rapidly increase to let transmission proceed quickly.
+*/
+void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data);
+
+/*
+* Idle timeout and handshake timeout
+* 
+* The max idle timeout determines how long to wait for sign of activity from
+* the peer before giving up on a connection. It is set by default to 
+* PICOQUIC_MICROSEC_HANDSHAKE_MAX, coverted in milliseconds (30 seconds).
+* It can be set per quic context using `picoquic_set_default_idle_timeout`,
+* before creating new connections in that context. The value is expressed
+* in milliseconds, with zero meaning "infinity". The value used for the
+* connection is the lowest of the value proposed by the client and the server,
+* as specified in RFC 9000.
+* 
+* The handshake timeout determines how long to wait for the completion
+* of a connection. It can be specified per QUIC context using
+* `picoquic_set_default_handshake_timeout`. The value is expressed
+* in microseconds, with `0` meaning unspecified.
+* 
+* If the handshake timeout is not specified, the wait time is determined by the
+* value of the default idle timeout specified for the QUIC context. If that
+* value is zero, the system uses the value of PICOQUIC_MICROSEC_HANDSHAKE_MAX,
+* i.e., 30 seconds.
+*/
+
+/* Set the idle timeout parameter for the context. Value is in milliseconds. */
+void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout_ms);
+/* Set the default handshake timeout parameter for the context.*/
+void picoquic_set_default_handshake_timeout(picoquic_quic_t* quic, uint64_t handshake_timeout_us);
 
 /* Set the length of a crypto epoch -- force rotation after that many packets sent */
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max);
@@ -685,7 +772,7 @@ int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
  * to the context after making this call will cause an error, which
  * makes it unsafe to use inside a callback.
  */
-int picoquic_close(picoquic_cnx_t* cnx, uint16_t application_reason_code);
+int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code);
 
 void picoquic_close_immediate(picoquic_cnx_t* cnx);
 
@@ -704,7 +791,8 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx);
 void picoquic_set_desired_version(picoquic_cnx_t* cnx, uint32_t desired_version);
 void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_version);
 
-/* Connection events.
+/* Path management events and API
+ * 
  * The "probe new path" API attempts to validate a new path. If multipath is enabled,
  * the new path will come in addition to the set of existing paths; if not,
  * the new path when validated will replace the default path.
@@ -712,15 +800,119 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * one path is available -- otherwise, just close the connection. If the command
  * is accepted, the peer will be informed of the need to close the path, and the
  * path will be demoted after a short delay.
+ * 
+ * Path event callbacks can be enabled by calling "picoquic_enable_path_callbacks".
+ * This can be set as the default for new connections by calling
+ * "picoquic_enable_path_callbacks_default". If enabled, the folling events
+ * will be signalled by callbacks:
+ * 
+ *  - picoquic_callback_path_available: 
+ *        A new path is available. On the client, this happens as soon as the 
+ *        continuity has been verified. On the server, this happens when the
+ *        continuity is verified and the client has started using the path
+ *        (see section 8.2 of RFC 9000, path validation.)
+ *        The same callback is used if a path was suspended, but becomes
+ *        available again. 
+ *  - picoquic_callback_path_suspended:
+ *        A path that was available has been suspended. This happens for
+ *        example if repeated transmission errors cause the scheduler to
+ *        stop using that path for sending packets. 
+ *  - picoquic_callback_path_deleted:
+ *        An existing path has been deleted. The application should delete
+ *        all references to that path.
+ *  - picoquic_callback_path_quality_changed:
+ *        Path parameters like RTT, data rate or packet loss rate have
+ *        changed.
+ * 
+ * The "path" callback events use the same calling signature as the other 
+ * callback events, but the definition of some fields changes:
+ *  - the "stream_id" field is used to carry a "unique_path id"
+ *  - the "bytes" and "length" fields are not used
+ *  - the "stream_ctx" field carries the application specified "app_path_ctx"
+ * The same "unique_path_id" is used to identify the path in the API calls.
+ * 
+ * The logical flow is that the application learns the path ID in a callback,
+ * typically "picoquic_callback_path_available". If the application wants to
+ * maintain path data in an app specific context, it will use a call to
+ * "picoquic_set_app_path_ctx" to document it. The path created during
+ * the connection setup has the unique_path_id 0.
+ 
+ * 
+ * If an error occurs, such as reference to an obsolete unique path id,
+ * all the functions return -1.
+ * 
+ * The call to "refresh the connection ID" will trigger a renewal of the connection
+ * ID used for sending packets on that path. This API is mostly used in test
+ * programs. By default, picoquic will attempt to renew a path connection ID 
+ * if that path resumes after a long silence: using
+ * a new connection ID in these conditions makes correlation of old and new
+ * connection data harder in case of NAT traversal.
  */
-int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, uint64_t current_time);
-int picoquic_abandon_path(picoquic_cnx_t* cnx, int path_id, uint64_t reason, char const* phrase);
 
-int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
+int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, uint64_t current_time);
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, int if_index, uint64_t current_time, int to_preferred_address);
+void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
+void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
+int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
+int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason, char const* phrase);
+int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
+int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
+int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
+/*
+* The calls to picoquic_get_path_quality takes as argument a structure
+* of type `picoquic_path_quality_t`.
+* 
+* The call to picoquic_get_default_path_quality uses the same
+* structure, but only reports the parameters for the "default" path.
+* This is suitable for applications that do not use multipath.
+* 
+* The application can call `picoquic_get_path_quality` or 
+* `picoquic_get_default_path_quality` at any time. The application can
+* also subscribe to the `quality change` callback, and only call
+* the path quality API after the callback signalled a path
+* qualiy change.
+* 
+* The application subscribes to the path quality update
+* using "picoquic_subscribe_to_quality_update" API
+* for the connection, or "picoquic_subscribe_to_quality_update_per_path" API
+* for a specific path, setting the "change" thresholds
+* for the datarate and the rtt. 
+* The function call "picoquic_default_quality_update"
+* can be used to set the default values of these parameters in
+* the quic context.
+*/
 
+typedef struct st_picoquic_path_quality_t {
+    uint64_t receive_rate_estimate; /* In bytes per second */
+    uint64_t pacing_rate; /* bytes per second */
+    uint64_t cwin; /* number of bytes in congestion window */
+    uint64_t rtt; /* smoothed estimate of roundtrip time in micros seconds */
+    uint64_t rtt_sample; /* most recent RTT sample */
+    uint64_t rtt_variant; /* estimate of RTT variability */
+    uint64_t rtt_min; /* minimum value of RTT, computed since path creation */
+    uint64_t rtt_max; /* maximum value of RTT, computed since path creation */
+    uint64_t sent; /* number of packets sent on the path */
+    uint64_t lost; /* number of packets considered lost among those sent */
+    uint64_t bytes_in_transit; /* number of bytes currently in transit */
+} picoquic_path_quality_t;
+
+int picoquic_get_path_quality(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_quality_t * quality);
+void picoquic_get_default_path_quality(picoquic_cnx_t* cnx, picoquic_path_quality_t* quality);
+int picoquic_subscribe_to_quality_update_per_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
+    uint64_t pacing_rate_delta, uint64_t rtt_delta);
+void picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t pacing_rate_delta, uint64_t rtt_delta);
+void picoquic_default_quality_update(picoquic_quic_t* quic, uint64_t pacing_rate_delta, uint64_t rtt_delta);
+
+/* Connection management API.
+ * TODO: many of these API should be deprecated. They were created when we
+ * envisaged that applications would directly manipulate which connection
+ * should be awaken when. The code in picoquicdemo only uses
+ * "picoquic_get_next_wake_delay" and then let the quic context poll the 
+ * right connection by calling picoquic_prepare_next_packet_ex.
+ */
 int picoquic_start_key_rotation(picoquic_cnx_t * cnx);
-
 picoquic_quic_t* picoquic_get_quic_ctx(picoquic_cnx_t* cnx);
 picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic);
 picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx);
@@ -981,6 +1173,31 @@ int picoquic_set_stream_priority(picoquic_cnx_t* cnx, uint64_t stream_id, uint8_
 int picoquic_mark_high_priority_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_high_priority);
 
+/* 
+* Handling of datagram priorities
+* 
+* All datagrams sent on a connection have the same priority.
+* The datagram priority value determines the relative priority of
+* streams and datagrams.
+* 
+* Streams with a higher priority than the datagram priority will be
+* scheduled before any datagram. Streams with a lower priority
+* will only be scheduled if no datagram needs to be sent. 
+* Streams with the same priority as the datagram priority will
+* be scheduled in a  "round robin" manner: datagram on one round,
+* then a stream on the next round, then back to datagrams, the general
+* idea being about equal share for the datagrams and all streams of
+* the same priority.
+* 
+* By default, the datagram priority is set to the value
+* PICOQUIC_DEFAULT_STREAM_PRIORITY, same as streams, so the default behavior
+* is a 50/50 share.
+*/
+
+void picoquic_set_default_datagram_priority(picoquic_quic_t* quic, uint8_t default_datagram_priority);
+
+void picoquic_set_datagram_priority(picoquic_cnx_t * cnx, uint8_t datagram_priority);
+
 /* If a stream is marked active, the application will receive a callback with
  * event type "picoquic_callback_prepare_to_send" when the transport is ready to
  * send data on a stream. The "length" argument in the call back indicates the
@@ -1018,7 +1235,7 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t * cnx, uint64_t stream_id, co
 /* Reset a stream, indicating that no more data will be sent on 
  * that stream and that any data currently queued can be abandoned. */
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint16_t local_stream_error);
+    uint64_t stream_id, uint64_t local_stream_error);
 
 /* Open the flow control for receiving the expected data on a stream */
 int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t expected_data_size);
@@ -1029,7 +1246,7 @@ uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
 /* Ask the peer to stop sending on a stream. The peer is expected
  * to reset that stream when receiving the "stop sending" signal. */
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint16_t local_stream_error);
+    uint64_t stream_id, uint64_t local_stream_error);
 
 /* Discard stream. This is equivalent to sending a stream reset
  * and a stop sending request, and also setting the app context
@@ -1037,27 +1254,98 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
 int picoquic_discard_stream(picoquic_cnx_t* cnx, uint64_t stream_id, uint16_t local_stream_error);
 
 /* The function picoquic_set_datagram_ready indicates to the stack
- * whether the application is ready to send datagrams. */
+ * whether the application is ready to send datagrams. 
+ * 
+ * When running in a multipath environment, some applications may want to
+ * send datagram on a specific path. For example, if an application is sending
+ * voice over IP frames in datagrams, it may want to send all these datagrams
+ * on the same path, to avoid the delay jitters due to random path selection.
+ * The path variant specifies a unique path identifier,
+ * indicating that datagrams are ready on that path. The callback
+ * "picoquic_callback_prepare_datagram" will be issued if either
+ * the current path or the whole connection is marked ready for datagrams.
+ */
 int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready);
+int picoquic_mark_datagram_ready_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, int is_path_ready);
 
 /* If a datagram is marked active, the application will receive a callback with
  * event type "picoquic_callback_prepare_datagram" when the transport is ready to
- * send data on a stream. The "length" argument in the call back indicates the
+ * send data on a path. The "length" argument in the call back indicates the
  * largest amount of data that can be sent, and the "bytes" argument points
- * to an opaque context structure. In order to prepare data, the application
- * needs to call "picoquic_provide_datagram_buffer" with that context
+ * to an opaque context structure. If the application has indicated support
+ * for path callbacks by using "", the "stream_id" argument is repurposed to
+ * indicate the unique path identifier of the current path. In order to prepare data, 
+ * the application needs to call "picoquic_provide_datagram_buffer" with the context
  * pointer, and with the number of bytes that it wants to write. The function
  * returns the pointer to a memory address where to write the bytes -- or
  * a NULL pointer in case of error. The application then copies the specified
  * number of bytes at the provided address, and provide a return code 0 from
  * the callback in case of success, or non zero in case of error.
+ * 
+ * There are two variants of "picoquic_callback_prepare_datagram", the old one
+ * and the new one, "picoquic_callback_prepare_datagram_ex", which adds
+ * an "is_active" parameter. This parameter helps handling some cases:
+ * 
+ * - if the application marked the context ready by mistake, it 
+ *   should set the "length" argument to 0, and the "is_active" argument
+ *   to picoquic_datagram_not_active. This is a way of saying "oops". The
+ *   stack will stop polling for datagrams, until there is a new call to
+ *   "picoquic_mark_datagram_ready"
+ * 
+ * - if the application does have data to send but the available
+ *   length indicated in the callback is too small, it should set the "length"
+ *   argument to 0, and the "is_active" argument to picoquic_datagram_active_any_path.
+ *   The stack will try to immediately reissue the callback in the next packet, hopefully with
+ *   more space available.
+ * 
+ * - if the application can send data, it should set the "length"
+ *   argument to the desired value, and the "is_active" argument to
+ *   either 0 if there is no datagram data immediately ready to send
+ *   after that, or 1 if there is some. The stack will send the requested
+ *   datagram, and then do the equivalent of a call to "picoquic_mark_datagram_ready"
+ *   with the value of is_active parameter.
+ * 
+ * The old API will not treat those scenarios as reliably. If the application
+ * is polled and has nothing to send, it MUST call
+ * " picoquic_mark_datagram_ready(cnx, 0);" to tell the stack to not call
+ * it again, otherwise there will be a hot loop consuming a lot of CPU. If you
+ * see that, you should really switch to using the new "extended" API and set
+ * the "is_active" parameter.
+ * 
+ * In multipath environments, the application can use the API 
+ * `picoquic_mark_datagram_ready_path` to signal that is is ready to send
+ * datagrams on a specific path. The picoquic_provide_datagram_path_ex
+ * API allows the application to mark 4 different level of activity:
+ * 
+ * - picoquic_datagram_not_active: not active on this path or any other.
+ * - picoquic_datagram_active_any_path: active, but not specifically on this path.
+ * - picoquic_datagram_active_this_path_only: ready to send datagrams on this
+ *   path, but not on other paths unless they were specifically marked.
+ * - picoquic_datagram_active_this_path_and_others: has traffic ready to
+ *   send on this path, and some different traffic ready for any other path.
  */
+
+typedef enum {
+    picoquic_datagram_not_active = 0,
+    picoquic_datagram_active_any_path = 1,
+    picoquic_datagram_active_this_path_only = 2,
+    picoquic_datagram_active_this_path_and_others = 3
+} picoquic_datagram_active_enum;
+
 uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length);
+uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length, picoquic_datagram_active_enum is_active);
 
 /* 
- * Set the optimistic ack policy. The holes will be inserted at random locations,
- * which in average will be separated by the pseudo period. By default,
- * the pseudo perio is 0, which means no hole insertion.
+ * Set the optimistic ack policy. This is a security feature that prevents
+ * peer from "faking" acknowledgements of packets that they have not
+ * received by inserting "holes" in the sequence of packet numbers.
+ * Acknowledging a hole is a protocol error, resulting in connection
+ * closure.
+ * 
+ * The holes are inserted at random, based on
+ * a period that doubles after each hole insertion in a given number space.
+ * By default, the initial period is 256. Setting it to 0 suppresses further
+ * hole insertion.
  */
 void picoquic_set_optimistic_ack_policy(picoquic_quic_t* quic, uint32_t sequence_hole_pseudo_period);
 
@@ -1104,22 +1392,32 @@ typedef enum {
     picoquic_congestion_notification_timeout,
     picoquic_congestion_notification_spurious_repeat,
     picoquic_congestion_notification_rtt_measurement,
-    picoquic_congestion_notification_bw_measurement,
     picoquic_congestion_notification_ecn_ec,
     picoquic_congestion_notification_cwin_blocked,
     picoquic_congestion_notification_seed_cwin,
     picoquic_congestion_notification_reset
 } picoquic_congestion_notification_t;
 
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x, uint64_t current_time);
+typedef struct st_picoquic_per_ack_state_t {
+    uint64_t rtt_measurement; /* RTT as measured when receiving the ACK */
+    uint64_t one_way_delay; /* One way delay when receiving the ACK, 0 if unknown */
+    uint64_t nb_bytes_acknowledged; /* Number of bytes acknowledged by this ACK */
+    uint64_t nb_bytes_newly_lost; /* Number of bytes in packets found lost because of this ACK */
+    uint64_t nb_bytes_lost_since_packet_sent; /* Number of bytes lost between the time the packet was sent and now */
+    uint64_t nb_bytes_delivered_since_packet_sent; /* Number of bytes acked between the time the packet was sent and now */
+    uint64_t inflight_prior;
+    uint64_t lost_packet_number;
+    uint64_t lost_packet_sent_time;
+    unsigned int is_app_limited : 1; /* App marked limited at time of ACK? */
+    unsigned int is_cwnd_limited: 1; /* path marked CWIN limited after packet was sent. */
+} picoquic_per_ack_state_t;
+
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
-    uint64_t rtt_measurement,
-    uint64_t one_way_delay,
-    uint64_t nb_bytes_acknowledged,
-    uint64_t lost_packet_number,
+    picoquic_per_ack_state_t * ack_state,
     uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
 typedef void (*picoquic_congestion_algorithm_observe)(
@@ -1140,6 +1438,7 @@ extern picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_prague_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_bbr1_algorithm;
 
 #define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
 
@@ -1150,6 +1449,30 @@ void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_c
 void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
+
+/* Special code for Wi-Fi network. These networks are subject to occasional
+ * "suspension", for power saving reasons. If the suspension is too long,
+ * it causes transmission to stop after cngestion control credits are
+ * exhausted. We expect that the effects of suspension are not so bad if
+ * the congestion control parameters allow for transmission through the
+ * suspension. The "wifi shadow RTT" parameter tells the congestion control
+ * algorithm BBR to set the CWIN large enough to sustain transmission through
+ * that duration. The value is in microseconds.
+ * 
+ * This parameter should be set before the first connections are started.
+ * Changing the settings will not affect existing connections.
+ */
+void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt);
+
+/* The experimental API `picoquic_set_default_bbr_quantum_ratio`
+* allows application to change the "quantum ratio" parameter of the BBR
+* algorithm. The default value is 0.001 (1/1000th of the pacing rate
+* in bytes per second). Larger values like 0.01 would increase the
+* size of the "leaky bucket" used by the pacing algorithms. Whether
+* that's a good idea or not is debatable, probably depends on the
+* application.
+*/
+void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio);
 
 /* Bandwidth update and congestion control parameters value.
  * Congestion control in picoquic is characterized by three values:
@@ -1178,9 +1501,21 @@ uint64_t picoquic_get_pacing_rate(picoquic_cnx_t* cnx);
 uint64_t picoquic_get_cwin(picoquic_cnx_t* cnx);
 uint64_t picoquic_get_rtt(picoquic_cnx_t* cnx);
 
-/* Probing new path for multipath scenarios.*/
-int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-        const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address);
+/* List of ALPN types used in session negotiation */
+
+typedef enum {
+    picoquic_alpn_undef = 0,
+    picoquic_alpn_http_0_9,
+    picoquic_alpn_http_3,
+    picoquic_alpn_siduck,
+    picoquic_alpn_quicperf
+} picoquic_alpn_enum;
+
+typedef struct st_picoquic_alpn_list_t {
+    picoquic_alpn_enum alpn_code;
+    char const* alpn_val;
+    size_t len;
+} picoquic_alpn_list_t;
 
 #ifdef __cplusplus
 }

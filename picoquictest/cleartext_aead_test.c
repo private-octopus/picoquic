@@ -329,8 +329,11 @@ int pn_ctr_test()
     uint8_t in_bytes[16];
     uint8_t out_bytes[16];
     uint8_t decoded[16];
+
+    picoquic_tls_api_init();
+
     ptls_aead_algorithm_t* aead = (ptls_aead_algorithm_t*)picoquic_get_aes128gcm_v(0);
-    ptls_cipher_context_t *pn_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
+    ptls_cipher_context_t *pn_enc = (aead == NULL)?NULL:ptls_cipher_new(aead->ctr_cipher, 1, key);
 
     if (pn_enc == NULL) {
         ret = -1;
@@ -1079,9 +1082,9 @@ int key_rotation_vector_test()
         NULL, NULL, NULL, NULL };
     uint8_t new_secret[PTLS_MAX_DIGEST_SIZE];
 
-    key_rotation_test_suites[0] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(256, 0); /* AES256GCM_SHA384 */
-    key_rotation_test_suites[1] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(128, 0); /* AES128GCM_SHA256 */
-    key_rotation_test_suites[2] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(20, 0); /* CHACHA0 */
+    key_rotation_test_suites[0] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_256_GCM_SHA384, 0);
+    key_rotation_test_suites[1] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256, 0);
+    key_rotation_test_suites[2] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_CHACHA20_POLY1305_SHA256, 0);
     key_rotation_test_suites[3] = NULL;
 
     memcpy(new_secret, key_rotation_test_init, PTLS_MAX_DIGEST_SIZE);
@@ -1307,3 +1310,54 @@ int retry_protection_vector_test()
     return ret;
 }
 
+/* Implement test vector for retry protection V2 */
+const picoquic_connection_id_t v2_sample_odcid = {
+    { 0x83, 0x94, 0xc8, 0xf0, 0x3e, 0x51, 0x57, 0x08 }, 8 };
+const uint8_t v2_sample_retry[] = {
+    0xcf, 0x6b, 0x33, 0x43, 0xcf, 0x00, 0x08, 0xf0,
+    0x67, 0xa5, 0x50, 0x2a, 0x42, 0x62, 0xb5, 0x74,
+    0x6f, 0x6b, 0x65, 0x6e, 0xc8, 0x64, 0x6c, 0xe8,
+    0xbf, 0xe3, 0x39, 0x52, 0xd9, 0x55, 0x54, 0x36,
+    0x65, 0xdc, 0xc7, 0xb6};
+
+int retry_protection_v2_test()
+{
+    int ret = 0;
+    void* protection_ctx_v2 = NULL;
+
+    /* Create a simple protection context from the V2 parameters */
+    for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
+        if (picoquic_supported_versions[i].version == PICOQUIC_V2_VERSION) {
+            protection_ctx_v2 = picoquic_create_retry_protection_context(1,
+                picoquic_supported_versions[i].version_retry_key,
+                picoquic_supported_versions[i].tls_prefix_label);
+            break;
+        }
+    }
+
+    if (protection_ctx_v2 == NULL) {
+        DBG_PRINTF("%s", "Cannot create protection context!");
+        ret = -1;
+    }
+    else{ 
+        uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE] = { 0 };
+        size_t byte_index = sizeof(v2_sample_retry) - 16;
+        /* Copy the first bytes of the retry sample to the buffer */
+        memcpy(bytes, v2_sample_retry, byte_index);
+        /* Generate the signature */
+        byte_index = picoquic_encode_retry_protection(protection_ctx_v2, bytes, PICOQUIC_MAX_PACKET_SIZE, byte_index, &v2_sample_odcid);
+        /* Compare result and expectation */
+        if (byte_index != sizeof(v2_sample_retry)) {
+            DBG_PRINTF("Wrong retry packet size, expected %zu, got %zu", sizeof(v2_sample_retry), byte_index);
+            ret = -1;
+        }
+        else if (memcmp(bytes, v2_sample_retry, byte_index) != 0) {
+            DBG_PRINTF("%s", "Wrong retry packet value");
+            ret = -1;
+        }
+
+        picoquic_aead_free(protection_ctx_v2);
+    }
+
+    return ret;
+}
