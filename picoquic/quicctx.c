@@ -4528,6 +4528,11 @@ void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_s
     quic->wifi_shadow_rtt = wifi_shadow_rtt;
 }
 
+void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio)
+{
+    quic->bbr_quantum_ratio = quantum_ratio;
+}
+
 void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrease_threshold, uint64_t increase_threshold)
 {
     cnx->pacing_decrease_threshold = decrease_threshold;

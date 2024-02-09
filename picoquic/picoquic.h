@@ -1464,6 +1464,16 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
  */
 void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt);
 
+/* The experimental API `picoquic_set_default_bbr_quantum_ratio`
+* allows application to change the "quantum ratio" parameter of the BBR
+* algorithm. The default value is 0.001 (1/1000th of the pacing rate
+* in bytes per second). Larger values like 0.01 would increase the
+* size of the "leaky bucket" used by the pacing algorithms. Whether
+* that's a good idea or not is debatable, probably depends on the
+* application.
+*/
+void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio);
+
 /* Bandwidth update and congestion control parameters value.
  * Congestion control in picoquic is characterized by three values:
  * - pacing rate, expressed in bytes per second (for example, 10Mbps would be noted as 1250000)

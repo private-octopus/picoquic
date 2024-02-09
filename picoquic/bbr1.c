@@ -279,6 +279,8 @@ typedef struct st_picoquic_bbr1_state_t {
     uint64_t cwin_before_suspension; /* So it can be restored if suspension stops. */
 
     uint64_t wifi_shadow_rtt; /* Shadow RTT used for wifi connections. */
+    double quantum_ratio;
+
     unsigned int filled_pipe : 1;
     unsigned int round_start : 1;
     unsigned int rt_prop_expired : 1;
@@ -337,7 +339,7 @@ void BBR1SetSendQuantum(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path
         bbr1_state->send_quantum = 2ull * path_x->send_mtu;
     }
     else {
-        bbr1_state->send_quantum = (uint64_t)(bbr1_state->pacing_rate * 0.001);
+        bbr1_state->send_quantum = (uint64_t)(bbr1_state->pacing_rate * bbr1_state->quantum_ratio);
         if (bbr1_state->send_quantum > 0x10000) {
             bbr1_state->send_quantum = 0x10000;
         }
@@ -371,7 +373,11 @@ static void picoquic_bbr1_reset(picoquic_bbr1_state_t* bbr1_state, picoquic_path
     memset(bbr1_state, 0, sizeof(picoquic_bbr1_state_t));
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
     bbr1_state->rt_prop = UINT64_MAX;
-    bbr1_state->wifi_shadow_rtt = wifi_shadow_rtt;
+    bbr1_state->wifi_shadow_rtt = path_x->cnx->quic->wifi_shadow_rtt;
+    bbr1_state->quantum_ratio = path_x->cnx->quic->bbr_quantum_ratio;
+    if (bbr1_state->quantum_ratio == 0) {
+        bbr1_state->quantum_ratio = 0.001;
+    }
 
     bbr1_state->rt_prop_stamp = current_time;
     bbr1_state->cycle_stamp = current_time;
