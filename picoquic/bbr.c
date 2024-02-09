@@ -1669,7 +1669,8 @@ static void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path
 
 void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
 {
-    if (bbr_state->state == picoquic_bbr_alg_startup &&
+    if ((bbr_state->state == picoquic_bbr_alg_startup ||
+        bbr_state->state == picoquic_bbr_alg_startup_resume) &&
         path_x->rtt_min > BBRLongRttThreshold) {
         BBREnterStartupLongRTT(bbr_state, path_x);
     }
@@ -1713,8 +1714,7 @@ void BBRSetBdpSeed(picoquic_bbr_state_t* bbr_state, uint64_t bdp_seed)
 {
     bbr_state->bdp_seed = bdp_seed;
     if (bbr_state->state == picoquic_bbr_alg_startup &&
-        bbr_state->bdp_seed > bbr_state->max_bw &&
-        bbr_state->min_rtt <= BBRLongRttThreshold) {
+        bbr_state->bdp_seed > bbr_state->max_bw) {
         BBRCheckEnterStartupResume(bbr_state);
     }
 }
