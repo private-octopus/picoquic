@@ -1514,7 +1514,7 @@ static void BBRCheckStartupFullBandwidthGeneric(picoquic_bbr_state_t* bbr_state,
     }
 }
 
-static void BBRCheckEnterStartupResume(picoquic_bbr_state_t* bbr_state)
+static void BBREnterStartupResume(picoquic_bbr_state_t* bbr_state)
 {
     /* This code is called either when the "bdp seed" is set, or
      * upon "Enter Startup"
@@ -1528,22 +1528,20 @@ static void BBRCheckStartupResume(picoquic_bbr_state_t* bbr_state, picoquic_path
 {
     if (bbr_state->state == picoquic_bbr_alg_startup_resume) {
         BBRCheckStartupHighLoss(bbr_state, path_x, rs);
-        BBRCheckStartupFullBandwidthGeneric(bbr_state, rs, BBRStartupResumeIncreaseThreshold);
-        if (bbr_state->filled_pipe) {
-            if (bbr_state->full_bw_count > 0) {
-                bbr_state->probe_probe_bw_quickly = 1;
-                bbr_state->full_bw_count = 0;
+        if (!bbr_state->filled_pipe && (double)bbr_state->max_bw > BBRStartupResumeIncreaseThreshold * bbr_state->bdp_seed) {
+            BBREnterStartup(bbr_state);
+        }
+        else {
+            BBRCheckStartupFullBandwidthGeneric(bbr_state, rs, BBRStartupResumeIncreaseThreshold);
+            if (bbr_state->filled_pipe) {
+                if (bbr_state->full_bw_count > 0) {
+                    bbr_state->probe_probe_bw_quickly = 1;
+                    bbr_state->full_bw_count = 0;
+                }
+                BBREnterDrain(bbr_state, path_x, current_time);
             }
-            BBREnterDrain(bbr_state, path_x, current_time);
         }
     }
-}
-
-static void BBREnterStartupResume(picoquic_bbr_state_t* bbr_state)
-{
-    bbr_state->state = picoquic_bbr_alg_startup_resume;
-    bbr_state->pacing_gain = BBRStartupResumePacingGain;
-    bbr_state->cwnd_gain = BBRStartupResumeCwndGain;
 }
 
 /* Startup specific processes for BBRv3 */
@@ -1715,7 +1713,7 @@ void BBRSetBdpSeed(picoquic_bbr_state_t* bbr_state, uint64_t bdp_seed)
     bbr_state->bdp_seed = bdp_seed;
     if (bbr_state->state == picoquic_bbr_alg_startup &&
         bbr_state->bdp_seed > bbr_state->max_bw) {
-        BBRCheckEnterStartupResume(bbr_state);
+        BBREnterStartupResume(bbr_state);
     }
 }
 

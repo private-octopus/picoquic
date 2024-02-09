@@ -268,6 +268,8 @@ int bdp_rtt_test();
 int bdp_ip_test();
 int bdp_delay_test();
 int bdp_short_test();
+int bdp_short_hi_test();
+int bdp_short_lo_test();
 int long_rtt_test();
 int high_latency_basic_test();
 int high_latency_bbr_test();

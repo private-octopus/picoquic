@@ -12506,7 +12506,9 @@ typedef enum {
     bdp_test_option_delay,
     bdp_test_option_reno,
     bdp_test_option_cubic,
-    bdp_test_option_short
+    bdp_test_option_short,
+    bdp_test_option_short_lo,
+    bdp_test_option_short_hi,
 } bdp_test_option_enum;
 
 int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
@@ -12546,12 +12548,27 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
             test_ctx->c_to_s_link->picosec_per_byte = (1000000ull * 8) / 20;
             test_ctx->s_to_c_link->picosec_per_byte = (1000000ull * 8) / 20;
 
-            if (bdp_test_option == bdp_test_option_short) {
+            if (bdp_test_option == bdp_test_option_short ||
+                bdp_test_option == bdp_test_option_short_lo ||
+                bdp_test_option == bdp_test_option_short_hi) {
                 /* Test that the BDP option also works well if delay < 250 ms */
                 max_completion_time = 4500000;
                 test_ctx->c_to_s_link->microsec_latency = 100000ull;
                 test_ctx->s_to_c_link->microsec_latency = 100000ull;
                 buffer_size = 2 * test_ctx->c_to_s_link->microsec_latency;
+                if (i == 0) {
+                    if (bdp_test_option == bdp_test_option_short_lo) {
+                        test_ctx->c_to_s_link->picosec_per_byte *= 2;
+                        test_ctx->s_to_c_link->picosec_per_byte *= 2;
+                    }
+                    else if (bdp_test_option == bdp_test_option_short_hi) {
+                        test_ctx->c_to_s_link->picosec_per_byte /= 2;
+                        test_ctx->s_to_c_link->picosec_per_byte /= 2;
+                    }
+                }
+                else if (i == 1 && bdp_test_option == bdp_test_option_short_lo) {
+                    max_completion_time = 4650000;
+                }
             }
             else if (i > 0) {
                 switch (bdp_test_option) {
@@ -12646,6 +12663,8 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     else if (bdp_test_option == bdp_test_option_basic ||
                         bdp_test_option == bdp_test_option_reno ||
                         bdp_test_option == bdp_test_option_short ||
+                        bdp_test_option == bdp_test_option_short_hi ||
+                        bdp_test_option == bdp_test_option_short_lo ||
                         bdp_test_option == bdp_test_option_cubic) {
                         if (!test_ctx->cnx_server->cwin_notified_from_seed) {
                             DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, cwin not seed on server.\n",
@@ -12724,6 +12743,16 @@ int bdp_reno_test()
 int bdp_short_test()
 {
     return bdp_option_test_one(bdp_test_option_short);
+}
+
+int bdp_short_hi_test()
+{
+    return bdp_option_test_one(bdp_test_option_short_hi);
+}
+
+int bdp_short_lo_test()
+{
+    return bdp_option_test_one(bdp_test_option_short_lo);
 }
 
 #if defined(_WINDOWS) && !defined(_WINDOWS64)

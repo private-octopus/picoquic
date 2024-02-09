@@ -347,6 +347,8 @@ static const picoquic_test_def_t test_table[] = {
     { "bdp_cubic", bdp_cubic_test },
 #endif
     { "bdp_short", bdp_short_test },
+    { "bdp_short_hi", bdp_short_hi_test },
+    { "bdp_short_lo", bdp_short_lo_test },
     { "cid_length", cid_length_test },
     { "optimistic_ack", optimistic_ack_test },
     { "optimistic_hole", optimistic_hole_test },
