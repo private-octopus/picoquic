@@ -77,7 +77,7 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l
         if (do_l4s) {
             test_ctx->c_to_s_link->l4s_max = l4s_max;
             test_ctx->s_to_c_link->l4s_max = l4s_max;
-            test_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_0;
+            test_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_1;
         }
         picoquic_set_binlog(test_ctx->qserver, ".");
 
@@ -121,7 +121,7 @@ int l4s_reno_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_newreno_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 3850000, 50, 6000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 4500000, 5, 3000, 0, NULL);
 
     return ret;
 }
@@ -130,7 +130,7 @@ int l4s_prague_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 5, 6000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 3, 1000, 0, NULL);
 
     return ret;
 }
@@ -139,14 +139,15 @@ int l4s_bbr_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 16, 6000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 3, 1000, 0, NULL);
 
     return ret;
 }
 
 test_vary_link_spec_t l4s_link_updown[] = {
     { 1000000, 10000000, 10000000, 10000},
-    { 1000000,  2000000,  2000000, 20000}
+    { 2000000,  2000000,  2000000, 10000},
+    { 8000000, 10000000, 10000000, 10000},
 };
 
 size_t nb_l4s_link_updown = sizeof(l4s_link_updown) / sizeof(test_vary_link_spec_t);
@@ -164,7 +165,7 @@ int l4s_bbr_updown_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 6500000, 55, 6000, nb_l4s_link_updown, l4s_link_updown);
+    int ret = l4s_congestion_test(ccalgo, 1, 6500000, 95, 6000, nb_l4s_link_updown, l4s_link_updown);
 
     return ret;
 }

@@ -108,7 +108,7 @@ typedef struct st_picoquic_prague_state_t {
     uint64_t recovery_start;
     uint64_t l4s_update_sent;
     uint64_t l4s_epoch_send;
-    uint64_t l4s_epoch_ect0;
+    uint64_t l4s_epoch_ect1;
     uint64_t l4s_epoch_ce;
     picoquic_min_max_rtt_t rtt_filter;
 } picoquic_prague_state_t;
@@ -161,7 +161,7 @@ static void picoquic_prague_reset_l3s(picoquic_cnx_t* cnx, picoquic_prague_state
 {
     picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
     pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
-    pr_state->l4s_epoch_ect0 = pkt_ctx->ecn_ect0_total_remote;
+    pr_state->l4s_epoch_ect1 = pkt_ctx->ecn_ect1_total_remote;
     pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;
     pr_state->alpha = 0;
     pr_state->alpha_shifted = 0;
@@ -220,11 +220,11 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
         uint64_t frac = 0;
         int is_suspect = 0;
         pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
-        uint64_t delta_ect0 = pkt_ctx->ecn_ect0_total_remote - pr_state->l4s_epoch_ect0;
+        uint64_t delta_ect1 = pkt_ctx->ecn_ect1_total_remote - pr_state->l4s_epoch_ect1;
         uint64_t delta_ce = pkt_ctx->ecn_ce_total_remote - pr_state->l4s_epoch_ce;
 
         if (delta_ce > 0) {
-            frac = (delta_ce * 1024) / (delta_ce + delta_ect0);
+            frac = (delta_ce * 1024) / (delta_ce + delta_ect1);
         }
         else {
             frac = 0;
@@ -242,7 +242,7 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
         }
         pr_state->l4s_update_sent = update_sent;
 
-        if (delta_ce > 0 || delta_ect0 > 0) {
+        if (delta_ce > 0 || delta_ect1 > 0) {
             if (frac > pr_state->alpha && (frac > 512 || is_suspect)) {
                 pr_state->alpha = frac;
                 pr_state->alpha_shifted = frac << PRAGUE_SHIFT_G;
@@ -255,7 +255,7 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
             }
         }
         pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
-        pr_state->l4s_epoch_ect0 = pkt_ctx->ecn_ect0_total_remote;
+        pr_state->l4s_epoch_ect1 = pkt_ctx->ecn_ect1_total_remote;
         pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;
 
         if (delta_ce > 0) {
