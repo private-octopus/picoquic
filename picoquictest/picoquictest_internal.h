@@ -261,6 +261,14 @@ extern test_skip_frames_t test_skip_list[];
 
 extern size_t nb_test_skip_list;
 
+typedef struct st_test_vary_link_spec_t {
+    uint64_t duration;
+    uint64_t bits_per_second_up;
+    uint64_t bits_per_second_down;
+    uint64_t microsec_latency;
+} test_vary_link_spec_t;
+
+
 
 #define TEST_CLIENT_READY (test_ctx->cnx_client->cnx_state == picoquic_state_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start)
 #define TEST_SERVER_READY (test_ctx->cnx_server != NULL &&(test_ctx->cnx_server->cnx_state == picoquic_state_ready || test_ctx->cnx_server->cnx_state == picoquic_state_server_false_start))
@@ -329,6 +337,10 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
 
 int tls_api_close_with_losses(
     picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, uint64_t loss_mask);
+
+int tls_api_one_scenario_body_ex(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, test_api_stream_desc_t* scenario,
+    size_t sizeof_scenario, size_t stream0_target, uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max, uint64_t max_completion_microsec,
+    size_t nb_link_states, test_vary_link_spec_t* link_state);
 
 int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, test_api_stream_desc_t* scenario, size_t sizeof_scenario, size_t stream0_target, uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max, uint64_t max_completion_microsec);
 

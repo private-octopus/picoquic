@@ -1790,12 +1790,27 @@ int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t* loss_mask, uint64_t* simulated_time, int max_trials)
+uint64_t test_vary_link(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t transition_time, test_vary_link_spec_t* link_state)
+{
+    const uint64_t ten_twelve = 1000000000000ull;
+    uint64_t picoseq_per_byte_up = (ten_twelve * 8) / link_state->bits_per_second_up;
+    uint64_t picoseq_per_byte_down = (ten_twelve * 8) / link_state->bits_per_second_down;
+    test_ctx->c_to_s_link->microsec_latency = link_state->microsec_latency;
+    test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_up;
+    test_ctx->s_to_c_link->microsec_latency = link_state->microsec_latency;
+    test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_down;
+
+    return transition_time + link_state->duration;
+}
+
+int tls_api_data_sending_loop_ex(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* loss_mask, uint64_t* simulated_time, int max_trials, size_t nb_link_states, test_vary_link_spec_t * link_state)
 {
     int ret = 0;
     int nb_trials = 0;
     int nb_inactive = 0;
+    uint64_t next_state_change = 0;
+    size_t next_link_state = 0;
 
     test_ctx->c_to_s_link->loss_mask = loss_mask;
     test_ctx->s_to_c_link->loss_mask = loss_mask;
@@ -1804,12 +1819,23 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         max_trials = 4000000;
     }
 
+    if (nb_link_states > 0) {
+        next_state_change = test_vary_link(test_ctx, *simulated_time, link_state);
+    }
+
     while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
 
         nb_trials++;
 
-        ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, next_state_change, &was_active);
+        if (nb_link_states > 0 && *simulated_time >= next_state_change) {
+            next_link_state++;
+            if (next_link_state >= nb_link_states) {
+                next_link_state = 0;
+            }
+            next_state_change = test_vary_link(test_ctx, *simulated_time, &link_state[next_link_state]);
+        }
 
         if (ret < 0)
         {
@@ -1831,6 +1857,12 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     return ret; /* end of sending loop */
+}
+
+int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* loss_mask, uint64_t* simulated_time, int max_trials)
+{
+    return tls_api_data_sending_loop_ex(test_ctx, loss_mask, simulated_time, max_trials, 0, NULL);
 }
 
 int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
@@ -2971,11 +3003,11 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
+int tls_api_one_scenario_body_ex(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t * simulated_time,
     test_api_stream_desc_t* scenario, size_t sizeof_scenario, size_t stream0_target,
     uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
-    uint64_t max_completion_microsec)
+    uint64_t max_completion_microsec, size_t nb_link_states, test_vary_link_spec_t* link_state)
 {
     uint64_t loss_mask = 0;
     int ret = tls_api_one_scenario_body_connect(test_ctx, simulated_time, stream0_target,
@@ -2995,7 +3027,8 @@ int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
 
     /* Perform a data sending loop */
     if (ret == 0) {
-        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, simulated_time, 0);
+        ret = tls_api_data_sending_loop_ex(test_ctx, &loss_mask, simulated_time, 0,
+            nb_link_states, link_state);
 
         if (ret != 0)
         {
@@ -3009,6 +3042,18 @@ int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
 
     return ret;
 }
+
+int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time,
+    test_api_stream_desc_t* scenario, size_t sizeof_scenario, size_t stream0_target,
+    uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
+    uint64_t max_completion_microsec)
+{
+    return tls_api_one_scenario_body_ex(test_ctx, simulated_time, scenario, sizeof_scenario,
+        stream0_target, init_loss_mask, max_data, queue_delay_max, max_completion_microsec,
+        0, NULL);
+}
+
 
 int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     size_t sizeof_scenario, size_t stream0_target,
@@ -11666,8 +11711,7 @@ int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
 
 int heavy_loss_test()
 {
-    /* TODO: investigate after BBRv3 complete */
-    return heavy_loss_test_one(0, 23000000);
+    return heavy_loss_test_one(0, 23100000);
 }
 
 int heavy_loss_inter_test()
