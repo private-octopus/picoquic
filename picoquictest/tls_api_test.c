@@ -11711,8 +11711,7 @@ int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
 
 int heavy_loss_test()
 {
-    /* TODO: investigate after BBRv3 complete */
-    return heavy_loss_test_one(0, 23000000);
+    return heavy_loss_test_one(0, 23100000);
 }
 
 int heavy_loss_inter_test()
