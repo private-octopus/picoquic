@@ -79,6 +79,8 @@
 #include <netinet/in.h>
 #include <sys/select.h>
 
+#include <pthread.h>
+
 #ifndef SOCKET_TYPE
 #define SOCKET_TYPE int
 #endif
@@ -587,10 +589,10 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
 
     *is_wake_up_event = 0;
     if (thread_ctx->wake_up_defined) {
-        if (sockmax < (int)wake_up_pipe_fd[0]) {
-            sockmax = (int)wake_up_pipe_fd[0];
+        if (sockmax < (int)thread_ctx->wake_up_pipe_fd[0]) {
+            sockmax = (int)thread_ctx->wake_up_pipe_fd[0];
         }
-        FD_SET(wake_up_pipe_fd[0], &readfds);
+        FD_SET(thread_ctx->wake_up_pipe_fd[0], &readfds);
     }
 
     if (delta_t <= 0) {
@@ -977,9 +979,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     if (thread_ctx->is_threaded) {
         pthread_exit((void*)&thread_ctx->return_code);
     }
-    else {
-        return(NULL);
-    }
+    return(NULL);
 #endif
 }
 
