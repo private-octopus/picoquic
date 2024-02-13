@@ -155,12 +155,12 @@ static int tls_api_is_init = 0;
 void picoquic_tls_api_init_providers(int unload)
 {
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MINICRYPTO) == 0) {
-        DBG_PRINTF("%s", "Loading minicrypto");
+        DBG_PRINTF("%s", "%s minicrypto", (unload)?"Unloading":"Loading");
         picoquic_ptls_minicrypto_load(unload);
     }
 #ifndef PTLS_WITHOUT_OPENSSL
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_OPENSSL) == 0) {
-        DBG_PRINTF("%s", "Loading openssl");
+        DBG_PRINTF("%s", "%s openssl", (unload)?"Unloading":"Loading");
         picoquic_ptls_openssl_load(unload);
     }
 #else
@@ -171,7 +171,7 @@ void picoquic_tls_api_init_providers(int unload)
     // picoquic_bcrypt_load(unload);
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
-        DBG_PRINTF("%s", "Loading fusion");
+        DBG_PRINTF("%s", "%s fusion", (unload)?"Unloading":"Loading");
         picoquic_ptls_fusion_load(unload);
     }
 #else
@@ -182,7 +182,7 @@ void picoquic_tls_api_init_providers(int unload)
 
 #ifdef PICOQUIC_WITH_MBEDTLS
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MBEDTLS) == 0) {
-        DBG_PRINTF("%s", "Loading MbedTLS");
+        DBG_PRINTF("%s", "%s MbedTLS", (unload)?"Unloading":"Loading");
         picoquic_mbedtls_load(unload);
     }
 #endif

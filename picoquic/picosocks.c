@@ -912,8 +912,6 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t* ctx)
             }
         }
         else {
-            DBG_PRINTF("Receive async immediate (WSARecvMsg) on UDP socket %d -- %d bytes !\n",
-                (int)ctx->fd, numberOfBytesReceived);
             ctx->nb_immediate_receive++;
         }
     } while (should_retry);
