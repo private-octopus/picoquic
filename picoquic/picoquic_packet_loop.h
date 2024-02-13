@@ -24,6 +24,7 @@
 
 #include "picosocks.h"
 #include "picoquic.h"
+#include "picoquic_utils.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -75,8 +76,18 @@ typedef enum {
     picoquic_packet_loop_after_receive, /* Argument type size_t*: nb packets received */
     picoquic_packet_loop_after_send, /* Argument type size_t*: nb packets sent */
     picoquic_packet_loop_port_update, /* argument type struct_sockaddr*: new address for wakeup */
-    picoquic_packet_loop_time_check /* argument type . Optional. */
+    picoquic_packet_loop_time_check, /* argument type packet_loop_time_check_arg_t*. Optional. */
+    picoquic_packet_loop_wake_up /* no argument (void* NULL). Used when loop wakeup is supported */
 } picoquic_packet_loop_cb_enum;
+
+/* The time check option passes as argument a pointer to a structure specifying
+* the current time and the proposed delta. The application uses the specified
+* current time to compute an updated delta.
+*/
+typedef struct st_packet_loop_time_check_arg_t {
+    uint64_t current_time;
+    int64_t delta_t;
+} packet_loop_time_check_arg_t;
 
 typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packet_loop_cb_enum cb_mode, void * callback_ctx, void * callback_argv);
 
@@ -87,15 +98,6 @@ typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packe
 typedef struct st_picoquic_packet_loop_options_t {
     int do_time_check : 1; /* App should be polled for next time before sock select */
 } picoquic_packet_loop_options_t;
-
-/* The time check option passes as argument a pointer to a structure specifying
- * the current time and the proposed delta. The application uses the specified
- * current time to compute an updated delta.
- */
-typedef struct st_packet_loop_time_check_arg_t {
-    uint64_t current_time;
-    int64_t delta_t;
-} packet_loop_time_check_arg_t;
 
 /* Version 2 of packet loop, works in progress.
 * Parameters are set in a struct, for future
@@ -117,8 +119,53 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     picoquic_packet_loop_cb_fn loop_callback,
     void * loop_callback_ctx);
 
-/* Two versions of the packet loop, one portable and one speciailezed
- * for winsock.
+/* Threaded version of packet loop, when running picoquic in a background thread.
+* 
+* Thread is started by calling picoquic_start_network_thread, which
+* returns an argument of type picoquic_network_thread_ctx_t. Returns a NULL
+* pointer if the thread could not be created.
+* 
+* If the application needs to post new data or otherwise interact with
+* the quic connections, it should call picoquic_wake_up_network_thread,
+* passing the thread context as an argument. This with trigger a
+* callback of type `picoquic_packet_loop_wake_up`, which executes
+* in the context of the network thread. Picoquic APIs can be called
+* in this context without worrying about concurrency issues.
+* 
+* If the application wants to close the network thread, it calls
+* picoquic_close_network_thread, passing the thread context as an argument.
+* The network thread context will be freed during that call.
+*/
+
+typedef struct st_picoquic_network_thread_ctx_t {
+    picoquic_quic_t* quic;
+    picoquic_packet_loop_param_t* param;
+    picoquic_packet_loop_cb_fn loop_callback;
+    void* loop_callback_ctx;
+    picoquic_thread_t thread_id;
+#ifdef _WINDOWS
+    HANDLE wake_up_event;
+#else
+    int wake_up_pipe_fd[2];
+#endif
+    int wake_up_defined;
+    volatile int thread_should_close;
+} picoquic_network_thread_ctx_t;
+
+picoquic_network_thread_ctx_t* picoquic_start_network_thread(
+    picoquic_quic_t* quic,
+    picoquic_packet_loop_param_t* param,
+    picoquic_packet_loop_cb_fn loop_callback,
+    void* loop_callback_ctx,
+    int * ret);
+
+int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx);
+void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx);
+
+
+/* Legacy versions the packet loop, one portable and one specialized
+ * for winsock. Keeping these API for compatibility, but the implementation
+ * redirects to picoquic_packet_loop_v2.
  */
 int picoquic_packet_loop(picoquic_quic_t* quic,
     int local_port,
