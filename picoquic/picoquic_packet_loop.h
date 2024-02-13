@@ -150,7 +150,9 @@ typedef struct st_picoquic_network_thread_ctx_t {
 #endif
     int is_threaded;
     int wake_up_defined;
+    volatile int thread_is_ready;
     volatile int thread_should_close;
+    volatile int thread_is_closed;
     int return_code;
 } picoquic_network_thread_ctx_t;
 

@@ -213,8 +213,6 @@ int picoquic_win_recvmsg_async_start(picoquic_socket_ctx_t* ctx)
             }
         }
         else {
-            DBG_PRINTF("Receive async immediate (WSARecvMsg) on UDP socket %d -- %d bytes !\n",
-                (int)ctx->fd, numberOfBytesReceived);
             ctx->nb_immediate_receive++;
         }
     } while (should_retry);
@@ -732,6 +730,13 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         }
     }
 
+    if (ret == 0) {
+        thread_ctx->thread_is_ready = 1;
+    }
+    else {
+        DBG_PRINTF("%s", "Thread cannot run");
+    }
+
     /* Wait for packets */
     /* TODO: add stopping condition, was && (!just_once || !connection_done) */
     /* Actually, no, rely on the callback return code for that? */
@@ -959,6 +964,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         }
     }
 
+    thread_ctx->thread_is_ready = 0;
+
     if (ret == PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP) {
         /* Normal termination requested by the application, returns no error */
         ret = 0;
@@ -1069,6 +1076,7 @@ picoquic_network_thread_ctx_t* picoquic_start_network_thread(picoquic_quic_t* qu
         /* Error, no memory */
     }
     else {
+        memset(thread_ctx, 0, sizeof(picoquic_network_thread_ctx_t));
         /* Fill the arguments in the context */
         thread_ctx->quic = quic;
         thread_ctx->param = param;
@@ -1115,6 +1123,7 @@ int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
 #endif
     }
     else {
+        DBG_PRINTF("%s", "Wake up event not defined.");
         ret = -1;
     }
     return ret;

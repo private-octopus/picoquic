@@ -174,6 +174,7 @@ int sockloop_errsock_test();
 int sockloop_ipv4_test();
 int sockloop_migration_test();
 int sockloop_nat_test();
+int sockloop_thread_test();
 int splay_test();
 int TlsStreamFrameTest();
 int draft17_vector_test();
