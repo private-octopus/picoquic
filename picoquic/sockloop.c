@@ -1131,7 +1131,7 @@ void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
     picoquic_close_network_wake_up(thread_ctx);
     /* delete the thread */
     if (thread_ctx->is_threaded) {
-        picoquic_delete_thread(thread_ctx->thread_id);
+        picoquic_delete_thread(&thread_ctx->thread_id);
     }
     /* Free the context */
     free(thread_ctx);
