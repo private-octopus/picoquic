@@ -587,10 +587,10 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
 
     *is_wake_up_event = 0;
     if (thread_ctx->wake_up_defined) {
-        if (sockmax < (int)wake_up_fd[0]) {
-            sockmax = (int)wake_up_fd[0];
+        if (sockmax < (int)wake_up_pipe_fd[0]) {
+            sockmax = (int)wake_up_pipe_fd[0];
         }
-        FD_SET(wake_up_fd[0], &readfds);
+        FD_SET(wake_up_pipe_fd[0], &readfds);
     }
 
     if (delta_t <= 0) {
@@ -614,11 +614,11 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     } else if (ret_select > 0) {
         /* Check if the 'wake up' pipe is full. If it is, read the data on it,
          * set the is_wake_up_event flag, and ignore the other file descriptors. */
-        if (thread_ctx->wake_up_defined && FD_ISSET(thread_ctx->wake_up_fd[0], &readfds)) {
+        if (thread_ctx->wake_up_defined && FD_ISSET(thread_ctx->wake_up_pipe_fd[0], &readfds)) {
             /* Something was written on the "wakeup" pipe. Read it. */
             uint8_t eventbuf[8];
             int pipe_recv;
-            if ((pipe_recv = read(thread_ctx->wake_up_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
+            if ((pipe_recv = read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
                 bytes_recv = -1;
                 DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0)?EPIPE:errno);
             }
@@ -636,15 +636,8 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
                         buffer, buffer_max);
 
                     if (bytes_recv <= 0) {
-                        int last_error = WSAGetLastError();
-
-                        if (last_error == WSAECONNRESET || last_error == WSAEMSGSIZE) {
-                            bytes_recv = 0;
-                            continue;
-                        }
                         DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
                             i, (int)s_ctx[i].fd);
-
                         break;
                     }
                     else {
@@ -668,7 +661,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
 #ifdef _WINDOWS
 DWORD WINAPI picoquic_packet_loop_v3(LPVOID v_ctx)
 #else
-int picoquic_packet_loop_v3(void * v_ctx)
+void* picoquic_packet_loop_v3(void* v_ctx)
 #endif
 {
     picoquic_network_thread_ctx_t* thread_ctx = (picoquic_network_thread_ctx_t*)v_ctx;
@@ -770,13 +763,13 @@ int picoquic_packet_loop_v3(void * v_ctx)
             &addr_from,
             &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
-            delta_t, &is_wake_up_event, thread_ctx,  &socket_rank);
+            delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
         received_buffer = buffer;
 #endif
         current_time = picoquic_current_time();
         if (bytes_recv < 0) {
             /* The interrupt error is expected if the loop is closing. */
-            ret = (thread_ctx->thread_should_close)?PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP:-1;
+            ret = (thread_ctx->thread_should_close) ? PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP : -1;
         }
         else if (bytes_recv == 0 && is_wake_up_event) {
             ret = loop_callback(quic, picoquic_packet_loop_wake_up, loop_callback_ctx, NULL);
@@ -866,7 +859,7 @@ int picoquic_packet_loop_v3(void * v_ctx)
                     * either IPv6, or IPv4, or both, and binding to a port number.
                     * Find the first socket where:
                     * - the destination AF is supported.
-                    * - either the source port is not specified, or it matches the local port.       
+                    * - either the source port is not specified, or it matches the local port.
                     */
                     SOCKET_TYPE send_socket = INVALID_SOCKET;
                     uint16_t send_port = (peer_addr.ss_family == AF_INET) ?
@@ -977,8 +970,17 @@ int picoquic_packet_loop_v3(void * v_ctx)
     if (send_buffer != NULL) {
         free(send_buffer);
     }
-
-    return ret;
+    thread_ctx->return_code = ret;
+#ifdef _WINDOWS
+    return (DWORD)ret;
+#else
+    if (thread_ctx->is_threaded) {
+        pthread_exit((void*)&thread_ctx->return_code);
+    }
+    else {
+        return(NULL);
+    }
+#endif
 }
 
 int picoquic_packet_loop_v2(picoquic_quic_t* quic,
@@ -992,7 +994,9 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     thread_ctx.param = param;
     thread_ctx.loop_callback = loop_callback;
     thread_ctx.loop_callback_ctx = loop_callback_ctx;
-    return picoquic_packet_loop_v3((void*)&thread_ctx);
+
+    (void)picoquic_packet_loop_v3((void*)&thread_ctx);
+    return thread_ctx.return_code;
 }
 
 /* Support for legacy API */
@@ -1074,10 +1078,11 @@ picoquic_network_thread_ctx_t* picoquic_start_network_thread(picoquic_quic_t* qu
         picoquic_open_network_wake_up(thread_ctx, ret);
         /* Start thread at specified entry point */
         if (thread_ctx->wake_up_defined){
+            thread_ctx->is_threaded = 1;
             if ((*ret = picoquic_create_thread(&thread_ctx->thread_id, picoquic_packet_loop_v3, (void*)thread_ctx)) != 0) {
                 /* Free the context and return error condition if something went wrong */
-                picoquic_close_network_wake_up(thread_ctx);
-                free(thread_ctx);
+                thread_ctx->is_threaded = 0;
+                picoquic_delete_network_thread(thread_ctx);
                 thread_ctx = NULL;
             }
         }
@@ -1125,7 +1130,9 @@ void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
      */
     picoquic_close_network_wake_up(thread_ctx);
     /* delete the thread */
-    picoquic_delete_thread(thread_ctx->thread_id);
+    if (thread_ctx->is_threaded) {
+        picoquic_delete_thread(thread_ctx->thread_id);
+    }
     /* Free the context */
     free(thread_ctx);
 }
