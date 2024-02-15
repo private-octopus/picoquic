@@ -333,13 +333,9 @@ static int IsRTTTooHigh(picoquic_bbr_state_t* bbr_state);
 
 uint64_t update_windowed_max_filter(uint64_t* filter, uint64_t v, unsigned int cycle, unsigned int filterLen)
 {
-#if 1
     if (filter[cycle % filterLen] < v) {
         filter[cycle % filterLen] = v;
     }
-#else
-    filter[cycle % filterLen] = v;
-#endif
     for (unsigned int i = 0; i < filterLen; i++) {
         if (filter[i] > v) {
             v = filter[i];
@@ -863,14 +859,9 @@ static void BBRLossLowerBounds(picoquic_bbr_state_t* bbr_state)
 /* Once per round-trip respond to congestion */
 static void BBRAdaptLowerBoundsFromCongestion(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
-#if 1
     if (BBRIsProbingBW(bbr_state)) {
         return;
     }
-#else
-    if (IsInAProbeBWState(bbr_state))
-        return;
-#endif
     if (bbr_state->loss_in_round) {
         BBRInitLowerBounds(bbr_state, path_x);
         BBRLossLowerBounds(bbr_state);
@@ -1715,28 +1706,14 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
     if (bbr_state->state == picoquic_bbr_alg_startup) {
         BBRCheckStartupFullBandwidth(bbr_state, rs);
         BBRCheckStartupHighLoss(bbr_state, path_x, rs);
-#if 1
+
         if (IsRTTTooHigh(bbr_state)) {
             bbr_state->filled_pipe = 1;
         }
-#else
-        if (picoquic_hystart_test(&bbr_state->rtt_filter, rs->rtt_sample,
-            path_x->pacing_packet_time_microsec, current_time, 0)) {
-            bbr_state->filled_pipe = 1;
-        }
-#endif
 
         if (bbr_state->filled_pipe) {
-#if 1
             bbr_state->probe_probe_bw_quickly = 1;
             bbr_state->full_bw_count = 0;
-#else
-
-            if (bbr_state->full_bw_count > 0) {
-                bbr_state->probe_probe_bw_quickly = 1;
-                bbr_state->full_bw_count = 0;
-            }
-#endif
             BBREnterDrain(bbr_state, path_x, current_time);
         }
     }
@@ -1969,11 +1946,6 @@ static void BBRComputeEcnFrac(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
         else {
             delta_ect1 = pkt_ctx->ecn_ect1_total_remote - bbr_state->ecn_ect1_last_round;
             delta_ce = pkt_ctx->ecn_ce_total_remote - bbr_state->ecn_ce_last_round;
-#if 1
-            if (delta_ect1 == 0) {
-                DBG_PRINTF("%s", "bug");
-            }
-#endif
         }
         if (delta_ect1 + delta_ce > 0) {
             rs->ecn_ce = delta_ce;

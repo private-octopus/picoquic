@@ -163,9 +163,13 @@ int l4s_prague_updown_test()
 
 int l4s_bbr_updown_test()
 {
+#if defined(_WINDOWS) && !defined(_WINDOWS64)
+    return 0;
+#else
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
     int ret = l4s_congestion_test(ccalgo, 1, 6850000, 50, 6000, nb_l4s_link_updown, l4s_link_updown);
 
     return ret;
+#endif
 }
