@@ -1156,7 +1156,9 @@ int mediatest_one(int media_test_id, mediatest_spec_t * spec)
             picosec_per_byte_ref[i] = mt_ctx->link[i]->picosec_per_byte;
             mt_ctx->link[i]->picosec_per_byte = 8000000; /* 8 us per byte, i.e., 1Mbps*/
             latency_ref[i] = mt_ctx->link[i]->microsec_latency;
+#if 0
             mt_ctx->link[i]->microsec_latency += 80000;
+#endif
         }
         if (ret == 0) {
             ret = mediatest_loop(mt_ctx, 6000000, 0, &is_finished);

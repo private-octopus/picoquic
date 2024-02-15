@@ -103,6 +103,7 @@ typedef enum {
 #define BBRExtraAckedFilterLen 10 /* to compute the extra acked parameter */
 
 #define BBRMinRTTFilterLen 10000000 /* Length of min rtt filter -- 10 seconds. */
+#define BBRRTTJitterBufferLen 7 /* Number of RTT amples retained to filter out jitter */
 #define BBRProbeRTTCwndGain 0.5
 #define BBRProbeRTTDuration 200000 /* 200msec, 200000 microsecs */
 #define BBRProbeRTTInterval 5000000 /* 5 seconds */
@@ -154,8 +155,16 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t bw_lo; /* short term maximum -- new in BBRv3 */
     uint64_t bw; /* max bw for current cycle, min(max_bw, bw_hi, bw_lo) -- new in BBRv3 */
 
-    /* Data volume parameters:*/
+    /* RTT parameters */
     uint64_t min_rtt; /* minimum RTT measured over last 10sec */
+    uint64_t rtt_jitter_buffer[BBRRTTJitterBufferLen];
+    uint64_t rtt_jitter_cycle;
+    uint64_t rtt_short_term_min;
+    uint64_t rtt_short_term_max;
+    uint64_t last_rtt_sample_stamp;
+    int nb_rtt_excess;
+
+    /* Data volume parameters:*/
     uint64_t bdp; /* estimate of path BDP, bw* min_rtt  -- new part of state in BBRv3 */
     uint64_t extra_acked; /* estimate of ack aggregation on path -- new in BBRv3 */
     uint64_t offload_budget; /* data necessary for using TSO / GSO(or LRO, GRO) -- new in BBRv3 */
@@ -280,6 +289,7 @@ typedef struct st_bbr_per_ack_state_t {
 
 /* Forward definition of key functions */
 static int IsInAProbeBWState(picoquic_bbr_state_t* bbr_state);
+static int BBRIsProbingBW(picoquic_bbr_state_t* bbr_state);
 static void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
 #if 0
 static void BBRHandleRestartFromIdle(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
@@ -309,6 +319,9 @@ static uint64_t BBRBDPMultiple(picoquic_bbr_state_t* bbr_state, picoquic_path_t*
 static void BBRAdaptUpperBounds(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time);
 static int InLossRecovery(picoquic_bbr_state_t* bbr_state);
 static int BBRHasElapsedInPhase(picoquic_bbr_state_t* bbr_state, uint64_t interval, uint64_t current_time);
+static void BBRUpdateRTTJitterBuffer(picoquic_bbr_state_t* bbr_state, bbr_per_ack_state_t* rs, uint64_t current_time);
+static void BBRResetRTTJitterBuffer(picoquic_bbr_state_t* bbr_state, uint64_t rtt_init_value, uint64_t current_time);
+static int IsRTTTooHigh(picoquic_bbr_state_t* bbr_state);
 
 /* Init processes for BBRv3 */
 
@@ -398,6 +411,7 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
     else {
         bbr_state->min_rtt = path_x->smoothed_rtt;
     }
+    BBRResetRTTJitterBuffer(bbr_state, bbr_state->min_rtt, current_time);
 
     bbr_state->probe_rtt_min_stamp = current_time;
     bbr_state->probe_rtt_min_delay = bbr_state->min_rtt;
@@ -849,8 +863,14 @@ static void BBRLossLowerBounds(picoquic_bbr_state_t* bbr_state)
 /* Once per round-trip respond to congestion */
 static void BBRAdaptLowerBoundsFromCongestion(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
+#if 1
+    if (BBRIsProbingBW(bbr_state)) {
+        return;
+    }
+#else
     if (IsInAProbeBWState(bbr_state))
         return;
+#endif
     if (bbr_state->loss_in_round) {
         BBRInitLowerBounds(bbr_state, path_x);
         BBRLossLowerBounds(bbr_state);
@@ -1082,13 +1102,46 @@ static void BBRAdaptMinRttMargin(picoquic_bbr_state_t* bbr_state, picoquic_path_
     bbr_state->min_rtt_margin = margin;
 }
 
+static void BBRUpdateRTTJitterBuffer(picoquic_bbr_state_t* bbr_state, bbr_per_ack_state_t * rs, uint64_t current_time)
+{
+    if (current_time > bbr_state->last_rtt_sample_stamp + 1000) {
+        bbr_state->rtt_jitter_buffer[bbr_state->rtt_jitter_cycle % BBRRTTJitterBufferLen] = rs->rtt_sample;
+        bbr_state->rtt_jitter_cycle++;
+        bbr_state->last_rtt_sample_stamp = current_time;
+        bbr_state->rtt_short_term_min = UINT64_MAX;
+        bbr_state->rtt_short_term_max = 0;
+        for (unsigned int i = 0; i < BBRRTTJitterBufferLen; i++) {
+            if (i >= bbr_state->rtt_jitter_cycle) {
+                break;
+            }
+            if (bbr_state->rtt_jitter_buffer[i] > bbr_state->rtt_short_term_max) {
+                bbr_state->rtt_short_term_max = bbr_state->rtt_jitter_buffer[i];
+            }
+            if (bbr_state->rtt_jitter_buffer[i] < bbr_state->rtt_short_term_min) {
+                bbr_state->rtt_short_term_min = bbr_state->rtt_jitter_buffer[i];
+            }
+        }
+    }
+}
+
+static void BBRResetRTTJitterBuffer(picoquic_bbr_state_t* bbr_state,  uint64_t rtt_init_value, uint64_t current_time)
+{
+    bbr_state->rtt_jitter_cycle = 0;
+    bbr_state->last_rtt_sample_stamp = current_time;
+    bbr_state->rtt_short_term_min = rtt_init_value;
+    bbr_state->rtt_short_term_max = rtt_init_value;
+    bbr_state->probe_rtt_min_delay = rtt_init_value;
+    bbr_state->nb_rtt_excess = 0;
+}
+
 static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
 {
     BBRAdaptMinRttMargin(bbr_state, path_x);
-    /* TODO: replace constants by state variables, computed as function of
-     * min RTT */
+    /* maintain filter of last BBRRTTJitterBufferLen samples, to handle jitter */
+    BBRUpdateRTTJitterBuffer(bbr_state, rs, current_time);
+    /* Compute the BBR expired limit */
     if (bbr_state->min_rtt < UINT64_MAX) {
-        if (bbr_state->min_rtt <= PICOQUIC_TARGET_RENO_RTT) {
+        if (bbr_state->min_rtt <= BBRLongRttThreshold) {
             bbr_state->probe_rtt_expired =
                 current_time > bbr_state->probe_rtt_min_stamp + BBRProbeRTTInterval;
         }
@@ -1097,16 +1150,17 @@ static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
                 current_time > bbr_state->probe_rtt_min_stamp + bbr_state->min_rtt * 100;
         }
     }
-    if (rs->rtt_sample >= 0 &&
-        (rs->rtt_sample < bbr_state->probe_rtt_min_delay ||
-            bbr_state->probe_rtt_expired)) {
-        bbr_state->probe_rtt_min_delay = rs->rtt_sample;
+    /* Update min rtt */
+    if (bbr_state->rtt_short_term_max < bbr_state->probe_rtt_min_delay ||
+            bbr_state->probe_rtt_expired ||
+            bbr_state->rtt_jitter_cycle < BBRRTTJitterBufferLen) {
+        bbr_state->probe_rtt_min_delay = bbr_state->rtt_short_term_max;
         bbr_state->probe_rtt_min_stamp = current_time;
     }
     else {
         /* Deviation from BBRv3: test whether the new measurment does not differ from min_rtt
          * by more than a "margin of error, and in that case delay the need to reevaluate min_rtt */
-        if (rs->rtt_sample >= 0 && rs->rtt_sample < (bbr_state->min_rtt + bbr_state->min_rtt_margin)) {
+        if (bbr_state->rtt_short_term_min < (bbr_state->min_rtt + bbr_state->min_rtt_margin)) {
             bbr_state->probe_rtt_min_stamp = current_time;
             bbr_state->min_rtt_stamp = current_time;
         }
@@ -1114,10 +1168,30 @@ static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
     int min_rtt_expired =
         current_time > bbr_state->min_rtt_stamp + BBRMinRTTFilterLen;
     if (bbr_state->probe_rtt_min_delay < bbr_state->min_rtt ||
-        min_rtt_expired) {
+        min_rtt_expired ||
+        bbr_state->rtt_jitter_cycle < BBRRTTJitterBufferLen) {
         bbr_state->min_rtt = bbr_state->probe_rtt_min_delay;
         bbr_state->min_rtt_stamp = bbr_state->probe_rtt_min_stamp;
     }
+}
+
+static int IsRTTTooHigh(picoquic_bbr_state_t* bbr_state)
+{
+    if (bbr_state->rtt_short_term_min > bbr_state->min_rtt)
+    {
+        uint64_t delta_max = bbr_state->min_rtt / 4;
+        if (bbr_state->rtt_short_term_min > bbr_state->min_rtt + delta_max) {
+            bbr_state->nb_rtt_excess++;
+            if (bbr_state->nb_rtt_excess > BBRRTTJitterBufferLen) {
+                return 1;
+            }
+        }
+    }
+    else
+    {
+        bbr_state->nb_rtt_excess = 0;
+    }
+    return 0;
 }
 
 static void BBRExitProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, uint64_t current_time)
@@ -1203,7 +1277,7 @@ static void BBRCheckProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * 
 }
 
 /* ProbeBW specific processes for BBRv3
-* There are actually for states, DOWN, CRUISE, REFILL, and UP.
+* There are actually four states, DOWN, CRUISE, REFILL, and UP.
 * TODO: Transition strategy between states is highly dependent on hypotheses,
 * such as a BDP of about 63 packets. Investigate what to do if the
 * BDP is much higher.
@@ -1217,6 +1291,16 @@ static int IsInAProbeBWState(picoquic_bbr_state_t* bbr_state)
         state == picoquic_bbr_alg_probe_bw_cruise ||
         state == picoquic_bbr_alg_probe_bw_refill ||
         state == picoquic_bbr_alg_probe_bw_up);
+}
+
+static int BBRIsProbingBW(picoquic_bbr_state_t* bbr_state)
+{
+    picoquic_bbr_alg_state_t state = bbr_state->state;
+
+    return (state == picoquic_bbr_alg_probe_bw_down ||
+        state == picoquic_bbr_alg_probe_bw_cruise ||
+        state == picoquic_bbr_alg_drain ||
+        state == picoquic_bbr_alg_probe_rtt) ? 0 : 1;
 }
 
 /* 
@@ -1596,6 +1680,13 @@ static void BBRCheckStartupHighLoss(picoquic_bbr_state_t* bbr_state, picoquic_pa
     }
 }
 
+/* Experimenting with startup exit on high latency.
+ */
+static void BBRCheckStartupHighLatency(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs)
+{
+
+}
+
 static void BBRCheckStartupFullBandwidth(picoquic_bbr_state_t* bbr_state,
     bbr_per_ack_state_t * rs)
 {
@@ -1624,12 +1715,28 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
     if (bbr_state->state == picoquic_bbr_alg_startup) {
         BBRCheckStartupFullBandwidth(bbr_state, rs);
         BBRCheckStartupHighLoss(bbr_state, path_x, rs);
+#if 1
+        if (IsRTTTooHigh(bbr_state)) {
+            bbr_state->filled_pipe = 1;
+        }
+#else
+        if (picoquic_hystart_test(&bbr_state->rtt_filter, rs->rtt_sample,
+            path_x->pacing_packet_time_microsec, current_time, 0)) {
+            bbr_state->filled_pipe = 1;
+        }
+#endif
 
         if (bbr_state->filled_pipe) {
+#if 1
+            bbr_state->probe_probe_bw_quickly = 1;
+            bbr_state->full_bw_count = 0;
+#else
+
             if (bbr_state->full_bw_count > 0) {
                 bbr_state->probe_probe_bw_quickly = 1;
                 bbr_state->full_bw_count = 0;
             }
+#endif
             BBREnterDrain(bbr_state, path_x, current_time);
         }
     }
@@ -1650,6 +1757,7 @@ static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
     bbr_state->min_rtt = path_x->rtt_sample;
     bbr_state->min_rtt_stamp = current_time;
     bbr_state->probe_rtt_min_stamp = current_time;
+    BBRResetRTTJitterBuffer(bbr_state, bbr_state->min_rtt, current_time);
     bbr_state->probe_probe_bw_quickly = 1;
     BBREnterStartup(bbr_state);
 }
@@ -1694,6 +1802,7 @@ static void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path
         bbr_state->min_rtt = bbr_state->rtt_filter.sample_max;
         bbr_state->min_rtt_stamp = current_time;
     }
+    BBRResetRTTJitterBuffer(bbr_state, bbr_state->min_rtt, current_time);
     /* Enter drain */
     BBREnterDrain(bbr_state, path_x, current_time);
     /* If there were just few bytes in transit, enter probe */
