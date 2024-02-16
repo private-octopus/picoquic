@@ -26,7 +26,7 @@
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
-#include "autoqlog.h"
+#include "picoquic_binlog.h"
 
 /* Media tests: simulate media transmission, include cases in which
 * the media bandwidth is much lower than the available bandwidth on
@@ -1023,7 +1023,7 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
         if (spec->ccalgo != NULL) {
             for (int i = 0; i < 2 && ret == 0; i++) {
                 picoquic_set_default_congestion_algorithm(mt_ctx->quic[i], spec->ccalgo);
-                ret = picoquic_set_qlog(mt_ctx->quic[i], ".");
+                ret = picoquic_set_binlog(mt_ctx->quic[i], ".");
             }
         }
     }

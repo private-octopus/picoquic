@@ -27,6 +27,7 @@
 
 #define RTTJitterBuffer On
 #define RTTJitterBufferStartup On
+#define RTTJitterBufferProbe On
 /*
 Implementation of the BBR3 algorithm, tuned for Picoquic.
 Based on https://datatracker.ietf.org/doc/html/draft-cardwell-iccrg-bbr-congestion-control-02,
@@ -1516,6 +1517,31 @@ static uint64_t BBRTargetInflight(picoquic_bbr_state_t* bbr_state, picoquic_path
     return (bbr_state->bdp < path_x->cwin) ? bbr_state->bdp : path_x->cwin;
 }
 
+#ifdef RTTJitterBufferProbe
+static int BBRCheckPathSaturated(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
+{
+    if (!rs->is_app_limited &&
+        bbr_state->state != picoquic_bbr_alg_drain &&
+        bbr_state->pacing_rate > 3 * rs->delivery_rate &&
+        100 * path_x->bytes_in_transit > 95 * path_x->cwin &&
+        bbr_state->rounds_since_bw_probe >= 1) {
+        bbr_state->prior_cwnd = rs->delivery_rate;
+        bbr_state->probe_rtt_done_stamp = 0;
+        bbr_state->ack_phase = picoquic_bbr_acks_probe_stopping;
+        bbr_state->MaxBwFilter[0] = rs->delivery_rate;
+        bbr_state->MaxBwFilter[1] = rs->delivery_rate;
+        bbr_state->max_bw = rs->delivery_rate;
+        bbr_state->full_bw = rs->delivery_rate;
+        BBREnterDrain(bbr_state, path_x, current_time);
+        BBRStartRound(bbr_state, path_x);
+        return 1;
+    }
+    else {
+        return 0;
+    }
+}
+#endif
+
 static int BBRIsRenoCoexistenceProbeTime(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x)
 {
     uint64_t reno_rounds = (BBRTargetInflight(bbr_state, path_x)/path_x->send_mtu);
@@ -1601,6 +1627,11 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
     case picoquic_bbr_alg_probe_bw_down:
         if (BBRCheckTimeToProbeBW(bbr_state, path_x, current_time))
             return; /* already decided state transition */
+#ifdef RTTJitterBufferProbe
+        if (BBRCheckPathSaturated(bbr_state, path_x, rs, current_time)) {
+            return;
+        }
+#endif
         if (BBRCheckTimeToCruise(bbr_state, path_x)) {
             if (15 * bbr_state->max_bw >= 16 * bbr_state->full_bw &&
                 rs->ecn_alpha <= BBRExcessiveEcnCE) {
@@ -1622,6 +1653,11 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
         break;
 
     case picoquic_bbr_alg_probe_bw_cruise:
+#ifdef RTTJitterBufferProbe
+        if (BBRCheckPathSaturated(bbr_state, path_x, rs, current_time)) {
+            return;
+        }
+#endif
         if (BBRCheckTimeToProbeBW(bbr_state, path_x, current_time))
             return; /* already decided state transition */
         break;
