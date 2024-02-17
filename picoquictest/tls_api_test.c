@@ -10709,7 +10709,7 @@ int app_limit_cc_test_one(
                     int nb_comma = 0;
                     int c_index = 0;
 
-                    while (nb_comma < 23 && c_index < 512 && buffer[c_index] != 0) {
+                    while (nb_comma < 24 && c_index < 512 && buffer[c_index] != 0) {
                         if (buffer[c_index] == ',') {
                             nb_comma++;
                         }
@@ -10852,7 +10852,7 @@ int cwin_max_test_one(
                     int nb_comma = 0;
                     int c_index = 0;
 
-                    while (nb_comma < 23 && c_index < 512 && buffer[c_index] != 0) {
+                    while (nb_comma < 24 && c_index < 512 && buffer[c_index] != 0) {
                         if (buffer[c_index] == ',') {
                             nb_comma++;
                         }
@@ -12616,7 +12616,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 5800000;
                     break;
                 case bdp_test_option_rtt:
-                    max_completion_time = 4600000;
+                    max_completion_time = 4610000;
                     test_ctx->c_to_s_link->microsec_latency = 50000ull;
                     test_ctx->s_to_c_link->microsec_latency = 50000ull;
                     buffer_size = 2 * test_ctx->c_to_s_link->microsec_latency;

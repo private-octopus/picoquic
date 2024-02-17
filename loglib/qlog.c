@@ -58,6 +58,7 @@ typedef struct qlog_context_st {
     unsigned int key_phase_received : 1;
     unsigned int spin_bit_sent_last : 1;
     unsigned int spin_bit_sent : 1;
+    unsigned int app_limited : 1;
 
     int state;
 } qlog_context_t;
@@ -1312,6 +1313,7 @@ int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     uint64_t cc_param = 0;
     uint64_t bw_max = 0;
     uint64_t bytes_in_transit = 0;
+    uint64_t app_limited = 0;
     qlog_context_t* ctx = (qlog_context_t*)ptr;
     FILE* f = ctx->f_txtlog;
 
@@ -1341,6 +1343,8 @@ int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     ret |= byteread_vint(s, &cc_param);
     ret |= byteread_vint(s, &bw_max);
     ret |= byteread_vint(s, &bytes_in_transit);
+    /* Not checking the app limited return, because it is not present in old bin logs */
+    (void) byteread_vint(s, &app_limited);
 
     if (ret == 0 &&
         (cwin != ctx->cwin || rtt_sample != ctx->rtt_sample || SRTT != ctx->SRTT ||
@@ -1393,6 +1397,12 @@ int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
         if (rtt_sample != ctx->rtt_sample) {
             fprintf(f, "%s\"latest_rtt\": %" PRIu64, comma, rtt_sample);
             ctx->rtt_sample = rtt_sample;
+            comma = ",";
+        }
+
+        if (app_limited != ctx->app_limited) {
+            fprintf(f, "%s\"app_limited\": %" PRIu64, comma, app_limited);
+            ctx->app_limited = (app_limited != 0);
             /* comma = ","; (not useful since last block of function) */
         }
 

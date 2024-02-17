@@ -1525,7 +1525,7 @@ static int BBRCheckPathSaturated(picoquic_bbr_state_t* bbr_state, picoquic_path_
         bbr_state->pacing_rate > 3 * rs->delivery_rate &&
         100 * path_x->bytes_in_transit > 95 * path_x->cwin &&
         bbr_state->rounds_since_bw_probe >= 1) {
-        bbr_state->prior_cwnd = rs->delivery_rate;
+        bbr_state->prior_cwnd = rs->delivered;
         bbr_state->probe_rtt_done_stamp = 0;
         bbr_state->ack_phase = picoquic_bbr_acks_probe_stopping;
         bbr_state->MaxBwFilter[0] = rs->delivery_rate;
