@@ -28,6 +28,7 @@
 #define RTTJitterBuffer On
 #define RTTJitterBufferStartup On
 #define RTTJitterBufferProbe On
+
 /*
 Implementation of the BBR3 algorithm, tuned for Picoquic.
 Based on https://datatracker.ietf.org/doc/html/draft-cardwell-iccrg-bbr-congestion-control-02,
@@ -1522,9 +1523,10 @@ static int BBRCheckPathSaturated(picoquic_bbr_state_t* bbr_state, picoquic_path_
 {
     if (!rs->is_app_limited &&
         bbr_state->state != picoquic_bbr_alg_drain &&
+        bbr_state->rounds_since_bw_probe >= 1 &&
         bbr_state->pacing_rate > 3 * rs->delivery_rate &&
-        100 * path_x->bytes_in_transit > 95 * path_x->cwin &&
-        bbr_state->rounds_since_bw_probe >= 1) {
+        rs->rtt_sample > 2*bbr_state->min_rtt &&
+        bbr_state->wifi_shadow_rtt == 0) {
         bbr_state->prior_cwnd = rs->delivered;
         bbr_state->probe_rtt_done_stamp = 0;
         bbr_state->ack_phase = picoquic_bbr_acks_probe_stopping;
@@ -2154,6 +2156,11 @@ static void BBRSetRsFromAckState(picoquic_path_t* path_x, picoquic_per_ack_state
     rs->tx_in_flight = ack_state->inflight_prior;
     rs->is_app_limited = ack_state->is_app_limited; /*Checked that this is properly implemented */   
     rs->is_cwnd_limited = ack_state->is_cwnd_limited;
+#if RTTJitterBufferProbe
+    if (rs->is_cwnd_limited || path_x->rtt_sample > 2 * path_x->rtt_min) {
+        rs->is_app_limited = 0;
+    }
+#endif
 }
 
 static void picoquic_bbr_notify_ack(
