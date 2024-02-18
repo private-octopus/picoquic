@@ -136,13 +136,19 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
 * picoquic_close_network_thread, passing the thread context as an argument.
 * The network thread context will be freed during that call.
 */
+typedef int (*picoquic_custom_thread_create_fn)(void** thread_id, picoquic_thread_fn thread_fn, void* arg);
+typedef void (*picoquic_custom_thread_setname_fn)(char const* thread_name);
+typedef void (*picoquic_custom_thread_delete_fn)(void** thread_id);
 
 typedef struct st_picoquic_network_thread_ctx_t {
     picoquic_quic_t* quic;
     picoquic_packet_loop_param_t* param;
     picoquic_packet_loop_cb_fn loop_callback;
+    picoquic_custom_thread_delete_fn thread_delete_fn;
+    picoquic_custom_thread_setname_fn thread_setname_fn;
+    char const* thread_name;
+    void* pthread; /* Can be cast to picoquic_thread_t, or custom type if using non native threads */
     void* loop_callback_ctx;
-    picoquic_thread_t thread_id;
 #ifdef _WINDOWS
     HANDLE wake_up_event;
 #else
@@ -166,6 +172,92 @@ picoquic_network_thread_ctx_t* picoquic_start_network_thread(
 int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx);
 void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx);
 
+/* The function picoquic_start_network_thread creates a background thread using
+* the "native" threading APIs, CreateThread in Windows or pthread_create in
+* Unix/Posix systems. This will not work in some environments, if for example
+* the threads should be created using a game engine API. In such cases,
+* developers may use the function picoquic_start_custom_network_thread,
+* passing the desired thread creation function, thread deletion function
+* and thread naming function as a function pointer. The thread naming
+* function will be called from inside the network thread after it is
+* created, as this is required in some OSes. The thread deletion
+* function will be called when the thread is delete, from inside
+* the thread context destruction function.
+* 
+* The custom thread creation function must match the prototype 
+* picoquic_custom_thread_create_fn, with the following arguments:
+* 
+* - void** pthread: a pointer to the thread (thread HANDLE in Windows,
+*   pthread_t if using pthread),
+* - picoquic_thread_fn thread_fn: the function that will be instantiated when creating the thread.
+* - void* arg: the argument to thread_fn.
+* 
+* The return code is an integer, either 0 if success or an error code if failure.
+* 
+* The custom thread deletion function must match the prototype 
+* picoquic_custom_thread_delete_fn, with the following arguments:
+* 
+* - void** pthread: a pointer to the thread, carrying the value returned
+*   in pthread by the custom creation function.
+* 
+* The custom thread naming function must match the prototype 
+* picoquic_custom_thread_delete_fn, with the following arguments:
+* 
+* - char const * thread_name: the desired thread name. Should be less
+*   than 16 characters, including the final null terminator.
+* 
+* The function picoquic_start_custom_network_thread takes the following
+* arguments:
+* 
+* - picoquic_quic_t* quic: the quic context, configured by the application
+*   before starting the network thread.
+* - picoquic_packet_loop_param_t* param: the loop creation parameters,
+* - picoquic_custom_thread_create_fn thread_create_fn: the thread creation
+*   function. If the value is NULL, the OS defaults will be used.
+* - picoquic_custom_thread_create_fn thread_delete_fn: the thread
+*   deletion function. If the value is NULL, the OS defaults will be used.
+* - char const* thread_name: the desired thread name, or NULL if the
+*   default value is sufficient.
+* - picoquic_packet_loop_cb_fn loop_callback: the function that will
+*   be called upon packet loop events.
+* - void* loop_callback_ctx: the arguments to loop callback.
+* - int * ret: error code, if any.
+* 
+* The function will return a pointer to the thread context, or NULL
+* if an error happened.
+* 
+* Note that these functions set the name of the thread but do attempt to set
+* the priority of the thread. Setting the name during the creation makes sense,
+* as the name will typically not change during the process. It is also
+* reasonably easy to set the name in a system independent way. In contrast,
+* the handling of priority is system dependent, with Windows and Unix using
+* different concepts, and there may be good reasons to change a thread priority
+* after creation. Developers can use the system or framework APIs after the
+* thread is created, using the thread handle in thread_ctx->pthread.
+*/
+
+picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(
+    picoquic_quic_t* quic,
+    picoquic_packet_loop_param_t* param,
+    picoquic_custom_thread_create_fn thread_create_fn,
+    picoquic_custom_thread_delete_fn thread_delete_fn,
+    picoquic_custom_thread_setname_fn thread_setname_fn, 
+    char const* thread_name,
+    picoquic_packet_loop_cb_fn loop_callback,
+    void* loop_callback_ctx,
+    int * ret);
+
+/* Implementations of picoquic_custom_thread_create_fn and 
+* picoquic_custom_thread_delete_fn for the native thread types.
+* These functions are used in calls to picoquic_start_custom_network_thread
+* when the create and delete function pointers are NULL.
+* They are also used in the test library to test the use of
+* function pointers in the thread creation function.
+ */
+int picoquic_internal_thread_create(void** pthread,
+    picoquic_thread_fn thread_fn, void* thread_arg);
+void picoquic_internal_thread_delete(void** pthread);
+void picoquic_internal_thread_setname(char const * thread_name);
 
 /* Legacy versions the packet loop, one portable and one specialized
  * for winsock. Keeping these API for compatibility, but the implementation
