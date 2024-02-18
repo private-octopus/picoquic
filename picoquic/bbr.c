@@ -1207,11 +1207,6 @@ static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
 
 static int IsRTTTooHigh(picoquic_bbr_state_t* bbr_state)
 {
-#if 1
-    if (bbr_state->nb_rtt_excess > BBRRTTJitterBufferLen) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
     return (bbr_state->nb_rtt_excess > BBRRTTJitterBufferLen);
 }
 #else

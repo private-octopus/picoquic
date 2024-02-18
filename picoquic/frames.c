@@ -2481,11 +2481,6 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
         }
         else {
             uint64_t receive_interval = delivery_time - delivered_time_prior;
-#if 1
-            if (current_time > 2300000) {
-                DBG_PRINTF("%s", "Bug");
-            }
-#endif
 
             if (receive_interval > PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN) {
                 uint64_t delivered = path_x->delivered - delivered_prior;
@@ -2498,13 +2493,9 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
 
                 bw_estimate = delivered * 1000000;
                 bw_estimate /= receive_interval;
-#if 1
+
                 path_x->bandwidth_estimate = bw_estimate;
                 if (!rs_is_path_limited || bw_estimate > path_x->bandwidth_estimate) {
-#else
-                if (!rs_is_path_limited || bw_estimate > path_x->bandwidth_estimate) {
-                    path_x->bandwidth_estimate = bw_estimate;
-#endif
                     if (path_x == cnx->path[0]){
                         if (cnx->is_ack_frequency_negotiated) {
                             /* Compute the desired value of the ack frequency*/
