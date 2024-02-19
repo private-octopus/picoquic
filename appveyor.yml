@@ -38,7 +38,7 @@ test_script:
  # using alternative because of error `vstest.console.exe .\UnitTest1.dll`
  # - ps: vstest.console /logger:Appveyor "/testcasefilter:(Name!=config_quic)&(Name!=config_option)&(Name!=qlog_trace)&(Name!=qlog_trace_auto)&(Name!=qlog_trace_ecn)&(Name!=qlog_trace_only)&(Name!=simple_multipath_qlog)&(Name!=multipath_qlog)&(Name!=threading)" UnitTest1.dll
  # Alternative to UnitTest1 (running the same tests):
- - ps: .\picoquic_t -n -r -x fuzz_initial
+ - ps: .\picoquic_t.exe -n -x fuzz_initial
 
 deploy: off
 
