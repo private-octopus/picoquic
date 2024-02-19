@@ -659,7 +659,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
 }
 #endif
 #ifdef _WINDOWS
-DWORD WINAPI picoquic_packet_loop_v3(LPVOID v_ctx)
+    DWORD WINAPI picoquic_packet_loop_v3(LPVOID v_ctx)
 #else
 void* picoquic_packet_loop_v3(void* v_ctx)
 #endif
@@ -697,6 +697,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
+
+    if (thread_ctx->thread_name != NULL) {
+        thread_ctx->thread_setname_fn(thread_ctx->thread_name);
+    }
 
     if (send_buffer_size == 0) {
         send_buffer_size = 0xffff;
@@ -1066,9 +1070,95 @@ static void picoquic_open_network_wake_up(picoquic_network_thread_ctx_t* thread_
 #endif
 }
 
+int picoquic_internal_thread_create(void** thread_id, picoquic_thread_fn thread_fn, void* thread_arg)
+{
+    int ret = picoquic_create_thread((picoquic_thread_t*)thread_id, thread_fn, thread_arg);
+    return ret;
+}
+
+void picoquic_internal_thread_setname(char const * thread_name)
+{
+#ifdef _WINDOWS
+    wchar_t wname[257];
+    wname[0] = 0;
+
+    if (swprintf(wname, 256, L"%S", thread_name) < 0) {
+        DBG_PRINTF("Cannot convert thread name <%s> to wchar[256], err: 0x%x",
+            thread_name, GetLastError());
+    }
+    else {
+        HRESULT r = SetThreadDescription(GetCurrentThread(), wname);
+        if (r != 0) {
+            DBG_PRINTF("Set thread name <%S> returns: 0x%x", wname, r);
+        }
+    }
+#else
+#ifdef __APPLE__
+    pthread_setname_np(thread_name);
+#else
+    int r=pthread_setname_np(pthread_self(), thread_name);
+    if (r != 0) {
+        DBG_PRINTF("Set thread name <%s> returns: 0x%x", thread_name, r);
+    }
+#endif
+#endif
+}
+
+void picoquic_internal_thread_delete(void** v_thread_id)
+{
+    picoquic_delete_thread((picoquic_thread_t *)v_thread_id);
+}
+
+picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(picoquic_quic_t* quic, picoquic_packet_loop_param_t* param,
+    picoquic_custom_thread_create_fn thread_create_fn, picoquic_custom_thread_delete_fn thread_delete_fn,
+    picoquic_custom_thread_setname_fn thread_setname_fn, char const* thread_name,
+    picoquic_packet_loop_cb_fn loop_callback, void* loop_callback_ctx, int* ret)
+{
+    picoquic_network_thread_ctx_t* thread_ctx = (picoquic_network_thread_ctx_t*)malloc(sizeof(picoquic_network_thread_ctx_t));
+    *ret = 0;
+
+    if (thread_ctx == NULL) {
+        /* Error, no memory */
+    }
+    else {
+        memset(thread_ctx, 0, sizeof(picoquic_network_thread_ctx_t));
+        /* Fill the arguments in the context */
+        thread_ctx->quic = quic;
+        thread_ctx->param = param;
+        thread_ctx->loop_callback = loop_callback;
+        thread_ctx->loop_callback_ctx = loop_callback_ctx;
+        /* Open the wake up pipe or event */
+        picoquic_open_network_wake_up(thread_ctx, ret);
+        /* Start thread at specified entry point */
+        if (thread_ctx->wake_up_defined){
+            thread_ctx->is_threaded = 1;
+            if (thread_create_fn == NULL) {
+                thread_create_fn = picoquic_internal_thread_create;
+            }
+            if ((thread_ctx->thread_setname_fn = thread_setname_fn) == NULL) {
+                thread_ctx->thread_setname_fn = picoquic_internal_thread_setname;
+            }
+            if ((thread_ctx->thread_delete_fn = thread_delete_fn) == NULL) {
+                thread_ctx->thread_delete_fn = picoquic_internal_thread_delete;
+            }
+            thread_ctx->thread_name = thread_name;
+            if ((*ret = thread_create_fn((void **)&thread_ctx->pthread, picoquic_packet_loop_v3, (void*)thread_ctx)) != 0) {
+                /* Free the context and return error condition if something went wrong */
+                thread_ctx->is_threaded = 0;
+                picoquic_delete_network_thread(thread_ctx);
+                thread_ctx = NULL;
+            }
+        }
+    }
+    return thread_ctx;
+}
+
 picoquic_network_thread_ctx_t* picoquic_start_network_thread(picoquic_quic_t* quic,
     picoquic_packet_loop_param_t* param, picoquic_packet_loop_cb_fn loop_callback, void* loop_callback_ctx, int* ret)
 {
+#if 1
+    return picoquic_start_custom_network_thread(quic, param, NULL, NULL, NULL, NULL, loop_callback, loop_callback_ctx, ret);
+#else
     picoquic_network_thread_ctx_t* thread_ctx = (picoquic_network_thread_ctx_t*)malloc(sizeof(picoquic_network_thread_ctx_t));
     *ret = 0;
 
@@ -1096,6 +1186,7 @@ picoquic_network_thread_ctx_t* picoquic_start_network_thread(picoquic_quic_t* qu
         }
     }
     return thread_ctx;
+#endif
 }
 
 int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
@@ -1140,7 +1231,7 @@ void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
     picoquic_close_network_wake_up(thread_ctx);
     /* delete the thread */
     if (thread_ctx->is_threaded) {
-        picoquic_delete_thread(&thread_ctx->thread_id);
+        thread_ctx->thread_delete_fn((void**)&thread_ctx->pthread);
     }
     /* Free the context */
     free(thread_ctx);

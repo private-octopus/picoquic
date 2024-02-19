@@ -53,6 +53,7 @@ typedef struct st_sockloop_test_spec_t {
     int socket_buffer_size;
     test_api_stream_desc_t* scenario;
     size_t scenario_size;
+    char const* thread_name;
     int use_background_thread;
     int ipv6_only;
     int do_not_use_gso;
@@ -492,7 +493,14 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
             loop_cb.param = &param;
 
             if (spec->use_background_thread) {
-                thread_ctx = picoquic_start_network_thread(test_ctx->qserver, &param, sockloop_test_cb, &loop_cb, &ret);
+                if (spec->thread_name != NULL) {
+                    thread_ctx = picoquic_start_custom_network_thread(test_ctx->qserver, &param,
+                        picoquic_internal_thread_create, picoquic_internal_thread_delete,
+                        picoquic_internal_thread_setname, spec->thread_name, sockloop_test_cb, &loop_cb, &ret);
+                }
+                else {
+                    thread_ctx = picoquic_start_network_thread(test_ctx->qserver, &param, sockloop_test_cb, &loop_cb, &ret);
+                }
                 if (thread_ctx == NULL) {
                     if (ret == 0) {
                         ret = -1;
@@ -663,7 +671,6 @@ int sockloop_nat_test()
     return(sockloop_test_one(&spec));
 }
 
-
 int sockloop_thread_test()
 {
     sockloop_test_spec_t spec;
@@ -672,6 +679,19 @@ int sockloop_thread_test()
     spec.scenario = sockloop_test_scenario_1M;
     spec.scenario_size = sizeof(sockloop_test_scenario_1M);
     spec.use_background_thread = 1;
+
+    return(sockloop_test_one(&spec));
+}
+
+int sockloop_thread_name_test()
+{
+    sockloop_test_spec_t spec;
+    sockloop_test_set_spec(&spec, 8);
+    spec.socket_buffer_size = 0xffff;
+    spec.scenario = sockloop_test_scenario_1M;
+    spec.scenario_size = sizeof(sockloop_test_scenario_1M);
+    spec.use_background_thread = 1;
+    spec.thread_name = "picoquic loop";
 
     return(sockloop_test_one(&spec));
 }
