@@ -58,6 +58,7 @@ static const picoquic_test_def_t test_table[] = {
     { "sockloop_migration", sockloop_migration_test },
     { "sockloop_nat", sockloop_nat_test },
     { "sockloop_thread", sockloop_thread_test },
+    { "sockloop_thread_name", sockloop_thread_name_test },
     { "splay", splay_test },
     { "cnxcreation", cnxcreation_test },
     { "parseheader", parseheadertest },
