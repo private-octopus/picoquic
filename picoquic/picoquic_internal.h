@@ -587,6 +587,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_enable_simple_multipath  0x29e3d19e
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
+#define picoquic_tp_initial_max_paths  0x0f739bbc1b666d07ull /* per PR 292 draft quic multipath 06 */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
  * This is kept private for now; and will only be set through the "set quic log"
@@ -1256,6 +1257,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int cwin_notified_from_seed : 1; /* cwin was reset from a seeded value */
     unsigned int is_datagram_ready : 1; /* Active polling for datagrams */
     unsigned int is_immediate_ack_required : 1; /* Should send an ACK asap */
+    unsigned int is_unique_path_id_enabled : 1; /* Unique path ID extension has been negotiated */
 
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
@@ -1439,6 +1441,9 @@ typedef struct st_picoquic_cnx_t {
     uint64_t unique_path_id_next;
     picoquic_path_t* nominal_path_for_ack;
     uint64_t status_sequence_to_send_next;
+    uint64_t max_paths_local;
+    uint64_t max_paths_acknowledged;
+    uint64_t max_paths_remote;
 
     /* Management of the CNX-ID stash */
     uint64_t retire_cnxid_before;

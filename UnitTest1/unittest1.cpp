@@ -697,7 +697,7 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-		TEST_METHOD(test_transport_param)
+		TEST_METHOD(transport_param)
 		{
 			int ret = transport_param_test();
 

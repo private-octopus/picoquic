@@ -303,6 +303,8 @@ typedef struct st_picoquic_tp_t {
     picoquic_tp_version_negotiation_t version_negotiation;
     int enable_bdp_frame;
     int enable_simple_multipath;
+    int is_unique_path_id_enabled;
+    uint64_t initial_max_paths;
 } picoquic_tp_t;
 
 /*
