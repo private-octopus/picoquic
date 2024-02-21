@@ -299,6 +299,12 @@ static uint8_t test_frame_type_ack_mp_ecn[] = {
     3, 0, 1
 };
 
+static uint8_t test_frame_type_max_paths[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_max_paths >> 24)), (uint8_t)(picoquic_frame_type_max_paths >> 16),
+    (uint8_t)(picoquic_frame_type_max_paths >> 8), (uint8_t)(picoquic_frame_type_max_paths & 0xFF),
+    0x11, /* max paths = 17 */
+};
+
 #define TEST_SKIP_ITEM(n, x, a, l, e, err, skip_err) \
     {                                                \
         n, x, sizeof(x), a, l, e, err, skip_err      \
@@ -347,6 +353,7 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_standby", test_frame_type_path_standby, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("path_available", test_frame_type_path_available, 0, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("max paths", test_frame_type_max_paths, 0, 0, 3, 0, 0),
 
     TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3, 0, 0)
 };
@@ -834,6 +841,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
 
         /* Enable multipath so the test of multipath frames works. */
         cnx->is_multipath_enabled = 1;
+        cnx->is_unique_path_id_enabled = 1;
        
         /* if testing handshake done, set state to ready so frame is ignored. */
         if (epoch == 3) {

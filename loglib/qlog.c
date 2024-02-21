@@ -814,6 +814,13 @@ void qlog_path_available_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"sequence\": %"PRIu64, sequence);
 }
 
+void qlog_max_paths_frame(FILE* f, bytestream* s)
+{
+    uint64_t max_paths = 0;
+    byteread_vint(s, &max_paths);
+    fprintf(f, ", \"max_paths\": %"PRIu64, max_paths);
+}
+
 void qlog_reset_stream_frame(FILE* f, bytestream* s)
 {
     uint64_t stream_id = 0;
@@ -1249,6 +1256,9 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_bdp:
         qlog_bdp_frame(f, s);
+        break;
+    case picoquic_frame_type_max_paths:
+        qlog_max_paths_frame(f, s);
         break;
     default:
         s->ptr = ptr_before_type;

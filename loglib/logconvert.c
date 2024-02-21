@@ -115,6 +115,8 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "path_available";
     case picoquic_frame_type_bdp:
         return "bdp";
+    case picoquic_frame_type_max_paths:
+        return "max_paths";
     default:
         return "unknown";
     }

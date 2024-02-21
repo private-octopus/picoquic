@@ -151,7 +151,8 @@ typedef enum {
     picoquic_frame_type_path_abandon =  0x15228c05,
     picoquic_frame_type_path_standby =  0x15228c07,
     picoquic_frame_type_path_available =  0x15228c08,
-    picoquic_frame_type_bdp = 0xebd9
+    picoquic_frame_type_bdp = 0xebd9,
+    picoquic_frame_type_max_paths = 0x15228c0b
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
