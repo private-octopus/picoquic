@@ -36,6 +36,7 @@
     path_abandon, path_id: 1, reason: 17: bad
     path_standby, path_id: 0, sequence: 15
     path_available, path_id: 0, sequence: 15
+    max_paths, max_paths: 17
     bdp_frame, lifetime: 1, bytes_in_flight: 2, min_rtt: 3, ip: 0a000001
     ack_mp (nb=2), path=0, 4328719360-4328719365, 4328719358, 4328719339-4328719351
     ack_mp_ecn (nb=2), path=0, 4328719360-4328719365, 4328719358, 4328719339-4328719351, ect0=3, ect1=0, ce=1

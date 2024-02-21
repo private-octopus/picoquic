@@ -51,12 +51,13 @@
 0102030405060708:         Extension type: 0 (ocid), length 8, 0102030405060708
 0102030405060708:         Extension type: 2 (stateless_reset_token), length 16, 0102030405060708090a0b0c0d0e0f10
 
-0102030405060708:     Extension list (33 bytes):
+0102030405060708:     Extension list (43 bytes):
 0102030405060708:         Extension type: 5 (max_stream_data_bidi_local), length 4, 80010000
 0102030405060708:         Extension type: 4 (initial_max_data), length 8, c0000000ffffffff
 0102030405060708:         Extension type: 1 (idle_timeout), length 1, 1e
 0102030405060708:         Extension type: 3 (max_packet_size), length 2, 45c8
 0102030405060708:         Extension type: 15 (hcid), length 8, 0203040506070809
+0102030405060708:         Extension type: 1113404765106498823 (initial_max_paths), length 1, 04
 
 0102030405060708:     Extension list (36 bytes):
 0102030405060708:         Extension type: 1 (idle_timeout), length 2, 400a
