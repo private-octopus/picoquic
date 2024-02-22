@@ -638,6 +638,10 @@ static void BBROnExitRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
         bbr_state->packet_conservation = 0;
 
         if (bbr_state->is_pto_recovery) {
+            /* TODO:
+             * we should try to enter startup with a high enough BW. However, 
+             * simple attempts to restore the BW parameters have proven ineffective.
+             */
             BBRReEnterStartup(bbr_state, path_x, current_time);
         }
         else if(bbr_state->state == picoquic_bbr_alg_probe_bw_up) {

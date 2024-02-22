@@ -168,6 +168,9 @@ typedef struct st_mediatest_spec_t {
     size_t data_size;
     size_t datagram_data_size;
     double bandwidth;
+    uint64_t latency_average;
+    uint64_t latency_max;
+    int do_not_check_video2;
 } mediatest_spec_t;
 
 int mediatest_callback(picoquic_cnx_t* cnx,
@@ -324,7 +327,7 @@ void mediatest_record_stats(mediatest_ctx_t* mt_ctx, mediatest_stream_ctx_t* str
     }
 }
 
-int mediatest_check_stats(mediatest_ctx_t* mt_ctx, media_test_type_enum media_type)
+int mediatest_check_stats(mediatest_ctx_t* mt_ctx, mediatest_spec_t * spec, media_test_type_enum media_type)
 {
     int ret = 0;
 
@@ -341,8 +344,19 @@ int mediatest_check_stats(mediatest_ctx_t* mt_ctx, media_test_type_enum media_ty
             uint64_t variance = (stats->sum_square_delays / stats->nb_frames) - (average * average);
             uint64_t sigma = picoquic_sqrt_for_tests(variance);
 
-            if (average > 25000 || sigma > 12500 || stats->max_delay > 100000) {
-                ret = -1;
+            if (spec->latency_average == 0)
+            {
+                if (average > 25000 || sigma > 12500 || stats->max_delay > 100000) {
+                    ret = -1;
+                }
+            }
+            else {
+                if (average > spec->latency_average) {
+                    ret = -1;
+                }
+                else if (spec->latency_max > 0 && stats->max_delay > spec->latency_max) {
+                    ret = -1;
+                }
             }
         }
     }
@@ -1237,13 +1251,13 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
         }
         /* Check that the results are as expected. */
         if (ret == 0 && spec->do_audio) {
-            ret = mediatest_check_stats(mt_ctx, media_test_audio);
+            ret = mediatest_check_stats(mt_ctx, spec, media_test_audio);
         }
         if (ret == 0 && spec->do_video) {
-            ret = mediatest_check_stats(mt_ctx, media_test_video);
+            ret = mediatest_check_stats(mt_ctx, spec, media_test_video);
         }
-        if (ret == 0 && spec->do_video2 && media_test_id != 5) {
-            ret = mediatest_check_stats(mt_ctx, media_test_video2);
+        if (ret == 0 && spec->do_video2 && !spec->do_not_check_video2) {
+            ret = mediatest_check_stats(mt_ctx, spec, media_test_video2);
         }
     }
     if (mt_ctx != NULL) {
@@ -1302,12 +1316,10 @@ int mediatest_video2_down_test()
     spec.do_video2 = 1;
     spec.do_audio = 1;
     spec.data_size = 0;
+    spec.latency_average = 100000;
+    spec.latency_max = 500000;
+    spec.do_not_check_video2 = 1;
     ret = mediatest_one(mediatest_video2_down, &spec);
-
-#if 1
-    /* TODO: remove this once BBR is debugged. */
-    ret = 0;
-#endif
 
     return ret;
 }
@@ -1336,12 +1348,10 @@ int mediatest_wifi_test()
     spec.do_video2 = 1;
     spec.do_audio = 1;
     spec.data_size = 0;
+    spec.latency_average = 45000;
+    spec.latency_max = 240000;
+    spec.do_not_check_video2 = 1;
     ret = mediatest_one(mediatest_wifi, &spec);
-
-#if 1
-    /* TODO: remove this once BBR is debugged. */
-    ret = 0;
-#endif
 
     return ret;
 }
