@@ -89,7 +89,7 @@
     "frame_type": "new_connection_id", "sequence_number": 5, "retire_before": 0, "connection_id": "0703040506070809", "reset_token": "cbf38915760d994ae0bdda3fd5000b90"}, { 
     "frame_type": "new_connection_id", "sequence_number": 6, "retire_before": 0, "connection_id": "0803040506070809", "reset_token": "067b59f6cd452cc9b3d45e1349c3d427"}, { 
     "frame_type": "new_connection_id", "sequence_number": 7, "retire_before": 0, "connection_id": "0903040506070809", "reset_token": "cdb10de67904bc850f26f43cede090d0"}]}],
-[21656, "recovery", "metrics_updated", {"pacing_rate": 7268505,"bytes_in_flight": 1717,"smoothed_rtt": 21117,"latest_rtt": 21656}],
+[21656, "recovery", "metrics_updated", {"pacing_rate": 7268505,"bytes_in_flight": 1717,"smoothed_rtt": 21117,"latest_rtt": 21656,"app_limited": 1}],
 [21656, "transport", "spin_bit_updated", { "state": true }],
 [21656, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 39, "packet_number": 3, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "handshake_done"}, { 
