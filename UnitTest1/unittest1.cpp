@@ -2248,6 +2248,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(mediatest_wifi) {
+            int ret = mediatest_wifi_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(mediatest_worst) {
             int ret = mediatest_worst_test();
 

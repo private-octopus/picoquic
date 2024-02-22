@@ -1828,9 +1828,6 @@ static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
     bbr_state->min_rtt = path_x->rtt_sample;
     bbr_state->min_rtt_stamp = current_time;
     bbr_state->probe_rtt_min_stamp = current_time;
-#ifdef RTTJitterBuffer
-    BBRResetRTTJitterBuffer(bbr_state, bbr_state->min_rtt, current_time);
-#endif
     bbr_state->probe_probe_bw_quickly = 1;
     BBREnterStartup(bbr_state);
 }
@@ -2151,11 +2148,6 @@ static void BBRSetRsFromAckState(picoquic_path_t* path_x, picoquic_per_ack_state
     rs->tx_in_flight = ack_state->inflight_prior;
     rs->is_app_limited = ack_state->is_app_limited; /*Checked that this is properly implemented */   
     rs->is_cwnd_limited = ack_state->is_cwnd_limited;
-#if RTTJitterBufferProbe
-    if (rs->is_cwnd_limited || path_x->rtt_sample > 2 * path_x->rtt_min) {
-        rs->is_app_limited = 0;
-    }
-#endif
 }
 
 static void picoquic_bbr_notify_ack(
