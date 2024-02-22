@@ -743,12 +743,6 @@ static void BBRUpdateMaxInflight(picoquic_bbr_state_t* bbr_state, picoquic_path_
         inflight = (uint64_t)(((double)inflight) * ((double)bbr_state->wifi_shadow_rtt) / ((double)bbr_state->min_rtt));
     }
     bbr_state->max_inflight = BBRQuantizationBudget(bbr_state, path_x, inflight);
-#if 0
-    if (bbr_state->state == picoquic_bbr_alg_startup &&
-        bbr_state->bdp_seed > bbr_state->max_inflight) {
-        bbr_state->max_inflight = bbr_state->bdp_seed;
-    }
-#endif
 }
 
 /* Pacing rate functions */
@@ -1825,9 +1819,6 @@ static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
     bbr_state->full_bw = 0;
     bbr_state->filled_pipe = 0;
     bbr_state->full_bw_count = 0;
-    bbr_state->min_rtt = path_x->rtt_sample;
-    bbr_state->min_rtt_stamp = current_time;
-    bbr_state->probe_rtt_min_stamp = current_time;
     bbr_state->probe_probe_bw_quickly = 1;
     BBREnterStartup(bbr_state);
 }
@@ -1872,7 +1863,7 @@ static void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path
         bbr_state->min_rtt = bbr_state->rtt_filter.sample_max;
         bbr_state->min_rtt_stamp = current_time;
     }
-#ifdef RTTJitterBuffer
+#ifdef RTTJitterBuffer_maybe
     BBRResetRTTJitterBuffer(bbr_state, bbr_state->min_rtt, current_time);
 #endif
     /* Enter drain */
