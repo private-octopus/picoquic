@@ -393,6 +393,7 @@ static const picoquic_test_def_t test_table[] = {
     { "mediatest_video_audio", mediatest_video_audio_test },
     { "mediatest_video_data_audio", mediatest_video_data_audio_test },
     { "mediatest_video2_down", mediatest_video2_down_test },
+    { "mediatest_wifi", mediatest_wifi_test },
     { "mediatest_worst", mediatest_worst_test },
     { "warptest_video", warptest_video_test },
     { "warptest_video_audio", warptest_video_audio_test },

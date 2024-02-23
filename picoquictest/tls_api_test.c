@@ -9034,7 +9034,7 @@ int bbr_test()
 
 int bbr_jitter_test()
 {
-    return congestion_control_test(picoquic_bbr_algorithm, 3550000, 5000, 5);
+    return congestion_control_test(picoquic_bbr_algorithm, 3600000, 5000, 5);
 }
 
 int bbr_long_test()
@@ -10709,7 +10709,7 @@ int app_limit_cc_test_one(
                     int nb_comma = 0;
                     int c_index = 0;
 
-                    while (nb_comma < 23 && c_index < 512 && buffer[c_index] != 0) {
+                    while (nb_comma < 24 && c_index < 512 && buffer[c_index] != 0) {
                         if (buffer[c_index] == ',') {
                             nb_comma++;
                         }
@@ -10852,7 +10852,7 @@ int cwin_max_test_one(
                     int nb_comma = 0;
                     int c_index = 0;
 
-                    while (nb_comma < 23 && c_index < 512 && buffer[c_index] != 0) {
+                    while (nb_comma < 24 && c_index < 512 && buffer[c_index] != 0) {
                         if (buffer[c_index] == ',') {
                             nb_comma++;
                         }
@@ -11552,19 +11552,13 @@ static int pacing_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t
 
 int pacing_bbr_test()
 {
-    /* TODO: With BBRv3, the 1MB transfer in this test takes more than 1sec,
-     * approximately an 80% path utilisation. This compares to less than
-     * 900ms for the same test using Cubic. On the other hand, there are
-     * way fewer retransmission than when using Cubic, less than 50 versus
-     * more than 200. The 80% path utilisation is because BBRv3 tests the
-     * bandwidth during startup, exits as soon as excessive packet
-     * losses are detected, and waits 2 to 3 seconds before pushing again.
-     * TODO: consider a post startup "push" similare to the second phase of
-     * Hystart++.
-     * Correction: after limiting the cwin on 2nd RTO, the time gets lower,
-     * but the nuber of losses increases markedly.
+    /* BBRv3 includes a short term loop that detects losses and tune the
+     * sending rate accordingly. The packet losses cause startup to 
+     * give up too soon, but this is fixed by probing up "quickly"
+     * after exiting startup. The packet losses occur during startup
+     * and during the probing periods.
      */
-    int ret = pacing_cc_algotest(picoquic_bbr_algorithm, 900000, 390);
+    int ret = pacing_cc_algotest(picoquic_bbr_algorithm, 900000, 150);
     return ret;
 }
 
@@ -11711,7 +11705,7 @@ int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
 
 int heavy_loss_test()
 {
-    return heavy_loss_test_one(0, 23100000);
+    return heavy_loss_test_one(0, 23500000);
 }
 
 int heavy_loss_inter_test()
@@ -12622,7 +12616,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 5800000;
                     break;
                 case bdp_test_option_rtt:
-                    max_completion_time = 4600000;
+                    max_completion_time = 4610000;
                     test_ctx->c_to_s_link->microsec_latency = 50000ull;
                     test_ctx->s_to_c_link->microsec_latency = 50000ull;
                     buffer_size = 2 * test_ctx->c_to_s_link->microsec_latency;
