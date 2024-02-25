@@ -582,7 +582,7 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
         }
 
         if (ret == 0 && c_ctx != NULL && cnx->cnx_state == picoquic_state_ready && c_index >= 0 &&
-            cnx->cnxid_stash_first != NULL && c_ctx->message_migration_trigger != 0 &&
+            cnx->first_remote_cnxid_stash->cnxid_stash_first != NULL && c_ctx->message_migration_trigger != 0 &&
             cnx->pkt_ctx[picoquic_packet_context_application].send_sequence > c_ctx->message_migration_trigger){
             /* Simulate a migration */
             ctx->c_ctx[c_index]->client_addr.sin_port++;

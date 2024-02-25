@@ -179,7 +179,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
     if (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) {
         /* If multipath is enabled, should check for retransmission on all paths */
-        picoquic_remote_cnxid_t* r_cid = cnx->cnxid_stash_first;
+        picoquic_remote_cnxid_t* r_cid = cnx->first_remote_cnxid_stash->cnxid_stash_first;
 
         while (r_cid != NULL) {
             if (length == 0) {
@@ -187,7 +187,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     next_wake_time, packet, send_buffer_max, header_length);
             }
             else {
-                /* If more retransmission are queued, set the timer appropriately */\
+                /* If more retransmission are queued, set the timer appropriately */
                 if (r_cid->pkt_ctx.pending_first != NULL) {
                     picoquic_set_wake_up_from_packet_retransmit(cnx, r_cid->pkt_ctx.pending_first, current_time, next_wake_time);
                 }

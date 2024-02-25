@@ -549,6 +549,11 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
     size_t decoded;
     int ret = 0;
 
+    if (cnx->is_unique_path_id_enabled) {
+        /* TODO */
+        return ph->payload_length + 1;
+    }
+
     /* verify that the packet is new */
     if (already_received != NULL) {
         if (picoquic_is_pn_already_received(cnx, ph->pc, ph->l_cid, ph->pn64) != 0) {
@@ -562,9 +567,14 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
 
     if (ph->epoch == picoquic_epoch_1rtt) {
         int need_integrity_check = 1;
-        picoquic_ack_context_t* ack_ctx = (cnx->is_multipath_enabled) ?
-            &ph->l_cid->ack_ctx : &cnx->ack_ctx[picoquic_packet_context_application];
-            
+        picoquic_ack_context_t* ack_ctx;
+        if (cnx->is_multipath_enabled) {
+            ack_ctx = &ph->l_cid->ack_ctx;
+        }
+        else {
+            ack_ctx = &cnx->ack_ctx[picoquic_packet_context_application];
+        }
+
         /* Manage key rotation */
         if (ph->key_phase == cnx->key_phase_dec) {
             /* AEAD Decrypt */
@@ -632,7 +642,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
                     /* Rotation only if the packet was correctly decrypted with the new key */
                     cnx->crypto_rotation_time_guard = current_time + cnx->path[0]->retransmit_timer;
                     if (cnx->is_multipath_enabled) {
-                        picoquic_local_cnxid_t* l_cid = cnx->local_cnxid_first;
+                        picoquic_local_cnxid_t* l_cid = cnx->first_local_cnxid_list->local_cnxid_first;
                         while (l_cid != NULL) {
                             l_cid->ack_ctx.crypto_rotation_sequence = UINT64_MAX;
                             l_cid = l_cid->next;
@@ -1789,7 +1799,6 @@ If we cannot associate an existing path with a packet and also
 cannot create a new path, we treat the packet as arriving on the
 default path.
 */
-
 int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
@@ -1797,6 +1806,10 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     int* p_path_id,
     int* path_is_not_allocated)
 {
+    if (cnx->is_unique_path_id_enabled) {
+        /* TODO: fix this */
+        return(-1);
+    }
     int ret = 0;
     int partial_match_path = -1;
     int nat_rebinding_path = -1;
@@ -1815,7 +1828,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
         /* Packet arriving on an existing path */
         if (cnx->path[path_id]->p_local_cnxid == NULL) {
             /* First packet from the peer. Remember the CNX ID. No further action */
-            cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, &ph->dest_cnx_id);
+            cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, 0, &ph->dest_cnx_id);
             if (cnx->path[path_id]->was_local_cnxid_retired){
                 if (cnx->client_mode == 0 &&
                     (path_id == 0 || cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)) {
@@ -1826,8 +1839,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             }
         } else if (picoquic_compare_connection_id(&cnx->path[path_id]->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0) {
             /* The peer switched to a new CID */
-            cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, &ph->dest_cnx_id);
-            if (cnx->client_mode == 0 && cnx->cnxid_stash_first != NULL &&
+            cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, 0, &ph->dest_cnx_id);
+            if (cnx->client_mode == 0 && cnx->first_remote_cnxid_stash->cnxid_stash_first != NULL &&
                 (path_id == 0 || cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)) {
                 /* If on a server, dereference the current CID, and pick a new one */
                 (void)picoquic_renew_connection_id(cnx, path_id);
@@ -1900,7 +1913,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             }
 
             cnx->path[path_id]->path_is_published = 1; 
-            cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, &ph->dest_cnx_id);
+            cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, 0, &ph->dest_cnx_id);
             picoquic_register_path(cnx, cnx->path[path_id]);
             picoquic_set_path_challenge(cnx, path_id, current_time);
 
