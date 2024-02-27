@@ -283,22 +283,48 @@ int picoquic_packet_set_windows_socket(int send_coalesced, int recv_coalesced, p
 int picoquic_win_recvmsg_async_finish(
     picoquic_socket_ctx_t* s_ctx)
 {
-    int nb_sockets = (local_af == AF_UNSPEC) ? 2 : 1;
+    DWORD cbTransferred = 0;
+    DWORD ret = 0;
+    DWORD flags = 0;
 
-    /* Compute how many sockets are necessary */
-    if (nb_sockets > nb_sockets_max) {
-        DBG_PRINTF("Cannot open %d sockets, max set to %d\n", nb_sockets, nb_sockets_max);
-        nb_sockets = 0;
-    } else if (local_af == AF_UNSPEC) {
-        sock_af[0] = AF_INET;
-        sock_af[1] = AF_INET6;
+    if (s_ctx == NULL) {
+        return -1;
     }
-    else if (local_af == AF_INET || local_af == AF_INET6) {
-        sock_af[0] = local_af;
+
+    if (!WSAGetOverlappedResult(s_ctx->fd, &s_ctx->overlap, &cbTransferred, FALSE, &flags)) {
+        ret = WSAGetLastError();
+        if (ret == WSAECONNRESET) {
+            s_ctx->bytes_recv = 0;
+            ret = picoquic_win_recvmsg_async_start(s_ctx);
+        }
+        else {
+            DBG_PRINTF("Could not complete async call (WSARecvMsg) on UDP socket %d = %d!\n",
+                (int)s_ctx->fd, ret);
+            s_ctx->bytes_recv = -1;
+        }
     }
     else {
-        DBG_PRINTF("Cannot open socket(AF=%d), unsupported AF\n", local_af);
-        nb_sockets = 0;
+        s_ctx->bytes_recv = cbTransferred;
+        s_ctx->from_length = s_ctx->msg.namelen;
+
+        picoquic_socks_cmsg_parse(&s_ctx->msg, &s_ctx->addr_dest, &s_ctx->dest_if, &s_ctx->received_ecn, &s_ctx->udp_coalesced_size);
+    }
+
+    return ret;
+}
+
+#endif
+
+void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
+{
+    if (s_ctx->fd != INVALID_SOCKET) {
+        SOCKET_CLOSE(s_ctx->fd);
+        s_ctx->fd = INVALID_SOCKET;
+    }
+#ifdef _WINDOWS
+    if (s_ctx->overlap.hEvent != WSA_INVALID_EVENT) {
+        WSACloseEvent(s_ctx->overlap.hEvent);
+        s_ctx->overlap.hEvent = WSA_INVALID_EVENT;
     }
 
     if (s_ctx->recv_buffer != NULL) {

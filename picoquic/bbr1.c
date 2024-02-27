@@ -546,7 +546,7 @@ void BBR1UpdateBtlBw(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x,
 
     if (bbr1_state->rt_prop > 0) {
         /* Stop the bandwidth estimate from falling too low. */
-        uint64_t min_bandwidth = (((uint64_t)PICOQUIC_CWIN_MINIMUM) * 1000000) / bbr1_state->rt_prop;
+        uint64_t min_bandwidth = (((uint64_t)path_x->cnx->quic->cwin_min)) * 1000000) / bbr1_state->rt_prop;
         if (bandwidth_estimate < min_bandwidth) {
             bandwidth_estimate = min_bandwidth;
         }
@@ -1052,12 +1052,12 @@ void picoquic_bbr1_notify_congestion(
         /* filter repeated loss events */
         return;
     }
-    if (is_timeout || path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
+    if (is_timeout || path_x->cwin < path_x->cnx->quic->cwin_min) {
         if (!bbr1_state->is_suspended) {
             bbr1_state->is_suspended = 1;
             bbr1_state->cwin_before_suspension = path_x->cwin;
         }
-        path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+        path_x->cwin = path_x->cnx->quic->cwin_min;
     } else {
         path_x->cwin = path_x->cwin / 2;
     }
