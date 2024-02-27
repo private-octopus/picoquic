@@ -145,6 +145,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="bbr1.c" />
     <ClCompile Include="bytestream.c" />
     <ClCompile Include="cc_common.c" />
     <ClCompile Include="config.c" />
@@ -207,6 +208,7 @@
     <ClInclude Include="picosocks.h" />
     <ClInclude Include="picosplay.h" />
     <ClInclude Include="picoquic.h" />
+    <ClInclude Include="sockloop.h" />
     <ClInclude Include="tls_api.h" />
     <ClInclude Include="picoquic_utils.h" />
     <ClInclude Include="wincompat.h" />

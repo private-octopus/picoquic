@@ -347,7 +347,7 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
 
     if (ret == 0) {
         /* Wait for packets */
-#if _WINDOWS
+#if _WINDOWS_BUT_WE_ARE_UNIFYING
         ret = picoquic_packet_loop_win(qserver, config->server_port, 0, config->dest_if, 
             config->socket_buffer_size, server_loop_cb, &loop_cb_ctx);
 #else
@@ -409,6 +409,7 @@ typedef struct st_client_loop_cb_t {
     struct sockaddr_storage client_alt_address[PICOQUIC_NB_PATH_TARGET];
     int client_alt_if[PICOQUIC_NB_PATH_TARGET];
     int nb_alt_paths;
+    uint16_t local_port;
     picoquic_connection_id_t server_cid_before_migration;
     picoquic_connection_id_t client_cid_before_migration;
 } client_loop_cb_t;
@@ -475,6 +476,27 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
         }
     }
     free(ptr);
+    return ret;
+}
+
+static int simulate_migration(client_loop_cb_t* cb_ctx)
+{
+    int ret = 0;
+    struct sockaddr_storage addr_from = { 0 };
+
+    picoquic_store_addr(&addr_from,
+        (struct sockaddr*)&cb_ctx->cnx_client->path[0]->local_addr);
+    if (addr_from.ss_family == AF_INET6) {
+        ((struct sockaddr_in6*)&addr_from)->sin6_port = htons(cb_ctx->local_port);
+    } else {
+        ((struct sockaddr_in*)&addr_from)->sin_port = htons(cb_ctx->local_port);
+    }
+
+    ret = picoquic_probe_new_path(cb_ctx->cnx_client,
+        (struct sockaddr*)&cb_ctx->server_address,
+        (struct sockaddr*)&addr_from,
+        picoquic_get_quic_time(cb_ctx->cnx_client->quic));
+
     return ret;
 }
 
@@ -563,6 +585,10 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                         }
                         cb_ctx->multipath_probe_done = 1;
                     }
+
+                    if (simulate_multipath) {
+                        ret = simulate_migration(cb_ctx);
+                    }
                 }
 
                 /* Track the migration to server preferred address */
@@ -628,7 +654,8 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                         break;
                     case 3:
                         fprintf(stdout, "Will test migration to new port.\n");
-                        ret = PICOQUIC_NO_ERROR_SIMULATE_MIGRATION;
+                        ret = simulate_migration(cb_ctx);
+                        cb_ctx->migration_started = 1;
                         break;
                     default:
                         cb_ctx->migration_started = -1;
@@ -660,9 +687,6 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                     picoquic_log_app_message(cb_ctx->cnx_client, "%s", "All done, Closing the connection.");
 
                     ret = picoquic_close(cb_ctx->cnx_client, 0);
-                }
-                if (simulate_multipath) {
-                    ret = PICOQUIC_NO_ERROR_SIMULATE_MIGRATION;
                 }
             }
             break;
@@ -719,6 +743,7 @@ int quic_client(const char* ip_address_text, int server_port,
     int is_quicperf = 0;
     quicperf_ctx_t* quicperf_ctx = NULL;
     client_loop_cb_t loop_cb;
+    picoquic_packet_loop_param_t param = { 0 };
     const char* sni = config->sni;
 
     memset(&loop_cb, 0, sizeof(client_loop_cb_t));
@@ -767,9 +792,8 @@ int quic_client(const char* ip_address_text, int server_port,
         if (config->alpn == NULL || config->proposed_version == 0) {
             char const* ticket_alpn;
             uint32_t ticket_version;
-
             if (picoquic_demo_client_get_alpn_and_version_from_tickets(qclient, sni, config->alpn,
-                config->proposed_version, current_time, &ticket_alpn, &ticket_version) == 0) {
+                config->proposed_version, &ticket_alpn, &ticket_version) == 0) {
                 if (ticket_alpn != NULL) {
                     fprintf(stdout, "Set ALPN to %s based on stored ticket\n", ticket_alpn);
                     picoquic_config_set_option(config, picoquic_option_ALPN, ticket_alpn);
@@ -905,7 +929,6 @@ int quic_client(const char* ip_address_text, int server_port,
             }
         }
     }
-
     /* Wait for packets */
     if (ret == 0) {
         if (config->multipath_alt_config != NULL) {
@@ -925,13 +948,18 @@ int quic_client(const char* ip_address_text, int server_port,
             loop_cb.demo_callback_ctx = &callback_ctx;
         }
 
-#ifdef _WINDOWS
-        ret = picoquic_packet_loop_win(qclient, 0, loop_cb.server_address.ss_family, 0, 
-            config->socket_buffer_size, client_loop_cb, &loop_cb);
-#else
-        ret = picoquic_packet_loop(qclient, 0, loop_cb.server_address.ss_family, 0,
-            config->socket_buffer_size, config->do_not_use_gso, client_loop_cb, &loop_cb);
-#endif
+        /* In case needed, program an extra path, so we can simulate multipath or migration */
+        param.local_af = loop_cb.server_address.ss_family;
+        param.socket_buffer_size = config->socket_buffer_size;
+        param.do_not_use_gso = config->do_not_use_gso;
+        param.extra_socket_required = 0;
+        if (force_migration == 1 || force_migration == 3 || config->multipath_alt_config != NULL) {
+            param.local_port = (uint16_t)picoquic_uniform_random(30000) + 20000;
+            param.extra_socket_required = 1;
+        }
+        loop_cb.local_port = param.local_port;
+
+        ret = picoquic_packet_loop_v2(qclient, &param, client_loop_cb, &loop_cb);
     }
 
     if (ret == 0) {
@@ -1113,8 +1141,7 @@ int quic_client(const char* ip_address_text, int server_port,
     if (qclient != NULL) {
         uint8_t* ticket;
         uint16_t ticket_length;
-
-        if (sni != NULL && loop_cb.saved_alpn != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time, sni, (uint16_t)strlen(sni), loop_cb.saved_alpn,
+        if (sni != NULL && loop_cb.saved_alpn != NULL && 0 == picoquic_get_ticket(qclient, sni, (uint16_t)strlen(sni), loop_cb.saved_alpn,
             (uint16_t)strlen(loop_cb.saved_alpn), 0, &ticket, &ticket_length, NULL, 0)) {
             fprintf(stdout, "Received ticket from %s (%s):\n", sni, loop_cb.saved_alpn);
             picoquic_textlog_picotls_ticket(stdout, picoquic_null_connection_id, ticket, ticket_length);

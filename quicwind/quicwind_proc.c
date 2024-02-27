@@ -295,7 +295,7 @@ picoquic_quic_t* quicwind_create_context(const char * alpn, int mtu_max, const c
 
         picoquic_set_default_congestion_algorithm(qclient, picoquic_cubic_algorithm);
 
-        if (picoquic_load_tokens(&qclient->p_first_token, current_time, token_store_filename) != 0) {
+        if (picoquic_load_tokens(qclient, token_store_filename) != 0) {
             AppendText(_T("Could not load tokens.\r\n"));
         }
 

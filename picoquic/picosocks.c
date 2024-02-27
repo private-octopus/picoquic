@@ -98,7 +98,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     if (af == AF_INET6) {
 #ifdef IPV6_ECN
         {
-            DWORD ecn = PICOQUIC_ECN_ECT_0;
+            DWORD ecn = PICOQUIC_ECN_ECT_1;
             DWORD recvEcn = 1;
             /* Request receiving ECN reports in recvmsg */
             ret = setsockopt(sd, IPPROTO_IPV6, IPV6_ECN, (char *)&recvEcn, sizeof(recvEcn));
@@ -130,7 +130,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
         /* Using IPv4 options. */
 #if defined(IP_ECN)
         {
-            DWORD ecn = PICOQUIC_ECN_ECT_0;
+            DWORD ecn = PICOQUIC_ECN_ECT_1;
             INT recvEcn =1;
 
             /* Request receiving ECN reports in recvmsg */
@@ -145,7 +145,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
                 ret = 0;
             }
 
-            /* Request setting ECN_ECT_0 in outgoing packets */
+            /* Request setting ECN_ECT_1 in outgoing packets */
             if (setsockopt(sd, IPPROTO_IP, IP_ECN, (const char*)&ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IP_ECN (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
@@ -163,7 +163,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     if (af == AF_INET6) {
 #if defined(IPV6_TCLASS)
         {
-            unsigned int ecn = PICOQUIC_ECN_ECT_0; /* Setting ECN_ECT_0 in outgoing packets */
+            unsigned int ecn = PICOQUIC_ECN_ECT_1; /* Setting ECN_ECT_1 in outgoing packets */
             if (setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPV6_TCLASS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
@@ -200,8 +200,8 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     else {
 #if defined(IP_TOS)
         {
-            unsigned int ecn = PICOQUIC_ECN_ECT_0;
-            /* Request setting ECN_ECT_0 in outgoing packets */
+            unsigned int ecn = PICOQUIC_ECN_ECT_1;
+            /* Request setting ECN_ECT_1 in outgoing packets */
             if (setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPv4 IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
@@ -912,8 +912,6 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t* ctx)
             }
         }
         else {
-            DBG_PRINTF("Receive async immediate (WSARecvMsg) on UDP socket %d -- %d bytes !\n",
-                (int)ctx->fd, numberOfBytesReceived);
             ctx->nb_immediate_receive++;
         }
     } while (should_retry);
