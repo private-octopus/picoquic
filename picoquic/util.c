@@ -533,7 +533,7 @@ int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* i
 }
 
 /* Get text string for address and port */
-char const* picoquic_addr_text(struct sockaddr* addr, char* text, size_t text_size)
+char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t text_size)
 {
     char addr_buffer[128];
     char const* addr_text;
