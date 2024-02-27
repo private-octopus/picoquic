@@ -95,6 +95,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_No_GSO, '0', "no_gso", 0, "", "Do not use UDP GSO or equivalent" },
     { picoquic_option_BDP_frame, 'j', "bdp", 1, "number", "use bdp extension frame(1) or don\'t (0). Default=0" },
     { picoquic_option_CWIN_MAX, 'W', "cwin_max", 1, "bytes", "Max value for CWIN. Default=UINT64_MAX"},
+    { picoquic_option_CWIN_MIN, 'u', "cwin_min", 1, "bytes", "Minimum value for CWIN. Default=3072"},
     { picoquic_option_HELP, 'h', "help", 0, "This help message" }
 };
 
