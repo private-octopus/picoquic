@@ -40,4 +40,5 @@ Picoquic options:
   -0              Do not use UDP GSO or equivalent
   -j number       use bdp extension frame(1) or don't (0). Default=0
   -W bytes        Max value for CWIN. Default=UINT64_MAX
+  -u bytes        Minimum value for CWIN. Default=3072
   -h              This help message
