@@ -155,12 +155,12 @@ static int tls_api_is_init = 0;
 void picoquic_tls_api_init_providers(int unload)
 {
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MINICRYPTO) == 0) {
-        DBG_PRINTF("%s", "Loading minicrypto");
+        DBG_PRINTF("%s", "%s minicrypto", (unload)?"Unloading":"Loading");
         picoquic_ptls_minicrypto_load(unload);
     }
 #ifndef PTLS_WITHOUT_OPENSSL
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_OPENSSL) == 0) {
-        DBG_PRINTF("%s", "Loading openssl");
+        DBG_PRINTF("%s", "%s openssl", (unload)?"Unloading":"Loading");
         picoquic_ptls_openssl_load(unload);
     }
 #else
@@ -171,7 +171,7 @@ void picoquic_tls_api_init_providers(int unload)
     // picoquic_bcrypt_load(unload);
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
-        DBG_PRINTF("%s", "Loading fusion");
+        DBG_PRINTF("%s", "%s fusion", (unload)?"Unloading":"Loading");
         picoquic_ptls_fusion_load(unload);
     }
 #else
@@ -182,7 +182,7 @@ void picoquic_tls_api_init_providers(int unload)
 
 #ifdef PICOQUIC_WITH_MBEDTLS
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MBEDTLS) == 0) {
-        DBG_PRINTF("%s", "Loading MbedTLS");
+        DBG_PRINTF("%s", "%s MbedTLS", (unload)?"Unloading":"Loading");
         picoquic_mbedtls_load(unload);
     }
 #endif
@@ -1127,7 +1127,7 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
 
     if (sni != NULL && alpn != NULL) {
         /* TODO: SHOULD STORE IP ADDRESSES? */
-        ret = picoquic_store_ticket(&quic->p_first_ticket, 0, sni, (uint16_t)strlen(sni),
+        ret = picoquic_store_ticket(quic, sni, (uint16_t)strlen(sni),
             alpn, (uint16_t)strlen(alpn), version, NULL, 0, NULL, 0,
             input.base, (uint16_t)input.len, &cnx->remote_parameters);
         /* Set first 8 bytes of ticket as identifier */
@@ -1772,7 +1772,7 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 uint64_t picoquic_get_tls_time(picoquic_quic_t* quic)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-    uint64_t now = ctx->get_time->cb(ctx->get_time);
+    uint64_t now = ctx->get_time->cb(ctx->get_time)*1000;
 
     return now;
 }
@@ -2176,8 +2176,8 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
     /* No resumption if no alpn specified upfront, because it would make the negotiation and
      * the handling of 0-RTT way too messy */
     if (cnx->sni != NULL && cnx->alpn != NULL && !cnx->quic->client_zero_share) {
-        picoquic_stored_ticket_t* stored_ticket = picoquic_get_stored_ticket(cnx->quic->p_first_ticket, 
-            current_time, cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
+        picoquic_stored_ticket_t* stored_ticket = picoquic_get_stored_ticket(cnx->quic, 
+            cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
             picoquic_supported_versions[cnx->version_index].version, 1, 0);
         if (stored_ticket != NULL) {
             ctx->handshake_properties.client.session_ticket.base = stored_ticket->ticket;

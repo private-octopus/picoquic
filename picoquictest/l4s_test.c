@@ -39,7 +39,8 @@ static test_api_stream_desc_t test_scenario_l4s[] = {
 };
 
 
-static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time, uint64_t max_losses, uint64_t max_rttvar)
+static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l4s, uint64_t max_completion_time, uint64_t max_losses, uint64_t max_rttvar,
+    size_t nb_link_states, test_vary_link_spec_t* link_state)
 {
     uint64_t simulated_time = 0;
     uint64_t queue_delay_max = 20000;
@@ -49,6 +50,14 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, uint64_t
     int ret;
 
     initial_cid.id[2] = ccalgo->congestion_algorithm_number;
+    initial_cid.id[3] = (uint8_t)nb_link_states;
+
+    for (size_t i = 0; i < nb_link_states; i++) {
+        if (2 * link_state->microsec_latency > queue_delay_max) {
+            queue_delay_max = 2 * link_state->microsec_latency;
+            l4s_max = queue_delay_max / 4;
+        }
+    }
 
     ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
 
@@ -65,15 +74,15 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, uint64_t
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
 
 
-        if (strcmp(ccalgo->congestion_algorithm_id, "prague") == 0) {
+        if (do_l4s) {
             test_ctx->c_to_s_link->l4s_max = l4s_max;
             test_ctx->s_to_c_link->l4s_max = l4s_max;
-            test_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_0;
+            test_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_1;
         }
         picoquic_set_binlog(test_ctx->qserver, ".");
 
-        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_l4s, sizeof(test_scenario_l4s), 0, 0, 0, queue_delay_max, max_completion_time);
+        ret = tls_api_one_scenario_body_ex(test_ctx, &simulated_time,
+            test_scenario_l4s, sizeof(test_scenario_l4s), 0, 0, 0, queue_delay_max, max_completion_time, nb_link_states, link_state);
     }
 
     /* Verify that L4S ECN feedback was received properly */
@@ -112,7 +121,7 @@ int l4s_reno_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_newreno_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 3650000, 50, 9000);
+    int ret = l4s_congestion_test(ccalgo, 1, 4500000, 5, 3000, 0, NULL);
 
     return ret;
 }
@@ -121,7 +130,46 @@ int l4s_prague_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 3500000, 5, 6000);
+    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 3, 1000, 0, NULL);
 
     return ret;
+}
+
+int l4s_bbr_test()
+{
+    picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
+
+    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 5, 1000, 0, NULL);
+
+    return ret;
+}
+
+test_vary_link_spec_t l4s_link_updown[] = {
+    { 1000000, 10000000, 10000000, 10000},
+    { 2000000,  2000000,  2000000, 10000},
+    { 8000000, 10000000, 10000000, 10000},
+};
+
+size_t nb_l4s_link_updown = sizeof(l4s_link_updown) / sizeof(test_vary_link_spec_t);
+
+int l4s_prague_updown_test()
+{
+    picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
+
+    int ret = l4s_congestion_test(ccalgo, 1, 6500000, 55, 6000, nb_l4s_link_updown, l4s_link_updown);
+
+    return ret;
+}
+
+int l4s_bbr_updown_test()
+{
+#if defined(_WINDOWS) && !defined(_WINDOWS64)
+    return 0;
+#else
+    picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
+
+    int ret = l4s_congestion_test(ccalgo, 1, 6850000, 50, 6000, nb_l4s_link_updown, l4s_link_updown);
+
+    return ret;
+#endif
 }

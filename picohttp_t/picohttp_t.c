@@ -80,10 +80,8 @@ static const picoquic_test_def_t test_table[] = {
     { "h09_multi_file_preemptive", h09_multi_file_preemptive_test },
     { "h3zero_settings", h3zero_settings_test },
     { "http_stress", http_stress_test },
-#if 1
     { "http_corrupt", http_corrupt_test},
     { "http_corrupt_rdpn", http_corrupt_rdpn_test},
-#endif
     { "http_drop", http_drop_test},
     { "picowt_baton_basic", picowt_baton_basic_test },
     { "picowt_baton_error", picowt_baton_error_test },

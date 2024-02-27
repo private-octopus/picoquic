@@ -132,6 +132,9 @@
     <ClCompile Include="picoquic_mbedtls.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="bbr1.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
@@ -192,6 +195,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picoquic_crypto_provider_api.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="sockloop.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

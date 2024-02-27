@@ -30,6 +30,8 @@
 #include <string.h>
 #ifndef _WINDOWS
 #include <sys/time.h>
+#include <time.h>
+#include <errno.h>
 #endif
 
 
@@ -666,19 +668,8 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         if (cnx_id_callback != NULL) {
             quic->unconditional_cnx_id = 1;
         }
-
         if (ticket_file_name != NULL) {
             quic->ticket_file_name = ticket_file_name;
-            ret = picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);
-
-            if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
-                DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
-                ret = 0;
-            }
-            else if (ret != 0) {
-                DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
-                ret = 0;
-            }
         }
 
         if (ret == 0) {
@@ -732,6 +723,19 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
                 picoquic_crypto_random(quic, quic->retry_seed, sizeof(quic->retry_seed));
 
                 /* If there is no root certificate context specified, use a null certifier. */
+                /* Load tickets */
+                if (quic->ticket_file_name != NULL) {
+                    ret = picoquic_load_tickets(quic, ticket_file_name);
+
+                    if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
+                        DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
+                        ret = 0;
+                    }
+                    else if (ret != 0) {
+                        DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
+                        ret = 0;
+                    }
+                }
             }
         }
         
@@ -746,8 +750,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
 
 int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name)
 {
-    uint64_t current_time = picoquic_get_quic_time(quic);
-    int ret = picoquic_load_tokens(&quic->p_first_token, current_time, token_file_name);
+    int ret = picoquic_load_tokens(quic, token_file_name);
 
     if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
         DBG_PRINTF("Ticket file <%s> not created yet.\n", token_file_name);
@@ -1998,8 +2001,8 @@ int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id)
 }
 
 /* Create a new path in order to trigger a migration */
-int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address)
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, int if_index, uint64_t current_time, int to_preferred_address)
 {
     int ret = 0;
     int partial_match_path = -1;
@@ -2011,11 +2014,11 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
         ret = PICOQUIC_ERROR_MIGRATION_DISABLED;
         DBG_PRINTF("Tried to create probe with migration disabled = %d", cnx->remote_parameters.migration_disabled);
     }
-    else if ((path_id = picoquic_find_path_by_address(cnx, addr_to, addr_from, &partial_match_path)) >= 0) {
+    else if ((path_id = picoquic_find_path_by_address(cnx, addr_local, addr_peer, &partial_match_path)) >= 0) {
         /* This path already exists. Will not create it, but will restore it in working order if disabled. */
         ret = -1;
     }
-    else if (partial_match_path >= 0 && addr_from->sa_family == 0) {
+    else if (partial_match_path >= 0 && addr_peer->sa_family == 0) {
         /* This path already exists. Will not create it, but will restore it in working order if disabled. */
         ret = -1;
     }
@@ -2027,7 +2030,7 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
         /* Too many paths created already */
         ret = -1;
     }
-    else if (picoquic_create_path(cnx, current_time, addr_to, addr_from) > 0) {
+    else if (picoquic_create_path(cnx, current_time, addr_local, addr_peer) > 0) {
         path_id = cnx->nb_paths - 1;
         ret = picoquic_assign_peer_cnxid_to_path(cnx, path_id);
 
@@ -2085,10 +2088,10 @@ int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void
     return ret;
 }
 
-int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, uint64_t current_time)
+int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, uint64_t current_time)
 {
-    return picoquic_probe_new_path_ex(cnx, addr_from, addr_to, 0, current_time, 0);
+    return picoquic_probe_new_path_ex(cnx, addr_peer, addr_local, 0, current_time, 0);
 }
 
 /* TODO: the "unique_path_id" should really be a unique ID, managed by the stack.
@@ -3834,6 +3837,13 @@ uint64_t picoquic_current_time()
     * Account for microseconds elapsed between 1601 and 1970.
     */
     now -= 11644473600000000ULL;
+#elif defined(CLOCK_MONOTONIC)
+    /*
+    * Use CLOCK_MONOTONIC if exists (more accurate)
+    */
+    struct timespec currentTime;
+    (void)clock_gettime(CLOCK_MONOTONIC, &currentTime);
+    now = (currentTime.tv_sec * 1000000ull) + currentTime.tv_nsec / 1000ull;
 #else
     struct timeval tv;
     (void)gettimeofday(&tv, NULL);
@@ -4399,7 +4409,7 @@ picoquic_cnx_t* picoquic_cnx_by_icid(picoquic_quic_t* quic, picoquic_connection_
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
-    picoquic_cnx_t dummy_cnx;
+    picoquic_cnx_t dummy_cnx = { 0 };
 
     picoquic_store_addr(&dummy_cnx.registered_icid_addr, addr);
     dummy_cnx.initial_cnxid = *icid;
@@ -4455,6 +4465,9 @@ picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char co
         }
         else if (strcmp(alg_name, "prague") == 0) {
             alg = picoquic_prague_algorithm;
+        }
+        else if (strcmp(alg_name, "bbr1") == 0) {
+            alg = picoquic_bbr1_algorithm;
         }
         else {
             alg = NULL;
@@ -4519,6 +4532,11 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
 void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt)
 {
     quic->wifi_shadow_rtt = wifi_shadow_rtt;
+}
+
+void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio)
+{
+    quic->bbr_quantum_ratio = quantum_ratio;
 }
 
 void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrease_threshold, uint64_t increase_threshold)
@@ -4684,3 +4702,10 @@ int picoquic_process_version_upgrade(picoquic_cnx_t* cnx, int old_version_index,
     }
     return ret;
 }
+
+/* Simple portable number generation. */
+uint64_t picoquic_uniform_random(uint64_t rnd_max)
+{
+    return picoquic_public_uniform_random(rnd_max);
+}
+

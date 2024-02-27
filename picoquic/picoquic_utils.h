@@ -223,6 +223,10 @@ void picoquic_delete_event(picoquic_event_t* event);
 int picoquic_signal_event(picoquic_event_t* event);
 int picoquic_wait_for_event(picoquic_event_t* event, uint64_t microsec_wait);
 
+/* Simple portable random number generation
+ */
+uint64_t picoquic_uniform_random(uint64_t rnd_max);
+
 /* Set of random number generation functions, designed for tests.
  * The random numbers are defined by a 64 bit context, initialized to a seed.
  * The same seed will always generate the same sequence.

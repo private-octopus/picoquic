@@ -79,7 +79,7 @@ static picoquic_tp_t transport_param_test1 = {
 
 static picoquic_tp_t transport_param_test2 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 0, 1, { 0 }, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 1, 1, { 0 }, 0, 0
 };
 
 static picoquic_tp_t transport_param_test3 = {
@@ -154,8 +154,8 @@ uint8_t client_param2[] = {
     picoquic_tp_max_datagram_frame_size, 2,0x45, 0xC8,
     0x50, 0x57, 0x01, 0x01,
     0x80, 0, 0x71, 0x58, 0x01, 0x03,
-    0xC0 | 
-    (uint8_t)((picoquic_tp_enable_multipath >> 56) & 0xFF),
+    0x40|(uint8_t)(picoquic_tp_grease_quic_bit>>8), (uint8_t)picoquic_tp_grease_quic_bit, 0,
+    0xC0 | (uint8_t)((picoquic_tp_enable_multipath >> 56) & 0xFF),
     (uint8_t)((picoquic_tp_enable_multipath >> 48) & 0xFF),
     (uint8_t)((picoquic_tp_enable_multipath >> 40) & 0xFF),
     (uint8_t)((picoquic_tp_enable_multipath >> 32) & 0xFF),

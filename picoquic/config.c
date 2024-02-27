@@ -32,8 +32,8 @@
 #include "picoquic_binlog.h"
 #include "picoquic_logger.h"
 #include "picoquic_unified_log.h"
-#include "picoquic_config.h"
 #include "tls_api.h"
+#include "picoquic_config.h"
 
 typedef struct st_option_param_t {
     char const * param;
@@ -60,7 +60,7 @@ static option_table_line_t option_table[] = {
     "Maximum number of concurrent connections, default 256" },
     { picoquic_option_DO_RETRY, 'r', "do_retry", 0, "", "Do Retry Request" },
     { picoquic_option_INITIAL_RANDOM, 'R', "initial_random", 1, "option", "Randomize packet number spaces: none(0), initial(1, default), all(2)." },
-    { picoquic_option_RESET_SEED, 's', "reset_seed", 2, "<64b 64b>", "Reset seed" },
+    { picoquic_option_RESET_SEED, 's', "reset_seed", 1, "<32 hex chars>", "Reset seed" },
     { picoquic_option_DisablePortBlocking, 'X', "disable_block", 0, "", "Disable the check for blocked ports"},
     { picoquic_option_SOLUTION_DIR, 'S', "solution_dir", 1, "folder", "Set the path to the source files to find the default files" },
     { picoquic_option_CC_ALGO, 'G', "cc_algo", 1, "cc_algorithm",
@@ -95,12 +95,13 @@ static option_table_line_t option_table[] = {
     { picoquic_option_No_GSO, '0', "no_gso", 0, "", "Do not use UDP GSO or equivalent" },
     { picoquic_option_BDP_frame, 'j', "bdp", 1, "number", "use bdp extension frame(1) or don\'t (0). Default=0" },
     { picoquic_option_CWIN_MAX, 'W', "cwin_max", 1, "bytes", "Max value for CWIN. Default=UINT64_MAX"},
-    { picoquic_option_CWIN_MIN, 'u', "cwin_min", 1, "bytes", "Minimum value for CWIN. Default=3072"},
     { picoquic_option_HELP, 'h', "help", 0, "This help message" }
 };
 
 static size_t option_table_size = sizeof(option_table) / sizeof(option_table_line_t);
 
+#if 0
+/* Not in use and not tests. Reevaluate if we use files of parameters */
 static int skip_spaces(const char* line, int offset)
 {
     int c;
@@ -166,6 +167,7 @@ static int compare_option_name(const char * line, int offset, size_t length, cha
 
     return ret;
 }
+#endif
 
 static uint32_t config_parse_target_version(char const* v_arg)
 {
@@ -265,6 +267,7 @@ int config_atoi(const option_param_t* params, int nb_param, int x, int* ret)
             int c = params[x].param[i] - '0';
             if (c < 0 || c > 9) {
                 v = -1;
+                *ret = -1;
                 break;
             }
             else {
@@ -273,37 +276,6 @@ int config_atoi(const option_param_t* params, int nb_param, int x, int* ret)
             }
         }
     }
-    return v;
-}
-
-uint64_t config_atoull(const option_param_t* params, int nb_param, int x, int * ret)
-{
-    uint64_t v = 0;
-
-    if (params == NULL || x < 0 || x >= nb_param) {
-        *ret = -1;
-    }
-    else {
-        for (size_t i = 0; i < params[x].length; i++) {
-            int c = params[x].param[i];
-            unsigned int d = 0;
-            if (c >= '0' || c <= '9') {
-                d = c - '0';
-            }
-            else if (c >= 'a' || c <= 'f') {
-                d = c - 'a' + 10;
-            }
-            else if (c >= 'A' || c <= 'F') {
-                d = c - 'A' + 10;
-            }
-            else {
-                continue;
-            }
-            v <<= 4;
-            v += d;
-        }
-    }
-
     return v;
 }
 
@@ -363,8 +335,12 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         break;
     }
     case picoquic_option_RESET_SEED:
-        config->reset_seed[1] = config_atoull(params, nb_params, 0, &ret);
-        config->reset_seed[0] = config_atoull(params, nb_params, 1, &ret);
+        config->has_reset_seed = 1;
+        ret = (picoquic_parse_hexa(params[0].param, params[0].length, config->reset_seed, sizeof(config->reset_seed)) ==
+            sizeof(config->reset_seed)) ? 0 : -1;
+        if (ret != 0) {
+            fprintf(stderr, "Invalid reset seed: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+        }
         break;
     case picoquic_option_DisablePortBlocking:
         config->disable_port_blocking = 1;
@@ -564,17 +540,22 @@ int picoquic_config_option_letters(char* option_string, size_t string_max, size_
     return ret;
 }
 
-void picoquic_config_usage()
+void picoquic_config_usage_file(FILE* F)
 {
-    fprintf(stderr, "Picoquic options:\n");
+    fprintf(F, "Picoquic options:\n");
     for (size_t i = 0; i < option_table_size; i++) {
         size_t spacer = strlen(option_table[i].param_sample);
-        fprintf(stderr, "  -%c %s", option_table[i].option_letter, option_table[i].param_sample);
+        fprintf(F, "  -%c %s", option_table[i].option_letter, option_table[i].param_sample);
         while (spacer++ < 12) {
-            putc(' ', stderr);
+            putc(' ', F);
         }
-        fprintf(stderr, " %s\n", option_table[i].option_help);
+        fprintf(F, " %s\n", option_table[i].option_help);
     }
+}
+
+void picoquic_config_usage()
+{
+    picoquic_config_usage_file(stderr);
 }
 
 int picoquic_config_set_option(picoquic_quic_config_t* config, picoquic_option_enum_t option_num, const char * opt_val)
@@ -619,32 +600,21 @@ int picoquic_config_command_line(int opt, int * p_optind, int argc, char const *
         }
     }
 
-    if (option_index == -1) {
-        fprintf(stderr, "Unknown option: -%c\n", opt);
+    if (option_index == -1 || option_table[option_index].nb_params_required > 1) {
+        /* No options have more than one parameter */
+        fprintf(stderr, "Unknown or incorrect option: -%c\n", opt);
+        ret = -1;
     }
     else {
         if (option_table[option_index].nb_params_required > 0) {
             params[0].param = optarg;
-            if (optarg == NULL) {
+            if (optarg == NULL){
                 fprintf(stderr, "option -%c requires %d arguments\n", opt, option_table[option_index].nb_params_required);
                 ret = -1;
             }
             else {
                 params[0].length = strlen(optarg);
                 nb_params++;
-                while (nb_params < option_table[option_index].nb_params_required) {
-                    if (*p_optind + 1 > argc) {
-                        fprintf(stderr, "option -%c requires %d arguments\n", opt, option_table[option_index].nb_params_required);
-                        ret = -1;
-                        break;
-                    }
-                    else {
-                        params[nb_params].param = argv[*p_optind];
-                        params[nb_params].length = (int)strlen(argv[*p_optind]);
-                        nb_params++;
-                        *p_optind += 1;
-                    }
-                }
             }
         }
     }
@@ -656,6 +626,10 @@ int picoquic_config_command_line(int opt, int * p_optind, int argc, char const *
     return ret;
 }
 
+#if 0
+/* Reading parameters from a file instead of the command line.
+* Apparently never used, also not tested.
+ */
 int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
 {
     int ret = 0;
@@ -686,42 +660,42 @@ int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
             else {
                 name_length = offset - name_offset;
                 /* Parse the option parameters, up to 5 of them */
-offset = parse_line_params(line, offset, params, 5, &nb_params);
-/* Recognize the option and apply the parameters  */
-for (size_t i = 0; i < option_table_size; i++) {
-    if (compare_option_name(line, name_offset, (size_t)name_length, option_table[i].option_name) == 0) {
-        option_index = (int)i;
-        break;
-    }
-}
+                offset = parse_line_params(line, offset, params, 5, &nb_params);
+                /* Recognize the option and apply the parameters  */
+                for (size_t i = 0; i < option_table_size; i++) {
+                    if (compare_option_name(line, name_offset, (size_t)name_length, option_table[i].option_name) == 0) {
+                        option_index = (int)i;
+                        break;
+                    }
+                }
 
-if (option_index == -1) {
-    char buffer[256];
-    fprintf(stderr, "Line %d, unknown option: -%s\n", line_number,
-        config_optval_string(buffer, 256, line + name_offset, name_length));
-    ret = -1;
-}
-else {
-    if (option_table[option_index].nb_params_required != nb_params) {
-        fprintf(stderr, "Line %d, option %s requires %d arguments, %d present\n",
-            line_number,
-            option_table[option_index].option_name,
-            option_table[option_index].nb_params_required,
-            nb_params);
-        ret = -1;
-    }
-}
+                if (option_index == -1) {
+                    char buffer[256];
+                    fprintf(stderr, "Line %d, unknown option: -%s\n", line_number,
+                        config_optval_string(buffer, 256, line + name_offset, name_length));
+                    ret = -1;
+                }
+                else {
+                    if (option_table[option_index].nb_params_required != nb_params) {
+                        fprintf(stderr, "Line %d, option %s requires %d arguments, %d present\n",
+                            line_number,
+                            option_table[option_index].option_name,
+                            option_table[option_index].nb_params_required,
+                            nb_params);
+                        ret = -1;
+                    }
+                }
 
-if (ret == 0) {
-    offset = skip_name(line, offset);
-    if (line[offset] != 0 && line[offset] != '#') {
-        fprintf(stderr, "Line %d, unexpected character at position %d\n", line_number, offset);
-    }
-}
+                if (ret == 0) {
+                    offset = skip_name(line, offset);
+                    if (line[offset] != 0 && line[offset] != '#') {
+                        fprintf(stderr, "Line %d, unexpected character at position %d\n", line_number, offset);
+                    }
+                }
 
-if (ret == 0) {
-    ret = config_set_option(&option_table[option_index], params, nb_params, config);
-}
+                if (ret == 0) {
+                    ret = config_set_option(&option_table[option_index], params, nb_params, config);
+                }
 
 
             }
@@ -732,7 +706,7 @@ if (ret == 0) {
     return ret;
 }
 
-
+#endif
 
 /* Create a QUIC Context based on configuration data.
  * Arguments from configuration:
@@ -777,7 +751,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         default_callback_ctx,
         NULL,
         NULL,
-        (uint8_t*)config->reset_seed,
+        (config->has_reset_seed)?(uint8_t*)config->reset_seed : NULL,
         current_time,
         p_simulated_time,
         config->ticket_file_name,
@@ -817,7 +791,6 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_default_idle_timeout(quic, (uint64_t)config->idle_timeout);
 
         picoquic_set_cwin_max(quic, config->cwin_max);
-        picoquic_set_cwin_min(quic, config->cwin_min);
 
         if (config->token_file_name) {
             if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {

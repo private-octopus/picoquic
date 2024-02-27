@@ -51,6 +51,10 @@
  * Then, unload the tls api provider and reset the control flag
  * to zero.
  */
+#ifndef PICOQUIC_WITH_MBEDTLS
+/* This is defined even if Mbedtls is not. */
+void picoquic_mbedtls_load(int unload);
+#endif
 
 static test_api_stream_desc_t test_scenario_minicrypto[] = {
     { 4, 0, 2000, 2000 }
@@ -66,7 +70,9 @@ int minicrypto_test()
     int ret = 0;
 
     picoquic_tls_api_reset(TLS_API_INIT_FLAGS_NO_OPENSSL);
-
+#ifndef PICOQUIC_WITH_MBEDTLS
+    picoquic_mbedtls_load(0);
+#endif
     ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid, 8, 0, 0, 1);
     if (ret == 0) {

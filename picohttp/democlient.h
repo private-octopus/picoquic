@@ -99,7 +99,7 @@ picoquic_alpn_enum picoquic_parse_alpn_nz(char const* alpn, size_t len);
  */
 
 int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic,
-    char const* sni, char const* alpn, uint32_t proposed_version, uint64_t current_time,
+    char const* sni, char const* alpn, uint32_t proposed_version,
     char const** ticket_alpn, uint32_t* ticket_version);
 
 int h09_demo_client_prepare_stream_open_command(

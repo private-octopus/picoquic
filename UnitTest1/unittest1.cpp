@@ -111,6 +111,62 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_basic)
+        {
+            int ret = sockloop_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_eio)
+        {
+            int ret = sockloop_eio_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_errsock)
+        {
+            int ret = sockloop_errsock_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_ipv4)
+        {
+            int ret = sockloop_ipv4_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_migration)
+        {
+            int ret = sockloop_migration_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_nat)
+        {
+            int ret = sockloop_nat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_thread)
+        {
+            int ret = sockloop_thread_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_thread_name)
+        {
+            int ret = sockloop_thread_name_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(splay)
         {
             int ret = splay_test();
@@ -992,16 +1048,72 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(mtu_drop)
+        TEST_METHOD(mtu_drop_bbr)
         {
-            int ret = mtu_drop_test();
+            int ret = mtu_drop_bbr_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(red_cc)
+        TEST_METHOD(mtu_drop_cubic)
         {
-            int ret = red_cc_test();
+            int ret = mtu_drop_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop_dcubic)
+        {
+            int ret = mtu_drop_dcubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop_fast)
+        {
+            int ret = mtu_drop_fast_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop_newreno)
+        {
+            int ret = mtu_drop_newreno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_bbr)
+        {
+            int ret = red_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_cubic)
+        {
+            int ret = red_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_dcubic)
+        {
+            int ret = red_dcubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_fast)
+        {
+            int ret = red_fast_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(red_newreno)
+        {
+            int ret = red_newreno_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1013,9 +1125,37 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(pacing_cc)
+        TEST_METHOD(pacing_bbr)
         {
-            int ret = pacing_cc_test();
+            int ret = pacing_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_cubic)
+        {
+            int ret = pacing_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_dcubic)
+        {
+            int ret = pacing_dcubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_fast)
+        {
+            int ret = pacing_fast_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(pacing_newreno)
+        {
+            int ret = pacing_newreno_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1132,7 +1272,7 @@ namespace UnitTest1
           Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_virtual_time)
+        TEST_METHOD(virtual_time)
         {
             int ret = virtual_time_test();
 
@@ -1312,7 +1452,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-        
+
+        TEST_METHOD(cnxid_transmit_r_early){
+            int ret = transmit_cnxid_retire_early_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_probe_api)
         {
             int ret = probe_api_test();
@@ -1799,6 +1945,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(bbr1)
+        {
+            int ret = bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(l4s_reno)
         {
             int ret = l4s_reno_test();
@@ -1809,6 +1962,27 @@ namespace UnitTest1
         TEST_METHOD(l4s_prague)
         {
             int ret = l4s_prague_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(l4s_prague_updown)
+        {
+            int ret = l4s_prague_updown_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(l4s_bbr)
+        {
+            int ret = l4s_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(l4s_bbr_updown)
+        {
+            int ret = l4s_bbr_updown_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2064,6 +2238,18 @@ namespace UnitTest1
 
         TEST_METHOD(mediatest_video_data_audio) {
             int ret = mediatest_video_data_audio_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mediatest_video2_down) {
+            int ret = mediatest_video2_down_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mediatest_wifi) {
+            int ret = mediatest_wifi_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2442,6 +2628,18 @@ namespace UnitTest1
 
         TEST_METHOD(config_option) {
             int ret = config_option_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(config_quic) {
+            int ret = config_quic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(config_usage) {
+            int ret= config_usage_test();
 
             Assert::AreEqual(ret, 0);
         }

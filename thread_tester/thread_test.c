@@ -552,9 +552,9 @@ int main(int argc, char** argv)
     int ret = 0;
     thread_test_context_t ctx;
     int is_name = 0;
-    picoquic_thread_t t_net = NULL;
-    picoquic_thread_t t_load = NULL;
-    picoquic_thread_t t_wake = NULL;
+    picoquic_thread_t t_net = (picoquic_thread_t)0;
+    picoquic_thread_t t_load = (picoquic_thread_t)0;
+    picoquic_thread_t t_wake = (picoquic_thread_t)0;
 
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
@@ -614,7 +614,7 @@ int main(int argc, char** argv)
             DBG_PRINTF("Cannot close load thread, ret= 0x%x", ret);
         }
         else {
-            t_load = NULL;
+            t_load = (picoquic_thread_t)0;
         }
     }
     /* Wait next on the message event thread. */
@@ -625,7 +625,7 @@ int main(int argc, char** argv)
             DBG_PRINTF("Cannot close wake thread, ret= 0x%x", ret);
         }
         else {
-            t_wake = NULL;
+            t_wake = (picoquic_thread_t)0;
         }
     }
     printf("Load and wake thread are closed.\n");
@@ -642,7 +642,7 @@ int main(int argc, char** argv)
             DBG_PRINTF("Cannot close wake thread, ret= 0x%x", ret);
         }
         else {
-            t_net = NULL;
+            t_net = (picoquic_thread_t)0;
         }
     }
     /* To do: statistics */

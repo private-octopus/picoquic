@@ -160,6 +160,27 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(bdp_short)
+        {
+            int ret = bdp_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_short_hi)
+        {
+            int ret = bdp_short_hi_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_short_lo)
+        {
+            int ret = bdp_short_lo_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stress)
         {
             int ret = stress_test();

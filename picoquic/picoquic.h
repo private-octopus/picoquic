@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.16.2"
+#define PICOQUIC_VERSION "1.1.19.1"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -860,10 +860,10 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * connection data harder in case of NAT traversal.
  */
 
-int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, uint64_t current_time);
-int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
-    const struct sockaddr* addr_to, int if_index, uint64_t current_time, int to_preferred_address);
+int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, uint64_t current_time);
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, int if_index, uint64_t current_time, int to_preferred_address);
 void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
 void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
 int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
@@ -887,7 +887,7 @@ int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoq
 * 
 * The application subscribes to the path quality update
 * using "picoquic_subscribe_to_quality_update" API
-* for the connection, or "picoquic_subscribe_to_quality_update" API
+* for the connection, or "picoquic_subscribe_to_quality_update_per_path" API
 * for a specific path, setting the "change" thresholds
 * for the datarate and the rtt. 
 * The function call "picoquic_default_quality_update"
@@ -1403,22 +1403,32 @@ typedef enum {
     picoquic_congestion_notification_timeout,
     picoquic_congestion_notification_spurious_repeat,
     picoquic_congestion_notification_rtt_measurement,
-    picoquic_congestion_notification_bw_measurement,
     picoquic_congestion_notification_ecn_ec,
     picoquic_congestion_notification_cwin_blocked,
     picoquic_congestion_notification_seed_cwin,
     picoquic_congestion_notification_reset
 } picoquic_congestion_notification_t;
 
+typedef struct st_picoquic_per_ack_state_t {
+    uint64_t rtt_measurement; /* RTT as measured when receiving the ACK */
+    uint64_t one_way_delay; /* One way delay when receiving the ACK, 0 if unknown */
+    uint64_t nb_bytes_acknowledged; /* Number of bytes acknowledged by this ACK */
+    uint64_t nb_bytes_newly_lost; /* Number of bytes in packets found lost because of this ACK */
+    uint64_t nb_bytes_lost_since_packet_sent; /* Number of bytes lost between the time the packet was sent and now */
+    uint64_t nb_bytes_delivered_since_packet_sent; /* Number of bytes acked between the time the packet was sent and now */
+    uint64_t inflight_prior;
+    uint64_t lost_packet_number;
+    uint64_t lost_packet_sent_time;
+    unsigned int is_app_limited : 1; /* App marked limited at time of ACK? */
+    unsigned int is_cwnd_limited: 1; /* path marked CWIN limited after packet was sent. */
+} picoquic_per_ack_state_t;
+
 typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
-    uint64_t rtt_measurement,
-    uint64_t one_way_delay,
-    uint64_t nb_bytes_acknowledged,
-    uint64_t lost_packet_number,
+    picoquic_per_ack_state_t * ack_state,
     uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
 typedef void (*picoquic_congestion_algorithm_observe)(
@@ -1439,6 +1449,7 @@ extern picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_prague_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_bbr1_algorithm;
 
 #define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
 
@@ -1463,6 +1474,16 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
  * Changing the settings will not affect existing connections.
  */
 void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt);
+
+/* The experimental API `picoquic_set_default_bbr_quantum_ratio`
+* allows application to change the "quantum ratio" parameter of the BBR
+* algorithm. The default value is 0.001 (1/1000th of the pacing rate
+* in bytes per second). Larger values like 0.01 would increase the
+* size of the "leaky bucket" used by the pacing algorithms. Whether
+* that's a good idea or not is debatable, probably depends on the
+* application.
+*/
+void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio);
 
 /* Bandwidth update and congestion control parameters value.
  * Congestion control in picoquic is characterized by three values:
