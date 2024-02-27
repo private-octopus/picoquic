@@ -1541,6 +1541,11 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
             path_x->pacing_rate_update_delta = cnx->pacing_rate_update_delta;
             picoquic_refresh_path_quality_thresholds(path_x);
 
+            /* In case of unique path_id multipath, initialize the context. We do that systematically,
+             * because path 0 is created before multipath options are negotiated.
+             */
+            picoquic_init_ack_ctx(cnx, &path_x->ack_ctx);
+            picoquic_init_packet_ctx(cnx, &path_x->pkt_ctx, picoquic_packet_context_application);
             /* Record the path */
             cnx->path[cnx->nb_paths] = path_x;
             ret = cnx->nb_paths++;

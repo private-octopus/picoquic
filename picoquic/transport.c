@@ -372,11 +372,9 @@ int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
         cnx->is_unique_path_id_enabled = 1;
         cnx->max_paths_acknowledged = cnx->local_parameters.initial_max_paths;
         cnx->max_paths_remote = cnx->remote_parameters.initial_max_paths;
-        if (!cnx->client_mode) {
-            cnx->local_parameters.enable_multipath = 0;
-            cnx->local_parameters.enable_simple_multipath = 0;
-            cnx->max_paths_local = cnx->local_parameters.initial_max_paths;
-        }
+        cnx->local_parameters.enable_multipath = 0;
+        cnx->local_parameters.enable_simple_multipath = 0;
+        cnx->max_paths_local = cnx->local_parameters.initial_max_paths;
     }
     else if (cnx->remote_parameters.enable_multipath &&
         cnx->local_parameters.enable_multipath &&

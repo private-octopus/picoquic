@@ -993,9 +993,12 @@ typedef struct st_picoquic_remote_cnxid_stash_t {
 * Path contexts are created:
 * - At the beginning of the connection for path[0]
 * - When sending or receiving packets to a or from new addresses and ports.
+* 
 * When a path is created, it is assigned a local connection idand a remote connection ID.
 * After that, the path has to be validated by a successful challenge/response.
 *
+* If multipath is supported, paths remain in the list until they are abandoned.
+* 
 * As soon as a path is validated, it moves to position 0. The old path[0] moves to the
 * last position, and is marked as deprecated. After about 1 RTT, the path resource
 * are freed. (TODO: once we actually support multipath, change that behavior.)
@@ -1005,6 +1008,17 @@ typedef struct st_picoquic_remote_cnxid_stash_t {
 * Congestion control and spin bit management are path specific.
 * Packet numbering is global, see packet context.
 */
+typedef struct st_picoquic_path_nat_t {
+    picoquic_local_cnxid_t* p_local_cnxid; 
+    picoquic_remote_cnxid_t* p_remote_cnxid;
+    struct sockaddr_storage peer_addr;
+    struct sockaddr_storage local_addr;
+    unsigned long if_index_dest;
+    uint64_t challenge_response;
+    uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
+    uint64_t challenge_time_first;
+    uint8_t challenge_repeat_count;
+} picoquic_path_nat_t;
 
 typedef struct st_picoquic_path_t {
     picoquic_local_cnxid_t* p_local_cnxid; 
@@ -1017,7 +1031,7 @@ typedef struct st_picoquic_path_t {
     void* app_path_ctx;
     /* If using unique path id multipath */
     picoquic_ack_context_t ack_ctx;
-
+    picoquic_packet_context_t pkt_ctx;
     /* Peer address. */
     struct sockaddr_storage peer_addr;
     struct sockaddr_storage local_addr;
@@ -1030,6 +1044,8 @@ typedef struct st_picoquic_path_t {
     uint64_t challenge_time_first;
     uint8_t challenge_repeat_count;
     uint64_t last_non_path_probing_pn;
+    /* NAT Challenge for this path */
+    picoquic_path_nat_t* nat;
     /* Last time a packet was sent on this path. */
     uint64_t last_sent_time;
     /* Number of packets sent on this path*/
@@ -1076,9 +1092,6 @@ typedef struct st_picoquic_path_t {
     uint64_t last_packet_received_at;
     uint64_t last_loss_event_detected;
     uint64_t nb_retransmit; /* Number of timeout retransmissions since last ACK */
-#if 0
-    uint64_t retrans_count; /* Number of packet losses for the path */
-#endif
     uint64_t total_bytes_lost; /* Sum of length of packet lost on this path */
     uint64_t nb_losses_found;
     uint64_t nb_spurious; /* Number of spurious retransmissiosn for the path */
@@ -1728,6 +1741,10 @@ int picoquic_sack_insert_item(picoquic_sack_list_t* sack_list, uint64_t range_mi
     uint64_t range_max, uint64_t current_time);
 
 int picoquic_sack_list_is_empty(picoquic_sack_list_t* sack_list);
+
+picoquic_ack_context_t* picoquic_ack_ctx_from_cnx_context(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, picoquic_local_cnxid_t* l_cid);
+
+picoquic_sack_list_t* picoquic_sack_list_from_cnx_context(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, picoquic_local_cnxid_t* l_cid);
 
 uint64_t picoquic_sack_list_first(picoquic_sack_list_t* first_sack);
 

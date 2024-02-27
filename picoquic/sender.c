@@ -841,6 +841,11 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
             sequence_number, send_buffer, /* header_length */ h_length, aead_context);
 
     }
+    else if (cnx->is_unique_path_id_enabled && ptype == picoquic_packet_1rtt_protected) {
+        send_length = picoquic_aead_encrypt_mp(send_buffer + /* header_length */ h_length,
+            bytes + header_length, length - header_length, path_x->unique_path_id,
+            sequence_number, send_buffer, /* header_length */ h_length, aead_context);
+    }
     else {
         send_length = picoquic_aead_encrypt_generic(send_buffer + /* header_length */ h_length,
             bytes + header_length, length - header_length,
@@ -1107,6 +1112,9 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
     if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
         pkt_ctx = &path_x->p_remote_cnxid->pkt_ctx;
     }
+    else if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_unique_path_id_enabled) {
+        pkt_ctx = &path_x->pkt_ctx;
+    }
     else {
         pkt_ctx = &cnx->pkt_ctx[packet->pc];
     }
@@ -1296,6 +1304,8 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
         packet->length = length;
         if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
             packet->sequence_number = path_x->p_remote_cnxid->pkt_ctx.send_sequence++;
+        } else if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_unique_path_id_enabled) {
+            packet->sequence_number = path_x->pkt_ctx.send_sequence++;
         } else {
             packet->sequence_number = cnx->pkt_ctx[packet->pc].send_sequence++;
         }
@@ -2751,7 +2761,7 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
          * create more. The code assume that path[0] is created during handshake. */
         while (cnx->nb_local_cnxid_lists < cnx->local_parameters.initial_max_paths &&
             cnx->max_paths_remote > cnx->nb_local_cnxid_lists) {
-            local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, cnx->nb_local_cnxid_lists, 1);
+            (void) picoquic_find_or_create_local_cnxid_list(cnx, cnx->nb_local_cnxid_lists, 1);
         }
     }
 
@@ -3251,8 +3261,14 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     }
 
     if (length == 0) {
-        picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled) ?
-            &path_x->p_remote_cnxid->pkt_ctx : &cnx->pkt_ctx[pc];
+        picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
+        if (cnx->is_multipath_enabled) {
+            pkt_ctx = &path_x->p_remote_cnxid->pkt_ctx;
+        }
+        else if (cnx->is_unique_path_id_enabled) {
+            pkt_ctx = &path_x->pkt_ctx;
+        }
+
         tls_ready = picoquic_is_tls_stream_ready(cnx);
         packet->pc = pc;
         length = picoquic_predict_packet_header_length(
@@ -4255,7 +4271,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
 {
     int path_id = -1;
 
-    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) && cnx->cnx_state >= picoquic_state_ready) {
+    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled || cnx->is_unique_path_id_enabled) && cnx->cnx_state >= picoquic_state_ready) {
         return picoquic_select_next_path_mp(cnx, current_time, next_wake_time);
     }
 

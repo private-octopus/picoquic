@@ -125,14 +125,33 @@ int picoquic_sack_list_is_empty(picoquic_sack_list_t* sack_list)
     return (sack_list->ack_tree.size == 0);
 }
 
+/* Find the ack context from the context 
+ */
+picoquic_ack_context_t* picoquic_ack_ctx_from_cnx_context(picoquic_cnx_t* cnx,
+    picoquic_packet_context_enum pc, picoquic_local_cnxid_t* l_cid)
+{
+    picoquic_ack_context_t* ack_ctx = &cnx->ack_ctx[pc];
+    if (pc == picoquic_packet_context_application) {
+        if (cnx->is_multipath_enabled) {
+            ack_ctx = &cnx->path[0]->p_local_cnxid->ack_ctx;
+        }
+        else if (cnx->is_unique_path_id_enabled) {
+            int path_id = picoquic_find_path_by_unique_id(cnx, l_cid->path_id);
+            if (path_id >= 0) {
+                ack_ctx = &cnx->path[path_id]->ack_ctx;
+            }
+        }
+    }
+
+    return ack_ctx;
+
+}
 /* Find the sack list for the context
  */
 picoquic_sack_list_t* picoquic_sack_list_from_cnx_context(picoquic_cnx_t* cnx,
-    picoquic_packet_context_enum pc, picoquic_local_cnxid_t* l_cid) {
-    picoquic_sack_list_t* sack_list = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) ?
-        ((l_cid == NULL) ? &cnx->path[0]->p_local_cnxid->ack_ctx.sack_list :
-            &l_cid->ack_ctx.sack_list) : &cnx->ack_ctx[pc].sack_list;
-    return sack_list;
+    picoquic_packet_context_enum pc, picoquic_local_cnxid_t* l_cid)
+{
+    return &picoquic_ack_ctx_from_cnx_context(cnx, pc, l_cid)->sack_list;
 }
 
 /* Find the closest range below an optional specified sack item
