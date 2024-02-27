@@ -74,7 +74,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_LOG_FILE, 'l', "text_log", 1, "file", "Log file, Log to stdout if file = \"-\". No text logging if absent." },
     { picoquic_option_LONG_LOG, 'L', "long_log", 0, "", "Log all packets. If absent, log stops after 100 packets." },
     { picoquic_option_BINLOG_DIR, 'b', "binlog_dir", 1, "folder", "Binary logging to this directory. No binary logging if absent." },
-    { picoquic_option_QLOG_DIR, 'q', "qlog_dir", 1, "folder", 
+    { picoquic_option_QLOG_DIR, 'q', "qlog_dir", 1, "folder",
     "Qlog logging to this directory. No qlog logging if absent, but qlogs could be produced using picolog if binary logs are available." },
     { picoquic_option_MTU_MAX, 'm', "mtu_max", 1, "mtu_max", "Largest mtu value that can be tried for discovery." },
     { picoquic_option_SNI, 'n', "sni", 1, "sni", "sni (default: server name)" },
@@ -96,7 +96,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_BDP_frame, 'j', "bdp", 1, "number", "use bdp extension frame(1) or don\'t (0). Default=0" },
     { picoquic_option_CWIN_MAX, 'W', "cwin_max", 1, "bytes", "Max value for CWIN. Default=UINT64_MAX"},
     { picoquic_option_CWIN_MIN, 'u', "cwin_min", 1, "bytes", "Minimum value for CWIN. Default=3072"},
-    { picoquic_option_HELP, 'h', "help", 0, "This help message" }
+    { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
 static size_t option_table_size = sizeof(option_table) / sizeof(option_table_line_t);
