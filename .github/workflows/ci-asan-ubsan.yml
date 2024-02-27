@@ -38,6 +38,7 @@ jobs:
             ./picoquic_ct -n -r 1>quic_ct.txt 2>sanity.txt || QUICRESULT=$? 
             echo "running picoquic_ct returns <$QUICRESULT> "
             cat sanity.txt
+            cat quic_ct.txt
             if [ ! -z ${QUICRESULT} ]; then
                 if [ ${QUICRESULT} != 0 ]; then exit 1; fi;
             fi
