@@ -546,7 +546,7 @@ void BBR1UpdateBtlBw(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x,
 
     if (bbr1_state->rt_prop > 0) {
         /* Stop the bandwidth estimate from falling too low. */
-        uint64_t min_bandwidth = (((uint64_t)path_x->cnx->quic->cwin_min)) * 1000000) / bbr1_state->rt_prop;
+        uint64_t min_bandwidth = ( ((uint64_t)path_x->cnx->quic->cwin_min) * 1000000) / bbr1_state->rt_prop;
         if (bandwidth_estimate < min_bandwidth) {
             bandwidth_estimate = min_bandwidth;
         }
