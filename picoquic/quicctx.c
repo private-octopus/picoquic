@@ -1916,12 +1916,6 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
         DBG_PRINTF("Could not find path by addr, local: %s, peer: %s", 
             picoquic_addr_text(addr_local, text1, sizeof(text1)),
             picoquic_addr_text(addr_local, text2, sizeof(text2)));
-        for (int i = 0; i < cnx->nb_paths; i++){
-            DBG_PRINTF("    path[%d], local: %s, peer: %s", i,
-                picoquic_addr_text((struct sockaddr*)&cnx->path[i]->local_addr, text1, sizeof(text1)),
-                picoquic_addr_text((struct sockaddr*)&cnx->path[i]->peer_addr, text2, sizeof(text2)));
-        }
-
     }
 
     return path_id;

@@ -4578,7 +4578,15 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
         bytes++;
         challenge_response = PICOPARSE_64(bytes);
         bytes += challenge_length;
-
+#if 1
+        {
+            char text1[128];
+            char text2[128];
+            DBG_PRINTF("Received path challenge, from: %s, to: %s",
+                picoquic_addr_text(addr_from, text1, sizeof(text1)),
+                picoquic_addr_text(addr_to, text2, sizeof(text2)));
+        }
+#endif
         if (path_x != NULL &&
             (addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->peer_addr) == 0) &&
             (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)) {

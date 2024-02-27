@@ -2933,6 +2933,16 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
                 /* When blocked, repeat the path challenge or wait */
                 uint8_t* bytes_challenge = bytes_next;
 
+#if 1
+                {
+                    char text1[128];
+                    char text2[128];
+                    DBG_PRINTF("Preparing path challenge, from: %s, to: %s",
+                        picoquic_addr_text((struct sockaddr*)&path_x->local_addr, text1, sizeof(text1)),
+                        picoquic_addr_text((struct sockaddr*)&path_x->peer_addr, text2, sizeof(text2)));
+                }
+#endif
+
                 bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, more_data, is_pure_ack,
                     path_x->challenge[path_x->challenge_repeat_count]);
                 if (bytes_next > bytes_challenge) {
@@ -3000,6 +3010,15 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
 
     if (path_x->response_required) {
         uint8_t* bytes_response = bytes_next;
+#if 1
+        {
+            char text1[128];
+            char text2[128];
+            DBG_PRINTF("Preparing path response, from: %s, to: %s",
+                picoquic_addr_text((struct sockaddr*)&path_x->local_addr, text1, sizeof(text1)),
+                picoquic_addr_text((struct sockaddr*)&path_x->peer_addr, text2, sizeof(text2)));
+        }
+#endif
         if ((bytes_next = picoquic_format_path_response_frame(bytes_response, bytes_max,
             more_data, is_pure_ack, path_x->challenge_response)) > bytes_response) {
             path_x->response_required = 0;
