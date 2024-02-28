@@ -7061,11 +7061,14 @@ int not_before_cnxid_test()
         ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
     }
 
-    /* find a plausible "not before" value,and apply it */
+    /* find a plausible "not before" value, and apply it */
     if (ret == 0) {
         not_before = test_ctx->cnx_server->first_local_cnxid_list->local_cnxid_sequence_next - 1;
         uint64_t transport_error = picoquic_remove_not_before_cid(test_ctx->cnx_client, 0, not_before, simulated_time);
-
+        if (transport_error != 0) {
+            DBG_PRINTF("picoquic_remove_not_before_cid returns 0x%" PRIx64, transport_error);
+            ret = -1;
+        }
     }
 
     /* run the loop again until no outstanding data */
