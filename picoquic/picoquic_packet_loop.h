@@ -96,7 +96,7 @@ typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packe
  * the "ready" callback. Application should set the flags corresponding to
  * the features that it supports */
 typedef struct st_picoquic_packet_loop_options_t {
-    int do_time_check : 1; /* App should be polled for next time before sock select */
+    unsigned int do_time_check : 1; /* App should be polled for next time before sock select */
 } picoquic_packet_loop_options_t;
 
 /* Version 2 of packet loop, works in progress.
