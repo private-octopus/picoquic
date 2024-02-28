@@ -1649,6 +1649,9 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     picoquic_packet_t* p = NULL;
     picoquic_stream_head_t* stream = NULL;
 
+    picoquic_reset_packet_context(cnx, &path_x->pkt_ctx);
+    picoquic_reset_ack_context(&path_x->ack_ctx);
+
     if (cnx->quic->F_log != NULL) {
         fflush(cnx->quic->F_log);
     }
@@ -4291,15 +4294,25 @@ void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_m
 void picoquic_clear_ack_ctx(picoquic_ack_context_t* ack_ctx)
 {
     picoquic_sack_list_free(&ack_ctx->sack_list);
+
 }
 
-void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
-    picoquic_packet_context_enum pc)
-{
-    /* TODO: special case for 0-RTT packets! */
-    picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
-    picoquic_ack_context_t* ack_ctx = &cnx->ack_ctx[pc];
 
+void picoquic_reset_ack_context(picoquic_ack_context_t* ack_ctx)
+{
+    picoquic_clear_ack_ctx(ack_ctx);
+
+    picoquic_sack_list_init(&ack_ctx->sack_list);
+
+    ack_ctx->ecn_ect0_total_local = 0;
+    ack_ctx->ecn_ect1_total_local = 0;
+    ack_ctx->ecn_ce_total_local = 0;
+}
+
+
+void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
+    picoquic_packet_context_t * pkt_ctx)
+{
     while (pkt_ctx->pending_last != NULL) {
         (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->pending_last, 1, 0);
     }
@@ -4310,13 +4323,7 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
 
     pkt_ctx->retransmitted_oldest = NULL;
 
-    picoquic_clear_ack_ctx(ack_ctx);
-    picoquic_sack_list_init(&ack_ctx->sack_list);
-
     /* Reset the ECN data */
-    ack_ctx->ecn_ect0_total_local = 0;
-    ack_ctx->ecn_ect1_total_local = 0;
-    ack_ctx->ecn_ce_total_local = 0;
     pkt_ctx->ecn_ect0_total_remote = 0;
     pkt_ctx->ecn_ect1_total_remote = 0;
     pkt_ctx->ecn_ce_total_remote = 0;
@@ -4348,7 +4355,9 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
          * packets, and to keep using the same sequence number space in
          * the new connection */
         if (pc != picoquic_packet_context_application) {
-            picoquic_reset_packet_context(cnx, pc);
+            /* TODO: special case for 0-RTT packets! */
+            picoquic_reset_packet_context(cnx, &cnx->pkt_ctx[pc]);
+            picoquic_reset_ack_context(&cnx->ack_ctx[pc]);
         }
     }
 
@@ -4516,7 +4525,8 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 
         for (picoquic_packet_context_enum pc = 0;
             pc < picoquic_nb_packet_context; pc++) {
-            picoquic_reset_packet_context(cnx, pc);
+            picoquic_reset_packet_context(cnx, &cnx->pkt_ctx[pc]);
+            picoquic_reset_ack_context(&cnx->ack_ctx[pc]);
         }
 
         while (cnx->first_misc_frame != NULL) {

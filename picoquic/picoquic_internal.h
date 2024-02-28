@@ -1594,8 +1594,7 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
 int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time);
 
 /* Reset packet context */
-void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
-    picoquic_packet_context_enum pc);
+void picoquic_reset_packet_context(picoquic_cnx_t* cnx, picoquic_packet_context_t * pkt_ctx);
 
 /* Notify error on connection */
 int picoquic_connection_error(picoquic_cnx_t* cnx, uint64_t local_error, uint64_t frame_type); 
@@ -1930,6 +1929,7 @@ uint8_t* picoquic_format_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes, u
 int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length, int is_pure_ack);
 void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame);
 void picoquic_clear_ack_ctx(picoquic_ack_context_t* ack_ctx);
+void picoquic_reset_ack_context(picoquic_ack_context_t* ack_ctx);
 int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx);
 uint8_t* picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, int* ret);
