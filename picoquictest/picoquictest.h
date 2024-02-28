@@ -439,6 +439,7 @@ int multipath_standby_test();
 int multipath_standup_test();
 int multipath_qlog_test();
 int m_unip_basic_test();
+int m_unip_nat_test();
 int simple_multipath_basic_test();
 int simple_multipath_drop_first_test();
 int simple_multipath_drop_second_test();

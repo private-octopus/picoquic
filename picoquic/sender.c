@@ -599,7 +599,7 @@ size_t picoquic_create_packet_header(
         length = 0;
         bytes[length++] = (K | C | picoquic_spin_function_table[cnx->spin_policy].spinbit_outgoing(cnx));
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length,
-            path_x->p_remote_cnxid->cnx_id);
+            (path_x->is_probing_nat && path_x->p_remote_nat_cnxid != NULL) ? path_x->p_remote_nat_cnxid->cnx_id : path_x->p_remote_cnxid->cnx_id);
 
         *pn_offset = length;
         if (header_length > length && header_length < length + 4) {
@@ -2348,15 +2348,48 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 /* Compute the time at which to send the next challenge
  */
 
-uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
+uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, unsigned int * is_nat)
 {
+    /* "Challenge time" holds the time at which the last challenge was set. We
+     * use the value to compute an estimate of the RTT */
     uint64_t next_challenge_time = path_x->challenge_time;
 
-    if (path_x->challenge_repeat_count >= 2) {
-        next_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
+    if (path_x->challenge_repeat_count == 0) {
+        next_challenge_time = current_time;
+    } else {
+        if (path_x->challenge_repeat_count >= 2) {
+            next_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
+        }
+        else {
+            next_challenge_time += PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+        }
     }
-    else {
-        next_challenge_time += PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+
+    if (is_nat != NULL) {
+        *is_nat = 0;
+        if (cnx->is_unique_path_id_enabled && path_x->nat_local_addr.ss_family != AF_UNSPEC)
+        {
+            uint64_t nat_challenge_time = path_x->nat_challenge_time;
+            if (path_x->nat_challenge_repeat_count == 0) {
+                nat_challenge_time = current_time;
+            }
+            else {
+                if (path_x->challenge_repeat_count >= 2) {
+                    nat_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
+                }
+                else {
+                    nat_challenge_time += path_x->retransmit_timer;
+                }
+            }
+            if (nat_challenge_time <= current_time && path_x->nat_challenge_repeat_count >= PICOQUIC_CHALLENGE_REPEAT_MAX) {
+                /* NAT Challenge failed. Resetting the address so we forget about it. */
+                picoquic_log_app_message(cnx, "NAT Challenge failed on path %" PRIu64, path_x->unique_path_id);
+                path_x->nat_local_addr.ss_family = AF_UNSPEC;
+            } else if (nat_challenge_time < next_challenge_time) {
+                *is_nat = 1;
+                next_challenge_time = nat_challenge_time;
+            }
+        }
     }
 
     return next_challenge_time;
@@ -2925,13 +2958,24 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
     uint64_t current_time, uint64_t * next_wake_time)
 {
     if (path_x->challenge_verified == 0 && path_x->challenge_failed == 0) {
-        uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x);
+        unsigned int is_nat = 0;
+        uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x, current_time, &is_nat);
 
-        if (next_challenge_time <= current_time || path_x->challenge_repeat_count == 0) {
-            if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
-                int ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
+        if (next_challenge_time <= current_time) {
+            int ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
+            uint8_t* bytes_challenge = bytes_next;
+            if (is_nat) {
+                /* Format a NAT challenge, or at least try. */
+                bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, more_data, is_pure_ack,
+                    path_x->nat_challenge[path_x->nat_challenge_repeat_count]);
+                if (bytes_next > bytes_challenge) {
+                    path_x->nat_challenge_time = current_time;
+                    path_x->nat_challenge_repeat_count++;
+                    *is_challenge_padding_needed = 1;
+                }
+            }
+            else if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
                 /* When blocked, repeat the path challenge or wait */
-                uint8_t* bytes_challenge = bytes_next;
 
                 bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, more_data, is_pure_ack,
                     path_x->challenge[path_x->challenge_repeat_count]);
@@ -4080,7 +4124,39 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
  * sensitive data is not sent on suspect paths.
  */
 
-static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time)
+static void picoquic_set_path_addresses(picoquic_cnx_t* cnx, int path_id, int is_nat,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index)
+{
+    if (is_nat) {
+        if (p_addr_to != NULL) {
+            picoquic_store_addr(p_addr_to, (struct sockaddr*)&cnx->path[path_id]->nat_peer_addr);
+        }
+
+        if (p_addr_from != NULL) {
+            picoquic_store_addr(p_addr_from, (struct sockaddr*)&cnx->path[path_id]->nat_local_addr);
+        }
+
+        if (if_index != NULL) {
+            *if_index = cnx->path[path_id]->if_index_nat_dest;
+        }
+    }
+    else {
+        if (p_addr_to != NULL) {
+            picoquic_store_addr(p_addr_to, (struct sockaddr*)&cnx->path[path_id]->peer_addr);
+        }
+
+        if (p_addr_from != NULL) {
+            picoquic_store_addr(p_addr_from, (struct sockaddr*)&cnx->path[path_id]->local_addr);
+        }
+
+        if (if_index != NULL) {
+            *if_index = cnx->path[path_id]->if_index_dest;
+        }
+    }
+}
+
+static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time,
+    struct sockaddr_storage * p_addr_to, struct sockaddr_storage * p_addr_from, int* if_index)
 {
     int path_id = -1;
     int highest_priority = -1;
@@ -4098,6 +4174,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     int is_ack_needed = 0;
     picoquic_stream_head_t* next_stream = picoquic_find_ready_stream(cnx);
     int affinity_path_id = -1;
+    unsigned int is_nat = 0;
 
     cnx->last_path_polled++;
     if (cnx->last_path_polled > cnx->nb_paths) {
@@ -4106,6 +4183,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
 
     for (i = 0; i < cnx->nb_paths; i++) {
         int path_priority = (cnx->path[i]->path_is_standby) ? 0 : 1;
+        cnx->path[i]->is_probing_nat = 0;
         if (cnx->path[i]->nb_retransmit > 0) {
             path_priority = 0;
         }
@@ -4125,10 +4203,10 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                 break;
             }
             else if (cnx->path[i]->challenge_required && !cnx->path[i]->challenge_verified) {
-                uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, cnx->path[i]);
-                if (cnx->path[i]->challenge_repeat_count == 0 ||
-                    current_time >= next_challenge_time) {
+                uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, cnx->path[i], current_time, &is_nat);
+                if (current_time >= next_challenge_time) {
                     cnx->path[i]->challenger++;
+                    cnx->path[i]->is_probing_nat = (is_nat) ? 1 : 0;
                     challenge_path = i;
                     break;
                 }
@@ -4263,16 +4341,18 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     }
 
     cnx->path[path_id]->selected++;
+    picoquic_set_path_addresses(cnx, path_id, is_nat, p_addr_to, p_addr_from, if_index);
 
     return path_id;
 }
 
-static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time, uint64_t * next_wake_time)
+static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time, uint64_t * next_wake_time,
+    struct sockaddr_storage * p_addr_to, struct sockaddr_storage * p_addr_from, int* if_index)
 {
     int path_id = -1;
 
     if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled || cnx->is_unique_path_id_enabled) && cnx->cnx_state >= picoquic_state_ready) {
-        return picoquic_select_next_path_mp(cnx, current_time, next_wake_time);
+        return picoquic_select_next_path_mp(cnx, current_time, next_wake_time, p_addr_to, p_addr_from, if_index);
     }
 
     /* Select the path */
@@ -4309,7 +4389,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
                 path_id = i;
             }
             else if (cnx->path[i]->challenge_required) {
-                uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, cnx->path[i]);
+                uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, cnx->path[i], current_time, NULL);
                 if (cnx->path[i]->challenge_repeat_count == 0 ||
                     current_time >= next_challenge_time) {
                     /* will try this path, unless a validated path came in */
@@ -4327,6 +4407,8 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
         path_id = 0;
     }
 
+    picoquic_set_path_addresses(cnx, path_id, 0, p_addr_to, p_addr_from, if_index);
+
     return path_id;
 }
 
@@ -4338,8 +4420,6 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
 
     int ret;
     picoquic_packet_t * packet = NULL;
-    struct sockaddr_storage addr_to_log;
-    struct sockaddr_storage addr_from_log;
     uint64_t initial_next_time;
     uint64_t next_wake_time = cnx->latest_receive_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
 
@@ -4353,8 +4433,6 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         picoquic_process_sooner_packets(cnx, current_time);
     }
 
-    memset(&addr_to_log, 0, sizeof(addr_to_log));
-    memset(&addr_from_log, 0, sizeof(addr_from_log));
     *send_length = 0;
 
     ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
@@ -4373,24 +4451,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         }
 
         /* Select the next path, and the corresponding addresses */
-        path_id = picoquic_select_next_path(cnx, current_time, &next_wake_time);
-
-        picoquic_store_addr(&addr_to_log, (struct sockaddr*) & cnx->path[path_id]->peer_addr);
-        if (cnx->path[path_id]->local_addr.ss_family != 0) {
-            picoquic_store_addr(&addr_from_log, (struct sockaddr*) & cnx->path[path_id]->local_addr);
-        }
-
-        if (p_addr_to != NULL) {
-            picoquic_store_addr(p_addr_to, (struct sockaddr*) & cnx->path[path_id]->peer_addr);
-        }
-
-        if (p_addr_from != NULL) {
-            picoquic_store_addr(p_addr_from, (struct sockaddr*) & cnx->path[path_id]->local_addr);
-        }
-
-        if (if_index != NULL) {
-            *if_index = cnx->path[path_id]->if_index_dest;
-        }
+        path_id = picoquic_select_next_path(cnx, current_time, &next_wake_time, p_addr_to, p_addr_from, if_index);
 
         /* Send the available packets */
         if (send_msg_size != NULL) {
@@ -4490,8 +4551,10 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 }
                 cnx->nb_packets_sent++;
                 /* if needed, log that the packet is sent */
-                picoquic_log_pdu(cnx, 0, current_time,
-                    (struct sockaddr*) & addr_to_log, (struct sockaddr*) & addr_from_log, packet_size);
+                if (p_addr_to != NULL && p_addr_from != NULL) {
+                    picoquic_log_pdu(cnx, 0, current_time,
+                        (struct sockaddr*)p_addr_to, (struct sockaddr*)p_addr_from, packet_size);
+                }
             }
 
             /* Update the wake up time for the connection */

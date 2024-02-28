@@ -4617,12 +4617,36 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
         /* Per QUIC V1, path responses must come on the same path. Ignore them if this cannot be verified. */
         if (path_x != NULL) {
             int found_challenge = 0;
+            int found_nat_challenge = 0;
 
             for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
                 if (response == path_x->challenge[ichal]) {
                     found_challenge = 1;
                     break;
                 }
+            }
+            if (!found_challenge && path_x->nat_peer_addr.ss_family != AF_UNSPEC) {
+                for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
+                    if (response == path_x->nat_challenge[ichal]) {
+                        found_nat_challenge = 1;
+                        break;
+                    }
+                }
+            }
+            if (found_nat_challenge && !path_x->challenge_verified) {
+                /* while probing NAT, the NAT response arrived before the normal path response */
+                /* Update the addresses */
+                picoquic_store_addr(&path_x->local_addr, (struct sockaddr*)&path_x->nat_local_addr);
+                picoquic_store_addr(&path_x->peer_addr, (struct sockaddr*)&path_x->nat_peer_addr);
+                path_x->if_index_dest = path_x->if_index_nat_dest;
+                /* if useful, update the CID */
+                if (path_x->p_remote_nat_cnxid != NULL) {
+                    picoquic_dereference_stashed_cnxid(cnx, path_x, 0);
+                    path_x->p_remote_cnxid = path_x->p_remote_nat_cnxid;
+                    path_x->p_remote_nat_cnxid = NULL;
+                }
+                /* Consider this a successful challenge */
+                found_challenge = 1;
             }
 
             if (found_challenge && !path_x->challenge_verified){
@@ -4641,6 +4665,8 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                     picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_path_response);
                     bytes = NULL;
                 }
+                /* Erase the NAT address, to avoid continuing the NAT challenge */
+                path_x->nat_peer_addr.ss_family = AF_UNSPEC;
             }
         }
     }
