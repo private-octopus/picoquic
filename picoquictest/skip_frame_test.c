@@ -307,7 +307,12 @@ static uint8_t test_frame_type_max_paths[] = {
 
 #define TEST_SKIP_ITEM(n, x, a, l, e, err, skip_err) \
     {                                                \
-        n, x, sizeof(x), a, l, e, err, skip_err      \
+        n, x, sizeof(x), a, l, e, err, skip_err, 0   \
+    }
+
+#define TEST_SKIP_ITEM_MPATH(n, x, a, l, e, err, skip_err, mpath) \
+    {                                                \
+        n, x, sizeof(x), a, l, e, err, skip_err, mpath   \
     }
 
 test_skip_frames_t test_skip_list[] = {
@@ -349,11 +354,11 @@ test_skip_frames_t test_skip_list[] = {
 
     TEST_SKIP_ITEM("immediate_ack", test_frame_type_immediate_ack, 0, 0, 3, 0, 0),
     TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("path_standby", test_frame_type_path_standby, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("path_available", test_frame_type_path_available, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("max paths", test_frame_type_max_paths, 0, 0, 3, 0, 0),
+    TEST_SKIP_ITEM_MPATH("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM_MPATH("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM_MPATH("path_standby", test_frame_type_path_standby, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM_MPATH("path_available", test_frame_type_path_available, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM_MPATH("max paths", test_frame_type_max_paths, 0, 0, 3, 0, 0, 2),
 
     TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3, 0, 0)
 };
@@ -622,13 +627,13 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM("bad_crypto_hs", test_frame_type_bad_crypto_hs, 0, 0, 2, ERR_F, 1),
     TEST_SKIP_ITEM("bad_datagram", test_frame_type_bad_datagram, 1, 0, 3, ERR_F, 1),
     TEST_SKIP_ITEM("stream_hang", test_frame_stream_hang, 1, 0, 3, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0),
-    TEST_SKIP_ITEM("bad_abandon_0", test_frame_type_path_abandon_bad_0, 0, 1, 3, ERR_F, 1),
-    TEST_SKIP_ITEM("bad_abandon_1", test_frame_type_path_abandon_bad_1, 0, 0, 3, ERR_F, 1),
-    TEST_SKIP_ITEM("bad_abandon_2", test_frame_type_path_abandon_bad_2, 0, 0, 3, ERR_F, 1),
-    TEST_SKIP_ITEM("bad_path_available", test_frame_type_path_available_bad, 0, 1, 3, ERR_F, 1),
-    TEST_SKIP_ITEM("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3, ERR_F, 0),
-    TEST_SKIP_ITEM("bad_bdp_addr", test_frame_type_bdp_bad_addr, 1, 0, 3, ERR_F, 0),
-    TEST_SKIP_ITEM("bad_bdp_length", test_frame_type_bdp_bad_length, 1, 0, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_MPATH("bad_abandon_0", test_frame_type_path_abandon_bad_0, 0, 1, 3, ERR_F, 1, 1),
+    TEST_SKIP_ITEM_MPATH("bad_abandon_1", test_frame_type_path_abandon_bad_1, 0, 0, 3, ERR_F, 1, 1),
+    TEST_SKIP_ITEM_MPATH("bad_abandon_2", test_frame_type_path_abandon_bad_2, 0, 0, 3, ERR_F, 1, 1),
+    TEST_SKIP_ITEM_MPATH("bad_path_available", test_frame_type_path_available_bad, 0, 1, 3, ERR_F, 1, 1),
+    TEST_SKIP_ITEM_MPATH("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3, ERR_F, 0, 1),
+    TEST_SKIP_ITEM_MPATH("bad_bdp_addr", test_frame_type_bdp_bad_addr, 1, 0, 3, ERR_F, 0, 1),
+    TEST_SKIP_ITEM_MPATH("bad_bdp_length", test_frame_type_bdp_bad_length, 1, 0, 3, ERR_F, 1, 1),
     TEST_SKIP_ITEM("bad_frame_id", test_frame_type_bad_frame_id, 1, 0, 3, ERR_F, 1)
 };
 
@@ -802,7 +807,7 @@ int skip_frame_test()
 }
 
 int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
-    uint8_t * buffer, size_t byte_max, int epoch,  int* ack_needed, uint64_t * err)
+    uint8_t * buffer, size_t byte_max, int epoch,  int* ack_needed, uint64_t * err, int mpath)
 {
     int ret = 0;
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
@@ -840,8 +845,13 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         cnx->local_parameters.enable_bdp_frame = 3;
 
         /* Enable multipath so the test of multipath frames works. */
-        cnx->is_multipath_enabled = 1;
-        cnx->is_unique_path_id_enabled = 1;
+        if (mpath == 1) {
+            cnx->is_multipath_enabled = 1;
+        }
+        else if (mpath == 2) {
+            cnx->is_unique_path_id_enabled = 1;
+            cnx->max_paths_local = 5;
+        }
        
         /* if testing handshake done, set state to ready so frame is ignored. */
         if (epoch == 3) {
@@ -905,7 +915,7 @@ int parse_frame_test()
             }
 
             t_ret = parse_test_packet(qclient, (struct sockaddr*) & saddr, simulated_time,
-                buffer, byte_max, test_skip_list[i].epoch, &ack_needed, &err);
+                buffer, byte_max, test_skip_list[i].epoch, &ack_needed, &err, test_skip_list[i].mpath);
 
             if (t_ret != 0) {
                 DBG_PRINTF("Parse frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);
@@ -936,7 +946,7 @@ int parse_frame_test()
             }
 
             t_ret = parse_test_packet(qclient, (struct sockaddr*) & saddr, simulated_time,
-                buffer, byte_max, test_frame_error_list[i].epoch, &ack_needed, &err);
+                buffer, byte_max, test_frame_error_list[i].epoch, &ack_needed, &err, test_skip_list[i].mpath);
 
             if (t_ret == 0) {
                 DBG_PRINTF("Parse error frame <%s> does not fails, ret = %d\n", test_frame_error_list[i].name, t_ret);
@@ -961,13 +971,14 @@ int parse_frame_test()
         do {
             r = picoquic_test_uniform_random(&random_context, nb_test_skip_list);
         } while (test_skip_list[r].epoch != 3);
+
         memcpy(buffer, test_skip_list[r].val, test_skip_list[r].len);
         byte_index = test_skip_list[r].len;
 
         if (!test_skip_list[r].must_be_last) {
-            r = picoquic_test_uniform_random(&random_context, 4);
+            uint64_t rr = picoquic_test_uniform_random(&random_context, 4);
 
-            switch (r) {
+            switch (rr) {
             case 0:
                 memcpy(buffer + byte_index, test_frame_type_ack, sizeof(test_frame_type_ack));
                 byte_index += sizeof(test_frame_type_ack);
@@ -986,8 +997,10 @@ int parse_frame_test()
         }
         bytes_max = byte_index;
 
-        ret = parse_test_packet(qclient, (struct sockaddr*) & saddr, simulated_time,
-            buffer, bytes_max, 3, &ack_needed, &err);
+        if (test_skip_list[r].mpath == 0) {
+            ret = parse_test_packet(qclient, (struct sockaddr*)&saddr, simulated_time,
+                buffer, bytes_max, 3, &ack_needed, &err, test_skip_list[r].mpath);
+        }
         if (ret != 0)
         {
             DBG_PRINTF("Skip packet <%d> fails, ret = %d\n", i, ret);
@@ -997,7 +1010,7 @@ int parse_frame_test()
             for (size_t j = 0; j < 100; j++) {
                 skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
                 if (parse_test_packet(qclient, (struct sockaddr*) & saddr, simulated_time,
-                    fuzz_buffer, bytes_max, 3, &ack_needed, &err) != 0) {
+                    fuzz_buffer, bytes_max, 3, &ack_needed, &err, j%3) != 0) {
                     fuzz_fail++;
                 }
                 fuzz_count++;

@@ -1,8 +1,3 @@
-#include "picoquic_internal.h"
-#include "picoquic_internal.h"
-#include "picoquic_internal.h"
-#include "picoquic_internal.h"
-#include "picoquic_internal.h"
 
 /*
 * Author: Christian Huitema
@@ -27,6 +22,7 @@
 
 #include "picoquic.h"
 #include "picoquic_internal.h"
+#include "picoquic_utils.h"
 #include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include <stdlib.h>
@@ -1915,7 +1911,7 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
         char text2[128];
         DBG_PRINTF("Could not find path by addr, local: %s, peer: %s", 
             picoquic_addr_text(addr_local, text1, sizeof(text1)),
-            picoquic_addr_text(addr_local, text2, sizeof(text2)));
+            picoquic_addr_text(addr_peer, text2, sizeof(text2)));
     }
 
     return path_id;
@@ -1923,7 +1919,7 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
 
 /* Find path by path-ID. This is designed for use with the multipath option
  */
-int picoquic_find_path_by_id(picoquic_cnx_t* cnx, int is_incoming, uint64_t path_id)
+int picoquic_find_path_by_cnxid_id(picoquic_cnx_t* cnx, int is_incoming, uint64_t path_id)
 {
     int path_number = -1;
 

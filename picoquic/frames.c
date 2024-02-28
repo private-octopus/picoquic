@@ -4578,15 +4578,6 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
         bytes++;
         challenge_response = PICOPARSE_64(bytes);
         bytes += challenge_length;
-#if 1
-        {
-            char text1[128];
-            char text2[128];
-            DBG_PRINTF("Received path challenge, from: %s, to: %s",
-                picoquic_addr_text(addr_from, text1, sizeof(text1)),
-                picoquic_addr_text(addr_to, text2, sizeof(text2)));
-        }
-#endif
         if (path_x != NULL &&
             (addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->peer_addr) == 0) &&
             (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)) {
@@ -5326,7 +5317,7 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
         /* process the abandon frame */
         int path_number = (cnx->is_unique_path_id_enabled)?
             picoquic_find_path_by_unique_id(cnx, path_id):
-            picoquic_find_path_by_id(cnx, 1, path_id);
+            picoquic_find_path_by_cnxid_id(cnx, 1, path_id);
         if (path_number < 0) {
             /* Invalid path ID. Just ignore this frame. Add line in log for debug */
             picoquic_log_app_message(cnx, "Ignore abandon path with invalid ID: %" PRIu64 ",%" PRIu64,
@@ -5442,7 +5433,7 @@ const uint8_t* picoquic_decode_path_available_or_standby_frame(const uint8_t* by
         /* process the status frame */
         int path_number = (cnx->is_unique_path_id_enabled)?
             picoquic_find_path_by_unique_id(cnx, path_id):
-            picoquic_find_path_by_id(cnx, 1, path_id);
+            picoquic_find_path_by_cnxid_id(cnx, 1, path_id);
         if (path_number < 0) {
             /* Invalid path ID. Just ignore this frame. Add line in log for debug */
             picoquic_log_app_message(cnx, "Ignore path %s frame with invalid ID: %" PRIu64,
@@ -5481,7 +5472,7 @@ int picoquic_path_available_or_standby_frame_need_repeat(picoquic_cnx_t* cnx, co
         /* check whether this is the last frame sent on path */
         int path_number = (cnx->is_unique_path_id_enabled)?
             picoquic_find_path_by_unique_id(cnx, path_id):
-            picoquic_find_path_by_id(cnx, 1, path_id);
+            picoquic_find_path_by_cnxid_id(cnx, 1, path_id);
         if (path_number < 0 ||
             cnx->path[path_number]->status_sequence_sent_last != sequence ||
             cnx->path[path_number]->path_is_demoted) {
