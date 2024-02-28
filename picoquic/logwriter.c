@@ -306,11 +306,41 @@ static const uint8_t* picoquic_log_new_connection_id_frame(FILE* f, const uint8_
     return bytes;
 }
 
+static const uint8_t* picoquic_log_mp_new_connection_id_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    if (bytes != NULL) {
+        bytes = picoquic_log_fixed_skip(bytes, bytes_max, ((size_t)1) + bytes[0]);
+    }
+
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, PICOQUIC_RESET_SECRET_SIZE);
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+    return bytes;
+}
+
 static const uint8_t* picoquic_log_retire_connection_id_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+    return bytes;
+}
+
+static const uint8_t* picoquic_log_mp_retire_connection_id_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
 
     picoquic_binlog_frame(f, bytes_begin, bytes);
@@ -518,6 +548,9 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         case picoquic_frame_type_retire_connection_id:
             bytes = picoquic_log_retire_connection_id_frame(f, bytes, bytes_max);
             break;
+        case picoquic_frame_type_mp_retire_connection_id:
+            bytes = picoquic_log_mp_retire_connection_id_frame(f, bytes, bytes_max);
+            break;
         case picoquic_frame_type_padding:
         case picoquic_frame_type_ping:
             bytes = picoquic_log_padding(f, bytes, bytes_max);
@@ -553,6 +586,9 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
             break;
         case picoquic_frame_type_new_connection_id:
             bytes = picoquic_log_new_connection_id_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_mp_new_connection_id:
+            bytes = picoquic_log_mp_new_connection_id_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_stop_sending:
             bytes = picoquic_log_stop_sending_frame(f, bytes, bytes_max);
@@ -621,6 +657,9 @@ static uint64_t binlog_get_path_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
         else if (path_x->p_local_cnxid != NULL) {
             path_id = path_x->p_local_cnxid->sequence;
         }
+    }
+    else if (cnx->is_unique_path_id_enabled && path_x != NULL) {
+        path_id = path_x->unique_path_id;
     }
 
     return path_id;

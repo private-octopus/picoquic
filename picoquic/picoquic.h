@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.19.1"
+#define PICOQUIC_VERSION "1.1.19.2"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -101,6 +101,7 @@ extern "C" {
 #define PICOQUIC_ERROR_PACKET_WRONG_VERSION (PICOQUIC_ERROR_CLASS + 57)
 #define PICOQUIC_ERROR_PORT_BLOCKED (PICOQUIC_ERROR_CLASS + 58)
 #define PICOQUIC_ERROR_DATAGRAM_TOO_LONG (PICOQUIC_ERROR_CLASS + 59)
+#define PICOQUIC_ERROR_PATH_ID_INVALID (PICOQUIC_ERROR_CLASS + 60)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -126,7 +127,7 @@ extern "C" {
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
 #define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x11)
 
-#define PICOQUIC_ERROR_MP_PROTOCOL_VIOLATION (0x1001d76d3ded42f3ull)
+#define PICOQUIC_TRANSPORT_MP_PROTOCOL_VIOLATION (0x1001d76d3ded42f3ull)
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
@@ -303,6 +304,8 @@ typedef struct st_picoquic_tp_t {
     picoquic_tp_version_negotiation_t version_negotiation;
     int enable_bdp_frame;
     int enable_simple_multipath;
+    int is_unique_path_id_enabled;
+    uint64_t initial_max_paths;
 } picoquic_tp_t;
 
 /*

@@ -29,6 +29,12 @@
 #include "logreader.h"
 #include "qlog.h"
 
+typedef enum {
+    multipath_variant_cid = 0,
+    multipath_variant_simple = 1,
+    multipath_variant_unique = 2
+} multipath_variant_enum;
+
 /* Add the additional links for multipath scenario */
 static int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop)
 {
@@ -353,18 +359,32 @@ int migration_mtu_drop_test()
  * Test of actual multipath, by opposition to only migration.
  */
 
-void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp, int is_simple_multipath)
+void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp, multipath_variant_enum m_variant)
 {
     memset(test_parameters, 0, sizeof(picoquic_tp_t));
 
     picoquic_init_transport_parameters(test_parameters, 1);
-    if (is_simple_multipath) {
-        test_parameters->enable_multipath = 0;
-        test_parameters->enable_simple_multipath = 1;
-    }
-    else {
+    switch (m_variant) {
+    case multipath_variant_cid:
         test_parameters->enable_multipath = 1;
         test_parameters->enable_simple_multipath = 0;
+        test_parameters->is_unique_path_id_enabled = 0;
+        test_parameters->initial_max_paths = 0;
+        break;
+    case multipath_variant_simple:
+        test_parameters->enable_multipath = 0;
+        test_parameters->enable_simple_multipath = 1;
+        test_parameters->is_unique_path_id_enabled = 0;
+        test_parameters->initial_max_paths = 0;
+        break;
+    case multipath_variant_unique:
+        test_parameters->enable_multipath = 0;
+        test_parameters->enable_simple_multipath = 0;
+        test_parameters->is_unique_path_id_enabled = 1;
+        test_parameters->initial_max_paths = 3;
+        break;
+    default:
+        break;
     }
     test_parameters->enable_time_stamp = 3;
 }
@@ -384,7 +404,6 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     /* Check the selected path */
     picoquic_store_addr(&old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->local_addr);
     picoquic_store_addr(&old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr);
-
 
     while (*simulated_time < time_out &&
         ret == 0 &&
@@ -642,7 +661,7 @@ int multipath_datagram_send_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id, int is_simple_multipath)
+int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id, multipath_variant_enum m_variant)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -655,7 +674,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     int ret;
 
     initial_cid.id[2] = (int)test_id;
-    initial_cid.id[3] = is_simple_multipath;
+    initial_cid.id[3] = m_variant;
 
     if (test_id == multipath_test_perf) {
         send_buffer_size = 65536;
@@ -704,44 +723,70 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         test_ctx->qclient->use_long_log = 1;
         binlog_new_connection(test_ctx->cnx_client);
         /* Set the multipath option at both client and server */
-        multipath_init_params(&server_parameters, is_sat_test, is_simple_multipath);
+        multipath_init_params(&server_parameters, is_sat_test, m_variant);
         if (test_id == multipath_test_datagram || test_id == multipath_test_dg_af) {
             server_parameters.max_datagram_frame_size = 1536;
             test_ctx->cnx_client->local_parameters.max_datagram_frame_size = 1536;
         }
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
-        if (is_simple_multipath) {
-            test_ctx->cnx_client->local_parameters.enable_simple_multipath = 1;
-        }
-        else {
-            test_ctx->cnx_client->local_parameters.enable_multipath = 1;
-        }
         test_ctx->cnx_client->local_parameters.enable_time_stamp = 3;
-        /* Initialize the client connection */
-        picoquic_start_client_cnx(test_ctx->cnx_client);
+
+        switch (m_variant) {
+        case multipath_variant_cid:
+            test_ctx->cnx_client->local_parameters.enable_multipath = 1;
+            break;
+        case multipath_variant_simple:
+            test_ctx->cnx_client->local_parameters.enable_simple_multipath = 1;
+            break;
+        case multipath_variant_unique:
+            test_ctx->cnx_client->local_parameters.is_unique_path_id_enabled = 1;
+            test_ctx->cnx_client->local_parameters.initial_max_paths = 3;
+            break;
+        default:
+            ret = -1;
+            break;
+        }
     }
 
     /* establish the connection */
     if (ret == 0) {
+        /* Initialize the client connection */
+        picoquic_start_client_cnx(test_ctx->cnx_client);
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
     }
     /* verify that multipath is negotiated on both sides */
     if (ret == 0) {
-        if (is_simple_multipath) {
-            if (!test_ctx->cnx_client->is_simple_multipath_enabled || !test_ctx->cnx_server->is_simple_multipath_enabled ||
-                test_ctx->cnx_client->is_multipath_enabled || test_ctx->cnx_server->is_multipath_enabled) {
-                DBG_PRINTF("Simple multipath not fully negotiated (c=%d, s=%d)",
-                    test_ctx->cnx_client->is_simple_multipath_enabled, test_ctx->cnx_server->is_simple_multipath_enabled);
-                ret = -1;
-            }
-        }
-        else {
+        switch (m_variant) {
+        case multipath_variant_cid:
             if (test_ctx->cnx_client->is_simple_multipath_enabled || test_ctx->cnx_server->is_simple_multipath_enabled ||
+                test_ctx->cnx_client->is_unique_path_id_enabled || test_ctx->cnx_server->is_unique_path_id_enabled ||
                 !test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled) {
                 DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
                     test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
                 ret = -1;
             }
+            break;
+        case multipath_variant_simple:
+            if (!test_ctx->cnx_client->is_simple_multipath_enabled || !test_ctx->cnx_server->is_simple_multipath_enabled ||
+                test_ctx->cnx_client->is_unique_path_id_enabled || test_ctx->cnx_server->is_unique_path_id_enabled ||
+                test_ctx->cnx_client->is_multipath_enabled || test_ctx->cnx_server->is_multipath_enabled) {
+                DBG_PRINTF("Simple multipath not fully negotiated (c=%d, s=%d)",
+                    test_ctx->cnx_client->is_simple_multipath_enabled, test_ctx->cnx_server->is_simple_multipath_enabled);
+                ret = -1;
+            }
+            break;
+        case multipath_variant_unique:
+            if (test_ctx->cnx_client->is_simple_multipath_enabled || test_ctx->cnx_server->is_simple_multipath_enabled ||
+                !test_ctx->cnx_client->is_unique_path_id_enabled || !test_ctx->cnx_server->is_unique_path_id_enabled ||
+                test_ctx->cnx_client->is_multipath_enabled || test_ctx->cnx_server->is_multipath_enabled) {
+                DBG_PRINTF("Simple multipath not fully negotiated (c=%d, s=%d)",
+                    test_ctx->cnx_client->is_simple_multipath_enabled, test_ctx->cnx_server->is_simple_multipath_enabled);
+                ret = -1;
+            }
+            break;
+        default:
+            ret = -1;
+            break;
         }
     }
 
@@ -988,7 +1033,7 @@ int multipath_basic_test()
 {
     uint64_t max_completion_microsec = 1060000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_basic, 0);
+    return multipath_test_one(max_completion_microsec, multipath_test_basic, multipath_variant_cid);
 }
 
 /* Drop first multipath test. Set up two links in parallel, start using them, then
@@ -999,7 +1044,7 @@ int multipath_drop_first_test()
 {
     uint64_t max_completion_microsec = 1490000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_drop_first, 0);
+    return multipath_test_one(max_completion_microsec, multipath_test_drop_first, multipath_variant_cid);
 }
 
 /* Drop second multipath test. Set up two links in parallel, start using them, then
@@ -1010,7 +1055,7 @@ int multipath_drop_second_test()
 {
     uint64_t max_completion_microsec = 1260000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_drop_second, 0);
+    return multipath_test_one(max_completion_microsec, multipath_test_drop_second, multipath_variant_cid);
 }
 
 /* Simulate the combination of a satellite link and a low latency low bandwidth
@@ -1020,7 +1065,7 @@ int multipath_sat_plus_test()
 {
     uint64_t max_completion_microsec = 10000000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 0);
+    return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, multipath_variant_cid);
 }
 
 /* Test the renewal of the connection ID on a path
@@ -1029,7 +1074,7 @@ int multipath_renew_test()
 {
     uint64_t max_completion_microsec = 3000000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_renew, 0);
+    return  multipath_test_one(max_completion_microsec, multipath_test_renew, multipath_variant_cid);
 }
 
 /* Test key rotation in a multipath setup
@@ -1038,7 +1083,7 @@ int multipath_rotation_test()
 {
     uint64_t max_completion_microsec = 3000000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_rotation, 0);
+    return  multipath_test_one(max_completion_microsec, multipath_test_rotation, multipath_variant_cid);
 }
 
 /* Test nat traversal in a multipath setup */
@@ -1046,7 +1091,7 @@ int multipath_nat_test()
 {
     uint64_t max_completion_microsec = 3000000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_nat, 0);
+    return  multipath_test_one(max_completion_microsec, multipath_test_nat, multipath_variant_cid);
 }
 
 /* Test that breaking paths are removed after some time
@@ -1055,7 +1100,7 @@ int multipath_break1_test()
 {
     uint64_t max_completion_microsec = 10800000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_break1, 0);
+    return  multipath_test_one(max_completion_microsec, multipath_test_break1, multipath_variant_cid);
 }
 
 /* Test reaction to socket error on second path
@@ -1064,7 +1109,7 @@ int multipath_socket_error_test()
 {
     uint64_t max_completion_microsec = 10900000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_break2, 0);
+    return  multipath_test_one(max_completion_microsec, multipath_test_break2, multipath_variant_cid);
 }
 
 /* Test that abandoned paths are removed after some time
@@ -1073,7 +1118,7 @@ int multipath_abandon_test()
 {
     uint64_t max_completion_microsec = 3800000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_abandon, 0);
+    return  multipath_test_one(max_completion_microsec, multipath_test_abandon, multipath_variant_cid);
 }
 
 /* Test that breaking paths can come back up after some time
@@ -1082,7 +1127,7 @@ int multipath_back1_test()
 {
     uint64_t max_completion_microsec = 3050000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_back1, 0);
+    return  multipath_test_one(max_completion_microsec, multipath_test_back1, multipath_variant_cid);
 }
 
 /* Test that a typical wifi+lte scenario provides good performance */
@@ -1090,7 +1135,7 @@ int multipath_perf_test()
 {
     uint64_t max_completion_microsec = 1550000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_perf, 0);
+    return  multipath_test_one(max_completion_microsec, multipath_test_perf, multipath_variant_cid);
 }
 
 #if defined(_WINDOWS) && !defined(_WINDOWS64)
@@ -1109,7 +1154,7 @@ int multipath_callback_test()
     uint64_t max_completion_microsec = 1000000;
 #endif
 
-    return multipath_test_one(max_completion_microsec, multipath_test_callback, 0);
+    return multipath_test_one(max_completion_microsec, multipath_test_callback, multipath_variant_cid);
 }
 #endif
 
@@ -1130,7 +1175,7 @@ int multipath_quality_test()
 #endif
 
 
-    return multipath_test_one(max_completion_microsec, multipath_test_quality, 0);
+    return multipath_test_one(max_completion_microsec, multipath_test_quality, multipath_variant_cid);
 }
 #endif
 
@@ -1138,28 +1183,28 @@ int multipath_stream_af_test()
 {
     uint64_t max_completion_microsec = 1500000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_stream_af, 0);
+    return multipath_test_one(max_completion_microsec, multipath_test_stream_af, multipath_variant_cid);
 }
 
 int multipath_datagram_test()
 {
     uint64_t max_completion_microsec = 1100000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_datagram, 0);
+    return multipath_test_one(max_completion_microsec, multipath_test_datagram, multipath_variant_cid);
 }
 
 int multipath_dg_af_test()
 {
     uint64_t max_completion_microsec = 1100000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_dg_af, 0);
+    return multipath_test_one(max_completion_microsec, multipath_test_dg_af, multipath_variant_cid);
 }
 
 int multipath_standby_test()
 {
     uint64_t max_completion_microsec = 2000000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_standby, 0);
+    return multipath_test_one(max_completion_microsec, multipath_test_standby, multipath_variant_cid);
 }
 
 int multipath_standup_test()
@@ -1171,7 +1216,7 @@ int multipath_standup_test()
     uint64_t max_completion_microsec = 4750000;
 #endif
 
-    return multipath_test_one(max_completion_microsec, multipath_test_standup, 0);
+    return multipath_test_one(max_completion_microsec, multipath_test_standup, multipath_variant_cid);
 }
 
 /* Monopath tests:
@@ -1182,7 +1227,8 @@ int multipath_standup_test()
 typedef enum {
     monopath_test_basic = 0,
     monopath_test_hole,
-    monopath_test_rotation
+    monopath_test_rotation,
+    monopath_test_unique
 } monopath_test_enum_t;
 
 /* Basic connection with the multicast option enabled. */
@@ -1196,8 +1242,13 @@ int monopath_test_one(monopath_test_enum_t test_case)
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = 0;
 
-    multipath_init_params(&client_parameters, 0, 0);
-    multipath_init_params(&server_parameters, 0, 0);
+    if (test_case == monopath_test_unique) {
+        multipath_init_params(&client_parameters, 0, multipath_variant_unique);
+        multipath_init_params(&server_parameters, 0, multipath_variant_unique);
+    } else {
+        multipath_init_params(&client_parameters, 0, multipath_variant_cid);
+        multipath_init_params(&server_parameters, 0, multipath_variant_cid);
+    }
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
 
@@ -1279,6 +1330,13 @@ int monopath_rotation_test()
 {
     return monopath_test_one(monopath_test_rotation);
 }
+
+/* Testing basic scenario using "unique path id" variant. */
+int monopath_unique_test()
+{
+    return monopath_test_one(monopath_test_unique);
+}
+
 
 /* The zero RTT test uses the unipath code, with a special parameter.
  * Test both regular 0RTT set up, and case of losses.
@@ -1601,7 +1659,7 @@ int simple_multipath_basic_test()
     /* Notably slower than the full multipath test */
     uint64_t max_completion_microsec = 1170000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_basic, 1);
+    return multipath_test_one(max_completion_microsec, multipath_test_basic, multipath_variant_simple);
 }
 
 int simple_multipath_drop_first_test()
@@ -1609,7 +1667,7 @@ int simple_multipath_drop_first_test()
     /* This is larger than 1.49sec for full multipath */
     uint64_t max_completion_microsec = 2000000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_drop_first, 1);
+    return multipath_test_one(max_completion_microsec, multipath_test_drop_first, multipath_variant_simple);
 }
 
 int simple_multipath_drop_second_test()
@@ -1617,7 +1675,7 @@ int simple_multipath_drop_second_test()
     /* This is worse than the full multipath test */
     uint64_t max_completion_microsec = 1900000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_drop_second, 1);
+    return multipath_test_one(max_completion_microsec, multipath_test_drop_second, multipath_variant_simple);
 }
 
 int simple_multipath_sat_plus_test()
@@ -1625,28 +1683,28 @@ int simple_multipath_sat_plus_test()
     /* Not to far from theoretical 10-12 sec! */
     uint64_t max_completion_microsec = 10700000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, 1);
+    return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, multipath_variant_simple);
 }
 
 int simple_multipath_renew_test()
 {
     uint64_t max_completion_microsec = 1180000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_renew, 1);
+    return  multipath_test_one(max_completion_microsec, multipath_test_renew, multipath_variant_simple);
 }
 
 int simple_multipath_rotation_test()
 {
     uint64_t max_completion_microsec = 1170000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_rotation, 1);
+    return  multipath_test_one(max_completion_microsec, multipath_test_rotation, multipath_variant_simple);
 }
 
 int simple_multipath_nat_test()
 {
     uint64_t max_completion_microsec = 1330000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_nat, 1);
+    return  multipath_test_one(max_completion_microsec, multipath_test_nat, multipath_variant_simple);
 }
 
 int simple_multipath_break1_test()
@@ -1654,7 +1712,7 @@ int simple_multipath_break1_test()
     /* Slower than 10.6 for full multipath */
     uint64_t max_completion_microsec = 12900000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_break1, 1);
+    return  multipath_test_one(max_completion_microsec, multipath_test_break1, multipath_variant_simple);
 }
 
 int simple_multipath_socket_error_test()
@@ -1662,14 +1720,14 @@ int simple_multipath_socket_error_test()
     /* Larger than 10.6 for full multipath */
     uint64_t max_completion_microsec = 12800000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_break2, 1);
+    return  multipath_test_one(max_completion_microsec, multipath_test_break2, multipath_variant_simple);
 }
 
 int simple_multipath_abandon_test()
 {
     uint64_t max_completion_microsec = 3800000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_abandon, 1);
+    return  multipath_test_one(max_completion_microsec, multipath_test_abandon, multipath_variant_simple);
 }
 
 int simple_multipath_back1_test()
@@ -1677,7 +1735,7 @@ int simple_multipath_back1_test()
     /* Similar to full multipath test */
     uint64_t max_completion_microsec = 3350000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_back1, 1);
+    return  multipath_test_one(max_completion_microsec, multipath_test_back1, multipath_variant_simple);
 }
 
 int simple_multipath_perf_test()
@@ -1685,7 +1743,7 @@ int simple_multipath_perf_test()
     /* Compares with 1.25 sec for full multipath */
     uint64_t max_completion_microsec = 1430000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_perf, 1);
+    return  multipath_test_one(max_completion_microsec, multipath_test_perf, multipath_variant_simple);
 }
 
 #if defined(_WINDOWS) && !defined(_WINDOWS64)
@@ -1700,14 +1758,14 @@ int simple_multipath_quality_test()
     /* Compares with full multipath */
     uint64_t max_completion_microsec = 1200000;
 
-    return  multipath_test_one(max_completion_microsec, multipath_test_quality_server, 1);
+    return  multipath_test_one(max_completion_microsec, multipath_test_quality_server, multipath_variant_simple);
 }
 #endif
 
 
 int simple_multipath_qlog_test()
 {
-    return multipath_qlog_test_one(1);
+    return multipath_qlog_test_one(multipath_variant_simple);
 }
 
 /* Test that queuing of packets in paths wroks correctly */
@@ -1857,4 +1915,15 @@ int path_packet_queue_test()
 int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time,
     uint64_t* next_wake_time);
 
+/* tests of the "unique path_id" variant */
 
+/* Basic multipath test. Set up two links in parallel, verify that both are used and that
+* the overall transmission is shorterthan if only one link was used.
+*/
+
+int m_unip_basic_test()
+{
+    uint64_t max_completion_microsec = 1060000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_basic, multipath_variant_unique);
+}
