@@ -1008,18 +1008,6 @@ typedef struct st_picoquic_remote_cnxid_stash_t {
 * Congestion control and spin bit management are path specific.
 * Packet numbering is global, see packet context.
 */
-typedef struct st_picoquic_path_nat_t {
-    picoquic_local_cnxid_t* p_local_cnxid; 
-    picoquic_remote_cnxid_t* p_remote_cnxid;
-    struct sockaddr_storage peer_addr;
-    struct sockaddr_storage local_addr;
-    unsigned long if_index_dest;
-    uint64_t challenge_response;
-    uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
-    uint64_t challenge_time_first;
-    uint8_t challenge_repeat_count;
-} picoquic_path_nat_t;
-
 typedef struct st_picoquic_path_t {
     picoquic_local_cnxid_t* p_local_cnxid; 
     picoquic_remote_cnxid_t* p_remote_cnxid;
@@ -1036,6 +1024,7 @@ typedef struct st_picoquic_path_t {
     struct sockaddr_storage peer_addr;
     struct sockaddr_storage local_addr;
     unsigned long if_index_dest;
+    uint64_t last_non_path_probing_pn;
     /* Challenge used for this path */
     uint64_t challenge_response;
     uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
@@ -1043,9 +1032,14 @@ typedef struct st_picoquic_path_t {
     uint64_t demotion_time;
     uint64_t challenge_time_first;
     uint8_t challenge_repeat_count;
-    uint64_t last_non_path_probing_pn;
-    /* NAT Challenge for this path */
-    picoquic_path_nat_t* nat;
+    /* NAT Challenge for this path, if using unique path id */
+    uint64_t nat_challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
+    uint64_t nat_challenge_time;
+    uint64_t nat_challenge_repeat_count;
+    picoquic_remote_cnxid_t* p_remote_nat_cnxid;
+    unsigned long if_index_nat_dest;
+    struct sockaddr_storage nat_peer_addr;
+    struct sockaddr_storage nat_local_addr;
     /* Last time a packet was sent on this path. */
     uint64_t last_sent_time;
     /* Number of packets sent on this path*/
@@ -1063,6 +1057,7 @@ typedef struct st_picoquic_path_t {
     unsigned int challenge_verified : 1;
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
+    unsigned int nat_challenge_required : 1;
     unsigned int path_is_standby : 1;
     unsigned int path_is_demoted : 1;
     unsigned int current_spin : 1;
@@ -1082,6 +1077,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_ack_expected : 1;
     unsigned int is_datagram_ready : 1;
     unsigned int is_pto_required : 1; /* Should send PTO probe */
+    unsigned int is_probing_nat : 1; /* When path transmission is scheduled only for NAT probing */
 
     /* Management of retransmissions in a path.
      * The "path_packet" variables are used for the RACK algorithm, per path, to avoid

@@ -844,7 +844,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
     if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
-        test_id == multipath_test_renew || test_id == multipath_test_nat ||
+        test_id == multipath_test_renew || test_id == multipath_test_nat || 
         test_id == multipath_test_break1 || test_id == multipath_test_break2 ||
         test_id == multipath_test_back1 || test_id == multipath_test_standup ||
         test_id == multipath_test_abandon)) {
@@ -952,6 +952,41 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     if (ret == 0 && test_id == multipath_test_rotation) {
         if (test_ctx->cnx_server->nb_crypto_key_rotations == 0) {
             DBG_PRINTF("%s", "No key rotation observed.\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && m_variant == multipath_variant_unique) {
+        uint64_t mask = 0;
+        for (int i = 0; ret == 0 && i < test_ctx->cnx_client->nb_paths; i++) {
+            if (test_ctx->cnx_client->path[i]->unique_path_id > 63) {
+                DBG_PRINTF("Path ID[%d] = %" PRIu64 ", too big!", i, test_ctx->cnx_client->path[i]->unique_path_id);
+                ret = -1;
+            }
+            else if ((mask & (1ull << test_ctx->cnx_client->path[i]->unique_path_id)) != 0) {
+                DBG_PRINTF("Path ID[%d] = %" PRIu64 ", reuse!", i, test_ctx->cnx_client->path[i]->unique_path_id);
+                ret = -1;
+            }
+            else if (test_ctx->cnx_client->path[i]->unique_path_id !=
+                test_ctx->cnx_client->path[i]->p_local_cnxid->path_id) {
+                DBG_PRINTF("Path ID[%d] = %" PRIu64 ", vs. local CID path id: %" PRIu64,
+                    i, test_ctx->cnx_client->path[i]->unique_path_id,
+                    i, test_ctx->cnx_client->path[i]->p_local_cnxid->path_id);
+                ret = -1;
+            }
+        }
+    }
+
+
+    if (ret == 0 && test_id == multipath_test_nat && m_variant == multipath_variant_unique) {
+        /* Check that the path 0 has the new address */
+        if (test_ctx->cnx_server->nb_paths < 2 ||
+            test_ctx->cnx_client->nb_paths < 2 ||
+            test_ctx->cnx_server->path[0]->unique_path_id != 0 ||
+            test_ctx->cnx_client->path[0]->unique_path_id != 0 ||
+            picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->peer_addr,
+                (struct sockaddr*)&test_ctx->client_addr_natted) != 0) {
+            DBG_PRINTF("%s", "NAT traversal looks wrong.\n");
             ret = -1;
         }
     }
@@ -1927,3 +1962,13 @@ int m_unip_basic_test()
 
     return multipath_test_one(max_completion_microsec, multipath_test_basic, multipath_variant_unique);
 }
+
+
+/* Test nat traversal in a multipath setup */
+int m_unip_nat_test()
+{
+    uint64_t max_completion_microsec = 3000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_nat, multipath_variant_unique);
+}
+
