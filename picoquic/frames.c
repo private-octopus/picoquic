@@ -742,7 +742,6 @@ int picoquic_process_ack_of_retire_connection_id_frame(picoquic_cnx_t* cnx, cons
         picoquic_remote_cnxid_stash_t* remote_cnxid_stash = picoquic_find_or_create_remote_cnxid_stash(cnx, unique_path_id, 0);
         if (remote_cnxid_stash != NULL) {
             picoquic_remote_cnxid_t* stashed = remote_cnxid_stash->cnxid_stash_first;
-            picoquic_remote_cnxid_t* previous_stash = NULL;
             *consumed = bytes_next - bytes;
 
             while (stashed != NULL) {
@@ -751,7 +750,6 @@ int picoquic_process_ack_of_retire_connection_id_frame(picoquic_cnx_t* cnx, cons
                     (void)picoquic_remove_cnxid_from_stash(cnx, remote_cnxid_stash, stashed, NULL, 1);
                     break;
                 }
-                previous_stash = stashed;
                 stashed = stashed->next;
             }
         }
