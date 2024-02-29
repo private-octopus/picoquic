@@ -1860,7 +1860,7 @@ int picoquic_find_incoming_unique_path(picoquic_cnx_t* cnx, picoquic_packet_head
                 path_x->nat_challenge[ichal] = picoquic_public_random_64();
             }
             path_x->nat_challenge_time = 0;
-            path_x->nat_challenge_repeat_count;
+            path_x->nat_challenge_repeat_count = 0;
             path_x->p_remote_nat_cnxid = picoquic_obtain_stashed_cnxid(cnx, path_x->unique_path_id);
         }
     }

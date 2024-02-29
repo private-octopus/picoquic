@@ -1463,13 +1463,15 @@ static uint64_t BBRRandomIntBetween(picoquic_bbr_state_t* bbr_state, uint64_t lo
 {
     return (low + picoquic_test_uniform_random(&bbr_state->random_context, (high - low) + 1));
 }
-
+#if 0
+/* Apprently this code is not needed. */
 static double BBRRandomFloatBetween(picoquic_bbr_state_t* bbr_state, double low, double high)
 {
     uint32_t random_32_bits = (uint32_t)picoquic_test_random(&bbr_state->random_context);
     double random_float = ((double)random_32_bits) / ((double)UINT32_MAX);
     return (low + random_float * (high - low));
 }
+#endif
 
 static void BBRPickProbeWait(picoquic_bbr_state_t* bbr_state) 
 {
@@ -1935,7 +1937,7 @@ void BBRSetBdpSeed(picoquic_bbr_state_t* bbr_state, uint64_t bdp_seed)
 * TODO: this is part of "path" model
  */
 
-
+#if 0
 /* At what prefix of packet did losses exceed BBRLossThresh? */
 static uint64_t BBRInflightHiFromLostPacket(bbr_per_ack_state_t * rs, picoquic_per_ack_state_t* packet_state)
 {
@@ -1950,7 +1952,7 @@ static uint64_t BBRInflightHiFromLostPacket(bbr_per_ack_state_t * rs, picoquic_p
     uint64_t inflight = inflight_prev + (uint64_t)lost_prefix;
     return inflight;
 }
-
+#endif
 #if 1
 /* TODO: reconcile this direct handling of path->cwin with the handling
 * of the "inflight too high" variable. 
