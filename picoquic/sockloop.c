@@ -79,9 +79,6 @@
 #include <netinet/in.h>
 #include <sys/select.h>
 
-#ifndef __APPLE__
-#define _GNU_SOURCE
-#endif
 #include <pthread.h>
 
 #ifndef SOCKET_TYPE
