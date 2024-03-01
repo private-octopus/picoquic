@@ -376,9 +376,9 @@ uint8_t * picoquic_format_new_connection_id_frame(picoquic_cnx_t* cnx, picoquic_
     int * more_data, int * is_pure_ack, picoquic_local_cnxid_t* l_cid)
 {
     uint8_t* bytes0 = bytes;
-    int is_mp = (cnx->is_unique_path_id_enabled && l_cid->path_id > 0);
+    unsigned int is_mp = cnx->is_unique_path_id_enabled;
 
-    if (l_cid != NULL && (l_cid->sequence != 0 || l_cid->path_id > 0)  && l_cid->cnx_id.id_len > 0) {
+    if (l_cid != NULL && l_cid->cnx_id.id_len > 0) {
         if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, 
             (is_mp)?picoquic_frame_type_mp_new_connection_id:picoquic_frame_type_new_connection_id)) == NULL ||
             (is_mp && ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, l_cid->path_id)) == NULL)) ||
