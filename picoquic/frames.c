@@ -5332,7 +5332,7 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
 
     /* This code assumes that the frame type is already skipped */
 
-    if (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled) {
+    if (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled && !cnx->is_unique_path_id_enabled) {
         /* Frame is unexpected */
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_path_abandon, "multipath not negotiated");
@@ -5443,7 +5443,7 @@ const uint8_t* picoquic_decode_path_available_or_standby_frame(const uint8_t* by
 
     /* This code assumes that the frame type is already skipped */
 
-    if (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled) {
+    if (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled && !cnx->is_unique_path_id_enabled) {
         /* Frame is unexpected */
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             frame_id64, "multipath not negotiated");
