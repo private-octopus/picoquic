@@ -669,7 +669,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     picoquic_connection_id_t initial_cid = { {0x1b, 0x11, 0xc0, 4, 5, 6, 7, 8}, 8 };
     picoquic_tp_t server_parameters;
-    uint64_t original_r_cid_sequence = 1;
+    uint64_t original_r_cid_sequence = (m_variant == multipath_variant_unique)?0:1;
     size_t send_buffer_size = 0;
     int ret;
 
@@ -1963,6 +1963,55 @@ int m_unip_basic_test()
     return multipath_test_one(max_completion_microsec, multipath_test_basic, multipath_variant_unique);
 }
 
+/* Drop first multipath test. Set up two links in parallel, start using them, then
+* drop the first one of them. Check that the transmission succeeds.
+*/
+
+int m_unip_drop_first_test()
+{
+    uint64_t max_completion_microsec = 1450000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_drop_first, multipath_variant_unique);
+}
+
+/* Drop second multipath test. Set up two links in parallel, start using them, then
+* drop the second one of them. Check that the transmission succeeds.
+*/
+
+int m_unip_drop_second_test()
+{
+    uint64_t max_completion_microsec = 1290000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_drop_second, multipath_variant_unique);
+}
+
+/* Simulate the combination of a satellite link and a low latency low bandwidth
+* terrestrial link
+*/
+int m_unip_sat_plus_test()
+{
+    uint64_t max_completion_microsec = 10000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, multipath_variant_unique);
+}
+
+/* Test the renewal of the connection ID on a path
+*/
+int m_unip_renew_test()
+{
+    uint64_t max_completion_microsec = 3000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_renew, multipath_variant_unique);
+}
+
+/* Test key rotation in a multipath setup
+*/
+int m_unip_rotation_test()
+{
+    uint64_t max_completion_microsec = 3000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_rotation, multipath_variant_unique);
+}
 
 /* Test nat traversal in a multipath setup */
 int m_unip_nat_test()
@@ -1971,4 +2020,5 @@ int m_unip_nat_test()
 
     return  multipath_test_one(max_completion_microsec, multipath_test_nat, multipath_variant_unique);
 }
+
 

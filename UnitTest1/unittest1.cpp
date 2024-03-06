@@ -2548,6 +2548,35 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(m_unip_drop_first) {
+            int ret = m_unip_drop_first_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(m_unip_drop_second) {
+            int ret = m_unip_drop_second_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(m_unip_sat_plus) {
+            int ret = m_unip_sat_plus_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(m_unip_renew) {
+            int ret = m_unip_renew_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(m_unip_rotation) {
+            int ret = m_unip_rotation_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(m_unip_nat) {
             int ret = m_unip_nat_test();
 

@@ -2803,7 +2803,7 @@ int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path
             ret = PICOQUIC_ERROR_MIGRATION_DISABLED;
         }
     else {
-        stashed = picoquic_get_cnxid_from_stash(cnxid_stash);
+        stashed = picoquic_obtain_stashed_cnxid(cnx, cid_path_id);
 
         if (stashed == NULL) {
             ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
