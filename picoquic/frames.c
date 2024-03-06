@@ -739,11 +739,11 @@ int picoquic_process_ack_of_retire_connection_id_frame(picoquic_cnx_t* cnx, cons
         /* Check whether the retired CID is still in the stash.
          * If yes, try remove it.
          */
+        *consumed = bytes_next - bytes;
+
         picoquic_remote_cnxid_stash_t* remote_cnxid_stash = picoquic_find_or_create_remote_cnxid_stash(cnx, unique_path_id, 0);
         if (remote_cnxid_stash != NULL) {
             picoquic_remote_cnxid_t* stashed = remote_cnxid_stash->cnxid_stash_first;
-            *consumed = bytes_next - bytes;
-
             while (stashed != NULL) {
                 if (stashed->sequence == sequence) {
                     stashed->retire_acked = 1;
@@ -5980,7 +5980,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                         ack_needed = 1;
                         break;
                     case picoquic_frame_type_mp_retire_connection_id:
-                        bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, current_time, path_x, 1);
+                        bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes0, bytes_max, current_time, path_x, 1);
                         ack_needed = 1;
                         break;
                     case picoquic_frame_type_bdp:

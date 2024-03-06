@@ -1832,6 +1832,9 @@ int picoquic_find_incoming_unique_path(picoquic_cnx_t* cnx, picoquic_packet_head
         /* If the local CID is not set, set it */
         if (path_x->p_local_cnxid == NULL) {
             path_x->p_local_cnxid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
+            if (cnx->client_mode == 0 && cnx->is_unique_path_id_enabled) {
+                (void)picoquic_renew_connection_id(cnx, path_id);
+            }
         } 
         /* Else handle CID renewal if needed */
         else if (picoquic_compare_connection_id(&path_x->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0) {
