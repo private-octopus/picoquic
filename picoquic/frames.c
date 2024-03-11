@@ -5401,9 +5401,11 @@ int picoquic_queue_path_available_or_standby_frame(
     else {
         uint8_t frame_buffer[256];
         uint64_t frame_type = (status == picoquic_path_status_available) ?
-            picoquic_path_status_available : picoquic_frame_type_path_standby;
+            picoquic_frame_type_path_available : picoquic_frame_type_path_standby;
         uint64_t sequence = cnx->status_sequence_to_send_next++;
-        uint64_t path_id = path_x->p_remote_cnxid->sequence;
+        uint64_t path_id = (cnx->is_unique_path_id_enabled)?
+            path_x->unique_path_id :
+            path_x->p_remote_cnxid->sequence;
         int is_pure_ack = 0;
         uint8_t* bytes_next = picoquic_format_path_available_or_standby_frame(
             frame_buffer, frame_buffer + sizeof(frame_buffer), frame_type, path_id, sequence);

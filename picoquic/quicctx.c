@@ -1715,7 +1715,8 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
     int path_index_current = 1;
     unsigned int is_demotion_in_progress = 0;
 
-    if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
+    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled ||
+        cnx->is_unique_path_id_enabled) && cnx->nb_paths > 1) {
         path_index_good = 0;
         path_index_current = 0;
     }
@@ -1766,6 +1767,28 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
 
     /* TODO: what if there are no paths left? */
     cnx->path_demotion_needed = is_demotion_in_progress;
+    int path_left = -1;
+    int path_standby = -1;
+    if (is_demotion_in_progress && cnx->is_unique_path_id_enabled) {
+        /* Verify that if one path is demoted, the other
+         * becomes available */
+        for (int i = 0; i < cnx->nb_paths; i++) {
+            if (cnx->path[i]->path_is_demoted) {
+                continue;
+            }
+            if (cnx->path[i]->path_is_standby && path_standby < 0) {
+                path_standby = i;
+            }
+            else {
+                path_left = i;
+                break;
+            }
+        }
+        if (path_left < 0 && path_standby >= 0) {
+            cnx->path[path_standby]->path_is_standby = 0;
+            (void)picoquic_queue_path_available_or_standby_frame(cnx, cnx->path[path_standby], picoquic_path_status_available);
+        }
+    }
 }
 
 /* 

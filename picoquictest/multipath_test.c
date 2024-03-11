@@ -1244,12 +1244,7 @@ int multipath_standby_test()
 
 int multipath_standup_test()
 {
-#if 1
-    /* This is a regression, needs to be investigated */
-    uint64_t max_completion_microsec = 5700000;
-#else
-    uint64_t max_completion_microsec = 4750000;
-#endif
+    uint64_t max_completion_microsec = 3000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_standup, multipath_variant_cid);
 }
@@ -2021,4 +2016,18 @@ int m_unip_nat_test()
     return  multipath_test_one(max_completion_microsec, multipath_test_nat, multipath_variant_unique);
 }
 
+
+int m_unip_standby_test()
+{
+    uint64_t max_completion_microsec = 2000000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_standby, multipath_variant_unique);
+}
+
+int m_unip_standup_test()
+{
+    uint64_t max_completion_microsec = 2500000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_standup, multipath_variant_unique);
+}
 
