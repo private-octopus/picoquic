@@ -4339,7 +4339,12 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
         }
         path_id = 0;
     }
-
+    if (cnx->path[path_id]->path_is_standby && challenge_path != path_id) {
+        /* Set the selected path to available if it was standby. Selecting a standby
+         * path means that the available path was of lower quality, the only exception
+         * being if the selection was due to a pending challenge. */
+        picoquic_set_path_status(cnx, cnx->path[path_id]->unique_path_id, picoquic_path_status_available);
+    }
     cnx->path[path_id]->selected++;
     picoquic_set_path_addresses(cnx, path_id, is_nat, p_addr_to, p_addr_from, if_index);
 

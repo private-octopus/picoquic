@@ -503,7 +503,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                     }
                     old_path->nb_retransmit++;
                     old_path->last_loss_event_detected = current_time;
-                    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) && cnx->nb_paths > 1) {
+                    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled || cnx->is_unique_path_id_enabled) && cnx->nb_paths > 1) {
                         picoquic_retransmit_path_packet_queue(cnx, old_path, pkt_ctx, current_time);
                     }
                     if (old_path->nb_retransmit > 9 &&

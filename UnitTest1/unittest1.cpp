@@ -2577,8 +2577,21 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
         TEST_METHOD(m_unip_nat) {
             int ret = m_unip_nat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(m_unip_standby) {
+            int ret = m_unip_standby_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(m_unip_standup) {
+            int ret = m_unip_standup_test();
 
             Assert::AreEqual(ret, 0);
         }
