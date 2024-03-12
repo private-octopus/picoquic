@@ -447,6 +447,7 @@ int m_unip_rotation_test();
 int m_unip_nat_test();
 int m_unip_standby_test();
 int m_unip_standup_test();
+int m_unip_tunnel_test();
 int simple_multipath_basic_test();
 int simple_multipath_drop_first_test();
 int simple_multipath_drop_second_test();

@@ -3556,11 +3556,13 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     int more_data = 0;
     int ack_sent = 0;
     int is_challenge_padding_needed = 0;
-    int is_nominal_ack_path = (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) ?
-        path_x->is_nominal_ack_path : path_x == cnx->path[0];
+    int is_nominal_ack_path = (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled || cnx->is_unique_path_id_enabled) ?
+        (path_x->is_nominal_ack_path || cnx->nb_paths == 1) : path_x == cnx->path[0];
 
     picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled) ?
-        &path_x->p_remote_cnxid->pkt_ctx : &cnx->pkt_ctx[picoquic_packet_context_application];
+        &path_x->p_remote_cnxid->pkt_ctx : ( (cnx->is_unique_path_id_enabled) ?
+        &path_x->pkt_ctx :
+        &cnx->pkt_ctx[picoquic_packet_context_application]);
 
     /* Check whether to insert a hole in the sequence of packets */
     if (pkt_ctx->send_sequence >= pkt_ctx->next_sequence_hole) {

@@ -455,6 +455,7 @@ static const picoquic_test_def_t test_table[] = {
     { "m_unip_nat", m_unip_nat_test },
     { "m_unip_standby", m_unip_standby_test },
     { "m_unip_standup", m_unip_standup_test },
+    { "m_unip_tunnel", m_unip_tunnel_test },
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },
     { "simple_multipath_basic", simple_multipath_basic_test },

@@ -416,7 +416,7 @@ uint64_t picoquic_sack_list_first(picoquic_sack_list_t* sack_list)
 uint64_t picoquic_sack_list_last(picoquic_sack_list_t* sack_list)
 {
     picoquic_sack_item_t* last = picoquic_sack_last_item(sack_list);
-    return (last == NULL) ? 0 : last->end_of_sack_range;
+    return (last == NULL) ? UINT64_MAX : last->end_of_sack_range;
 }
 
 /* Return the first range in the sack list
