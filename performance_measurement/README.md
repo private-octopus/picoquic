@@ -137,6 +137,7 @@ in the ```sample``` directory directly)
 - Create a ```temp/``` directory.
 - Follow the instructions in the ```sample``` directory to create the necessary keys and certificates.
 This should involve the following steps
+    - ```openssl req -x509 -newkey rsa:2048 -days 365 -keyout ca-key.pem -out ca-cert.pem```
     - ```openssl req -newkey rsa:2048 -keyout server-key.pem -out server-req.pem```
     - Set the passphrase to ```1234``` and hit ```Enter``` for the other fields. This creates ```server-key.pem``` and ```server-req.pem```.
 
