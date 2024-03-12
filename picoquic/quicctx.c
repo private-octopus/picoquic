@@ -2502,7 +2502,8 @@ uint64_t picoquic_add_remote_cnxid_to_stash(picoquic_cnx_t* cnx, picoquic_remote
     }
 
     if (ret == 0 && is_duplicate == 0) {
-        if (nb_cid_received >= cnx->local_parameters.active_connection_id_limit + nb_cid_retired_before) {
+        if (nb_cid_received >= cnx->local_parameters.active_connection_id_limit + nb_cid_retired_before ||
+            nb_cid_received >= 2*cnx->local_parameters.active_connection_id_limit) {
             ret = PICOQUIC_TRANSPORT_CONNECTION_ID_LIMIT_ERROR;
         }
         else {
