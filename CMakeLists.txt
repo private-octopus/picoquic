@@ -412,6 +412,19 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     target_include_directories(thread_test PRIVATE loglib picoquic)
     set_picoquic_compile_settings(thread_test)
 
+    # Added by Talal
+    add_executable(server_toy
+    toy_app/server.cpp)
+    target_link_libraries(server_toy PRIVATE picoquic-log picoquic-core)
+    target_include_directories(server_toy PRIVATE loglib picoquic)
+    set_picoquic_compile_settings(server_toy)
+
+    add_executable(client_toy
+    toy_app/client.cpp)
+    target_link_libraries(client_toy PRIVATE picoquic-log picoquic-core)
+    target_include_directories(client_toy PRIVATE loglib picoquic)
+    set_picoquic_compile_settings(client_toy)
+
 endif()
 
 # get all project files for formatting
