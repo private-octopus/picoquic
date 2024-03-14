@@ -4194,7 +4194,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
             continue;
         }
         else if (cnx->path[i]->challenge_failed) {
-            picoquic_demote_path(cnx, i, current_time);
+            picoquic_demote_path(cnx, i, current_time, 0, NULL);
             continue;
         }
         else
@@ -4368,7 +4368,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
             continue;
         }
         else if (cnx->path[i]->challenge_failed) {
-            picoquic_demote_path(cnx, i, current_time);
+            picoquic_demote_path(cnx, i, current_time, 0, NULL);
             continue;
         }
         else if (cnx->path[i]->challenge_verified && cnx->cnx_state == picoquic_state_ready) {

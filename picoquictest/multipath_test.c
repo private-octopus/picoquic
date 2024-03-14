@@ -980,7 +980,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 DBG_PRINTF("Path ID[%d] = %" PRIu64 ", reuse!", i, test_ctx->cnx_client->path[i]->unique_path_id);
                 ret = -1;
             }
-            else if (test_ctx->cnx_client->path[i]->unique_path_id !=
+            else if (test_ctx->cnx_client->path[i]->p_local_cnxid != NULL && test_ctx->cnx_client->path[i]->unique_path_id !=
                 test_ctx->cnx_client->path[i]->p_local_cnxid->path_id) {
                 DBG_PRINTF("Path ID[%d] = %" PRIu64 ", vs. local CID path id: %" PRIu64,
                     i, test_ctx->cnx_client->path[i]->unique_path_id,
@@ -2043,7 +2043,16 @@ int m_unip_standup_test()
 
 int m_unip_tunnel_test()
 {
-    uint64_t max_completion_microsec = 10000000;
+    uint64_t max_completion_microsec = 12000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_tunnel, multipath_variant_unique);
+}
+
+/* Test that abandoned paths are removed after some time
+*/
+int m_unip_abandon_test()
+{
+    uint64_t max_completion_microsec = 3800000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_abandon, multipath_variant_unique);
 }

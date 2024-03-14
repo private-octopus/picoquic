@@ -1827,7 +1827,6 @@ int tls_api_data_sending_loop_ex(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
 
         nb_trials++;
-
         ret = tls_api_one_sim_round(test_ctx, simulated_time, next_state_change, &was_active);
         if (nb_link_states > 0 && *simulated_time >= next_state_change) {
             next_link_state++;

@@ -2419,14 +2419,6 @@ int picoquic_incoming_segment(
                 ret = picoquic_incoming_1rtt(cnx, path_id, bytes, decrypted_data,
                     &ph, addr_from, addr_to, if_index_to, received_ecn,
                     path_is_not_allocated, current_time);
-#if 1
-                /* TODO: this is wrong, should work on abandon path instead */
-                if (cnx->is_unique_path_id_enabled &&
-                    cnx->path[path_id]->path_is_demoted && cnx->path[path_id]->nb_retransmit == 0) {
-                    cnx->path[path_id]->path_is_demoted = 0;
-                    cnx->path[path_id]->challenge_failed = 0;
-                }
-#endif
                 break;
             default:
                 /* Packet type error. Log and ignore */

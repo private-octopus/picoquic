@@ -511,8 +511,24 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                         /* Max retransmission reached for this path */
                         DBG_PRINTF("%s\n", "Too many data retransmits, abandon path");
                         picoquic_log_app_message(cnx, "%s", "Too many data retransmits, abandon path");
-                        old_path->challenge_failed = 1;
-                        cnx->path_demotion_needed = 1;
+
+                        if (cnx->is_multipath_enabled || cnx->is_unique_path_id_enabled || cnx->is_simple_multipath_enabled) {
+                            int all_paths_dubious = 1;
+                            for (int path_id = 0; path_id < cnx->nb_paths; path_id++) {
+                                if (cnx->path[path_id]->nb_retransmit == 0) {
+                                    all_paths_dubious = 0;
+                                    break;
+                                }
+                            }
+                            if (!all_paths_dubious) {
+                                old_path->challenge_failed = 1;
+                                cnx->path_demotion_needed = 1;
+                            }
+                        }
+                        else {
+                            old_path->challenge_failed = 1;
+                            cnx->path_demotion_needed = 1;
+                        }
                     }
                 }
                 /* Then, manage the total number of retransmissions across all paths. */
@@ -1046,6 +1062,9 @@ void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path
     if (cnx->cnx_state == picoquic_state_ready && cnx->nb_paths > 1) {
         if (cnx->is_multipath_enabled) {
             pkt_ctx = &path_x->p_remote_cnxid->pkt_ctx;
+        }
+        else if (cnx->is_unique_path_id_enabled) {
+            pkt_ctx = &path_x->pkt_ctx;
         }
         else {
             pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];

@@ -263,33 +263,44 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
     uint64_t pn64, uint64_t current_microsec)
 {
     int ret = 0;
-    picoquic_sack_list_t* sack_list = picoquic_sack_list_from_cnx_context(cnx, pc, l_cid);
-
-    if (picoquic_sack_list_is_empty(sack_list)) {
-        /* This is the first packet ever received.. */
-        cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
+    picoquic_sack_list_t* sack_list = NULL;
+    if (cnx->is_unique_path_id_enabled && pc == picoquic_packet_context_application) {
+        int path_id = picoquic_find_path_by_unique_id(cnx, l_cid->path_id);
+        if (path_id >= 0) {
+            sack_list = &cnx->path[path_id]->ack_ctx.sack_list;
+        }
     }
     else {
-        uint64_t pn_last = picoquic_sack_list_last(sack_list);
-        if (pn64 > pn_last) {
-            if (pn64 > pn_last + 1) {
-                cnx->ack_ctx[pc].act[0].out_of_order_received = 1;
-                cnx->ack_ctx[pc].act[1].out_of_order_received = 1;
-            }
-            cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
-        }
-        else
-        {
-            if (cnx->ack_ctx[pc].act[0].ack_needed && pn64 < cnx->ack_ctx[pc].act[0].highest_ack_sent) {
-                cnx->ack_ctx[pc].act[0].out_of_order_received = 1;
-            }
-            if (cnx->ack_ctx[pc].act[1].ack_needed && pn64 < cnx->ack_ctx[pc].act[1].highest_ack_sent) {
-                cnx->ack_ctx[pc].act[1].out_of_order_received = 1;
-            }
-        }
+        sack_list = picoquic_sack_list_from_cnx_context(cnx, pc, l_cid);
     }
 
-    ret = picoquic_update_sack_list(sack_list, pn64, pn64, current_microsec);
+    if (sack_list != NULL) {
+        if (picoquic_sack_list_is_empty(sack_list)) {
+            /* This is the first packet ever received.. */
+            cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
+        }
+        else {
+            uint64_t pn_last = picoquic_sack_list_last(sack_list);
+            if (pn64 > pn_last) {
+                if (pn64 > pn_last + 1) {
+                    cnx->ack_ctx[pc].act[0].out_of_order_received = 1;
+                    cnx->ack_ctx[pc].act[1].out_of_order_received = 1;
+                }
+                cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
+            }
+            else
+            {
+                if (cnx->ack_ctx[pc].act[0].ack_needed && pn64 < cnx->ack_ctx[pc].act[0].highest_ack_sent) {
+                    cnx->ack_ctx[pc].act[0].out_of_order_received = 1;
+                }
+                if (cnx->ack_ctx[pc].act[1].ack_needed && pn64 < cnx->ack_ctx[pc].act[1].highest_ack_sent) {
+                    cnx->ack_ctx[pc].act[1].out_of_order_received = 1;
+                }
+            }
+        }
+
+        ret = picoquic_update_sack_list(sack_list, pn64, pn64, current_microsec);
+    }
     return ret;
 }
 
@@ -416,7 +427,7 @@ uint64_t picoquic_sack_list_first(picoquic_sack_list_t* sack_list)
 uint64_t picoquic_sack_list_last(picoquic_sack_list_t* sack_list)
 {
     picoquic_sack_item_t* last = picoquic_sack_last_item(sack_list);
-    return (last == NULL) ? UINT64_MAX : last->end_of_sack_range;
+    return (last == NULL) ? 0 : last->end_of_sack_range;
 }
 
 /* Return the first range in the sack list
