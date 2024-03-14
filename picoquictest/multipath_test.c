@@ -459,7 +459,8 @@ typedef enum {
     multipath_test_datagram,
     multipath_test_dg_af,
     multipath_test_standby,
-    multipath_test_standup
+    multipath_test_standup,
+    multipath_test_tunnel
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -847,9 +848,11 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         test_id == multipath_test_renew || test_id == multipath_test_nat || 
         test_id == multipath_test_break1 || test_id == multipath_test_break2 ||
         test_id == multipath_test_back1 || test_id == multipath_test_standup ||
-        test_id == multipath_test_abandon)) {
+        test_id == multipath_test_abandon || test_id == multipath_test_tunnel)) {
         /* If testing a final link drop before completion, perform a 
-         * partial sending loop and then kill the initial link */
+         * partial sending loop and then kill the initial link.
+         * For the tunnel scenario, do the same but kill both links.
+         */
         if (ret == 0) {
             uint64_t timeout = 640000;
 
@@ -877,6 +880,11 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             else if (test_id == multipath_test_break2) {
                 /* Trigger "destination unreachable" error on next socket call to link 1 */
                 multipath_test_set_unreachable(test_ctx, 1);
+            }
+            else if (test_id == multipath_test_tunnel) {
+                /* Break both links */
+                multipath_test_kill_links(test_ctx, 0);
+                multipath_test_kill_links(test_ctx, 1);
             } else {
                 multipath_test_kill_links(test_ctx, 
                     (test_id == multipath_test_drop_first ||
@@ -884,9 +892,11 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             }
         }
     }
-    /* For the "backup scenario", wait a small interval, then bring the path # 1 back up */
-    if (ret == 0 && test_id == multipath_test_back1) {
-        uint64_t timeout = 1000000;
+    /* For the "backup scenario", wait a small interval, then bring the path # 1 back up
+     * For the "tunnel" scenario, do the same but wait 5 seconds and then restore both links.
+     */
+    if (ret == 0 && (test_id == multipath_test_back1 || test_id == multipath_test_tunnel)) {
+        uint64_t timeout = (test_id == multipath_test_tunnel)?5000000:1000000;
 
         ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
 
@@ -895,6 +905,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             DBG_PRINTF("Wait for %" PRIu64 "us returns %d\n", timeout, ret);
         }
         else {
+            if (test_id == multipath_test_tunnel) {
+                multipath_test_unkill_links(test_ctx, 0, simulated_time);
+            }
             multipath_test_unkill_links(test_ctx, 1, simulated_time);
         }
     }
@@ -967,7 +980,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 DBG_PRINTF("Path ID[%d] = %" PRIu64 ", reuse!", i, test_ctx->cnx_client->path[i]->unique_path_id);
                 ret = -1;
             }
-            else if (test_ctx->cnx_client->path[i]->unique_path_id !=
+            else if (test_ctx->cnx_client->path[i]->p_local_cnxid != NULL && test_ctx->cnx_client->path[i]->unique_path_id !=
                 test_ctx->cnx_client->path[i]->p_local_cnxid->path_id) {
                 DBG_PRINTF("Path ID[%d] = %" PRIu64 ", vs. local CID path id: %" PRIu64,
                     i, test_ctx->cnx_client->path[i]->unique_path_id,
@@ -1942,9 +1955,6 @@ int path_packet_queue_test()
  * 
  * TODO: break that into parts that can be verified!
  */
-int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time,
-    uint64_t* next_wake_time);
-
 /* tests of the "unique path_id" variant */
 
 /* Basic multipath test. Set up two links in parallel, verify that both are used and that
@@ -2026,8 +2036,23 @@ int m_unip_standby_test()
 
 int m_unip_standup_test()
 {
-    uint64_t max_completion_microsec = 2500000;
+    uint64_t max_completion_microsec = 3500000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_standup, multipath_variant_unique);
 }
 
+int m_unip_tunnel_test()
+{
+    uint64_t max_completion_microsec = 12000000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_tunnel, multipath_variant_unique);
+}
+
+/* Test that abandoned paths are removed after some time
+*/
+int m_unip_abandon_test()
+{
+    uint64_t max_completion_microsec = 3800000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_abandon, multipath_variant_unique);
+}

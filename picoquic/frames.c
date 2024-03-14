@@ -701,7 +701,9 @@ int picoquic_check_retire_connection_id_needs_repeat(picoquic_cnx_t* cnx, const 
     int ret = 0;
     uint64_t sequence = 0;
     uint64_t unique_path_id = 0;
-    const uint8_t* bytes_next = picoquic_parse_retire_connection_id_frame(bytes + 1, bytes + bytes_size, &unique_path_id, &sequence, is_mp);
+    const uint8_t* bytes_first = picoquic_frames_varint_skip(bytes, bytes + bytes_size);
+    const uint8_t* bytes_next = (bytes_first == NULL)? NULL:
+        picoquic_parse_retire_connection_id_frame(bytes_first, bytes + bytes_size, &unique_path_id, &sequence, is_mp);
     *no_need_to_repeat = 1;
 
     if (bytes_next == NULL) {
@@ -1271,7 +1273,6 @@ const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* 
     uint64_t offset;
     int      fin;
     size_t   consumed;
-
     if (picoquic_parse_stream_header(bytes, bytes_max - bytes, &stream_id, &offset, &data_length, &fin, &consumed) != 0) {
         bytes = NULL;
     }else if (offset + data_length >= (1ull<<62)){
@@ -3064,7 +3065,7 @@ int picoquic_process_ack_of_ack_mp_frame(
         if (cnx->is_unique_path_id_enabled) {
             int path_index = picoquic_find_path_by_unique_id(cnx, path_id);
             if (path_index >= 0) {
-                ack_ctx = &cnx->path[path_id]->ack_ctx;
+                ack_ctx = &cnx->path[path_index]->ack_ctx;
             }
         }
         else {
@@ -3281,6 +3282,7 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
             break;
         default: {
             uint64_t frame_id64;
+            const uint8_t* type_bytes = bytes;
             *no_need_to_repeat = 0;
             if ((bytes = picoquic_frames_varint_decode(bytes, bytes + bytes_max, &frame_id64)) != NULL) {
                 switch (frame_id64) {
@@ -3320,10 +3322,10 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                         bytes + bytes_max, no_need_to_repeat);
                     break;
                 case picoquic_frame_type_mp_new_connection_id:
-                    ret = picoquic_check_new_cid_needs_repeat(cnx, bytes, bytes_max, 1, no_need_to_repeat);
+                    ret = picoquic_check_new_cid_needs_repeat(cnx, type_bytes, bytes_max, 1, no_need_to_repeat);
                     break;
-                case picoquic_frame_type_retire_connection_id:
-                    ret = picoquic_check_retire_connection_id_needs_repeat(cnx, bytes, bytes_max, no_need_to_repeat, 1);
+                case picoquic_frame_type_mp_retire_connection_id:
+                    ret = picoquic_check_retire_connection_id_needs_repeat(cnx, type_bytes, bytes_max, no_need_to_repeat, 1);
                     break;
                 default:
                     *no_need_to_repeat = 0;
@@ -3623,7 +3625,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                     return bytes;
                 }
                 else {
-                    pkt_ctx = &cnx->path[path_id]->pkt_ctx;
+                    pkt_ctx = &cnx->path[path_index]->pkt_ctx;
                 }
             }
         }
@@ -4060,20 +4062,21 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t*
     int ret = picoquic_is_ack_needed_in_ctx(cnx, &cnx->ack_ctx[pc], current_time, 0, next_wake_time, 
         pc, is_opportunistic);
 
-    if (cnx->is_multipath_enabled) {
-        picoquic_local_cnxid_t* l_cid = cnx->first_local_cnxid_list->local_cnxid_first;
+    if (pc == picoquic_packet_context_application) {
+        if (cnx->is_multipath_enabled) {
+            picoquic_local_cnxid_t* l_cid = cnx->first_local_cnxid_list->local_cnxid_first;
 
-        while (ret == 0 && l_cid != NULL) {
-            ret |= picoquic_is_ack_needed_in_ctx(cnx, &l_cid->ack_ctx, current_time, l_cid->sequence, 
-                next_wake_time, pc, is_opportunistic);
-            l_cid = l_cid->next;
+            while (ret == 0 && l_cid != NULL) {
+                ret |= picoquic_is_ack_needed_in_ctx(cnx, &l_cid->ack_ctx, current_time, l_cid->sequence,
+                    next_wake_time, pc, is_opportunistic);
+                l_cid = l_cid->next;
+            }
         }
-    }
-    else if (cnx->is_unique_path_id_enabled) {
-
-        for (int i=0; ret == 0 && i < cnx->nb_paths; i++){
-            ret |= picoquic_is_ack_needed_in_ctx(cnx, &cnx->path[i]->ack_ctx, current_time, 0, 
-                next_wake_time, pc, is_opportunistic);
+        else if (cnx->is_unique_path_id_enabled) {
+            for (int i = 0; ret == 0 && i < cnx->nb_paths; i++) {
+                ret |= picoquic_is_ack_needed_in_ctx(cnx, &cnx->path[i]->ack_ctx, current_time, 0,
+                    next_wake_time, pc, is_opportunistic);
+            }
         }
     }
     return ret;
@@ -5342,13 +5345,14 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
         int path_number = (cnx->is_unique_path_id_enabled)?
             picoquic_find_path_by_unique_id(cnx, path_id):
             picoquic_find_path_by_cnxid_id(cnx, 1, path_id);
-        if (path_number < 0) {
+        if (path_number < 0 || cnx->path[path_number]->path_is_demoted) {
             /* Invalid path ID. Just ignore this frame. Add line in log for debug */
             picoquic_log_app_message(cnx, "Ignore abandon path with invalid ID: %" PRIu64 ",%" PRIu64,
                 path_id);
         }
         else {
-            picoquic_demote_path(cnx, path_number, current_time);
+            cnx->path[path_number]->path_abandon_received = 1;
+            picoquic_demote_path(cnx, path_number, current_time, 0, NULL);
         }
     }
     else {
@@ -6314,11 +6318,11 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
                     *pure_ack = 0;
                     break;
                 case picoquic_frame_type_mp_new_connection_id:
-                    bytes = picoquic_skip_new_connection_id_frame(bytes, bytes_max, 1);
+                    bytes = picoquic_skip_new_connection_id_frame(bytes_before_type, bytes_max, 1);
                     *pure_ack = 0;
                     break;
                 case picoquic_frame_type_mp_retire_connection_id:
-                    bytes = picoquic_skip_retire_connection_id_frame(bytes, bytes_max, 1);
+                    bytes = picoquic_skip_retire_connection_id_frame(bytes_before_type, bytes_max, 1);
                     *pure_ack = 0;
                     break;
                 default:

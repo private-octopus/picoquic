@@ -2596,6 +2596,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(m_unip_tunnel) {
+            int ret = m_unip_tunnel_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(m_unip_abandon) {
+            int ret = m_unip_abandon_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(simple_multipath_basic) {
             int ret = simple_multipath_basic_test();
 
