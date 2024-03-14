@@ -1692,6 +1692,9 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
         }
     }
 
+    /* Free the data */
+    picoquic_clear_path_data(cnx, path_x);
+
     if (cnx->is_unique_path_id_enabled) {
         /* delete the local CID context used by the path */
         picoquic_local_cnxid_list_t* local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, path_x->unique_path_id, 0);
@@ -1699,9 +1702,6 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
             picoquic_delete_local_cnxid_list(cnx, local_cnxid_list);
         }
     }
-
-    /* Free the data and free the path context. */
-    picoquic_clear_path_data(cnx, path_x);
 
     /* Compact the path table  */
     for (int i = path_index + 1; i < cnx->nb_paths; i++) {
