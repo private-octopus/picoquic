@@ -3489,6 +3489,7 @@ void picoquic_delete_local_cnxid_list(picoquic_cnx_t* cnx, picoquic_local_cnxid_
             if (previous->next_list == local_cnxid_list) {
                 previous->next_list = local_cnxid_list->next_list;
             }
+            previous = previous->next_list;
         }
     }
 
