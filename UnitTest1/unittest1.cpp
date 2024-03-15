@@ -2722,6 +2722,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_varint_stream) {
+            int ret = h3zero_varint_stream_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qpack_huffman) {
             int ret = qpack_huffman_test();
 

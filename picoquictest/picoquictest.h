@@ -280,6 +280,7 @@ int high_latency_probeRTT_test();
 int cid_length_test();
 int initial_server_close_test();
 int h3zero_integer_test();
+int h3zero_varint_stream_test();
 int qpack_huffman_test();
 int qpack_huffman_base_test();
 int h3zero_parse_qpack_test();
