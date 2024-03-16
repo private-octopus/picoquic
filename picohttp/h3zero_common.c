@@ -805,6 +805,7 @@ void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* 
 {
 	h3zero_delete_all_stream_prefixes(cnx, ctx);
 	picosplay_empty_tree(&ctx->h3_stream_tree);
+	picoquic_set_callback(cnx, NULL, NULL);
 	free(ctx);
 }
 
