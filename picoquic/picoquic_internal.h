@@ -1061,6 +1061,7 @@ typedef struct st_picoquic_path_t {
     unsigned int path_is_standby : 1;
     unsigned int path_is_demoted : 1;
     unsigned int path_abandon_received : 1;
+    unsigned int path_abandon_sent : 1;
     unsigned int current_spin : 1;
     unsigned int last_bw_estimate_path_limited : 1;
     unsigned int path_cid_rotated : 1;
