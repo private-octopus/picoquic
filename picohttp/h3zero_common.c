@@ -541,8 +541,8 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 
 	if (stream_state->stream_type == UINT64_MAX) {
 		bytes = h3zero_varint_from_stream(bytes, bytes_max, &stream_state->stream_type, stream_state->frame_header, &stream_state->frame_header_read);
-		if (stream_state->current_frame_type == UINT64_MAX) {
-			/* frame type was not updated */
+		if (stream_state->stream_type == UINT64_MAX) {
+			/* stream type was not updated */
 			return bytes;
 		}
 		if (stream_state->stream_type == h3zero_stream_type_control) {
