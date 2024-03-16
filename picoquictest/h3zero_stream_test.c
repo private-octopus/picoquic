@@ -265,7 +265,7 @@ int h3zero_incoming_unidir_test()
             ret = -1;
         }
     }
-
+    picoquic_set_callback(cnx, NULL, NULL);
     h3zero_callback_delete_context(cnx, h3_ctx);
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
 
