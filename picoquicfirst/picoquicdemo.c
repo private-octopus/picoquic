@@ -569,25 +569,29 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                      * causes the socket code to create an additional socket, and issue a 
                      * picoquic_probe_new_path request for the corresponding address.
                      */
-                    struct sockaddr_in6 addr_zero = { 0 };
-                    addr_zero.sin6_family = AF_INET6;
+                    int remote_cid_ready = (picoquic_obtain_stashed_cnxid(cb_ctx->cnx_client, 1) != NULL);
+                    if (remote_cid_ready) {
+                        struct sockaddr_in6 addr_zero = { 0 };
+                        addr_zero.sin6_family = AF_INET6;
 
-                    for (int i = 0; i < cb_ctx->nb_alt_paths; i++) {
-                        if (picoquic_compare_addr((struct sockaddr*)&addr_zero, (struct sockaddr*)&cb_ctx->client_alt_address[i]) == 0) {
-                            simulate_multipath = 1;
-                            picoquic_log_app_message(cb_ctx->cnx_client, "%s\n", "Will try to simulate new path");
+                        for (int i = 0; i < cb_ctx->nb_alt_paths; i++) {
+                            if (picoquic_compare_addr((struct sockaddr*)&addr_zero, (struct sockaddr*)&cb_ctx->client_alt_address[i]) == 0) {
+                                simulate_multipath = 1;
+                                picoquic_log_app_message(cb_ctx->cnx_client, "%s\n", "Will try to simulate new path");
+                            }
+                            else if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr*)&cb_ctx->server_address,
+                                (struct sockaddr*)&cb_ctx->client_alt_address[i], cb_ctx->client_alt_if[i], picoquic_get_quic_time(quic), 0)) != 0) {
+                                picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d\n", ret);
+                            }
+                            else {
+                                picoquic_log_app_message(cb_ctx->cnx_client, "New path added, total path available %d\n", cb_ctx->cnx_client->nb_paths);
+                            }
+                            cb_ctx->multipath_probe_done = 1;
                         }
-                        else if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr *)&cb_ctx->server_address,
-                                (struct sockaddr *)&cb_ctx->client_alt_address[i], cb_ctx->client_alt_if[i], picoquic_get_quic_time(quic), 0)) != 0) {
-                            picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d\n", ret);
-                        } else {
-                            picoquic_log_app_message(cb_ctx->cnx_client, "New path added, total path available %d\n", cb_ctx->cnx_client->nb_paths);
-                        }
-                        cb_ctx->multipath_probe_done = 1;
-                    }
 
-                    if (simulate_multipath) {
-                        ret = simulate_migration(cb_ctx);
+                        if (simulate_multipath) {
+                            ret = simulate_migration(cb_ctx);
+                        }
                     }
                 }
 
