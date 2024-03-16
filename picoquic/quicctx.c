@@ -1819,7 +1819,7 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
         /* if in multipath, call "retransmit on path demoted" */
         if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled ||
             cnx->is_unique_path_id_enabled) {
-            if (!cnx->path[path_index]->path_abandon_received) {
+            if (!cnx->path[path_index]->path_abandon_sent) {
                 uint8_t buffer[512];
                 uint8_t* end_bytes;
                 int more_data = 0;
@@ -1835,7 +1835,7 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
                         cnx->path[path_index]->unique_path_id);
                 }
             }
-            picoquic_retransmit_demoted_path(cnx, cnx->path[path_index], current_time);
+            /* let's not retransmit immediately -- wait for normal processing instead */
         }
     }
 }

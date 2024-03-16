@@ -5345,10 +5345,20 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
         int path_number = (cnx->is_unique_path_id_enabled)?
             picoquic_find_path_by_unique_id(cnx, path_id):
             picoquic_find_path_by_cnxid_id(cnx, 1, path_id);
-        if (path_number < 0 || cnx->path[path_number]->path_is_demoted) {
+        if (path_number < 0) {
             /* Invalid path ID. Just ignore this frame. Add line in log for debug */
-            picoquic_log_app_message(cnx, "Ignore abandon path with invalid ID: %" PRIu64 ",%" PRIu64,
+            picoquic_log_app_message(cnx, "Ignore abandon path with invalid ID: %" PRIu64,
                 path_id);
+        }
+        else if (cnx->path[path_number]->path_is_demoted) {
+            if (!cnx->path[path_number]->path_abandon_received) {
+                cnx->path[path_number]->path_abandon_received = 1;
+            }
+            else {
+                /* Already abandoned... */
+                picoquic_log_app_message(cnx, "Ignore redundant abandon path with ID: %" PRIu64,
+                    path_id);
+            }
         }
         else {
             cnx->path[path_number]->path_abandon_received = 1;
