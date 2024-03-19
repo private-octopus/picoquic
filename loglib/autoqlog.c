@@ -36,9 +36,11 @@ int autoqlog(picoquic_cnx_t* cnx)
     int ret = 0;
     uint64_t log_time = cnx->start_time;
     uint16_t flags = 0;
+    int error_code = 0;
     FILE* f_binlog = picoquic_open_cc_log_file_for_read(cnx->binlog_file_name, &flags, &log_time);
     if (f_binlog == NULL) {
         DBG_PRINTF("Cannot open file %s for reading.\n", cnx->binlog_file_name);
+        error_code = 1;
         ret = -1;
     }
     else {
@@ -47,6 +49,7 @@ int autoqlog(picoquic_cnx_t* cnx)
 
         if (picoquic_print_connection_id_hexa(cid_name, sizeof(cid_name), &cnx->initial_cnxid) != 0) {
             DBG_PRINTF("Cannot convert connection id for %s", cnx->binlog_file_name);
+            error_code = 2;
             ret = -1;
         }
         else
@@ -66,23 +69,42 @@ int autoqlog(picoquic_cnx_t* cnx)
             if (sprintf_ret != 0) {
                 DBG_PRINTF("Cannot format file name for connection %s in file %s", cid_name, cnx->binlog_file_name);
                 ret = -1;
+                error_code = 3;
             }
             else {
                 ret = qlog_convert(&cnx->initial_cnxid, f_binlog, cnx->binlog_file_name, filename, cnx->quic->qlog_dir, flags);
                 picoquic_file_close(f_binlog);
                 if (ret != 0) {
                     DBG_PRINTF("Cannot convert file %s to qlog, err = %d.\n", cnx->binlog_file_name, ret);
+                    error_code = 4;
                 }
                 else {
                     if (cnx->quic->binlog_dir == NULL) {
                         int last_err = 0;
                         if ((ret = picoquic_file_delete(cnx->binlog_file_name, &last_err)) != 0) {
                             DBG_PRINTF("Cannot delete file %s to qlog, err = %d.\n", cnx->binlog_file_name, last_err);
+                            error_code = 5;
                         }
                     }
                 }
             }
         }
+    }
+    if (ret != 0) {
+        FILE* F_err = NULL;
+        char err_file_name[512];
+        size_t name_len = strlen(cnx->binlog_file_name);
+        if (name_len > 500) {
+            name_len = 500;
+        }
+        memcpy(err_file_name, cnx->binlog_file_name, name_len);
+        memcpy(err_file_name + name_len, ".errlog", 7);
+        err_file_name[name_len + 0] = 0;
+        F_err = picoquic_file_open(err_file_name, "wt");
+        if (F_err != NULL) {
+            fprintf(F_err, "Cannot create qlog file for %s, error: %d\n", cnx->binlog_file_name, error_code);
+        }
+        (void)picoquic_file_close(F_err);
     }
 
     return ret;
