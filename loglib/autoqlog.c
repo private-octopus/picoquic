@@ -93,7 +93,13 @@ int autoqlog(picoquic_cnx_t* cnx)
     if (ret != 0) {
         FILE* F_err = NULL;
         char err_file_name[512];
-        (void)picoquic_sprintf(err_file_name, 512, "%s.errlog", cnx->binlog_file_name);
+        size_t name_len = strlen(cnx->binlog_file_name);
+        if (name_len > 500) {
+            name_len = 500;
+        }
+        memcpy(err_file_name, cnx->binlog_file_name, name_len);
+        memcpy(err_file_name + name_len, ".errlog", 7);
+        err_file_name[name_len + 0] = 0;
         F_err = picoquic_file_open(err_file_name, "wt");
         if (F_err != NULL) {
             fprintf(F_err, "Cannot create qlog file for %s, error: %d\n", cnx->binlog_file_name, error_code);
