@@ -82,7 +82,7 @@ int siduck_callback(picoquic_cnx_t* cnx,
     int ret = 0;
     siduck_ctx_t * ctx = (siduck_ctx_t*)callback_ctx;
 
-    if (ctx == NULL) {
+    if (ctx == NULL  || callback_ctx == picoquic_get_default_callback_context(cnx->quic)) {
         ctx = siduck_create_ctx(NULL);
         if (ctx != NULL) {
             ctx->is_auto_alloc = 1;
@@ -91,6 +91,7 @@ int siduck_callback(picoquic_cnx_t* cnx,
     }
     else {
         ret = 0;
+
     }
 
     if (ret == 0) {
