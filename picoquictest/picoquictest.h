@@ -411,6 +411,7 @@ int minicrypto_test();
 int minicrypto_is_last_test();
 #ifdef PICOQUIC_WITH_MBEDTLS
 int mbedtls_crypto_test();
+int mbedtls_load_der_test();
 #endif
 int mbedtls_test();
 int monopath_basic_test();

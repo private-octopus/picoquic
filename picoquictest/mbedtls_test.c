@@ -542,4 +542,189 @@ static int test_key_exchange(ptls_key_exchange_algorithm_t *client, ptls_key_exc
 
     return ret;
 }
+
+
+/*
+Sign certificate has to implement a callback:
+
+if ((ret = tls->ctx->sign_certificate->cb(
+tls->ctx->sign_certificate, tls, tls->is_server ? &tls->server.async_job : NULL, &algo, sendbuf,
+ptls_iovec_init(data, datalen), signature_algorithms != NULL ? signature_algorithms->list : NULL,
+signature_algorithms != NULL ? signature_algorithms->count : 0)) != 0) {
+
+or:
+
+static int sign_certificate(ptls_sign_certificate_t *_self, ptls_t *tls, ptls_async_job_t **async, uint16_t *selected_algorithm,
+ptls_buffer_t *outbuf, ptls_iovec_t input, const uint16_t *algorithms, size_t num_algorithms)
+
+The callback "super" type is ptls_sign_certificate_t, defined by the macro:
+PTLS_CALLBACK_TYPE(int, sign_certificate, ptls_t *tls, ptls_async_job_t **async, uint16_t *selected_algorithm,
+ptls_buffer_t *output, ptls_iovec_t input, const uint16_t *algorithms, size_t num_algorithms);
+
+The notation is simple: input buffer and supported algorithms as input, selected algo and output buffer as output.
+Output buffer is already partially filled.
+
+For PSA/MbedTLS, see:
+https://mbed-tls.readthedocs.io/en/latest/getting_started/psa/
+Using PSA, Signing a message with RSA provides the following sequence:
+
+-- Set key attributes --
+psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_SIGN_HASH);
+psa_set_key_algorithm(&attributes, PSA_ALG_RSA_PKCS1V15_SIGN_RAW);
+psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_KEY_PAIR);
+psa_set_key_bits(&attributes, 1024);
+
+-- Import the key --
+status = psa_import_key(&attributes, key, key_len, &key_id);
+if (status != PSA_SUCCESS) {
+printf("Failed to import key\n");
+return;
+}
+
+-- Sign message using the key --
+status = psa_sign_hash(key_id, PSA_ALG_RSA_PKCS1V15_SIGN_RAW,
+hash, sizeof(hash),
+signature, sizeof(signature),
+&signature_length);
+
+TODO: verify that Picotls does compute the hash before calling sign.
+TODO: verify that there are "sign raw" implementations for ECDSA, EDDSA
+
+-- Verify hash:
+psa_status_t psa_verify_hash(mbedtls_svc_key_id_t key, psa_algorithm_t alg, const uint8_t *hash, size_t hash_length, const uint8_t *signature, size_t signature_length)
+
+Load a key in memory
+
+int mbedtls_pk_parse_keyfile(mbedtls_pk_context* ctx,
+const char* path, const char* pwd,
+int (*f_rng)(void*, unsigned char*, size_t), void* p_rng);
+
+But before using the psa API, the key must be imported. That means the key has to
+be expressed in the proper x509/DER format.
+
+*/
+#ifdef _WINDOWS
+#ifdef _WINDOWS64
+#define ASSET_DIR ..\\..\\data
+#define ASSET_RSA_KEY "..\\..\\data\\rsa\\key.pem"
+#define ASSET_RSA_PKCS8_KEY "..\\..\\data\\rsa-pkcs8\\key.pem"
+#define ASSET_SECP256R1_KEY "..\\..\\data\\secp256r1\\key.pem"
+#define ASSET_SECP384R1_KEY "..\\..\\data\\secp384r1\\key.pem"
+#define ASSET_SECP521R1_KEY "..\\..\\data\\secp521r1\\key.pem"
+#define ASSET_SECP256R1_PKCS8_KEY "..\\..\\data\\secp256r1-pkcs8\\key.pem"
+#define ASSET_ED25519_KEY "..\\..\\data\\ed25519\\key.pem"
+#else
+#define ASSET_DIR ..\\data
+#define ASSET_RSA_KEY "..\\data\\rsa\\key.pem"
+#define ASSET_RSA_PKCS8_KEY "..\\data\\rsa-pkcs8\\key.pem"
+#define ASSET_SECP256R1_KEY "..\\data\\secp256r1\\key.pem"
+#define ASSET_SECP384R1_KEY "..\\data\\secp384r1\\key.pem"
+#define ASSET_SECP521R1_KEY "..\\data\\secp521r1\\key.pem"
+#define ASSET_SECP256R1_PKCS8_KEY "..\\data\\secp256r1-pkcs8\\key.pem"
+#define ASSET_ED25519_KEY "..\\data\\ed25519\\key.pem"
+#endif
+#else
+#define ASSET_DIR data
+#define ASSET_RSA_KEY "data/rsa/key.pem"
+#define ASSET_RSA_PKCS8_KEY "data/rsa-pkcs8/key.pem"
+#define ASSET_SECP256R1_KEY "data/secp256r1/key.pem"
+#define ASSET_SECP384R1_KEY "data/secp384r1/key.pem"
+#define ASSET_SECP521R1_KEY "data/secp521r1/key.pem"
+#define ASSET_SECP256R1_PKCS8_KEY "data/secp256r1-pkcs8/key.pem"
+#define ASSET_ED25519_KEY "data/ed25519/key.pem"
+#endif
+
+static int mbedtls_test_load_one_der_key(char const* path)
+{
+    int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
+    unsigned char hash[32];
+    const unsigned char h0[32] = {
+        1, 2, 3, 4, 5, 6, 7, 8,
+        9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24,
+        25, 26, 27, 28, 29, 30, 31, 32
+    };
+    ptls_context_t ctx = { 0 };
+    psa_status_t status = 0;
+
+    ret = ptls_mbedtls_load_private_key(&ctx, path);
+    if (ret != 0) {
+        printf("Cannot create sign_certificate from: %s\n", path);
+    }
+    else if (ctx.sign_certificate == NULL) {
+        printf("Sign_certificate not set in ptls context for: %s\n", path);
+        ret = -1;
+    }
+    else {
+        /* Try to sign something */
+        int ret;
+        ptls_mbedtls_sign_certificate_t* signer = (ptls_mbedtls_sign_certificate_t*)
+            (((unsigned char*)ctx.sign_certificate) - offsetof(struct st_ptls_mbedtls_sign_certificate_t, super));
+        /* get the key algorithm */
+        psa_algorithm_t algo = psa_get_key_algorithm(&signer->attributes);
+        ptls_buffer_t outbuf;
+        uint8_t outbuf_smallbuf[256];
+        ptls_iovec_t input = { hash, sizeof(hash) };
+        uint16_t selected_algorithm = 0;
+        int num_algorithms = 0;
+        uint16_t algorithms[16];
+        memcpy(hash, h0, 32);
+        while (signer->schemes[num_algorithms].scheme_id != UINT16_MAX && num_algorithms < 16) {
+            algorithms[num_algorithms++] = signer->schemes[num_algorithms].scheme_id;
+        }
+
+        ptls_buffer_init(&outbuf, outbuf_smallbuf, sizeof(outbuf_smallbuf));
+
+        ret = ptls_mbedtls_sign_certificate(ctx.sign_certificate, NULL, NULL, &selected_algorithm,
+            &outbuf, input, algorithms, num_algorithms);
+        if (ret == 0) {
+            printf("Signed a message, key: %s, scheme: %x, signature size: %zu\n", path, selected_algorithm, outbuf.off);
+        }
+        else {
+            printf("Sign failed, key: %s, scheme: %x, signature size: %zu\n", path, selected_algorithm, outbuf.off);
+        }
+        ptls_buffer_dispose(&outbuf);
+        ptls_mbedtls_dispose_sign_certificate(&signer->super);
+    }
+
+    return ret;
+}
+
+int mbedtls_load_der_test()
+{
+    int ret = 0;
+    if (ret == 0) {
+        ret = mbedtls_test_load_one_der_key(ASSET_RSA_KEY);
+    }
+
+    if (ret == 0) {
+        ret = mbedtls_test_load_one_der_key(ASSET_SECP256R1_KEY);
+    }
+
+    if (ret == 0) {
+        ret = mbedtls_test_load_one_der_key(ASSET_SECP384R1_KEY);
+    }
+
+    if (ret == 0) {
+        ret = mbedtls_test_load_one_der_key(ASSET_SECP521R1_KEY);
+    }
+
+    if (ret == 0) {
+        ret = mbedtls_test_load_one_der_key(ASSET_SECP256R1_PKCS8_KEY);
+    }
+
+    if (ret == 0) {
+        ret = mbedtls_test_load_one_der_key(ASSET_RSA_PKCS8_KEY);
+    }
+
+#if 0
+    /* Commenting out ED25519 for now, probably not supported yet in MBEDTLS/PSA */
+    if (ret == 0) {
+        ret = mbedtls_test_load_one_der_key(ASSET_ED25519_KEY);
+    }
+#endif
+
+    return ret;
+}
+
 #endif

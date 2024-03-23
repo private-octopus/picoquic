@@ -418,6 +418,7 @@ static const picoquic_test_def_t test_table[] = {
 #ifdef PICOQUIC_WITH_MBEDTLS
     { "mbedtls", mbedtls_test },
     { "mbedtls_crypto", mbedtls_crypto_test },
+    { "mbedtls_load_der", mbedtls_load_der_test },
 #endif
     { "monopath_basic", monopath_basic_test },
     { "monopath_hole", monopath_hole_test },
