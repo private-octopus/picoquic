@@ -2837,7 +2837,7 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr* a
 int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
     uint64_t current_time, int * is_new_token, picoquic_connection_id_t * odcid, const picoquic_connection_id_t* rcid,
     uint32_t initial_pn,
-    const uint8_t * token, size_t token_size, int new_context_created)
+    const uint8_t * token, size_t token_size, int check_reuse)
 {
     int ret = 0;
     uint8_t text[128];
@@ -2872,7 +2872,7 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
             else {
                 /* Remove old tickets before testing this one. */
                 picoquic_registered_token_clear(quic, current_time);
-                if (new_context_created && (ret = picoquic_registered_token_check_reuse(quic, token, token_size, token_time)) != 0) {
+                if (check_reuse && (ret = picoquic_registered_token_check_reuse(quic, token, token_size, token_time)) != 0) {
                     picoquic_log_context_free_app_message(quic, rcid, "Duplicate token test returns %d", ret);
                 }
                 else if (odcid->id_len > 0 &&
@@ -2977,20 +2977,20 @@ void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key, const
     return (void *)picoquic_setup_test_aead_context(is_enc, key, prefix_label);
 }
 
-void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending)
+void * picoquic_find_retry_protection_context(picoquic_quic_t * quic, int version_index, int sending)
 {
     void * aead_ctx = NULL;
-    void ** aead_vector = (sending) ? cnx->quic->retry_integrity_sign_ctx : cnx->quic->retry_integrity_verify_ctx;
+    void ** aead_vector = (sending) ? quic->retry_integrity_sign_ctx : quic->retry_integrity_verify_ctx;
 
-    if (picoquic_supported_versions[cnx->version_index].version_retry_key != NULL) {
+    if (picoquic_supported_versions[version_index].version_retry_key != NULL) {
         if (aead_vector == NULL) {
             if (sending) {
-                cnx->quic->retry_integrity_sign_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
-                aead_vector = cnx->quic->retry_integrity_sign_ctx;
+                quic->retry_integrity_sign_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
+                aead_vector = quic->retry_integrity_sign_ctx;
             }
             else {
-                cnx->quic->retry_integrity_verify_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
-                aead_vector = cnx->quic->retry_integrity_verify_ctx;
+                quic->retry_integrity_verify_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
+                aead_vector = quic->retry_integrity_verify_ctx;
             }
             if (aead_vector != NULL) {
                 memset(aead_vector, 0, sizeof(void*)*picoquic_nb_supported_versions);
@@ -2998,11 +2998,11 @@ void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending)
         }
 
         if (aead_vector != NULL) {
-            aead_ctx = aead_vector[cnx->version_index];
+            aead_ctx = aead_vector[version_index];
             if (aead_ctx == NULL) {
-                aead_ctx = picoquic_create_retry_protection_context(sending, picoquic_supported_versions[cnx->version_index].version_retry_key,
-                                                                    picoquic_supported_versions[cnx->version_index].tls_prefix_label);
-                aead_vector[cnx->version_index] = aead_ctx;
+                aead_ctx = picoquic_create_retry_protection_context(sending, picoquic_supported_versions[version_index].version_retry_key,
+                                                                    picoquic_supported_versions[version_index].tls_prefix_label);
+                aead_vector[version_index] = aead_ctx;
             }
         }
     }

@@ -571,6 +571,77 @@ uint8_t picoquic_create_long_packet_type(picoquic_packet_type_enum pt, int versi
     return flags;
 }
 
+size_t picoquic_create_long_header(
+    picoquic_packet_type_enum packet_type,
+    picoquic_connection_id_t * dest_cnx_id,
+    picoquic_connection_id_t * srce_cnx_id,
+    int do_grease_quic_bit,
+    uint32_t version,
+    int version_index,
+    uint64_t sequence_number,
+    size_t retry_token_length,
+    uint8_t * retry_token,
+    uint8_t* bytes,
+    size_t* pn_offset,
+    size_t* pn_length)
+{
+    /* Create a long packet */
+    size_t length = 0;
+
+    /* The first byte is defined in RFC 9000 as:
+    *     Header Form (1) = 1,
+    *     Fixed Bit (1) = 1,
+    *     Long Packet Type (2),
+    *     Type-Specific Bits (4)
+    * The packet type is version dependent. In fact, the whole first byte is version
+    * dependent, the invariant draft only specifies the "header form" bit = 1 for long
+    * header. In version 1, the packet specific bytes are two reserved bytes +
+    * sequence number length, always set to 3 in picoquic (i.e., 4 bytes).
+    *
+    */
+    bytes[0] = picoquic_create_long_packet_type(packet_type, version_index);
+
+    if (do_grease_quic_bit) {
+        bytes[0] &= 0xBF;
+    }
+
+    length = 1;
+
+    picoformat_32(&bytes[length], picoquic_supported_versions[version_index].version);
+    length += 4;
+
+    bytes[length++] = dest_cnx_id->id_len;
+    length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, *dest_cnx_id);
+    bytes[length++] = srce_cnx_id->id_len;
+    length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, *srce_cnx_id);
+
+    /* Special case of packet initial -- encode token as part of header */
+    if (packet_type == picoquic_packet_initial) {
+        length += picoquic_varint_encode(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, retry_token_length);
+        if (retry_token_length > 0) {
+            memcpy(&bytes[length], retry_token, retry_token_length);
+            length += retry_token_length;
+        }
+    }
+
+    if (packet_type == picoquic_packet_retry) {
+        /* No payload length and no sequence number for Retry */
+        *pn_offset = 0;
+        *pn_length = 0;
+    }
+    else {
+        /* Reserve two bytes for payload length */
+        bytes[length++] = 0;
+        bytes[length++] = 0;
+        /* Encode the sequence number */
+        *pn_offset = length;
+        *pn_length = 4;
+        picoformat_32(&bytes[length], (uint32_t)sequence_number);
+        length += 4;
+    }
+    return length;
+}
+
 size_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
@@ -625,66 +696,28 @@ size_t picoquic_create_packet_header(
     }
     else {
         /* Create a long packet */
-        picoquic_connection_id_t dest_cnx_id =
+        picoquic_connection_id_t * dest_cnx_id =
             (cnx->client_mode && (packet_type == picoquic_packet_initial ||
                 packet_type == picoquic_packet_0rtt_protected)
                 && picoquic_is_connection_id_null(&path_x->p_remote_cnxid->cnx_id)) ?
-            cnx->initial_cnxid : path_x->p_remote_cnxid->cnx_id;
+            &cnx->initial_cnxid : &path_x->p_remote_cnxid->cnx_id;
+        picoquic_connection_id_t* srce_cnx_id = &path_x->p_local_cnxid->cnx_id;
+        uint32_t version = ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_initial) ?
+            cnx->proposed_version : picoquic_supported_versions[cnx->version_index].version;
 
-        /* The first byte is defined in RFC 9000 as:
-         *     Header Form (1) = 1,
-         *     Fixed Bit (1) = 1,
-         *     Long Packet Type (2),
-         *     Type-Specific Bits (4)
-         * The packet type is version dependent. In fact, the whole first byte is version
-         * dependent, the invariant draft only specifies the "header form" bit = 1 for long
-         * header. In version 1, the packet specific bytes are two reserved bytes +
-         * sequence number length, always set to 3 in picoquic (i.e., 4 bytes).
-         * 
-         */
-        bytes[0] = picoquic_create_long_packet_type(packet_type, cnx->version_index);
-
-        if (cnx->do_grease_quic_bit) {
-            bytes[0] &= 0xBF;
-        }
-
-        length = 1;
-        if ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_initial) {
-            picoformat_32(&bytes[length], cnx->proposed_version);
-        }
-        else {
-            picoformat_32(&bytes[length], picoquic_supported_versions[cnx->version_index].version);
-        }
-        length += 4;
-
-        bytes[length++] = dest_cnx_id.id_len;
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
-        bytes[length++] = path_x->p_local_cnxid->cnx_id.id_len;
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, path_x->p_local_cnxid->cnx_id);
-
-        /* Special case of packet initial -- encode token as part of header */
-        if (packet_type == picoquic_packet_initial) {
-            length += picoquic_varint_encode(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->retry_token_length);
-            if (cnx->retry_token_length > 0) {
-                memcpy(&bytes[length], cnx->retry_token, cnx->retry_token_length);
-                length += cnx->retry_token_length;
-            }
-        }
-
-        if (packet_type == picoquic_packet_retry) {
-            /* No payload length and no sequence number for Retry */
-            *pn_offset = 0;
-            *pn_length = 0;
-        } else {
-            /* Reserve two bytes for payload length */
-            bytes[length++] = 0;
-            bytes[length++] = 0;
-            /* Encode the sequence number */
-            *pn_offset = length;
-            *pn_length = 4;
-            picoformat_32(&bytes[length], (uint32_t) sequence_number);
-            length += 4;
-        }
+        length = picoquic_create_long_header(
+            packet_type,
+            dest_cnx_id,
+            srce_cnx_id,
+            version,
+            cnx->version_index,
+            cnx->do_grease_quic_bit,
+            sequence_number,
+            cnx->retry_token_length,
+            cnx->retry_token,
+            bytes,
+            pn_offset,
+            pn_length);
     }
 
     return length;
