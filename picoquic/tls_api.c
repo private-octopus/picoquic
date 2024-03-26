@@ -2910,9 +2910,9 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
                 /* Invalid token, too old */
                 ret = -1;
             }
-            /* If the PN value is not yet decrypted, setting it to UINT64_MAX
+            /* If the PN value is not yet decrypted, setting it to UINT32_MAX
              * bypasses the verification */
-            else if (initial_pn != UINT64_MAX && odcid->id_len > 0 && token_pn >= initial_pn) {
+            else if (initial_pn != UINT32_MAX && odcid->id_len > 0 && token_pn >= initial_pn) {
                 /* Invalid PN number */
                 ret = -1;
             }

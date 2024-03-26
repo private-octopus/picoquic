@@ -131,7 +131,7 @@ int picoquic_screen_initial_packet(
                 * is not decrypted yet.
                  */
                 if (picoquic_verify_retry_token(quic, addr_from, current_time,
-                    &is_new_token, &original_cnxid, &ph->dest_cnx_id, UINT64_MAX,
+                    &is_new_token, &original_cnxid, &ph->dest_cnx_id, UINT32_MAX,
                     ph->token_bytes, ph->token_length, 1) == 0) {
                     has_good_token = 1;
                 }
