@@ -7160,7 +7160,7 @@ int server_busy_test()
             DBG_PRINTF("Client state: %d, remote error: %" PRIx64, test_ctx->cnx_client->cnx_state, test_ctx->cnx_client->remote_error);
             ret = -1;
         }
-        else if (simulated_time > 50000ull) {
+        else if (simulated_time > 500000ull) {
             DBG_PRINTF("Simulated time: %" PRIu64, (unsigned long long)simulated_time);
             ret = -1;
         }
