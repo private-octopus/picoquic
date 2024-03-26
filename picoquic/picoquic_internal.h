@@ -1536,6 +1536,8 @@ int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
 /* Register or update default address and reset secret */
 int picoquic_register_net_secret(picoquic_cnx_t* cnx);
 
+void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id, uint8_t id_length, picoquic_connection_id_t cnx_id_remote);
+
 /* Management of path */
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     const struct sockaddr* local_addr, const struct sockaddr* peer_addr);
@@ -1657,6 +1659,12 @@ int picoquic_parse_packet_header(
     picoquic_cnx_t** pcnx,
     int receiving);
 
+size_t picoquic_create_long_header(picoquic_packet_type_enum packet_type, 
+    picoquic_connection_id_t* dest_cnx_id, picoquic_connection_id_t* srce_cnx_id,
+    int do_grease_quic_bit, uint32_t version, int version_index, uint64_t sequence_number,
+    size_t retry_token_length, uint8_t* retry_token,
+    uint8_t* bytes, size_t* pn_offset, size_t* pn_length);
+
 size_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
@@ -1676,6 +1684,8 @@ void picoquic_update_payload_length(
     uint8_t* bytes, size_t pnum_index, size_t header_length, size_t packet_length);
 
 size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, picoquic_epoch_enum is_cleartext_mode);
+
+void picoquic_protect_packet_header(uint8_t* send_buffer, size_t pn_offset, uint8_t first_mask, void* pn_enc);
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 

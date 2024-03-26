@@ -207,8 +207,6 @@ int h3zero_incoming_unidir_test()
     h3zero_stream_ctx_t* stream_ctx = NULL;
     h3zero_callback_ctx_t* h3_ctx = NULL;
     uint8_t unidir_input[] = { 0x40, 0x54, 0x04, 0xf0 };
-    size_t chunk = 2;
-
 
     if (ret == 0) {
         h3_ctx = h3zero_callback_create_context(NULL);

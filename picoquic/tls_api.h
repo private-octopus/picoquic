@@ -89,6 +89,7 @@ uint64_t picoquic_aead_integrity_limit(void* aead_ctx);
 uint64_t picoquic_aead_confidentiality_limit(void* aead_ctx);
 
 void picoquic_aead_free(void* aead_context);
+void picoquic_cipher_free(void* cipher_context);
 
 size_t picoquic_pn_iv_size(void *pn_enc);
 
@@ -109,6 +110,9 @@ int picoquic_setup_initial_secrets(
     uint8_t * server_secret);
 
 int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx);
+
+int picoquic_get_initial_aead_context(picoquic_quic_t* quic, int version_index, picoquic_connection_id_t* initial_cnxid,
+    int is_client, int is_enc, void** aead_ctx, void** pn_enc_ctx);
 
 uint8_t * picoquic_get_app_secret(picoquic_cnx_t* cnx, int is_enc);
 size_t picoquic_get_app_secret_size(picoquic_cnx_t* cnx);
@@ -146,7 +150,7 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr * 
 int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
     uint64_t current_time, int * is_new_token, picoquic_connection_id_t * odcid, 
     const picoquic_connection_id_t* rcid, uint32_t initial_pn,
-    const uint8_t * token, size_t token_size, int new_context_created);
+    const uint8_t * token, size_t token_size, int check_reuse);
 
 void picoquic_cid_free_under_mask_ctx(void * v_pn_enc);
 int picoquic_cid_get_under_mask_ctx(void ** v_pn_enc, const void * secret, const char *prefix_label);
@@ -173,7 +177,7 @@ ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count
 
 /* Special AEAD context definition functions used for stateless retry integrity protection */
 void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key, const char *prefix_label);
-void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending);
+void * picoquic_find_retry_protection_context(picoquic_quic_t * quic, int version_index, int sending);
 void picoquic_delete_retry_protection_contexts(picoquic_quic_t * quic);
 size_t picoquic_encode_retry_protection(void * integrity_aead, uint8_t * bytes, size_t bytes_max, size_t byte_index, const picoquic_connection_id_t * odcid);
 int picoquic_verify_retry_protection(void * integrity_aead, uint8_t * bytes, size_t * length, size_t byte_index, const picoquic_connection_id_t * odcid);

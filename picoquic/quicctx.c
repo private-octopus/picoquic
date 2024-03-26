@@ -1467,6 +1467,16 @@ static void picoquic_create_random_cnx_id(picoquic_quic_t* quic, picoquic_connec
     cnx_id->id_len = id_length;
 }
 
+void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id, uint8_t id_length, picoquic_connection_id_t cnx_id_remote)
+{
+    /* First call fills the CID with a random value */
+    picoquic_create_random_cnx_id(quic, cnx_id, quic->local_cnxid_length);
+    /* if required for application, call to function update that definition */
+    if (quic->cnx_id_callback_fn) {
+        quic->cnx_id_callback_fn(quic, *cnx_id, cnx_id_remote, quic->cnx_id_callback_ctx, cnx_id);
+    }
+}
+
 /* Path management -- returns the index of the path that was created. */
 
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct sockaddr* local_addr, const struct sockaddr* peer_addr)
@@ -3329,6 +3339,8 @@ picoquic_local_cnxid_list_t* picoquic_find_or_create_local_cnxid_list(picoquic_c
     return local_cnxid_list;
 }
 
+
+
 picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, 
     uint64_t unique_path_id, picoquic_connection_id_t* suggested_value, uint64_t current_time)
 {
@@ -3352,12 +3364,7 @@ picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx,
                         l_cid->cnx_id = *suggested_value;
                     }
                     else {
-                        picoquic_create_random_cnx_id(cnx->quic, &l_cid->cnx_id, cnx->quic->local_cnxid_length);
-
-                        if (cnx->quic->cnx_id_callback_fn) {
-                            cnx->quic->cnx_id_callback_fn(cnx->quic, l_cid->cnx_id, cnx->initial_cnxid,
-                                cnx->quic->cnx_id_callback_ctx, &l_cid->cnx_id);
-                        }
+                        picoquic_create_local_cnx_id(cnx->quic, &l_cid->cnx_id, cnx->quic->local_cnxid_length, cnx->initial_cnxid);
                     }
 
                     if (picoquic_cnx_by_id(cnx->quic, l_cid->cnx_id, NULL) == NULL) {
