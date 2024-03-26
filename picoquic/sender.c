@@ -606,8 +606,7 @@ size_t picoquic_create_long_header(
     }
 
     length = 1;
-
-    picoformat_32(&bytes[length], picoquic_supported_versions[version_index].version);
+    picoformat_32(&bytes[length], version);
     length += 4;
 
     bytes[length++] = dest_cnx_id->id_len;
@@ -709,9 +708,9 @@ size_t picoquic_create_packet_header(
             packet_type,
             dest_cnx_id,
             srce_cnx_id,
+            cnx->do_grease_quic_bit,
             version,
             cnx->version_index,
-            cnx->do_grease_quic_bit,
             sequence_number,
             cnx->retry_token_length,
             cnx->retry_token,
@@ -805,6 +804,29 @@ size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, picoquic_epoch_enum epo
     return ret;
 }
 
+void picoquic_protect_packet_header(uint8_t * send_buffer, size_t pn_offset, uint8_t first_mask, void* pn_enc)
+{
+    /* The sample is located after the pn_offset */
+    size_t sample_offset = /* header_length */ pn_offset + 4;
+
+    if (pn_offset < sample_offset)
+    {
+        /* This is always true, as we use pn_length = 4 */
+        uint8_t mask_bytes[5] = { 0, 0, 0, 0, 0 };
+        uint8_t pn_l;
+
+        picoquic_pn_encrypt(pn_enc, send_buffer + sample_offset, mask_bytes, mask_bytes, 5);
+        /* Encode the first byte */
+        pn_l = (send_buffer[0] & 3) + 1;
+        send_buffer[0] ^= (mask_bytes[0] & first_mask);
+
+        /* Packet encoding is 1 to 4 bytes */
+        for (uint8_t i = 0; i < pn_l; i++) {
+            send_buffer[pn_offset+i] ^= mask_bytes[i+1];
+        }
+    }
+}
+
 static size_t picoquic_protect_packet(picoquic_cnx_t* cnx, 
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, 
@@ -817,7 +839,6 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     size_t send_length;
     size_t h_length;
     size_t pn_offset = 0;
-    size_t sample_offset = 0;
     size_t pn_length = 0;
     size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
     uint8_t first_mask = 0x0F;
@@ -893,24 +914,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
         send_buffer, send_length, current_time);
 
     /* Next, encrypt the PN -- The sample is located after the pn_offset */
-    sample_offset = /* header_length */ pn_offset + 4;
-
-    if (pn_offset < sample_offset)
-    {
-        /* This is always true, as use pn_length = 4 */
-        uint8_t mask_bytes[5] = { 0, 0, 0, 0, 0 };
-        uint8_t pn_l;
-
-        picoquic_pn_encrypt(pn_enc, send_buffer + sample_offset, mask_bytes, mask_bytes, 5);
-        /* Encode the first byte */
-        pn_l = (send_buffer[0] & 3) + 1;
-        send_buffer[0] ^= (mask_bytes[0] & first_mask);
-
-        /* Packet encoding is 1 to 4 bytes */
-        for (uint8_t i = 0; i < pn_l; i++) {
-            send_buffer[pn_offset+i] ^= mask_bytes[i+1];
-        }
-    }
+    picoquic_protect_packet_header(send_buffer, pn_offset, first_mask, pn_enc);
 
     return send_length;
 }

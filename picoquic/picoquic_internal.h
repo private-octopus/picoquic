@@ -1685,6 +1685,8 @@ void picoquic_update_payload_length(
 
 size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, picoquic_epoch_enum is_cleartext_mode);
 
+void picoquic_protect_packet_header(uint8_t* send_buffer, size_t pn_offset, uint8_t first_mask, void* pn_enc);
+
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
 void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx); /* For debugging potential PN_ENC corruption */

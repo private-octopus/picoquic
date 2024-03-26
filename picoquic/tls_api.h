@@ -89,6 +89,7 @@ uint64_t picoquic_aead_integrity_limit(void* aead_ctx);
 uint64_t picoquic_aead_confidentiality_limit(void* aead_ctx);
 
 void picoquic_aead_free(void* aead_context);
+void picoquic_cipher_free(void* cipher_context);
 
 size_t picoquic_pn_iv_size(void *pn_enc);
 
@@ -109,6 +110,9 @@ int picoquic_setup_initial_secrets(
     uint8_t * server_secret);
 
 int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx);
+
+int picoquic_get_initial_aead_context(picoquic_quic_t* quic, int version_index, picoquic_connection_id_t* initial_cnxid,
+    int is_client, int is_enc, void** aead_ctx, void** pn_enc_ctx);
 
 uint8_t * picoquic_get_app_secret(picoquic_cnx_t* cnx, int is_enc);
 size_t picoquic_get_app_secret_size(picoquic_cnx_t* cnx);

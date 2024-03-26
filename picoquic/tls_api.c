@@ -1371,31 +1371,38 @@ int picoquic_setup_initial_secrets(
     return ret;
 }
 
-int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
+static int picoquic_compute_initial_secrets(picoquic_quic_t * quic, int version_index, picoquic_connection_id_t *initial_cnxid,
+    ptls_cipher_suite_t * *cipher, uint8_t *client_secret, uint8_t *server_secret)
 {
     int ret = 0;
-    uint8_t master_secret[256]; /* secret_max */
-    ptls_cipher_suite_t * cipher = picoquic_get_aes128gcm_sha256(cnx->quic->use_low_memory);
     ptls_iovec_t salt;
-    uint8_t client_secret[256];
-    uint8_t server_secret[256];
-    uint8_t *secret1, *secret2;
-    const char *prefix_label = picoquic_supported_versions[cnx->version_index].tls_prefix_label;
-
-    if (cipher == NULL) {
+    uint8_t master_secret[256]; /* secret_max */
+    *cipher = picoquic_get_aes128gcm_sha256(quic->use_low_memory);
+    if (*cipher == NULL) {
         ret = -1;
     }
     else {
-        picoquic_setup_cleartext_aead_salt(cnx->version_index, &salt);
+        picoquic_setup_cleartext_aead_salt(version_index, &salt);
 
         /* Extract the master key -- key length will be 32 per SHA256 */
-        ret = picoquic_setup_initial_master_secret(cipher, salt, cnx->initial_cnxid, master_secret);
+        ret = picoquic_setup_initial_master_secret(*cipher, salt, *initial_cnxid, master_secret);
+        if (ret == 0) {
+            ret = picoquic_setup_initial_secrets(*cipher, master_secret, client_secret, server_secret);
+        }
     }
+    return ret;
+}
 
-    /* set up client and server secrets */
-    if (ret == 0) {
-        ret = picoquic_setup_initial_secrets(cipher, master_secret, client_secret, server_secret);
-    }
+int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    const char *prefix_label = picoquic_supported_versions[cnx->version_index].tls_prefix_label;
+    ptls_cipher_suite_t* cipher = NULL;
+    uint8_t client_secret[256];
+    uint8_t server_secret[256];
+    uint8_t *secret1, *secret2;
+
+    ret = picoquic_compute_initial_secrets(cnx->quic, cnx->version_index, &cnx->initial_cnxid, &cipher, client_secret, server_secret);
 
     /* derive the initial keys */
     if (ret == 0) {
@@ -1415,6 +1422,38 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
         }
     }
 
+    return ret;
+}
+
+int picoquic_get_initial_aead_context(picoquic_quic_t * quic, int version_index, picoquic_connection_id_t *initial_cnxid,
+    int is_client, int is_enc, void** aead_ctx, void ** pn_enc_ctx)
+{
+    int ret = 0;
+    ptls_cipher_suite_t* cipher = NULL;
+    uint8_t client_secret[256];
+    uint8_t server_secret[256];
+    const char *prefix_label = picoquic_supported_versions[version_index].tls_prefix_label;
+
+    *aead_ctx = NULL;
+    *pn_enc_ctx = NULL;
+
+    ret = picoquic_compute_initial_secrets(quic, version_index, initial_cnxid, &cipher, client_secret, server_secret);
+
+    if (ret == 0) {
+        uint8_t* selected_secret;
+
+        if (!is_client) {
+            selected_secret = (is_enc) ? server_secret : client_secret;
+        }
+        else {
+            selected_secret = (is_enc) ? client_secret : server_secret;
+        }
+
+        ret = picoquic_set_aead_from_secret(aead_ctx, cipher, 1, selected_secret, prefix_label);
+        if (ret == 0) {
+            ret = picoquic_set_pn_enc_from_secret(pn_enc_ctx, cipher, is_enc, selected_secret, prefix_label);
+        }
+    }
     return ret;
 }
 
@@ -2274,6 +2313,12 @@ void picoquic_aead_free(void* aead_context)
     ptls_aead_free((ptls_aead_context_t*)aead_context);
 }
 
+void picoquic_cipher_free(void* cipher_context)
+{
+    ptls_cipher_free((ptls_cipher_context_t*)cipher_context);
+}
+
+
 size_t picoquic_aead_get_checksum_length(void* aead_context)
 {
     size_t tag_size = ((ptls_aead_context_t*)aead_context)->algo->tag_size;
@@ -2865,7 +2910,9 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
                 /* Invalid token, too old */
                 ret = -1;
             }
-            else if (odcid->id_len > 0 && token_pn >= initial_pn) {
+            /* If the PN value is not yet decrypted, setting it to UINT64_MAX
+             * bypasses the verification */
+            else if (initial_pn != UINT64_MAX && odcid->id_len > 0 && token_pn >= initial_pn) {
                 /* Invalid PN number */
                 ret = -1;
             }
