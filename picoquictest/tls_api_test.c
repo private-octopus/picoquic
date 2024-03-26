@@ -6159,9 +6159,14 @@ int client_only_test()
         picoquic_set_binlog(test_ctx->qclient, ".");
         binlog_new_connection(test_ctx->cnx_client);
         connection_ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
-        if (connection_ret == 0) {
+        if (connection_ret == 0 && test_ctx->cnx_client->cnx_state < picoquic_state_disconnected) {
             DBG_PRINTF("Connection unexpectedly succeeds, state=%d, ret=%d (0x%x)",
                 test_ctx->cnx_client->cnx_state, connection_ret, connection_ret);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server != NULL) {
+            DBG_PRINTF("Connection context created on client-only note, ret=%d (0x%x)",
+                connection_ret, connection_ret);
             ret = -1;
         }
     }
