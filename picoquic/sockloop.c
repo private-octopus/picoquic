@@ -1156,37 +1156,7 @@ picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(picoquic_qui
 picoquic_network_thread_ctx_t* picoquic_start_network_thread(picoquic_quic_t* quic,
     picoquic_packet_loop_param_t* param, picoquic_packet_loop_cb_fn loop_callback, void* loop_callback_ctx, int* ret)
 {
-#if 1
     return picoquic_start_custom_network_thread(quic, param, NULL, NULL, NULL, NULL, loop_callback, loop_callback_ctx, ret);
-#else
-    picoquic_network_thread_ctx_t* thread_ctx = (picoquic_network_thread_ctx_t*)malloc(sizeof(picoquic_network_thread_ctx_t));
-    *ret = 0;
-
-    if (thread_ctx == NULL) {
-        /* Error, no memory */
-    }
-    else {
-        memset(thread_ctx, 0, sizeof(picoquic_network_thread_ctx_t));
-        /* Fill the arguments in the context */
-        thread_ctx->quic = quic;
-        thread_ctx->param = param;
-        thread_ctx->loop_callback = loop_callback;
-        thread_ctx->loop_callback_ctx = loop_callback_ctx;
-        /* Open the wake up pipe or event */
-        picoquic_open_network_wake_up(thread_ctx, ret);
-        /* Start thread at specified entry point */
-        if (thread_ctx->wake_up_defined){
-            thread_ctx->is_threaded = 1;
-            if ((*ret = picoquic_create_thread(&thread_ctx->thread_id, picoquic_packet_loop_v3, (void*)thread_ctx)) != 0) {
-                /* Free the context and return error condition if something went wrong */
-                thread_ctx->is_threaded = 0;
-                picoquic_delete_network_thread(thread_ctx);
-                thread_ctx = NULL;
-            }
-        }
-    }
-    return thread_ctx;
-#endif
 }
 
 int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
