@@ -1449,7 +1449,7 @@ int picoquic_get_initial_aead_context(picoquic_quic_t * quic, int version_index,
             selected_secret = (is_enc) ? client_secret : server_secret;
         }
 
-        ret = picoquic_set_aead_from_secret(aead_ctx, cipher, 1, selected_secret, prefix_label);
+        ret = picoquic_set_aead_from_secret(aead_ctx, cipher, is_enc, selected_secret, prefix_label);
         if (ret == 0) {
             ret = picoquic_set_pn_enc_from_secret(pn_enc_ctx, cipher, is_enc, selected_secret, prefix_label);
         }

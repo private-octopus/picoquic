@@ -88,6 +88,7 @@ picoquic_packet_type_enum picoquic_parse_long_packet_type(uint8_t flags, int ver
 
 int picoquic_screen_initial_packet(
     picoquic_quic_t* quic,
+    const uint8_t* bytes,
     size_t packet_length,
     const struct sockaddr* addr_from,
     picoquic_packet_header* ph,
@@ -111,54 +112,86 @@ int picoquic_screen_initial_packet(
         ret = PICOQUIC_ERROR_PACKET_HEADER_PARSING;
     }
     else if (*pcnx == NULL) {
-        if (quic->enforce_client_only) {
-            /* Cannot create a client connection if the context is client only */
-            ret = PICOQUIC_ERROR_SERVER_BUSY;
-        }
-        else if (quic->server_busy) {
-            /* Cannot create a client connection now, send immediate close. */
-            ret = PICOQUIC_ERROR_SERVER_BUSY;
+        /* Verify the AEAD checkum */
+        void* aead_ctx = NULL;
+        void* pn_dec_ctx = NULL;
+        uint8_t decrypted_bytes[PICOQUIC_MAX_PACKET_SIZE];
+        picoquic_packet_header dph = *ph;
+
+        if (picoquic_get_initial_aead_context(quic, ph->version_index, &ph->dest_cnx_id,
+            0 /* is_client=0 */, 0 /* is_enc = 0 */, &aead_ctx, &pn_dec_ctx) == 0) {
+            ret = picoquic_remove_header_protection_inner((uint8_t *)bytes, ph->offset + ph->payload_length,
+                decrypted_bytes, &dph, pn_dec_ctx, 0 /* is_loss_bit_enabled_incoming */, 0 /* sack_list_last*/);
+            if (ret == 0) {
+                size_t decrypted_length = picoquic_aead_decrypt_generic(decrypted_bytes + dph.offset,
+                    bytes + dph.offset, dph.payload_length, dph.pn64, decrypted_bytes, dph.offset, 
+                    aead_ctx);
+                if (decrypted_length >= dph.payload_length) {
+                    ret = PICOQUIC_ERROR_AEAD_CHECK;
+                }
+            }
         }
         else {
-            int is_address_blocked = !quic->is_port_blocking_disabled && picoquic_check_addr_blocked(addr_from);
-            int is_new_token = 0;
-            int has_good_token = 0;
-            int has_bad_token = 0;
-            picoquic_connection_id_t original_cnxid = { 0 };
-            if (ph->token_length > 0) {
-                /* If a token is present, verify it.
-                * The PN verification is disabled (UINT64_MAX) because the PN
-                * is not decrypted yet.
-                 */
-                if (picoquic_verify_retry_token(quic, addr_from, current_time,
-                    &is_new_token, &original_cnxid, &ph->dest_cnx_id, UINT32_MAX,
-                    ph->token_bytes, ph->token_length, 1) == 0) {
-                    has_good_token = 1;
-                }
-                else {
-                    has_bad_token = 1;
-                }
-            }
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
 
-            if (has_bad_token && !is_new_token) {
-                /* sending a bad retry token is fatal, sending an old new token is not */
-                ret = PICOQUIC_ERROR_INVALID_TOKEN;
+        if (aead_ctx != NULL) {
+            /* Free the AEAD CTX */
+            picoquic_aead_free(aead_ctx);
+        }
+
+        if (pn_dec_ctx != NULL) {
+            /* Free the PN encryption context */
+            picoquic_cipher_free(pn_dec_ctx);
+        }
+
+        if (ret == 0) {
+            if (quic->enforce_client_only) {
+                /* Cannot create a client connection if the context is client only */
+                ret = PICOQUIC_ERROR_SERVER_BUSY;
             }
-            else if (!has_good_token && (quic->force_check_token || quic->max_half_open_before_retry <= quic->current_number_half_open || is_address_blocked)) {
-                /* tokens are required before accepting new connections, so ask to queue a retry packet. */
-                ret = PICOQUIC_ERROR_RETRY_NEEDED;
+            else if (quic->server_busy) {
+                /* Cannot create a client connection now, send immediate close. */
+                ret = PICOQUIC_ERROR_SERVER_BUSY;
             }
             else {
-                /* All clear */
-                /* Check: what do do with odcid? */
-                *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
-                if (*pcnx == NULL) {
-                    /* Could not allocate the context */
-                    ret = PICOQUIC_ERROR_MEMORY;
+                int is_address_blocked = !quic->is_port_blocking_disabled && picoquic_check_addr_blocked(addr_from);
+                int is_new_token = 0;
+                int has_good_token = 0;
+                int has_bad_token = 0;
+                picoquic_connection_id_t original_cnxid = { 0 };
+                if (ph->token_length > 0) {
+                    /* If a token is present, verify it. */
+                    if (picoquic_verify_retry_token(quic, addr_from, current_time,
+                        &is_new_token, &original_cnxid, &ph->dest_cnx_id, (uint32_t)dph.pn64,
+                        ph->token_bytes, ph->token_length, 1) == 0) {
+                        has_good_token = 1;
+                    }
+                    else {
+                        has_bad_token = 1;
+                    }
                 }
-                else if (has_good_token) {
-                    (*pcnx)->initial_validated = 1;
-                    (void)picoquic_parse_connection_id(original_cnxid.id, original_cnxid.id_len, &(*pcnx)->original_cnxid);
+
+                if (has_bad_token && !is_new_token) {
+                    /* sending a bad retry token is fatal, sending an old new token is not */
+                    ret = PICOQUIC_ERROR_INVALID_TOKEN;
+                }
+                else if (!has_good_token && (quic->force_check_token || quic->max_half_open_before_retry <= quic->current_number_half_open || is_address_blocked)) {
+                    /* tokens are required before accepting new connections, so ask to queue a retry packet. */
+                    ret = PICOQUIC_ERROR_RETRY_NEEDED;
+                }
+                else {
+                    /* All clear */
+                    /* Check: what do do with odcid? */
+                    *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
+                    if (*pcnx == NULL) {
+                        /* Could not allocate the context */
+                        ret = PICOQUIC_ERROR_MEMORY;
+                    }
+                    else if (has_good_token) {
+                        (*pcnx)->initial_validated = 1;
+                        (void)picoquic_parse_connection_id(original_cnxid.id, original_cnxid.id_len, &(*pcnx)->original_cnxid);
+                    }
                 }
             }
         }
@@ -539,16 +572,16 @@ void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx)
 /*
  * Remove header protection 
  */
-int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
+int picoquic_remove_header_protection_inner(
     uint8_t* bytes,
-    uint8_t * decrypted_bytes,
-    picoquic_packet_header* ph)
+    size_t length,
+    uint8_t* decrypted_bytes,
+    picoquic_packet_header* ph,
+    void * pn_enc,
+    unsigned int is_loss_bit_enabled_incoming,
+    uint64_t sack_list_last)
 {
     int ret = 0;
-    size_t length = ph->offset + ph->payload_length; /* this may change after decrypting the PN */
-    void * pn_enc = NULL;
-
-    pn_enc = cnx->crypto_context[ph->epoch].pn_dec;
 
     if (pn_enc != NULL)
     {
@@ -572,10 +605,9 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
         else
         {   /* Decode */
             uint8_t first_byte = bytes[0];
-            uint8_t first_mask = ((first_byte & 0x80) == 0x80) ? 0x0F : (cnx->is_loss_bit_enabled_incoming)?0x07:0x1F;
+            uint8_t first_mask = ((first_byte & 0x80) == 0x80) ? 0x0F : (is_loss_bit_enabled_incoming)?0x07:0x1F;
             uint8_t pn_l;
             uint32_t pn_val = 0;
-            picoquic_sack_list_t* sack_list;
 
             memcpy(decrypted_bytes, bytes, ph->pn_offset);
             picoquic_pn_encrypt(pn_enc, bytes + sample_offset, mask_bytes, mask_bytes, mask_length);
@@ -601,12 +633,11 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
             }
 
             /* Build a packet number to 64 bits */
-            sack_list = picoquic_sack_list_from_cnx_context(cnx, ph->pc, ph->l_cid);
-            ph->pn64 = picoquic_get_packet_number64(picoquic_sack_list_last(sack_list), ph->pnmask, ph->pn);
+            ph->pn64 = picoquic_get_packet_number64(sack_list_last, ph->pnmask, ph->pn);
 
             /* Check the reserved bits */
             if ((first_byte & 0x80) == 0) {
-                ph->has_reserved_bit_set = !cnx->is_loss_bit_enabled_incoming && (first_byte & 0x18) != 0;
+                ph->has_reserved_bit_set = !is_loss_bit_enabled_incoming && (first_byte & 0x18) != 0;
             }
             else{
                 ph->has_reserved_bit_set = (first_byte & 0x0c) != 0;
@@ -625,6 +656,22 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
 
         ret = PICOQUIC_ERROR_AEAD_NOT_READY;
     }
+
+    return ret;
+}
+
+int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
+    uint8_t* bytes,
+    uint8_t * decrypted_bytes,
+    picoquic_packet_header* ph)
+{
+    int ret = 0;
+    size_t length = ph->offset + ph->payload_length; /* this may change after decrypting the PN */
+    void * pn_enc = cnx->crypto_context[ph->epoch].pn_dec;
+
+    picoquic_sack_list_t* sack_list = picoquic_sack_list_from_cnx_context(cnx, ph->pc, ph->l_cid);
+    ret = picoquic_remove_header_protection_inner(bytes, length, decrypted_bytes, ph,
+        pn_enc, cnx->is_loss_bit_enabled_incoming, picoquic_sack_list_last(sack_list));
 
     return ret;
 }
@@ -826,7 +873,7 @@ int picoquic_parse_header_and_decrypt(
 
             if (*pcnx == NULL) {
                 if (ph->ptype == picoquic_packet_initial) {
-                    ret = picoquic_screen_initial_packet(quic, packet_length, addr_from, ph, current_time, pcnx, new_ctx_created);
+                    ret = picoquic_screen_initial_packet(quic, bytes, packet_length, addr_from, ph, current_time, pcnx, new_ctx_created);
                 }
             }
             else if (!(*pcnx)->client_mode && ph->ptype == picoquic_packet_initial && packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
@@ -851,7 +898,7 @@ int picoquic_parse_header_and_decrypt(
                     }
 
                     if (ret == 0) {
-                        /* Remove header protection at this point -- values of bytes will change */
+                        /* Remove header protection at this point -- values of bytes will not change */
                         ret = picoquic_remove_header_protection(*pcnx, (uint8_t*)bytes, decrypted_data->data, ph);
                     }
 
