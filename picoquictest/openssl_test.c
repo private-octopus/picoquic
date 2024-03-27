@@ -49,15 +49,6 @@ int openssl_cert_test()
     return 0;
 }
 #else
-#include "picotls/openssl.h"
-#include <openssl/pem.h>
-#include <openssl/err.h>
-#include <openssl/engine.h>
-#include <openssl/conf.h>
-#include <openssl/ssl.h>
-#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-#include <openssl/provider.h>
-#endif
 
 ptls_iovec_t* picoquic_openssl_get_certs_from_file(char const* file_name, size_t* count);
 
