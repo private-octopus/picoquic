@@ -135,6 +135,16 @@ int picoquic_screen_initial_packet(
             ret = PICOQUIC_ERROR_MEMORY;
         }
 
+        if (aead_ctx != NULL) {
+            /* Free the AEAD CTX */
+            picoquic_aead_free(aead_ctx);
+        }
+
+        if (pn_dec_ctx != NULL) {
+            /* Free the PN encryption context */
+            picoquic_cipher_free(pn_dec_ctx);
+        }
+
         if (ret == 0) {
             if (quic->enforce_client_only) {
                 /* Cannot create a client connection if the context is client only */
