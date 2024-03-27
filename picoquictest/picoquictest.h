@@ -413,6 +413,7 @@ int minicrypto_is_last_test();
 int mbedtls_crypto_test();
 #endif
 int mbedtls_test();
+int openssl_cert_test();
 int monopath_basic_test();
 int monopath_hole_test();
 int monopath_rotation_test();
