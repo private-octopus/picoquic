@@ -1143,6 +1143,13 @@ void picoquic_prepare_version_negotiation(
  * Per draft 14, the stateless reset starts with the packet code 0K110000.
  * The packet has after the first byte at least 23 random bytes, and then
  * the 16 bytes reset token.
+ * 
+ * The "pad size" is computed so that the packet length is always at least
+ * 1 byte shorter than the incoming packet. Since the minimum size of a
+ * stateless reset is PICOQUIC_RESET_PACKET_MIN_SIZE, this code only
+ * respond to packets that are strictly larger than the size.
+ * 
+ * 
  */
 void picoquic_process_unexpected_cnxid(
     picoquic_quic_t* quic,
@@ -1158,20 +1165,16 @@ void picoquic_process_unexpected_cnxid(
         quic->stateless_reset_next_time <= current_time) {
         picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
         if (sp != NULL) {
-            size_t pad_size = length - PICOQUIC_RESET_SECRET_SIZE -1;
+            size_t pad_size = length - PICOQUIC_RESET_SECRET_SIZE - 2;
             uint8_t* bytes = sp->bytes;
             size_t byte_index = 0;
 
-            if (pad_size > PICOQUIC_RESET_PACKET_PAD_SIZE) {
-                pad_size = (size_t)picoquic_public_uniform_random(pad_size - PICOQUIC_RESET_PACKET_PAD_SIZE)
-                    + PICOQUIC_RESET_PACKET_PAD_SIZE;
-            }
-            else {
-                pad_size = PICOQUIC_RESET_PACKET_PAD_SIZE;
+            if (pad_size > PICOQUIC_RESET_PACKET_MIN_SIZE - PICOQUIC_RESET_SECRET_SIZE - 1) {
+                pad_size -= (size_t)picoquic_public_uniform_random(pad_size - (PICOQUIC_RESET_PACKET_MIN_SIZE - PICOQUIC_RESET_SECRET_SIZE - 1));
             }
 
             /* Packet type set to short header, randomize the 5 lower bits */
-            bytes[byte_index++] = 0x30 | (uint8_t)(picoquic_public_random_64() & 0x1F);
+            bytes[byte_index++] = 0x40 | (uint8_t)(picoquic_public_random_64() & 0x3F);
 
             /* Add the random bytes */
             picoquic_public_random(bytes + byte_index, pad_size);
