@@ -1,20 +1,17 @@
 #include <iostream>
 #include <picoquic.h>
 #include "picoquic_packet_loop.h"
+#include "picoquic_internal.h"
 #include <cmath>
 #include <chrono>
 #include <fstream>
 
 std::string msg(1000000000, 'a');
 
-// typedef struct st_server_app_ctx_t
-// {
-//   long *send_timestamp;
-//   int response_count;
-//   int total_requests;
-//   long *send_times;
-//   std::string output_file;
-// } server_app_ctx_t;
+typedef struct st_server_app_ctx_t
+{
+  int last_path_id;
+} server_app_ctx_t;
 
 int sample_server_callback(picoquic_cnx_t *cnx,
                            uint64_t stream_id, uint8_t *bytes, size_t length,
@@ -32,22 +29,14 @@ int main(int argc, char **argv)
   const char *server_cert = "./sample/ca-cert.pem";
   const char *server_key = "./sample/server-key.pem";
   char *default_alpn = "my_custom_alpn";
-  // char *default_alpn = "application layer protocol";
   uint64_t current_time = picoquic_current_time();
 
   // Server app context
-  // server_app_ctx_t *server_ctx = new server_app_ctx_t();
-  // server_ctx->total_requests = atoi(argv[1]);
-  // server_ctx->send_timestamp = new long[server_ctx->total_requests];
-  // server_ctx->response_count = 0;
-  // server_ctx->output_file = std::string(argv[2]);
-  // server_ctx->send_times = new long[server_ctx->total_requests];
+  server_app_ctx_t *server_ctx = new server_app_ctx_t();
+  server_ctx->last_path_id = 0;
 
   // Create a quic context
-  // picoquic_quic_t *quic = picoquic_create(10, server_cert, server_key, NULL, default_alpn, NULL, NULL,
-  //                                         NULL, NULL, NULL, current_time, NULL,
-  //                                         NULL, NULL, 0);
-  picoquic_quic_t *quic = picoquic_create(10, server_cert, server_key, NULL, default_alpn, sample_server_callback, NULL,
+  picoquic_quic_t *quic = picoquic_create(10, server_cert, server_key, NULL, default_alpn, sample_server_callback, server_ctx,
                                           NULL, NULL, NULL, current_time, NULL,
                                           NULL, NULL, 0);
 
@@ -59,6 +48,8 @@ int main(int argc, char **argv)
 
   // Set some configurations
   picoquic_set_default_congestion_algorithm(quic, picoquic_cubic_algorithm);
+  picoquic_set_default_multipath_option(quic, 1);  // Enable multipath
+  picoquic_enable_path_callbacks_default(quic, 1); // Enable path callbacks
   // picoquic_set_key_log_file_from_env(quic);
   // picoquic_set_qlog(quic, qlog_dir);
   // picoquic_set_log_level(quic, 1);
@@ -86,50 +77,68 @@ int sample_server_callback(picoquic_cnx_t *cnx,
                            picoquic_call_back_event_t fin_or_event, void *callback_ctx, void *stream_ctx)
 {
 
-  // st_server_app_ctx_t *server_ctx = (st_server_app_ctx_t *)callback_ctx;
+  st_server_app_ctx_t *server_ctx = (st_server_app_ctx_t *)callback_ctx;
 
   switch (fin_or_event)
   {
   case picoquic_callback_stream_data: // Data received from peer on stream N
   {
-    // std::cout << "Server callback: stream data. length is " << length << std::endl;
     std::string data = std::string((char *)bytes, length);
 
     // Send a response
     long num_bytes = strtol(data.c_str(), NULL, 10);
-    // std::cout << "Requested size is " << num_bytes << std::endl;
-    // server_ctx->send_times[server_ctx->response_count] = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    std::cout << "Requested size is " << num_bytes << std::endl
+              << std::endl
+              << std::endl;
+
+    // picoquic_set_stream_path_affinity(cnx, stream_id, cnx->path[server_ctx->last_path_id]->unique_path_id);
+    // picoquic_set_stream_path_affinity(cnx, stream_id, cnx->path[1]->unique_path_id);
+    stream_id = picoquic_get_next_local_stream_id(cnx, 0);
+    // picoquic_set_stream_priority(cnx, stream_id, 0);
+    std::cout << "First_stream_id: " << stream_id << std::endl;
     picoquic_add_to_stream(cnx, stream_id, (uint8_t *)msg.c_str(), num_bytes, 0);
-    // std::cout << "Server callback: response sent" << std::endl;
-    // server_ctx->response_count++;
-    // if (server_ctx->response_count == server_ctx->total_requests)
-    // {
-    //   std::cout << "Server callback: all responses sent" << std::endl;
 
-    //   std::ofstream file(server_ctx->output_file);
-    //   if (file.is_open())
-    //   {
-    //     file << "response_send_timestamp" << std::endl;
-    //   }
+    stream_id = picoquic_get_next_local_stream_id(cnx, 0);
+    // picoquic_set_stream_priority(cnx, stream_id, 1);
+    std::cout << "Second stream id is " << stream_id << std::endl;
+    picoquic_add_to_stream(cnx, stream_id, (uint8_t *)msg.c_str(), num_bytes, 0);
 
-    //   std::cout << "time" << std::endl;
-    //   for (int i = 0; i < server_ctx->total_requests; i++)
-    //   {
-    //     file << server_ctx->send_times[i] << std::endl;
-    //   }
-    //   file.close();
+    if (server_ctx->last_path_id == 0)
+    {
+      server_ctx->last_path_id = 1;
+    }
+    else
+    {
+      server_ctx->last_path_id = 0;
+    }
 
-    //   delete[] server_ctx->send_times;
-    //   delete server_ctx;
-    //   exit(0);
-    // }
+    std::cout << "Server callback: response sent" << std::endl;
   }
   break;
   case picoquic_callback_stream_fin: // Fin received from peer on stream N; data is optional
     std::cout << "Server callback: stream fin. length is " << length << std::endl;
     break;
+  case picoquic_callback_path_available:
+    std::cout << "Client callback: path available" << std::endl;
+    break;
+  case picoquic_callback_path_suspended:
+    std::cout << "Client callback: path suspended" << std::endl;
+    break;
+  case picoquic_callback_path_deleted:
+    std::cout << "Client callback: path deleted" << std::endl;
+    break;
+  case picoquic_callback_path_quality_changed:
+    std::cout << "Client callback: path quality changed" << std::endl;
+    break;
+  case picoquic_callback_close:
+    std::cout << "Server callback: connection closed" << std::endl;
+    for (int i = 0; i < cnx->nb_paths; i++)
+    {
+      std::cout << "Path " << i << " is " << cnx->path[i]->selected << std::endl;
+    }
+    break;
   default:
-    // std::cout << "Server callback: unknown event " << fin_or_event << std::endl;
+    std::cout << "Server callback: unknown event " << fin_or_event << std::endl;
     break;
   }
 
