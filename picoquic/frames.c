@@ -1227,13 +1227,19 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
         if (found_stream != NULL && stream->stream_priority > found_stream->stream_priority) {
             /* All the streams at that priority level have been examined,
              * the current selection is validated */
-            break;
+            // break;
+            if(path_x == NULL) {
+                break;
+            }
         }
         has_data = (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
                 (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
                 (stream->fin_requested && !stream->fin_sent)));
-        if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
-            /* Only consider the streams that meet path affinity requirements */
+        // if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
+        //     /* Only consider the streams that meet path affinity requirements */
+        //     // has_data = 0;
+        // }
+        if(has_data && path_x != NULL && stream->stream_priority == path_x->unique_path_id){
             has_data = 0;
         }
         if ((stream->reset_requested && !stream->reset_sent) ||
@@ -1252,15 +1258,17 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
             }
             if (has_data) {
                 /* Something can be sent */
-                if ((stream->stream_priority & 1) != 0) {
-                    /* This priority level requests FIFO processing, so we return the first available stream */
-                    found_stream = stream;
-                    break;
-                }
-                else if (found_stream == NULL || stream->last_time_data_sent < found_stream->last_time_data_sent) {
-                    /* Select this stream, but need to check if another stream should go before in round robin order */
-                    found_stream = stream;
-                }
+                found_stream = stream;
+                break;
+                // if ((stream->stream_priority & 1) != 0) {
+                //     /* This priority level requests FIFO processing, so we return the first available stream */
+                //     found_stream = stream;
+                //     break;
+                // }
+                // else if (found_stream == NULL || stream->last_time_data_sent < found_stream->last_time_data_sent) {
+                //     /* Select this stream, but need to check if another stream should go before in round robin order */
+                //     found_stream = stream;
+                // }
             }
         }
         else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {

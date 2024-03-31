@@ -24,6 +24,7 @@
 #include "tls_api.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 /*
  * Sending logic.
@@ -4044,6 +4045,8 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     int is_ack_needed = 0;
     picoquic_stream_head_t* next_stream = picoquic_find_ready_stream(cnx);
     int affinity_path_id = -1;
+    int are_both_data_ready = 1;
+    int is_data_ready = 0;
 
     cnx->last_path_polled++;
     if (cnx->last_path_polled > cnx->nb_paths) {
@@ -4051,6 +4054,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     }
 
     for (i = 0; i < cnx->nb_paths; i++) {
+        is_data_ready = 0;
         int path_priority = (cnx->path[i]->path_is_standby) ? 0 : 1;
         if (cnx->path[i]->nb_retransmit > 0) {
             path_priority = 0;
@@ -4141,10 +4145,12 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                         }
                         if (cnx->path[i]->bytes_in_transit < cnx->path[i]->cwin &&
                             cnx->path[i]->bytes_in_transit <  cnx->quic->cwin_max) {
-                            if (cnx->path[i]->last_sent_time < last_sent_cwin) {
-                                last_sent_cwin = cnx->path[i]->last_sent_time;
-                                data_path_cwin = i;
-                            }
+                            // if (cnx->path[i]->last_sent_time < last_sent_cwin) {
+                            //     last_sent_cwin = cnx->path[i]->last_sent_time;
+                            //     data_path_cwin = i;
+                            // }
+                            is_data_ready = 1;
+                            data_path_cwin = i;
                             if (affinity_path_id < 0) {
                                 /* we select here the first path that is either ready to send on
                                  * the highest priority stream with affinity on this path, or
@@ -4167,6 +4173,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                 }
             }
         }
+        are_both_data_ready = is_data_ready ? are_both_data_ready & 1 : 0;
     }
 
     /* Ensure that at most one path is marked as nominal ack path */
@@ -4186,10 +4193,19 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     }
     else if (data_path_cwin >= 0) {
         /* if there is a path ready to send the most urgent data, select it */
-        if (affinity_path_id >= 0) {
-            path_id = affinity_path_id;
-        }
-        else {
+        // if (affinity_path_id >= 0) {
+        //     path_id = affinity_path_id;
+        // }
+        // else {
+        //     path_id = data_path_cwin;
+        // }
+        if(cnx->nb_paths > 1 && are_both_data_ready) {
+            if(next_stream != NULL && next_stream->stream_priority == 0){
+                path_id = 1;
+            } else {
+                path_id = 0;
+            }
+        } else {
             path_id = data_path_cwin;
         }
     }
@@ -4215,6 +4231,9 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
 
 static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time, uint64_t * next_wake_time)
 {
+    #ifdef SENDER_DEBUG
+    fprintf(stdout, "picoquic_select_next_path and nb_paths:%d\n", cnx->nb_paths);
+    #endif
     int path_id = -1;
 
     if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) && cnx->cnx_state >= picoquic_state_ready) {
