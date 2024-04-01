@@ -106,7 +106,7 @@ int openssl_cert_test()
         openssl_cert_test_one(TEST_CERT3, 2) != 0) {
         ret = -1;
     }
-    return 0;
+    return ret;
 }
 
 #endif /* !PTLS_WITHOUT_OPENSSL */
