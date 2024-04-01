@@ -1889,8 +1889,21 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
     int is_spurious, uint64_t current_time);
 
 /* Coding and decoding of frames */
+typedef struct st_picoquic_stream_data_buffer_argument_t {
+    uint8_t* bytes; /* Points to the beginning of the encoding of the stream frame */
+    size_t byte_index; /* Current index position after encoding type, stream-id and offset */
+    size_t byte_space; /* Number of bytes available in the packet after the current index */
+    size_t allowed_space; /* Maximum number of bytes that the application is authorized to write */
+    size_t length; /* number of bytes that the application commits to write */
+    int is_fin; /* Whether this is the end of the stream */
+    int is_still_active; /* whether the stream is still considered active after this call */
+    uint8_t* app_buffer; /* buffer provided to the application. */
+} picoquic_stream_data_buffer_argument_t;
 
 int picoquic_is_stream_frame_unlimited(const uint8_t* bytes);
+
+uint8_t* picoquic_format_stream_frame_header(uint8_t* bytes, uint8_t* bytes_max, uint64_t stream_id, uint64_t offset);
+
 int picoquic_parse_stream_header(
     const uint8_t* bytes, size_t bytes_max,
     uint64_t* stream_id, uint64_t* offset, size_t* data_length, int* fin,
