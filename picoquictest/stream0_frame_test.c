@@ -997,7 +997,7 @@ int provide_stream_buffer_test_one(uint64_t stream_id, uint64_t stream_offset, s
 
             if (length > 0) {
                 /* set test data value */
-                for (int i = 0; i < length; i++) {
+                for (size_t i = 0; i < length; i++) {
                     test_data[i] = (uint8_t)(i ^ 0x7f);
                 }
                 /* Fill the data space */
