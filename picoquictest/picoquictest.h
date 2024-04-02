@@ -318,6 +318,7 @@ int bad_cnxid_test();
 int stream_splay_test();
 int stream_output_test();
 int stream_rank_test();
+int provide_stream_buffer_test();
 int not_before_cnxid_test();
 int send_stream_blocked_test();
 int stream_ack_test();
