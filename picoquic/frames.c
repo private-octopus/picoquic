@@ -1506,17 +1506,6 @@ uint8_t * picoquic_format_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, ui
 /* handling of stream frames
  */
 
-typedef struct st_picoquic_stream_data_buffer_argument_t {
-    uint8_t* bytes; /* Points to the beginning of the encoding of the stream frame */
-    size_t byte_index; /* Current index position after encoding type, stream-id and offset */
-    size_t byte_space; /* Number of bytes available in the packet after the current index */
-    size_t allowed_space; /* Maximum number of bytes that the application is authorized to write */
-    size_t length; /* number of bytes that the application commits to write */
-    int is_fin; /* Whether this is the end of the stream */
-    int is_still_active; /* whether the stream is still considered active after this call */
-    uint8_t* app_buffer; /* buffer provided to the application. */
-} picoquic_stream_data_buffer_argument_t;
-
 static size_t picoquic_encode_length_of_stream_frame(
     uint8_t* bytes, size_t byte_index, size_t byte_space, size_t length, size_t *start_index)
 {
@@ -1573,7 +1562,7 @@ uint8_t* picoquic_provide_stream_data_buffer(void* context, size_t length, int i
     return buffer;
 }
 
-static uint8_t* picoquic_format_stream_frame_header(uint8_t* bytes, uint8_t* bytes_max, uint64_t stream_id, uint64_t offset)
+uint8_t* picoquic_format_stream_frame_header(uint8_t* bytes, uint8_t* bytes_max, uint64_t stream_id, uint64_t offset)
 {
     uint8_t* bytes0 = bytes;
     if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_stream_range_min)) != NULL &&

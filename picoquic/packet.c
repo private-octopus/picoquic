@@ -1351,7 +1351,7 @@ int picoquic_queue_busy_packet(
             payload_length = picoquic_aead_encrypt_generic(bytes + header_length,
                 payload, sizeof(payload), 0, bytes, header_length, aead_ctx);
             /* protect the PN */
-            picoquic_protect_packet_header(bytes, pn_offset, 0x1F, pn_enc_ctx);
+            picoquic_protect_packet_header(bytes, pn_offset, 0x0F, pn_enc_ctx);
             /* Fill up control fields */
             sp->length = byte_index + payload_length;
             sp->ptype = picoquic_packet_initial;

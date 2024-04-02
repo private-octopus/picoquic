@@ -697,6 +697,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(provide_stream_buffer)
+        {
+            int ret = provide_stream_buffer_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(transport_param)
 		{
 			int ret = transport_param_test();
