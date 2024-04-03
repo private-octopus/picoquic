@@ -30,6 +30,8 @@ jobs:
              git clone https://github.com/Mbed-TLS/mbedtls
              cd mbedtls
              echo "cloned mbedtls"
+             git submodule init
+             git submodule update
              mkdir build
              cd build
              cmake -S .. .

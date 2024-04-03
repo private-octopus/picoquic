@@ -145,6 +145,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="bbr1.c" />
     <ClCompile Include="bytestream.c" />
     <ClCompile Include="cc_common.c" />
     <ClCompile Include="config.c" />

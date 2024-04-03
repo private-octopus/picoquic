@@ -915,8 +915,8 @@ int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
             picoquic_log_app_message(cnx, "Cannot parse incoming stream: %"PRIu64, stream_id);
             ret = -1;
         }
-        else {
-            ret = h3zero_post_data_or_fin(cnx, bytes, length, fin_or_event, stream_ctx);
+        else if (bytes < bytes_max) {
+            ret = h3zero_post_data_or_fin(cnx, bytes, bytes_max - bytes, fin_or_event, stream_ctx);
         }
     }
     return ret;

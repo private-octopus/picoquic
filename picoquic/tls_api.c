@@ -155,12 +155,12 @@ static int tls_api_is_init = 0;
 void picoquic_tls_api_init_providers(int unload)
 {
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MINICRYPTO) == 0) {
-        DBG_PRINTF("%s", "Loading minicrypto");
+        DBG_PRINTF("%s", "%s minicrypto", (unload)?"Unloading":"Loading");
         picoquic_ptls_minicrypto_load(unload);
     }
 #ifndef PTLS_WITHOUT_OPENSSL
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_OPENSSL) == 0) {
-        DBG_PRINTF("%s", "Loading openssl");
+        DBG_PRINTF("%s", "%s openssl", (unload)?"Unloading":"Loading");
         picoquic_ptls_openssl_load(unload);
     }
 #else
@@ -171,7 +171,7 @@ void picoquic_tls_api_init_providers(int unload)
     // picoquic_bcrypt_load(unload);
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
-        DBG_PRINTF("%s", "Loading fusion");
+        DBG_PRINTF("%s", "%s fusion", (unload)?"Unloading":"Loading");
         picoquic_ptls_fusion_load(unload);
     }
 #else
@@ -182,7 +182,7 @@ void picoquic_tls_api_init_providers(int unload)
 
 #ifdef PICOQUIC_WITH_MBEDTLS
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MBEDTLS) == 0) {
-        DBG_PRINTF("%s", "Loading MbedTLS");
+        DBG_PRINTF("%s", "%s MbedTLS", (unload)?"Unloading":"Loading");
         picoquic_mbedtls_load(unload);
     }
 #endif
@@ -1371,31 +1371,38 @@ int picoquic_setup_initial_secrets(
     return ret;
 }
 
-int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
+static int picoquic_compute_initial_secrets(picoquic_quic_t * quic, int version_index, picoquic_connection_id_t *initial_cnxid,
+    ptls_cipher_suite_t * *cipher, uint8_t *client_secret, uint8_t *server_secret)
 {
     int ret = 0;
-    uint8_t master_secret[256]; /* secret_max */
-    ptls_cipher_suite_t * cipher = picoquic_get_aes128gcm_sha256(cnx->quic->use_low_memory);
     ptls_iovec_t salt;
-    uint8_t client_secret[256];
-    uint8_t server_secret[256];
-    uint8_t *secret1, *secret2;
-    const char *prefix_label = picoquic_supported_versions[cnx->version_index].tls_prefix_label;
-
-    if (cipher == NULL) {
+    uint8_t master_secret[256]; /* secret_max */
+    *cipher = picoquic_get_aes128gcm_sha256(quic->use_low_memory);
+    if (*cipher == NULL) {
         ret = -1;
     }
     else {
-        picoquic_setup_cleartext_aead_salt(cnx->version_index, &salt);
+        picoquic_setup_cleartext_aead_salt(version_index, &salt);
 
         /* Extract the master key -- key length will be 32 per SHA256 */
-        ret = picoquic_setup_initial_master_secret(cipher, salt, cnx->initial_cnxid, master_secret);
+        ret = picoquic_setup_initial_master_secret(*cipher, salt, *initial_cnxid, master_secret);
+        if (ret == 0) {
+            ret = picoquic_setup_initial_secrets(*cipher, master_secret, client_secret, server_secret);
+        }
     }
+    return ret;
+}
 
-    /* set up client and server secrets */
-    if (ret == 0) {
-        ret = picoquic_setup_initial_secrets(cipher, master_secret, client_secret, server_secret);
-    }
+int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    const char *prefix_label = picoquic_supported_versions[cnx->version_index].tls_prefix_label;
+    ptls_cipher_suite_t* cipher = NULL;
+    uint8_t client_secret[256];
+    uint8_t server_secret[256];
+    uint8_t *secret1, *secret2;
+
+    ret = picoquic_compute_initial_secrets(cnx->quic, cnx->version_index, &cnx->initial_cnxid, &cipher, client_secret, server_secret);
 
     /* derive the initial keys */
     if (ret == 0) {
@@ -1415,6 +1422,38 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
         }
     }
 
+    return ret;
+}
+
+int picoquic_get_initial_aead_context(picoquic_quic_t * quic, int version_index, picoquic_connection_id_t *initial_cnxid,
+    int is_client, int is_enc, void** aead_ctx, void ** pn_enc_ctx)
+{
+    int ret = 0;
+    ptls_cipher_suite_t* cipher = NULL;
+    uint8_t client_secret[256];
+    uint8_t server_secret[256];
+    const char *prefix_label = picoquic_supported_versions[version_index].tls_prefix_label;
+
+    *aead_ctx = NULL;
+    *pn_enc_ctx = NULL;
+
+    ret = picoquic_compute_initial_secrets(quic, version_index, initial_cnxid, &cipher, client_secret, server_secret);
+
+    if (ret == 0) {
+        uint8_t* selected_secret;
+
+        if (!is_client) {
+            selected_secret = (is_enc) ? server_secret : client_secret;
+        }
+        else {
+            selected_secret = (is_enc) ? client_secret : server_secret;
+        }
+
+        ret = picoquic_set_aead_from_secret(aead_ctx, cipher, is_enc, selected_secret, prefix_label);
+        if (ret == 0) {
+            ret = picoquic_set_pn_enc_from_secret(pn_enc_ctx, cipher, is_enc, selected_secret, prefix_label);
+        }
+    }
     return ret;
 }
 
@@ -2274,6 +2313,12 @@ void picoquic_aead_free(void* aead_context)
     ptls_aead_free((ptls_aead_context_t*)aead_context);
 }
 
+void picoquic_cipher_free(void* cipher_context)
+{
+    ptls_cipher_free((ptls_cipher_context_t*)cipher_context);
+}
+
+
 size_t picoquic_aead_get_checksum_length(void* aead_context)
 {
     size_t tag_size = ((ptls_aead_context_t*)aead_context)->algo->tag_size;
@@ -2837,7 +2882,7 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr* a
 int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
     uint64_t current_time, int * is_new_token, picoquic_connection_id_t * odcid, const picoquic_connection_id_t* rcid,
     uint32_t initial_pn,
-    const uint8_t * token, size_t token_size, int new_context_created)
+    const uint8_t * token, size_t token_size, int check_reuse)
 {
     int ret = 0;
     uint8_t text[128];
@@ -2865,14 +2910,16 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
                 /* Invalid token, too old */
                 ret = -1;
             }
-            else if (odcid->id_len > 0 && token_pn >= initial_pn) {
+            /* If the PN value is not yet decrypted, setting it to UINT32_MAX
+             * bypasses the verification */
+            else if (initial_pn != UINT32_MAX && odcid->id_len > 0 && token_pn >= initial_pn) {
                 /* Invalid PN number */
                 ret = -1;
             }
             else {
                 /* Remove old tickets before testing this one. */
                 picoquic_registered_token_clear(quic, current_time);
-                if (new_context_created && (ret = picoquic_registered_token_check_reuse(quic, token, token_size, token_time)) != 0) {
+                if (check_reuse && (ret = picoquic_registered_token_check_reuse(quic, token, token_size, token_time)) != 0) {
                     picoquic_log_context_free_app_message(quic, rcid, "Duplicate token test returns %d", ret);
                 }
                 else if (odcid->id_len > 0 &&
@@ -2977,20 +3024,20 @@ void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key, const
     return (void *)picoquic_setup_test_aead_context(is_enc, key, prefix_label);
 }
 
-void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending)
+void * picoquic_find_retry_protection_context(picoquic_quic_t * quic, int version_index, int sending)
 {
     void * aead_ctx = NULL;
-    void ** aead_vector = (sending) ? cnx->quic->retry_integrity_sign_ctx : cnx->quic->retry_integrity_verify_ctx;
+    void ** aead_vector = (sending) ? quic->retry_integrity_sign_ctx : quic->retry_integrity_verify_ctx;
 
-    if (picoquic_supported_versions[cnx->version_index].version_retry_key != NULL) {
+    if (picoquic_supported_versions[version_index].version_retry_key != NULL) {
         if (aead_vector == NULL) {
             if (sending) {
-                cnx->quic->retry_integrity_sign_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
-                aead_vector = cnx->quic->retry_integrity_sign_ctx;
+                quic->retry_integrity_sign_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
+                aead_vector = quic->retry_integrity_sign_ctx;
             }
             else {
-                cnx->quic->retry_integrity_verify_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
-                aead_vector = cnx->quic->retry_integrity_verify_ctx;
+                quic->retry_integrity_verify_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
+                aead_vector = quic->retry_integrity_verify_ctx;
             }
             if (aead_vector != NULL) {
                 memset(aead_vector, 0, sizeof(void*)*picoquic_nb_supported_versions);
@@ -2998,11 +3045,11 @@ void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending)
         }
 
         if (aead_vector != NULL) {
-            aead_ctx = aead_vector[cnx->version_index];
+            aead_ctx = aead_vector[version_index];
             if (aead_ctx == NULL) {
-                aead_ctx = picoquic_create_retry_protection_context(sending, picoquic_supported_versions[cnx->version_index].version_retry_key,
-                                                                    picoquic_supported_versions[cnx->version_index].tls_prefix_label);
-                aead_vector[cnx->version_index] = aead_ctx;
+                aead_ctx = picoquic_create_retry_protection_context(sending, picoquic_supported_versions[version_index].version_retry_key,
+                                                                    picoquic_supported_versions[version_index].tls_prefix_label);
+                aead_vector[version_index] = aead_ctx;
             }
         }
     }
