@@ -94,13 +94,13 @@ int sample_server_callback(picoquic_cnx_t *cnx,
     // picoquic_set_stream_path_affinity(cnx, stream_id, cnx->path[server_ctx->last_path_id]->unique_path_id);
     // picoquic_set_stream_path_affinity(cnx, stream_id, cnx->path[1]->unique_path_id);
     stream_id = picoquic_get_next_local_stream_id(cnx, 0);
-    // picoquic_set_stream_priority(cnx, stream_id, 0);
+    picoquic_set_stream_priority(cnx, stream_id, 0);
     std::cout << "First_stream_id: " << stream_id << std::endl;
     picoquic_add_to_stream(cnx, stream_id, (uint8_t *)msg.c_str(), num_bytes, 0);
 
     stream_id = picoquic_get_next_local_stream_id(cnx, 0);
-    // picoquic_set_stream_priority(cnx, stream_id, 1);
-    std::cout << "Second stream id is " << stream_id << std::endl;
+    picoquic_set_stream_priority(cnx, stream_id, 1);
+    std::cout << "Second_stream_id: " << stream_id << std::endl;
     picoquic_add_to_stream(cnx, stream_id, (uint8_t *)msg.c_str(), num_bytes, 0);
 
     if (server_ctx->last_path_id == 0)

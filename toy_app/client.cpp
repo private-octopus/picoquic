@@ -24,6 +24,7 @@ typedef struct st_client_app_ctx_t
   std::string output_file;
   std::map<uint64_t, long> stream_bytes_received;
   int num_of_responses;
+  std::map<uint64_t, double> stream_rtt;
 } client_app_ctx_t;
 
 int sample_client_callback(picoquic_cnx_t *cnx,
@@ -138,6 +139,7 @@ int sample_client_callback(picoquic_cnx_t *cnx,
     {
       client_ctx->end_timestamp = std::chrono::high_resolution_clock::now();
       client_ctx->start_times[client_ctx->requests_sent - 1] = client_ctx->start_timestamp.time_since_epoch().count();
+      client_ctx->stream_rtt[stream_id] = (client_ctx->end_timestamp.time_since_epoch().count() - client_ctx->start_timestamp.time_since_epoch().count()) / 1000000.0;
       if (client_ctx->num_of_responses % 2 == 0)
       {
         client_ctx->end_times[client_ctx->requests_sent - 1] = client_ctx->end_timestamp.time_since_epoch().count();
@@ -147,7 +149,7 @@ int sample_client_callback(picoquic_cnx_t *cnx,
         client_ctx->end_times2[client_ctx->requests_sent - 1] = client_ctx->end_timestamp.time_since_epoch().count();
       }
 
-      std::cout << "Received response " << client_ctx->num_of_responses << " bytes" << std::endl;
+      std::cout << "Received response " << client_ctx->num_of_responses << std::endl;
       client_ctx->num_of_responses++;
 
       if (client_ctx->requests_sent < client_ctx->total_requests && client_ctx->num_of_responses % 2 == 0)
@@ -181,6 +183,11 @@ int sample_client_callback(picoquic_cnx_t *cnx,
           std::cout << (client_ctx->end_times[i] - client_ctx->start_times[i]) / 1000000.0 << " ms" << std::endl;
           std::cout << (client_ctx->end_times2[i] - client_ctx->start_times[i]) / 1000000.0 << " ms" << std::endl
                     << std::endl;
+        }
+
+        for(auto& it: client_ctx->stream_rtt)
+        {
+          std::cout << "Stream " << it.first << " RTT: " << it.second << " ms" << std::endl;
         }
 
         delete[] client_ctx->start_times;
@@ -241,6 +248,18 @@ int sample_client_callback(picoquic_cnx_t *cnx,
     std::cout << "Client callback: path available" << std::endl;
     // std::string a(1000000, 'a');
     // picoquic_add_to_stream(cnx, stream_id, (uint8_t *)a.c_str(), a.length(), 0);
+    // std::cout << "Sending request" << std::endl;
+
+    // int is_unidir = 0;
+    // uint64_t stream_id = picoquic_get_next_local_stream_id(cnx, is_unidir);
+
+    // // Timestamp
+    // client_ctx->start_timestamp = std::chrono::high_resolution_clock::now();
+
+    // // Send some data
+    // picoquic_add_to_stream(cnx, stream_id, (const uint8_t *)client_ctx->request_msg.c_str(), client_ctx->request_msg.length(), 0);
+    // client_ctx->requests_sent++;
+
     break;
   }
   case picoquic_callback_path_suspended:
