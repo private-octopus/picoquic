@@ -168,15 +168,9 @@ static void fastcc_notify_congestion(
 void picoquic_fastcc_notify(
     picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
-    uint64_t rtt_measurement,
-    uint64_t one_way_delay,
-    uint64_t nb_bytes_acknowledged,
-    uint64_t lost_packet_number,
+    picoquic_per_ack_state_t * ack_state,
     uint64_t current_time)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(lost_packet_number);
-#endif
     picoquic_fastcc_state_t* fastcc_state = (picoquic_fastcc_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
 
@@ -201,7 +195,7 @@ void picoquic_fastcc_notify(
         case picoquic_congestion_notification_acknowledgement: 
             if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
                 /* Count the bytes since last RTT measurement */
-                fastcc_state->nb_bytes_ack_since_rtt += nb_bytes_acknowledged;
+                fastcc_state->nb_bytes_ack_since_rtt += ack_state->nb_bytes_acknowledged;
                 /* Compute pacing data. */
                 picoquic_update_pacing_data(cnx, path_x, 0);
             }
@@ -212,7 +206,7 @@ void picoquic_fastcc_notify(
             break;
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
-            if (picoquic_hystart_loss_test(&fastcc_state->rtt_filter, notification, lost_packet_number)) {
+            if (picoquic_hystart_loss_test(&fastcc_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) {
                 fastcc_notify_congestion(cnx, path_x, fastcc_state, current_time, 0,
                     (notification == picoquic_congestion_notification_timeout) ? 1 : 0);
             }
@@ -226,7 +220,7 @@ void picoquic_fastcc_notify(
         {
             uint64_t delta_rtt = 0;
 
-            picoquic_filter_rtt_min_max(&fastcc_state->rtt_filter, rtt_measurement);
+            picoquic_filter_rtt_min_max(&fastcc_state->rtt_filter, ack_state->rtt_measurement);
 
             if (fastcc_state->rtt_filter.is_init) {
                 /* We use the maximum of the last samples as the candidate for the
@@ -257,15 +251,15 @@ void picoquic_fastcc_notify(
             }
 
             if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
-                if (rtt_measurement < fastcc_state->rtt_min) {
+                if (ack_state->rtt_measurement < fastcc_state->rtt_min) {
                     fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
                 }
                 else if (fastcc_state->rtt_min_is_trusted){
-                    delta_rtt = rtt_measurement - fastcc_state->rtt_min;
+                    delta_rtt = ack_state->rtt_measurement - fastcc_state->rtt_min;
                 }
                 else {
-                    fastcc_state->rtt_min = rtt_measurement; 
-                    fastcc_state->rolling_rtt_min = rtt_measurement;
+                    fastcc_state->rtt_min = ack_state->rtt_measurement; 
+                    fastcc_state->rolling_rtt_min = ack_state->rtt_measurement;
                     fastcc_state->rtt_min_is_trusted = 1;
                     delta_rtt = 0;
                 }
@@ -302,7 +296,7 @@ void picoquic_fastcc_notify(
             picoquic_fastcc_reset(fastcc_state, path_x, current_time);
             break;
         case picoquic_congestion_notification_seed_cwin:
-            picoquic_fastcc_seed_cwin(fastcc_state, path_x, nb_bytes_acknowledged);
+            picoquic_fastcc_seed_cwin(fastcc_state, path_x, ack_state->nb_bytes_acknowledged);
             break;
         default:
             /* ignore */

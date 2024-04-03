@@ -206,13 +206,13 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 int satellite_basic_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6700000, 250, 3, 0, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 5300000, 250, 3, 0, 0, 0, 0, 0, 0);
 }
 
 int satellite_seeded_test()
 {
     /* Simulate remembering RTT and BW from previous connection */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4800000, 250, 3, 0, 0, 0, 1, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4850000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
 int satellite_loss_test()
@@ -251,7 +251,7 @@ int satellite_medium_test()
 int satellite_small_test()
 {
     /* Should be less than 85 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81000000, 10, 2, 0, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81500000, 10, 2, 0, 0, 0, 0, 0, 0);
 }
 
 int satellite_small_up_test()

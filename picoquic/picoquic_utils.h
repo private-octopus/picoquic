@@ -100,7 +100,7 @@ int picoquic_addr_length(const struct sockaddr* addr);
 void picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr);
 void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * ip_addr_len);
 int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* ip_address_text, uint16_t port);
-char const* picoquic_addr_text(struct sockaddr* addr, char* text, size_t text_size);
+char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t text_size);
 int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_family, uint16_t port);
 
 /* Setting the solution dir when not executing from default location */
@@ -223,7 +223,7 @@ void picoquic_delete_event(picoquic_event_t* event);
 int picoquic_signal_event(picoquic_event_t* event);
 int picoquic_wait_for_event(picoquic_event_t* event, uint64_t microsec_wait);
 
-/* Simple potable random number generation
+/* Simple portable random number generation
  */
 uint64_t picoquic_uniform_random(uint64_t rnd_max);
 

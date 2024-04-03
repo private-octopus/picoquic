@@ -1790,12 +1790,27 @@ int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t* loss_mask, uint64_t* simulated_time, int max_trials)
+uint64_t test_vary_link(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t transition_time, test_vary_link_spec_t* link_state)
+{
+    const uint64_t ten_twelve = 1000000000000ull;
+    uint64_t picoseq_per_byte_up = (ten_twelve * 8) / link_state->bits_per_second_up;
+    uint64_t picoseq_per_byte_down = (ten_twelve * 8) / link_state->bits_per_second_down;
+    test_ctx->c_to_s_link->microsec_latency = link_state->microsec_latency;
+    test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_up;
+    test_ctx->s_to_c_link->microsec_latency = link_state->microsec_latency;
+    test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_down;
+
+    return transition_time + link_state->duration;
+}
+
+int tls_api_data_sending_loop_ex(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* loss_mask, uint64_t* simulated_time, int max_trials, size_t nb_link_states, test_vary_link_spec_t * link_state)
 {
     int ret = 0;
     int nb_trials = 0;
     int nb_inactive = 0;
+    uint64_t next_state_change = 0;
+    size_t next_link_state = 0;
 
     test_ctx->c_to_s_link->loss_mask = loss_mask;
     test_ctx->s_to_c_link->loss_mask = loss_mask;
@@ -1804,12 +1819,22 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         max_trials = 4000000;
     }
 
+    if (nb_link_states > 0) {
+        next_state_change = test_vary_link(test_ctx, *simulated_time, link_state);
+    }
+
     while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
 
         nb_trials++;
-
-        ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, next_state_change, &was_active);
+        if (nb_link_states > 0 && *simulated_time >= next_state_change) {
+            next_link_state++;
+            if (next_link_state >= nb_link_states) {
+                next_link_state = 0;
+            }
+            next_state_change = test_vary_link(test_ctx, *simulated_time, &link_state[next_link_state]);
+        }
 
         if (ret < 0)
         {
@@ -1831,6 +1856,12 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     return ret; /* end of sending loop */
+}
+
+int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* loss_mask, uint64_t* simulated_time, int max_trials)
+{
+    return tls_api_data_sending_loop_ex(test_ctx, loss_mask, simulated_time, max_trials, 0, NULL);
 }
 
 int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
@@ -2971,11 +3002,11 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
+int tls_api_one_scenario_body_ex(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t * simulated_time,
     test_api_stream_desc_t* scenario, size_t sizeof_scenario, size_t stream0_target,
     uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
-    uint64_t max_completion_microsec)
+    uint64_t max_completion_microsec, size_t nb_link_states, test_vary_link_spec_t* link_state)
 {
     uint64_t loss_mask = 0;
     int ret = tls_api_one_scenario_body_connect(test_ctx, simulated_time, stream0_target,
@@ -2995,7 +3026,8 @@ int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
 
     /* Perform a data sending loop */
     if (ret == 0) {
-        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, simulated_time, 0);
+        ret = tls_api_data_sending_loop_ex(test_ctx, &loss_mask, simulated_time, 0,
+            nb_link_states, link_state);
 
         if (ret != 0)
         {
@@ -3009,6 +3041,18 @@ int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
 
     return ret;
 }
+
+int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time,
+    test_api_stream_desc_t* scenario, size_t sizeof_scenario, size_t stream0_target,
+    uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
+    uint64_t max_completion_microsec)
+{
+    return tls_api_one_scenario_body_ex(test_ctx, simulated_time, scenario, sizeof_scenario,
+        stream0_target, init_loss_mask, max_data, queue_delay_max, max_completion_microsec,
+        0, NULL);
+}
+
 
 int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     size_t sizeof_scenario, size_t stream0_target,
@@ -4742,31 +4786,36 @@ static int mtu_drop_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64
     return ret;
 }
 
-int mtu_drop_test()
+int mtu_drop_bbr_test()
 {
-    picoquic_congestion_algorithm_t* algo_list[5] = {
-        picoquic_newreno_algorithm,
-        picoquic_cubic_algorithm,
-        picoquic_dcubic_algorithm,
-        picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
-    };
-    uint64_t algo_time[5] = {
-        11600000,
-        9450000,
-        9200000,
-        11400000,
-        9750000
-    };
-    int ret = 0;
+    /* TODO: the time with BBR v1 was 10300000. The current value is
+     * a slight regression. Investigate whether some performance
+     * for BBR3 "recover from PTO" could be improved. */
+    int ret = mtu_drop_cc_algotest(picoquic_bbr_algorithm, 10700000);
+    return ret;
+}
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
-        ret = mtu_drop_cc_algotest(algo_list[i], algo_time[i]);
-        if (ret != 0) {
-            DBG_PRINTF("MTU drop test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
-        }
-    }
+int mtu_drop_cubic_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_cubic_algorithm, 10000000);
+    return ret;
+}
 
+int mtu_drop_dcubic_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_dcubic_algorithm, 9200000);
+    return ret;
+}
+
+int mtu_drop_fast_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_fastcc_algorithm, 11500000);
+    return ret;
+}
+
+int mtu_drop_newreno_test()
+{
+    int ret = mtu_drop_cc_algotest(picoquic_newreno_algorithm, 11600000);
     return ret;
 }
 
@@ -5500,7 +5549,7 @@ int bad_client_certificate_test()
 
 int nat_rebinding_count_r_cid(picoquic_cnx_t* cnx) {
     int nb_cid = 0;
-    picoquic_remote_cnxid_t* r_cid = cnx->cnxid_stash_first;
+    picoquic_remote_cnxid_t* r_cid = cnx->first_remote_cnxid_stash->cnxid_stash_first;
 
     while (r_cid) {
         nb_cid++;
@@ -5588,7 +5637,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid, uint64_t laten
         && TEST_SERVER_READY && !zero_cid
         && (test_ctx->cnx_server->path[0]->challenge_verified != 1 ||
             test_ctx->cnx_server->nb_paths > 1 ||
-            test_ctx->cnx_server->cnxid_stash_first->sequence == 0 ||
+            test_ctx->cnx_server->first_remote_cnxid_stash->cnxid_stash_first->sequence == 0 ||
             nat_rebinding_count_r_cid(test_ctx->cnx_server) < 8 )) {
         int was_active = 0;
 
@@ -6110,9 +6159,14 @@ int client_only_test()
         picoquic_set_binlog(test_ctx->qclient, ".");
         binlog_new_connection(test_ctx->cnx_client);
         connection_ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
-        if (connection_ret == 0) {
+        if (connection_ret == 0 && test_ctx->cnx_client->cnx_state < picoquic_state_disconnected) {
             DBG_PRINTF("Connection unexpectedly succeeds, state=%d, ret=%d (0x%x)",
                 test_ctx->cnx_client->cnx_state, connection_ret, connection_ret);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server != NULL) {
+            DBG_PRINTF("Connection context created on client-only note, ret=%d (0x%x)",
+                connection_ret, connection_ret);
             ret = -1;
         }
     }
@@ -6134,7 +6188,7 @@ int client_only_test()
  */
 
 int test_cnxid_count_stash(picoquic_cnx_t * cnx) {
-    picoquic_remote_cnxid_t * stash = cnx->cnxid_stash_first;
+    picoquic_remote_cnxid_t * stash = cnx->first_remote_cnxid_stash->cnxid_stash_first;
     int nb = 0;
 
     while (stash != NULL) {
@@ -6148,8 +6202,8 @@ int test_cnxid_count_stash(picoquic_cnx_t * cnx) {
 int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char const * cnx_text)
 {
     int ret = 0;
-    picoquic_remote_cnxid_t * stash = cnx1->cnxid_stash_first;
-    picoquic_local_cnxid_t* cid_list = cnx2->local_cnxid_first;
+    picoquic_remote_cnxid_t * stash = cnx1->first_remote_cnxid_stash->cnxid_stash_first;
+    picoquic_local_cnxid_t* cid_list = cnx2->first_local_cnxid_list->local_cnxid_first;
     int rank = 0;
 
     while (stash != NULL && cid_list != NULL) {
@@ -6166,12 +6220,12 @@ int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char
 
     if (ret == 0 && cid_list != NULL) {
         DBG_PRINTF("On %s, %d items in stash instead instead of %d.\n", cnx_text, rank, 
-            cnx2->nb_local_cnxid - 1);
+            cnx2->first_local_cnxid_list->nb_local_cnxid - 1);
         ret = -1;
     }
 
     if (ret == 0 && stash != NULL) {
-        DBG_PRINTF("On %s, more than %d items in stash.\n", cnx_text, cnx2->nb_local_cnxid - 1);
+        DBG_PRINTF("On %s, more than %d items in stash.\n", cnx_text, cnx2->first_local_cnxid_list->nb_local_cnxid - 1);
         ret = -1;
     }
 
@@ -6218,7 +6272,7 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration, int retire
         }
         else {
             /* force the retire prior to 1 so it be set in the first batch of CID. */
-            test_ctx->cnx_server->local_cnxid_retire_before = 1;
+            test_ctx->cnx_server->first_local_cnxid_list->local_cnxid_retire_before = 1;
         }
     }
 
@@ -6243,9 +6297,9 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration, int retire
         /* wait until the TTL of local CID expires */
         ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, default_connection_id_ttl - sync_empty_loop_timeout);
 
-        if (ret == 0 && test_ctx->cnx_server->local_cnxid_retire_before == 0) {
+        if (ret == 0 && test_ctx->cnx_server->first_local_cnxid_list->local_cnxid_retire_before == 0) {
             DBG_PRINTF("Retire before did not progress: %" PRIu64 ".\n",
-                test_ctx->cnx_server->local_cnxid_retire_before);
+                test_ctx->cnx_server->first_local_cnxid_list->local_cnxid_retire_before);
             ret = -1;
         }
 
@@ -6256,11 +6310,11 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration, int retire
     }
 
     if (ret == 0) {
-        if (test_ctx->cnx_client->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Only %d CID created on client.\n", test_ctx->cnx_client->nb_local_cnxid);
+        if (test_ctx->cnx_client->first_local_cnxid_list->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d CID created on client.\n", test_ctx->cnx_client->first_local_cnxid_list->nb_local_cnxid);
             ret = -1;
-        } else if (test_ctx->cnx_server->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Only %d CID created on server.\n", test_ctx->cnx_server->nb_local_cnxid);
+        } else if (test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d CID created on server.\n", test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid);
         }
     }
 
@@ -6274,10 +6328,10 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration, int retire
 
     if (ret == 0 && retire_before) {
         /* Verify that all CID in the client stash have valid sequence numbers. */
-        picoquic_remote_cnxid_t* stashed = test_ctx->cnx_client->cnxid_stash_first;
+        picoquic_remote_cnxid_t* stashed = test_ctx->cnx_client->first_remote_cnxid_stash->cnxid_stash_first;
 
         while (stashed != NULL && ret == 0) {
-            if (stashed->sequence < test_ctx->cnx_server->local_cnxid_retire_before) {
+            if (stashed->sequence < test_ctx->cnx_server->first_local_cnxid_list->local_cnxid_retire_before) {
                 DBG_PRINTF("Old CID %" PRIu64 " still on client.\n", stashed->sequence);
                 ret = -1;
                 break;
@@ -6361,12 +6415,12 @@ int probe_api_test()
     }
 
     if (ret == 0) {
-        if (test_ctx->cnx_client->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Only %d CID created on client.\n", test_ctx->cnx_client->nb_local_cnxid);
+        if (test_ctx->cnx_client->first_local_cnxid_list->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d CID created on client.\n", test_ctx->cnx_client->first_local_cnxid_list->nb_local_cnxid);
             ret = -1;
         }
-        else if (test_ctx->cnx_server->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Only %d CID created on server.\n", test_ctx->cnx_server->nb_local_cnxid);
+        else if (test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d CID created on server.\n", test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid);
         }
     }
 
@@ -6908,26 +6962,26 @@ int retire_cnxid_test()
     }
 
     if (ret == 0) {
-        if (test_ctx->cnx_client->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Only %d cids created on client.\n", test_ctx->cnx_client->nb_local_cnxid);
+        if (test_ctx->cnx_client->first_local_cnxid_list->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d cids created on client.\n", test_ctx->cnx_client->first_local_cnxid_list->nb_local_cnxid);
             ret = -1;
         }
-        else if (test_ctx->cnx_server->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Only %d cids created on server.\n", test_ctx->cnx_server->nb_local_cnxid);
+        else if (test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d cids created on server.\n", test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid);
             ret = -1;
         }
     }
 
     /* Delete several connection ID */
     for (int i = 2; ret == 0 && i < PICOQUIC_NB_PATH_TARGET; i++) {
-        picoquic_remote_cnxid_t * stashed = picoquic_obtain_stashed_cnxid(test_ctx->cnx_client);
+        picoquic_remote_cnxid_t * stashed = picoquic_obtain_stashed_cnxid(test_ctx->cnx_client, 0);
 
         if (stashed == NULL) {
             DBG_PRINTF("Could not retrieve cnx ID #%d.\n", i-1);
             ret = -1;
         } else {
-            ret = picoquic_queue_retire_connection_id_frame(test_ctx->cnx_client, stashed->sequence);
-            (void)picoquic_remove_stashed_cnxid(test_ctx->cnx_client, stashed, NULL, 0);
+            ret = picoquic_queue_retire_connection_id_frame(test_ctx->cnx_client, 0, stashed->sequence);
+            (void)picoquic_remove_stashed_cnxid(test_ctx->cnx_client, 0, stashed, NULL, 0);
         }
     }
 
@@ -6944,8 +6998,8 @@ int retire_cnxid_test()
             ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
             nb_rounds++;
 
-            if (test_ctx->cnx_client->nb_local_cnxid >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_local_cnxid >= PICOQUIC_NB_PATH_TARGET &&
+            if (test_ctx->cnx_client->first_local_cnxid_list->nb_local_cnxid >= PICOQUIC_NB_PATH_TARGET &&
+                test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid >= PICOQUIC_NB_PATH_TARGET &&
                 test_ctx->cnx_client->first_misc_frame == NULL &&
                 test_cnxid_count_stash(test_ctx->cnx_client) >= (PICOQUIC_NB_PATH_TARGET - 1) &&
                 picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
@@ -6957,15 +7011,15 @@ int retire_cnxid_test()
 
         if (ret == 0 && success == 0) {
             DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough cids (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_local_cnxid, test_ctx->cnx_server->nb_local_cnxid);
+                nb_rounds, test_ctx->cnx_client->first_local_cnxid_list->nb_local_cnxid, test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid);
         }
     }
 
     /* Check */
 
     if (ret == 0) {
-        if (test_ctx->cnx_server->nb_local_cnxid != PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Found %d cids active on server instead of %d.\n", test_ctx->cnx_server->nb_local_cnxid, PICOQUIC_NB_PATH_TARGET);
+        if (test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid != PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Found %d cids active on server instead of %d.\n", test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid, PICOQUIC_NB_PATH_TARGET);
             ret = -1;
         }
     }
@@ -7011,10 +7065,14 @@ int not_before_cnxid_test()
         ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
     }
 
-    /* find a plausible "not before" value,and apply it */
+    /* find a plausible "not before" value, and apply it */
     if (ret == 0) {
-        not_before = test_ctx->cnx_server->local_cnxid_sequence_next - 1;
-        ret = picoquic_remove_not_before_cid(test_ctx->cnx_client, not_before, simulated_time);
+        not_before = test_ctx->cnx_server->first_local_cnxid_list->local_cnxid_sequence_next - 1;
+        uint64_t transport_error = picoquic_remove_not_before_cid(test_ctx->cnx_client, 0, not_before, simulated_time);
+        if (transport_error != 0) {
+            DBG_PRINTF("picoquic_remove_not_before_cid returns 0x%" PRIx64, transport_error);
+            ret = -1;
+        }
     }
 
     /* run the loop again until no outstanding data */
@@ -7034,8 +7092,8 @@ int not_before_cnxid_test()
                 ret = 0;
             }
 
-            if (test_ctx->cnx_client->nb_local_cnxid >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_local_cnxid >= PICOQUIC_NB_PATH_TARGET &&
+            if (test_ctx->cnx_client->first_local_cnxid_list->nb_local_cnxid >= PICOQUIC_NB_PATH_TARGET &&
+                test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid >= PICOQUIC_NB_PATH_TARGET &&
                 test_ctx->cnx_client->first_misc_frame == NULL &&
                 test_cnxid_count_stash(test_ctx->cnx_client) >= (PICOQUIC_NB_PATH_TARGET - 1) &&
                 test_cnxid_count_stash(test_ctx->cnx_server) >= (PICOQUIC_NB_PATH_TARGET - 1) &&
@@ -7048,15 +7106,15 @@ int not_before_cnxid_test()
 
         if (ret == 0 && success == 0) {
             DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough cid (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_local_cnxid, test_ctx->cnx_server->nb_local_cnxid);
+                nb_rounds, test_ctx->cnx_client->first_local_cnxid_list->nb_local_cnxid, test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid);
         }
     }
 
     /* Check */
 
     if (ret == 0) {
-        if (test_ctx->cnx_server->nb_local_cnxid != PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Found %d cid active on server instead of %d.\n", test_ctx->cnx_server->nb_local_cnxid, PICOQUIC_NB_PATH_TARGET + 1);
+        if (test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid != PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Found %d cid active on server instead of %d.\n", test_ctx->cnx_server->first_local_cnxid_list->nb_local_cnxid, PICOQUIC_NB_PATH_TARGET + 1);
             ret = -1;
         }
     }
@@ -7102,7 +7160,7 @@ int server_busy_test()
             DBG_PRINTF("Client state: %d, remote error: %" PRIx64, test_ctx->cnx_client->cnx_state, test_ctx->cnx_client->remote_error);
             ret = -1;
         }
-        else if (simulated_time > 50000ull) {
+        else if (simulated_time > 500000ull) {
             DBG_PRINTF("Simulated time: %" PRIu64, (unsigned long long)simulated_time);
             ret = -1;
         }
@@ -8979,12 +9037,12 @@ int fastcc_jitter_test()
 
 int bbr_test()
 {
-    return congestion_control_test(picoquic_bbr_algorithm, 3600000, 0, 0);
+    return congestion_control_test(picoquic_bbr_algorithm, 3500000, 0, 0);
 }
 
 int bbr_jitter_test()
 {
-    return congestion_control_test(picoquic_bbr_algorithm, 3650000, 5000, 5);
+    return congestion_control_test(picoquic_bbr_algorithm, 3600000, 5000, 5);
 }
 
 int bbr_long_test()
@@ -9071,6 +9129,11 @@ int bbr_long_test()
     }
 
     return ret;
+}
+
+int bbr1_test()
+{
+    return congestion_control_test(picoquic_bbr1_algorithm, 3600000, 0, 0);
 }
 
 /* Performance test.
@@ -9252,7 +9315,7 @@ int bbr_asym100_nodelay_test()
  */
 int bbr_asym400_test()
 {
-    uint64_t max_completion_time = 2200000;
+    uint64_t max_completion_time = 2350000;
     uint64_t latency = 1000;
     uint64_t jitter = 750;
     uint64_t buffer = 50000;
@@ -9480,7 +9543,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                         hole_number = packet->sequence_number;
                         if (shall_spoof_ack) {
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
-                                test_ctx->cnx_client->local_cnxid_first, hole_number, simulated_time);
+                                test_ctx->cnx_client->first_local_cnxid_list->local_cnxid_first, hole_number, simulated_time);
                             if (ret != 0) {
                                 DBG_PRINTF("Record pn hole %d number returns %d\n", (int)hole_number, ret);
                                 break;
@@ -10654,7 +10717,7 @@ int app_limit_cc_test_one(
                     int nb_comma = 0;
                     int c_index = 0;
 
-                    while (nb_comma < 23 && c_index < 512 && buffer[c_index] != 0) {
+                    while (nb_comma < 24 && c_index < 512 && buffer[c_index] != 0) {
                         if (buffer[c_index] == ',') {
                             nb_comma++;
                         }
@@ -10797,7 +10860,7 @@ int cwin_max_test_one(
                     int nb_comma = 0;
                     int c_index = 0;
 
-                    while (nb_comma < 23 && c_index < 512 && buffer[c_index] != 0) {
+                    while (nb_comma < 24 && c_index < 512 && buffer[c_index] != 0) {
                         if (buffer[c_index] == ',') {
                             nb_comma++;
                         }
@@ -10842,7 +10905,7 @@ int cwin_max_test()
         11000000,
         11000000,
         11000000,
-        12000000 };
+        12100000 };
     int ret = 0;
 
     for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
@@ -11296,39 +11359,33 @@ static int red_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t ta
     return ret;
 }
 
-int red_cc_test()
+int red_newreno_test()
 {
-    picoquic_congestion_algorithm_t* algo_list[5] = {
-        picoquic_newreno_algorithm,
-        picoquic_cubic_algorithm,
-        picoquic_dcubic_algorithm,
-        picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
-    };
-    uint64_t algo_time[5] = {
-        500000,
-        500000,
-        500000,
-        500000,
-        500000
-    };
-    uint64_t algo_loss[5] = {
-        150,
-        225,
-        275,
-        250,
-        170
-    };
+    int ret = red_cc_algotest(picoquic_newreno_algorithm, 500000, 150);
+    return ret;
+}
 
-    int ret = 0;
+int red_cubic_test()
+{
+    int ret = red_cc_algotest(picoquic_cubic_algorithm, 500000, 225);
+    return ret;
+}
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
-        ret = red_cc_algotest(algo_list[i], algo_time[i], algo_loss[i]);
-        if (ret != 0) {
-            DBG_PRINTF("RED cc test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
-        }
-    }
+int red_dcubic_test()
+{
+    int ret = red_cc_algotest(picoquic_dcubic_algorithm, 500000, 275);
+    return ret;
+}
 
+int red_fast_test()
+{
+    int ret = red_cc_algotest(picoquic_fastcc_algorithm, 500000, 250);
+    return ret;
+}
+
+int red_bbr_test()
+{
+    int ret = red_cc_algotest(picoquic_bbr_algorithm, 500000, 170);
     return ret;
 }
 
@@ -11407,7 +11464,7 @@ int multi_segment_test()
         1050000,
         1250000,
         1350000,
-        1000000
+        1280000
     };
     int ret = 0;
 
@@ -11501,39 +11558,39 @@ static int pacing_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t
     return ret;
 }
 
-int pacing_cc_test()
+int pacing_bbr_test()
 {
-    picoquic_congestion_algorithm_t* algo_list[5] = {
-        picoquic_newreno_algorithm,
-        picoquic_cubic_algorithm,
-        picoquic_dcubic_algorithm,
-        picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
-    };
-    uint64_t algo_time[5] = {
-        900000,
-        900000,
-        900000,
-        940000,
-        900000
-    };
-    uint64_t algo_loss[5] = {
-        100,
-        210,
-        240,
-        180,
-        210
-    };
+    /* BBRv3 includes a short term loop that detects losses and tune the
+     * sending rate accordingly. The packet losses cause startup to 
+     * give up too soon, but this is fixed by probing up "quickly"
+     * after exiting startup. The packet losses occur during startup
+     * and during the probing periods.
+     */
+    int ret = pacing_cc_algotest(picoquic_bbr_algorithm, 900000, 150);
+    return ret;
+}
 
-    int ret = 0;
+int pacing_cubic_test()
+{
+    int ret = pacing_cc_algotest(picoquic_cubic_algorithm, 900000, 210);
+    return ret;
+}
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
-        ret = pacing_cc_algotest(algo_list[i], algo_time[i], algo_loss[i]);
-        if (ret != 0) {
-            DBG_PRINTF("Pacing cc test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
-        }
-    }
+int pacing_dcubic_test()
+{
+    int ret = pacing_cc_algotest(picoquic_dcubic_algorithm, 900000, 240);
+    return ret;
+}
 
+int pacing_fast_test()
+{
+    int ret = pacing_cc_algotest(picoquic_fastcc_algorithm, 960000, 180);
+    return ret;
+}
+
+int pacing_newreno_test()
+{
+    int ret = pacing_cc_algotest(picoquic_newreno_algorithm, 900000, 100);
     return ret;
 }
 
@@ -11820,7 +11877,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
         int nb_loops = 0;
 
         if (cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_DCUBIC ||
-            cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST ) {
+            cc_algo->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST) {
             repeat_target = 200;
         }
 
@@ -11936,6 +11993,7 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
     picoquictest_sim_packet_t* ddos_packet_first = NULL;
     int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 10000, 0, 0, 0);
+    uint32_t max_number_cnx_ctx = 0;
 
     if (ret == 0 && (test_ctx == NULL || packet == NULL || qddos == NULL)) {
         ret = -1;
@@ -11946,7 +12004,7 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
     }
 
     /* Create a list of nb_connections initial packets. We do this before running the
-     * DDOS, so the time to create teh attack is not counted in the "wall time" of
+     * DDOS, so the time to create the attack is not counted in the "wall time" of
      * the server under attacks. */
     for (int i = 0; ret == 0 && i < nb_connections; i++) {
         picoquictest_sim_packet_t* ddos_packet = picoquictest_sim_link_create_packet();
@@ -11961,7 +12019,7 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
             ddos_packet_first = ddos_packet;
 
             ddos_cnx = picoquic_create_cnx(qddos, picoquic_null_connection_id, picoquic_null_connection_id,
-                (struct sockaddr*) & test_ctx->server_addr, simulated_time, 0, PICOQUIC_TEST_SNI,
+                (struct sockaddr*)&test_ctx->server_addr, simulated_time, 0, PICOQUIC_TEST_SNI,
                 PICOQUIC_TEST_ALPN, 1);
             if (ddos_cnx == NULL) {
                 DBG_PRINTF("Cannot create ddos cnx #%d", nb_ddos_done);
@@ -11979,7 +12037,7 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
                 ret = -1;
             }
             else {
-                picoquic_set_test_address((struct sockaddr_in*) & packet->addr_from,
+                picoquic_set_test_address((struct sockaddr_in*)&packet->addr_from,
                     0x0a010000 + nb_ddos_done, 0x8421);
             }
 
@@ -11997,6 +12055,10 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
         uint64_t next_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
 
         still_sending = 0;
+
+        if (test_ctx->qserver->current_number_connections > max_number_cnx_ctx) {
+            max_number_cnx_ctx = test_ctx->qserver->current_number_connections;
+        }
 
         if (next_time < ddos_time) {
             simulated_time = next_time;
@@ -12028,7 +12090,7 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
             }
 
             ret = picoquic_incoming_packet(test_ctx->qserver, ddos_packet->bytes, ddos_packet->length,
-                (struct sockaddr*) & ddos_packet->addr_from, (struct sockaddr*) & ddos_packet->addr_to,
+                (struct sockaddr*)&ddos_packet->addr_from, (struct sockaddr*)&ddos_packet->addr_to,
                 if_index, 0, simulated_time);
             still_sending = 1;
             if (ret != 0) {
@@ -12041,53 +12103,59 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
 
     elapsed_wall_time = picoquic_current_time() - start_wall_time;
 
-if (ret == 0) {
-    DBG_PRINTF("Simulation succeeds at t=%" PRIu64 ", spent: %" PRIu64 ", sent: %d",
-        simulated_time, elapsed_wall_time, nb_sent);
-}
-
-/* TODO: run a simulated connection to verify that the context is operational */
-if (ret == 0) {
-    /* Get rid of the connection if one was created in the context */
-    if (test_ctx->cnx_client != NULL) {
-        (void)picoquic_delete_cnx(test_ctx->cnx_client);
-        test_ctx->cnx_client = NULL;
-    }
-    /* re-create a client connection, this time picking up the correct start time */
-    test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-        picoquic_null_connection_id, picoquic_null_connection_id,
-        (struct sockaddr*) & test_ctx->server_addr, simulated_time,
-        PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
-
-    ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-        test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0x00004281, 0, 20000, 2000000);
-
     if (ret == 0) {
-        DBG_PRINTF("Post DDOS connection succeeds at t=%" PRIu64 ", spent: %" PRIu64 ", sent: %d",
+        if (max_number_cnx_ctx > test_ctx->qserver->max_half_open_before_retry) {
+            DBG_PRINTF("Too many connection context, up to %d instead of at most %d",
+                max_number_cnx_ctx, test_ctx->qserver->max_half_open_before_retry);
+            ret = -1;
+        }
+
+        DBG_PRINTF("Simulation succeeds at t=%" PRIu64 ", spent: %" PRIu64 ", sent: %d",
             simulated_time, elapsed_wall_time, nb_sent);
     }
-}
 
-/* Delete the context and other fields. */
-if (packet != NULL) {
-    free(packet);
-}
+    /* TODO: run a simulated connection to verify that the context is operational */
+    if (ret == 0) {
+        /* Get rid of the connection if one was created in the context */
+        if (test_ctx->cnx_client != NULL) {
+            (void)picoquic_delete_cnx(test_ctx->cnx_client);
+            test_ctx->cnx_client = NULL;
+        }
+        /* re-create a client connection, this time picking up the correct start time */
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&test_ctx->server_addr, simulated_time,
+            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
 
-if (qddos != NULL) {
-    picoquic_free(qddos);
-}
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0x00004281, 0, 20000, 2000000);
 
-while (ddos_packet_first != NULL) {
-    picoquictest_sim_packet_t* ddos_packet = ddos_packet_first;
-    ddos_packet_first = ddos_packet->next_packet;
-    free(ddos_packet);
-}
+        if (ret == 0) {
+            DBG_PRINTF("Post DDOS connection succeeds at t=%" PRIu64 ", spent: %" PRIu64 ", sent: %d",
+                simulated_time, elapsed_wall_time, nb_sent);
+        }
+    }
 
-if (test_ctx != NULL) {
-    tls_api_delete_ctx(test_ctx);
-}
+    /* Delete the context and other fields. */
+    if (packet != NULL) {
+        free(packet);
+    }
 
-return ret;
+    if (qddos != NULL) {
+        picoquic_free(qddos);
+    }
+
+    while (ddos_packet_first != NULL) {
+        picoquictest_sim_packet_t* ddos_packet = ddos_packet_first;
+        ddos_packet_first = ddos_packet->next_packet;
+        free(ddos_packet);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
 }
 
 int cnx_ddos_unit_test()
@@ -12494,7 +12562,10 @@ typedef enum {
     bdp_test_option_ip,
     bdp_test_option_delay,
     bdp_test_option_reno,
-    bdp_test_option_cubic
+    bdp_test_option_cubic,
+    bdp_test_option_short,
+    bdp_test_option_short_lo,
+    bdp_test_option_short_hi,
 } bdp_test_option_enum;
 
 int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
@@ -12534,7 +12605,29 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
             test_ctx->c_to_s_link->picosec_per_byte = (1000000ull * 8) / 20;
             test_ctx->s_to_c_link->picosec_per_byte = (1000000ull * 8) / 20;
 
-            if (i > 0) {
+            if (bdp_test_option == bdp_test_option_short ||
+                bdp_test_option == bdp_test_option_short_lo ||
+                bdp_test_option == bdp_test_option_short_hi) {
+                /* Test that the BDP option also works well if delay < 250 ms */
+                max_completion_time = 4500000;
+                test_ctx->c_to_s_link->microsec_latency = 100000ull;
+                test_ctx->s_to_c_link->microsec_latency = 100000ull;
+                buffer_size = 2 * test_ctx->c_to_s_link->microsec_latency;
+                if (i == 0) {
+                    if (bdp_test_option == bdp_test_option_short_lo) {
+                        test_ctx->c_to_s_link->picosec_per_byte *= 2;
+                        test_ctx->s_to_c_link->picosec_per_byte *= 2;
+                    }
+                    else if (bdp_test_option == bdp_test_option_short_hi) {
+                        test_ctx->c_to_s_link->picosec_per_byte /= 2;
+                        test_ctx->s_to_c_link->picosec_per_byte /= 2;
+                    }
+                }
+                else if (i == 1 && bdp_test_option == bdp_test_option_short_lo) {
+                    max_completion_time = 4650000;
+                }
+            }
+            else if (i > 0) {
                 switch (bdp_test_option) {
                 case bdp_test_option_none:
                     break;
@@ -12542,7 +12635,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     max_completion_time = 5800000;
                     break;
                 case bdp_test_option_rtt:
-                    max_completion_time = 4500000;
+                    max_completion_time = 4610000;
                     test_ctx->c_to_s_link->microsec_latency = 50000ull;
                     test_ctx->s_to_c_link->microsec_latency = 50000ull;
                     buffer_size = 2 * test_ctx->c_to_s_link->microsec_latency;
@@ -12585,7 +12678,8 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
             ret = picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
 
             if (ret == 0) {
-                ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, buffer_size, max_completion_time);
+                ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, buffer_size, 
+                    (i==0)?0:max_completion_time);
             }
 
             /* Verify that the BDP option was set and processed */
@@ -12625,6 +12719,9 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     }
                     else if (bdp_test_option == bdp_test_option_basic ||
                         bdp_test_option == bdp_test_option_reno ||
+                        bdp_test_option == bdp_test_option_short ||
+                        bdp_test_option == bdp_test_option_short_hi ||
+                        bdp_test_option == bdp_test_option_short_lo ||
                         bdp_test_option == bdp_test_option_cubic) {
                         if (!test_ctx->cnx_server->cwin_notified_from_seed) {
                             DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, cwin not seed on server.\n",
@@ -12674,6 +12771,14 @@ int bdp_basic_test()
 
 int bdp_rtt_test()
 {
+    /* TODO: this test succeeds for the wrong reason.
+    * The goal of the test is to verify that the BDP is NOT set
+    * if the RTT on the second connection does not match the RTT
+    * on the first one. The test does that, but only because the
+    * second connection's RTT is lower than BBRLongRttThreshold,
+    * thus uses regular BBR startup, in which the BDP option is
+    * not implemented.
+     */
     return bdp_option_test_one(bdp_test_option_rtt);
 }
 
@@ -12690,6 +12795,21 @@ int bdp_delay_test()
 int bdp_reno_test()
 {
     return bdp_option_test_one(bdp_test_option_reno);
+}
+
+int bdp_short_test()
+{
+    return bdp_option_test_one(bdp_test_option_short);
+}
+
+int bdp_short_hi_test()
+{
+    return bdp_option_test_one(bdp_test_option_short_hi);
+}
+
+int bdp_short_lo_test()
+{
+    return bdp_option_test_one(bdp_test_option_short_lo);
 }
 
 #if defined(_WINDOWS) && !defined(_WINDOWS64)

@@ -161,6 +161,7 @@
     <ClCompile Include="delay_tolerant_test.c" />
     <ClCompile Include="edge_cases.c" />
     <ClCompile Include="h3zerotest.c" />
+    <ClCompile Include="h3zero_stream_test.c" />
     <ClCompile Include="h3zero_uri_test.c" />
     <ClCompile Include="hashtest.c" />
     <ClCompile Include="high_latency_test.c" />
@@ -171,6 +172,7 @@
     <ClCompile Include="minicrypto_test.c" />
     <ClCompile Include="multipath_test.c" />
     <ClCompile Include="netperf_test.c" />
+    <ClCompile Include="openssl_test.c" />
     <ClCompile Include="parseheadertest.c" />
     <ClCompile Include="picoquic_lb_test.c" />
     <ClCompile Include="pn2pn64test.c" />

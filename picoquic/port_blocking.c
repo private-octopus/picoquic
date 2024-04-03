@@ -123,6 +123,7 @@ const uint16_t picoquic_blocked_port_list[] = {
         53,     /* DNS */
         19,     /* Chargen */
         17,     /* Quote of the Day */
+        7,      /* Echo */
         0,      /* Unusable */
 };
 

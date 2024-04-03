@@ -30,6 +30,15 @@
 #include "picoquic_packet_loop.h"
 #include "picosocks.h"
 
+
+#ifndef SLEEP
+#ifdef _WINDOWS
+#define SLEEP(x) Sleep(x)
+#else
+#define SLEEP(x) usleep((x)*1000)
+#endif
+#endif
+
 /* 
 * Testing the socket loop.
 * This requires sending packets through sockets, etc. We do that by using a 
@@ -44,6 +53,7 @@ typedef struct st_sockloop_test_spec_t {
     int socket_buffer_size;
     test_api_stream_desc_t* scenario;
     size_t scenario_size;
+    char const* thread_name;
     int use_background_thread;
     int ipv6_only;
     int do_not_use_gso;
@@ -165,7 +175,7 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                 /* Handle migration tests */
                 if (cb_ctx->force_migration){
                     if (!cb_ctx->migration_started &&
-                        cnx_client->cnxid_stash_first != NULL) {
+                        cnx_client->first_remote_cnxid_stash->cnxid_stash_first != NULL) {
                         if (sockloop_test_verify_extra_socket(cnx_client, (struct sockaddr*)&cb_ctx->server_address) != 0) {
                             ret = -1;
                         }
@@ -223,6 +233,12 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
             }
             break;
         }
+        case picoquic_packet_loop_wake_up: {
+            ret = picoquic_start_client_cnx(cnx_client);
+            DBG_PRINTF("Starting the client connection, returns: %d", ret);
+            break;
+        }
+
         default:
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
             break;
@@ -401,6 +417,7 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     sockloop_test_cb_t loop_cb = { 0 };
     uint64_t current_time = picoquic_current_time();
     picoquic_socket_ctx_t double_bind[2] = { 0 };
+    picoquic_network_thread_ctx_t* thread_ctx = NULL;
     int nb_double_bind = 0;
 
     /* Create test context
@@ -449,7 +466,9 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     if (ret == 0) {
         loop_cb.test_ctx = test_ctx;
         loop_cb.test_id = spec->test_id;
-        picoquic_start_client_cnx(test_ctx->cnx_client);
+        if (!spec->use_background_thread) {
+            picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
         if (spec->test_id == 1) {
 #ifdef _WINDOWS_BUT_MAYBE_NOT
             ret = picoquic_packet_loop_win(test_ctx->qserver, spec->port, 0, 0,
@@ -473,7 +492,55 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
             loop_cb.force_migration = spec->force_migration;
             loop_cb.param = &param;
 
-            ret = picoquic_packet_loop_v2(test_ctx->qserver, &param, sockloop_test_cb, &loop_cb);
+            if (spec->use_background_thread) {
+                if (spec->thread_name != NULL) {
+                    thread_ctx = picoquic_start_custom_network_thread(test_ctx->qserver, &param,
+                        picoquic_internal_thread_create, picoquic_internal_thread_delete,
+                        picoquic_internal_thread_setname, spec->thread_name, sockloop_test_cb, &loop_cb, &ret);
+                }
+                else {
+                    thread_ctx = picoquic_start_network_thread(test_ctx->qserver, &param, sockloop_test_cb, &loop_cb, &ret);
+                }
+                if (thread_ctx == NULL) {
+                    if (ret == 0) {
+                        ret = -1;
+                    }
+                }
+                else {
+                    for (int i = 0; i < 2000; i++) {
+                        if (thread_ctx->thread_is_ready) {
+                            DBG_PRINTF("Thread is ready after %dms", i);
+                            break;
+                        }
+                        else {
+                            SLEEP(1);
+                        }
+                    }
+                    if (!thread_ctx->thread_is_ready) {
+                        DBG_PRINTF("%s", "Cannot start the network thread in 2000ms");
+                        ret = -1;
+                    }
+                    else if (picoquic_wake_up_network_thread(thread_ctx) != 0) {
+                        DBG_PRINTF("%s", "Cannot wakeup the network thread");
+                        ret = -1;
+                    }
+                    else {
+                        for (int i = 0; i < 50; i++) {
+                            if (sockloop_test_received_finished(test_ctx)) {
+                                DBG_PRINTF("Receive finished after %dms", 100 * i);
+                                break;
+                            }
+                            else {
+                                SLEEP(100);
+                            }
+                        }
+                    }
+                    picoquic_delete_network_thread(thread_ctx);
+                }
+            }
+            else {
+                ret = picoquic_packet_loop_v2(test_ctx->qserver, &param, sockloop_test_cb, &loop_cb);
+            }
         }
     }
     /* Verify that the scenario worked. */
@@ -600,6 +667,31 @@ int sockloop_nat_test()
     spec.scenario_size = sizeof(sockloop_test_scenario_1M);
     spec.extra_socket_required = 1;
     spec.force_migration = 1;
+
+    return(sockloop_test_one(&spec));
+}
+
+int sockloop_thread_test()
+{
+    sockloop_test_spec_t spec;
+    sockloop_test_set_spec(&spec, 7);
+    spec.socket_buffer_size = 0xffff;
+    spec.scenario = sockloop_test_scenario_1M;
+    spec.scenario_size = sizeof(sockloop_test_scenario_1M);
+    spec.use_background_thread = 1;
+
+    return(sockloop_test_one(&spec));
+}
+
+int sockloop_thread_name_test()
+{
+    sockloop_test_spec_t spec;
+    sockloop_test_set_spec(&spec, 8);
+    spec.socket_buffer_size = 0xffff;
+    spec.scenario = sockloop_test_scenario_1M;
+    spec.scenario_size = sizeof(sockloop_test_scenario_1M);
+    spec.use_background_thread = 1;
+    spec.thread_name = "picoquic loop";
 
     return(sockloop_test_one(&spec));
 }
