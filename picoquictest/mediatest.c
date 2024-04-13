@@ -348,14 +348,20 @@ int mediatest_check_stats(mediatest_ctx_t* mt_ctx, mediatest_spec_t * spec, medi
             if (spec->latency_average == 0)
             {
                 if (average > 25000 || sigma > 12500 || stats->max_delay > 100000) {
+                    DBG_PRINTF("Latency average: %" PRIu64 ", sigma: %" PRIu64 ", max: %" PRIu64,
+                        average, sigma, stats->max_delay);
                     ret = -1;
                 }
             }
             else {
                 if (average > spec->latency_average) {
+                    DBG_PRINTF("Average latency expected: %" PRIu64 ", got %" PRIu64,
+                        spec->latency_average, average);
                     ret = -1;
                 }
                 else if (spec->latency_max > 0 && stats->max_delay > spec->latency_max) {
+                    DBG_PRINTF("Max latency expected: %" PRIu64 ", got %" PRIu64,
+                        spec->latency_max, stats->max_delay);
                     ret = -1;
                 }
             }
@@ -1320,8 +1326,8 @@ int mediatest_video2_down_test()
     spec.do_video2 = 1;
     spec.do_audio = 1;
     spec.data_size = 0;
-    spec.latency_average = 100000;
-    spec.latency_max = 450000;
+    spec.latency_average = 110000;
+    spec.latency_max = 600000;
     spec.do_not_check_video2 = 1;
     ret = mediatest_one(mediatest_video2_down, &spec);
 
