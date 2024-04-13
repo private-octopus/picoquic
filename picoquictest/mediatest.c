@@ -67,7 +67,8 @@ typedef enum {
     mediatest_video_data_audio = 3,
     mediatest_worst = 4,
     mediatest_video2_down = 5,
-    mediatest_wifi = 6
+    mediatest_wifi = 6,
+    mediatest_video2_back = 7
 } mediatest_id_enum;
 
 typedef enum {
@@ -347,14 +348,20 @@ int mediatest_check_stats(mediatest_ctx_t* mt_ctx, mediatest_spec_t * spec, medi
             if (spec->latency_average == 0)
             {
                 if (average > 25000 || sigma > 12500 || stats->max_delay > 100000) {
+                    DBG_PRINTF("Latency average: %" PRIu64 ", sigma: %" PRIu64 ", max: %" PRIu64,
+                        average, sigma, stats->max_delay);
                     ret = -1;
                 }
             }
             else {
                 if (average > spec->latency_average) {
+                    DBG_PRINTF("Average latency expected: %" PRIu64 ", got %" PRIu64,
+                        spec->latency_average, average);
                     ret = -1;
                 }
                 else if (spec->latency_max > 0 && stats->max_delay > spec->latency_max) {
+                    DBG_PRINTF("Max latency expected: %" PRIu64 ", got %" PRIu64,
+                        spec->latency_max, stats->max_delay);
                     ret = -1;
                 }
             }
@@ -1154,7 +1161,7 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
     if (mt_ctx == NULL) {
         ret = -1;
     }
-    /* Three special cases in which we manipualte the configuration
+    /* Three special cases in which we manipulate the configuration
     * to simulate various downgrade or suspension patterns.
      */
     if (media_test_id == mediatest_worst) {
@@ -1168,20 +1175,23 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
         }
     }
 
-    if (media_test_id == mediatest_video2_down) {
+    if (media_test_id == mediatest_video2_down ||
+        media_test_id == mediatest_video2_back) {
         uint64_t picosec_per_byte_ref[2];
         uint64_t latency_ref[2];
+        uint64_t down_time = (media_test_id == mediatest_video2_down) ? 4000000 : 2000000;
+        uint64_t back_time = (media_test_id == mediatest_video2_down) ? 24000000 : 4000000;
 
         /* Run the simulation for 2 second. */
-        ret = mediatest_loop(mt_ctx, 2000000, 0, &is_finished);
-        /* Drop the bandwidth and increase latency for 4 seconds */
+        ret = mediatest_loop(mt_ctx, down_time, 0, &is_finished);
+        /* Drop the bandwidth and increase latency for specified down time */
         for (int i = 0; i < 2; i++) {
             picosec_per_byte_ref[i] = mt_ctx->link[i]->picosec_per_byte;
             mt_ctx->link[i]->picosec_per_byte = 8000000; /* 8 us per byte, i.e., 1Mbps*/
             latency_ref[i] = mt_ctx->link[i]->microsec_latency;
         }
         if (ret == 0) {
-            ret = mediatest_loop(mt_ctx, 6000000, 0, &is_finished);
+            ret = mediatest_loop(mt_ctx, back_time, 0, &is_finished);
         }
         /* restore the bandwidth */
         for (int i = 0; i < 2; i++) {
@@ -1320,6 +1330,24 @@ int mediatest_video2_down_test()
     spec.latency_max = 600000;
     spec.do_not_check_video2 = 1;
     ret = mediatest_one(mediatest_video2_down, &spec);
+
+    return ret;
+}
+
+int mediatest_video2_back_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.01;
+    spec.do_video = 1;
+    spec.do_video2 = 1;
+    spec.do_audio = 1;
+    spec.data_size = 0;
+    spec.latency_average = 110000;
+    spec.latency_max = 600000;
+    spec.do_not_check_video2 = 1;
+    ret = mediatest_one(mediatest_video2_back, &spec);
 
     return ret;
 }
