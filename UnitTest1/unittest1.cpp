@@ -2255,6 +2255,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(mediatest_video2_back) {
+            int ret = mediatest_video2_back_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(mediatest_wifi) {
             int ret = mediatest_wifi_test();
 
