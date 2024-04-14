@@ -1326,7 +1326,7 @@ int mediatest_video2_down_test()
     spec.do_video2 = 1;
     spec.do_audio = 1;
     spec.data_size = 0;
-    spec.latency_average = 110000;
+    spec.latency_average = 100000;
     spec.latency_max = 600000;
     spec.do_not_check_video2 = 1;
     ret = mediatest_one(mediatest_video2_down, &spec);
@@ -1344,8 +1344,8 @@ int mediatest_video2_back_test()
     spec.do_video2 = 1;
     spec.do_audio = 1;
     spec.data_size = 0;
-    spec.latency_average = 110000;
-    spec.latency_max = 600000;
+    spec.latency_average = 50000;
+    spec.latency_max = 450000;
     spec.do_not_check_video2 = 1;
     ret = mediatest_one(mediatest_video2_back, &spec);
 
