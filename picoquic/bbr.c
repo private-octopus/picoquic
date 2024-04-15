@@ -1517,11 +1517,10 @@ static uint64_t BBRTargetInflight(picoquic_bbr_state_t* bbr_state, picoquic_path
 #ifdef RTTJitterBufferProbe
 static int BBRCheckPathSaturated(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
 {
-    if (!rs->is_app_limited &&
-        bbr_state->state != picoquic_bbr_alg_drain &&
+    if (IsInAProbeBWState(bbr_state) &&
+        rs->rtt_sample > 2*bbr_state->min_rtt &&
         bbr_state->rounds_since_bw_probe >= 1 &&
         bbr_state->pacing_rate > 3 * rs->delivery_rate &&
-        rs->rtt_sample > 2*bbr_state->min_rtt &&
         bbr_state->wifi_shadow_rtt == 0) {
         bbr_state->prior_cwnd = rs->delivered;
         bbr_state->probe_rtt_done_stamp = 0;
