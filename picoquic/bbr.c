@@ -2141,11 +2141,6 @@ static void BBRSetRsFromAckState(picoquic_path_t* path_x, picoquic_per_ack_state
     rs->delivered = ack_state->nb_bytes_delivered_since_packet_sent;
     /* variable in path */
     rs->rtt_sample = path_x->rtt_sample;
-#if 1
-    if (path_x->cnx->client_mode && rs->rtt_sample > 100000) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
     /* variables from call */
     rs->newly_acked = ack_state->nb_bytes_acknowledged; /* volume of data acked by current ack */
     rs->newly_lost = ack_state->nb_bytes_newly_lost; /* volume of data marked lost on ack received */
