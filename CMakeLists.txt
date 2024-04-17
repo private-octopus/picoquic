@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.19.1
+        VERSION 1.1.19.9
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -156,6 +156,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/minicrypto_test.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
+    picoquictest/openssl_test.c
     picoquictest/parseheadertest.c
     picoquictest/picoquic_lb_test.c
     picoquictest/pn2pn64test.c
@@ -199,6 +200,7 @@ set(PICOHTTP_HEADERS
 
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
+    picoquictest/h3zero_stream_test.c
     picoquictest/h3zero_uri_test.c
     picoquictest/webtransport_test.c)
 
@@ -207,7 +209,7 @@ if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
         GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             af66fc4aa8853b0725fcb2c18a702e8f1c656cf1)
+        GIT_TAG             5a4461d8a3948d9d26bf861e7d90cb80d8093515)
     FetchContent_MakeAvailable(picotls)
 endif()
 

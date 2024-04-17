@@ -571,6 +571,76 @@ uint8_t picoquic_create_long_packet_type(picoquic_packet_type_enum pt, int versi
     return flags;
 }
 
+size_t picoquic_create_long_header(
+    picoquic_packet_type_enum packet_type,
+    picoquic_connection_id_t * dest_cnx_id,
+    picoquic_connection_id_t * srce_cnx_id,
+    int do_grease_quic_bit,
+    uint32_t version,
+    int version_index,
+    uint64_t sequence_number,
+    size_t retry_token_length,
+    uint8_t * retry_token,
+    uint8_t* bytes,
+    size_t* pn_offset,
+    size_t* pn_length)
+{
+    /* Create a long packet */
+    size_t length = 0;
+
+    /* The first byte is defined in RFC 9000 as:
+    *     Header Form (1) = 1,
+    *     Fixed Bit (1) = 1,
+    *     Long Packet Type (2),
+    *     Type-Specific Bits (4)
+    * The packet type is version dependent. In fact, the whole first byte is version
+    * dependent, the invariant draft only specifies the "header form" bit = 1 for long
+    * header. In version 1, the packet specific bytes are two reserved bytes +
+    * sequence number length, always set to 3 in picoquic (i.e., 4 bytes).
+    *
+    */
+    bytes[0] = picoquic_create_long_packet_type(packet_type, version_index);
+
+    if (do_grease_quic_bit) {
+        bytes[0] &= 0xBF;
+    }
+
+    length = 1;
+    picoformat_32(&bytes[length], version);
+    length += 4;
+
+    bytes[length++] = dest_cnx_id->id_len;
+    length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, *dest_cnx_id);
+    bytes[length++] = srce_cnx_id->id_len;
+    length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, *srce_cnx_id);
+
+    /* Special case of packet initial -- encode token as part of header */
+    if (packet_type == picoquic_packet_initial) {
+        length += picoquic_varint_encode(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, retry_token_length);
+        if (retry_token_length > 0) {
+            memcpy(&bytes[length], retry_token, retry_token_length);
+            length += retry_token_length;
+        }
+    }
+
+    if (packet_type == picoquic_packet_retry) {
+        /* No payload length and no sequence number for Retry */
+        *pn_offset = 0;
+        *pn_length = 0;
+    }
+    else {
+        /* Reserve two bytes for payload length */
+        bytes[length++] = 0;
+        bytes[length++] = 0;
+        /* Encode the sequence number */
+        *pn_offset = length;
+        *pn_length = 4;
+        picoformat_32(&bytes[length], (uint32_t)sequence_number);
+        length += 4;
+    }
+    return length;
+}
+
 size_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
@@ -599,7 +669,7 @@ size_t picoquic_create_packet_header(
         length = 0;
         bytes[length++] = (K | C | picoquic_spin_function_table[cnx->spin_policy].spinbit_outgoing(cnx));
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length,
-            path_x->p_remote_cnxid->cnx_id);
+            (path_x->is_probing_nat && path_x->p_remote_nat_cnxid != NULL) ? path_x->p_remote_nat_cnxid->cnx_id : path_x->p_remote_cnxid->cnx_id);
 
         *pn_offset = length;
         if (header_length > length && header_length < length + 4) {
@@ -625,66 +695,28 @@ size_t picoquic_create_packet_header(
     }
     else {
         /* Create a long packet */
-        picoquic_connection_id_t dest_cnx_id =
+        picoquic_connection_id_t * dest_cnx_id =
             (cnx->client_mode && (packet_type == picoquic_packet_initial ||
                 packet_type == picoquic_packet_0rtt_protected)
                 && picoquic_is_connection_id_null(&path_x->p_remote_cnxid->cnx_id)) ?
-            cnx->initial_cnxid : path_x->p_remote_cnxid->cnx_id;
+            &cnx->initial_cnxid : &path_x->p_remote_cnxid->cnx_id;
+        picoquic_connection_id_t* srce_cnx_id = &path_x->p_local_cnxid->cnx_id;
+        uint32_t version = ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_initial) ?
+            cnx->proposed_version : picoquic_supported_versions[cnx->version_index].version;
 
-        /* The first byte is defined in RFC 9000 as:
-         *     Header Form (1) = 1,
-         *     Fixed Bit (1) = 1,
-         *     Long Packet Type (2),
-         *     Type-Specific Bits (4)
-         * The packet type is version dependent. In fact, the whole first byte is version
-         * dependent, the invariant draft only specifies the "header form" bit = 1 for long
-         * header. In version 1, the packet specific bytes are two reserved bytes +
-         * sequence number length, always set to 3 in picoquic (i.e., 4 bytes).
-         * 
-         */
-        bytes[0] = picoquic_create_long_packet_type(packet_type, cnx->version_index);
-
-        if (cnx->do_grease_quic_bit) {
-            bytes[0] &= 0xBF;
-        }
-
-        length = 1;
-        if ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_initial) {
-            picoformat_32(&bytes[length], cnx->proposed_version);
-        }
-        else {
-            picoformat_32(&bytes[length], picoquic_supported_versions[cnx->version_index].version);
-        }
-        length += 4;
-
-        bytes[length++] = dest_cnx_id.id_len;
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
-        bytes[length++] = path_x->p_local_cnxid->cnx_id.id_len;
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, path_x->p_local_cnxid->cnx_id);
-
-        /* Special case of packet initial -- encode token as part of header */
-        if (packet_type == picoquic_packet_initial) {
-            length += picoquic_varint_encode(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->retry_token_length);
-            if (cnx->retry_token_length > 0) {
-                memcpy(&bytes[length], cnx->retry_token, cnx->retry_token_length);
-                length += cnx->retry_token_length;
-            }
-        }
-
-        if (packet_type == picoquic_packet_retry) {
-            /* No payload length and no sequence number for Retry */
-            *pn_offset = 0;
-            *pn_length = 0;
-        } else {
-            /* Reserve two bytes for payload length */
-            bytes[length++] = 0;
-            bytes[length++] = 0;
-            /* Encode the sequence number */
-            *pn_offset = length;
-            *pn_length = 4;
-            picoformat_32(&bytes[length], (uint32_t) sequence_number);
-            length += 4;
-        }
+        length = picoquic_create_long_header(
+            packet_type,
+            dest_cnx_id,
+            srce_cnx_id,
+            cnx->do_grease_quic_bit,
+            version,
+            cnx->version_index,
+            sequence_number,
+            cnx->retry_token_length,
+            cnx->retry_token,
+            bytes,
+            pn_offset,
+            pn_length);
     }
 
     return length;
@@ -772,6 +804,29 @@ size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, picoquic_epoch_enum epo
     return ret;
 }
 
+void picoquic_protect_packet_header(uint8_t * send_buffer, size_t pn_offset, uint8_t first_mask, void* pn_enc)
+{
+    /* The sample is located after the pn_offset */
+    size_t sample_offset = /* header_length */ pn_offset + 4;
+
+    if (pn_offset < sample_offset)
+    {
+        /* This is always true, as we use pn_length = 4 */
+        uint8_t mask_bytes[5] = { 0, 0, 0, 0, 0 };
+        uint8_t pn_l;
+
+        picoquic_pn_encrypt(pn_enc, send_buffer + sample_offset, mask_bytes, mask_bytes, 5);
+        /* Encode the first byte */
+        pn_l = (send_buffer[0] & 3) + 1;
+        send_buffer[0] ^= (mask_bytes[0] & first_mask);
+
+        /* Packet encoding is 1 to 4 bytes */
+        for (uint8_t i = 0; i < pn_l; i++) {
+            send_buffer[pn_offset+i] ^= mask_bytes[i+1];
+        }
+    }
+}
+
 static size_t picoquic_protect_packet(picoquic_cnx_t* cnx, 
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, 
@@ -784,7 +839,6 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     size_t send_length;
     size_t h_length;
     size_t pn_offset = 0;
-    size_t sample_offset = 0;
     size_t pn_length = 0;
     size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
     uint8_t first_mask = 0x0F;
@@ -841,6 +895,11 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
             sequence_number, send_buffer, /* header_length */ h_length, aead_context);
 
     }
+    else if (cnx->is_unique_path_id_enabled && ptype == picoquic_packet_1rtt_protected) {
+        send_length = picoquic_aead_encrypt_mp(send_buffer + /* header_length */ h_length,
+            bytes + header_length, length - header_length, path_x->unique_path_id,
+            sequence_number, send_buffer, /* header_length */ h_length, aead_context);
+    }
     else {
         send_length = picoquic_aead_encrypt_generic(send_buffer + /* header_length */ h_length,
             bytes + header_length, length - header_length,
@@ -855,24 +914,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
         send_buffer, send_length, current_time);
 
     /* Next, encrypt the PN -- The sample is located after the pn_offset */
-    sample_offset = /* header_length */ pn_offset + 4;
-
-    if (pn_offset < sample_offset)
-    {
-        /* This is always true, as use pn_length = 4 */
-        uint8_t mask_bytes[5] = { 0, 0, 0, 0, 0 };
-        uint8_t pn_l;
-
-        picoquic_pn_encrypt(pn_enc, send_buffer + sample_offset, mask_bytes, mask_bytes, 5);
-        /* Encode the first byte */
-        pn_l = (send_buffer[0] & 3) + 1;
-        send_buffer[0] ^= (mask_bytes[0] & first_mask);
-
-        /* Packet encoding is 1 to 4 bytes */
-        for (uint8_t i = 0; i < pn_l; i++) {
-            send_buffer[pn_offset+i] ^= mask_bytes[i+1];
-        }
-    }
+    picoquic_protect_packet_header(send_buffer, pn_offset, first_mask, pn_enc);
 
     return send_length;
 }
@@ -1107,6 +1149,9 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
     if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
         pkt_ctx = &path_x->p_remote_cnxid->pkt_ctx;
     }
+    else if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_unique_path_id_enabled) {
+        pkt_ctx = &path_x->pkt_ctx;
+    }
     else {
         pkt_ctx = &cnx->pkt_ctx[packet->pc];
     }
@@ -1296,6 +1341,8 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
         packet->length = length;
         if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
             packet->sequence_number = path_x->p_remote_cnxid->pkt_ctx.send_sequence++;
+        } else if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_unique_path_id_enabled) {
+            packet->sequence_number = path_x->pkt_ctx.send_sequence++;
         } else {
             packet->sequence_number = cnx->pkt_ctx[packet->pc].send_sequence++;
         }
@@ -1415,7 +1462,7 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
     }
 
     if (cnx->is_multipath_enabled) {
-        picoquic_remote_cnxid_t* r_cid = cnx->cnxid_stash_first;
+        picoquic_remote_cnxid_t* r_cid = cnx->first_remote_cnxid_stash->cnxid_stash_first;
 
         while (r_cid != NULL && backlog_empty) {
             backlog_empty = picoquic_is_pkt_ctx_backlog_empty(&r_cid->pkt_ctx);
@@ -1618,7 +1665,7 @@ int picoquic_preemptive_retransmit_as_needed(
 
     if (pc == picoquic_packet_context_application &&
         cnx->is_multipath_enabled) {
-        picoquic_remote_cnxid_t* r_cid = cnx->cnxid_stash_first;
+        picoquic_remote_cnxid_t* r_cid = cnx->first_remote_cnxid_stash->cnxid_stash_first;
 
         while (r_cid != NULL) {
             pkt_ctx = &r_cid->pkt_ctx;
@@ -1971,19 +2018,21 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
 int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
 {
     int ret = 0;
+    uint64_t transport_error = 0;
 
     if (cnx->remote_parameters.prefered_address.is_defined) {
+        uint64_t unique_path_id = (cnx->is_unique_path_id_enabled) ? 1 : 0;
         int ipv4_received = cnx->remote_parameters.prefered_address.ipv4Port != 0;
         int ipv6_received = cnx->remote_parameters.prefered_address.ipv6Port != 0;
 
         /* Add the connection ID to the local stash */
-        ret = picoquic_enqueue_cnxid_stash(cnx, 0, 1,
+        transport_error = picoquic_stash_remote_cnxid(cnx, 0, unique_path_id, 1,
             cnx->remote_parameters.prefered_address.connection_id.id_len,
             cnx->remote_parameters.prefered_address.connection_id.id,
             cnx->remote_parameters.prefered_address.statelessResetToken,
             NULL);
-        if (ret != 0) {
-            ret = picoquic_connection_error(cnx, (uint16_t)ret, picoquic_frame_type_new_connection_id);
+        if (transport_error != 0) {
+            ret = picoquic_connection_error(cnx, transport_error, picoquic_frame_type_new_connection_id);
         }
         else if(ipv4_received || ipv6_received) {
             struct sockaddr_storage dest_addr;
@@ -2336,15 +2385,48 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 /* Compute the time at which to send the next challenge
  */
 
-uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
+uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, unsigned int * is_nat)
 {
+    /* "Challenge time" holds the time at which the last challenge was set. We
+     * use the value to compute an estimate of the RTT */
     uint64_t next_challenge_time = path_x->challenge_time;
 
-    if (path_x->challenge_repeat_count >= 2) {
-        next_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
+    if (path_x->challenge_repeat_count == 0) {
+        next_challenge_time = current_time;
+    } else {
+        if (path_x->challenge_repeat_count >= 2) {
+            next_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
+        }
+        else {
+            next_challenge_time += PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+        }
     }
-    else {
-        next_challenge_time += PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+
+    if (is_nat != NULL) {
+        *is_nat = 0;
+        if (cnx->is_unique_path_id_enabled && path_x->nat_local_addr.ss_family != AF_UNSPEC)
+        {
+            uint64_t nat_challenge_time = path_x->nat_challenge_time;
+            if (path_x->nat_challenge_repeat_count == 0) {
+                nat_challenge_time = current_time;
+            }
+            else {
+                if (path_x->challenge_repeat_count >= 2) {
+                    nat_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
+                }
+                else {
+                    nat_challenge_time += path_x->retransmit_timer;
+                }
+            }
+            if (nat_challenge_time <= current_time && path_x->nat_challenge_repeat_count >= PICOQUIC_CHALLENGE_REPEAT_MAX) {
+                /* NAT Challenge failed. Resetting the address so we forget about it. */
+                picoquic_log_app_message(cnx, "NAT Challenge failed on path %" PRIu64, path_x->unique_path_id);
+                path_x->nat_local_addr.ss_family = AF_UNSPEC;
+            } else if (nat_challenge_time < next_challenge_time) {
+                *is_nat = 1;
+                next_challenge_time = nat_challenge_time;
+            }
+        }
     }
 
     return next_challenge_time;
@@ -2742,34 +2824,53 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t * bytes_max,
     uint64_t current_time, uint64_t * next_wake_time, int * more_data, int * is_pure_ack)
 {
-    /* Check whether time has comed to obsolete local CID */
-    picoquic_check_local_cnxid_ttl(cnx, current_time, next_wake_time);
-
-    /* Push new CID if needed */
-    while (
-        cnx->nb_local_cnxid < ((int)(cnx->remote_parameters.active_connection_id_limit) + cnx->nb_local_cnxid_expired) &&
-        cnx->nb_local_cnxid <= (PICOQUIC_NB_PATH_TARGET+cnx->nb_local_cnxid_expired)) {
-        uint8_t* bytes0 = bytes;
-        picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, NULL, current_time);
-
-        if (l_cid == NULL) {
-            /* OOPS, memory error */
-            break;
-        } else {
-            bytes = picoquic_format_new_connection_id_frame(cnx, bytes, bytes_max, more_data, is_pure_ack, l_cid);
-
-            if (bytes == bytes0) {
-                /* Oops. Try again next time. */
-                picoquic_delete_local_cnxid(cnx, l_cid);
-                cnx->local_cnxid_sequence_next--;
-                /* No need -- alreadey decremented during "delete" cnx->nb_local_cnxid--; */
-                break;
-            }
+    int no_space_left = 0;
+    picoquic_local_cnxid_list_t* local_cnxid_list = cnx->first_local_cnxid_list;
+    if (cnx->is_unique_path_id_enabled) {
+        /* If the number of local lists is lower than the max number of paths,
+         * create more. The code assume that path[0] is created during handshake. */
+        while (cnx->nb_local_cnxid_lists < cnx->local_parameters.initial_max_paths &&
+            cnx->max_paths_remote > cnx->nb_local_cnxid_lists) {
+            (void) picoquic_find_or_create_local_cnxid_list(cnx, cnx->nb_local_cnxid_lists, 1);
         }
     }
 
+    while (local_cnxid_list != NULL && !no_space_left) {
+        /* Check whether time has comed to obsolete local CID */
+        picoquic_check_local_cnxid_ttl(cnx, local_cnxid_list, current_time, next_wake_time);
+
+        /* Push new CID if needed */
+        while (
+            local_cnxid_list->nb_local_cnxid < ((int)(cnx->remote_parameters.active_connection_id_limit) + local_cnxid_list->nb_local_cnxid_expired) &&
+            local_cnxid_list->nb_local_cnxid <= (PICOQUIC_NB_PATH_TARGET + local_cnxid_list->nb_local_cnxid_expired)) {
+            uint8_t* bytes0 = bytes;
+            picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, local_cnxid_list->unique_path_id, NULL, current_time);
+
+            if (l_cid == NULL) {
+                /* OOPS, no memory left */
+                no_space_left = 1;
+                break;
+            }
+            else {
+                bytes = picoquic_format_new_connection_id_frame(cnx, local_cnxid_list, bytes, bytes_max, more_data, is_pure_ack, l_cid);
+
+                if (bytes == bytes0) {
+                    no_space_left = 1;
+                    /* Oops. Try again next time. */
+                    picoquic_delete_local_cnxid(cnx, l_cid);
+                    local_cnxid_list->local_cnxid_sequence_next--;
+                    break;
+                }
+            }
+        }
+        local_cnxid_list = local_cnxid_list->next_list;
+    }
     return bytes;
 }
+
+picoquic_local_cnxid_list_t* picoquic_find_or_create_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id, int do_create);
+picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx,
+    uint64_t unique_path_id, picoquic_connection_id_t* suggested_value, uint64_t current_time);
 
 void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time)
 {
@@ -2798,7 +2899,7 @@ void picoquic_client_almost_ready_transition(picoquic_cnx_t* cnx)
     /* If client, make sure that 0-RTT packets are in correct context */
     if (cnx->is_multipath_enabled) {
         picoquic_packet_context_t* o_pkt_ctx = &cnx->pkt_ctx[0];
-        picoquic_packet_context_t* n_pkt_ctx = &cnx->cnxid_stash_first->pkt_ctx;
+        picoquic_packet_context_t* n_pkt_ctx = &cnx->first_remote_cnxid_stash->cnxid_stash_first->pkt_ctx;
 
         *n_pkt_ctx = *o_pkt_ctx;
         picoquic_init_packet_ctx(cnx, o_pkt_ctx, picoquic_packet_context_application);
@@ -2894,13 +2995,24 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
     uint64_t current_time, uint64_t * next_wake_time)
 {
     if (path_x->challenge_verified == 0 && path_x->challenge_failed == 0) {
-        uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x);
+        unsigned int is_nat = 0;
+        uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x, current_time, &is_nat);
 
-        if (next_challenge_time <= current_time || path_x->challenge_repeat_count == 0) {
-            if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
-                int ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
+        if (next_challenge_time <= current_time) {
+            int ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
+            uint8_t* bytes_challenge = bytes_next;
+            if (is_nat) {
+                /* Format a NAT challenge, or at least try. */
+                bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, more_data, is_pure_ack,
+                    path_x->nat_challenge[path_x->nat_challenge_repeat_count]);
+                if (bytes_next > bytes_challenge) {
+                    path_x->nat_challenge_time = current_time;
+                    path_x->nat_challenge_repeat_count++;
+                    *is_challenge_padding_needed = 1;
+                }
+            }
+            else if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
                 /* When blocked, repeat the path challenge or wait */
-                uint8_t* bytes_challenge = bytes_next;
 
                 bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, more_data, is_pure_ack,
                     path_x->challenge[path_x->challenge_repeat_count]);
@@ -3230,8 +3342,14 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     }
 
     if (length == 0) {
-        picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled) ?
-            &path_x->p_remote_cnxid->pkt_ctx : &cnx->pkt_ctx[pc];
+        picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
+        if (cnx->is_multipath_enabled) {
+            pkt_ctx = &path_x->p_remote_cnxid->pkt_ctx;
+        }
+        else if (cnx->is_unique_path_id_enabled) {
+            pkt_ctx = &path_x->pkt_ctx;
+        }
+
         tls_ready = picoquic_is_tls_stream_ready(cnx);
         packet->pc = pc;
         length = picoquic_predict_packet_header_length(
@@ -3475,11 +3593,13 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     int more_data = 0;
     int ack_sent = 0;
     int is_challenge_padding_needed = 0;
-    int is_nominal_ack_path = (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) ?
-        path_x->is_nominal_ack_path : path_x == cnx->path[0];
+    int is_nominal_ack_path = (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled || cnx->is_unique_path_id_enabled) ?
+        (path_x->is_nominal_ack_path || cnx->nb_paths == 1) : path_x == cnx->path[0];
 
     picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled) ?
-        &path_x->p_remote_cnxid->pkt_ctx : &cnx->pkt_ctx[picoquic_packet_context_application];
+        &path_x->p_remote_cnxid->pkt_ctx : ( (cnx->is_unique_path_id_enabled) ?
+        &path_x->pkt_ctx :
+        &cnx->pkt_ctx[picoquic_packet_context_application]);
 
     /* Check whether to insert a hole in the sequence of packets */
     if (pkt_ctx->send_sequence >= pkt_ctx->next_sequence_hole) {
@@ -4044,7 +4164,39 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
  * sensitive data is not sent on suspect paths.
  */
 
-static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time)
+static void picoquic_set_path_addresses(picoquic_cnx_t* cnx, int path_id, int is_nat,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index)
+{
+    if (is_nat) {
+        if (p_addr_to != NULL) {
+            picoquic_store_addr(p_addr_to, (struct sockaddr*)&cnx->path[path_id]->nat_peer_addr);
+        }
+
+        if (p_addr_from != NULL) {
+            picoquic_store_addr(p_addr_from, (struct sockaddr*)&cnx->path[path_id]->nat_local_addr);
+        }
+
+        if (if_index != NULL) {
+            *if_index = cnx->path[path_id]->if_index_nat_dest;
+        }
+    }
+    else {
+        if (p_addr_to != NULL) {
+            picoquic_store_addr(p_addr_to, (struct sockaddr*)&cnx->path[path_id]->peer_addr);
+        }
+
+        if (p_addr_from != NULL) {
+            picoquic_store_addr(p_addr_from, (struct sockaddr*)&cnx->path[path_id]->local_addr);
+        }
+
+        if (if_index != NULL) {
+            *if_index = cnx->path[path_id]->if_index_dest;
+        }
+    }
+}
+
+static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time,
+    struct sockaddr_storage * p_addr_to, struct sockaddr_storage * p_addr_from, int* if_index)
 {
     int path_id = -1;
     int highest_priority = -1;
@@ -4062,6 +4214,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     int is_ack_needed = 0;
     picoquic_stream_head_t* next_stream = picoquic_find_ready_stream(cnx);
     int affinity_path_id = -1;
+    unsigned int is_nat = 0;
 
     cnx->last_path_polled++;
     if (cnx->last_path_polled > cnx->nb_paths) {
@@ -4070,6 +4223,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
 
     for (i = 0; i < cnx->nb_paths; i++) {
         int path_priority = (cnx->path[i]->path_is_standby) ? 0 : 1;
+        cnx->path[i]->is_probing_nat = 0;
         if (cnx->path[i]->nb_retransmit > 0) {
             path_priority = 0;
         }
@@ -4078,7 +4232,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
             continue;
         }
         else if (cnx->path[i]->challenge_failed) {
-            picoquic_demote_path(cnx, i, current_time);
+            picoquic_demote_path(cnx, i, current_time, 0, NULL);
             continue;
         }
         else
@@ -4089,10 +4243,10 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                 break;
             }
             else if (cnx->path[i]->challenge_required && !cnx->path[i]->challenge_verified) {
-                uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, cnx->path[i]);
-                if (cnx->path[i]->challenge_repeat_count == 0 ||
-                    current_time >= next_challenge_time) {
+                uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, cnx->path[i], current_time, &is_nat);
+                if (current_time >= next_challenge_time) {
                     cnx->path[i]->challenger++;
+                    cnx->path[i]->is_probing_nat = (is_nat) ? 1 : 0;
                     challenge_path = i;
                     break;
                 }
@@ -4225,18 +4379,25 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
         }
         path_id = 0;
     }
-
+    if (cnx->path[path_id]->path_is_standby && challenge_path != path_id) {
+        /* Set the selected path to available if it was standby. Selecting a standby
+         * path means that the available path was of lower quality, the only exception
+         * being if the selection was due to a pending challenge. */
+        picoquic_set_path_status(cnx, cnx->path[path_id]->unique_path_id, picoquic_path_status_available);
+    }
     cnx->path[path_id]->selected++;
+    picoquic_set_path_addresses(cnx, path_id, is_nat, p_addr_to, p_addr_from, if_index);
 
     return path_id;
 }
 
-static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time, uint64_t * next_wake_time)
+static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time, uint64_t * next_wake_time,
+    struct sockaddr_storage * p_addr_to, struct sockaddr_storage * p_addr_from, int* if_index)
 {
     int path_id = -1;
 
-    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) && cnx->cnx_state >= picoquic_state_ready) {
-        return picoquic_select_next_path_mp(cnx, current_time, next_wake_time);
+    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled || cnx->is_unique_path_id_enabled) && cnx->cnx_state >= picoquic_state_ready) {
+        return picoquic_select_next_path_mp(cnx, current_time, next_wake_time, p_addr_to, p_addr_from, if_index);
     }
 
     /* Select the path */
@@ -4245,7 +4406,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
             continue;
         }
         else if (cnx->path[i]->challenge_failed) {
-            picoquic_demote_path(cnx, i, current_time);
+            picoquic_demote_path(cnx, i, current_time, 0, NULL);
             continue;
         }
         else if (cnx->path[i]->challenge_verified && cnx->cnx_state == picoquic_state_ready) {
@@ -4273,7 +4434,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
                 path_id = i;
             }
             else if (cnx->path[i]->challenge_required) {
-                uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, cnx->path[i]);
+                uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, cnx->path[i], current_time, NULL);
                 if (cnx->path[i]->challenge_repeat_count == 0 ||
                     current_time >= next_challenge_time) {
                     /* will try this path, unless a validated path came in */
@@ -4291,6 +4452,8 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
         path_id = 0;
     }
 
+    picoquic_set_path_addresses(cnx, path_id, 0, p_addr_to, p_addr_from, if_index);
+
     return path_id;
 }
 
@@ -4302,8 +4465,6 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
 
     int ret;
     picoquic_packet_t * packet = NULL;
-    struct sockaddr_storage addr_to_log;
-    struct sockaddr_storage addr_from_log;
     uint64_t initial_next_time;
     uint64_t next_wake_time = cnx->latest_receive_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
 
@@ -4317,8 +4478,6 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         picoquic_process_sooner_packets(cnx, current_time);
     }
 
-    memset(&addr_to_log, 0, sizeof(addr_to_log));
-    memset(&addr_from_log, 0, sizeof(addr_from_log));
     *send_length = 0;
 
     ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
@@ -4337,24 +4496,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         }
 
         /* Select the next path, and the corresponding addresses */
-        path_id = picoquic_select_next_path(cnx, current_time, &next_wake_time);
-
-        picoquic_store_addr(&addr_to_log, (struct sockaddr*) & cnx->path[path_id]->peer_addr);
-        if (cnx->path[path_id]->local_addr.ss_family != 0) {
-            picoquic_store_addr(&addr_from_log, (struct sockaddr*) & cnx->path[path_id]->local_addr);
-        }
-
-        if (p_addr_to != NULL) {
-            picoquic_store_addr(p_addr_to, (struct sockaddr*) & cnx->path[path_id]->peer_addr);
-        }
-
-        if (p_addr_from != NULL) {
-            picoquic_store_addr(p_addr_from, (struct sockaddr*) & cnx->path[path_id]->local_addr);
-        }
-
-        if (if_index != NULL) {
-            *if_index = cnx->path[path_id]->if_index_dest;
-        }
+        path_id = picoquic_select_next_path(cnx, current_time, &next_wake_time, p_addr_to, p_addr_from, if_index);
 
         /* Send the available packets */
         if (send_msg_size != NULL) {
@@ -4454,8 +4596,10 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 }
                 cnx->nb_packets_sent++;
                 /* if needed, log that the packet is sent */
-                picoquic_log_pdu(cnx, 0, current_time,
-                    (struct sockaddr*) & addr_to_log, (struct sockaddr*) & addr_from_log, packet_size);
+                if (p_addr_to != NULL && p_addr_from != NULL) {
+                    picoquic_log_pdu(cnx, 0, current_time,
+                        (struct sockaddr*)p_addr_to, (struct sockaddr*)p_addr_from, packet_size);
+                }
             }
 
             /* Update the wake up time for the connection */

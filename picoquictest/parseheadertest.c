@@ -442,18 +442,20 @@ int parseheadertest()
         cnx_10 = picoquic_create_cnx(quic, test_cnxid_ini, test_cnxid_rem, (struct sockaddr*)&addr_10,
             0, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, 1);
 
-        if (cnx_10 == NULL) {
+        if (cnx_10 == NULL || cnx_10->first_local_cnxid_list == NULL) {
             ret = -1;
         }
         else {
             /* Remove old local CID from table and avoid leak. */
+            picoquic_local_cnxid_list_t* local_cnxid_list = cnx_10->first_local_cnxid_list;
+
             picoquic_delete_local_cnxid(cnx_10, cnx_10->path[0]->p_local_cnxid);
-            if (cnx_10->nb_local_cnxid != 0) {
-                DBG_PRINTF("Expected 0 cnxid left, got %d", cnx_10->nb_local_cnxid);
+            if (local_cnxid_list->nb_local_cnxid != 0) {
+                DBG_PRINTF("Expected 0 cnxid left, got %d", local_cnxid_list->nb_local_cnxid);
             }
             else {
                 /* Update the local cnx_id so it be predictable in tests */
-                picoquic_local_cnxid_t* local_cnxid0 = picoquic_create_local_cnxid(cnx_10, &test_cnxid_local, 0);
+                picoquic_local_cnxid_t* local_cnxid0 = picoquic_create_local_cnxid(cnx_10, 0, &test_cnxid_local, 0);
                 if (local_cnxid0 == NULL) {
                     DBG_PRINTF("%s", "Cannot create the new CNX_ID");
                     ret = -1;

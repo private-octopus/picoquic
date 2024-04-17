@@ -67,7 +67,7 @@ static option_table_line_t option_table[] = {
     "Use the specified congestion control algorithm: reno, cubic, bbr or fast. Defaults to bbr." },
     { picoquic_option_SPINBIT, 'P', "spinbit", 1, "number", "Set the default spinbit policy" },
     { picoquic_option_LOSSBIT, 'O', "lossbit", 1, "number", "Set the default lossbit policy" },
-    { picoquic_option_MULTIPATH, 'M', "multipath", 1, "number", "Multipath option: none(0), full(1), simple(2), both(3)" },
+    { picoquic_option_MULTIPATH, 'M', "multipath", 1, "number", "Multipath option: none(0), full(1), simple(2), both(3), unique(4), all (7)" },
     { picoquic_option_DEST_IF, 'e', "dest_if", 1, "if", "Send on interface (default: -1)" },
     { picoquic_option_CIPHER_SUITE, 'C', "cipher_suite", 1, "cipher_suite_id", "specify cipher suite (e.g. -C 20 = chacha20)" },
     { picoquic_option_INIT_CNXID, 'i', "cnxid_params", 1, "per-text-lb-spec", "See documentation for LB compatible CID configuration" },
@@ -376,7 +376,7 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     }
     case picoquic_option_MULTIPATH: {
         int v = config_atoi(params, nb_params, 0, &ret);
-        if (ret != 0 || v < 0 || v > 3) {
+        if (ret != 0 || v < 0 || v > 7) {
             fprintf(stderr, "Invalid multipath option: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
             ret = (ret == 0) ? -1 : ret;
         }

@@ -152,25 +152,27 @@ static void picoquic_openssl_dispose_sign_certificate(ptls_sign_certificate_t* c
 /* Read certificates from a file using openSSL functions
 * TODO: what if we need to read multiple certificates for the chain?
 */
-static ptls_iovec_t* picoquic_openssl_get_certs_from_file(char const * file_name, size_t * count)
+ptls_iovec_t* picoquic_openssl_get_certs_from_file(char const * file_name, size_t * count)
 {
     BIO* bio_key = BIO_new_file(file_name, "rb");
-    /* Load cert and convert to DER */
-    X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
-    int length = i2d_X509(cert, NULL);
-    unsigned char* cert_der = (unsigned char*)malloc(length);
-    unsigned char* tmp = cert_der;
-    i2d_X509(cert, &tmp);
-    X509_free(cert);
-    BIO_free(bio_key);
-
-    ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t));
-    if (chain == NULL) {
-        *count = 0;
-    } else {
-        *count = 1;
-        chain[0] = ptls_iovec_init(cert_der, length);
+    size_t const max_count = 16;
+    ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t) * max_count);
+    *count = 0;
+    if (chain != NULL) {
+        X509* cert = NULL;
+        memset(chain, 0, sizeof(ptls_iovec_t) * max_count);
+        /* Load cert and convert to DER */
+        while (*count < max_count && (cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL)) != NULL) {
+            int length = i2d_X509(cert, NULL);
+            unsigned char* cert_der = (unsigned char*)malloc(length);
+            unsigned char* tmp = cert_der;
+            i2d_X509(cert, &tmp);
+            X509_free(cert);
+            chain[*count] = ptls_iovec_init(cert_der, length);
+            *count += 1;
+        }
     }
+    BIO_free(bio_key);
     return chain;
 }
 

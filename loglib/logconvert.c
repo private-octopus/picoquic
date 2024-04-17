@@ -76,6 +76,8 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "streams_blocked";
     case picoquic_frame_type_new_connection_id:
         return "new_connection_id";
+    case picoquic_frame_type_mp_new_connection_id:
+        return "mp_new_connection_id";
     case picoquic_frame_type_stop_sending:
         return "stop_sending";
     case picoquic_frame_type_ack:
@@ -96,6 +98,8 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "ack_mp";
     case picoquic_frame_type_retire_connection_id:
         return "retire_connection_id";
+    case picoquic_frame_type_mp_retire_connection_id:
+        return "mp_retire_connection_id";
     case picoquic_frame_type_handshake_done:
         return "handshake_done";
     case picoquic_frame_type_datagram:
@@ -115,6 +119,8 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "path_available";
     case picoquic_frame_type_bdp:
         return "bdp";
+    case picoquic_frame_type_max_paths:
+        return "max_paths";
     default:
         return "unknown";
     }

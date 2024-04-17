@@ -1014,11 +1014,13 @@ uint8_t * h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t
     }
     if (bp == buffer) {
         *bp++ = *bytes++;
+        *buffer_length += 1;
     }
     be = buffer + h3zero_varint_skip(buffer);
 
     while (bytes < bytes_max && bp < be) {
         *bp++ = *bytes++;
+        *buffer_length += 1;
     }
 
     if (bp >= be) {
