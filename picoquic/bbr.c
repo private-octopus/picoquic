@@ -2005,16 +2005,8 @@ static picoquic_packet_context_t* BBRAccessEcnPacketContext(picoquic_path_t* pat
     /* TODO: ECN counts should be a function of path, not number space! */
     picoquic_packet_context_t* pkt_ctx = &path_x->cnx->pkt_ctx[picoquic_packet_context_application];
 
-    if (path_x->cnx->is_multipath_enabled) {
-        /* TODO: if the RCID index has changed, reset the counters. */
-        picoquic_remote_cnxid_t* r_cid = path_x->p_remote_cnxid;
-
-        if (r_cid != NULL) {
-            pkt_ctx = &r_cid->pkt_ctx;
-        }
-        else {
-            pkt_ctx = NULL;
-        }
+    if (path_x->cnx->is_unique_path_id_enabled) {
+        pkt_ctx = &path_x->pkt_ctx;
     }
     else if (path_x != path_x->cnx->path[0]) {
         /* When doing simple multipath, or when preparing transitions,

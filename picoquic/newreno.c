@@ -125,7 +125,7 @@ void picoquic_newreno_sim_notify(
         }
         break;
     case picoquic_congestion_notification_spurious_repeat:
-        if (!cnx->is_multipath_enabled) {
+        if (!cnx->is_unique_path_id_enabled) {
             if (current_time - nr_state->recovery_start < path_x->smoothed_rtt &&
                 nr_state->recovery_sequence > picoquic_cc_get_ack_number(cnx, path_x)) {
                 /* If spurious repeat of initial loss detected,

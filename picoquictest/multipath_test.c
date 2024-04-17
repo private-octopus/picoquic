@@ -30,7 +30,6 @@
 #include "qlog.h"
 
 typedef enum {
-    multipath_variant_cid = 0,
     multipath_variant_simple = 1,
     multipath_variant_unique = 2
 } multipath_variant_enum;
@@ -365,12 +364,6 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
 
     picoquic_init_transport_parameters(test_parameters, 1);
     switch (m_variant) {
-    case multipath_variant_cid:
-        test_parameters->enable_multipath = 1;
-        test_parameters->enable_simple_multipath = 0;
-        test_parameters->is_unique_path_id_enabled = 0;
-        test_parameters->initial_max_paths = 0;
-        break;
     case multipath_variant_simple:
         test_parameters->enable_multipath = 0;
         test_parameters->enable_simple_multipath = 1;
@@ -733,9 +726,6 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         test_ctx->cnx_client->local_parameters.enable_time_stamp = 3;
 
         switch (m_variant) {
-        case multipath_variant_cid:
-            test_ctx->cnx_client->local_parameters.enable_multipath = 1;
-            break;
         case multipath_variant_simple:
             test_ctx->cnx_client->local_parameters.enable_simple_multipath = 1;
             break;
@@ -758,19 +748,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     /* verify that multipath is negotiated on both sides */
     if (ret == 0) {
         switch (m_variant) {
-        case multipath_variant_cid:
-            if (test_ctx->cnx_client->is_simple_multipath_enabled || test_ctx->cnx_server->is_simple_multipath_enabled ||
-                test_ctx->cnx_client->is_unique_path_id_enabled || test_ctx->cnx_server->is_unique_path_id_enabled ||
-                !test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled) {
-                DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
-                    test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
-                ret = -1;
-            }
-            break;
         case multipath_variant_simple:
             if (!test_ctx->cnx_client->is_simple_multipath_enabled || !test_ctx->cnx_server->is_simple_multipath_enabled ||
-                test_ctx->cnx_client->is_unique_path_id_enabled || test_ctx->cnx_server->is_unique_path_id_enabled ||
-                test_ctx->cnx_client->is_multipath_enabled || test_ctx->cnx_server->is_multipath_enabled) {
+                test_ctx->cnx_client->is_unique_path_id_enabled || test_ctx->cnx_server->is_unique_path_id_enabled) {
                 DBG_PRINTF("Simple multipath not fully negotiated (c=%d, s=%d)",
                     test_ctx->cnx_client->is_simple_multipath_enabled, test_ctx->cnx_server->is_simple_multipath_enabled);
                 ret = -1;
@@ -778,8 +758,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             break;
         case multipath_variant_unique:
             if (test_ctx->cnx_client->is_simple_multipath_enabled || test_ctx->cnx_server->is_simple_multipath_enabled ||
-                !test_ctx->cnx_client->is_unique_path_id_enabled || !test_ctx->cnx_server->is_unique_path_id_enabled ||
-                test_ctx->cnx_client->is_multipath_enabled || test_ctx->cnx_server->is_multipath_enabled) {
+                !test_ctx->cnx_client->is_unique_path_id_enabled || !test_ctx->cnx_server->is_unique_path_id_enabled) {
                 DBG_PRINTF("Simple multipath not fully negotiated (c=%d, s=%d)",
                     test_ctx->cnx_client->is_simple_multipath_enabled, test_ctx->cnx_server->is_simple_multipath_enabled);
                 ret = -1;
@@ -1073,6 +1052,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     return ret;
 }
 
+#if 0
 /* Basic multipath test. Set up two links in parallel, verify that both are used and that
  * the overall transmission is shorterthan if only one link was used.
  */
@@ -1261,7 +1241,7 @@ int multipath_standup_test()
 
     return multipath_test_one(max_completion_microsec, multipath_test_standup, multipath_variant_cid);
 }
-
+#endif
 /* Monopath tests:
  * Enable the multipath option, but use only a single path. The gal of the tests is to verify that
  * these "monopath" scenarios perform just as well as if multipath was not enabled.
@@ -1270,8 +1250,7 @@ int multipath_standup_test()
 typedef enum {
     monopath_test_basic = 0,
     monopath_test_hole,
-    monopath_test_rotation,
-    monopath_test_unique
+    monopath_test_rotation
 } monopath_test_enum_t;
 
 /* Basic connection with the multicast option enabled. */
@@ -1285,13 +1264,8 @@ int monopath_test_one(monopath_test_enum_t test_case)
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = 0;
 
-    if (test_case == monopath_test_unique) {
-        multipath_init_params(&client_parameters, 0, multipath_variant_unique);
-        multipath_init_params(&server_parameters, 0, multipath_variant_unique);
-    } else {
-        multipath_init_params(&client_parameters, 0, multipath_variant_cid);
-        multipath_init_params(&server_parameters, 0, multipath_variant_cid);
-    }
+    multipath_init_params(&client_parameters, 0, multipath_variant_unique);
+    multipath_init_params(&server_parameters, 0, multipath_variant_unique);
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
 
@@ -1373,13 +1347,6 @@ int monopath_rotation_test()
 {
     return monopath_test_one(monopath_test_rotation);
 }
-
-/* Testing basic scenario using "unique path id" variant. */
-int monopath_unique_test()
-{
-    return monopath_test_one(monopath_test_unique);
-}
-
 
 /* The zero RTT test uses the unipath code, with a special parameter.
  * Test both regular 0RTT set up, and case of losses.

@@ -455,7 +455,7 @@ int sendack_loop_test_one(uint64_t ack_gap, uint64_t ack_delay)
             if (largest_received_number + 1 != test_pn64[i]) {
                 out_of_order = 1;
             }
-            picoquic_set_ack_needed(cnx, current_time, pc, cnx->first_local_cnxid_list->local_cnxid_first, out_of_order);
+            picoquic_set_ack_needed(cnx, current_time, pc, cnx->path[0], out_of_order);
             if (next_ack_time > current_time + ack_delay) {
                 next_ack_time = current_time + ack_delay;
             }

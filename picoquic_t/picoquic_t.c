@@ -425,9 +425,9 @@ static const picoquic_test_def_t test_table[] = {
     { "monopath_basic", monopath_basic_test },
     { "monopath_hole", monopath_hole_test },
     { "monopath_rotation", monopath_rotation_test },
-    { "monopath_unique", monopath_unique_test },
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },
+#if 0
     { "multipath_aead", multipath_aead_test },
     { "multipath_basic", multipath_basic_test },
     { "multipath_drop_first", multipath_drop_first_test },
@@ -449,6 +449,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_standby", multipath_standby_test },
     { "multipath_standup", multipath_standup_test },
     { "multipath_qlog", multipath_qlog_test },
+#endif
     { "m_unip_basic", m_unip_basic_test },
     { "m_unip_drop_first", m_unip_drop_first_test },
     { "m_unip_drop_second", m_unip_drop_second_test },

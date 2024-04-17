@@ -804,15 +804,13 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option)
 {
     quic->default_multipath_option = multipath_option;
+
     if (multipath_option & 1) {
-        quic->default_tp.enable_multipath = 1;
+        quic->default_tp.is_unique_path_id_enabled = 1;
+        quic->default_tp.initial_max_paths = 4;
     }
     if (multipath_option & 2) {
         quic->default_tp.enable_simple_multipath = 1;
-    }
-    if (multipath_option & 4) {
-        quic->default_tp.is_unique_path_id_enabled = 1;
-        quic->default_tp.initial_max_paths = 4;
     }
 }
 
@@ -1732,7 +1730,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
     int path_index_current = 1;
     unsigned int is_demotion_in_progress = 0;
 
-    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled ||
+    if ((cnx->is_simple_multipath_enabled ||
         cnx->is_unique_path_id_enabled) && cnx->nb_paths > 1) {
         path_index_good = 0;
         path_index_current = 0;
@@ -1827,14 +1825,12 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
         /* TODO: add suspended callback */
 
         /* if in multipath, call "retransmit on path demoted" */
-        if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled ||
-            cnx->is_unique_path_id_enabled) {
+        if (cnx->is_unique_path_id_enabled) {
             if (!cnx->path[path_index]->path_abandon_sent) {
                 uint8_t buffer[512];
                 uint8_t* end_bytes;
                 int more_data = 0;
-                uint64_t path_id = (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) ?
-                    cnx->path[path_index]->p_remote_cnxid->sequence : cnx->path[path_index]->unique_path_id;
+                uint64_t path_id = cnx->path[path_index]->unique_path_id;
                 end_bytes = picoquic_format_path_abandon_frame(buffer, buffer + sizeof(buffer), &more_data,
                     path_id, reason, phrase);
                 if (end_bytes != NULL && picoquic_queue_misc_frame(cnx, buffer, end_bytes - buffer, 0) == 0) {
@@ -2183,7 +2179,7 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t
     int path_index = picoquic_get_path_id_from_unique(cnx, unique_path_id);
 
     if (path_index < 0 || path_index >= cnx->nb_paths || cnx->nb_paths == 1 ||
-        (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled && !cnx->is_unique_path_id_enabled)) {
+        (!cnx->is_simple_multipath_enabled && !cnx->is_unique_path_id_enabled)) {
         ret = -1;
     }
     else if (!cnx->path[path_index]->path_is_demoted) {
@@ -3423,7 +3419,7 @@ void picoquic_delete_local_cnxid_listed(picoquic_cnx_t* cnx,
             cnx->path[i]->was_local_cnxid_retired = 1;
 
             if (cnx->cnx_state == picoquic_state_ready &&
-                (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)) {
+                cnx->is_simple_multipath_enabled) {
                 picoquic_set_path_challenge(cnx, i, picoquic_get_quic_time(cnx->quic));
             }
         }

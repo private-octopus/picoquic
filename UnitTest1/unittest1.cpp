@@ -2417,12 +2417,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(monopath_unique) {
-            int ret = monopath_unique_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(monopath_0rtt) {
             int ret = monopath_0rtt_test();
 
@@ -2434,7 +2428,7 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
+#if 0
         TEST_METHOD(multipath_aead) {
             int ret = multipath_aead_test();
 
@@ -2560,7 +2554,7 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
+#endif
         TEST_METHOD(m_unip_basic) {
             int ret = m_unip_basic_test();
 

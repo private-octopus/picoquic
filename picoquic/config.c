@@ -375,7 +375,7 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     }
     case picoquic_option_MULTIPATH: {
         int v = config_atoi(params, nb_params, 0, &ret);
-        if (ret != 0 || v < 0 || v > 7) {
+        if (ret != 0 || v < 0 || v > 3) {
             fprintf(stderr, "Invalid multipath option: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
             ret = (ret == 0) ? -1 : ret;
         }
