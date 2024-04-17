@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.19.8
+        VERSION 1.1.19.9
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -209,7 +209,7 @@ if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
         GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             af66fc4aa8853b0725fcb2c18a702e8f1c656cf1)
+        GIT_TAG             5a4461d8a3948d9d26bf861e7d90cb80d8093515)
     FetchContent_MakeAvailable(picotls)
 endif()
 
