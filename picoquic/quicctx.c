@@ -3786,11 +3786,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
             cnx->cnx_state = picoquic_state_client_init;
 
-            if (!quic->is_cert_store_not_empty || sni == NULL) {
-                /* This is a hack. The open SSL certifier crashes if no name is specified,
-                 * and always fails if no certificate is stored, so we just use a NULL verifier */
-                picoquic_log_app_message(cnx, "%s -- certificate will not be verified.\n",
-                    (sni == NULL) ? "No server name specified" : "No root crt list specified");
+            if (!quic->is_cert_store_not_empty) {
+                /* The open SSL certifier always fails if no certificate is stored, so we just use a NULL verifier */
+                picoquic_log_app_message(cnx, "No root crt list specified -- certificate will not be verified.\n");
 
                 picoquic_set_null_verifier(quic);
             }

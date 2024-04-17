@@ -2175,9 +2175,6 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
     {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
     }
-    else if (sni == NULL) {
-        picoquic_set_null_verifier(test_ctx->qclient);
-    }
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, loss_mask, 0, &simulated_time);
