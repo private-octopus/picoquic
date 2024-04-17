@@ -476,13 +476,12 @@ uint8_t* h3zero_parse_control_stream_id(
 	uint8_t* bytes, uint8_t* bytes_max,
 	h3zero_data_stream_state_t* stream_state,
 	h3zero_stream_ctx_t* stream_ctx,
-	h3zero_callback_ctx_t* ctx,
-	uint64_t * error_found)
+	h3zero_callback_ctx_t* ctx)
 {
 	if (stream_state->control_stream_id == UINT64_MAX) {
 		bytes = h3zero_varint_from_stream(bytes, bytes_max, &stream_state->control_stream_id, stream_state->frame_header, &stream_state->frame_header_read);
-		if (stream_state->current_frame_type == UINT64_MAX) {
-			/* frame type was not updated */
+		if (stream_state->control_stream_id == UINT64_MAX) {
+			/* Control stream ID not updated */
 			return bytes;
 		}
 		/* Just found the control stream ID */
@@ -523,7 +522,7 @@ uint8_t* h3zero_parse_remote_bidir_stream(
 		}
 	}
 	if (stream_state->stream_type == h3zero_frame_webtransport_stream) {
-		bytes = h3zero_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx, error_found);
+		bytes = h3zero_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
 	}
 	else {
 		/* Not and expected stream */
@@ -542,8 +541,8 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 
 	if (stream_state->stream_type == UINT64_MAX) {
 		bytes = h3zero_varint_from_stream(bytes, bytes_max, &stream_state->stream_type, stream_state->frame_header, &stream_state->frame_header_read);
-		if (stream_state->current_frame_type == UINT64_MAX) {
-			/* frame type was not updated */
+		if (stream_state->stream_type == UINT64_MAX) {
+			/* stream type was not updated */
 			return bytes;
 		}
 		if (stream_state->stream_type == h3zero_stream_type_control) {
@@ -565,7 +564,7 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 		bytes = bytes_max;
 		break;
 	case h3zero_stream_type_webtransport: /* unidir stream is used as specified in web transport */
-		bytes = h3zero_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx, error_found);
+		bytes = h3zero_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
 		break;
 	default:
 		/* Per section 6.2 of RFC 9114, unknown stream types are just ignored */

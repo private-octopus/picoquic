@@ -361,6 +361,9 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_enable_bdp_frame:
                     qlog_vint_transport_extension(f, "enable_bdp_frame", s, extension_length);
                     break;
+                case picoquic_tp_initial_max_paths:
+                    qlog_vint_transport_extension(f, "initial_max_paths", s, extension_length);
+                    break;
                 default:
                     /* dump unknown extensions */
                     fprintf(f, "\"%" PRIx64 "\": ", extension_type);
@@ -815,6 +818,13 @@ void qlog_path_available_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"sequence\": %"PRIu64, sequence);
 }
 
+void qlog_max_paths_frame(FILE* f, bytestream* s)
+{
+    uint64_t max_paths = 0;
+    byteread_vint(s, &max_paths);
+    fprintf(f, ", \"max_paths\": %"PRIu64, max_paths);
+}
+
 void qlog_reset_stream_frame(FILE* f, bytestream* s)
 {
     uint64_t stream_id = 0;
@@ -940,11 +950,17 @@ void qlog_streams_blocked_frame(uint64_t ftype, FILE* f, bytestream* s)
     fprintf(f, ", \"limit\": %"PRIu64"", limit);
 }
 
-void qlog_new_connection_id_frame(FILE* f, bytestream* s)
+void qlog_new_connection_id_frame(uint64_t ftype, FILE* f, bytestream* s)
 {
     uint64_t sequence_number = 0;
     uint64_t retire_before = 0;
     uint64_t cid_length = 0;
+
+    if (ftype == picoquic_frame_type_mp_new_connection_id) {
+        uint64_t path_id;
+        byteread_vint(s, &path_id);
+        fprintf(f, ", \"path_id\": %"PRIu64"", path_id);
+    }
 
     byteread_vint(s, &sequence_number);
     fprintf(f, ", \"sequence_number\": %"PRIu64"", sequence_number);
@@ -957,9 +973,16 @@ void qlog_new_connection_id_frame(FILE* f, bytestream* s)
     qlog_string(f, s, 16);
 }
 
-void qlog_retire_connection_id_frame(FILE* f, bytestream* s)
+void qlog_retire_connection_id_frame(uint64_t ftype, FILE* f, bytestream* s)
 {
     uint64_t sequence_number = 0;
+
+    if (ftype == picoquic_frame_type_mp_retire_connection_id) {
+        uint64_t path_id = 0;
+        byteread_vint(s, &path_id);
+        fprintf(f, ", \"path_id\": %"PRIu64"", path_id);
+    }
+
     byteread_vint(s, &sequence_number);
     fprintf(f, ", \"sequence_number\": %"PRIu64"", sequence_number);
 }
@@ -1212,10 +1235,12 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         qlog_streams_blocked_frame(ftype, f, s);
         break;
     case picoquic_frame_type_new_connection_id:
-        qlog_new_connection_id_frame(f, s);
+    case picoquic_frame_type_mp_new_connection_id:
+        qlog_new_connection_id_frame(ftype, f, s);
         break;
     case picoquic_frame_type_retire_connection_id:
-        qlog_retire_connection_id_frame(f, s);
+    case picoquic_frame_type_mp_retire_connection_id:
+        qlog_retire_connection_id_frame(ftype, f, s);
         break;
     case picoquic_frame_type_path_challenge:
     case picoquic_frame_type_path_response:
@@ -1250,6 +1275,9 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_bdp:
         qlog_bdp_frame(f, s);
+        break;
+    case picoquic_frame_type_max_paths:
+        qlog_max_paths_frame(f, s);
         break;
     default:
         s->ptr = ptr_before_type;

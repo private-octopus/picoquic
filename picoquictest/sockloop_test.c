@@ -175,7 +175,7 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                 /* Handle migration tests */
                 if (cb_ctx->force_migration){
                     if (!cb_ctx->migration_started &&
-                        cnx_client->cnxid_stash_first != NULL) {
+                        cnx_client->first_remote_cnxid_stash->cnxid_stash_first != NULL) {
                         if (sockloop_test_verify_extra_socket(cnx_client, (struct sockaddr*)&cb_ctx->server_address) != 0) {
                             ret = -1;
                         }

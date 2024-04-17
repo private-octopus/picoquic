@@ -27,7 +27,8 @@ jobs:
         run: |
           brew reinstall openssl
           brew install pkg-config
-          export PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig"
+          whereis openssl
+          export PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig"
           ./ci/build_picotls.sh
           cmake -S . -B build
           cmake --build build
