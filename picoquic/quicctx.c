@@ -804,15 +804,13 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option)
 {
     quic->default_multipath_option = multipath_option;
+
     if (multipath_option & 1) {
-        quic->default_tp.enable_multipath = 1;
+        quic->default_tp.is_multipath_enabled = 1;
+        quic->default_tp.initial_max_paths = 4;
     }
     if (multipath_option & 2) {
         quic->default_tp.enable_simple_multipath = 1;
-    }
-    if (multipath_option & 4) {
-        quic->default_tp.is_unique_path_id_enabled = 1;
-        quic->default_tp.initial_max_paths = 4;
     }
 }
 
@@ -1702,7 +1700,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
         }
     }
 
-    if (cnx->is_unique_path_id_enabled) {
+    if (cnx->is_multipath_enabled) {
         /* delete the local CID context used by the path */
         picoquic_local_cnxid_list_t* local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, path_x->unique_path_id, 0);
         if (local_cnxid_list != NULL) {
@@ -1732,8 +1730,8 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
     int path_index_current = 1;
     unsigned int is_demotion_in_progress = 0;
 
-    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled ||
-        cnx->is_unique_path_id_enabled) && cnx->nb_paths > 1) {
+    if ((cnx->is_simple_multipath_enabled ||
+        cnx->is_multipath_enabled) && cnx->nb_paths > 1) {
         path_index_good = 0;
         path_index_current = 0;
     }
@@ -1786,7 +1784,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
     cnx->path_demotion_needed = is_demotion_in_progress;
     int path_left = -1;
     int path_standby = -1;
-    if (is_demotion_in_progress && cnx->is_unique_path_id_enabled) {
+    if (is_demotion_in_progress && cnx->is_multipath_enabled) {
         /* Verify that if one path is demoted, the other
          * becomes available */
         for (int i = 0; i < cnx->nb_paths; i++) {
@@ -1827,14 +1825,13 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
         /* TODO: add suspended callback */
 
         /* if in multipath, call "retransmit on path demoted" */
-        if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled ||
-            cnx->is_unique_path_id_enabled) {
+        if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
             if (!cnx->path[path_index]->path_abandon_sent) {
                 uint8_t buffer[512];
                 uint8_t* end_bytes;
                 int more_data = 0;
-                uint64_t path_id = (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) ?
-                    cnx->path[path_index]->p_remote_cnxid->sequence : cnx->path[path_index]->unique_path_id;
+                uint64_t path_id = (cnx->is_simple_multipath_enabled)?cnx->path[path_index]->p_remote_cnxid->sequence:
+                    cnx->path[path_index]->unique_path_id;
                 end_bytes = picoquic_format_path_abandon_frame(buffer, buffer + sizeof(buffer), &more_data,
                     path_id, reason, phrase);
                 if (end_bytes != NULL && picoquic_queue_misc_frame(cnx, buffer, end_bytes - buffer, 0) == 0) {
@@ -2069,7 +2066,7 @@ void picoquic_notify_destination_unreachable_by_cnxid(picoquic_quic_t * quic, pi
 int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id)
 {
     int ret = -1;
-    uint64_t unique_path_id = (cnx->is_unique_path_id_enabled) ? cnx->path[path_id]->unique_path_id : 0;
+    uint64_t unique_path_id = (cnx->is_multipath_enabled) ? cnx->path[path_id]->unique_path_id : 0;
     picoquic_remote_cnxid_t* available_cnxid = picoquic_obtain_stashed_cnxid(cnx, unique_path_id);
 
     if (available_cnxid != NULL) {
@@ -2183,7 +2180,7 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t
     int path_index = picoquic_get_path_id_from_unique(cnx, unique_path_id);
 
     if (path_index < 0 || path_index >= cnx->nb_paths || cnx->nb_paths == 1 ||
-        (!cnx->is_multipath_enabled && !cnx->is_simple_multipath_enabled && !cnx->is_unique_path_id_enabled)) {
+        (!cnx->is_simple_multipath_enabled && !cnx->is_multipath_enabled)) {
         ret = -1;
     }
     else if (!cnx->path[path_index]->path_is_demoted) {
@@ -2451,7 +2448,6 @@ int picoquic_init_cnxid_stash(picoquic_cnx_t* cnx)
         else {
             memset(remote_cnxid_stash->cnxid_stash_first, 0, sizeof(picoquic_remote_cnxid_t));
             remote_cnxid_stash->cnxid_stash_first->nb_path_references++;
-            picoquic_init_packet_ctx(cnx, &remote_cnxid_stash->cnxid_stash_first->pkt_ctx, picoquic_packet_context_application);
 
             /* Initialize the reset secret to a random value. This
             * will prevent spurious matches to an all zero value, for example.
@@ -2535,7 +2531,6 @@ uint64_t picoquic_add_remote_cnxid_to_stash(picoquic_cnx_t* cnx, picoquic_remote
                 memset(stashed, 0, sizeof(picoquic_remote_cnxid_t));
                 (void)picoquic_parse_connection_id(cnxid_bytes, cid_length, &stashed->cnx_id);
                 stashed->sequence = sequence;
-                picoquic_init_packet_ctx(cnx, &stashed->pkt_ctx, picoquic_packet_context_application);
                 memcpy(stashed->reset_secret, secret_bytes, PICOQUIC_RESET_SECRET_SIZE);
                 stashed->next = NULL;
 
@@ -2600,39 +2595,6 @@ picoquic_remote_cnxid_t* picoquic_remove_cnxid_from_stash(picoquic_cnx_t* cnx, p
         }
         /* Actually remove the element from the stash */
         if (stashed != NULL) {
-            picoquic_packet_context_t* pkt_ctx = &removed->pkt_ctx;
-
-            if (recycle_packets) {
-                picoquic_packet_t* recycled = pkt_ctx->pending_first;
-                while (recycled != NULL) {
-                    picoquic_packet_t * recycled_previous = recycled->packet_next;
-                    int packet_is_pure_ack = 0;
-                    int do_not_detect_spurious = 0;
-                    int add_to_data_repeat_queue = 0;
-                    size_t length = 0;
-                    int ret = picoquic_copy_before_retransmit(recycled, cnx, NULL, 0, &packet_is_pure_ack,
-                        &do_not_detect_spurious, 1, &length, &add_to_data_repeat_queue);
-                    if (ret != 0 || length != 0) {
-                        /* Unexpected! */
-                        DBG_PRINTF("Recycle stashed packet returns %d, length %zu\n", ret, length);
-                    }
-                    (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, recycled, 1, add_to_data_repeat_queue);
-                    recycled = recycled_previous;
-                }
-            }
-            else
-            {
-                while (pkt_ctx->pending_last != NULL) {
-                    (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->pending_last, 1, 0);
-                }
-            }
-
-            while (pkt_ctx->retransmitted_newest != NULL) {
-                picoquic_dequeue_retransmitted_packet(cnx, pkt_ctx, pkt_ctx->retransmitted_newest);
-            }
-
-            pkt_ctx->retransmitted_oldest = NULL;
-
             stashed = stashed->next;
             if (previous == NULL) {
                 remote_cnxid_stash->cnxid_stash_first = stashed;
@@ -2650,7 +2612,7 @@ picoquic_remote_cnxid_t* picoquic_remove_stashed_cnxid(picoquic_cnx_t* cnx, uint
     picoquic_remote_cnxid_t* removed, picoquic_remote_cnxid_t* previous, int recycle_packets)
 {
     picoquic_remote_cnxid_stash_t* remote_cnxid_stash = picoquic_find_or_create_remote_cnxid_stash(cnx,
-        (cnx->is_unique_path_id_enabled)?unique_path_id:0, 0);
+        (cnx->is_multipath_enabled)?unique_path_id:0, 0);
 
     return picoquic_remove_cnxid_from_stash(cnx, remote_cnxid_stash, removed, previous, recycle_packets);
 }
@@ -2680,7 +2642,7 @@ void picoquic_dereference_stashed_cnxid(picoquic_cnx_t* cnx, picoquic_path_t * p
 {
     if (path_x->p_remote_cnxid != NULL) {
         if (path_x->p_remote_cnxid->nb_path_references <= 1) {
-            uint64_t unique_path_id = (cnx->is_unique_path_id_enabled) ? path_x->unique_path_id : 0;
+            uint64_t unique_path_id = (cnx->is_multipath_enabled) ? path_x->unique_path_id : 0;
             if (!is_deleting_cnx && !path_x->p_remote_cnxid->retire_sent) {
                 /* if this was the last reference, retire the old cnxid */
                 if (picoquic_queue_retire_connection_id_frame(cnx, unique_path_id, path_x->p_remote_cnxid->sequence) != 0) {
@@ -2740,7 +2702,7 @@ uint64_t picoquic_remove_not_before_from_stash(picoquic_cnx_t* cnx, picoquic_rem
         * old one by a new one. If no CID is available, the old path should be marked
         * as failing, and thus scheduled for deletion after a time-out */
 
-        if (cnx->is_unique_path_id_enabled) {
+        if (cnx->is_multipath_enabled) {
             int path_id = picoquic_find_path_by_unique_id(cnx, cnxid_stash->unique_path_id);
             if (path_id >= 0) {
                 if (cnx->path[path_id]->p_remote_cnxid->sequence < not_before &&
@@ -2832,7 +2794,7 @@ int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path
 {
     int ret = 0;
     picoquic_remote_cnxid_t* stashed = NULL;
-    uint64_t cid_path_id = (cnx->is_unique_path_id_enabled) ? path_x->unique_path_id : 0;
+    uint64_t cid_path_id = (cnx->is_multipath_enabled) ? path_x->unique_path_id : 0;
     picoquic_remote_cnxid_stash_t* cnxid_stash = picoquic_find_or_create_remote_cnxid_stash(cnx, cid_path_id, 0);
 
     if (cnxid_stash == NULL) {
@@ -3354,7 +3316,7 @@ picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx,
         if (l_cid != NULL) {
             memset(l_cid, 0, sizeof(picoquic_local_cnxid_t));
             l_cid->create_time = current_time;
-            picoquic_init_ack_ctx(cnx, &l_cid->ack_ctx);
+
             if (cnx->quic->local_cnxid_length == 0) {
                 is_unique = 1;
             }
@@ -3423,7 +3385,7 @@ void picoquic_delete_local_cnxid_listed(picoquic_cnx_t* cnx,
             cnx->path[i]->was_local_cnxid_retired = 1;
 
             if (cnx->cnx_state == picoquic_state_ready &&
-                (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)) {
+                cnx->is_simple_multipath_enabled) {
                 picoquic_set_path_challenge(cnx, i, picoquic_get_quic_time(cnx->quic));
             }
         }
@@ -3437,9 +3399,6 @@ void picoquic_delete_local_cnxid_listed(picoquic_cnx_t* cnx,
         }
         l_cid->registered_cnx = NULL;
     }
-
-    /* Clear the associated ack context */
-    picoquic_clear_ack_ctx(&l_cid->ack_ctx);
 
     if (local_cnxid_list != NULL) {
         picoquic_local_cnxid_t* next = local_cnxid_list->local_cnxid_first;
@@ -3688,7 +3647,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         /* If the default parameters include preferred address, document it */
         if (cnx->local_parameters.prefered_address.is_defined) {
             /* Create an additional CID -- this depends on the multipath variant being already negotiated */
-            uint64_t unique_path_id = (cnx->is_unique_path_id_enabled) ? 1 : 0;
+            uint64_t unique_path_id = (cnx->is_multipath_enabled) ? 1 : 0;
             picoquic_local_cnxid_t* cnxid1 = picoquic_create_local_cnxid(cnx, unique_path_id, NULL, start_time);
             if (cnxid1 != NULL){
                 /* copy the connection ID into the local parameter */
@@ -3786,11 +3745,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
             cnx->cnx_state = picoquic_state_client_init;
 
-            if (!quic->is_cert_store_not_empty || sni == NULL) {
-                /* This is a hack. The open SSL certifier crashes if no name is specified,
-                 * and always fails if no certificate is stored, so we just use a NULL verifier */
-                picoquic_log_app_message(cnx, "%s -- certificate will not be verified.\n",
-                    (sni == NULL) ? "No server name specified" : "No root crt list specified");
+            if (!quic->is_cert_store_not_empty) {
+                /* The open SSL certifier always fails if no certificate is stored, so we just use a NULL verifier */
+                picoquic_log_app_message(cnx, "No root crt list specified -- certificate will not be verified.\n");
 
                 picoquic_set_null_verifier(quic);
             }

@@ -133,10 +133,6 @@ picoquic_ack_context_t* picoquic_ack_ctx_from_cnx_context(picoquic_cnx_t* cnx,
     picoquic_ack_context_t* ack_ctx = &cnx->ack_ctx[pc];
     if (pc == picoquic_packet_context_application) {
         if (cnx->is_multipath_enabled) {
-            ack_ctx  = ((l_cid == NULL) ? &cnx->path[0]->p_local_cnxid->ack_ctx :
-                    &l_cid->ack_ctx);
-        }
-        else if (cnx->is_unique_path_id_enabled) {
             int path_id = picoquic_find_path_by_unique_id(cnx, l_cid->path_id);
             if (path_id >= 0) {
                 ack_ctx = &cnx->path[path_id]->ack_ctx;
@@ -264,7 +260,7 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     picoquic_sack_list_t* sack_list = NULL;
-    if (cnx->is_unique_path_id_enabled && pc == picoquic_packet_context_application) {
+    if (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) {
         int path_id = picoquic_find_path_by_unique_id(cnx, l_cid->path_id);
         if (path_id >= 0) {
             sack_list = &cnx->path[path_id]->ack_ctx.sack_list;

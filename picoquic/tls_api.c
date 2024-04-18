@@ -155,12 +155,12 @@ static int tls_api_is_init = 0;
 void picoquic_tls_api_init_providers(int unload)
 {
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MINICRYPTO) == 0) {
-        DBG_PRINTF("%s", "%s minicrypto", (unload)?"Unloading":"Loading");
+        DBG_PRINTF("%s minicrypto", (unload)?"Unloading":"Loading");
         picoquic_ptls_minicrypto_load(unload);
     }
 #ifndef PTLS_WITHOUT_OPENSSL
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_OPENSSL) == 0) {
-        DBG_PRINTF("%s", "%s openssl", (unload)?"Unloading":"Loading");
+        DBG_PRINTF("%s openssl", (unload)?"Unloading":"Loading");
         picoquic_ptls_openssl_load(unload);
     }
 #else

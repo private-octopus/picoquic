@@ -1251,6 +1251,7 @@ static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
 static void BBRExitProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, uint64_t current_time)
 {
     BBRResetLowerBounds(bbr_state);
+    path_x->rtt_min = bbr_state->min_rtt;
     if (bbr_state->filled_pipe) {
         BBRStartProbeBW_DOWN(bbr_state, path_x, current_time);
         BBRStartProbeBW_CRUISE(bbr_state);
@@ -1303,7 +1304,6 @@ static void BBRHandleProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t *
     }
 }
 
-
 static void BBREnterProbeRTT(picoquic_bbr_state_t* bbr_state)
 {
     bbr_state->state = picoquic_bbr_alg_probe_rtt;
@@ -1317,6 +1317,7 @@ static void BBRCheckProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * 
         bbr_state->probe_rtt_expired &&
         !bbr_state->idle_restart) {
         BBREnterProbeRTT(bbr_state);
+        bbr_state->min_rtt = rs->rtt_sample;
         bbr_state->prior_cwnd = BBRSaveCwnd(bbr_state, path_x);
         bbr_state->probe_rtt_done_stamp = 0;
         bbr_state->ack_phase = picoquic_bbr_acks_probe_stopping;
@@ -1516,11 +1517,10 @@ static uint64_t BBRTargetInflight(picoquic_bbr_state_t* bbr_state, picoquic_path
 #ifdef RTTJitterBufferProbe
 static int BBRCheckPathSaturated(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
 {
-    if (!rs->is_app_limited &&
-        bbr_state->state != picoquic_bbr_alg_drain &&
+    if (IsInAProbeBWState(bbr_state) &&
+        rs->rtt_sample > 2*bbr_state->min_rtt &&
         bbr_state->rounds_since_bw_probe >= 1 &&
         bbr_state->pacing_rate > 3 * rs->delivery_rate &&
-        rs->rtt_sample > 2*bbr_state->min_rtt &&
         bbr_state->wifi_shadow_rtt == 0) {
         bbr_state->prior_cwnd = rs->delivered;
         bbr_state->probe_rtt_done_stamp = 0;
@@ -1579,6 +1579,7 @@ static void BBRStartProbeBW_DOWN(picoquic_bbr_state_t* bbr_state, picoquic_path_
     bbr_state->ack_phase = picoquic_bbr_acks_probe_stopping;
     BBRStartRound(bbr_state, path_x);
     bbr_state->state = picoquic_bbr_alg_probe_bw_down;
+    bbr_state->nb_rtt_excess = 0;
 }
 
 static void BBRStartProbeBW_CRUISE(picoquic_bbr_state_t* bbr_state)
@@ -1603,6 +1604,7 @@ static void BBRStartProbeBW_REFILL(picoquic_bbr_state_t* bbr_state, picoquic_pat
 
 static void BBRStartProbeBW_UP(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, uint64_t current_time)
 {
+    bbr_state->nb_rtt_excess = 0;
     bbr_state->pacing_gain = BBRProbeBwUpPacingGain;  /* pace at rate */
     bbr_state->cwnd_gain = BBRProbeBwUpCwndGain;   /* maintain cwnd */
     bbr_state->ack_phase = picoquic_bbr_acks_probe_starting;
@@ -1669,7 +1671,8 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
 
     case picoquic_bbr_alg_probe_bw_up:
         if (BBRHasElapsedInPhase(bbr_state, bbr_state->min_rtt, current_time) &&
-            path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw)) {
+            (bbr_state->nb_rtt_excess > 0 ||
+            path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw))) {
             BBRStartProbeBW_DOWN(bbr_state, path_x, current_time);
         }
         break;
@@ -2002,15 +2005,7 @@ static picoquic_packet_context_t* BBRAccessEcnPacketContext(picoquic_path_t* pat
     picoquic_packet_context_t* pkt_ctx = &path_x->cnx->pkt_ctx[picoquic_packet_context_application];
 
     if (path_x->cnx->is_multipath_enabled) {
-        /* TODO: if the RCID index has changed, reset the counters. */
-        picoquic_remote_cnxid_t* r_cid = path_x->p_remote_cnxid;
-
-        if (r_cid != NULL) {
-            pkt_ctx = &r_cid->pkt_ctx;
-        }
-        else {
-            pkt_ctx = NULL;
-        }
+        pkt_ctx = &path_x->pkt_ctx;
     }
     else if (path_x != path_x->cnx->path[0]) {
         /* When doing simple multipath, or when preparing transitions,

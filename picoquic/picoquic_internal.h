@@ -668,7 +668,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int test_large_server_flight : 1; /* Use TP to ensure server flight is at least 8K */
     unsigned int is_port_blocking_disabled : 1; /* Do not check client port on incoming connections */
     unsigned int are_path_callbacks_enabled : 1; /* Enable path specific callbacks by default */
-
+    unsigned int use_predictable_random : 1; /* For logging tests */
     picoquic_stateless_packet_t* pending_stateless_packet;
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;
@@ -950,7 +950,6 @@ typedef struct st_picoquic_local_cnxid_t {
     uint64_t sequence;
     uint64_t create_time;
     picoquic_connection_id_t cnx_id;
-    picoquic_ack_context_t ack_ctx;
     unsigned int is_acked;
 } picoquic_local_cnxid_t;
 
@@ -1282,7 +1281,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int did_receive_short_initial : 1; /* whether peer sent unpadded initial packet */
     unsigned int ack_ignore_order_local : 1; /* Request peer to not generate immediate ack if out of order packet received */
     unsigned int ack_ignore_order_remote : 1; /* Peer requested no immediate ack if out of order packet received */
-    unsigned int is_multipath_enabled : 1; /* Usage of multipath was negotiated */
     unsigned int is_simple_multipath_enabled : 1; /* Usage of simple multipath was negotiated */
     unsigned int are_path_callbacks_enabled : 1; /* Enable path specific callbacks */
     unsigned int is_sending_large_buffer : 1; /* Buffer provided by application is sufficient for PMTUD */
@@ -1292,7 +1290,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int cwin_notified_from_seed : 1; /* cwin was reset from a seeded value */
     unsigned int is_datagram_ready : 1; /* Active polling for datagrams */
     unsigned int is_immediate_ack_required : 1; /* Should send an ACK asap */
-    unsigned int is_unique_path_id_enabled : 1; /* Unique path ID extension has been negotiated */
+    unsigned int is_multipath_enabled : 1; /* Unique path ID extension has been negotiated */
 
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
@@ -1880,7 +1878,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
 int picoquic_retransmit_needed(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time, picoquic_packet_t* packet, size_t send_buffer_max, size_t* header_length);
 
 void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc,
-    picoquic_local_cnxid_t* l_cid, int is_immediate_ack_required);
+    picoquic_path_t * path_x, int is_immediate_ack_required);
 
 /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic.
  * Record stream data as acknowledged, signal datagram frames as acknowledged.

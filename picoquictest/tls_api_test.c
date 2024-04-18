@@ -377,9 +377,10 @@ static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from
             pc = picoquic_packet_context_application;
             break;
         }
-
-        pkt_ctx = (packet_type == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) ?
-            &path_x->p_remote_cnxid->pkt_ctx : &cnx->pkt_ctx[pc];
+        pkt_ctx = &cnx->pkt_ctx[pc];
+        if (packet_type == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
+            pkt_ctx = &path_x->pkt_ctx;
+        }
 
         header_length = picoquic_predict_packet_header_length(cnx, packet_type, pkt_ctx);
         memcpy(packet->bytes + header_length, payload, p_length);
@@ -2174,9 +2175,6 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
     if (ret != 0)
     {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
-    }
-    else if (sni == NULL) {
-        picoquic_set_null_verifier(test_ctx->qclient);
     }
 
     if (ret == 0) {

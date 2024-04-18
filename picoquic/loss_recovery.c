@@ -178,24 +178,6 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
     size_t length = 0;
 
     if (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) {
-        /* If multipath is enabled, should check for retransmission on all paths */
-        picoquic_remote_cnxid_t* r_cid = cnx->first_remote_cnxid_stash->cnxid_stash_first;
-
-        while (r_cid != NULL) {
-            if (length == 0) {
-                length = picoquic_retransmit_needed_loop(cnx, &r_cid->pkt_ctx, pc, path_x, current_time,
-                    next_wake_time, packet, send_buffer_max, header_length);
-            }
-            else {
-                /* If more retransmission are queued, set the timer appropriately */
-                if (r_cid->pkt_ctx.pending_first != NULL) {
-                    picoquic_set_wake_up_from_packet_retransmit(cnx, r_cid->pkt_ctx.pending_first, current_time, next_wake_time);
-                }
-            }
-            r_cid = r_cid->next;
-        }
-    }
-    else if (pc == picoquic_packet_context_application && cnx->is_unique_path_id_enabled) {
         /* If unique multipath is enabled, should check for retransmission on all paths */
         for (int i=0; i<cnx->nb_paths; i++) {
             if (length == 0) {
@@ -503,7 +485,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                     }
                     old_path->nb_retransmit++;
                     old_path->last_loss_event_detected = current_time;
-                    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled || cnx->is_unique_path_id_enabled) && cnx->nb_paths > 1) {
+                    if ((cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled) && cnx->nb_paths > 1) {
                         picoquic_retransmit_path_packet_queue(cnx, old_path, pkt_ctx, current_time);
                     }
                     if (old_path->nb_retransmit > 9 &&
@@ -512,7 +494,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                         DBG_PRINTF("%s\n", "Too many data retransmits, abandon path");
                         picoquic_log_app_message(cnx, "%s", "Too many data retransmits, abandon path");
 
-                        if (cnx->is_multipath_enabled || cnx->is_unique_path_id_enabled || cnx->is_simple_multipath_enabled) {
+                        if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
                             int all_paths_dubious = 1;
                             for (int path_id = 0; path_id < cnx->nb_paths; path_id++) {
                                 if (cnx->path[path_id]->nb_retransmit == 0) {
@@ -1061,9 +1043,6 @@ void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path
 
     if (cnx->cnx_state == picoquic_state_ready && cnx->nb_paths > 1) {
         if (cnx->is_multipath_enabled) {
-            pkt_ctx = &path_x->p_remote_cnxid->pkt_ctx;
-        }
-        else if (cnx->is_unique_path_id_enabled) {
             pkt_ctx = &path_x->pkt_ctx;
         }
         else {
@@ -1086,7 +1065,7 @@ void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path
     /* If multipath, pick the packet context associated with the current path,
      * else, pick the default 1RTT context */
     if (cnx->is_multipath_enabled) {
-        pkt_ctx = &path_x->p_remote_cnxid->pkt_ctx;
+        pkt_ctx = &path_x->pkt_ctx;
     }
     else {
         pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
