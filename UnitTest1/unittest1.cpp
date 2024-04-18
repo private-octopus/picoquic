@@ -2417,12 +2417,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(monopath_unique) {
-            int ret = monopath_unique_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(monopath_0rtt) {
             int ret = monopath_0rtt_test();
 
@@ -2434,7 +2428,6 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
         TEST_METHOD(multipath_aead) {
             int ret = multipath_aead_test();
 
@@ -2561,68 +2554,8 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(m_unip_basic) {
-            int ret = m_unip_basic_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(m_unip_drop_first) {
-            int ret = m_unip_drop_first_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(m_unip_drop_second) {
-            int ret = m_unip_drop_second_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(m_unip_sat_plus) {
-            int ret = m_unip_sat_plus_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(m_unip_renew) {
-            int ret = m_unip_renew_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(m_unip_rotation) {
-            int ret = m_unip_rotation_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(m_unip_nat) {
-            int ret = m_unip_nat_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(m_unip_standby) {
-            int ret = m_unip_standby_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(m_unip_standup) {
-            int ret = m_unip_standup_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(m_unip_tunnel) {
-            int ret = m_unip_tunnel_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(m_unip_abandon) {
-            int ret = m_unip_abandon_test();
+        TEST_METHOD(multipath_tunnel) {
+            int ret = multipath_tunnel_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -511,9 +511,9 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
             param->enable_simple_multipath, ref->enable_simple_multipath);
         ret = -1;
     }
-    else if (param->is_unique_path_id_enabled != ref->is_unique_path_id_enabled) {
-    DBG_PRINTF("is_unique_path_id_enabled: got %d, expected %d\n",
-        param->is_unique_path_id_enabled, ref->is_unique_path_id_enabled);
+    else if (param->is_multipath_enabled != ref->is_multipath_enabled) {
+    DBG_PRINTF("is_multipath_enabled: got %d, expected %d\n",
+        param->is_multipath_enabled, ref->is_multipath_enabled);
     ret = -1;
     }
     else if (param->initial_max_paths != ref->initial_max_paths) {
