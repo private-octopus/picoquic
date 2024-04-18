@@ -421,7 +421,6 @@ int monopath_hole_test();
 int monopath_rotation_test();
 int monopath_0rtt_test();
 int monopath_0rtt_loss_test();
-#if 0
 int multipath_aead_test();
 int multipath_basic_test();
 int multipath_drop_first_test();
@@ -443,7 +442,6 @@ int multipath_dg_af_test();
 int multipath_standby_test();
 int multipath_standup_test();
 int multipath_qlog_test();
-#endif
 int m_unip_basic_test();
 int m_unip_drop_first_test();
 int m_unip_drop_second_test();
