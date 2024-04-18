@@ -177,7 +177,22 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 {
     size_t length = 0;
 
-    if (cnx->is_simple_multipath_enabled && cnx->cnx_state == picoquic_state_ready) {
+    if (pc == picoquic_packet_context_application && cnx->is_unique_path_id_enabled) {
+        /* If unique multipath is enabled, should check for retransmission on all paths */
+        for (int i=0; i<cnx->nb_paths; i++) {
+            if (length == 0) {
+                length = picoquic_retransmit_needed_loop(cnx, &cnx->path[i]->pkt_ctx, pc, path_x, current_time,
+                    next_wake_time, packet, send_buffer_max, header_length);
+            }
+            else {
+                /* If more retransmission are queued, set the timer appropriately */
+                if (cnx->path[i]->pkt_ctx.pending_first != NULL) {
+                    picoquic_set_wake_up_from_packet_retransmit(cnx, cnx->path[i]->pkt_ctx.pending_first, current_time, next_wake_time);
+                }
+            }
+        }
+    }
+    else if (cnx->is_simple_multipath_enabled && cnx->cnx_state == picoquic_state_ready) {
         /* The per-path algorithm excludes the packets that were sent on
         * a path now deleted. The path is set to NULL. */
         picoquic_packet_t* old_p;

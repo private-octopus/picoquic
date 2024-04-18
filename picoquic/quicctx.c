@@ -1825,12 +1825,13 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
         /* TODO: add suspended callback */
 
         /* if in multipath, call "retransmit on path demoted" */
-        if (cnx->is_unique_path_id_enabled) {
+        if (cnx->is_unique_path_id_enabled || cnx->is_simple_multipath_enabled) {
             if (!cnx->path[path_index]->path_abandon_sent) {
                 uint8_t buffer[512];
                 uint8_t* end_bytes;
                 int more_data = 0;
-                uint64_t path_id = cnx->path[path_index]->unique_path_id;
+                uint64_t path_id = (cnx->is_simple_multipath_enabled)?cnx->path[path_index]->p_remote_cnxid->sequence:
+                    cnx->path[path_index]->unique_path_id;
                 end_bytes = picoquic_format_path_abandon_frame(buffer, buffer + sizeof(buffer), &more_data,
                     path_id, reason, phrase);
                 if (end_bytes != NULL && picoquic_queue_misc_frame(cnx, buffer, end_bytes - buffer, 0) == 0) {

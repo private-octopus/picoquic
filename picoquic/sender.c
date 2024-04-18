@@ -4370,7 +4370,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
 {
     int path_id = -1;
 
-    if (cnx->is_unique_path_id_enabled && cnx->cnx_state >= picoquic_state_ready) {
+    if ((cnx->is_simple_multipath_enabled || cnx->is_unique_path_id_enabled) && cnx->cnx_state >= picoquic_state_ready) {
         return picoquic_select_next_path_mp(cnx, current_time, next_wake_time, p_addr_to, p_addr_from, if_index);
     }
 
