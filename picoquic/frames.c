@@ -3060,12 +3060,6 @@ int picoquic_process_ack_of_ack_mp_frame(
                 ack_ctx = &cnx->path[path_index]->ack_ctx;
             }
         }
-        else {
-            picoquic_local_cnxid_t* l_cid = picoquic_find_local_cnxid_by_number(cnx, 0, path_id);
-            if (l_cid != NULL) {
-                ack_ctx = &l_cid->ack_ctx;
-            }
-        }
 
         if (ack_ctx == NULL) {
             /* skip ack frame */

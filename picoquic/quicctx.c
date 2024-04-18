@@ -2448,7 +2448,6 @@ int picoquic_init_cnxid_stash(picoquic_cnx_t* cnx)
         else {
             memset(remote_cnxid_stash->cnxid_stash_first, 0, sizeof(picoquic_remote_cnxid_t));
             remote_cnxid_stash->cnxid_stash_first->nb_path_references++;
-            picoquic_init_packet_ctx(cnx, &remote_cnxid_stash->cnxid_stash_first->pkt_ctx, picoquic_packet_context_application);
 
             /* Initialize the reset secret to a random value. This
             * will prevent spurious matches to an all zero value, for example.
@@ -2532,7 +2531,6 @@ uint64_t picoquic_add_remote_cnxid_to_stash(picoquic_cnx_t* cnx, picoquic_remote
                 memset(stashed, 0, sizeof(picoquic_remote_cnxid_t));
                 (void)picoquic_parse_connection_id(cnxid_bytes, cid_length, &stashed->cnx_id);
                 stashed->sequence = sequence;
-                picoquic_init_packet_ctx(cnx, &stashed->pkt_ctx, picoquic_packet_context_application);
                 memcpy(stashed->reset_secret, secret_bytes, PICOQUIC_RESET_SECRET_SIZE);
                 stashed->next = NULL;
 
@@ -2597,39 +2595,6 @@ picoquic_remote_cnxid_t* picoquic_remove_cnxid_from_stash(picoquic_cnx_t* cnx, p
         }
         /* Actually remove the element from the stash */
         if (stashed != NULL) {
-            picoquic_packet_context_t* pkt_ctx = &removed->pkt_ctx;
-
-            if (recycle_packets) {
-                picoquic_packet_t* recycled = pkt_ctx->pending_first;
-                while (recycled != NULL) {
-                    picoquic_packet_t * recycled_previous = recycled->packet_next;
-                    int packet_is_pure_ack = 0;
-                    int do_not_detect_spurious = 0;
-                    int add_to_data_repeat_queue = 0;
-                    size_t length = 0;
-                    int ret = picoquic_copy_before_retransmit(recycled, cnx, NULL, 0, &packet_is_pure_ack,
-                        &do_not_detect_spurious, 1, &length, &add_to_data_repeat_queue);
-                    if (ret != 0 || length != 0) {
-                        /* Unexpected! */
-                        DBG_PRINTF("Recycle stashed packet returns %d, length %zu\n", ret, length);
-                    }
-                    (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, recycled, 1, add_to_data_repeat_queue);
-                    recycled = recycled_previous;
-                }
-            }
-            else
-            {
-                while (pkt_ctx->pending_last != NULL) {
-                    (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->pending_last, 1, 0);
-                }
-            }
-
-            while (pkt_ctx->retransmitted_newest != NULL) {
-                picoquic_dequeue_retransmitted_packet(cnx, pkt_ctx, pkt_ctx->retransmitted_newest);
-            }
-
-            pkt_ctx->retransmitted_oldest = NULL;
-
             stashed = stashed->next;
             if (previous == NULL) {
                 remote_cnxid_stash->cnxid_stash_first = stashed;
@@ -3351,7 +3316,7 @@ picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx,
         if (l_cid != NULL) {
             memset(l_cid, 0, sizeof(picoquic_local_cnxid_t));
             l_cid->create_time = current_time;
-            picoquic_init_ack_ctx(cnx, &l_cid->ack_ctx);
+
             if (cnx->quic->local_cnxid_length == 0) {
                 is_unique = 1;
             }
@@ -3434,9 +3399,6 @@ void picoquic_delete_local_cnxid_listed(picoquic_cnx_t* cnx,
         }
         l_cid->registered_cnx = NULL;
     }
-
-    /* Clear the associated ack context */
-    picoquic_clear_ack_ctx(&l_cid->ack_ctx);
 
     if (local_cnxid_list != NULL) {
         picoquic_local_cnxid_t* next = local_cnxid_list->local_cnxid_first;

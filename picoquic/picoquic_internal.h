@@ -950,7 +950,6 @@ typedef struct st_picoquic_local_cnxid_t {
     uint64_t sequence;
     uint64_t create_time;
     picoquic_connection_id_t cnx_id;
-    picoquic_ack_context_t ack_ctx;
     unsigned int is_acked;
 } picoquic_local_cnxid_t;
 
@@ -978,7 +977,6 @@ typedef struct st_picoquic_remote_cnxid_t {
     unsigned int needs_removal : 1;
     unsigned int retire_sent : 1;
     unsigned int retire_acked : 1;
-    picoquic_packet_context_t pkt_ctx;
 } picoquic_remote_cnxid_t;
 
 typedef struct st_picoquic_remote_cnxid_stash_t {
