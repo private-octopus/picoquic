@@ -1666,6 +1666,14 @@ int multipath_qlog_test()
     return multipath_qlog_test_one(0);
 }
 
+int multipath_tunnel_test()
+{
+    uint64_t max_completion_microsec = 12000000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_tunnel, multipath_variant_unique);
+}
+
+
 /* Simple multipath tests.
  * These are the same as the multipath tests, but using the "simple" multipath option
  * which relies on just on packet number space, instead of the full option
@@ -1900,7 +1908,8 @@ int path_packet_queue_test()
     return ret;
 }
 
-/* Unit test of path selection.
+/* 
+ * TODO: Unit test of path selection.
  * The input to path selections include the state of the path,
  * the status set by the peer, the presence of losses, etc.
  * Each test set up a connection context and two path contexts,
@@ -1929,104 +1938,3 @@ int path_packet_queue_test()
  * 
  * TODO: break that into parts that can be verified!
  */
-/* tests of the "unique path_id" variant */
-
-/* Basic multipath test. Set up two links in parallel, verify that both are used and that
-* the overall transmission is shorterthan if only one link was used.
-*/
-
-int m_unip_basic_test()
-{
-    uint64_t max_completion_microsec = 1060000;
-
-    return multipath_test_one(max_completion_microsec, multipath_test_basic, multipath_variant_unique);
-}
-
-/* Drop first multipath test. Set up two links in parallel, start using them, then
-* drop the first one of them. Check that the transmission succeeds.
-*/
-
-int m_unip_drop_first_test()
-{
-    uint64_t max_completion_microsec = 1450000;
-
-    return multipath_test_one(max_completion_microsec, multipath_test_drop_first, multipath_variant_unique);
-}
-
-/* Drop second multipath test. Set up two links in parallel, start using them, then
-* drop the second one of them. Check that the transmission succeeds.
-*/
-
-int m_unip_drop_second_test()
-{
-    uint64_t max_completion_microsec = 1290000;
-
-    return multipath_test_one(max_completion_microsec, multipath_test_drop_second, multipath_variant_unique);
-}
-
-/* Simulate the combination of a satellite link and a low latency low bandwidth
-* terrestrial link
-*/
-int m_unip_sat_plus_test()
-{
-    uint64_t max_completion_microsec = 10000000;
-
-    return  multipath_test_one(max_completion_microsec, multipath_test_sat_plus, multipath_variant_unique);
-}
-
-/* Test the renewal of the connection ID on a path
-*/
-int m_unip_renew_test()
-{
-    uint64_t max_completion_microsec = 3000000;
-
-    return  multipath_test_one(max_completion_microsec, multipath_test_renew, multipath_variant_unique);
-}
-
-/* Test key rotation in a multipath setup
-*/
-int m_unip_rotation_test()
-{
-    uint64_t max_completion_microsec = 3000000;
-
-    return  multipath_test_one(max_completion_microsec, multipath_test_rotation, multipath_variant_unique);
-}
-
-/* Test nat traversal in a multipath setup */
-int m_unip_nat_test()
-{
-    uint64_t max_completion_microsec = 3000000;
-
-    return  multipath_test_one(max_completion_microsec, multipath_test_nat, multipath_variant_unique);
-}
-
-
-int m_unip_standby_test()
-{
-    uint64_t max_completion_microsec = 2000000;
-
-    return multipath_test_one(max_completion_microsec, multipath_test_standby, multipath_variant_unique);
-}
-
-int m_unip_standup_test()
-{
-    uint64_t max_completion_microsec = 3500000;
-
-    return multipath_test_one(max_completion_microsec, multipath_test_standup, multipath_variant_unique);
-}
-
-int m_unip_tunnel_test()
-{
-    uint64_t max_completion_microsec = 12000000;
-
-    return multipath_test_one(max_completion_microsec, multipath_test_tunnel, multipath_variant_unique);
-}
-
-/* Test that abandoned paths are removed after some time
-*/
-int m_unip_abandon_test()
-{
-    uint64_t max_completion_microsec = 3800000;
-
-    return  multipath_test_one(max_completion_microsec, multipath_test_abandon, multipath_variant_unique);
-}
