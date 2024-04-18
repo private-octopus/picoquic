@@ -510,11 +510,14 @@ int picoquic_process_ack_of_new_cid_frame(picoquic_cnx_t* cnx, const uint8_t* by
     const uint8_t * bytes_next = picoquic_parse_new_connection_id_frame(bytes, bytes + bytes_max, is_mp, &unique_path_id, &sequence, &retire_before, &cid_length, &cnxid_bytes, &secret_bytes);
 
     if (bytes_next != NULL) {
-        picoquic_local_cnxid_list_t* local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, unique_path_id, 0);
+        picoquic_local_cnxid_list_t* local_cnxid_list;
+
+        *consumed = bytes_next - bytes;
+
+        local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, unique_path_id, 0);
 
         if (local_cnxid_list != NULL) {
             picoquic_local_cnxid_t* local_cnxid = local_cnxid_list->local_cnxid_first;
-            *consumed = bytes_next - bytes;
             /* Locate the CID being acknowledged */
 
             while (local_cnxid != NULL) {
