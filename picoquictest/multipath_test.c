@@ -367,13 +367,13 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
     case multipath_variant_simple:
         test_parameters->enable_multipath = 0;
         test_parameters->enable_simple_multipath = 1;
-        test_parameters->is_unique_path_id_enabled = 0;
+        test_parameters->is_multipath_enabled = 0;
         test_parameters->initial_max_paths = 0;
         break;
     case multipath_variant_unique:
         test_parameters->enable_multipath = 0;
         test_parameters->enable_simple_multipath = 0;
-        test_parameters->is_unique_path_id_enabled = 1;
+        test_parameters->is_multipath_enabled = 1;
         test_parameters->initial_max_paths = 3;
         break;
     default:
@@ -730,7 +730,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             test_ctx->cnx_client->local_parameters.enable_simple_multipath = 1;
             break;
         case multipath_variant_unique:
-            test_ctx->cnx_client->local_parameters.is_unique_path_id_enabled = 1;
+            test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
             test_ctx->cnx_client->local_parameters.initial_max_paths = 3;
             break;
         default:
@@ -750,7 +750,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         switch (m_variant) {
         case multipath_variant_simple:
             if (!test_ctx->cnx_client->is_simple_multipath_enabled || !test_ctx->cnx_server->is_simple_multipath_enabled ||
-                test_ctx->cnx_client->is_unique_path_id_enabled || test_ctx->cnx_server->is_unique_path_id_enabled) {
+                test_ctx->cnx_client->is_multipath_enabled || test_ctx->cnx_server->is_multipath_enabled) {
                 DBG_PRINTF("Simple multipath not fully negotiated (c=%d, s=%d)",
                     test_ctx->cnx_client->is_simple_multipath_enabled, test_ctx->cnx_server->is_simple_multipath_enabled);
                 ret = -1;
@@ -758,7 +758,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             break;
         case multipath_variant_unique:
             if (test_ctx->cnx_client->is_simple_multipath_enabled || test_ctx->cnx_server->is_simple_multipath_enabled ||
-                !test_ctx->cnx_client->is_unique_path_id_enabled || !test_ctx->cnx_server->is_unique_path_id_enabled) {
+                !test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled) {
                 DBG_PRINTF("Simple multipath not fully negotiated (c=%d, s=%d)",
                     test_ctx->cnx_client->is_simple_multipath_enabled, test_ctx->cnx_server->is_simple_multipath_enabled);
                 ret = -1;

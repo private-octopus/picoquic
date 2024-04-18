@@ -889,7 +889,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     }
 
     /* Encrypt the packet */
-    if (cnx->is_unique_path_id_enabled && ptype == picoquic_packet_1rtt_protected) {
+    if (cnx->is_multipath_enabled && ptype == picoquic_packet_1rtt_protected) {
         send_length = picoquic_aead_encrypt_mp(send_buffer + /* header_length */ h_length,
             bytes + header_length, length - header_length, path_x->unique_path_id,
             sequence_number, send_buffer, /* header_length */ h_length, aead_context);
@@ -1141,7 +1141,7 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
 {
     picoquic_packet_context_t* pkt_ctx = NULL;
     
-    if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_unique_path_id_enabled) {
+    if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
         pkt_ctx = &path_x->pkt_ctx;
     }
     else {
@@ -1332,7 +1332,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
     if (ret == 0 && length > 0) {
         packet->length = length;
         
-        if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_unique_path_id_enabled) {
+        if (packet->ptype == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
             packet->sequence_number = path_x->pkt_ctx.send_sequence++;
         } else {
             packet->sequence_number = cnx->pkt_ctx[packet->pc].send_sequence++;
@@ -1452,7 +1452,7 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
             picoquic_is_pkt_ctx_backlog_empty(&cnx->pkt_ctx[picoquic_packet_context_handshake]);
     }
 
-    if (cnx->is_unique_path_id_enabled) {
+    if (cnx->is_multipath_enabled) {
         for (int i=0; backlog_empty && i < cnx->nb_paths; i++) {
             backlog_empty &= picoquic_is_pkt_ctx_backlog_empty(&cnx->path[i]->pkt_ctx);
         }
@@ -1652,7 +1652,7 @@ int picoquic_preemptive_retransmit_as_needed(
     uint64_t rtt = path_x->smoothed_rtt;
 
     if (pc == picoquic_packet_context_application &&
-        cnx->is_unique_path_id_enabled) {
+        cnx->is_multipath_enabled) {
         for (int i = 0; i < cnx->nb_paths; i++) {
             pkt_ctx = &cnx->path[i]->pkt_ctx;
             ret = picoquic_preemptive_retransmit_in_context(
@@ -2006,7 +2006,7 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
     uint64_t transport_error = 0;
 
     if (cnx->remote_parameters.prefered_address.is_defined) {
-        uint64_t unique_path_id = (cnx->is_unique_path_id_enabled) ? 1 : 0;
+        uint64_t unique_path_id = (cnx->is_multipath_enabled) ? 1 : 0;
         int ipv4_received = cnx->remote_parameters.prefered_address.ipv4Port != 0;
         int ipv6_received = cnx->remote_parameters.prefered_address.ipv6Port != 0;
 
@@ -2389,7 +2389,7 @@ uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path
 
     if (is_nat != NULL) {
         *is_nat = 0;
-        if (cnx->is_unique_path_id_enabled && path_x->nat_local_addr.ss_family != AF_UNSPEC)
+        if (cnx->is_multipath_enabled && path_x->nat_local_addr.ss_family != AF_UNSPEC)
         {
             uint64_t nat_challenge_time = path_x->nat_challenge_time;
             if (path_x->nat_challenge_repeat_count == 0) {
@@ -2635,7 +2635,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     /* At this stage, we don't try to retransmit any old packet, whether in
      * the current context or in previous contexts. */
 
-    if (packet_type == picoquic_packet_1rtt_protected && cnx->is_unique_path_id_enabled) {
+    if (packet_type == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
         pkt_ctx = &path_x->pkt_ctx;
     }
     else {
@@ -2811,7 +2811,7 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
 {
     int no_space_left = 0;
     picoquic_local_cnxid_list_t* local_cnxid_list = cnx->first_local_cnxid_list;
-    if (cnx->is_unique_path_id_enabled) {
+    if (cnx->is_multipath_enabled) {
         /* If the number of local lists is lower than the max number of paths,
          * create more. The code assume that path[0] is created during handshake. */
         while (cnx->nb_local_cnxid_lists < cnx->local_parameters.initial_max_paths &&
@@ -2882,7 +2882,7 @@ void picoquic_client_almost_ready_transition(picoquic_cnx_t* cnx)
 {
     cnx->cnx_state = picoquic_state_client_almost_ready;
     /* If client, make sure that 0-RTT packets are in correct context */
-    if (cnx->is_unique_path_id_enabled) {
+    if (cnx->is_multipath_enabled) {
         picoquic_packet_context_t* o_pkt_ctx = &cnx->pkt_ctx[0];
         picoquic_packet_context_t* n_pkt_ctx = &cnx->path[0]->pkt_ctx;
 
@@ -3162,7 +3162,7 @@ static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoq
         * packet is full or there is nothing more to send. */
         uint64_t datagram_present = cnx->first_datagram != NULL || cnx->is_datagram_ready || path_x->is_datagram_ready;
         picoquic_stream_head_t* first_stream = picoquic_find_ready_stream_path(cnx,
-            (cnx->is_unique_path_id_enabled || cnx->is_simple_multipath_enabled) ? path_x : NULL);
+            (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) ? path_x : NULL);
         picoquic_packet_t* first_repeat = picoquic_first_data_repeat_packet(cnx);
         uint64_t current_priority = UINT64_MAX;
         uint64_t stream_priority = UINT64_MAX;
@@ -3328,7 +3328,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
     if (length == 0) {
         picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
-        if (cnx->is_unique_path_id_enabled) {
+        if (cnx->is_multipath_enabled) {
             pkt_ctx = &path_x->pkt_ctx;
         }
 
@@ -3575,10 +3575,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     int more_data = 0;
     int ack_sent = 0;
     int is_challenge_padding_needed = 0;
-    int is_nominal_ack_path = (cnx->is_simple_multipath_enabled || cnx->is_unique_path_id_enabled) ?
+    int is_nominal_ack_path = (cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled) ?
         (path_x->is_nominal_ack_path || cnx->nb_paths == 1) : path_x == cnx->path[0];
 
-    picoquic_packet_context_t* pkt_ctx = (cnx->is_unique_path_id_enabled) ?
+    picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled) ?
         &path_x->pkt_ctx :
         &cnx->pkt_ctx[picoquic_packet_context_application];
 
@@ -3879,7 +3879,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 }
             }
 
-            if (is_pure_ack && (cnx->is_unique_path_id_enabled || cnx->is_simple_multipath_enabled) && 
+            if (is_pure_ack && (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) && 
                 path_x->is_ack_lost && !path_x->is_ack_expected) {
                 /* In some multipath scenarios, we may need to ping a path if we see 
                  * non-ackable packets being lost. */
@@ -4370,7 +4370,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
 {
     int path_id = -1;
 
-    if ((cnx->is_simple_multipath_enabled || cnx->is_unique_path_id_enabled) && cnx->cnx_state >= picoquic_state_ready) {
+    if ((cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled) && cnx->cnx_state >= picoquic_state_ready) {
         return picoquic_select_next_path_mp(cnx, current_time, next_wake_time, p_addr_to, p_addr_from, if_index);
     }
 

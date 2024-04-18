@@ -664,7 +664,7 @@ int test_packet_encrypt_one(
         ret = -1;
     }
     else {
-        pkt_ctx = (ptype == picoquic_packet_1rtt_protected && cnx_client->is_unique_path_id_enabled) ?
+        pkt_ctx = (ptype == picoquic_packet_1rtt_protected && cnx_client->is_multipath_enabled) ?
             &path_x->pkt_ctx : &cnx_client->pkt_ctx[pc];
         memset(packet, 0, sizeof(picoquic_packet_t));
         memset(packet->bytes, 0xbb, length);

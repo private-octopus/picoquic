@@ -706,7 +706,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         /* Manage key rotation */
         if (ph->key_phase == cnx->key_phase_dec) {
             /* AEAD Decrypt */
-            if (cnx->is_unique_path_id_enabled && ph->ptype) {
+            if (cnx->is_multipath_enabled && ph->ptype) {
                 decoded = picoquic_aead_decrypt_mp(decoded_bytes + ph->offset,
                     bytes + ph->offset,
                     ph->payload_length, 
@@ -730,7 +730,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
                 need_integrity_check = 0;
             }
             else if (cnx->crypto_context_old.aead_decrypt != NULL) {
-                if (cnx->is_unique_path_id_enabled) {
+                if (cnx->is_multipath_enabled) {
                     decoded = picoquic_aead_decrypt_mp(decoded_bytes + ph->offset, bytes + ph->offset, ph->payload_length,
                         ph->l_cid->path_id, ph->pn64, decoded_bytes, ph->offset, cnx->crypto_context_old.aead_decrypt);
                 }
@@ -755,7 +755,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             }
             /* if decoding succeeds, the rotation should be validated */
             if (ret == 0 && cnx->crypto_context_new.aead_decrypt != NULL) {
-                if (cnx->is_unique_path_id_enabled) {
+                if (cnx->is_multipath_enabled) {
                     decoded = picoquic_aead_decrypt_mp(decoded_bytes + ph->offset, bytes + ph->offset, ph->payload_length,
                         ph->l_cid->path_id, ph->pn64, decoded_bytes, ph->offset, cnx->crypto_context_new.aead_decrypt);
 
@@ -767,7 +767,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
                 if (decoded <= ph->payload_length) {
                     /* Rotation only if the packet was correctly decrypted with the new key */
                     cnx->crypto_rotation_time_guard = current_time + cnx->path[0]->retransmit_timer;
-                    if (cnx->is_unique_path_id_enabled) {
+                    if (cnx->is_multipath_enabled) {
                         for (int i=0; i < cnx->nb_paths; i++){
                             cnx->path[i]->ack_ctx.crypto_rotation_sequence = UINT64_MAX;
                         }
@@ -801,7 +801,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         /* TODO: get rid of handshake some time after handshake complete */
         /* For all the other epochs, there is a single crypto context and no key rotation */
         if (cnx->crypto_context[ph->epoch].aead_decrypt != NULL) {
-            if (cnx->is_unique_path_id_enabled && ph->ptype == picoquic_packet_1rtt_protected) {
+            if (cnx->is_multipath_enabled && ph->ptype == picoquic_packet_1rtt_protected) {
                 decoded = picoquic_aead_decrypt_mp(decoded_bytes + ph->offset, 
                     bytes + ph->offset, ph->payload_length,
                     ph->l_cid->path_id, ph->pn64, decoded_bytes, ph->offset,
@@ -2067,7 +2067,7 @@ int picoquic_find_incoming_unique_path(picoquic_cnx_t* cnx, picoquic_packet_head
         /* If the local CID is not set, set it */
         if (path_x->p_local_cnxid == NULL) {
             path_x->p_local_cnxid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
-            if (cnx->client_mode == 0 && cnx->is_unique_path_id_enabled) {
+            if (cnx->client_mode == 0 && cnx->is_multipath_enabled) {
                 (void)picoquic_renew_connection_id(cnx, path_id);
             }
         } 
@@ -2117,7 +2117,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     int* p_path_id,
     int* path_is_not_allocated)
 {
-    if (ph->ptype == picoquic_packet_1rtt_protected && cnx->is_unique_path_id_enabled) {
+    if (ph->ptype == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
         return picoquic_find_incoming_unique_path(cnx, ph, addr_from, addr_to, if_index_to, current_time, p_path_id, path_is_not_allocated);
     }
     int ret = 0;
@@ -2264,7 +2264,7 @@ void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
 {
     picoquic_ack_context_t* ack_ctx = &cnx->ack_ctx[pc];
     
-    if (pc == picoquic_packet_context_application && cnx->is_unique_path_id_enabled) {
+    if (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) {
         ack_ctx = picoquic_ack_ctx_from_cnx_context(cnx, pc, l_cid);
     }
 

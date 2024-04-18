@@ -846,7 +846,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
 
         /* Enable multipath so the test of multipath frames works. */
         if (mpath != 0) {
-            cnx->is_unique_path_id_enabled = 1;
+            cnx->is_multipath_enabled = 1;
             cnx->max_paths_local = 5;
         }
        

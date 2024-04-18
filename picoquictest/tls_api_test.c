@@ -378,7 +378,7 @@ static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from
             break;
         }
         pkt_ctx = &cnx->pkt_ctx[pc];
-        if (packet_type == picoquic_packet_1rtt_protected && cnx->is_unique_path_id_enabled) {
+        if (packet_type == picoquic_packet_1rtt_protected && cnx->is_multipath_enabled) {
             pkt_ctx = &path_x->pkt_ctx;
         }
 

@@ -806,7 +806,7 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
     quic->default_multipath_option = multipath_option;
 
     if (multipath_option & 1) {
-        quic->default_tp.is_unique_path_id_enabled = 1;
+        quic->default_tp.is_multipath_enabled = 1;
         quic->default_tp.initial_max_paths = 4;
     }
     if (multipath_option & 2) {
@@ -1700,7 +1700,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
         }
     }
 
-    if (cnx->is_unique_path_id_enabled) {
+    if (cnx->is_multipath_enabled) {
         /* delete the local CID context used by the path */
         picoquic_local_cnxid_list_t* local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, path_x->unique_path_id, 0);
         if (local_cnxid_list != NULL) {
@@ -1731,7 +1731,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
     unsigned int is_demotion_in_progress = 0;
 
     if ((cnx->is_simple_multipath_enabled ||
-        cnx->is_unique_path_id_enabled) && cnx->nb_paths > 1) {
+        cnx->is_multipath_enabled) && cnx->nb_paths > 1) {
         path_index_good = 0;
         path_index_current = 0;
     }
@@ -1784,7 +1784,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
     cnx->path_demotion_needed = is_demotion_in_progress;
     int path_left = -1;
     int path_standby = -1;
-    if (is_demotion_in_progress && cnx->is_unique_path_id_enabled) {
+    if (is_demotion_in_progress && cnx->is_multipath_enabled) {
         /* Verify that if one path is demoted, the other
          * becomes available */
         for (int i = 0; i < cnx->nb_paths; i++) {
@@ -1825,7 +1825,7 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
         /* TODO: add suspended callback */
 
         /* if in multipath, call "retransmit on path demoted" */
-        if (cnx->is_unique_path_id_enabled || cnx->is_simple_multipath_enabled) {
+        if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
             if (!cnx->path[path_index]->path_abandon_sent) {
                 uint8_t buffer[512];
                 uint8_t* end_bytes;
@@ -2066,7 +2066,7 @@ void picoquic_notify_destination_unreachable_by_cnxid(picoquic_quic_t * quic, pi
 int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id)
 {
     int ret = -1;
-    uint64_t unique_path_id = (cnx->is_unique_path_id_enabled) ? cnx->path[path_id]->unique_path_id : 0;
+    uint64_t unique_path_id = (cnx->is_multipath_enabled) ? cnx->path[path_id]->unique_path_id : 0;
     picoquic_remote_cnxid_t* available_cnxid = picoquic_obtain_stashed_cnxid(cnx, unique_path_id);
 
     if (available_cnxid != NULL) {
@@ -2180,7 +2180,7 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t
     int path_index = picoquic_get_path_id_from_unique(cnx, unique_path_id);
 
     if (path_index < 0 || path_index >= cnx->nb_paths || cnx->nb_paths == 1 ||
-        (!cnx->is_simple_multipath_enabled && !cnx->is_unique_path_id_enabled)) {
+        (!cnx->is_simple_multipath_enabled && !cnx->is_multipath_enabled)) {
         ret = -1;
     }
     else if (!cnx->path[path_index]->path_is_demoted) {
@@ -2612,7 +2612,7 @@ picoquic_remote_cnxid_t* picoquic_remove_stashed_cnxid(picoquic_cnx_t* cnx, uint
     picoquic_remote_cnxid_t* removed, picoquic_remote_cnxid_t* previous, int recycle_packets)
 {
     picoquic_remote_cnxid_stash_t* remote_cnxid_stash = picoquic_find_or_create_remote_cnxid_stash(cnx,
-        (cnx->is_unique_path_id_enabled)?unique_path_id:0, 0);
+        (cnx->is_multipath_enabled)?unique_path_id:0, 0);
 
     return picoquic_remove_cnxid_from_stash(cnx, remote_cnxid_stash, removed, previous, recycle_packets);
 }
@@ -2642,7 +2642,7 @@ void picoquic_dereference_stashed_cnxid(picoquic_cnx_t* cnx, picoquic_path_t * p
 {
     if (path_x->p_remote_cnxid != NULL) {
         if (path_x->p_remote_cnxid->nb_path_references <= 1) {
-            uint64_t unique_path_id = (cnx->is_unique_path_id_enabled) ? path_x->unique_path_id : 0;
+            uint64_t unique_path_id = (cnx->is_multipath_enabled) ? path_x->unique_path_id : 0;
             if (!is_deleting_cnx && !path_x->p_remote_cnxid->retire_sent) {
                 /* if this was the last reference, retire the old cnxid */
                 if (picoquic_queue_retire_connection_id_frame(cnx, unique_path_id, path_x->p_remote_cnxid->sequence) != 0) {
@@ -2702,7 +2702,7 @@ uint64_t picoquic_remove_not_before_from_stash(picoquic_cnx_t* cnx, picoquic_rem
         * old one by a new one. If no CID is available, the old path should be marked
         * as failing, and thus scheduled for deletion after a time-out */
 
-        if (cnx->is_unique_path_id_enabled) {
+        if (cnx->is_multipath_enabled) {
             int path_id = picoquic_find_path_by_unique_id(cnx, cnxid_stash->unique_path_id);
             if (path_id >= 0) {
                 if (cnx->path[path_id]->p_remote_cnxid->sequence < not_before &&
@@ -2794,7 +2794,7 @@ int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path
 {
     int ret = 0;
     picoquic_remote_cnxid_t* stashed = NULL;
-    uint64_t cid_path_id = (cnx->is_unique_path_id_enabled) ? path_x->unique_path_id : 0;
+    uint64_t cid_path_id = (cnx->is_multipath_enabled) ? path_x->unique_path_id : 0;
     picoquic_remote_cnxid_stash_t* cnxid_stash = picoquic_find_or_create_remote_cnxid_stash(cnx, cid_path_id, 0);
 
     if (cnxid_stash == NULL) {
@@ -3647,7 +3647,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         /* If the default parameters include preferred address, document it */
         if (cnx->local_parameters.prefered_address.is_defined) {
             /* Create an additional CID -- this depends on the multipath variant being already negotiated */
-            uint64_t unique_path_id = (cnx->is_unique_path_id_enabled) ? 1 : 0;
+            uint64_t unique_path_id = (cnx->is_multipath_enabled) ? 1 : 0;
             picoquic_local_cnxid_t* cnxid1 = picoquic_create_local_cnxid(cnx, unique_path_id, NULL, start_time);
             if (cnxid1 != NULL){
                 /* copy the connection ID into the local parameter */

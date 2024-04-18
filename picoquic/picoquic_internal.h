@@ -977,6 +977,7 @@ typedef struct st_picoquic_remote_cnxid_t {
     unsigned int needs_removal : 1;
     unsigned int retire_sent : 1;
     unsigned int retire_acked : 1;
+    picoquic_packet_context_t pkt_ctx;
 } picoquic_remote_cnxid_t;
 
 typedef struct st_picoquic_remote_cnxid_stash_t {
@@ -1289,7 +1290,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int cwin_notified_from_seed : 1; /* cwin was reset from a seeded value */
     unsigned int is_datagram_ready : 1; /* Active polling for datagrams */
     unsigned int is_immediate_ack_required : 1; /* Should send an ACK asap */
-    unsigned int is_unique_path_id_enabled : 1; /* Unique path ID extension has been negotiated */
+    unsigned int is_multipath_enabled : 1; /* Unique path ID extension has been negotiated */
 
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;

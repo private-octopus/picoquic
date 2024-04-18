@@ -1029,7 +1029,7 @@ int quic_client(const char* ip_address_text, int server_port,
         }
 
         if ((config->multipath_option&1) != 0) {
-            fprintf(stdout, "Enable multipath: %s.\n", (cnx_client->is_unique_path_id_enabled)?"Success":"Refused");
+            fprintf(stdout, "Enable multipath: %s.\n", (cnx_client->is_multipath_enabled)?"Success":"Refused");
         }
         if ((config->multipath_option&2) != 0) {
             fprintf(stdout, "Enable simple multipath: %s.\n", (cnx_client->is_simple_multipath_enabled)?"Success":"Refused");
@@ -1072,7 +1072,7 @@ int quic_client(const char* ip_address_text, int server_port,
             }
             else {
                 uint64_t crypto_rotation_sequence;
-                if (cnx_client->is_unique_path_id_enabled) {
+                if (cnx_client->is_multipath_enabled) {
                     crypto_rotation_sequence = cnx_client->path[0]->ack_ctx.crypto_rotation_sequence;
                 }
                 else {
