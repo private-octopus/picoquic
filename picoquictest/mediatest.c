@@ -102,13 +102,16 @@ typedef struct st_mediatest_stream_ctx_t {
     unsigned int finished_sending : 1;
     unsigned int fin_received : 1;
     unsigned int is_fin_sent : 1;
+    unsigned int is_reset : 1;
 
     uint64_t frames_to_send;
     uint64_t frames_sent;
+    uint64_t frames_skipped;
     uint64_t frames_received;
     size_t bytes_sent;
     size_t bytes_received;
     uint64_t next_frame_time;
+    uint64_t next_iframe_time;
 
     mediatest_message_buffer_t message_sent;
     mediatest_message_buffer_t message_received;
@@ -446,11 +449,40 @@ int mediatest_receive_stream_data(mediatest_stream_ctx_t* stream_ctx, uint8_t* b
     return ret;
 }
 
+/* For the high speed video stream, check if the media is far behind. if
+ * it is, mark the current state as "skipping". If the state is marked
+ * "reset", abstain from sending any frame until the next I frame.
+ */
+void  mediatest_simulate_reset(mediatest_stream_ctx_t* stream_ctx, uint64_t current_time, uint64_t frame_duration, uint64_t cycle_length, uint64_t queue_limit)
+{
+    uint64_t frame_rank = stream_ctx->frames_sent % cycle_length;
+
+    if (frame_rank != 0){
+        if ((stream_ctx->frames_sent + queue_limit * frame_duration) > current_time) {
+            stream_ctx->is_reset = 1;
+        }
+        if (stream_ctx->is_reset) {
+            for (uint64_t i = frame_rank; i < cycle_length; i++) {
+                stream_ctx->next_frame_time += frame_duration;
+                stream_ctx->frames_sent++;
+                stream_ctx->frames_skipped++;
+            }
+        }
+    }
+    else {
+        stream_ctx->is_reset = 0;
+    }
+}
+
 /* Prepare next frame. Do this as soon as we know that a new frame can be sent. */
 int mediatest_prepare_new_frame(mediatest_stream_ctx_t* stream_ctx, uint64_t current_time)
 {
     int ret = 0;
-        /* Is this the right time? */
+    /* Is the high bandwidth stream reset? */
+    if (stream_ctx->stream_type == media_test_video2) {
+        mediatest_simulate_reset(stream_ctx, current_time, MEDIATEST_VIDEO_PERIOD, 100, 10);
+    }
+    /* Is this the right time? */
     if (stream_ctx->next_frame_time <= current_time) {
         if (stream_ctx->frames_sent == 0) {
             stream_ctx->next_frame_time = current_time;
@@ -470,8 +502,12 @@ int mediatest_prepare_new_frame(mediatest_stream_ctx_t* stream_ctx, uint64_t cur
         case media_test_video:
             stream_ctx->message_sent.message_size = ((stream_ctx->frames_sent % 100) == 0) ? 0x8000 : 0x800;
             stream_ctx->next_frame_time += MEDIATEST_VIDEO_PERIOD;
+             
             break;
         case media_test_video2:
+            if ((stream_ctx->frames_sent % 100) == 0) {
+                stream_ctx->next_iframe_time = stream_ctx->next_frame_time + 100 * MEDIATEST_VIDEO_PERIOD;
+            }
             stream_ctx->message_sent.message_size = ((stream_ctx->frames_sent % 100) == 0) ? 0x10000 : 0x1800;
             stream_ctx->next_frame_time += MEDIATEST_VIDEO_PERIOD;
             break;
@@ -1211,6 +1247,7 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
         uint64_t sim_time = 0;
         uint64_t blocked_sequence = 4;
         uint64_t unblocked_sequence = 1;
+
         for (int i=0; i<2; i++){
             mt_ctx->link[i]->picosec_per_byte = 160000; /* 160 nanosec per byte, i.e., 50Mbps*/
             mt_ctx->link[i]->microsec_latency = 2000; /* 2ms */
@@ -1268,6 +1305,14 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
         }
         if (ret == 0 && spec->do_video2 && !spec->do_not_check_video2) {
             ret = mediatest_check_stats(mt_ctx, spec, media_test_video2);
+        }
+    }
+    if (ret == 0 && media_test_id == mediatest_wifi) {
+        picoquic_path_quality_t quality = { 0 };
+        picoquic_get_default_path_quality(mt_ctx->client_cnx->cnx, &quality);
+        if (quality.lost == 0 || quality.spurious_losses == 0 || quality.timer_losses == 0) {
+            /* Unexpected. the wifi tst should have triggered at least on spurious timer loss. */
+            ret = -1;
         }
     }
     if (mt_ctx != NULL) {

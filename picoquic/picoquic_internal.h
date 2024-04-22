@@ -1091,7 +1091,8 @@ typedef struct st_picoquic_path_t {
     uint64_t nb_retransmit; /* Number of timeout retransmissions since last ACK */
     uint64_t total_bytes_lost; /* Sum of length of packet lost on this path */
     uint64_t nb_losses_found;
-    uint64_t nb_spurious; /* Number of spurious retransmissiosn for the path */
+    uint64_t nb_timer_losses;
+    uint64_t nb_spurious; /* Number of spurious retransmissions for the path */
     uint64_t path_packet_acked_number; /* path packet number of highest ack */
     uint64_t path_packet_acked_time_sent; /* path packet number of highest ack */
     uint64_t path_packet_acked_received; /* time at which the highest ack was received */

@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.19.9"
+#define PICOQUIC_VERSION "1.1.19.10"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -900,7 +900,13 @@ typedef struct st_picoquic_path_quality_t {
     uint64_t rtt_max; /* maximum value of RTT, computed since path creation */
     uint64_t sent; /* number of packets sent on the path */
     uint64_t lost; /* number of packets considered lost among those sent */
+    uint64_t timer_losses; /* packet losses detected due to timer expiring */
+    uint64_t spurious_losses; /* number of packet lost that were later acked. */
+    uint64_t max_spurious_rtt; /* maximum RTT for spurious losses */
+    uint64_t max_reorder_delay; /* maximum time gap for out of order packets */
+    uint64_t max_reorder_gap; /* maximum number gap for out of order packets */
     uint64_t bytes_in_transit; /* number of bytes currently in transit */
+
 } picoquic_path_quality_t;
 
 int picoquic_get_path_quality(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_quality_t * quality);
