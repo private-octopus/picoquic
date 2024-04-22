@@ -2427,9 +2427,9 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
 
         if ( p->sequence_number <= end_of_range) {
 
-            uint64_t max_spurious_rtt = current_time - p->send_time;
-            uint64_t max_reorder_delay = pkt_ctx->latest_time_acknowledged - p->send_time;
-            uint64_t max_reorder_gap = pkt_ctx->highest_acknowledged - p->sequence_number;
+            uint64_t spurious_rtt = current_time - p->send_time;
+            uint64_t reorder_delay = pkt_ctx->latest_time_acknowledged - p->send_time;
+            uint64_t reorder_gap = pkt_ctx->highest_acknowledged - p->sequence_number;
             picoquic_path_t * old_path = p->send_path;
 
             /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic.
@@ -2468,20 +2468,16 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                     old_path->mtu_probe_sent = 0; 
                 }
 
-                if (max_spurious_rtt > old_path->max_spurious_rtt) {
-                    old_path->max_spurious_rtt = max_spurious_rtt;
+                if (spurious_rtt > old_path->max_spurious_rtt) {
+                    old_path->max_spurious_rtt = spurious_rtt;
                 }
 
-                if (max_reorder_delay > old_path->max_reorder_delay) {
-                    old_path->max_reorder_delay = max_reorder_delay;
+                if (reorder_delay > old_path->max_reorder_delay) {
+                    old_path->max_reorder_delay = reorder_delay;
                 }
 
-                if (max_reorder_gap > old_path->max_reorder_gap) {
-                    old_path->max_reorder_gap = max_reorder_gap;
-                }
-
-                if (old_path->nb_losses_found > 0) {
-                    old_path->nb_losses_found--;
+                if (reorder_gap > old_path->max_reorder_gap) {
+                    old_path->max_reorder_gap = reorder_gap;
                 }
 
                 if (old_path->total_bytes_lost > p->length) {

@@ -2257,6 +2257,11 @@ static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, pico
     quality->receive_rate_estimate = path_x->receive_rate_estimate;
     quality->sent = path_x->path_packet_number;
     quality->lost = path_x->nb_losses_found;
+    quality->timer_losses = path_x->nb_timer_losses;
+    quality->spurious_losses = path_x->nb_spurious;
+    quality->max_spurious_rtt = path_x->max_spurious_rtt;
+    quality->max_reorder_delay = path_x->max_reorder_delay;
+    quality->max_reorder_gap = path_x->max_reorder_gap;
     quality->bytes_in_transit = path_x->bytes_in_transit;
 }
 
