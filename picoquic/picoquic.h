@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.19.10"
+#define PICOQUIC_VERSION "1.1.19.11"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -261,7 +261,7 @@ typedef enum {
     picoquic_callback_path_available, /* A new path is available, or a suspended path is available again */
     picoquic_callback_path_suspended, /* An available path is suspended */
     picoquic_callback_path_deleted, /* An existing path has been deleted */
-    picoquic_callback_path_quality_changed, /* Some path quality parameters have changed */
+    picoquic_callback_path_quality_changed /* Some path quality parameters have changed */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {
