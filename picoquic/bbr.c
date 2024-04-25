@@ -2216,11 +2216,6 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_lost_feedback:
             /* Feedback has been lost. It will be restored at the next notification. */
-#if 1
-            if (current_time > 4000000 && current_time < 4300000) {
-                DBG_PRINTF("%s", "Bug");
-            }
-#endif
             BBREnterLostFeedback(bbr_state, path_x);
             break;
         case picoquic_congestion_notification_rtt_measurement:

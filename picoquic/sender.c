@@ -4437,11 +4437,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
 static int picoquic_check_cc_feedback_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_time, uint64_t current_time)
 {
     int ret = 0;
-#if 1
-    if (current_time > 4020000) {
-        DBG_PRINTF("%s", "bug");
-    }
-#endif
+
     if (cnx->is_lost_feedback_notification_required && cnx->congestion_alg != NULL) {
         for (int i = 0; i < cnx->nb_paths; i++) {
             picoquic_path_t* path_x = cnx->path[i];
