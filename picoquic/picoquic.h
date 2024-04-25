@@ -261,7 +261,7 @@ typedef enum {
     picoquic_callback_path_available, /* A new path is available, or a suspended path is available again */
     picoquic_callback_path_suspended, /* An available path is suspended */
     picoquic_callback_path_deleted, /* An existing path has been deleted */
-    picoquic_callback_path_quality_changed /* Some path quality parameters have changed */
+    picoquic_callback_path_quality_changed, /* Some path quality parameters have changed */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -1406,7 +1406,8 @@ typedef enum {
     picoquic_congestion_notification_ecn_ec,
     picoquic_congestion_notification_cwin_blocked,
     picoquic_congestion_notification_seed_cwin,
-    picoquic_congestion_notification_reset
+    picoquic_congestion_notification_reset,
+    picoquic_congestion_notification_lost_feedback /* notification of lost feedback */
 } picoquic_congestion_notification_t;
 
 typedef struct st_picoquic_per_ack_state_t {
@@ -1484,6 +1485,24 @@ void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_s
 * application.
 */
 void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio);
+
+/* The experimental API `picoquic_set_feedback_loss_notification` allow applications
+* to turn on the "feedback lost" event notification. These events are
+* passed to the congestion control algorithm, allowing it to react
+* quickly to a temporary loss of connectivity, instead of waiting
+* for retransmission timers. Delay sensitive applications use this
+* feature to stop queuing more data when connectivity is lost,
+* and thus avoid the queues of less urgent data to delay
+* arrival of urgent real time frames when connectivity is restored.
+* On the other hand, this feature may lower the performance of
+* applications sending lots of data, and thus should only be
+* used when applications require it.
+* 
+* The `should_notify` should be set 1 to enable the feature, or to 0
+* to stop notifications. It is set by default to zero when a connection
+* is created.
+*/
+void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify);
 
 /* Bandwidth update and congestion control parameters value.
  * Congestion control in picoquic is characterized by three values:

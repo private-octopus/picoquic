@@ -1079,7 +1079,8 @@ typedef struct st_picoquic_path_t {
     unsigned int is_datagram_ready : 1;
     unsigned int is_pto_required : 1; /* Should send PTO probe */
     unsigned int is_probing_nat : 1; /* When path transmission is scheduled only for NAT probing */
-
+    unsigned int is_lost_feedback_notified : 1; /* Lost feedback has been notified */
+    
     /* Management of retransmissions in a path.
      * The "path_packet" variables are used for the RACK algorithm, per path, to avoid
      * declaring packets lost just because another path is delivering them faster.
@@ -1292,7 +1293,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_datagram_ready : 1; /* Active polling for datagrams */
     unsigned int is_immediate_ack_required : 1; /* Should send an ACK asap */
     unsigned int is_multipath_enabled : 1; /* Unique path ID extension has been negotiated */
-
+    unsigned int is_lost_feedback_notification_required : 1; /* CC algorithm requests lost feedback notification */
+    
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
     /* Spin bit policy */

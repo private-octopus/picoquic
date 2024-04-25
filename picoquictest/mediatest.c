@@ -68,7 +68,8 @@ typedef enum {
     mediatest_worst = 4,
     mediatest_video2_down = 5,
     mediatest_wifi = 6,
-    mediatest_video2_back = 7
+    mediatest_video2_back = 7,
+    mediatest_suspension = 8
 } mediatest_id_enum;
 
 typedef enum {
@@ -1121,6 +1122,7 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
             picoquic_tp_t client_parameters;
             mediatest_init_transport_parameters(&client_parameters, 1);
             picoquic_set_transport_parameters(cnx, &client_parameters);
+            picoquic_set_feedback_loss_notification(cnx, 1);
 
             if (picoquic_start_client_cnx(cnx) != 0) {
                 picoquic_delete_cnx(cnx);
@@ -1197,6 +1199,7 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
     if (mt_ctx == NULL) {
         ret = -1;
     }
+
     /* Three special cases in which we manipulate the configuration
     * to simulate various downgrade or suspension patterns.
      */
@@ -1210,15 +1213,14 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
             ret = mediatest_loop(mt_ctx, 2000000, 1, &is_finished);
         }
     }
-
-    if (media_test_id == mediatest_video2_down ||
+    else if (media_test_id == mediatest_video2_down ||
         media_test_id == mediatest_video2_back) {
         uint64_t picosec_per_byte_ref[2];
         uint64_t latency_ref[2];
         uint64_t down_time = (media_test_id == mediatest_video2_down) ? 4000000 : 2000000;
         uint64_t back_time = (media_test_id == mediatest_video2_down) ? 24000000 : 4000000;
 
-        /* Run the simulation for 2 second. */
+        /* Run the simulation for the first period. */
         ret = mediatest_loop(mt_ctx, down_time, 0, &is_finished);
         /* Drop the bandwidth and increase latency for specified down time */
         for (int i = 0; i < 2; i++) {
@@ -1235,8 +1237,19 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
             mt_ctx->link[i]->microsec_latency = latency_ref[i];
         }
     }
-
-    if (media_test_id == mediatest_wifi) {
+    else if (media_test_id == mediatest_suspension) {
+        /* Simulate one single wifi suspension, for 150 ms at
+         * t = 4000000 */
+        uint64_t sim_time = 4000000;
+        /* Run the simulation for the first period. */
+        ret = mediatest_loop(mt_ctx, sim_time, 0, &is_finished);
+        /* Simulate the suspension for 150 ms */
+        sim_time += 150000;
+        for (int i = 0; i < 2; i++) {
+            picoquic_test_simlink_suspend(mt_ctx->link[i], sim_time, 0);
+        }
+    }
+    else if (media_test_id == mediatest_wifi) {
         /* For 10 seconds, run a test loop in which the simulated Wi-Fi
         * link alternates between 100Mbps, low delay and just blocked,
         * 0 bandwidth. The duration of the block unblock phase varies.
@@ -1425,6 +1438,24 @@ int mediatest_wifi_test()
     spec.latency_max = 300000;
     spec.do_not_check_video2 = 1;
     ret = mediatest_one(mediatest_wifi, &spec);
+
+    return ret;
+}
+
+int mediatest_suspension_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.1;
+    spec.do_video = 1;
+    spec.do_video2 = 1;
+    spec.do_audio = 1;
+    spec.data_size = 0;
+    spec.latency_average = 50000;
+    spec.latency_max = 300000;
+    spec.do_not_check_video2 = 1;
+    ret = mediatest_one(mediatest_suspension, &spec);
 
     return ret;
 }

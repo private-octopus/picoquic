@@ -4433,6 +4433,43 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
     return path_id;
 }
 
+/* manage the CC timer, if any */
+static int picoquic_check_cc_feedback_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_time, uint64_t current_time)
+{
+    int ret = 0;
+#if 1
+    if (current_time > 4020000) {
+        DBG_PRINTF("%s", "bug");
+    }
+#endif
+    if (cnx->is_lost_feedback_notification_required && cnx->congestion_alg != NULL) {
+        for (int i = 0; i < cnx->nb_paths; i++) {
+            picoquic_path_t* path_x = cnx->path[i];
+            if (!path_x->is_lost_feedback_notified){
+                picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled)?
+                    &path_x->pkt_ctx:&cnx->pkt_ctx[picoquic_packet_context_application];
+                if (pkt_ctx->pending_first != NULL) {
+                    uint64_t delta_sent = (pkt_ctx->pending_first->send_time <= path_x->last_time_acked_data_frame_sent) ? 0 :
+                        (pkt_ctx->pending_first->send_time - path_x->last_time_acked_data_frame_sent);
+                    uint64_t lost_feedback_time = pkt_ctx->highest_acknowledged_time + delta_sent + 2 * cnx->ack_frequency_delay_local;
+                            
+                    if (lost_feedback_time <= current_time) {
+                        path_x->is_lost_feedback_notified = 1;
+                        cnx->congestion_alg->alg_notify(cnx, path_x,
+                            picoquic_congestion_notification_lost_feedback,
+                            NULL, current_time);
+                    }
+                    else if (lost_feedback_time < *next_wake_time) {
+                        *next_wake_time = lost_feedback_time;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                    }
+                }
+            }
+        }
+    }
+    return ret;
+}
+
 /* Prepare next packet to send, or nothing.. */
 int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
@@ -4457,6 +4494,10 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     *send_length = 0;
 
     ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
+
+    if (ret == 0) {
+        ret = picoquic_check_cc_feedback_timer(cnx, &next_wake_time, current_time);
+    }
 
     if (send_buffer_max < PICOQUIC_ENFORCED_INITIAL_MTU) {
         DBG_PRINTF("Invalid buffer size: %zu", send_buffer_max);
