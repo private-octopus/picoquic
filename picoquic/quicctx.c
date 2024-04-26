@@ -4782,6 +4782,11 @@ void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantu
     quic->bbr_quantum_ratio = quantum_ratio;
 }
 
+void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify)
+{
+    cnx->is_lost_feedback_notification_required = should_notify;
+}
+
 void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrease_threshold, uint64_t increase_threshold)
 {
     cnx->pacing_decrease_threshold = decrease_threshold;

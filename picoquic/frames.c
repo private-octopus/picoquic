@@ -2885,6 +2885,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             ack_state.inflight_prior = packet_data->path_ack[i].inflight_prior;
             ack_state.is_app_limited = packet_data->path_ack[i].rs_is_path_limited;
             ack_state.is_cwnd_limited = packet_data->path_ack[i].rs_is_cwnd_limited;
+            packet_data->path_ack[i].acked_path->is_lost_feedback_notified = 0;
             cnx->congestion_alg->alg_notify(cnx, packet_data->path_ack[i].acked_path,
                 picoquic_congestion_notification_acknowledgement,
                 &ack_state, current_time);

@@ -230,6 +230,10 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t recovery_packet_number;
     uint64_t recovery_delivered;
 
+    /* Management of lost feedback */
+    unsigned int is_handling_lost_feedback;
+    uint64_t cwin_before_lost_feedback;
+
     /* Management of ECN marks */
     uint64_t ecn_ect1_last_round;
     uint64_t ecn_ce_last_round;
@@ -605,6 +609,31 @@ static void BBROnEnterFastRecovery(picoquic_bbr_state_t* bbr_state, picoquic_pat
     bbr_state->is_in_recovery = 1;
     bbr_state->is_pto_recovery = 0;
     bbr_state->recovery_delivered = path_x->delivered;
+}
+
+/* Handling of the "lost feedback" state.
+ */
+static void BBREnterLostFeedback(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
+{
+    if ((IsInAProbeBWState(bbr_state) || bbr_state->state == picoquic_bbr_alg_drain) &&
+        !bbr_state->is_handling_lost_feedback &&
+        path_x->cnx->cnx_state == picoquic_state_ready) {
+        /* Remembering the old cwin, so the state can be restored when the
+        * condition is lifted. */
+        bbr_state->cwin_before_lost_feedback = path_x->cwin;
+        /* setting the congestion window to exactly the bytes in transit, thus
+         * preventing any further transmission until the condition is lifted */
+        path_x->cwin = path_x->bytes_in_transit;
+        bbr_state->is_handling_lost_feedback = 1;
+    }
+}
+
+static void BBRExitLostFeedback(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
+{
+    if (bbr_state->is_handling_lost_feedback) {
+        path_x->cwin = bbr_state->cwin_before_lost_feedback;
+        bbr_state->is_handling_lost_feedback = 0;
+    }
 }
 
 /* In picoquic, the arrival of an RTO maps to a "timer based" packet loss.
@@ -2177,6 +2206,7 @@ static void picoquic_bbr_notify(
             BBRUpdateRecoveryOnLoss(bbr_state, path_x, ack_state->nb_bytes_newly_lost);
             break;
         case picoquic_congestion_notification_timeout:
+            BBRExitLostFeedback(bbr_state, path_x);
             /* if loss is PTO, we should start the OnPto processing */
             BBROnEnterRTO(bbr_state, path_x, ack_state->lost_packet_number);
             break;
@@ -2184,11 +2214,16 @@ static void picoquic_bbr_notify(
             /* handling of suspension */
             BBROnSpuriousLoss(bbr_state, path_x, ack_state->lost_packet_number, current_time);
             break;
+        case picoquic_congestion_notification_lost_feedback:
+            /* Feedback has been lost. It will be restored at the next notification. */
+            BBREnterLostFeedback(bbr_state, path_x);
+            break;
         case picoquic_congestion_notification_rtt_measurement:
             /* TODO: this call is subsumed by the acknowledgement notification.
              * Consider removing it from the API once other CC algorithms are updated.  */
             break;
-        case picoquic_congestion_notification_acknowledgement: 
+        case picoquic_congestion_notification_acknowledgement:
+            BBRExitLostFeedback(bbr_state, path_x);
             picoquic_bbr_notify_ack(bbr_state, path_x, ack_state, current_time);
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
                 picoquic_update_pacing_data(cnx, path_x, 1);

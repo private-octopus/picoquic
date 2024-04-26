@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.19.10"
+#define PICOQUIC_VERSION "1.1.19.11"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1406,7 +1406,8 @@ typedef enum {
     picoquic_congestion_notification_ecn_ec,
     picoquic_congestion_notification_cwin_blocked,
     picoquic_congestion_notification_seed_cwin,
-    picoquic_congestion_notification_reset
+    picoquic_congestion_notification_reset,
+    picoquic_congestion_notification_lost_feedback /* notification of lost feedback */
 } picoquic_congestion_notification_t;
 
 typedef struct st_picoquic_per_ack_state_t {
@@ -1484,6 +1485,32 @@ void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_s
 * application.
 */
 void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio);
+
+/* The experimental API `picoquic_set_feedback_loss_notification` allow applications
+* to turn on the "feedback lost" event notification. These events are
+* passed to the congestion control algorithm, allowing it to react
+* quickly to a temporary loss of connectivity, instead of waiting
+* for retransmission timers. Delay sensitive applications use this
+* feature to stop queuing more data when connectivity is lost,
+* and thus avoid the queues of less urgent data to delay
+* arrival of urgent real time frames when connectivity is restored.
+* On the other hand, this feature may lower the performance of
+* applications sending lots of data, and thus should only be
+* used when applications require it.
+* 
+* The lost control events fires if there is more that 2 "ack delay max" between
+* the last ACK received and the next one. In practice, that means 1 RTT + 2 ack delays
+* after the first non acked packet was sent. In contrast, the RTO fires
+* 1 RTT + 4 STDEV + 1 ack delay after the last packet was sent. Given congestion
+* control and CWIN, this "last packet" is typically sent 1 RTT after the "first
+* packet not acknowledged". Thus, the "lost control" event will typically
+* happen 1 RTT before the RTO event.
+* 
+* The `should_notify` should be set 1 to enable the feature, or to 0
+* to stop notifications. It is set by default to zero when a connection
+* is created.
+*/
+void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify);
 
 /* Bandwidth update and congestion control parameters value.
  * Congestion control in picoquic is characterized by three values:

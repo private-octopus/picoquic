@@ -390,6 +390,7 @@ int mediatest_video_data_audio_test();
 int mediatest_video2_down_test();
 int mediatest_video2_back_test();
 int mediatest_wifi_test();
+int mediatest_suspension_test();
 int mediatest_worst_test();
 int warptest_video_test();
 int warptest_video_audio_test();
