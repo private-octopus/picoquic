@@ -2257,6 +2257,11 @@ static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, pico
     quality->receive_rate_estimate = path_x->receive_rate_estimate;
     quality->sent = path_x->path_packet_number;
     quality->lost = path_x->nb_losses_found;
+    quality->timer_losses = path_x->nb_timer_losses;
+    quality->spurious_losses = path_x->nb_spurious;
+    quality->max_spurious_rtt = path_x->max_spurious_rtt;
+    quality->max_reorder_delay = path_x->max_reorder_delay;
+    quality->max_reorder_gap = path_x->max_reorder_gap;
     quality->bytes_in_transit = path_x->bytes_in_transit;
 }
 
@@ -4835,6 +4840,11 @@ void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_s
 void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio)
 {
     quic->bbr_quantum_ratio = quantum_ratio;
+}
+
+void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify)
+{
+    cnx->is_lost_feedback_notification_required = should_notify;
 }
 
 void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrease_threshold, uint64_t increase_threshold)

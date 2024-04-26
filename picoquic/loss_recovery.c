@@ -944,6 +944,9 @@ static void picoquic_count_and_notify_loss(
 
     if (old_p->send_path != NULL) {
         old_p->send_path->nb_losses_found++;
+        if (timer_based_retransmit) {
+            old_p->send_path->nb_timer_losses++;
+        }
         if ((old_p->send_path->smoothed_rtt != PICOQUIC_INITIAL_RTT ||
             old_p->send_path->rtt_variant != 0) &&
             old_p->send_time > cnx->start_time + old_p->send_path->smoothed_rtt) {
