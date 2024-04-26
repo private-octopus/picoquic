@@ -1498,6 +1498,14 @@ void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantu
 * applications sending lots of data, and thus should only be
 * used when applications require it.
 * 
+* The lost control events fires if there is more that 2 "ack delay max" between
+* the last ACK received and the next one. In practice, that means 1 RTT + 2 ack delays
+* after the first non acked packet was sent. In contrast, the RTO fires
+* 1 RTT + 4 STDEV + 1 ack delay after the last packet was sent. Given congestion
+* control and CWIN, this "last packet" is typically sent 1 RTT after the "first
+* packet not acknowledged". Thus, the "lost control" event will typically
+* happen 1 RTT before the RTO event.
+* 
 * The `should_notify` should be set 1 to enable the feature, or to 0
 * to stop notifications. It is set by default to zero when a connection
 * is created.
