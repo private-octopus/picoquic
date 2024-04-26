@@ -338,6 +338,7 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
             ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
         }
         else if (!stream->reset_requested) {
+            picoquic_update_low_priority_on_reset(cnx, stream);
             stream->local_error = local_stream_error;
             stream->reset_requested = 1;
         }

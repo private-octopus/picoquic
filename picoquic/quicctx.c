@@ -3270,6 +3270,66 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     return ret;
 }
 
+/* Handling of low priority in transit limit.
+*/
+static int64_t picoquic_stream_first_not_ack(picoquic_stream_head_t* stream)
+{
+    int64_t first_not_ack = -1;
+
+    if (stream->sent_offset > 0) {
+        picoquic_sack_item_t* first_item = picoquic_sack_first_item(&stream->sack_list);
+        if (first_item != NULL) {
+            first_not_ack = picoquic_sack_item_range_end(first_item);
+        }
+    }
+
+    return first_not_ack;
+}
+
+void picoquic_set_low_priority_stream_limit(picoquic_cnx_t* cnx, uint8_t stream_priority, uint64_t limit)
+{
+    picoquic_stream_head_t* stream = picoquic_first_stream(cnx);
+    
+    cnx->low_stream_priority = stream_priority;
+    cnx->low_stream_priority_limit = limit;
+    cnx->low_stream_priority_current = 0;
+
+    while (stream != NULL) {
+        if (stream->stream_priority >= stream_priority && stream->sent_offset > 0){
+            uint64_t in_transit = stream->sent_offset - picoquic_stream_first_not_ack(stream);
+            cnx->low_stream_priority_current += in_transit;
+        }
+        stream = picoquic_next_stream(stream);
+    }
+}
+
+void picoquic_update_low_priority_current(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
+    uint64_t offset, size_t data_length, int fin)
+{
+    int64_t sack_first_after;
+    int64_t sack_first_before = picoquic_stream_first_not_ack(stream);
+    (void)picoquic_update_sack_list(&stream->sack_list,
+        offset, offset + data_length - ((fin) ? 0 : 1), 0);
+    sack_first_after = picoquic_stream_first_not_ack(stream);
+    if (sack_first_after > sack_first_before) {
+        uint64_t delta = sack_first_after - sack_first_before;
+        if (delta > cnx->low_stream_priority_current) {
+            cnx->low_stream_priority_current = 0;
+        } else {
+            cnx->low_stream_priority_current -= delta;
+        }
+    }
+}
+
+void picoquic_update_low_priority_on_reset(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
+{
+    uint64_t delta = stream->sent_offset - picoquic_stream_first_not_ack(stream);
+    if (delta > cnx->low_stream_priority_current) {
+        cnx->low_stream_priority_current = 0;
+    } else {
+        cnx->low_stream_priority_current -= delta;
+    }
+}
 
 /* Management of local CID.
  * Local CID are created and registered on demand.

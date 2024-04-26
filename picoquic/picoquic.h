@@ -1203,6 +1203,30 @@ void picoquic_set_default_datagram_priority(picoquic_quic_t* quic, uint8_t defau
 
 void picoquic_set_datagram_priority(picoquic_cnx_t * cnx, uint8_t datagram_priority);
 
+/* Handling of low priority in transit limit.
+* The API `picoquic_set_low_priority_stream_limit()` sets a connection
+* level limit to the amount of data that can be queued on low priority
+* streams.
+* The app could for example say that it does not want more than 64KB
+* in transit for streams with priority >= 8. Chose the limit high enough,
+* and it will only kick in if the connection is experiencing some trouble.
+* 
+* The goal is to limit queue building when the path capacity is suddenly
+* reduced. When that happens, packets in transit will be delievered
+* before new packets can be sent. If the in-transit packets are "low priority",
+* we get a "resource inversion", because these low priority packets
+* are delivered before the new high priority data.
+* 
+* Limiting the size of queues of low priority packets would reduce the
+* impact of such priority inversion.
+* 
+* The stream data "in transit" is defined as the interval between the first
+* unacknowledged byte in the stream and the send offset. The total in
+* transit is defined as the sum of these values for all low priority streams.
+*/
+
+void picoquic_set_low_priority_stream_limit(picoquic_cnx_t* cnx, uint8_t stream_priority, uint64_t limit);
+
 /* If a stream is marked active, the application will receive a callback with
  * event type "picoquic_callback_prepare_to_send" when the transport is ready to
  * send data on a stream. The "length" argument in the call back indicates the

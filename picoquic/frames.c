@@ -1308,9 +1308,11 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
              * the current selection is validated */
             break;
         }
-        has_data = (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
-                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
-                (stream->fin_requested && !stream->fin_sent)));
+        has_data = ((cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
+            (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+            (stream->fin_requested && !stream->fin_sent))) &&
+            (cnx->low_stream_priority == 0 || stream->stream_priority < cnx->low_stream_priority ||
+                    cnx->low_stream_priority_current < cnx->low_stream_priority_limit));
         if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
             /* Only consider the streams that meet path affinity requirements */
             has_data = 0;
@@ -1663,6 +1665,10 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                     stream->last_time_data_sent = picoquic_get_quic_time(cnx->quic);
                     cnx->data_sent += stream_data_context.length;
 
+                    if (cnx->low_stream_priority > 0 && stream->stream_priority >= cnx->low_stream_priority) {
+                        cnx->low_stream_priority_current += stream_data_context.length;
+                    }
+
                     if (stream_data_context.length > 0) {
                         if (stream_data_context.app_buffer == NULL ||
                             stream_data_context.app_buffer < bytes0 ||
@@ -1730,6 +1736,10 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                     stream->sent_offset += length;
                     stream->last_time_data_sent = picoquic_get_quic_time(cnx->quic);
                     cnx->data_sent += length;
+
+                    if (cnx->low_stream_priority > 0 && stream->stream_priority >= cnx->low_stream_priority) {
+                        cnx->low_stream_priority_current += length;
+                    }
                 }
 
                 bytes = bytes0 + byte_index;
@@ -3346,8 +3356,15 @@ int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         /* record the ack range for the stream */
         stream = picoquic_find_stream(cnx, stream_id);
         if (stream != NULL) {
-            (void)picoquic_update_sack_list(&stream->sack_list,
-                offset, offset + data_length - ((fin) ? 0 : 1), 0);
+            if (cnx->low_stream_priority > 0 && stream->stream_priority >= cnx->low_stream_priority) {
+                /* keep track of the amount of data in transit for low priority streams,
+                 * and also update the sack list. */
+                picoquic_update_low_priority_current(cnx, stream, offset, data_length, fin);
+            }
+            else {
+                (void)picoquic_update_sack_list(&stream->sack_list,
+                    offset, offset + data_length - ((fin) ? 0 : 1), 0);
+            }
 
             picoquic_delete_stream_if_closed(cnx, stream);
         }

@@ -1445,6 +1445,10 @@ typedef struct st_picoquic_cnx_t {
     picoquic_stream_head_t * last_output_stream;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
+    /* Management of limit of in transit data for low priority streams */
+    uint8_t low_stream_priority;
+    uint64_t low_stream_priority_limit;
+    uint64_t low_stream_priority_current;
 
     /* Repeat queue contains packets with data frames that should be
      * sent according to priority when congestion window opens. */
@@ -1927,6 +1931,8 @@ void picoquic_stream_data_node_recycle(picoquic_stream_data_node_t* stream_data)
 picoquic_stream_data_node_t* picoquic_stream_data_node_alloc(picoquic_quic_t* quic);
 void picoquic_clear_stream(picoquic_stream_head_t* stream);
 void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t * stream);
+void picoquic_update_low_priority_current(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, uint64_t offset, size_t data_length, int fin);
+void picoquic_update_low_priority_on_reset(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
 picoquic_local_cnxid_list_t* picoquic_find_or_create_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id, int do_create);
 picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx,
     uint64_t unique_path_id, picoquic_connection_id_t* suggested_value, uint64_t current_time);
