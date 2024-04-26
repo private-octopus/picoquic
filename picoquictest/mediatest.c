@@ -1457,7 +1457,7 @@ int mediatest_suspension_test()
     spec.data_size = 0;
     spec.latency_average = 50000;
     spec.latency_max = 300000;
-    spec.low_priority_limit = 32768;
+    spec.low_priority_limit = 65536;
     spec.do_not_check_video2 = 1;
     ret = mediatest_one(mediatest_suspension, &spec);
 
