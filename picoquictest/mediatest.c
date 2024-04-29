@@ -69,7 +69,9 @@ typedef enum {
     mediatest_video2_down = 5,
     mediatest_wifi = 6,
     mediatest_video2_back = 7,
-    mediatest_suspension = 8
+    mediatest_suspension = 8,
+    mediatest_video2_probe = 9,
+    mediatest_suspension2 = 10
 } mediatest_id_enum;
 
 typedef enum {
@@ -170,6 +172,7 @@ typedef struct st_mediatest_spec_t {
     int do_audio;
     int do_video;
     int do_video2;
+    int do_probe_up;
     size_t data_size;
     size_t datagram_data_size;
     double bandwidth;
@@ -338,7 +341,8 @@ int mediatest_check_stats(mediatest_ctx_t* mt_ctx, mediatest_spec_t * spec, medi
 
     if (media_type >= 0 && media_type < media_test_nb_types) {
         mediatest_media_stats_t* stats = mt_ctx->media_stats + media_type;
-        uint64_t period = (media_type == media_test_audio) ? MEDIATEST_AUDIO_PERIOD : MEDIATEST_VIDEO_PERIOD;
+        uint64_t period = (media_type == media_test_audio) ? MEDIATEST_AUDIO_PERIOD :
+            ((media_type == media_test_video2) ? MEDIATEST_VIDEO2_PERIOD : MEDIATEST_VIDEO_PERIOD);
         uint64_t expected = MEDIATEST_DURATION / period;
 
         if (stats->nb_frames != expected && mt_ctx->disruption_clear == 0) {
@@ -458,8 +462,8 @@ void  mediatest_simulate_reset(mediatest_stream_ctx_t* stream_ctx, uint64_t curr
 {
     uint64_t frame_rank = stream_ctx->frames_sent % cycle_length;
 
-    if (frame_rank != 0){
-        if ((stream_ctx->frames_sent + queue_limit * frame_duration) > current_time) {
+    if (frame_rank > 0 && stream_ctx->frames_sent > queue_limit){
+        if (((stream_ctx->frames_sent - queue_limit) * frame_duration) > current_time) {
             stream_ctx->is_reset = 1;
         }
         if (stream_ctx->is_reset) {
@@ -481,7 +485,7 @@ int mediatest_prepare_new_frame(mediatest_stream_ctx_t* stream_ctx, uint64_t cur
     int ret = 0;
     /* Is the high bandwidth stream reset? */
     if (stream_ctx->stream_type == media_test_video2) {
-        mediatest_simulate_reset(stream_ctx, current_time, MEDIATEST_VIDEO_PERIOD, 100, 10);
+        mediatest_simulate_reset(stream_ctx, current_time, MEDIATEST_VIDEO2_PERIOD, 100, 20);
     }
     /* Is this the right time? */
     if (stream_ctx->next_frame_time <= current_time) {
@@ -507,10 +511,10 @@ int mediatest_prepare_new_frame(mediatest_stream_ctx_t* stream_ctx, uint64_t cur
             break;
         case media_test_video2:
             if ((stream_ctx->frames_sent % 100) == 0) {
-                stream_ctx->next_iframe_time = stream_ctx->next_frame_time + 100 * MEDIATEST_VIDEO_PERIOD;
+                stream_ctx->next_iframe_time = stream_ctx->next_frame_time + 100 * MEDIATEST_VIDEO2_PERIOD;
             }
             stream_ctx->message_sent.message_size = ((stream_ctx->frames_sent % 100) == 0) ? 0x10000 : 0x1800;
-            stream_ctx->next_frame_time += MEDIATEST_VIDEO_PERIOD;
+            stream_ctx->next_frame_time += MEDIATEST_VIDEO2_PERIOD;
             break;
         default:
             ret = -1;
@@ -1146,6 +1150,9 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
                 if (spec->do_video2 && ret == 0) {
                     ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_video2, 0);
                 }
+                if (spec->do_probe_up && ret == 0) {
+                    picoquic_request_forced_probe_up(mt_ctx->client_cnx->cnx, 1);
+                }
                 if (spec->datagram_data_size > 0 && ret == 0) {
                     mt_ctx->datagram_data_requested = spec->datagram_data_size;
                 }
@@ -1237,7 +1244,8 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
             mt_ctx->link[i]->microsec_latency = latency_ref[i];
         }
     }
-    else if (media_test_id == mediatest_suspension) {
+    else if (media_test_id == mediatest_suspension ||
+        media_test_id == mediatest_suspension2) {
         /* Simulate one single wifi suspension, for 150 ms at
          * t = 4000000 */
         uint64_t sim_time = 4000000;
@@ -1402,10 +1410,28 @@ int mediatest_video2_back_test()
     spec.do_video2 = 1;
     spec.do_audio = 1;
     spec.data_size = 0;
-    spec.latency_average = 50000;
-    spec.latency_max = 450000;
+    spec.latency_average = 80000;
+    spec.latency_max = 500000;
     spec.do_not_check_video2 = 1;
     ret = mediatest_one(mediatest_video2_back, &spec);
+
+    return ret;
+}
+
+int mediatest_video2_probe_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.1;
+    spec.do_video = 1;
+    spec.do_video2 = 1;
+    spec.do_audio = 1;
+    spec.data_size = 0;
+    spec.latency_average = 25000;
+    spec.latency_max = 150000;
+    spec.do_probe_up = 1;
+    ret = mediatest_one(mediatest_video2_probe, &spec);
 
     return ret;
 }
@@ -1456,6 +1482,25 @@ int mediatest_suspension_test()
     spec.latency_max = 300000;
     spec.do_not_check_video2 = 1;
     ret = mediatest_one(mediatest_suspension, &spec);
+
+    return ret;
+}
+
+int mediatest_suspension2_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.1;
+    spec.do_video = 1;
+    spec.do_video2 = 1;
+    spec.do_audio = 1;
+    spec.data_size = 0;
+    spec.latency_average = 50000;
+    spec.latency_max = 300000;
+    spec.do_not_check_video2 = 1;
+    spec.do_probe_up = 1;
+    ret = mediatest_one(mediatest_suspension2, &spec);
 
     return ret;
 }

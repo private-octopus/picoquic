@@ -309,7 +309,7 @@ static void BBRHandleRestartFromIdle(picoquic_bbr_state_t* bbr_state, picoquic_p
 static void BBRStartProbeBW_DOWN(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, uint64_t current_time);
 static void BBRStartProbeBW_CRUISE(picoquic_bbr_state_t* bbr_state);
 static void BBRStartProbeBW_REFILL(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x);
-static void BBREnterStartup(picoquic_bbr_state_t* bbr_state);
+static void BBREnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
 static void BBRCheckStartupHighLoss(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs);
 static void BBRUpdateRound(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
@@ -441,7 +441,7 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
     BBRInitRoundCounting(bbr_state, path_x);
     BBRInitFullPipe(bbr_state);
     BBRInitPacingRate(bbr_state, path_x);
-    BBREnterStartup(bbr_state);
+    BBREnterStartup(bbr_state, path_x);
 }
 
 static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
@@ -1286,7 +1286,7 @@ static void BBRExitProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * p
         BBRStartProbeBW_CRUISE(bbr_state);
     }
     else {
-        BBREnterStartup(bbr_state);
+        BBREnterStartup(bbr_state, path_x);
     }
 }
 
@@ -1333,11 +1333,12 @@ static void BBRHandleProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t *
     }
 }
 
-static void BBREnterProbeRTT(picoquic_bbr_state_t* bbr_state)
+static void BBREnterProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x)
 {
     bbr_state->state = picoquic_bbr_alg_probe_rtt;
     bbr_state->pacing_gain = 1.0;
     bbr_state->cwnd_gain = BBRProbeRTTCwndGain;  /* 0.5 */
+    path_x->is_cca_probing_up = 0;
 }
 
 static void BBRCheckProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
@@ -1345,7 +1346,7 @@ static void BBRCheckProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * 
     if (bbr_state->state != picoquic_bbr_alg_probe_rtt &&
         bbr_state->probe_rtt_expired &&
         !bbr_state->idle_restart) {
-        BBREnterProbeRTT(bbr_state);
+        BBREnterProbeRTT(bbr_state, path_x);
         bbr_state->min_rtt = rs->rtt_sample;
         bbr_state->prior_cwnd = BBRSaveCwnd(bbr_state, path_x);
         bbr_state->probe_rtt_done_stamp = 0;
@@ -1609,6 +1610,7 @@ static void BBRStartProbeBW_DOWN(picoquic_bbr_state_t* bbr_state, picoquic_path_
     BBRStartRound(bbr_state, path_x);
     bbr_state->state = picoquic_bbr_alg_probe_bw_down;
     bbr_state->nb_rtt_excess = 0;
+    path_x->is_cca_probing_up = 0;
 }
 
 static void BBRStartProbeBW_CRUISE(picoquic_bbr_state_t* bbr_state)
@@ -1629,6 +1631,7 @@ static void BBRStartProbeBW_REFILL(picoquic_bbr_state_t* bbr_state, picoquic_pat
     bbr_state->ack_phase = picoquic_bbr_acks_refilling;
     BBRStartRound(bbr_state, path_x);
     bbr_state->state = picoquic_bbr_alg_probe_bw_refill;
+    path_x->is_cca_probing_up = 1;
 }
 
 static void BBRStartProbeBW_UP(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, uint64_t current_time)
@@ -1641,6 +1644,7 @@ static void BBRStartProbeBW_UP(picoquic_bbr_state_t* bbr_state, picoquic_path_t 
     bbr_state->cycle_stamp = current_time; /* start wall clock */
     bbr_state->state = picoquic_bbr_alg_probe_bw_up;
     BBRRaiseInflightHiSlope(bbr_state, path_x);
+    path_x->is_cca_probing_up = 1;
 }
 
 /* The core state machine logic for ProbeBW: */
@@ -1725,6 +1729,8 @@ static void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path
     bbr_state->state = picoquic_bbr_alg_drain;
     bbr_state->pacing_gain = 1.0 / BBRStartupCwndGain;  /* pace slowly */
     bbr_state->cwnd_gain = BBRStartupCwndGain;   /* maintain cwnd */
+
+    path_x->is_cca_probing_up = 0;
 }
 
 static void BBRCheckDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
@@ -1771,7 +1777,7 @@ static void BBRCheckStartupResume(picoquic_bbr_state_t* bbr_state, picoquic_path
     if (bbr_state->state == picoquic_bbr_alg_startup_resume) {
         BBRCheckStartupHighLoss(bbr_state, path_x, rs);
         if (!bbr_state->filled_pipe && (double)bbr_state->max_bw > BBRStartupResumeIncreaseThreshold * bbr_state->bdp_seed) {
-            BBREnterStartup(bbr_state);
+            BBREnterStartup(bbr_state, path_x);
         }
         else {
             BBRCheckStartupFullBandwidthGeneric(bbr_state, rs, BBRStartupResumeIncreaseThreshold);
@@ -1845,11 +1851,12 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
     }
 }
 
-static void BBREnterStartup(picoquic_bbr_state_t* bbr_state)
+static void BBREnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
     bbr_state->state = picoquic_bbr_alg_startup;
     bbr_state->pacing_gain = BBRStartupPacingGain;
     bbr_state->cwnd_gain = BBRStartupCwndGain;
+    path_x->is_cca_probing_up = 1;
 }
 
 static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
@@ -1858,7 +1865,7 @@ static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
     bbr_state->filled_pipe = 0;
     bbr_state->full_bw_count = 0;
     bbr_state->probe_probe_bw_quickly = 1;
-    BBREnterStartup(bbr_state);
+    BBREnterStartup(bbr_state, path_x);
 }
 
 /* End of BBRv3 startup specific */
@@ -1883,6 +1890,7 @@ void BBREnterStartupLongRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
     if (cwnd > path_x->cwin) {
         path_x->cwin = cwnd;
     }
+    path_x->is_cca_probing_up = 1;
 }
 
 static void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)

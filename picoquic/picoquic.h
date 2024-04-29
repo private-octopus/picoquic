@@ -1512,6 +1512,18 @@ void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantu
 */
 void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify);
 
+/* The experimental API `picoquic_request_forced_probe_up` direct the 
+ * stack to send filler traffic when the congestion control algorithm is 
+ * "probing for bandwidth". This is intended for "real time" applications
+ * that often send less traffic that congestion control will allow, and
+ * may suffer from an insufficient estimate of the path capacity.
+ * Forcing more traffic will remedy that. 
+ * 
+ * When more traffic is requested, there is a risk of filling buffers and
+ * creating packet losses. The stack will try to alleviate that risk
+ * by building traffic with redundant copies of unacknowledged packets.
+ */
+void picoquic_request_forced_probe_up(picoquic_cnx_t* cnx, unsigned int request_forced_probe_up);
 /* Bandwidth update and congestion control parameters value.
  * Congestion control in picoquic is characterized by three values:
  * - pacing rate, expressed in bytes per second (for example, 10Mbps would be noted as 1250000)

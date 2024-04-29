@@ -3795,7 +3795,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             length = bytes_next - bytes;
                         }
 
-                        if (cnx->is_preemptive_repeat_enabled) {
+                        if (cnx->is_preemptive_repeat_enabled ||
+                            (cnx->is_forced_probe_up_required && path_x->is_cca_probing_up)) {
                             if (length <= header_length) {
                                 /* Consider redundant retransmission:
                                  * if the redundant retransmission index is null:
@@ -3810,6 +3811,13 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                                      preemptive_repeat = 1;
                                      packet->is_preemptive_repeat = 1;
                                      bytes_next = bytes + length;
+                                 }
+                                 else if (cnx->is_forced_probe_up_required && path_x->is_cca_probing_up) {
+                                     *bytes_next++ = picoquic_frame_type_ping;
+                                     memset(bytes_next, picoquic_frame_type_padding, bytes_max - bytes_next);
+                                     bytes_next = bytes_max;
+                                     length = bytes_next - bytes;
+                                     is_pure_ack = 0;
                                  }
                             }
                             else if (!more_data){
