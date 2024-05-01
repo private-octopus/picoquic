@@ -68,7 +68,8 @@ typedef enum {
     mediatest_worst = 4,
     mediatest_video2_down = 5,
     mediatest_wifi = 6,
-    mediatest_video2_back = 7
+    mediatest_video2_back = 7,
+    mediatest_suspension = 8
 } mediatest_id_enum;
 
 typedef enum {
@@ -102,13 +103,16 @@ typedef struct st_mediatest_stream_ctx_t {
     unsigned int finished_sending : 1;
     unsigned int fin_received : 1;
     unsigned int is_fin_sent : 1;
+    unsigned int is_reset : 1;
 
     uint64_t frames_to_send;
     uint64_t frames_sent;
+    uint64_t frames_skipped;
     uint64_t frames_received;
     size_t bytes_sent;
     size_t bytes_received;
     uint64_t next_frame_time;
+    uint64_t next_iframe_time;
 
     mediatest_message_buffer_t message_sent;
     mediatest_message_buffer_t message_received;
@@ -446,11 +450,40 @@ int mediatest_receive_stream_data(mediatest_stream_ctx_t* stream_ctx, uint8_t* b
     return ret;
 }
 
+/* For the high speed video stream, check if the media is far behind. if
+ * it is, mark the current state as "skipping". If the state is marked
+ * "reset", abstain from sending any frame until the next I frame.
+ */
+void  mediatest_simulate_reset(mediatest_stream_ctx_t* stream_ctx, uint64_t current_time, uint64_t frame_duration, uint64_t cycle_length, uint64_t queue_limit)
+{
+    uint64_t frame_rank = stream_ctx->frames_sent % cycle_length;
+
+    if (frame_rank != 0){
+        if ((stream_ctx->frames_sent + queue_limit * frame_duration) > current_time) {
+            stream_ctx->is_reset = 1;
+        }
+        if (stream_ctx->is_reset) {
+            for (uint64_t i = frame_rank; i < cycle_length; i++) {
+                stream_ctx->next_frame_time += frame_duration;
+                stream_ctx->frames_sent++;
+                stream_ctx->frames_skipped++;
+            }
+        }
+    }
+    else {
+        stream_ctx->is_reset = 0;
+    }
+}
+
 /* Prepare next frame. Do this as soon as we know that a new frame can be sent. */
 int mediatest_prepare_new_frame(mediatest_stream_ctx_t* stream_ctx, uint64_t current_time)
 {
     int ret = 0;
-        /* Is this the right time? */
+    /* Is the high bandwidth stream reset? */
+    if (stream_ctx->stream_type == media_test_video2) {
+        mediatest_simulate_reset(stream_ctx, current_time, MEDIATEST_VIDEO_PERIOD, 100, 10);
+    }
+    /* Is this the right time? */
     if (stream_ctx->next_frame_time <= current_time) {
         if (stream_ctx->frames_sent == 0) {
             stream_ctx->next_frame_time = current_time;
@@ -470,8 +503,12 @@ int mediatest_prepare_new_frame(mediatest_stream_ctx_t* stream_ctx, uint64_t cur
         case media_test_video:
             stream_ctx->message_sent.message_size = ((stream_ctx->frames_sent % 100) == 0) ? 0x8000 : 0x800;
             stream_ctx->next_frame_time += MEDIATEST_VIDEO_PERIOD;
+
             break;
         case media_test_video2:
+            if ((stream_ctx->frames_sent % 100) == 0) {
+                stream_ctx->next_iframe_time = stream_ctx->next_frame_time + 100 * MEDIATEST_VIDEO_PERIOD;
+            }
             stream_ctx->message_sent.message_size = ((stream_ctx->frames_sent % 100) == 0) ? 0x10000 : 0x1800;
             stream_ctx->next_frame_time += MEDIATEST_VIDEO_PERIOD;
             break;
@@ -1085,6 +1122,7 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
             picoquic_tp_t client_parameters;
             mediatest_init_transport_parameters(&client_parameters, 1);
             picoquic_set_transport_parameters(cnx, &client_parameters);
+            picoquic_set_feedback_loss_notification(cnx, 1);
 
             if (picoquic_start_client_cnx(cnx) != 0) {
                 picoquic_delete_cnx(cnx);
@@ -1161,7 +1199,8 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
     if (mt_ctx == NULL) {
         ret = -1;
     }
-    /* Three special cases in which we manipualte the configuration
+
+    /* Three special cases in which we manipulate the configuration
     * to simulate various downgrade or suspension patterns.
      */
     if (media_test_id == mediatest_worst) {
@@ -1174,15 +1213,14 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
             ret = mediatest_loop(mt_ctx, 2000000, 1, &is_finished);
         }
     }
-
-    if (media_test_id == mediatest_video2_down ||
+    else if (media_test_id == mediatest_video2_down ||
         media_test_id == mediatest_video2_back) {
         uint64_t picosec_per_byte_ref[2];
         uint64_t latency_ref[2];
         uint64_t down_time = (media_test_id == mediatest_video2_down) ? 4000000 : 2000000;
         uint64_t back_time = (media_test_id == mediatest_video2_down) ? 24000000 : 4000000;
 
-        /* Run the simulation for 2 second. */
+        /* Run the simulation for the first period. */
         ret = mediatest_loop(mt_ctx, down_time, 0, &is_finished);
         /* Drop the bandwidth and increase latency for specified down time */
         for (int i = 0; i < 2; i++) {
@@ -1199,8 +1237,19 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
             mt_ctx->link[i]->microsec_latency = latency_ref[i];
         }
     }
-
-    if (media_test_id == mediatest_wifi) {
+    else if (media_test_id == mediatest_suspension) {
+        /* Simulate one single wifi suspension, for 150 ms at
+         * t = 4000000 */
+        uint64_t sim_time = 4000000;
+        /* Run the simulation for the first period. */
+        ret = mediatest_loop(mt_ctx, sim_time, 0, &is_finished);
+        /* Simulate the suspension for 150 ms */
+        sim_time += 150000;
+        for (int i = 0; i < 2; i++) {
+            picoquic_test_simlink_suspend(mt_ctx->link[i], sim_time, 0);
+        }
+    }
+    else if (media_test_id == mediatest_wifi) {
         /* For 10 seconds, run a test loop in which the simulated Wi-Fi
         * link alternates between 100Mbps, low delay and just blocked,
         * 0 bandwidth. The duration of the block unblock phase varies.
@@ -1211,6 +1260,7 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
         uint64_t sim_time = 0;
         uint64_t blocked_sequence = 4;
         uint64_t unblocked_sequence = 1;
+
         for (int i=0; i<2; i++){
             mt_ctx->link[i]->picosec_per_byte = 160000; /* 160 nanosec per byte, i.e., 50Mbps*/
             mt_ctx->link[i]->microsec_latency = 2000; /* 2ms */
@@ -1268,6 +1318,14 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
         }
         if (ret == 0 && spec->do_video2 && !spec->do_not_check_video2) {
             ret = mediatest_check_stats(mt_ctx, spec, media_test_video2);
+        }
+    }
+    if (ret == 0 && media_test_id == mediatest_wifi) {
+        picoquic_path_quality_t quality = { 0 };
+        picoquic_get_default_path_quality(mt_ctx->client_cnx->cnx, &quality);
+        if (quality.lost == 0 || quality.spurious_losses == 0 || quality.timer_losses == 0) {
+            /* Unexpected. the wifi tst should have triggered at least on spurious timer loss. */
+            ret = -1;
         }
     }
     if (mt_ctx != NULL) {
@@ -1376,10 +1434,28 @@ int mediatest_wifi_test()
     spec.do_video2 = 1;
     spec.do_audio = 1;
     spec.data_size = 0;
+    spec.latency_average = 60000;
+    spec.latency_max = 350000;
+    spec.do_not_check_video2 = 1;
+    ret = mediatest_one(mediatest_wifi, &spec);
+
+    return ret;
+}
+
+int mediatest_suspension_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.1;
+    spec.do_video = 1;
+    spec.do_video2 = 1;
+    spec.do_audio = 1;
+    spec.data_size = 0;
     spec.latency_average = 50000;
     spec.latency_max = 300000;
     spec.do_not_check_video2 = 1;
-    ret = mediatest_one(mediatest_wifi, &spec);
+    ret = mediatest_one(mediatest_suspension, &spec);
 
     return ret;
 }

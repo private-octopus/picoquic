@@ -1073,7 +1073,7 @@ int quic_client(const char* ip_address_text, int server_port,
             else {
                 uint64_t crypto_rotation_sequence;
                 if (cnx_client->is_multipath_enabled) {
-                    crypto_rotation_sequence = cnx_client->path[0]->p_local_cnxid->ack_ctx.crypto_rotation_sequence;
+                    crypto_rotation_sequence = cnx_client->path[0]->ack_ctx.crypto_rotation_sequence;
                 }
                 else {
                     crypto_rotation_sequence = cnx_client->ack_ctx[picoquic_packet_context_application].crypto_rotation_sequence;

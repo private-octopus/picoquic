@@ -145,12 +145,7 @@ static picoquic_packet_context_t* picoquic_prague_get_pkt_ctx(picoquic_cnx_t* cn
 
     /* Reset the L3S measurement context to the current value */
     if (cnx->is_multipath_enabled) {
-        /* TODO: if the RCID index has changed, reset the counters. */
-        picoquic_remote_cnxid_t* r_cid = path_x->p_remote_cnxid;
-
-        if (r_cid != NULL) {
-            pkt_ctx = &r_cid->pkt_ctx;
-        }
+        pkt_ctx = &path_x->pkt_ctx;
     }
 
     return pkt_ctx;
