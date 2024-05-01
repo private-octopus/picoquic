@@ -3749,15 +3749,28 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
                 if ((path_x->cwin < path_x->bytes_in_transit || cnx->quic->cwin_max < path_x->bytes_in_transit)
                     &&!path_x->is_pto_required) {
-                    cnx->cwin_blocked = 1;
-                    path_x->last_cwin_blocked_time = current_time;
-                    if (cnx->congestion_alg != NULL) {
-                        picoquic_per_ack_state_t ack_state = { 0 };
+                        /* Implementation of experimental API, picoquic_set_priority_limit_for_bypass */
+                        uint8_t* bytes_next_before_bypass = bytes_next;
+                        int no_data_to_send = 0;
+                        if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1) {
+                            bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+                                cnx->priority_limit_for_bypass,
+                                &more_data, &is_pure_ack, &no_data_to_send, &ret);
+                        }
+                        if (bytes_next != bytes_next_before_bypass) {
+                            length = bytes_next - bytes;
+                        }
+                        else {
+                            cnx->cwin_blocked = 1;
+                            path_x->last_cwin_blocked_time = current_time;
+                            if (cnx->congestion_alg != NULL) {
+                                picoquic_per_ack_state_t ack_state = { 0 };
 
-                        cnx->congestion_alg->alg_notify(cnx, path_x,
-                            picoquic_congestion_notification_cwin_blocked,
-                            &ack_state, current_time);
-                    }
+                                cnx->congestion_alg->alg_notify(cnx, path_x,
+                                    picoquic_congestion_notification_cwin_blocked,
+                                    &ack_state, current_time);
+                            }
+                        }
                 }
                 else {
                     /* Send here the frames that are subject to both congestion and pacing control.
@@ -3865,6 +3878,16 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     }
                 } /* end of CC */
             } /* End of pacing */
+            else if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1) {
+                /* If congestion bypass is implemented, also consider pacing bypass */
+                int no_data_to_send = 0;
+                
+                if ((bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+                    cnx->priority_limit_for_bypass,
+                    &more_data, &is_pure_ack, &no_data_to_send, &ret)) != NULL) {
+                    length = bytes_next - bytes;
+                }
+            }
         } /* End of challenge verified */
     }
 
