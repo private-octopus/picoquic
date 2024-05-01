@@ -1486,6 +1486,22 @@ void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_s
 */
 void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio);
 
+/* The experimental API 'picoquic_set_priority_limit_for_bypass' 
+* instruct the stack to send the high priority streams or datagrams
+* immediately, even if congestion control would normally prevent it.
+* 
+* The "priority_limit" parameter indicates the lowest priority that will
+* not be bypassed. For example, if the priority limit is set to 3, streams
+* or datagrams with priority 0, 1 or 2 will be sent without waiting for
+* congestion control credits, but streams will priority 3 or more will
+* not. By default, the limit is set to 0, meaning no stream or datagram
+* will bypass congestion control.
+* 
+* This experimental feature will not be activated in a multipath
+* environment, i.e., if more that 1 path is activated.
+ */
+void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit);
+
 /* The experimental API `picoquic_set_feedback_loss_notification` allow applications
 * to turn on the "feedback lost" event notification. These events are
 * passed to the congestion control algorithm, allowing it to react

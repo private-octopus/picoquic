@@ -175,6 +175,7 @@ typedef struct st_mediatest_spec_t {
     double bandwidth;
     uint64_t latency_average;
     uint64_t latency_max;
+    uint8_t priority_limit_for_bypass;
     int do_not_check_video2;
 } mediatest_spec_t;
 
@@ -1149,6 +1150,10 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
                 if (spec->datagram_data_size > 0 && ret == 0) {
                     mt_ctx->datagram_data_requested = spec->datagram_data_size;
                 }
+                if (spec->priority_limit_for_bypass > 0) {
+                    picoquic_set_priority_limit_for_bypass(mt_ctx->client_cnx->cnx, spec->priority_limit_for_bypass);
+                }
+
             
                 for (int i = 0; i < media_test_nb_types; i++) {
                     mt_ctx->media_stats[i].min_delay = UINT64_MAX;
@@ -1436,6 +1441,7 @@ int mediatest_wifi_test()
     spec.data_size = 0;
     spec.latency_average = 60000;
     spec.latency_max = 350000;
+    spec.priority_limit_for_bypass = 5;
     spec.do_not_check_video2 = 1;
     ret = mediatest_one(mediatest_wifi, &spec);
 

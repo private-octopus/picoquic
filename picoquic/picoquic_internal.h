@@ -1448,6 +1448,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_stream_head_t * last_output_stream;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
+    uint64_t priority_limit_for_bypass; /* Bypass CC if dtagram or stream priority lower than this, 0 means never */
 
     /* Repeat queue contains packets with data frames that should be
      * sent according to priority when congestion window opens. */

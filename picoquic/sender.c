@@ -3150,6 +3150,7 @@ static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, picoquic_pa
 */
 
 static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
+    uint64_t max_priority_allowed,
     int* more_data, int* is_pure_ack, int* no_data_to_send, int* ret)
 {
     int datagram_sent = 0;
@@ -3187,7 +3188,7 @@ static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoq
             current_priority = stream_priority;
         }
 
-        if (current_priority == UINT64_MAX) {
+        if (current_priority == UINT64_MAX || current_priority >= max_priority_allowed) {
             /* Nothing to send! */
             if (is_first_round) {
                 *no_data_to_send = 1;
@@ -3392,13 +3393,25 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
                 length = bytes_next - bytes;
                 if (path_x->cwin < path_x->bytes_in_transit) {
-                    picoquic_per_ack_state_t ack_state = { 0 };
-                    cnx->cwin_blocked = 1;
-                    path_x->last_cwin_blocked_time = current_time;
-                    if (cnx->congestion_alg != NULL) {
-                        cnx->congestion_alg->alg_notify(cnx, path_x,
-                            picoquic_congestion_notification_cwin_blocked,
-                            &ack_state, current_time);
+                    /* Implementation of experimental API, picoquic_set_priority_limit_for_bypass */
+                    uint8_t* bytes_next_before_bypass = bytes_next;
+                    if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1) {
+                        bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+                            cnx->priority_limit_for_bypass,
+                            &more_data, &is_pure_ack, &no_data_to_send, &ret);
+                    }
+                    if (bytes_next != bytes_next_before_bypass) {
+                        length = bytes_next - bytes;
+                    }
+                    else {
+                        picoquic_per_ack_state_t ack_state = { 0 };
+                        cnx->cwin_blocked = 1;
+                        path_x->last_cwin_blocked_time = current_time;
+                        if (cnx->congestion_alg != NULL) {
+                            cnx->congestion_alg->alg_notify(cnx, path_x,
+                                picoquic_congestion_notification_cwin_blocked,
+                                &ack_state, current_time);
+                        }
                     }
                 }
                 else {
@@ -3440,6 +3453,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             }
                             if (ret == 0) {
                                 bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+                                    UINT64_MAX,
                                     &more_data, &is_pure_ack, &no_data_to_send, &ret);
                             }
                             /* TODO: replace this by posting of frame when CWIN estimated */
@@ -3774,7 +3788,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);
                         }
                         if (ret == 0) {
-                            bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+                            bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max, UINT64_MAX,
                                 &more_data, &is_pure_ack, &no_data_to_send, &ret);
                         }
 
