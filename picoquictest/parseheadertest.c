@@ -665,7 +665,7 @@ int test_packet_encrypt_one(
     }
     else {
         pkt_ctx = (ptype == picoquic_packet_1rtt_protected && cnx_client->is_multipath_enabled) ?
-            &path_x->p_remote_cnxid->pkt_ctx : &cnx_client->pkt_ctx[pc];
+            &path_x->pkt_ctx : &cnx_client->pkt_ctx[pc];
         memset(packet, 0, sizeof(picoquic_packet_t));
         memset(packet->bytes, 0xbb, length);
         header_length = picoquic_predict_packet_header_length(cnx_client, ptype, pkt_ctx);
