@@ -423,8 +423,8 @@ void app_limited_monitor(app_limited_ctx_t* al_ctx)
         if (path_x->cwin > al_ctx->cwin_max) {
             al_ctx->cwin_max = path_x->cwin;
         }
-        if (path_x->pacing_rate > al_ctx->data_rate_max) {
-            al_ctx->data_rate_max = path_x->pacing_rate;
+        if (path_x->pacing.rate > al_ctx->data_rate_max) {
+            al_ctx->data_rate_max = path_x->pacing.rate;
         }
     }
 }

@@ -988,6 +988,28 @@ typedef struct st_picoquic_remote_cnxid_stash_t {
 } picoquic_remote_cnxid_stash_t;
 
 /*
+* Pacing uses a set of per path variables:
+* - rate: bytes per second.
+* - evaluation_time: last time the path was evaluated.
+* - bucket_nanosec: number of nanoseconds of transmission time that are allowed.
+* - bucket_max: maximum value (capacity) of the leaky bucket.
+* - packet_time_nanosec: number of nanoseconds required to send a full size packet.
+* - packet_time_microsec: max of (packet_time_nano_sec/1024, 1) microsec.
+*/
+typedef struct st_picoquic_pacing_t {
+    uint64_t rate;
+    uint64_t evaluation_time;
+    int64_t bucket_nanosec;
+    int64_t bucket_max;
+    int64_t packet_time_nanosec;
+    uint64_t packet_time_microsec;
+    uint64_t quantum_max;
+    uint64_t rate_max;
+    int bandwidth_pause;
+} picoquic_pacing_t;
+
+
+/*
 * Per path context.
 * Path contexts are created:
 * - At the beginning of the connection for path[0]
@@ -1156,6 +1178,9 @@ typedef struct st_picoquic_path_t {
     uint64_t last_time_acked_data_frame_sent;
     void* congestion_alg_state;
 
+#if 1
+    picoquic_pacing_t pacing;
+#else
     /*
     * Pacing uses a set of per path variables:
     * - pacing_rate: bytes per second.
@@ -1175,6 +1200,7 @@ typedef struct st_picoquic_path_t {
     uint64_t pacing_quantum_max;
     uint64_t pacing_rate_max;
     int pacing_bandwidth_pause;
+#endif
 
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;
@@ -1611,6 +1637,13 @@ picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, const struct sockaddr
 picoquic_cnx_t* picoquic_cnx_by_icid(picoquic_quic_t* quic, picoquic_connection_id_t* icid,
     const struct sockaddr* addr);
 picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* reset_secret, const struct sockaddr* addr);
+
+/* Pacing implementation */
+int picoquic_is_authorized_by_pacing(picoquic_pacing_t* pacing, uint64_t current_time, uint64_t* next_time, unsigned int packet_train_mode, picoquic_quic_t * quic);
+void picoquic_update_pacing_parameters(picoquic_pacing_t* pacing, double pacing_rate, uint64_t quantum, size_t send_mtu, uint64_t smoothed_rtt,
+    picoquic_path_t* signalled_path);
+void picoquic_update_pacing_window(picoquic_pacing_t* pacing, int slow_start, uint64_t cwin, size_t send_mtu, uint64_t smoothed_rtt, picoquic_path_t * signalled_path);
+void picoquic_update_pacing_data_after_send(picoquic_pacing_t * pacing, size_t length, size_t send_mtu, uint64_t current_time);
 
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int slow_start);

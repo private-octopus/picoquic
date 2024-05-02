@@ -84,6 +84,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/logwriter.c
     picoquic/loss_recovery.c
     picoquic/newreno.c
+    picoquic/pacing.c
     picoquic/packet.c
     picoquic/performance_log.c
     picoquic/picohash.c

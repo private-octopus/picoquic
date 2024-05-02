@@ -1161,7 +1161,7 @@ static void picoquic_bbr1_notify(
 
             if (bbr1_state->state == picoquic_bbr1_alg_startup_long_rtt) {
                 if (picoquic_hystart_test(&bbr1_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
-                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
+                    cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     BBR1ExitStartupLongRtt(bbr1_state, path_x, current_time);
                 }
             }
@@ -1188,7 +1188,7 @@ static void picoquic_bbr1_notify(
                     path_x->cwin = min_win;
                 }
                 else if (path_x->smoothed_rtt > PICOQUIC_TARGET_RENO_RTT) {
-                    path_x->pacing_bandwidth_pause = 1;
+                    path_x->pacing.bandwidth_pause = 1;
                 }
 
                 picoquic_update_pacing_data(cnx, path_x, 1);

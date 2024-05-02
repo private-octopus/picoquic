@@ -913,7 +913,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     return send_length;
 }
 
-
+#if 0
 /* Compute nanosec per packet */
 uint64_t picoquic_packet_time_nanosec(picoquic_path_t* path_x, size_t length)
 {
@@ -927,15 +927,15 @@ uint64_t picoquic_packet_time_nanosec(picoquic_path_t* path_x, size_t length)
  */
 static void picoquic_update_pacing_bucket(picoquic_path_t * path_x, uint64_t current_time)
 {
-    if (path_x->pacing_bucket_nanosec < -path_x->pacing_packet_time_nanosec) {
-        path_x->pacing_bucket_nanosec = -path_x->pacing_packet_time_nanosec;
+    if (path_x->pacing.bucket_nanosec < -path_x->pacing_packet_time_nanosec) {
+        path_x->pacing.bucket_nanosec = -path_x->pacing_packet_time_nanosec;
     }
 
     if (current_time > path_x->pacing_evaluation_time) {
-        path_x->pacing_bucket_nanosec += (current_time - path_x->pacing_evaluation_time) * 1000;
+        path_x->pacing.bucket_nanosec += (current_time - path_x->pacing_evaluation_time) * 1000;
         path_x->pacing_evaluation_time = current_time;
-        if (path_x->pacing_bucket_nanosec > path_x->pacing_bucket_max) {
-            path_x->pacing_bucket_nanosec = path_x->pacing_bucket_max;
+        if (path_x->pacing.bucket_nanosec > path_x->pacing_bucket_max) {
+            path_x->pacing.bucket_nanosec = path_x->pacing_bucket_max;
         }
     }
 }
@@ -953,7 +953,7 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t * cnx, picoquic_path
 
     picoquic_update_pacing_bucket(path_x, current_time);
 
-    if (path_x->pacing_bucket_nanosec < path_x->pacing_packet_time_nanosec) {
+    if (path_x->pacing.bucket_nanosec < path_x->pacing_packet_time_nanosec) {
         uint64_t next_pacing_time;
         int64_t bucket_required;
         
@@ -964,7 +964,7 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t * cnx, picoquic_path
                 bucket_required = 10 * path_x->pacing_packet_time_nanosec;
             }
             
-            bucket_required -= path_x->pacing_bucket_nanosec;
+            bucket_required -= path_x->pacing.bucket_nanosec;
         }
         else {
             bucket_required = path_x->pacing_packet_time_nanosec - path_x->pacing_bucket_nanosec;
@@ -981,6 +981,9 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t * cnx, picoquic_path
 
     return ret;
 }
+
+/* Handle reporting of parameter updates if path is specified.
+ */
 
 /* Reset the pacing data after recomputing the pacing rate
  */
@@ -1131,7 +1134,7 @@ void picoquic_update_pacing_after_send(picoquic_path_t * path_x, size_t length, 
     packet_time_nanosec = ((path_x->pacing_packet_time_nanosec * (uint64_t)length) + (path_x->send_mtu - 1)) / path_x->send_mtu;
     path_x->pacing_bucket_nanosec -= packet_time_nanosec;
 }
-
+#endif
 /*
  * Final steps in packet transmission: queue for retransmission, etc
  */
@@ -4675,7 +4678,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                         if (cnx->path[path_id]->cwin <= cnx->path[path_id]->bytes_in_transit) {
                             cnx->nb_trains_blocked_cwin++;
                         }
-                        else if (cnx->path[path_id]->pacing_bucket_nanosec < cnx->path[path_id]->pacing_packet_time_nanosec){
+                        else if (cnx->path[path_id]->pacing.bucket_nanosec < cnx->path[path_id]->pacing.packet_time_nanosec){
                             cnx->nb_trains_blocked_pacing++;
                         }
                         else {
