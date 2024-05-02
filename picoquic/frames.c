@@ -5809,6 +5809,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_ping:
+                cnx->latest_receive_time = current_time;
                 bytes = picoquic_skip_0len_frame(bytes, bytes_max);
                 ack_needed = 1;
                 break;
