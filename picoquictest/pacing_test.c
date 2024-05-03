@@ -247,7 +247,7 @@ int pacing_newreno_test()
 
 typedef struct st_pacing_test_t {
     uint64_t current_time;
-    uint64_t length;
+    size_t length;
     size_t send_mtu;
     uint64_t cwin;
     int slow_start;
