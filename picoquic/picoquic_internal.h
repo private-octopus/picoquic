@@ -85,6 +85,9 @@ extern "C" {
 #define PICOQUIC_CWIN_INITIAL (10 * PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
+#define PICOQUIC_PRIORITY_BYPASS_MAX_RATE 125000
+#define PICOQUIC_PRIORITY_BYPASS_QUANTUM 2560
+
 #define PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH (1<<22)
 
 #define PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS 32
@@ -1453,6 +1456,7 @@ typedef struct st_picoquic_cnx_t {
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
     uint64_t priority_limit_for_bypass; /* Bypass CC if dtagram or stream priority lower than this, 0 means never */
+    picoquic_pacing_t priority_bypass_pacing;
 
     /* Repeat queue contains packets with data frames that should be
      * sent according to priority when congestion window opens. */
