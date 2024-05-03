@@ -151,26 +151,6 @@ static void picoquic_report_pacing_update(picoquic_pacing_t* pacing, picoquic_pa
 void picoquic_update_pacing_parameters(picoquic_pacing_t * pacing, double pacing_rate, uint64_t quantum, size_t send_mtu, uint64_t smoothed_rtt,
     picoquic_path_t * signalled_path)
 {
-#if 0
-    const uint64_t nanosec_per_sec = 1000000000ull;
-
-    pacing->rate = (uint64_t)pacing_rate;
-
-    if (quantum > pacing->quantum_max) {
-        pacing->quantum_max = quantum;
-    }
-    if (pacing->rate > pacing->rate_max) {
-        pacing->rate_max = pacing->rate;
-    }
-
-    pacing->packet_time_nanosec = picoquic_packet_time_nanosec(pacing, send_mtu);
-
-    pacing->bucket_max = (nanosec_per_sec * quantum) / pacing->rate;
-    if (pacing->bucket_max <= 0) {
-        pacing->bucket_max = 16 * pacing->packet_time_nanosec;
-    }
-
-#else
     double packet_time = (double)send_mtu / pacing_rate;
     double quantum_time = (double)quantum / pacing_rate;
     uint64_t rtt_nanosec = smoothed_rtt * 1000;
@@ -201,7 +181,6 @@ void picoquic_update_pacing_parameters(picoquic_pacing_t * pacing, double pacing
     if (pacing->bucket_max <= 0) {
         pacing->bucket_max = 16 * pacing->packet_time_nanosec;
     }
-#endif
 
     if (pacing->bucket_nanosec > pacing->bucket_max) {
         pacing->bucket_nanosec = pacing->bucket_max;

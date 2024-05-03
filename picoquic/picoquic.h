@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.19.12"
+#define PICOQUIC_VERSION "1.1.20.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1499,6 +1499,11 @@ void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantu
 * 
 * This experimental feature will not be activated in a multipath
 * environment, i.e., if more that 1 path is activated.
+* 
+* To protect against potential abuse, the code includes a rate limiter,
+* ensuring that if congestion control is blocking transmission, 
+* the "bypass" will not result in more than 1 Mbps of
+* traffic.
  */
 void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit);
 
