@@ -23,6 +23,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+/* Initialize pacing state to high speed default */
+void picoquic_pacing_init(picoquic_pacing_t* pacing, uint64_t current_time)
+{
+    pacing->evaluation_time = current_time;
+    pacing->bucket_nanosec = 16;
+    pacing->bucket_max = 16;
+    pacing->packet_time_nanosec = 1;
+    pacing->packet_time_microsec = 1;
+}
+
 /* Compute nanosec per packet */
 static uint64_t picoquic_pacing_time_nanosec(picoquic_pacing_t* pacing, size_t length)
 {
@@ -50,6 +61,14 @@ static void picoquic_update_pacing_bucket(picoquic_pacing_t* pacing, uint64_t cu
             pacing->bucket_nanosec = pacing->bucket_max;
         }
     }
+}
+
+/* Check whether pacing authorizes immediate transmission, 
+* no not send any state
+ */
+int picoquic_is_pacing_blocked(picoquic_pacing_t* pacing)
+{
+    return (pacing->bucket_nanosec < pacing->packet_time_nanosec);
 }
 
 /*
@@ -87,7 +106,9 @@ int picoquic_is_authorized_by_pacing(picoquic_pacing_t * pacing, uint64_t curren
         if (next_pacing_time < *next_time) {
             pacing->bandwidth_pause = 0;
             *next_time = next_pacing_time;
-            SET_LAST_WAKE(quic, PICOQUIC_SENDER);
+            if (quic != NULL) {
+                SET_LAST_WAKE(quic, PICOQUIC_SENDER);
+            }
         }
         ret = 0;
     }
