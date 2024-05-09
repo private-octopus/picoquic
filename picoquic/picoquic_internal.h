@@ -85,6 +85,9 @@ extern "C" {
 #define PICOQUIC_CWIN_INITIAL (10 * PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
+#define PICOQUIC_PRIORITY_BYPASS_MAX_RATE 125000
+#define PICOQUIC_PRIORITY_BYPASS_QUANTUM 2560
+
 #define PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH (1<<22)
 
 #define PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS 32
@@ -988,6 +991,29 @@ typedef struct st_picoquic_remote_cnxid_stash_t {
 } picoquic_remote_cnxid_stash_t;
 
 /*
+* Pacing uses a set of per path variables:
+* - rate: bytes per second.
+* - evaluation_time: last time the path was evaluated.
+* - bucket_max: maximum value (capacity) of the leaky bucket.
+* - packet_time_microsec: max of (packet_time_nano_sec/1024, 1) microsec.
+* Internal variables:
+* - bucket_nanosec: number of nanoseconds of transmission time that are allowed.
+* - packet_time_nanosec: number of nanoseconds required to send a full size packet.
+*/
+typedef struct st_picoquic_pacing_t {
+    uint64_t rate;
+    uint64_t evaluation_time;
+    int64_t bucket_max;
+    uint64_t packet_time_microsec;
+    uint64_t quantum_max;
+    uint64_t rate_max;
+    int bandwidth_pause;
+    /* High precision variables should only be used inside pacing.c */
+    int64_t bucket_nanosec;
+    int64_t packet_time_nanosec;
+} picoquic_pacing_t;
+
+/*
 * Per path context.
 * Path contexts are created:
 * - At the beginning of the connection for path[0]
@@ -1079,7 +1105,8 @@ typedef struct st_picoquic_path_t {
     unsigned int is_datagram_ready : 1;
     unsigned int is_pto_required : 1; /* Should send PTO probe */
     unsigned int is_probing_nat : 1; /* When path transmission is scheduled only for NAT probing */
-
+    unsigned int is_lost_feedback_notified : 1; /* Lost feedback has been notified */
+    
     /* Management of retransmissions in a path.
      * The "path_packet" variables are used for the RACK algorithm, per path, to avoid
      * declaring packets lost just because another path is delivering them faster.
@@ -1091,7 +1118,8 @@ typedef struct st_picoquic_path_t {
     uint64_t nb_retransmit; /* Number of timeout retransmissions since last ACK */
     uint64_t total_bytes_lost; /* Sum of length of packet lost on this path */
     uint64_t nb_losses_found;
-    uint64_t nb_spurious; /* Number of spurious retransmissiosn for the path */
+    uint64_t nb_timer_losses;
+    uint64_t nb_spurious; /* Number of spurious retransmissions for the path */
     uint64_t path_packet_acked_number; /* path packet number of highest ack */
     uint64_t path_packet_acked_time_sent; /* path packet number of highest ack */
     uint64_t path_packet_acked_received; /* time at which the highest ack was received */
@@ -1153,26 +1181,7 @@ typedef struct st_picoquic_path_t {
     uint64_t last_cwin_blocked_time;
     uint64_t last_time_acked_data_frame_sent;
     void* congestion_alg_state;
-
-    /*
-    * Pacing uses a set of per path variables:
-    * - pacing_rate: bytes per second.
-    * - pacing_evaluation_time: last time the path was evaluated.
-    * - pacing_bucket_nanosec: number of nanoseconds of transmission time that are allowed.
-    * - pacing_bucket_max: maximum value (capacity) of the leaky bucket.
-    * - pacing_packet_time_nanosec: number of nanoseconds required to send a full size packet.
-    * - pacing_packet_time_microsec: max of (packet_time_nano_sec/1024, 1) microsec.
-    */
-
-    uint64_t pacing_rate;
-    uint64_t pacing_evaluation_time;
-    int64_t pacing_bucket_nanosec;
-    int64_t pacing_bucket_max;
-    int64_t pacing_packet_time_nanosec;
-    uint64_t pacing_packet_time_microsec;
-    uint64_t pacing_quantum_max;
-    uint64_t pacing_rate_max;
-    int pacing_bandwidth_pause;
+    picoquic_pacing_t pacing;
 
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;
@@ -1291,7 +1300,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_datagram_ready : 1; /* Active polling for datagrams */
     unsigned int is_immediate_ack_required : 1; /* Should send an ACK asap */
     unsigned int is_multipath_enabled : 1; /* Unique path ID extension has been negotiated */
-
+    unsigned int is_lost_feedback_notification_required : 1; /* CC algorithm requests lost feedback notification */
+    
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
     /* Spin bit policy */
@@ -1445,6 +1455,8 @@ typedef struct st_picoquic_cnx_t {
     picoquic_stream_head_t * last_output_stream;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
+    uint64_t priority_limit_for_bypass; /* Bypass CC if dtagram or stream priority lower than this, 0 means never */
+    picoquic_pacing_t priority_bypass_pacing;
 
     /* Repeat queue contains packets with data frames that should be
      * sent according to priority when congestion window opens. */
@@ -1607,6 +1619,15 @@ picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, const struct sockaddr
 picoquic_cnx_t* picoquic_cnx_by_icid(picoquic_quic_t* quic, picoquic_connection_id_t* icid,
     const struct sockaddr* addr);
 picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* reset_secret, const struct sockaddr* addr);
+
+/* Pacing implementation */
+void picoquic_pacing_init(picoquic_pacing_t* pacing, uint64_t current_time);
+int picoquic_is_pacing_blocked(picoquic_pacing_t* pacing);
+int picoquic_is_authorized_by_pacing(picoquic_pacing_t* pacing, uint64_t current_time, uint64_t* next_time, unsigned int packet_train_mode, picoquic_quic_t * quic);
+void picoquic_update_pacing_parameters(picoquic_pacing_t* pacing, double pacing_rate, uint64_t quantum, size_t send_mtu, uint64_t smoothed_rtt,
+    picoquic_path_t* signalled_path);
+void picoquic_update_pacing_window(picoquic_pacing_t* pacing, int slow_start, uint64_t cwin, size_t send_mtu, uint64_t smoothed_rtt, picoquic_path_t * signalled_path);
+void picoquic_update_pacing_data_after_send(picoquic_pacing_t * pacing, size_t length, size_t send_mtu, uint64_t current_time);
 
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int slow_start);

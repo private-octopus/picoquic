@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.19.9"
+#define PICOQUIC_VERSION "1.1.20.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -900,7 +900,13 @@ typedef struct st_picoquic_path_quality_t {
     uint64_t rtt_max; /* maximum value of RTT, computed since path creation */
     uint64_t sent; /* number of packets sent on the path */
     uint64_t lost; /* number of packets considered lost among those sent */
+    uint64_t timer_losses; /* packet losses detected due to timer expiring */
+    uint64_t spurious_losses; /* number of packet lost that were later acked. */
+    uint64_t max_spurious_rtt; /* maximum RTT for spurious losses */
+    uint64_t max_reorder_delay; /* maximum time gap for out of order packets */
+    uint64_t max_reorder_gap; /* maximum number gap for out of order packets */
     uint64_t bytes_in_transit; /* number of bytes currently in transit */
+
 } picoquic_path_quality_t;
 
 int picoquic_get_path_quality(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_quality_t * quality);
@@ -1400,7 +1406,8 @@ typedef enum {
     picoquic_congestion_notification_ecn_ec,
     picoquic_congestion_notification_cwin_blocked,
     picoquic_congestion_notification_seed_cwin,
-    picoquic_congestion_notification_reset
+    picoquic_congestion_notification_reset,
+    picoquic_congestion_notification_lost_feedback /* notification of lost feedback */
 } picoquic_congestion_notification_t;
 
 typedef struct st_picoquic_per_ack_state_t {
@@ -1478,6 +1485,53 @@ void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_s
 * application.
 */
 void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio);
+
+/* The experimental API 'picoquic_set_priority_limit_for_bypass' 
+* instruct the stack to send the high priority streams or datagrams
+* immediately, even if congestion control would normally prevent it.
+* 
+* The "priority_limit" parameter indicates the lowest priority that will
+* not be bypassed. For example, if the priority limit is set to 3, streams
+* or datagrams with priority 0, 1 or 2 will be sent without waiting for
+* congestion control credits, but streams will priority 3 or more will
+* not. By default, the limit is set to 0, meaning no stream or datagram
+* will bypass congestion control.
+* 
+* This experimental feature will not be activated in a multipath
+* environment, i.e., if more that 1 path is activated.
+* 
+* To protect against potential abuse, the code includes a rate limiter,
+* ensuring that if congestion control is blocking transmission, 
+* the "bypass" will not result in more than 1 Mbps of
+* traffic.
+ */
+void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit);
+
+/* The experimental API `picoquic_set_feedback_loss_notification` allow applications
+* to turn on the "feedback lost" event notification. These events are
+* passed to the congestion control algorithm, allowing it to react
+* quickly to a temporary loss of connectivity, instead of waiting
+* for retransmission timers. Delay sensitive applications use this
+* feature to stop queuing more data when connectivity is lost,
+* and thus avoid the queues of less urgent data to delay
+* arrival of urgent real time frames when connectivity is restored.
+* On the other hand, this feature may lower the performance of
+* applications sending lots of data, and thus should only be
+* used when applications require it.
+* 
+* The lost control events fires if there is more that 2 "ack delay max" between
+* the last ACK received and the next one. In practice, that means 1 RTT + 2 ack delays
+* after the first non acked packet was sent. In contrast, the RTO fires
+* 1 RTT + 4 STDEV + 1 ack delay after the last packet was sent. Given congestion
+* control and CWIN, this "last packet" is typically sent 1 RTT after the "first
+* packet not acknowledged". Thus, the "lost control" event will typically
+* happen 1 RTT before the RTO event.
+* 
+* The `should_notify` should be set 1 to enable the feature, or to 0
+* to stop notifications. It is set by default to zero when a connection
+* is created.
+*/
+void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify);
 
 /* Bandwidth update and congestion control parameters value.
  * Congestion control in picoquic is characterized by three values:

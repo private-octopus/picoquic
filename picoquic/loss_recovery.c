@@ -641,22 +641,20 @@ static int picoquic_is_packet_probably_lost(picoquic_cnx_t* cnx,
                 *is_timer_expired = 1;
             }
         }
-        else {
+        else if (old_p->send_path->nb_retransmit == 0) {
             /* RACK has failure modes if the sender keeps adding small packets to the
-             * retransmit queue. In that case, we pick a safe timer based retransmit.
+             * retransmit queue. This may push the send time of the "last" packet
+             * beyond a reasonable value.
+             * In that case, we pick a safe timer based retransmit.
              * The "timer" condition will have consequences on congestion control;
-             * we only set it if the packet is ack eliciting and if another
-             * path is plausible.
+             * we only set it if the packet is ack eliciting.
              */
             uint64_t alt_retransmit_timer = old_p->send_time + 2*picoquic_current_retransmit_timer(cnx, old_p->send_path);
 
             if (alt_retransmit_timer < last_packet->send_time) {
                 retransmit_time_timer = alt_retransmit_timer;
-
                 if (current_time >= retransmit_time_timer) {
-                    if (picoquic_is_packet_ack_eliciting(old_p) &&
-                        (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) &&
-                        cnx->nb_paths > 1)
+                    if (picoquic_is_packet_ack_eliciting(old_p))
                     {
                         *is_timer_expired = 1;
                     }
@@ -944,6 +942,9 @@ static void picoquic_count_and_notify_loss(
 
     if (old_p->send_path != NULL) {
         old_p->send_path->nb_losses_found++;
+        if (timer_based_retransmit) {
+            old_p->send_path->nb_timer_losses++;
+        }
         if ((old_p->send_path->smoothed_rtt != PICOQUIC_INITIAL_RTT ||
             old_p->send_path->rtt_variant != 0) &&
             old_p->send_time > cnx->start_time + old_p->send_path->smoothed_rtt) {

@@ -438,6 +438,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(pacing_repeat)
+        {
+            int ret = pacing_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_tls_api)
 		{
 			int ret = tls_api_test();
@@ -2269,6 +2276,12 @@ namespace UnitTest1
 
         TEST_METHOD(mediatest_worst) {
             int ret = mediatest_worst_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mediatest_suspension) {
+            int ret = mediatest_suspension_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -105,6 +105,7 @@ static const picoquic_test_def_t test_table[] = {
     { "new_cnxid_stash", cnxid_stash_test },
     { "new_cnxid", new_cnxid_test },
     { "pacing", pacing_test },
+    { "pacing_repeat", pacing_repeat_test },
 #if 0
     /* The TLS API connect test is only useful when debugging issues step by step */
     { "tls_api_connect", tls_api_connect_test },
@@ -397,6 +398,7 @@ static const picoquic_test_def_t test_table[] = {
     { "mediatest_video2_back", mediatest_video2_back_test },
     { "mediatest_wifi", mediatest_wifi_test },
     { "mediatest_worst", mediatest_worst_test },
+    { "mediatest_suspension", mediatest_suspension_test },
     { "warptest_video", warptest_video_test },
     { "warptest_video_audio", warptest_video_audio_test },
     { "warptest_video_data_audio", warptest_video_data_audio_test },
