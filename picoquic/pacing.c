@@ -34,18 +34,6 @@ void picoquic_pacing_init(picoquic_pacing_t* pacing, uint64_t current_time)
     pacing->packet_time_microsec = 1;
 }
 
-/* Compute nanosec per packet */
-static uint64_t picoquic_pacing_time_nanosec(picoquic_pacing_t* pacing, size_t length)
-{
-    const uint64_t nanosec_per_sec = 1000000000ull;
-    uint64_t packet_time_nanosec = 1;
-    if (pacing->rate > 0) {
-        packet_time_nanosec = (nanosec_per_sec * length + (pacing->rate - 1)) / pacing->rate;
-    }
-
-    return packet_time_nanosec;
-}
-
 /* Update the leaky bucket used for pacing.
 */
 static void picoquic_update_pacing_bucket(picoquic_pacing_t* pacing, uint64_t current_time)
