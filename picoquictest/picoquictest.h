@@ -376,6 +376,7 @@ int app_limited_rpr_test();
 int cwin_max_test();
 int initial_race_test();
 int pacing_test();
+int pacing_repeat_test();
 int chacha20_test();
 int cnx_limit_test();
 int cert_verify_bad_cert_test();

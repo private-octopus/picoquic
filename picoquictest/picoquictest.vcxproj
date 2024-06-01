@@ -173,6 +173,7 @@
     <ClCompile Include="multipath_test.c" />
     <ClCompile Include="netperf_test.c" />
     <ClCompile Include="openssl_test.c" />
+    <ClCompile Include="pacing_test.c" />
     <ClCompile Include="parseheadertest.c" />
     <ClCompile Include="picoquic_lb_test.c" />
     <ClCompile Include="pn2pn64test.c" />
