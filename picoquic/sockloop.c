@@ -751,13 +751,16 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         uint8_t* received_buffer;
 
         if_index_to = 0;
-        /* The "loop immediate" code tries to process multiple consecutive
-        * receive in order to improve performance. This code is a bit dangerous, 
+        /* The "loop immediate" condition is set when a packet has been
+        * received and processed successfully. We call select again with
+        * a delay set to zero to check whether more packets need to be
+        * received, trying to empty the receive queue before sending
+        * more packet. However, this code is a bit dangerous, 
         * because it can lead to long series of receiving packets without
         * ever sending responses or ACKs. We moderate that by counting the number
         * of loops in "immediate" mode, and ignoring the "loop
         * immediate" condition if that number reaches a limit */
-        if (!loop_immediate || nb_loop_immediate >= PICOQUIC_PACKET_LOOP_RECV_MAX) {
+        if (!loop_immediate) {
             nb_loop_immediate = 1;
             delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
             if (options.do_time_check) {
@@ -773,6 +776,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         else {
             nb_loop_immediate++;
         }
+        /* The "loop immediate flag is set by default to zero. It will be
+        * set to 1 if a packet has been received and the number of
+        * packets received "immediately" does not exceed the limit.
+         */
         loop_immediate = 0;
 #ifdef _WINDOWS
         bytes_recv = picoquic_packet_loop_wait(s_ctx, nb_sockets_available,
@@ -834,8 +841,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx, &b_recvd);
                 }
 
+                /* If the number of packets received in immediate mode has not
+                * reached the threshold, set the "immediate" flag and bypass
+                * the sending code. 
+                 */
                 if (ret == 0 && nb_loop_immediate < PICOQUIC_PACKET_LOOP_RECV_MAX) {
-                    /* Try to receive more packets if possible */
                     loop_immediate = 1;
                     continue;
                 }
