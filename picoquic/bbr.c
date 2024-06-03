@@ -211,10 +211,8 @@ typedef struct st_picoquic_bbr_state_t {
     uint32_t rounds_since_bw_probe;
     uint64_t bw_probe_wait;
     uint64_t cycle_stamp;
-    uint64_t bw_probe_up_bw_threshold;
     uint32_t bw_probe_up_cnt;
     uint32_t bw_probe_up_rounds;
-    uint32_t bw_probe_up_no_increase;
     uint32_t bw_probe_samples;
     uint64_t bw_probe_up_acks;
     picoquic_bbr_ack_phase_t ack_phase;
@@ -308,6 +306,7 @@ static void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path
 #if 0
 static void BBRHandleRestartFromIdle(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
 #endif
+static void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
 static void BBRStartProbeBW_DOWN(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, uint64_t current_time);
 static void BBRStartProbeBW_CRUISE(picoquic_bbr_state_t* bbr_state);
 static void BBRStartProbeBW_REFILL(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x);
@@ -1284,7 +1283,7 @@ static void BBRExitProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * p
     BBRResetLowerBounds(bbr_state);
     path_x->rtt_min = bbr_state->min_rtt;
     if (bbr_state->filled_pipe) {
-        BBRStartProbeBW_DOWN(bbr_state, path_x, current_time);
+        BBREnterProbeBW(bbr_state, path_x, current_time);
         BBRStartProbeBW_CRUISE(bbr_state);
     }
     else {
@@ -1643,8 +1642,6 @@ static void BBRStartProbeBW_UP(picoquic_bbr_state_t* bbr_state, picoquic_path_t 
     bbr_state->cwnd_gain = BBRProbeBwUpCwndGain;   /* maintain cwnd */
     bbr_state->ack_phase = picoquic_bbr_acks_probe_starting;
     BBRStartRound(bbr_state, path_x);
-    bbr_state->bw_probe_up_no_increase = 0;
-    bbr_state->bw_probe_up_bw_threshold = bbr_state->max_bw + bbr_state->max_bw / 16;
     bbr_state->cycle_stamp = current_time; /* start wall clock */
     bbr_state->state = picoquic_bbr_alg_probe_bw_up;
     BBRRaiseInflightHiSlope(bbr_state, path_x);
@@ -1707,39 +1704,11 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
         break;
 
     case picoquic_bbr_alg_probe_bw_up:
-#if 0
-        /* New definition of the exit conditions for "up". 
-        * Exit if loss detected, or excess ECN mark, or excess RTT.
-        * Exit if three consecutive RTT without increase, whatever the reason.
-        */
-        if (BBRHasElapsedInPhase(bbr_state, bbr_state->min_rtt, current_time)) {
-            bbr_state->cycle_stamp = current_time;  /* restart wall clock */
-            if (bbr_state->max_bw > bbr_state->bw_probe_up_bw_threshold) {
-                bbr_state->bw_probe_up_bw_threshold = bbr_state->max_bw + bbr_state->max_bw / 16;
-                bbr_state->bw_probe_up_no_increase = 0;
-            }
-            else {
-                bbr_state->bw_probe_up_no_increase++;
-            }
-#if 1
-            if (rs->ecn_alpha > BBRExcessiveEcnCE) {
-                DBG_PRINTF("%s","Bug");
-            }
-#endif
-            if (bbr_state->bw_probe_up_no_increase >= 3 ||
-                bbr_state->nb_rtt_excess > 0 ||
-                path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw)) {
-                bbr_state->probe_probe_bw_quickly = 0;
-                BBRStartProbeBW_DOWN(bbr_state, path_x, current_time);
-            }
-        }
-#else
         if (BBRHasElapsedInPhase(bbr_state, bbr_state->min_rtt, current_time) &&
             (bbr_state->nb_rtt_excess > 0 ||
             path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw))) {
             BBRStartProbeBW_DOWN(bbr_state, path_x, current_time);
         }
-#endif
         break;
 
     default:
