@@ -1922,7 +1922,7 @@ void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
     }
 
     if (picoquic_hystart_test(&bbr_state->rtt_filter, rs->rtt_sample,
-        path_x->pacing_packet_time_microsec, current_time, 0)) {
+        path_x->pacing.packet_time_microsec, current_time, 0)) {
         BBRExitStartupLongRtt(bbr_state, path_x, current_time);
     }
     else if (rs->ecn_alpha > BBRExcessiveEcnCE) {

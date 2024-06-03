@@ -1541,11 +1541,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
             path_x->congestion_alg_state = NULL;
 
             /* Initialize per path pacing state */
-            path_x->pacing_evaluation_time = start_time;
-            path_x->pacing_bucket_nanosec = 16;
-            path_x->pacing_bucket_max = 16;
-            path_x->pacing_packet_time_nanosec = 1;
-            path_x->pacing_packet_time_microsec = 1;
+            picoquic_pacing_init(&path_x->pacing, start_time);
 
             /* Initialize the MTU */
             path_x->send_mtu = (peer_addr == NULL || peer_addr->sa_family == AF_INET) ? PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
@@ -2215,13 +2211,13 @@ void picoquic_refresh_path_quality_thresholds(picoquic_path_t* path_x)
     }
 
     if (path_x->pacing_rate_update_delta > 0) {
-        if (path_x->pacing_rate > path_x->pacing_rate_update_delta) {
-            path_x->pacing_rate_threshold_low = path_x->pacing_rate - path_x->pacing_rate_update_delta;
+        if (path_x->pacing.rate > path_x->pacing_rate_update_delta) {
+            path_x->pacing_rate_threshold_low = path_x->pacing.rate - path_x->pacing_rate_update_delta;
         }
         else {
             path_x->pacing_rate_threshold_low = 0;
         }
-        path_x->pacing_rate_threshold_high = path_x->pacing_rate + path_x->pacing_rate_update_delta;
+        path_x->pacing_rate_threshold_high = path_x->pacing.rate + path_x->pacing_rate_update_delta;
         if (path_x->receive_rate_estimate > path_x->pacing_rate_update_delta) {
             path_x->receive_rate_threshold_low = path_x->receive_rate_estimate - path_x->pacing_rate_update_delta;
         }
@@ -2240,8 +2236,8 @@ int picoquic_issue_path_quality_update(picoquic_cnx_t* cnx, picoquic_path_t* pat
         path_x->smoothed_rtt < path_x->rtt_threshold_low || 
         path_x->smoothed_rtt > path_x->rtt_threshold_high)) ||
         (path_x->pacing_rate_update_delta > 0 && (
-            path_x->pacing_rate < path_x->pacing_rate_threshold_low ||
-            path_x->pacing_rate > path_x->pacing_rate_threshold_high ||
+            path_x->pacing.rate < path_x->pacing_rate_threshold_low ||
+            path_x->pacing.rate > path_x->pacing_rate_threshold_high ||
             path_x->receive_rate_estimate < path_x->receive_rate_threshold_low ||
             path_x->receive_rate_estimate > path_x->receive_rate_threshold_high))) {
         picoquic_refresh_path_quality_thresholds(path_x);
@@ -2259,7 +2255,7 @@ static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, pico
     quality->rtt_min = path_x->rtt_min;
     quality->rtt_max = path_x->rtt_max;
     quality->rtt_variant = path_x->rtt_variant;
-    quality->pacing_rate = path_x->pacing_rate;
+    quality->pacing_rate = path_x->pacing.rate;
     quality->receive_rate_estimate = path_x->receive_rate_estimate;
     quality->sent = path_x->path_packet_number;
     quality->lost = path_x->nb_losses_found;
@@ -3649,6 +3645,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             for (int i = 0; i < 4; i++) {
                 cnx->next_stream_id[i] = i;
             }
+            picoquic_pacing_init(&cnx->priority_bypass_pacing, start_time);
             picoquic_register_path(cnx, cnx->path[0]);
         }
     }
@@ -4788,6 +4785,16 @@ void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantu
     quic->bbr_quantum_ratio = quantum_ratio;
 }
 
+void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit)
+{
+    cnx->priority_limit_for_bypass = priority_limit;
+    if (priority_limit > 0) {
+        picoquic_update_pacing_parameters(&cnx->priority_bypass_pacing,
+            PICOQUIC_PRIORITY_BYPASS_MAX_RATE, PICOQUIC_PRIORITY_BYPASS_QUANTUM,
+            cnx->path[0]->send_mtu, cnx->path[0]->smoothed_rtt, NULL);
+    }
+}
+
 void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify)
 {
     cnx->is_lost_feedback_notification_required = should_notify;
@@ -4802,7 +4809,7 @@ void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrea
 
 uint64_t picoquic_get_pacing_rate(picoquic_cnx_t* cnx)
 {
-    return cnx->path[0]->pacing_rate;
+    return cnx->path[0]->pacing.rate;
 }
 
 uint64_t picoquic_get_cwin(picoquic_cnx_t* cnx)

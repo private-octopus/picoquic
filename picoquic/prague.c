@@ -384,7 +384,7 @@ void picoquic_prague_notify(
                 }
 
                 if (picoquic_hystart_test(&pr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
-                    cnx->path[0]->pacing_packet_time_microsec, current_time,
+                    cnx->path[0]->pacing.packet_time_microsec, current_time,
                     cnx->is_time_stamp_enabled)) {
                     /* RTT increased too much, get out of slow start! */
                     pr_state->ssthresh = path_x->cwin;

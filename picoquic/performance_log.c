@@ -183,8 +183,8 @@ int picoquic_perflog_record(picoquic_cnx_t* cnx, picoquic_performance_log_ctx_t*
             perflog_item->v[picoquic_perflog_minrtt] = cnx->path[0]->rtt_min;
             perflog_item->v[picoquic_perflog_cwin] = cnx->path[0]->cwin;
             perflog_item->v[picoquic_perflog_bwe_max] = cnx->path[0]->bandwidth_estimate_max;
-            perflog_item->v[picoquic_perflog_pacing_quantum_max] = cnx->path[0]->pacing_quantum_max;
-            perflog_item->v[picoquic_perflog_pacing_rate] = cnx->path[0]->pacing_rate_max;
+            perflog_item->v[picoquic_perflog_pacing_quantum_max] = cnx->path[0]->pacing.quantum_max;
+            perflog_item->v[picoquic_perflog_pacing_rate] = cnx->path[0]->pacing.rate_max;
         }
         if (cnx->congestion_alg != NULL) {
             perflog_item->v[picoquic_perflog_ccalgo] = cnx->congestion_alg->congestion_algorithm_number;
