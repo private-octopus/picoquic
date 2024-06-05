@@ -208,9 +208,10 @@ typedef struct st_picoquic_bbr_state_t {
 
     /* probe BW parameters */
     unsigned int probe_probe_bw_quickly : 1;
-    uint32_t rounds_since_bw_probe;
     uint64_t bw_probe_wait;
     uint64_t cycle_stamp;
+    uint64_t bw_probe_ceiling; /* If bandwidth grows more than ceiling in probe_bw states, redo startup */
+    uint32_t rounds_since_bw_probe;
     uint32_t bw_probe_up_cnt;
     uint32_t bw_probe_up_rounds;
     uint32_t bw_probe_samples;
@@ -1713,12 +1714,17 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
 
     default:
         /* In non probe BW states, do nothing. */
-        break;
+        return;
+    }
+    /* Only in probe BW states, if BW > ceiling, enter startup */
+    if (bbr_state->bw > bbr_state->bw_probe_ceiling) {
+        BBRReEnterStartup(bbr_state, path_x, current_time);
     }
 }
 
 static void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
 {
+    bbr_state->bw_probe_ceiling = bbr_state->bw + bbr_state->bw / 2;
     BBRStartProbeBW_DOWN(bbr_state, path_x, current_time);
 }
 /* End of probe BW specific algorithms */
