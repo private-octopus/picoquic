@@ -211,7 +211,6 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t bw_probe_wait;
     uint64_t bw_probe_ceiling; /* If bandwidth grows more than ceiling in probe_bw states, redo startup */
     uint64_t cycle_stamp;
-    uint64_t bw_probe_ceiling; /* If bandwidth grows more than ceiling in probe_bw states, redo startup */
     uint32_t rounds_since_bw_probe;
     uint32_t bw_probe_up_cnt;
     uint32_t bw_probe_up_rounds;
