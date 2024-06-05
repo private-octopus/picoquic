@@ -303,6 +303,7 @@ typedef struct st_bbr_per_ack_state_t {
 /* Forward definition of key functions */
 static int IsInAProbeBWState(picoquic_bbr_state_t* bbr_state);
 static int BBRIsProbingBW(picoquic_bbr_state_t* bbr_state);
+static void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
 static void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
 #if 0
 static void BBRHandleRestartFromIdle(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
@@ -1283,7 +1284,7 @@ static void BBRExitProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * p
     BBRResetLowerBounds(bbr_state);
     path_x->rtt_min = bbr_state->min_rtt;
     if (bbr_state->filled_pipe) {
-        BBRStartProbeBW(bbr_state, path_x, current_time);
+        BBREnterProbeBW(bbr_state, path_x, current_time);
         BBRStartProbeBW_CRUISE(bbr_state);
     }
     else {
