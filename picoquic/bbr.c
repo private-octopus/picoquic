@@ -209,6 +209,7 @@ typedef struct st_picoquic_bbr_state_t {
     /* probe BW parameters */
     unsigned int probe_probe_bw_quickly : 1;
     uint64_t bw_probe_wait;
+    uint64_t bw_probe_ceiling; /* If bandwidth grows more than ceiling in probe_bw states, redo startup */
     uint64_t cycle_stamp;
     uint64_t bw_probe_ceiling; /* If bandwidth grows more than ceiling in probe_bw states, redo startup */
     uint32_t rounds_since_bw_probe;
@@ -303,6 +304,7 @@ typedef struct st_bbr_per_ack_state_t {
 /* Forward definition of key functions */
 static int IsInAProbeBWState(picoquic_bbr_state_t* bbr_state);
 static int BBRIsProbingBW(picoquic_bbr_state_t* bbr_state);
+static void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
 static void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
 #if 0
 static void BBRHandleRestartFromIdle(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
