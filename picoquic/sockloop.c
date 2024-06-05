@@ -79,6 +79,11 @@
 #include <netinet/in.h>
 #include <sys/select.h>
 
+#ifndef __APPLE__
+/* On Linux systems, add macro to define the GNU extension for pthread_setname_np */
+#define _GNU_SOURCE
+#endif
+
 #include <pthread.h>
 
 #ifndef SOCKET_TYPE
