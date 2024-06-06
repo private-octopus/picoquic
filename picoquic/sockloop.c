@@ -798,6 +798,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         * ever sending responses or ACKs. We moderate that by counting the number
         * of loops in "immediate" mode, and ignoring the "loop
         * immediate" condition if that number reaches a limit */
+        current_time = picoquic_current_time();
         if (!loop_immediate) {
             nb_loop_immediate = 1;
             delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
