@@ -78,8 +78,25 @@ typedef enum {
     picoquic_packet_loop_after_send, /* Argument type size_t*: nb packets sent */
     picoquic_packet_loop_port_update, /* argument type struct_sockaddr*: new address for wakeup */
     picoquic_packet_loop_time_check, /* argument type packet_loop_time_check_arg_t*. Optional. */
+    picoquic_packet_loop_system_call_duration, /* argument type packet_loop_system_call_duration_t*. Optional. */
     picoquic_packet_loop_wake_up /* no argument (void* NULL). Used when loop wakeup is supported */
 } picoquic_packet_loop_cb_enum;
+
+/* System call statistics.
+* The socket loop uses 'zero delay' calls to check whether
+* more packets are ready to be received. In theory, these calls
+* return immediately. But these are system calls, and the OS
+* might decide to pause the process before returning from the
+* call. If the application selects the "system call duration"
+* option, it will receive callbacks when the call time varies
+* significantly.
+ */
+typedef struct st_packet_loop_system_call_duration_t {
+    uint64_t scd_last;
+    uint64_t scd_max;
+    uint64_t scd_smoothed;
+    uint64_t scd_dev;
+} packet_loop_system_call_duration_t;
 
 /* The time check option passes as argument a pointer to a structure specifying
 * the current time and the proposed delta. The application uses the specified
@@ -98,6 +115,7 @@ typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packe
  * the features that it supports */
 typedef struct st_picoquic_packet_loop_options_t {
     unsigned int do_time_check : 1; /* App should be polled for next time before sock select */
+    unsigned int do_system_call_duration : 1; /* App should be notified if the system call duration varies */
 } picoquic_packet_loop_options_t;
 
 /* Version 2 of packet loop, works in progress.
