@@ -79,6 +79,11 @@
 #include <netinet/in.h>
 #include <sys/select.h>
 
+#ifndef __APPLE__
+/* On Linux systems, add macro to define the GNU extension for pthread_setname_np */
+#define _GNU_SOURCE
+#endif
+
 #include <pthread.h>
 
 #ifndef SOCKET_TYPE
@@ -658,6 +663,36 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     return bytes_recv;
 }
 #endif
+
+static int monitor_system_call_duration(packet_loop_system_call_duration_t* sc_duration, uint64_t current_time, uint64_t previous_time)
+{
+    uint64_t duration = current_time - previous_time;
+    int64_t dev = sc_duration->scd_smoothed - duration;
+    int shall_notify = 0;
+
+    if (duration > sc_duration->scd_max) {
+        shall_notify = 1;
+        sc_duration->scd_max = duration;
+    }
+    else if (duration != sc_duration->scd_last) {
+        int64_t delta_d = sc_duration->scd_last - duration;
+
+        if (delta_d > 1000 || delta_d < -1000 || delta_d < (int64_t)sc_duration->scd_last) {
+            shall_notify = 1;
+        }
+        sc_duration->scd_last = duration;
+    }
+
+    sc_duration->scd_smoothed = (duration + 15 * sc_duration->scd_smoothed) / 16;
+    if (dev < 0) {
+        dev = -dev;
+    }
+    sc_duration->scd_dev = (7 * sc_duration->scd_dev + dev) / 8;
+
+    return shall_notify;
+}
+
+
 #ifdef _WINDOWS
     DWORD WINAPI picoquic_packet_loop_v3(LPVOID v_ctx)
 #else
@@ -690,8 +725,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     int nb_sockets_available = 0;
     picoquic_cnx_t* last_cnx = NULL;
     int loop_immediate = 0;
+    unsigned int nb_loop_immediate = 0;
     picoquic_packet_loop_options_t options = { 0 };
-    uint64_t next_send_time = current_time + PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX;
+    packet_loop_system_call_duration_t sc_duration = { 0 };
+
     int is_wake_up_event;
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
@@ -749,10 +786,21 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         int64_t delta_t = 0;
         uint8_t received_ecn;
         uint8_t* received_buffer;
+        uint64_t previous_time;
 
         if_index_to = 0;
-        /* TODO: rewrite the code and avoid using the "loop_immediate" state variable */
+        /* The "loop immediate" condition is set when a packet has been
+        * received and processed successfully. We call select again with
+        * a delay set to zero to check whether more packets need to be
+        * received, trying to empty the receive queue before sending
+        * more packet. However, this code is a bit dangerous, 
+        * because it can lead to long series of receiving packets without
+        * ever sending responses or ACKs. We moderate that by counting the number
+        * of loops in "immediate" mode, and ignoring the "loop
+        * immediate" condition if that number reaches a limit */
+        current_time = picoquic_current_time();
         if (!loop_immediate) {
+            nb_loop_immediate = 1;
             delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
             if (options.do_time_check) {
                 packet_loop_time_check_arg_t time_check_arg;
@@ -764,7 +812,16 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 }
             }
         }
+        else {
+            nb_loop_immediate++;
+        }
+        /* The "loop immediate flag is set by default to zero. It will be
+        * set to 1 if a packet has been received and the number of
+        * packets received "immediately" does not exceed the limit.
+         */
         loop_immediate = 0;
+        /* Remember the time before the select call, so it duration be monitored */
+        previous_time = current_time;
 #ifdef _WINDOWS
         bytes_recv = picoquic_packet_loop_wait(s_ctx, nb_sockets_available,
             &addr_from, &addr_to, &if_index_to, &received_ecn, &received_buffer,
@@ -778,6 +835,12 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         received_buffer = buffer;
 #endif
         current_time = picoquic_current_time();
+        if (options.do_system_call_duration && delta_t == 0 &&
+            monitor_system_call_duration(&sc_duration, current_time, previous_time)) {
+            ret = loop_callback(quic, picoquic_packet_loop_system_call_duration,
+                loop_callback_ctx, &sc_duration);
+        }
+
         if (bytes_recv < 0) {
             /* The interrupt error is expected if the loop is closing. */
             ret = (thread_ctx->thread_should_close) ? PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP : -1;
@@ -788,6 +851,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         else {
             uint64_t loop_time = current_time;
             size_t bytes_sent = 0;
+            size_t nb_packets_sent = 0;
 
             if (bytes_recv > 0) {
 #ifdef _WINDOWS
@@ -823,13 +887,14 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     size_t b_recvd = (size_t)bytes_recv;
                     ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx, &b_recvd);
                 }
-                if (ret == 0 && current_time < next_send_time) {
-                    /* Try to receive more packets if possible */
+
+                /* If the number of packets received in immediate mode has not
+                * reached the threshold, set the "immediate" flag and bypass
+                * the sending code. 
+                 */
+                if (ret == 0 && nb_loop_immediate < PICOQUIC_PACKET_LOOP_RECV_MAX) {
                     loop_immediate = 1;
                     continue;
-                }
-                else {
-                    next_send_time = current_time + PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX;
                 }
             }
 
@@ -849,8 +914,12 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 }
                 ret = 0;
             }
+            /* We limit the number of packets sent in a loop, no make sure that
+            * the code will not spend a lot of time sending packets while
+            * packets may be adding in the receive queue.
+             */
 
-            while (ret == 0) {
+            while (ret == 0 && nb_packets_sent < PICOQUIC_PACKET_LOOP_SEND_MAX) {
                 struct sockaddr_storage peer_addr;
                 struct sockaddr_storage local_addr = { 0 };
                 int if_index = param->dest_if;
@@ -863,6 +932,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     send_msg_ptr);
 
                 if (ret == 0 && send_length > 0) {
+                    /* If send_msg_size is defined, sendmsg may send more than one packet.
+                     * We compute that to update the number of packets sent in the loop.
+                     */
+                    nb_packets_sent += (send_msg_size == 0) ? 1 :
+                        (send_length + send_msg_size - 1) / (send_msg_size);
                     if (send_length > param->send_length_max) {
                         param->send_length_max = send_length;
                     }

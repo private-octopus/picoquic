@@ -1043,7 +1043,11 @@ void picoquic_delete_thread(picoquic_thread_t * thread)
     *thread = NULL;
 #else
     if (pthread_join(*thread, NULL) != 0) {
+# ifdef ANDROID
+        pthread_kill(*thread, SIGTERM);
+# else
         (void)pthread_cancel(*thread);
+# endif
     }
 #endif
 }

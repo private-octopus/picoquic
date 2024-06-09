@@ -173,10 +173,16 @@ typedef struct st_mediatest_spec_t {
     size_t data_size;
     size_t datagram_data_size;
     double bandwidth;
+    uint64_t link_latency;
     uint64_t latency_average;
     uint64_t latency_max;
     uint8_t priority_limit_for_bypass;
     int do_not_check_video2;
+    int nb_suspensions;
+    uint64_t suspension_start_time;
+    uint64_t suspension_up_time;
+    uint64_t suspension_down_time;
+
 } mediatest_spec_t;
 
 int mediatest_callback(picoquic_cnx_t* cnx,
@@ -1106,7 +1112,8 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
         }
         /* register the links */
         for (int i = 0; i < 2; i++) {
-            mt_ctx->link[i] = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
+            mt_ctx->link[i] = picoquictest_sim_link_create(0.01,
+                (spec->link_latency == 0)?10000:spec->link_latency, NULL, 0, 0);
             if (mt_ctx->link[i] == NULL) {
                 ret = -1;
                 break;
@@ -1242,66 +1249,39 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
             mt_ctx->link[i]->microsec_latency = latency_ref[i];
         }
     }
-    else if (media_test_id == mediatest_suspension) {
-        /* Simulate one single wifi suspension, for 150 ms at
-         * t = 4000000 */
-        uint64_t sim_time = 4000000;
-        /* Run the simulation for the first period. */
-        ret = mediatest_loop(mt_ctx, sim_time, 0, &is_finished);
-        /* Simulate the suspension for 150 ms */
-        sim_time += 150000;
-        for (int i = 0; i < 2; i++) {
-            picoquic_test_simlink_suspend(mt_ctx->link[i], sim_time, 0);
-        }
-    }
-    else if (media_test_id == mediatest_wifi) {
-        /* For 10 seconds, run a test loop in which the simulated Wi-Fi
-        * link alternates between 100Mbps, low delay and just blocked,
-        * 0 bandwidth. The duration of the block unblock phase varies.
-        * For the first 5 seconds and the last 5 seconds, unblock
-        * last 900ms, block last 100ms. For the middle
-        * 10 seconds, unblock lasts 20 to 200ms, block lasts 100ms.
-        */
-        uint64_t sim_time = 0;
-        uint64_t blocked_sequence = 4;
-        uint64_t unblocked_sequence = 1;
-
-        for (int i=0; i<2; i++){
-            mt_ctx->link[i]->picosec_per_byte = 160000; /* 160 nanosec per byte, i.e., 50Mbps*/
-            mt_ctx->link[i]->microsec_latency = 2000; /* 2ms */
-        }
-        while (sim_time < 20000000 && !is_finished) {
-            uint64_t time_unblocked = 900000;
-            uint64_t time_blocked = 100000;
-
-            if (sim_time >= 5000000 && sim_time <= 15000000) {
-                time_unblocked = unblocked_sequence * 10000;
-                unblocked_sequence *= 2;
-                if (unblocked_sequence > 10) {
-                    unblocked_sequence = 1;
-                }
-            }
-            sim_time += time_unblocked;
+    else if (spec->nb_suspensions > 0) {
+        /* Set the time of the first suspension */
+        uint64_t sim_time = spec->suspension_start_time;
+        /* Execute the specified suspensions */
+        for (int i = 0; ret == 0 && !is_finished && i < spec->nb_suspensions; i++) {
+            /* Run the simulation until the beginning of the suspension */
             ret = mediatest_loop(mt_ctx, sim_time, 0, &is_finished);
-            if (sim_time >= 5000000 && sim_time <= 15000000) {
-                time_blocked = blocked_sequence * 20000;
-                if (blocked_sequence < 8) {
-                    blocked_sequence *= 2;
-                }
-                else if (blocked_sequence < 12) {
-                    blocked_sequence++;
-                }
-                else {
-                    blocked_sequence = 1;
-                }
-            }
-            sim_time += time_blocked;
-            for (int i = 0; i < 2; i++) {
-                picoquic_test_simlink_suspend(mt_ctx->link[i], sim_time, 0);
-            }
-
+            /* set the end of suspension time */
+            sim_time += spec->suspension_down_time;
+            /* program the suspension */
+            picoquic_test_simlink_suspend(mt_ctx->link[0], sim_time, 0);
+            picoquic_test_simlink_suspend(mt_ctx->link[1], sim_time, 1);
+            /* Run the simulation until the end of the suspension */
             ret = mediatest_loop(mt_ctx, sim_time, 0, &is_finished);
+            /* deliver the packets that were queued at the beginning of the suspension */
+            if (spec->suspension_up_time == 0) {
+                /* simulating back to back suspensions */
+                picoquictest_sim_packet_t* packet;
+                for (int i = 0; i < 2; i++) {
+                    while ((packet = picoquictest_sim_link_dequeue(mt_ctx->link[i], sim_time)) != NULL && ret == 0) {
+                        ret = picoquic_incoming_packet(mt_ctx->quic[i],
+                            packet->bytes, (uint32_t)packet->length,
+                            (struct sockaddr*)&packet->addr_from,
+                            (struct sockaddr*)&packet->addr_to, 0, 0,
+                            mt_ctx->simulated_time);
+                        free(packet);
+                    }
+                }
+            }
+            /* Compute the time of the next suspension */
+            sim_time += spec->suspension_up_time;
         }
+        /* After that, continue running as specified. */
     }
 
     /* Run the simulation until done */
@@ -1434,15 +1414,21 @@ int mediatest_wifi_test()
     int ret;
     mediatest_spec_t spec = { 0 };
     spec.ccalgo = picoquic_bbr_algorithm;
-    spec.bandwidth = 0.1;
+    spec.bandwidth = 0.01;
     spec.do_video = 1;
     spec.do_video2 = 1;
     spec.do_audio = 1;
     spec.data_size = 0;
+    spec.link_latency = 15000;
     spec.latency_average = 60000;
     spec.latency_max = 350000;
     spec.priority_limit_for_bypass = 5;
     spec.do_not_check_video2 = 1;
+    spec.nb_suspensions = 20;
+    spec.suspension_start_time = 4000000;
+    spec.suspension_down_time = 150000;
+    spec.suspension_up_time = 0;
+
     ret = mediatest_one(mediatest_wifi, &spec);
 
     return ret;
@@ -1461,6 +1447,10 @@ int mediatest_suspension_test()
     spec.latency_average = 50000;
     spec.latency_max = 300000;
     spec.do_not_check_video2 = 1;
+    spec.nb_suspensions = 1;
+    spec.suspension_start_time = 4000000;
+    spec.suspension_down_time = 150000;
+    spec.suspension_up_time = 50000;
     ret = mediatest_one(mediatest_suspension, &spec);
 
     return ret;
