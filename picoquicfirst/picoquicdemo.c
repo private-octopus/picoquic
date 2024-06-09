@@ -412,6 +412,7 @@ typedef struct st_client_loop_cb_t {
     uint16_t local_port;
     picoquic_connection_id_t server_cid_before_migration;
     picoquic_connection_id_t client_cid_before_migration;
+    packet_loop_system_call_duration_t sc_duration;
 } client_loop_cb_t;
 
 
@@ -511,9 +512,12 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
     }
     else {
         switch (cb_mode) {
-        case picoquic_packet_loop_ready:
+        case picoquic_packet_loop_ready: {
+            picoquic_packet_loop_options_t* options = (picoquic_packet_loop_options_t*)callback_arg;
+            options->do_system_call_duration = 1;
             fprintf(stdout, "Waiting for packets.\n");
             break;
+        }
         case picoquic_packet_loop_after_receive:
             /* Post receive callback */
             if ((!cb_ctx->is_siduck && !cb_ctx->is_quicperf && cb_ctx->demo_callback_ctx->connection_closed) ||
@@ -720,6 +724,9 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             break;
         case picoquic_packet_loop_port_update:
             break;
+        case picoquic_packet_loop_system_call_duration:
+            memcpy(&cb_ctx->sc_duration, callback_arg, sizeof(packet_loop_system_call_duration_t));
+            break;
         default:
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
             break;
@@ -739,6 +746,9 @@ int quic_client(const char* ip_address_text, int server_port,
     picoquic_cnx_t* cnx_client = NULL;
     picoquic_demo_callback_ctx_t callback_ctx = { 0 };
     uint64_t current_time = 0;
+    uint64_t system_call_duration_max = 0;
+    uint64_t system_call_duration_smoothed = 0;
+
     int is_name = 0;
     size_t client_sc_nb = 0;
     picoquic_demo_stream_desc_t * client_sc = NULL;
@@ -1131,13 +1141,16 @@ int quic_client(const char* ip_address_text, int server_port,
                 printf("max_ack_gap_local: %" PRIu64 "\n", cnx_client->max_ack_gap_local);
                 printf("max_mtu_sent: %zu\n", cnx_client->max_mtu_sent);
                 printf("max_mtu_received: %zu\n", cnx_client->max_mtu_received);
-
                 if (config->multipath_option != 0) {
                     for (int i = 0; i < cnx_client->nb_paths; i++) {
                         printf("Path[%d], packets sent: %" PRIu64 "\n", i,
                             cnx_client->path[i]->path_packet_number);
                     }
                 }
+                /* Print details on system call durations */
+                printf("System call duration max: %"PRIu64 "\n", loop_cb.sc_duration.scd_max);
+                printf("System call duration smoothed: %"PRIu64 "\n", loop_cb.sc_duration.scd_smoothed);
+                printf("System call duration deviation: %"PRIu64 "\n", loop_cb.sc_duration.scd_dev);
             }
         }
     }
