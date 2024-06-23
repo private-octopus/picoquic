@@ -1012,6 +1012,16 @@ ptls_key_exchange_algorithm_t ptls_mbedtls_x25519 = {.id = PTLS_GROUP_X25519,
 .create = ptls_mbedtls_x25519_create,
 .exchange = ptls_mbedtls_x25519_exchange};
 
+#include "mbedtls_sign.inc"
+
+/* Set the certificate signature function and context using openSSL
+*/
+
+static int set_mbdetls_private_key_from_key_file(char const* keypem, ptls_context_t* ctx)
+{
+    ret = ptls_mbedtls_load_private_key(ctx, key_pem);
+}
+
 /* Register the mbedtls functions
 */
 void picoquic_mbedtls_load(int unload)
@@ -1027,6 +1037,13 @@ void picoquic_mbedtls_load(int unload)
         picoquic_register_ciphersuite(&ptls_mbedtls_chacha20poly1305sha256, 1);
         picoquic_register_key_exchange_algorithm(&ptls_mbedtls_secp256r1);
         picoquic_register_key_exchange_algorithm(&ptls_mbedtls_x25519);
+
+        picoquic_register_tls_key_provider_fn(
+            set_mbdetls_private_key_from_key_file,
+            ptls_mbedtls_dispose_sign_certificate,
+            NULL /* picoquic_get_certs_from_file_t get_certs_from_file_fn */);
+
+
 
         picoquic_register_crypto_random_provider_fn(ptls_mbedtls_random_bytes);
     }
