@@ -1029,12 +1029,12 @@ int h3zero_user_agent_test_one(int test_mode, char const * ua_string, uint8_t * 
     switch (test_mode) {
     case 0:
         bytes = h3zero_create_request_header_frame_ex(buffer, bytes_max,
-            (uint8_t*)"/", 1, "example.com", ua_string);
+            (uint8_t*)"/", 1, NULL, 0, "example.com", ua_string);
         break;
     case 1:
         bytes = h3zero_create_post_header_frame_ex(buffer, bytes_max,
             (uint8_t *)h3zero_test_ua_post_path, strlen(h3zero_test_ua_post_path),
-            "example.com", h3zero_content_type_text_plain, ua_string);
+            NULL, 0, "example.com", h3zero_content_type_text_plain, ua_string);
         break;
     case 2:
         bytes = h3zero_create_not_found_header_frame_ex(buffer, bytes_max, ua_string);

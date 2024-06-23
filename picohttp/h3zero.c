@@ -837,7 +837,7 @@ uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
 }
 
 uint8_t * h3zero_create_post_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max,
-    uint8_t const * path, size_t path_length, char const * host, 
+    uint8_t const * path, size_t path_length, uint8_t const * range, size_t range_length, char const* host,
     h3zero_content_type_enum content_type, char const* ua_string)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
@@ -852,6 +852,10 @@ uint8_t * h3zero_create_post_header_frame_ex(uint8_t * bytes, uint8_t * bytes_ma
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_SCHEME_HTTPS);
     /* Path: doc_name. Use literal plus reference format */
     bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_CODE_PATH, path, path_length);
+    /*Optional: range. Use literal plus reference format */
+    if (range_length > 0) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_RANGE, (uint8_t const *)range, range_length);
+    }
     /*Authority: host. Use literal plus reference format */
     if (host != NULL) {
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const *)host, strlen(host));
@@ -869,12 +873,13 @@ uint8_t * h3zero_create_post_header_frame_ex(uint8_t * bytes, uint8_t * bytes_ma
 uint8_t* h3zero_create_post_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     uint8_t const* path, size_t path_length, char const* host, h3zero_content_type_enum content_type)
 {
-    return h3zero_create_post_header_frame_ex(bytes, bytes_max, path, path_length, host,
+    return h3zero_create_post_header_frame_ex(bytes, bytes_max, path, path_length, NULL, 0, host,
         content_type, H3ZERO_USER_AGENT_STRING);
 }
 
 uint8_t * h3zero_create_request_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max,
-    uint8_t const * path, size_t path_length, char const * host, char const* ua_string)
+    uint8_t const * path, size_t path_length, uint8_t const * range, size_t range_length,
+    char const * host, char const* ua_string)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -888,6 +893,10 @@ uint8_t * h3zero_create_request_header_frame_ex(uint8_t * bytes, uint8_t * bytes
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_SCHEME_HTTPS);
     /* Path: doc_name. Use literal plus reference format */
     bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_CODE_PATH, path, path_length);
+    /*Optional: range. Use literal plus reference format */
+    if (range_length > 0) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_RANGE, (uint8_t const *)range, range_length);
+    }
     /*Authority: host. Use literal plus reference format */
     if (host != NULL) {
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const *)host, strlen(host));
@@ -903,7 +912,7 @@ uint8_t* h3zero_create_request_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     uint8_t const* path, size_t path_length, char const* host)
 {
     return h3zero_create_request_header_frame_ex(bytes, bytes_max, path, path_length,
-        host, H3ZERO_USER_AGENT_STRING);
+        NULL, 0, host, H3ZERO_USER_AGENT_STRING);
 }
 
 uint8_t * h3zero_create_response_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max,
