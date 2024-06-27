@@ -252,12 +252,6 @@ IF (WITH_MBEDTLS)
         message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
         message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
         list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_MBEDTLS)
-# TODO:
-#       add mbedtls include dir to include path?
-#       maybe, create an mbed-ltls library in picoquic?
-#       either ADD_LIBRARY(picoquic-mbedtls lib/ptls_mbedtls.c)
-#       or ADD file to core libraries, easier for users?
-#       list(APPEND PICOQUIC_LIBRARY_FILES picoquic/ptls_mbedtls.c)
     ELSE ()
         message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
         message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
@@ -307,6 +301,11 @@ endmacro()
 
 
 add_library(picoquic-core ${PICOQUIC_CORE_HEADERS} ${PICOQUIC_LIBRARY_FILES})
+
+
+message(STATUS "Defining picoquic-core")
+message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+
 target_include_directories(picoquic-core
     PRIVATE
         ${PTLS_INCLUDE_DIRS}
