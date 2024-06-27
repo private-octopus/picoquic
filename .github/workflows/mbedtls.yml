@@ -29,6 +29,7 @@ jobs:
              cd ..
              git clone https://github.com/Mbed-TLS/mbedtls
              cd mbedtls
+             git checkout master
              echo "cloned mbedtls"
              git submodule init
              git submodule update
@@ -50,10 +51,9 @@ jobs:
           # $CC --version
           ./ci/build_picotls.sh
           cmake -S . -B build "-DWITH_OPENSSL=OFF" "-DWITH_MBEDTLS=ON"
+          echo ls  /home/runner/work/picoquic/mbedtls/include
           ls /home/runner/work/picoquic/mbedtls/include
-          # cmake "-DWITH_MBEDTLS=ON" --build build
-          cd build
-          make
+          cmake "-DWITH_MBEDTLS=ON" --build build
 
       - name: Perform Unit Tests
         run: |
