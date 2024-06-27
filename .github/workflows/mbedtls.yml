@@ -40,8 +40,6 @@ jobs:
              echo "compiled MbedTLS"
              pwd
              cd ../../picoquic
-             pwd
-             ls
 
       - name: Building picoquic
         run: |
@@ -52,7 +50,7 @@ jobs:
           # $CC --version
           ./ci/build_picotls.sh
           cmake -S . -B build "-DWITH_OPENSSL=OFF" "-DWITH_MBEDTLS=ON"
-          cmake --build build
+          cmake "-DWITH_MBEDTLS=ON" --build build
 
       - name: Perform Unit Tests
         run: |
