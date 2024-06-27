@@ -50,7 +50,10 @@ jobs:
           # $CC --version
           ./ci/build_picotls.sh
           cmake -S . -B build "-DWITH_OPENSSL=OFF" "-DWITH_MBEDTLS=ON"
-          cmake "-DWITH_MBEDTLS=ON" --build build
+          ls /home/runner/work/picoquic/mbedtls/include
+          # cmake "-DWITH_MBEDTLS=ON" --build build
+          cd build
+          make
 
       - name: Perform Unit Tests
         run: |

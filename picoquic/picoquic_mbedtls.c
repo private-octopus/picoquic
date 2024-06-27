@@ -40,9 +40,7 @@ void picoquic_mbedtls_load(int unload)
 #include <string.h>
 #include <picotls.h>
 #include "mbedtls/mbedtls_config.h"
-#if 0
 #include "mbedtls/build_info.h"
-#endif
 #include "psa/crypto.h"
 #include "psa/crypto_struct.h"
 #include "psa/crypto_values.h"
