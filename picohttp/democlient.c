@@ -871,6 +871,34 @@ char const * demo_client_parse_post_size(char const * text, uint64_t * post_size
     return text;
 }
 
+char const * demo_client_parse_range(char const * text, char ** range)
+{
+    if (text[0]  != '#') {
+        *range = NULL;
+    }
+    else {
+        char const* range_start = ++text;
+        size_t l_range = 0;
+        
+        while (*text != ':' && *text != ';' && *text != 0) {
+            text++;
+        }
+        l_range = text - range_start;
+        *range = malloc(l_range + 1);
+        if (*range == NULL) {
+            text = NULL;
+        } else {
+            memcpy(*range, range_start, l_range);
+            (*range)[l_range] = 0;
+
+            if (*text == ':') {
+                text++;
+            }
+        }
+    }
+
+    return text;
+}
 
 char const * demo_client_parse_stream_desc(char const * text, uint64_t default_stream, uint64_t default_previous,
     picoquic_demo_stream_desc_t * desc)
@@ -895,6 +923,10 @@ char const * demo_client_parse_stream_desc(char const * text, uint64_t default_s
         text = demo_client_parse_post_size(demo_client_parse_stream_spaces(text), &desc->post_size);
     }
 
+    if (text != NULL) {
+        text = demo_client_parse_range(demo_client_parse_stream_spaces(text), (char **)&desc->range);
+    }
+
     /* Skip the final ';' */
     if (text != NULL && *text == ';') {
         text++;
@@ -913,6 +945,10 @@ void demo_client_delete_scenario_desc(size_t nb_streams, picoquic_demo_stream_de
         if (desc[i].doc_name != NULL) {
             free((char*)desc[i].doc_name);
             *(char**)(&desc[i].doc_name) = NULL;
+        }
+        if (desc[i].range != NULL) {
+            free((char*)desc[i].range);
+            *(char**)(&desc[i].range) = NULL;
         }
     }
     free(desc);
