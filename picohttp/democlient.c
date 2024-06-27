@@ -226,7 +226,7 @@ int h09_demo_client_prepare_stream_open_command(
 
 static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx,
-    uint64_t stream_id, char const* doc_name, char const* fname, uint64_t post_size, uint64_t nb_repeat)
+    uint64_t stream_id, char const* doc_name, char const* fname, char const* range, uint64_t post_size, uint64_t nb_repeat)
 {
     int ret = 0;
     uint8_t buffer[1024];
@@ -315,8 +315,10 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
 
         switch (ctx->alpn) {
         case picoquic_alpn_http_3:
-            ret = h3zero_client_create_stream_request(
-                buffer, sizeof(buffer), path, path_len, post_size, cnx->sni, &request_length);
+            ret = h3zero_client_create_stream_request_ex(
+                buffer, sizeof(buffer), path, path_len, 
+                range, (range == NULL)?0:strlen(range), post_size,
+                cnx->sni, &request_length);
             break;
         case picoquic_alpn_http_0_9:
         default:
@@ -397,6 +399,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
                 ret = picoquic_demo_client_open_stream(cnx, ctx, ctx->demo_stream[i].stream_id,
                     ctx->demo_stream[i].doc_name,
                     ctx->demo_stream[i].f_name,
+                    ctx->demo_stream[i].range,
                     (size_t)ctx->demo_stream[i].post_size,
                     repeat_nb);
                 repeat_nb++;
