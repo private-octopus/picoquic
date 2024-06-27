@@ -185,7 +185,7 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_client.c
     picohttp/h3zero_common.c
     picohttp/h3zero_server.c
-     picohttp/h3zero_uri.c
+    picohttp/h3zero_uri.c
     picohttp/quicperf.c
     picohttp/siduck.c
     picohttp/webtransport.c
@@ -252,12 +252,6 @@ IF (WITH_MBEDTLS)
         message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
         message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
         list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_MBEDTLS)
-# TODO:
-#       add mbedtls include dir to include path?
-#       maybe, create an mbed-ltls library in picoquic?
-#       either ADD_LIBRARY(picoquic-mbedtls lib/ptls_mbedtls.c)
-#       or ADD file to core libraries, easier for users?
-#       list(APPEND PICOQUIC_LIBRARY_FILES picoquic/ptls_mbedtls.c)
     ELSE ()
         message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
         message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
@@ -307,12 +301,17 @@ endmacro()
 
 
 add_library(picoquic-core ${PICOQUIC_CORE_HEADERS} ${PICOQUIC_LIBRARY_FILES})
+
+
+message(STATUS "Defining picoquic-core")
+message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+
 target_include_directories(picoquic-core
     PRIVATE
         ${PTLS_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR}
-        ${MBEDTLS_INCLUDE_DIRS}
     PUBLIC
+        ${MBEDTLS_INCLUDE_DIRS}
         picoquic)
 target_link_libraries(picoquic-core
     PRIVATE
@@ -344,6 +343,7 @@ target_include_directories(picohttp-core
     PRIVATE
         ${PTLS_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR}
+        ${MBEDTLS_INCLUDE_DIRS}
     PUBLIC
         picoquic)
 set_picoquic_compile_settings(picohttp-core)
