@@ -1394,8 +1394,8 @@ static picoquic_demo_stream_desc_t const parse_demo_scenario_desc7[] = {
 };
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc8[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "test.html", "test.html", 0, "#bytes=80-800"},
-    { 0, 4, 0, "/cgi-sink", "_cgi-sink", 10000, "#bytes=100-1000" }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "test.html", "test.html", 0, "bytes=80-800"},
+    { 0, 4, 0, "/cgi-sink", "_cgi-sink", 10000, "bytes=100-1000" }
 };
 
 
