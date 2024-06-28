@@ -906,6 +906,8 @@ char const * demo_client_parse_range(char const * text, char ** range)
 char const * demo_client_parse_stream_desc(char const * text, uint64_t default_stream, uint64_t default_previous,
     picoquic_demo_stream_desc_t * desc)
 {
+    memset(desc, 0, sizeof(picoquic_demo_stream_desc_t));
+
     text = demo_client_parse_stream_repeat(text, &desc->repeat_count);
 
     if (text != NULL) {

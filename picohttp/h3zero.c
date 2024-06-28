@@ -467,6 +467,16 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                         decoded_length, &parts->path, &parts->path_length);
                 }
                 break;
+            case http_header_range:
+                if (parts->range != NULL) {
+                    /* Duplicate content type! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->range, &parts->range_length);
+                }
+                break;
             case http_pseudo_header_protocol:
                 if (parts->protocol != NULL) {
                     /* Duplicate content type! */

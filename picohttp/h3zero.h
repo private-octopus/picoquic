@@ -184,6 +184,8 @@ typedef struct st_h3zero_header_parts_t {
     h3zero_method_enum method;
     uint8_t const * path;
     size_t path_length;
+    uint8_t const * range;
+    size_t range_length;
     int status;
     h3zero_content_type_enum content_type;
     uint8_t const * protocol;
