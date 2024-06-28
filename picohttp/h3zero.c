@@ -1058,6 +1058,11 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
         *((uint8_t**)&header->path) = NULL;
         header->path_length = 0;
     }
+    if (header->range != NULL) {
+        free((uint8_t*)header->range);
+        *((uint8_t**)&header->range) = NULL;
+        header->range_length = 0;
+    }
     if (header->protocol != NULL) {
         free((uint8_t*)header->protocol);
         *((uint8_t**)&header->protocol) = NULL;
