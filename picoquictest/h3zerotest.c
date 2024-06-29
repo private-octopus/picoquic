@@ -546,6 +546,8 @@ int qpack_huffman_base_test()
 #define QPACK_TEST_HEADER_INDEX_HTML_LEN 10
 #define QPACK_TEST_HEADER_PATH ':', 'p', 'a', 't', 'h'
 #define QPACK_TEST_HEADER_PATH_LEN 5
+#define QPACK_TEST_HEADER_RANGE 'r', 'a', 'n', 'g', 'e'
+#define QPACK_TEST_HEADER_RANGE_LEN 5
 #define QPACK_TEST_HEADER_STATUS ':', 's', 't', 'a', 't', 'u', 's'
 #define QPACK_TEST_HEADER_STATUS_LEN 7
 #define QPACK_TEST_HEADER_QPACK_PATH 0xFD, 0xFD, 0xFD 
@@ -554,7 +556,8 @@ int qpack_huffman_base_test()
 #define QPACK_TEST_HEADER_ALLOW_GET_POST 
 #define QPACK_TEST_ALLOWED_METHODS 'G', 'E', 'T', ',', ' ', 'P', 'O', 'S', 'T', ',', ' ', 'C', 'O', 'N', 'N', 'E', 'C', 'T'
 #define QPACK_TEST_ALLOWED_METHODS_LEN 18
-
+#define QPACK_TEST_VALUE_RANGE10 'b', 'y', 't', 'e', 's', '=', '1', '-', '1', '0'
+#define QPACK_TEST_VALUE_RANGE10_LEN 10
 static uint8_t qpack_test_get_slash[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0|17, 0xC0 | 1 };
 
@@ -634,7 +637,13 @@ static uint8_t qpack_status200_akamai[] = {
 
 static uint8_t qpack_test_get_slash_range[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0xC0 | 1,
-    0x5f, 0x28, 0x0a, 'b', 'y', 't', 'e', 's', '=', '1', '-', '1', '0'
+    0x5f, 0x28, QPACK_TEST_VALUE_RANGE10_LEN, QPACK_TEST_VALUE_RANGE10
+};
+
+static uint8_t qpack_test_get_slash_range_long[] = {
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0xC0 | 1,
+    0x20 | QPACK_TEST_HEADER_RANGE_LEN, QPACK_TEST_HEADER_RANGE,
+    QPACK_TEST_VALUE_RANGE10_LEN, QPACK_TEST_VALUE_RANGE10
 };
 
 #define FILE_10Z '0', '0', '0', '0', '0', '0', '0', '0', '0', '0'
@@ -807,6 +816,12 @@ static qpack_test_case_t qpack_test_case[] = {
         qpack_test_range_text, sizeof(qpack_test_range_text),
         0, 0, NULL, 0}
     },
+    {
+        qpack_test_get_slash_range_long, sizeof(qpack_test_get_slash_range_long),
+        { h3zero_method_get, qpack_test_string_slash, 1,
+        qpack_test_range_text, sizeof(qpack_test_range_text),
+        0, 0, NULL, 0}
+    }
 };
 
 static size_t nb_qpack_test_case = sizeof(qpack_test_case) / sizeof(qpack_test_case_t);

@@ -503,11 +503,12 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
 int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int is_huffman)
 {
     char const  * interesting_header_name[] = {
-     ":method", ":path", ":status", "content-type", ":protocol", "origin", NULL};
+     ":method", ":path", ":status", "content-type", ":protocol", "origin", "range", NULL};
     const http_header_enum_t interesting_header[] = {
         http_pseudo_header_method, http_pseudo_header_path,
         http_pseudo_header_status, http_header_content_type,
-        http_pseudo_header_protocol, http_header_origin
+        http_pseudo_header_protocol, http_header_origin,
+        http_header_range
     };
     http_header_enum_t val = http_header_unknown;
     uint8_t deHuff[256];
@@ -862,13 +863,13 @@ uint8_t * h3zero_create_post_header_frame_ex(uint8_t * bytes, uint8_t * bytes_ma
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_SCHEME_HTTPS);
     /* Path: doc_name. Use literal plus reference format */
     bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_CODE_PATH, path, path_length);
-    /*Optional: range. Use literal plus reference format */
-    if (range_length > 0) {
-        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_RANGE, (uint8_t const *)range, range_length);
-    }
-    /*Authority: host. Use literal plus reference format */
+    /* Authority: host. Use literal plus reference format */
     if (host != NULL) {
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const *)host, strlen(host));
+    }
+    /* Optional: range. Use literal plus reference format */
+    if (range_length > 0) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_RANGE, (uint8_t const *)range, range_length);
     }
     /* User Agent */
     if (ua_string != NULL) {
@@ -903,13 +904,13 @@ uint8_t * h3zero_create_request_header_frame_ex(uint8_t * bytes, uint8_t * bytes
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_SCHEME_HTTPS);
     /* Path: doc_name. Use literal plus reference format */
     bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_CODE_PATH, path, path_length);
-    /*Optional: range. Use literal plus reference format */
-    if (range_length > 0) {
-        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_RANGE, (uint8_t const *)range, range_length);
-    }
-    /*Authority: host. Use literal plus reference format */
+    /* Authority: host. Use literal plus reference format */
     if (host != NULL) {
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const *)host, strlen(host));
+    }
+    /* Optional: range. Use literal plus reference format */
+    if (range_length > 0) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_RANGE, (uint8_t const *)range, range_length);
     }
     /* User Agent */
     if (ua_string != NULL) {
