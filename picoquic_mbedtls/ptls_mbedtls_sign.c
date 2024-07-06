@@ -37,7 +37,7 @@
 #include <psa/crypto.h>
 #include <psa/crypto_struct.h>
 #include <psa/crypto_values.h>
-/* #include "ptls_mbedtls.h" */
+#include "ptls_mbedtls.h"
 
 typedef struct st_ptls_mbedtls_signature_scheme_t {
     uint16_t scheme_id;
@@ -652,8 +652,6 @@ int ptls_mbedtls_sign_certificate(ptls_sign_certificate_t *_self, ptls_t *tls, p
 
 void ptls_mbedtls_dispose_sign_certificate(ptls_sign_certificate_t *_self)
 {
-    DBG_PRINTF("Dispose sign certificate (%x) with MbedTLS", self);
-
     if (_self != NULL) {
         ptls_mbedtls_sign_certificate_t *self =
             (ptls_mbedtls_sign_certificate_t *)(((unsigned char *)_self) -
@@ -823,8 +821,6 @@ int ptls_mbedtls_load_private_key(ptls_context_t *ctx, char const *pem_fname)
     size_t key_length = 0;
     size_t key_index = 0;
     ptls_mbedtls_sign_certificate_t *signer = (ptls_mbedtls_sign_certificate_t *)malloc(sizeof(ptls_mbedtls_sign_certificate_t));
-
-    DBG_PRINTF("Load sign certificate (%x) with MbedTLS", self);
 
     if (signer == NULL) {
         return (PTLS_ERROR_NO_MEMORY);

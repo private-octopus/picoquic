@@ -51,7 +51,7 @@ void picoquic_mbedtls_load(int unload)
 #include "mbedtls/chacha20.h"
 #include "mbedtls/ecdh.h"
 
-
+#if 0
 /* Init and free functions. Init should be used before starting using
 * library functions. Free should be used before leaving the program.
 */
@@ -1012,6 +1012,8 @@ ptls_key_exchange_algorithm_t ptls_mbedtls_x25519 = {.id = PTLS_GROUP_X25519,
 .name = PTLS_GROUP_NAME_X25519,
 .create = ptls_mbedtls_x25519_create,
 .exchange = ptls_mbedtls_x25519_exchange};
+
+#endif
 
 /* Set the certificate signature function and context using MbedSSL
 */
