@@ -358,7 +358,7 @@ add_executable(picoquicdemo
     picoquicfirst/picoquicdemo.c
     picoquicfirst/getopt.c)
 target_link_libraries(picoquicdemo
-    PRIVATE
+    PUBLIC
         ${PTLS_LIBRARIES}
         ${OPENSSL_LIBRARIES}
         ${MBEDTLS_LIBRARIES}
