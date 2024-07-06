@@ -45,6 +45,7 @@ void picoquic_mbedtls_load(int unload)
 #include "psa/crypto_struct.h"
 #include "psa/crypto_values.h"
 #include "picotls.h"
+#include "ptls_mbedtls.h"
 #include "picoquic_crypto_provider_api.h"
 #include "picoquic_utils.h"
 #include "mbedtls/chacha20.h"
