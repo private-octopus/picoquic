@@ -174,7 +174,7 @@ void picoquic_tls_api_init_providers(int unload)
     // picoquic_bcrypt_load(unload);
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
-        DBG_PRINTF("%s", "%s fusion", (unload)?"Unloading":"Loading");
+        DBG_PRINTF("%s fusion", (unload)?"Unloading":"Loading");
         picoquic_ptls_fusion_load(unload);
     }
 #else
@@ -185,7 +185,7 @@ void picoquic_tls_api_init_providers(int unload)
 
 #ifdef PICOQUIC_WITH_MBEDTLS
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MBEDTLS) == 0) {
-        DBG_PRINTF("%s", "%s MbedTLS", (unload)?"Unloading":"Loading");
+        DBG_PRINTF("%s MbedTLS", (unload)?"Unloading":"Loading");
         picoquic_mbedtls_load(unload);
     }
 #endif
@@ -565,11 +565,11 @@ void picoquic_dispose_sign_certificate(ptls_context_t* ctx)
 {
     if (ctx->sign_certificate != NULL) {
         if (picoquic_dispose_sign_certificate_fn != NULL) {
+            /* we expect the dispose function to free dependencies,
+             * but not the certificate itself. */
             picoquic_dispose_sign_certificate_fn(ctx->sign_certificate);
         }
-        else {
-            free(ctx->sign_certificate);
-        }
+        free(ctx->sign_certificate);
         ctx->sign_certificate = NULL;
     }
 }
