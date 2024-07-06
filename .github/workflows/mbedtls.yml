@@ -49,7 +49,7 @@ jobs:
           echo $CXX
           # $CC --version
           ./ci/build_picotls.sh
-          cmake -S . -B build "-DWITH_OPENSSL=OFF"
+          cmake -S . -B build "-DWITH_OPENSSL=OFF" "-DWITH_MBEDTLS=ON"
           echo ls  /home/runner/work/picoquic/mbedtls/include
           ls /home/runner/work/picoquic/mbedtls/include
           cmake --build build
