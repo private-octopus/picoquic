@@ -317,7 +317,8 @@ target_include_directories(picoquic-core
         ${OPENSSL_INCLUDE_DIR}
     PUBLIC
         ${MBEDTLS_INCLUDE_DIRS}
-        picoquic)
+        picoquic
+        picoquic_mbedtls)
 target_link_libraries(picoquic-core
     PRIVATE
         ${OPENSSL_LIBRARIES}
