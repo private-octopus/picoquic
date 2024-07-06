@@ -45,6 +45,7 @@ typedef struct st_picoquic_demo_stream_desc_t {
     char const* doc_name;
     char const* f_name;
     uint64_t post_size;
+    char const* range;
 } picoquic_demo_stream_desc_t;
 
 #define PICOQUIC_DEMO_STREAM_LIST_MAX 16

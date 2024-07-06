@@ -182,6 +182,8 @@ extern "C" {
 
     /* CLIENT DEFINITIONS 
      */
+    int h3zero_client_create_stream_request_ex(
+        uint8_t* buffer, size_t max_bytes, uint8_t const* path, size_t path_len, const char* range, size_t range_len, uint64_t post_size, const char* host, size_t* consumed);
     int h3zero_client_create_stream_request(
         uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed);
 
