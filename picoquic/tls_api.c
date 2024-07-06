@@ -561,10 +561,16 @@ int picoquic_set_private_key_from_file(picoquic_quic_t* quic, char const* file_n
 
 /* Clear certificate objects allocated by the crypto stack for a certficate
 */
-void picoquic_dispose_sign_certificate(ptls_sign_certificate_t* cert)
+void picoquic_dispose_sign_certificate(ptls_context_t* ctx)
 {
-    if (picoquic_dispose_sign_certificate_fn != NULL) {
-        picoquic_dispose_sign_certificate_fn(cert);
+    if (ctx->sign_certificate != NULL) {
+        if (picoquic_dispose_sign_certificate_fn != NULL) {
+            picoquic_dispose_sign_certificate_fn(ctx->sign_certificate);
+        }
+        else {
+            free(ctx->sign_certificate);
+        }
+        ctx->sign_certificate = NULL;
     }
 }
 
@@ -1777,11 +1783,7 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 
         free_certificates_list(ctx->certificates.list, ctx->certificates.count);
 
-        if (ctx->sign_certificate != NULL) {
-            picoquic_dispose_sign_certificate(ctx->sign_certificate);
-            free(ctx->sign_certificate);
-            ctx->sign_certificate = NULL;
-        }
+        picoquic_dispose_sign_certificate(ctx);
 
         picoquic_dispose_verify_certificate_callback(quic);
 
