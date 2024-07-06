@@ -249,7 +249,9 @@ OPTION(WITH_MBEDTLS "enable MBEDTLS" OFF)
 IF (WITH_MBEDTLS)
     FIND_PACKAGE(MbedTLS)
     IF (MbedTLS_FOUND)
-        message(STATUS "  Enabling MbedTLS support")
+        message(STATUS "Enabling MbedTLS support")
+        message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+        message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
         list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_MBEDTLS)
         list(APPEND PICOQUIC_LIBRARY_FILES 
                     picoquic_mbedtls/ptls_mbedtls.c
