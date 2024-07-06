@@ -51,6 +51,7 @@
 #endif
 
 #include <stddef.h>
+#include <stdlib.h>
 #include "picotls.h"
 #include "picoquic_internal.h"
 #ifndef PTLS_WITHOUT_OPENSSL
