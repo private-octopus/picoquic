@@ -652,6 +652,8 @@ int ptls_mbedtls_sign_certificate(ptls_sign_certificate_t *_self, ptls_t *tls, p
 
 void ptls_mbedtls_dispose_sign_certificate(ptls_sign_certificate_t *_self)
 {
+    DBG_PRINTF("Dispose sign certificate (%x) with MbedTLS", self);
+
     if (_self != NULL) {
         ptls_mbedtls_sign_certificate_t *self =
             (ptls_mbedtls_sign_certificate_t *)(((unsigned char *)_self) -
@@ -660,7 +662,6 @@ void ptls_mbedtls_dispose_sign_certificate(ptls_sign_certificate_t *_self)
         psa_destroy_key(self->key_id);
         psa_reset_key_attributes(&self->attributes);
         memset(self, 0, sizeof(ptls_mbedtls_sign_certificate_t));
-        free(self);
     }
 }
 /*
@@ -822,6 +823,8 @@ int ptls_mbedtls_load_private_key(ptls_context_t *ctx, char const *pem_fname)
     size_t key_length = 0;
     size_t key_index = 0;
     ptls_mbedtls_sign_certificate_t *signer = (ptls_mbedtls_sign_certificate_t *)malloc(sizeof(ptls_mbedtls_sign_certificate_t));
+
+    DBG_PRINTF("Load sign certificate (%x) with MbedTLS", self);
 
     if (signer == NULL) {
         return (PTLS_ERROR_NO_MEMORY);

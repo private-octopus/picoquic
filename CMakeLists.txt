@@ -253,8 +253,7 @@ IF (WITH_MBEDTLS)
         message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
         message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
         list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_MBEDTLS)
-        list(APPEND PICOQUIC_LIBRARY_FILES 
-                    picoquic_mbedtls/ptls_mbedtls.c
+        list(APPEND PICOQUIC_LIBRARY_FILES
                     picoquic_mbedtls/ptls_mbedtls_sign.c
                     picoquic_mbedtls/ptls_mbedtls_verify.c)
     ELSE ()
