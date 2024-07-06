@@ -39,26 +39,6 @@
 #include <psa/crypto_values.h>
 #include "ptls_mbedtls.h"
 
-typedef struct st_ptls_mbedtls_signature_scheme_t {
-    uint16_t scheme_id;
-    psa_algorithm_t hash_algo;
-} ptls_mbedtls_signature_scheme_t;
-
-typedef struct st_ptls_mbedtls_sign_certificate_t {
-    ptls_sign_certificate_t super;
-    mbedtls_svc_key_id_t key_id;
-    psa_key_attributes_t attributes;
-    const ptls_mbedtls_signature_scheme_t *schemes;
-} ptls_mbedtls_sign_certificate_t;
-
-typedef struct st_ptls_mbedtls_verify_certificate_t {
-    ptls_verify_certificate_t super;
-    mbedtls_x509_crt *trust_ca;
-    mbedtls_x509_crl *trust_crl;
-    int (*f_vrfy)(void*, mbedtls_x509_crt*, int, uint32_t*);
-    void* p_vrfy;
-} ptls_mbedtls_verify_certificate_t;
-
 static const unsigned char ptls_mbedtls_oid_ec_key[] = {0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01};
 static const unsigned char ptls_mbedtls_oid_rsa_key[] = {0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01};
 #if 0
@@ -1019,10 +999,6 @@ int ptls_mbedtls_load_private_key(ptls_context_t *ctx, char const *pem_fname)
 * pointer to NULL. It does not reset of free the "verify_ctx" -- if necessary,
 * the value there should be reset after the first call.
 */
-
-typedef struct st_mbedtls_message_verify_ctx_t {
-    psa_key_id_t key_id;
-} mbedtls_message_verify_ctx_t;
 
 uint16_t mbedtls_verify_sign_algos[] = {
     0x0201, 0x0203, 0x0401, 0x0403, 0x501, 0x0503, 0x0601, 0x0603,
