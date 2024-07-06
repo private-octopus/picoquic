@@ -49,6 +49,13 @@
 #include "picotls/minicrypto.h"
 
 #ifdef PICOQUIC_WITH_MBEDTLS
+#include "mbedtls/mbedtls_config.h"
+#include "mbedtls/build_info.h"
+#include "psa/crypto.h"
+#include "psa/crypto_struct.h"
+#include "psa/crypto_values.h"
+#include "picotls.h"
+#include "ptls_mbedtls.h"
 #endif
 /* Mbedtls test:
  * Use the "flag" option of tls_api_init to only load specified
@@ -636,7 +643,7 @@ be expressed in the proper x509/DER format.
 
 static int mbedtls_test_load_one_der_key(char const* path)
 {
-    int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
+    int ret = -1;
     unsigned char hash[32];
     const unsigned char h0[32] = {
         1, 2, 3, 4, 5, 6, 7, 8,
@@ -645,7 +652,6 @@ static int mbedtls_test_load_one_der_key(char const* path)
         25, 26, 27, 28, 29, 30, 31, 32
     };
     ptls_context_t ctx = { 0 };
-    psa_status_t status = 0;
 
     ret = ptls_mbedtls_load_private_key(&ctx, path);
     if (ret != 0) {
@@ -660,8 +666,10 @@ static int mbedtls_test_load_one_der_key(char const* path)
         int ret;
         ptls_mbedtls_sign_certificate_t* signer = (ptls_mbedtls_sign_certificate_t*)
             (((unsigned char*)ctx.sign_certificate) - offsetof(struct st_ptls_mbedtls_sign_certificate_t, super));
+#if 0
         /* get the key algorithm */
         psa_algorithm_t algo = psa_get_key_algorithm(&signer->attributes);
+#endif
         ptls_buffer_t outbuf;
         uint8_t outbuf_smallbuf[256];
         ptls_iovec_t input = { hash, sizeof(hash) };
@@ -670,7 +678,8 @@ static int mbedtls_test_load_one_der_key(char const* path)
         uint16_t algorithms[16];
         memcpy(hash, h0, 32);
         while (signer->schemes[num_algorithms].scheme_id != UINT16_MAX && num_algorithms < 16) {
-            algorithms[num_algorithms++] = signer->schemes[num_algorithms].scheme_id;
+            algorithms[num_algorithms] = signer->schemes[num_algorithms].scheme_id;
+            num_algorithms++;
         }
 
         ptls_buffer_init(&outbuf, outbuf_smallbuf, sizeof(outbuf_smallbuf));

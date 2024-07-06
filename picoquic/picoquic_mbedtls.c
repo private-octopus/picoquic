@@ -1013,14 +1013,12 @@ ptls_key_exchange_algorithm_t ptls_mbedtls_x25519 = {.id = PTLS_GROUP_X25519,
 .create = ptls_mbedtls_x25519_create,
 .exchange = ptls_mbedtls_x25519_exchange};
 
-#include "mbedtls_sign.inc"
-
-/* Set the certificate signature function and context using openSSL
+/* Set the certificate signature function and context using MbedSSL
 */
 
 static int set_mbdetls_private_key_from_key_file(char const* keypem, ptls_context_t* ctx)
 {
-    ret = ptls_mbedtls_load_private_key(ctx, key_pem);
+    return ptls_mbedtls_load_private_key(ctx, keypem);
 }
 
 /* Register the mbedtls functions

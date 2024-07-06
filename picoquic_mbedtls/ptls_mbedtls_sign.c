@@ -403,9 +403,8 @@ static int ptls_mbedtls_parse_public_key_info(const unsigned char *pem_buf, size
         }
         else {
             size_t l_seq1 = 0;
-            size_t x_seq1;
+
             ret = ptls_mbedtls_parse_der_length(pem_buf, pem_len, &x, &l_seq1);
-            x_seq1 = x;
             if (x + l_seq1 > pem_len || pem_buf[x++] != 0x30) {
                 ret = PTLS_ERROR_INCORRECT_ASN1_SYNTAX;
             }
