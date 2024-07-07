@@ -735,36 +735,45 @@ static int mbedtls_test_load_one_der_key(char const* path)
 int mbedtls_load_der_test()
 {
     int ret = 0;
-    if (ret == 0) {
-        ret = mbedtls_test_load_one_der_key(ASSET_RSA_KEY);
-    }
 
-    if (ret == 0) {
-        ret = mbedtls_test_load_one_der_key(ASSET_SECP256R1_KEY);
-    }
 
-    if (ret == 0) {
-        ret = mbedtls_test_load_one_der_key(ASSET_SECP384R1_KEY);
+    /* Initialize the PSA crypto library. */
+    if ((ret = ptls_mbedtls_init()) != 0) {
+        DBG_PRINTF("%s", "psa_crypto_init fails.");
     }
+    else {
+        if (ret == 0) {
+            ret = mbedtls_test_load_one_der_key(ASSET_RSA_KEY);
+        }
 
-    if (ret == 0) {
-        ret = mbedtls_test_load_one_der_key(ASSET_SECP521R1_KEY);
-    }
+        if (ret == 0) {
+            ret = mbedtls_test_load_one_der_key(ASSET_SECP256R1_KEY);
+        }
 
-    if (ret == 0) {
-        ret = mbedtls_test_load_one_der_key(ASSET_SECP256R1_PKCS8_KEY);
-    }
+        if (ret == 0) {
+            ret = mbedtls_test_load_one_der_key(ASSET_SECP384R1_KEY);
+        }
 
-    if (ret == 0) {
-        ret = mbedtls_test_load_one_der_key(ASSET_RSA_PKCS8_KEY);
-    }
+        if (ret == 0) {
+            ret = mbedtls_test_load_one_der_key(ASSET_SECP521R1_KEY);
+        }
 
+        if (ret == 0) {
+            ret = mbedtls_test_load_one_der_key(ASSET_SECP256R1_PKCS8_KEY);
+        }
+
+        if (ret == 0) {
+            ret = mbedtls_test_load_one_der_key(ASSET_RSA_PKCS8_KEY);
+        }
 #if 0
-    /* Commenting out ED25519 for now, probably not supported yet in MBEDTLS/PSA */
-    if (ret == 0) {
-        ret = mbedtls_test_load_one_der_key(ASSET_ED25519_KEY);
-    }
+        /* Commenting out ED25519 for now, probably not supported yet in MBEDTLS/PSA */
+        if (ret == 0) {
+            ret = mbedtls_test_load_one_der_key(ASSET_ED25519_KEY);
+        }
 #endif
+        /* Deinitialize the PSA crypto library. */
+        ptls_mbedtls_free();
+    }
 
     return ret;
 }
