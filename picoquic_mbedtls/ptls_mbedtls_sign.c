@@ -1346,10 +1346,10 @@ int ptls_mbedtls_init_verify_certificate(ptls_context_t* ptls_ctx, char const* p
     return ret;
 }
 
-void ptls_mbedtls_dispose_verify_certificate(ptls_context_t* ptls_ctx)
+void ptls_mbedtls_dispose_verify_certificate(ptls_verify_certificate_t* v)
 {
     ptls_mbedtls_verify_certificate_t* verifier =
-        (ptls_mbedtls_verify_certificate_t*)ptls_ctx->verify_certificate;
+        (ptls_mbedtls_verify_certificate_t*)v;
     if (verifier != NULL) {
         if (verifier->trust_ca != NULL) {
             mbedtls_x509_crt_free(verifier->trust_ca);
@@ -1360,6 +1360,5 @@ void ptls_mbedtls_dispose_verify_certificate(ptls_context_t* ptls_ctx)
         }
         memset(verifier, 0, sizeof(ptls_mbedtls_verify_certificate_t));
         free(verifier);
-        ptls_ctx->verify_certificate = NULL;
     }
 }

@@ -588,13 +588,14 @@ ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count
 
 /* Return the certificate verifier callback provided by the crypto stack */
 ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_root_file_name,
-    unsigned int* is_cert_store_not_empty)
+    unsigned int* is_cert_store_not_empty, picoquic_free_verify_certificate_ctx * p_free_certificate_verifier_fn)
 {
     if (picoquic_certificate_verifier_fn == NULL) {
         return NULL;
     }
     else {
-        return picoquic_certificate_verifier_fn(cert_root_file_name, is_cert_store_not_empty);
+        return picoquic_certificate_verifier_fn(cert_root_file_name, is_cert_store_not_empty,
+            p_free_certificate_verifier_fn);
     }
 }
 
@@ -1170,28 +1171,38 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
 
     ctx->verify_certificate = quic->verify_certificate_callback;
     quic->is_cert_store_not_empty = 1;
-    quic->is_cert_verifier_custom = 1;
     return 0;
 }
 
 void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic) {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
 
-    if (ctx->verify_certificate != NULL){
-        if (quic->is_cert_verifier_custom) {
-            if (quic->free_verify_certificate_callback_fn != NULL) {
-                (quic->free_verify_certificate_callback_fn)(ctx->verify_certificate);
-                quic->free_verify_certificate_callback_fn = NULL;
-            }
-        } else {
-            picoquic_dispose_certificate_verifier(ctx->verify_certificate);
-            free(ctx->verify_certificate);
+    if (ctx->verify_certificate != NULL) {
+        if (quic->free_verify_certificate_callback_fn != NULL) {
+            picoquic_dispose_certificate_verifier_t disposer =
+                (picoquic_dispose_certificate_verifier_t)quic->free_verify_certificate_callback_fn;
+            disposer(ctx->verify_certificate);
+            quic->free_verify_certificate_callback_fn = NULL;
         }
+        /*
+        free(ctx->verify_certificate);
+        */
         ctx->verify_certificate = NULL;
-        quic->is_cert_verifier_custom = 0;
     }
-   
+
     ctx->verify_certificate = NULL;
+}
+
+void picoquic_tls_set_verify_certificate_callback(picoquic_quic_t* quic,
+    struct st_ptls_verify_certificate_t* cb, picoquic_free_verify_certificate_ctx free_fn)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+
+    picoquic_dispose_verify_certificate_callback(quic);
+
+    ctx->verify_certificate = cb;
+    quic->is_cert_store_not_empty = 1;
+    quic->free_verify_certificate_callback_fn = free_fn;
 }
 
 /* set key from secret: this is used to create AEAD contexts and PN encoding contexts
@@ -1730,7 +1741,9 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
             }
         }
 
-        ctx->verify_certificate = picoquic_get_certificate_verifier(cert_root_file_name, &is_cert_store_not_empty);
+        ctx->verify_certificate = picoquic_get_certificate_verifier(cert_root_file_name,
+            &is_cert_store_not_empty, (picoquic_free_verify_certificate_ctx*)
+                &quic->free_verify_certificate_callback_fn);
         quic->is_cert_store_not_empty = is_cert_store_not_empty;
 
         if (quic->ticket_file_name != NULL) {

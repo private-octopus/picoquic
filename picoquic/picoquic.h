@@ -584,7 +584,7 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
 
 /* Set the verify certificate callback and context. */
 typedef struct st_ptls_verify_certificate_t ptls_verify_certificate_t;
-int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, 
+void picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, 
     ptls_verify_certificate_t * cb, picoquic_free_verify_certificate_ctx free_fn);
 
 /* Set client authentication in TLS (if enabled, client is required to send certificates). */
