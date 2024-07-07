@@ -416,6 +416,7 @@ int minicrypto_is_last_test();
 #ifdef PICOQUIC_WITH_MBEDTLS
 int mbedtls_crypto_test();
 int mbedtls_load_der_test();
+int mbedtls_load_key_fail_test();
 #endif
 int mbedtls_test();
 int openssl_cert_test();

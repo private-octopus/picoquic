@@ -613,32 +613,65 @@ be expressed in the proper x509/DER format.
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
 #define ASSET_DIR ..\\..\\data
-#define ASSET_RSA_KEY "..\\..\\data\\rsa\\key.pem"
-#define ASSET_RSA_PKCS8_KEY "..\\..\\data\\rsa-pkcs8\\key.pem"
-#define ASSET_SECP256R1_KEY "..\\..\\data\\secp256r1\\key.pem"
-#define ASSET_SECP384R1_KEY "..\\..\\data\\secp384r1\\key.pem"
-#define ASSET_SECP521R1_KEY "..\\..\\data\\secp521r1\\key.pem"
-#define ASSET_SECP256R1_PKCS8_KEY "..\\..\\data\\secp256r1-pkcs8\\key.pem"
-#define ASSET_ED25519_KEY "..\\..\\data\\ed25519\\key.pem"
+#define ASSET_RSA_KEY "..\\..\\certs\\rsa\\key.pem"
+#define ASSET_RSA_PKCS8_KEY "..\\..\\certs\\rsa-pkcs8\\key.pem"
+#define ASSET_SECP256R1_KEY "..\\..\\certs\\secp256r1\\key.pem"
+#define ASSET_SECP384R1_KEY "..\\..\\certs\\secp384r1\\key.pem"
+#define ASSET_SECP521R1_KEY "..\\..\\certs\\secp521r1\\key.pem"
+#define ASSET_SECP256R1_PKCS8_KEY "..\\..\\certs\\secp256r1-pkcs8\\key.pem"
+#define ASSET_ED25519_KEY "..\\..\\certs\\ed25519\\key.pem"
+#define ASSET_NO_SUCH_FILE "..\\..\\certs\\no_such_file.pem"
+#define ASSET_NOT_A_PEM_FILE "..\\..\\certs\\not_a_valid_pem_file.pem"
+#define ASSET_RSA_CERT "..\\..\\certs\\rsa/cert.pem"
+#define ASSET_RSA_PKCS8_CERT "..\\..\\certs\\rsa-pkcs8\\cert.pem"
+#define ASSET_SECP256R1_CERT "..\\..\\certs\\secp256r1\\cert.pem"
+#define ASSET_SECP384R1_CERT "..\\..\\certs\\secp384r1\\cert.pem"
+#define ASSET_SECP521R1_CERT "..\\..\\certs\\secp521r1\\cert.pem"
+#define ASSET_SECP256R1_PKCS8_CERT "..\\..\\certs\\secp256r1-pkcs8/cert.pem"
+#define ASSET_ED25519_CERT "..\\..\\certs\\ed25519\\cert.pem"
+
+#define ASSET_TEST_CA "..\\..\\certs\\test-ca.crt"
 #else
 #define ASSET_DIR ..\\data
-#define ASSET_RSA_KEY "..\\data\\rsa\\key.pem"
-#define ASSET_RSA_PKCS8_KEY "..\\data\\rsa-pkcs8\\key.pem"
-#define ASSET_SECP256R1_KEY "..\\data\\secp256r1\\key.pem"
-#define ASSET_SECP384R1_KEY "..\\data\\secp384r1\\key.pem"
-#define ASSET_SECP521R1_KEY "..\\data\\secp521r1\\key.pem"
-#define ASSET_SECP256R1_PKCS8_KEY "..\\data\\secp256r1-pkcs8\\key.pem"
-#define ASSET_ED25519_KEY "..\\data\\ed25519\\key.pem"
+#define ASSET_RSA_KEY "..\\certs\\rsa\\key.pem"
+#define ASSET_RSA_PKCS8_KEY "..\\certs\\rsa-pkcs8\\key.pem"
+#define ASSET_SECP256R1_KEY "..\\certs\\secp256r1\\key.pem"
+#define ASSET_SECP384R1_KEY "..\\certs\\secp384r1\\key.pem"
+#define ASSET_SECP521R1_KEY "..\\certs\\secp521r1\\key.pem"
+#define ASSET_SECP256R1_PKCS8_KEY "..\\certs\\secp256r1-pkcs8\\key.pem"
+#define ASSET_ED25519_KEY "..\\certs\\ed25519\\key.pem"
+#define ASSET_NO_SUCH_FILE "..\\certs\\no_such_file.pem"
+#define ASSET_NOT_A_PEM_FILE "..\\certs\\not_a_valid_pem_file.pem"
+#define ASSET_RSA_CERT "..\\certs\\rsa/cert.pem"
+#define ASSET_RSA_PKCS8_CERT "..\\certs\\rsa-pkcs8\\cert.pem"
+#define ASSET_SECP256R1_CERT "..\\certs\\secp256r1\\cert.pem"
+#define ASSET_SECP384R1_CERT "..\\certs\\secp384r1\\cert.pem"
+#define ASSET_SECP521R1_CERT "..\\certs\\secp521r1\\cert.pem"
+#define ASSET_SECP256R1_PKCS8_CERT "..\\certs\\secp256r1-pkcs8/cert.pem"
+#define ASSET_ED25519_CERT "..\\certs\\ed25519\\cert.pem"
+
+#define ASSET_TEST_CA "data\\test-ca.crt"
 #endif
 #else
 #define ASSET_DIR data
-#define ASSET_RSA_KEY "data/rsa/key.pem"
-#define ASSET_RSA_PKCS8_KEY "data/rsa-pkcs8/key.pem"
-#define ASSET_SECP256R1_KEY "data/secp256r1/key.pem"
-#define ASSET_SECP384R1_KEY "data/secp384r1/key.pem"
-#define ASSET_SECP521R1_KEY "data/secp521r1/key.pem"
-#define ASSET_SECP256R1_PKCS8_KEY "data/secp256r1-pkcs8/key.pem"
-#define ASSET_ED25519_KEY "data/ed25519/key.pem"
+#define ASSET_RSA_KEY "certs/rsa/key.pem"
+#define ASSET_RSA_PKCS8_KEY "certs/rsa-pkcs8/key.pem"
+#define ASSET_SECP256R1_KEY "certs/secp256r1/key.pem"
+#define ASSET_SECP384R1_KEY "certs/secp384r1/key.pem"
+#define ASSET_SECP521R1_KEY "certs/secp521r1/key.pem"
+#define ASSET_SECP256R1_PKCS8_KEY "certs/secp256r1-pkcs8/key.pem"
+#define ASSET_ED25519_KEY "certs/ed25519/key.pem"
+#define ASSET_NO_SUCH_FILE "certs/no_such_file.pem"
+#define ASSET_NOT_A_PEM_FILE "certs/not_a_valid_pem_file.pem"
+#define ASSET_RSA_CERT "certs/rsa/cert.pem"
+#define ASSET_RSA_PKCS8_CERT "certs/rsa-pkcs8/cert.pem"
+#define ASSET_SECP256R1_CERT "certs/secp256r1/cert.pem"
+#define ASSET_SECP384R1_CERT "certs/secp384r1/cert.pem"
+#define ASSET_SECP521R1_CERT "certs/secp521r1/cert.pem"
+#define ASSET_SECP256R1_PKCS8_CERT "certs/secp256r1-pkcs8/cert.pem"
+#define ASSET_ED25519_CERT "certs/ed25519/cert.pem"
+
+#define ASSET_TEST_CA "certs/test-ca.crt"
 #endif
 
 static int mbedtls_test_load_one_der_key(char const* path)
@@ -735,5 +768,52 @@ int mbedtls_load_der_test()
 
     return ret;
 }
+
+/*
+* Testing of failure modes.
+* 
+* Testing the various reasons why loading of key should fail:
+* - key file does not exist
+* - key file is empty, no PEM keyword
+* - key file does not contain a key (we use a cert file for that)
+* - key file is for ED25559, which is not supported
+*/
+int mbedtls_load_key_fail_test()
+{
+    int ret = 0;
+
+    if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_NO_SUCH_FILE) == 0)
+    {
+        ret = -1;
+    }
+
+    if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_NOT_A_PEM_FILE) == 0)
+    {
+        ret = -1;
+    }
+
+    if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_RSA_CERT) == 0)
+    {
+        ret = -1;
+    }
+
+    if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_ED25519_KEY) == 0)
+    {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+
+
+
+
+
+
+
+
+
+
 
 #endif

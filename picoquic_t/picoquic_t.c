@@ -423,6 +423,7 @@ static const picoquic_test_def_t test_table[] = {
     { "mbedtls", mbedtls_test },
     { "mbedtls_crypto", mbedtls_crypto_test },
     { "mbedtls_load_der", mbedtls_load_der_test },
+    { "mbedtls_load_key_fail", mbedtls_load_key_fail_test },
 #endif
     { "openssl_cert", openssl_cert_test },
     { "monopath_basic", monopath_basic_test },
