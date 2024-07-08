@@ -921,8 +921,9 @@ size_t num_test_sign_signature_algorithms = sizeof(test_sign_signature_algorithm
 static int test_sign_init_server_mbedtls(ptls_context_t* ctx, char const* key_path, char const* cert_path)
 {
     int ret = ptls_mbedtls_load_private_key(ctx, key_path);
-    if (ret == 0) {
-        ret = picoquic_mbedtls_get_certs_from_file(cert_path, &ctx->certificates.list, &ctx->certificates.count);
+    if (ret == 0 &&
+        (ctx->certificates.list = picoquic_mbedtls_get_certs_from_file(cert_path, &ctx->certificates.count)) == NULL){
+        ret = -1;
     }
     return ret;
 }
