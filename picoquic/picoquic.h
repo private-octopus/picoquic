@@ -487,7 +487,7 @@ void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason,
  * If `data` and `sign` are empty buffers, an error occurred and `verify_ctx` should be freed.
  * Expect `0` as return value, when the data matches the signature.
  */
-
+typedef struct st_ptls_verify_certificate_t ptls_verify_certificate_t;
 typedef int (*picoquic_verify_sign_cb_fn)(void* verify_ctx, ptls_iovec_t data, ptls_iovec_t sign);
 /* Will be called to verify a certificate of a connection.
  * The arguments `verify_sign` and `verify_sign_ctx` are expected to be set, when the function returns `0`.
@@ -497,7 +497,7 @@ typedef int (*picoquic_verify_certificate_cb_fn)(void* ctx, picoquic_cnx_t* cnx,
                                                  picoquic_verify_sign_cb_fn* verify_sign, void** verify_sign_ctx);
 
 /* Is called to free the verify certificate ctx */
-typedef void (*picoquic_free_verify_certificate_ctx)(void* ctx);
+typedef void (*picoquic_free_verify_certificate_ctx)(ptls_verify_certificate_t* ctx);
 
 /* Management of the blocked port list */
 int picoquic_check_port_blocked(uint16_t port);
@@ -583,7 +583,6 @@ void picoquic_set_null_verifier(picoquic_quic_t* quic);
 int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len);
 
 /* Set the verify certificate callback and context. */
-typedef struct st_ptls_verify_certificate_t ptls_verify_certificate_t;
 void picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, 
     ptls_verify_certificate_t * cb, picoquic_free_verify_certificate_ctx free_fn);
 

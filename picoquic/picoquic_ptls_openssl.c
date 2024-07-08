@@ -228,7 +228,7 @@ ptls_verify_certificate_t* picoquic_openssl_get_certificate_verifier(char const*
         free_certificate_verifier_fn = NULL;
     }
     else {
-        verify_cert = (ptls_verify_certificate_t*)&verifier->super;
+        verify_cert = &verifier->super;
         *free_certificate_verifier_fn = picoquic_openssl_dispose_certificate_verifier;
     }
     return verify_cert;
