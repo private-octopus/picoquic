@@ -748,24 +748,32 @@ int mbedtls_load_key_fail_test()
     int ret = 0;
 
 
-    if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_NO_SUCH_FILE) == 0)
-    {
-        ret = -1;
+    if ((ret = ptls_mbedtls_init()) != 0) {
+        DBG_PRINTF("%s", "psa_crypto_init fails.");
     }
+    else {
+        if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_NO_SUCH_FILE) == 0)
+        {
+            ret = -1;
+        }
 
-    if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_NOT_A_PEM_FILE) == 0)
-    {
-        ret = -1;
-    }
+        if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_NOT_A_PEM_FILE) == 0)
+        {
+            ret = -1;
+        }
 
-    if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_RSA_CERT) == 0)
-    {
-        ret = -1;
-    }
+        if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_RSA_CERT) == 0)
+        {
+            ret = -1;
+        }
 
-    if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_ED25519_KEY) == 0)
-    {
-        ret = -1;
+        if (ret == 0 && mbedtls_test_load_one_der_key(ASSET_ED25519_KEY) == 0)
+        {
+            ret = -1;
+        }
+
+        /* Deinitialize the PSA crypto library. */
+        ptls_mbedtls_free();
     }
 
     return ret;
@@ -862,21 +870,28 @@ static int test_retrieve_pubkey_one(char const* key_path_ref, char const* cert_p
 int mbedtls_retrieve_pubkey_test()
 {
     int ret = 0;
-
-    if (ret == 0) {
-        ret = test_retrieve_pubkey_one(ASSET_RSA_KEY, ASSET_RSA_CERT);
+    if ((ret = ptls_mbedtls_init()) != 0) {
+        DBG_PRINTF("%s", "psa_crypto_init fails.");
     }
+    else {
+        if (ret == 0) {
+            ret = test_retrieve_pubkey_one(ASSET_RSA_KEY, ASSET_RSA_CERT);
+        }
 
-    if (ret == 0) {
-        ret = test_retrieve_pubkey_one(ASSET_SECP256R1_KEY, ASSET_SECP256R1_CERT);
-    }
+        if (ret == 0) {
+            ret = test_retrieve_pubkey_one(ASSET_SECP256R1_KEY, ASSET_SECP256R1_CERT);
+        }
 
-    if (ret == 0) {
-        ret = test_retrieve_pubkey_one(ASSET_SECP384R1_KEY, ASSET_SECP384R1_CERT);
-    }
+        if (ret == 0) {
+            ret = test_retrieve_pubkey_one(ASSET_SECP384R1_KEY, ASSET_SECP384R1_CERT);
+        }
 
-    if (ret == 0) {
-        ret = test_retrieve_pubkey_one(ASSET_SECP521R1_KEY, ASSET_SECP521R1_CERT);
+        if (ret == 0) {
+            ret = test_retrieve_pubkey_one(ASSET_SECP521R1_KEY, ASSET_SECP521R1_CERT);
+        }
+
+        /* Deinitialize the PSA crypto library. */
+        ptls_mbedtls_free();
     }
 
     return ret;
@@ -1148,26 +1163,34 @@ int mbedtls_sign_verify_test()
 {
     int ret = 0;
 
-    if (ret == 0) {
-        ret = test_sign_verify_one(ASSET_RSA_KEY, ASSET_RSA_CERT, ASSET_TEST_CA, ASSET_RSA_NAME, 0, 0);
-    }
 
-    if (ret == 0) {
-        ret = test_sign_verify_one(ASSET_SECP256R1_KEY, ASSET_SECP256R1_CERT, ASSET_TEST_CA, ASSET_SECP256R1_NAME, 0, 0);
+    if ((ret = ptls_mbedtls_init()) != 0) {
+        DBG_PRINTF("%s", "psa_crypto_init fails.");
     }
+    else {
+        if (ret == 0) {
+            ret = test_sign_verify_one(ASSET_RSA_KEY, ASSET_RSA_CERT, ASSET_TEST_CA, ASSET_RSA_NAME, 0, 0);
+        }
 
-    if (ret == 0) {
-        ret = test_sign_verify_one(ASSET_SECP384R1_KEY, ASSET_SECP384R1_CERT, ASSET_TEST_CA, ASSET_SECP384R1_NAME, 0, 0);
+        if (ret == 0) {
+            ret = test_sign_verify_one(ASSET_SECP256R1_KEY, ASSET_SECP256R1_CERT, ASSET_TEST_CA, ASSET_SECP256R1_NAME, 0, 0);
+        }
+
+        if (ret == 0) {
+            ret = test_sign_verify_one(ASSET_SECP384R1_KEY, ASSET_SECP384R1_CERT, ASSET_TEST_CA, ASSET_SECP384R1_NAME, 0, 0);
+        }
+
+        if (ret == 0) {
+            ret = test_sign_verify_one(ASSET_SECP521R1_KEY, ASSET_SECP521R1_CERT, ASSET_TEST_CA, ASSET_SECP521R1_NAME, 0, 0);
+        }
+
+        if (ret == 0) {
+            ret = test_sign_verify_one(ASSET_SECP256R1_PKCS8_KEY, ASSET_SECP256R1_PKCS8_CERT, ASSET_TEST_CA, ASSET_SECP256R1_PKCS8_NAME, 0, 0);
+        }
+
+        /* Deinitialize the PSA crypto library. */
+        ptls_mbedtls_free();
     }
-
-    if (ret == 0) {
-        ret = test_sign_verify_one(ASSET_SECP521R1_KEY, ASSET_SECP521R1_CERT, ASSET_TEST_CA, ASSET_SECP521R1_NAME, 0, 0);
-    }
-
-    if (ret == 0) {
-        ret = test_sign_verify_one(ASSET_SECP256R1_PKCS8_KEY, ASSET_SECP256R1_PKCS8_CERT, ASSET_TEST_CA, ASSET_SECP256R1_PKCS8_NAME, 0, 0);
-    }
-
     return ret;
 }
 
