@@ -85,7 +85,7 @@ int ptls_mbedtls_sign_certificate(ptls_sign_certificate_t* _self, ptls_t* tls, p
     uint16_t* selected_algorithm, ptls_buffer_t* outbuf, ptls_iovec_t input,
     const uint16_t* algorithms, size_t num_algorithms);
 
-int picoquic_mbedtls_get_certs_from_file(char const* pem_fname, ptls_iovec_t** vec, size_t* count);
+ptls_iovec_t* picoquic_mbedtls_get_certs_from_file(char const* pem_fname, size_t* count);
 int ptls_mbedtls_load_certificates(ptls_context_t* ctx, char const* cert_pem_file);
 
 int ptls_mbedtls_init_verify_certificate(ptls_context_t* ptls_ctx, char const* pem_fname);

@@ -1226,19 +1226,18 @@ static int mbedtls_verify_certificate(ptls_verify_certificate_t *_self, ptls_t *
 * Discuss: picotls has a built in function for this.
 * Is it really necessary to program an alternative?
 */
-int picoquic_mbedtls_get_certs_from_file(char const * pem_fname, ptls_iovec_t** pvec, size_t * count)
+ ptls_iovec_t * picoquic_mbedtls_get_certs_from_file(char const * pem_fname, size_t * count)
 {
     int ret = 0;
-    *pvec = (ptls_iovec_t*)malloc(sizeof(ptls_iovec_t) * 16);
+    size_t const max_count = 16;
+    ptls_iovec_t *pvec = (ptls_iovec_t*)malloc(sizeof(ptls_iovec_t) * max_count);
 
     *count = 0;
-    if (*pvec == NULL) {
-        ret = PTLS_ERROR_NO_MEMORY;
-    } else {
+    if (pvec != NULL) {
         size_t buf_length;
         unsigned char* buf = NULL;
         /* The load file function simply loads the file content in memory */
-        if ((ret = ptls_mbedtls_load_file(pem_fname, &buf, &buf_length)) == 0) {
+        if (ptls_mbedtls_load_file(pem_fname, &buf, &buf_length) == 0) {
             size_t length_already_read = 0;
 
             while (ret == 0 && *count < 16 && length_already_read < (size_t)buf_length) {
@@ -1260,8 +1259,8 @@ int picoquic_mbedtls_get_certs_from_file(char const * pem_fname, ptls_iovec_t** 
                     }
                     else {
                         memcpy(cert, pem.private_buf, pem.private_buflen);
-                        (*pvec)[*count].base = cert;
-                        (*pvec)[*count].len = pem.private_buflen;
+                        pvec[*count].base = cert;
+                        pvec[*count].len = pem.private_buflen;
                         *count += 1;
                     }
                 }
@@ -1277,8 +1276,9 @@ int picoquic_mbedtls_get_certs_from_file(char const * pem_fname, ptls_iovec_t** 
 
 int ptls_mbedtls_load_certificates(ptls_context_t *ctx, char const *cert_pem_file)
 {
-    return picoquic_mbedtls_get_certs_from_file(cert_pem_file, &ctx->certificates.list,
+    ctx->certificates.list = picoquic_mbedtls_get_certs_from_file(cert_pem_file, 
         &ctx->certificates.count);
+    return((ctx->certificates.list == NULL) ? 0 : -1);
 }
 
 /* Creating the call back. This API is not described by picotls. The "backend"
