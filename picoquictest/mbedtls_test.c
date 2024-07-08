@@ -1091,6 +1091,7 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
             /* Then, create a tls context for the server. */
             server_tls = ptls_new(server_ctx, 1);
             if (server_tls == NULL) {
+                DBG_PRINTF("ptls_new (server, %s) returns NULL", key_path);
                 ret = -1;
             }
         }
@@ -1101,7 +1102,7 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
                 &selected_algorithm, &signature, input,
                 test_sign_signature_algorithms, num_test_sign_signature_algorithms);
             if (ret != 0) {
-                DBG_PRINTF("sign_certificate (%s) returns 0x%x", key_path, ret);
+                DBG_PRINTF("sign_certificate (%s) returns 0x%x (%d)", key_path, ret, ret);
             }
         }
 
@@ -1109,6 +1110,7 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
             /* Then, create a tls context for the client. */
             client_tls = ptls_new(client_ctx, 0);
             if (client_tls == NULL) {
+                    DBG_PRINTF("ptls_new (client, %s) returns NULL", key_path);
                 ret = -1;
             }
         }
@@ -1119,17 +1121,17 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
                 &certificate_verify.cb, &certificate_verify.verify_ctx,
                 server_ctx->certificates.list, server_ctx->certificates.count);
             if (ret != 0) {
-                DBG_PRINTF("verify_certificate (%s) returns 0x%x", cert_path, ret);
+                DBG_PRINTF("verify_certificate (%s) returns 0x%x (%d)", cert_path, ret, ret);
             }
             /* verify the signature */
-            if (ret == 0) {
+            else {
                 ptls_iovec_t sig;
                 sig.base = signature.base;
                 sig.len = signature.off;
 
                 ret = certificate_verify.cb(certificate_verify.verify_ctx, selected_algorithm, input, sig);
                 if (ret != 0) {
-                    DBG_PRINTF("verify_signature (%s) returns 0x%x", key_path, ret);
+                    DBG_PRINTF("verify_signature (%s) returns 0x%x (%d)", key_path, ret, ret);
                     ret = -1;
                 }
             }
