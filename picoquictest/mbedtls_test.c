@@ -791,9 +791,7 @@ static int test_retrieve_pubkey_one(char const* key_path_ref, char const* cert_p
     ptls_context_t ctx = { 0 };
     mbedtls_x509_crt* chain_head = (mbedtls_x509_crt*)malloc(sizeof(mbedtls_x509_crt));
     uint8_t pubkey_ref[1024];
-    uint8_t pubkey_val[1024];
     size_t pubkey_ref_len = 0;
-    size_t pubkey_val_len = 0;
     char cert_path[512];
     char key_path[512];
 
@@ -972,7 +970,8 @@ static void test_sign_free_context(ptls_context_t* ctx, int config)
     if (ctx->verify_certificate != NULL) {
         switch (config) {
         case 0:
-            ptls_mbedtls_dispose_verify_certificate(ctx);
+            ptls_mbedtls_dispose_verify_certificate(ctx->verify_certificate);
+            ctx->verify_certificate = NULL;
             break;
         default:
             break;
@@ -1040,18 +1039,6 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
     char const * server_name, int server_config, int client_config)
 {
     int ret = 0;
-    ptls_context_t* server_ctx = test_sign_set_ptls_context(key_path, cert_path, trusted_path, 1, server_config); 
-    ptls_context_t* client_ctx = test_sign_set_ptls_context(key_path, cert_path, trusted_path, 0, client_config);
-    ptls_t* client_tls = NULL;
-    ptls_t* server_tls = NULL;
-    uint16_t selected_algorithm = 0;
-    uint8_t signature_smallbuf[256];
-    ptls_buffer_t signature;
-    struct {
-        int (*cb)(void *verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t signature);
-        void *verify_ctx;
-    } certificate_verify;
-    ptls_iovec_t input;
     char cert_path[512];
     char key_path[512];
     char trusted_path[512];
@@ -1062,6 +1049,19 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
         DBG_PRINTF("Cannot build path from %s, %s or %s", cert_path_ref, key_path_ref, trusted_path_ref);
     }
     else {
+        ptls_context_t* server_ctx = test_sign_set_ptls_context(key_path, cert_path, trusted_path, 1, server_config); 
+        ptls_context_t* client_ctx = test_sign_set_ptls_context(key_path, cert_path, trusted_path, 0, client_config);
+        ptls_t* client_tls = NULL;
+        ptls_t* server_tls = NULL;
+        uint16_t selected_algorithm = 0;
+        uint8_t signature_smallbuf[256];
+        ptls_buffer_t signature;
+        struct {
+            int (*cb)(void *verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t signature);
+            void *verify_ctx;
+        } certificate_verify;
+        ptls_iovec_t input;
+
         input.base = (uint8_t*)test_sign_verify_message;
         input.len = test_sign_verify_message_size;
 
