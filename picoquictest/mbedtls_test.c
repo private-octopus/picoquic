@@ -620,6 +620,13 @@ in the "verify" tests.
 #define ASSET_TEST_CA "certs/test-ca.crt"
 #endif
 
+#define ASSET_RSA_NAME "rsa.test.example.com"
+#define ASSET_RSA_PKCS8_NAME "rsa.test.example.com"
+#define ASSET_SECP256R1_NAME "test.example.com"
+#define ASSET_SECP384R1_NAME "secp384r1.test.example.com"
+#define ASSET_SECP521R1_NAME "secp521r1.test.example.com"
+#define ASSET_SECP256R1_PKCS8_NAME "test.example.com"
+
 static int mbedtls_test_load_one_der_key(char const* path_ref)
 {
     int ret = -1;
@@ -681,7 +688,7 @@ static int mbedtls_test_load_one_der_key(char const* path_ref)
     return ret;
 }
 
-static int mbedtls_load_key_test()
+int mbedtls_load_key_test()
 {
     int ret = 0;
 
@@ -836,11 +843,11 @@ static int test_retrieve_pubkey_one(char const* key_path_ref, char const* cert_p
                 if (pubkey_ref_len != key_length ||
                     memcmp(pubkey_ref, chain_head->pk_raw.p + key_index, key_length) != 0) {
                     ret = -1;
-                    DBG_PRINTF("Fail, retrieved key does not match public key.");
+                    DBG_PRINTF("%s", "Fail, retrieved key does not match public key.");
                 }
             }
             else {
-                DBG_PRINTF("Fail");
+                DBG_PRINTF("%s", "Fail");
             }
         }
         /* Clean up */
@@ -1162,11 +1169,5 @@ int mbedtls_sign_verify_test()
 
     return ret;
 }
-
-
-
-
-
-
 
 #endif
