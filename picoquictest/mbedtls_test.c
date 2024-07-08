@@ -1124,7 +1124,7 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
                 DBG_PRINTF("verify_certificate (%s) returns 0x%x (%d)", cert_path, ret, ret);
             }
             /* verify the signature */
-            else {
+            if (ret == 0) {
                 ptls_iovec_t sig;
                 sig.base = signature.base;
                 sig.len = signature.off;
@@ -1134,7 +1134,7 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
                     DBG_PRINTF("verify_signature (%s) returns 0x%x (%d)", key_path, ret, ret);
                     ret = -1;
                 }
-            }
+            } 
             else if (certificate_verify.cb != NULL) {
                 ptls_iovec_t empty;
                 empty.base = NULL;
