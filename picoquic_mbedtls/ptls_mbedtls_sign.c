@@ -1271,7 +1271,7 @@ static int mbedtls_verify_certificate(ptls_verify_certificate_t *_self, ptls_t *
             free(buf);
         }
     }
-    return ret;
+    return pvec;
 }
 
 int ptls_mbedtls_load_certificates(ptls_context_t *ctx, char const *cert_pem_file)
