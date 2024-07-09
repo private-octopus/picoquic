@@ -88,7 +88,8 @@ int ptls_mbedtls_sign_certificate(ptls_sign_certificate_t* _self, ptls_t* tls, p
 ptls_iovec_t* picoquic_mbedtls_get_certs_from_file(char const* pem_fname, size_t* count);
 int ptls_mbedtls_load_certificates(ptls_context_t* ctx, char const* cert_pem_file);
 
-ptls_verify_certificate_t* ptls_mbedtls_get_certificate_verifier(char const* pem_fname);
+ptls_verify_certificate_t* ptls_mbedtls_get_certificate_verifier(char const* pem_fname,
+    unsigned int* is_cert_store_not_empty);
 void ptls_mbedtls_dispose_verify_certificate(ptls_verify_certificate_t* v);
 
 int ptls_mbedtls_load_file(char const* file_name, unsigned char** buf, size_t* n);

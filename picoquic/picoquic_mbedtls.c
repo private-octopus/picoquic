@@ -66,7 +66,7 @@ ptls_verify_certificate_t* picoquic_mbedtls_get_certificate_verifier(char const*
         *is_cert_store_not_empty = 0;
     }
     else {
-        *free_certificate_verifier_fn = picoquic_openssl_dispose_certificate_verifier;
+        *free_certificate_verifier_fn = ptls_mbedtls_dispose_verify_certificate;
     }
     return verifier;
 }
