@@ -1209,6 +1209,7 @@ int mbedtls_configure_test()
     };
     ptls_key_exchange_algorithm_t* exchange[3] = {
         &ptls_mbedtls_secp256r1, &ptls_mbedtls_x25519 };
+
     /* Cleanup previous initiation of the TLS API and do it cleanly. */
     picoquic_tls_api_reset(TLS_API_INIT_FLAGS_NO_OPENSSL |
         TLS_API_INIT_FLAGS_NO_FUSION);
@@ -1271,7 +1272,10 @@ int mbedtls_configure_test()
         DBG_PRINTF("%s", "Crypto random provider does not match mbedtls");
         ret = -1;
     }
-        
+
+    /* Reset configuration to default after test */
+    picoquic_tls_api_reset(0);
+
     return ret;
 }
 
