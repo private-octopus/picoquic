@@ -92,11 +92,6 @@ ptls_verify_certificate_t* ptls_mbedtls_get_certificate_verifier(char const* pem
     unsigned int* is_cert_store_not_empty);
 void ptls_mbedtls_dispose_verify_certificate(ptls_verify_certificate_t* v);
 
-/* Picoquic variant of the get certificate verifier API */
-ptls_verify_certificate_t* picoquic_mbedtls_get_certificate_verifier(char const* cert_root_file_name,
-    unsigned int* is_cert_store_not_empty, picoquic_dispose_certificate_verifier_t * free_certificate_verifier_fn)
-
-
 int ptls_mbedtls_load_file(char const* file_name, unsigned char** buf, size_t* n);
 
 #ifdef __cplusplus

@@ -84,6 +84,14 @@ extern "C" {
     extern picoquic_explain_crypto_error_t picoquic_explain_crypto_error_fn;
     extern picoquic_clear_crypto_errors_t picoquic_clear_crypto_errors_fn;
     extern picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn;
+
+#ifdef PICOQUIC_WITH_MBEDTLS
+    /* Picoquic variant of the get certificate verifier API */
+    ptls_verify_certificate_t* picoquic_mbedtls_get_certificate_verifier(
+        char const* cert_root_file_name,
+        unsigned int* is_cert_store_not_empty,
+        picoquic_dispose_certificate_verifier_t * free_certificate_verifier_fn);
+#endif
 #ifdef __cplusplus
 }
 #endif

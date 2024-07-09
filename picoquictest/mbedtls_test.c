@@ -1033,11 +1033,11 @@ static ptls_context_t* test_sign_set_ptls_context(char const* key_path, char con
     }
     else {
         /* Initialize the client verify context */
-        unsigned int* is_cert_store_not_empty = 0;
+        unsigned int is_cert_store_not_empty = 0;
         switch (config) {
         case 0: /* MbedTLS */
             ctx->verify_certificate = ptls_mbedtls_get_certificate_verifier(trusted_path,
-                is_cert_store_not_empty);
+                &is_cert_store_not_empty);
             break;
         default:
             ret = -1;
