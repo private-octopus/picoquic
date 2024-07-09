@@ -1292,7 +1292,6 @@ ptls_mbedtls_verify_certificate_t* ptls_mbedssl_init_verify_certificate_complete
     mbedtls_x509_crt* trust_ca, mbedtls_x509_crl* trust_crl,
     int (*f_vrfy)(void*, mbedtls_x509_crt*, int, uint32_t*), void* p_vrfy)
 {
-    int ret = 0;
     ptls_mbedtls_verify_certificate_t* verifier =
         (ptls_mbedtls_verify_certificate_t*)malloc(sizeof(ptls_mbedtls_verify_certificate_t));
     if (verifier != NULL) {
@@ -1304,7 +1303,7 @@ ptls_mbedtls_verify_certificate_t* ptls_mbedssl_init_verify_certificate_complete
         verifier->f_vrfy = f_vrfy;
         verifier->p_vrfy = p_vrfy;
     }
-    return ptls_mbedtls_verify_certificate_t;
+    return verifier;
 }
 
 ptls_verify_certificate_t* ptls_mbedtls_get_certificate_verifier(char const* pem_fname,
@@ -1320,15 +1319,14 @@ ptls_verify_certificate_t* ptls_mbedtls_get_certificate_verifier(char const* pem
         psa_ret = mbedtls_x509_crt_parse_file(chain_head, pem_fname);
         if (psa_ret == 0) {
             *is_cert_store_not_empty = 1;
-            verifier = ptls_mbedssl_init_verify_certificate_complete(ptls_ctx,
-                chain_head, NULL, NULL, NULL);
+            verifier = ptls_mbedssl_init_verify_certificate_complete(chain_head, NULL, NULL, NULL);
         }
         else {
 
             mbedtls_x509_crt_free(chain_head);
         }
     }
-    return (verifier==NULL)?NULL:&verifier.super;
+    return (verifier==NULL)?NULL:&verifier->super;
 }
 
 void ptls_mbedtls_dispose_verify_certificate(ptls_verify_certificate_t* v)
