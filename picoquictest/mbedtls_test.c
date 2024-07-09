@@ -1262,8 +1262,8 @@ int mbedtls_configure_test()
         ret = -1;
     }
 
-    if (picoquic_certificate_verifier_fn != picoquic_mbedtls_get_certificate_verifier ||
-        ptls_mbedtls_dispose_verify_certificate != ptls_mbedtls_dispose_verify_certificate) {
+    if (picoquic_get_certificate_verifier_fn != picoquic_mbedtls_get_certificate_verifier ||
+        picoquic_dispose_certificate_verifier_fn != ptls_mbedtls_dispose_verify_certificate) {
         DBG_PRINTF("%s", "At least one verify certs function does not match mbedtls");
         ret = -1;
     }
