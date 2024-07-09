@@ -40,7 +40,7 @@ extern "C" {
     typedef void (*picoquic_dispose_sign_certificate_t)(ptls_sign_certificate_t* cert);
     typedef ptls_iovec_t* (*picoquic_get_certs_from_file_t)(char const* file_name, size_t* count);
     typedef ptls_verify_certificate_t* (*picoquic_get_certificate_verifier_t)(char const* cert_root_file_name,
-        unsigned int* is_cert_store_not_empty, picoquic_free_verify_certificate_ctx * free_certificate_verifier_fn);
+        unsigned int* is_cert_store_not_empty, picoquic_dispose_certificate_verifier_t * free_certificate_verifier_fn);
     typedef void (*picoquic_dispose_certificate_verifier_t)(ptls_verify_certificate_t* verifier);
     typedef int (*picoquic_set_tls_root_certificates_t)(ptls_context_t* ctx, ptls_iovec_t* certs, size_t count);
     typedef int (*picoquic_explain_crypto_error_t)(char const** err_file, int* err_line);

@@ -56,7 +56,7 @@ void picoquic_mbedtls_load(int unload)
 */
 
 ptls_verify_certificate_t* picoquic_mbedtls_get_certificate_verifier(char const* cert_root_file_name,
-    unsigned int* is_cert_store_not_empty, picoquic_free_verify_certificate_ctx * free_certificate_verifier_fn)
+    unsigned int* is_cert_store_not_empty, picoquic_dispose_certificate_verifier_t * free_certificate_verifier_fn)
 {
     ptls_verify_certificate_t* verifier = ptls_mbedtls_get_certificate_verifier(cert_root_file_name,
         is_cert_store_not_empty);
