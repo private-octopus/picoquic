@@ -645,7 +645,7 @@ static int mbedtls_test_load_one_der_key(char const* path_ref)
         DBG_PRINTF("Cannot build path from %s", path_ref);
     }
     else {
-        ret = ptls_mbedtls_load_private_key(&ctx, path);
+        ret = ptls_mbedtls_load_private_key(path, &ctx);
         if (ret != 0) {
             DBG_PRINTF("Cannot create sign_certificate from: %s\n", path);
         }
@@ -820,7 +820,7 @@ static int test_retrieve_pubkey_one(char const* key_path_ref, char const* cert_p
             }
         }
         if (ret == 0) {
-            ret = ptls_mbedtls_load_private_key(&ctx, key_path);
+            ret = ptls_mbedtls_load_private_key(key_path, &ctx);
             if (ret != 0) {
                 DBG_PRINTF("Cannot create load private key from: %s, ret = %d (0x%x, -0x%x)", key_path, ret, ret, (int16_t)-ret);
             }
@@ -935,7 +935,7 @@ size_t num_test_sign_signature_algorithms = sizeof(test_sign_signature_algorithm
 
 static int test_sign_init_server_mbedtls(ptls_context_t* ctx, char const* key_path, char const* cert_path)
 {
-    int ret = ptls_mbedtls_load_private_key(ctx, key_path);
+    int ret = ptls_mbedtls_load_private_key(key_path, ctx);
     if (ret == 0 &&
         (ctx->certificates.list = picoquic_mbedtls_get_certs_from_file(cert_path, &ctx->certificates.count)) == NULL){
         ret = -1;
@@ -1033,9 +1033,11 @@ static ptls_context_t* test_sign_set_ptls_context(char const* key_path, char con
     }
     else {
         /* Initialize the client verify context */
+        unsigned int* is_cert_store_not_empty = 0;
         switch (config) {
         case 0: /* MbedTLS */
-            ret = ptls_mbedtls_init_verify_certificate(ctx, trusted_path);
+            ctx->verify_certificate = ptls_mbedtls_get_certificate_verifier(trusted_path,
+                is_cert_store_not_empty);
             break;
         default:
             ret = -1;
@@ -1120,11 +1122,8 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
             ret = client_ctx->verify_certificate->cb(client_ctx->verify_certificate, client_tls, server_name,
                 &certificate_verify.cb, &certificate_verify.verify_ctx,
                 server_ctx->certificates.list, server_ctx->certificates.count);
-            if (ret != 0) {
-                DBG_PRINTF("verify_certificate (%s) returns 0x%x (%d)", cert_path, ret, ret);
-            }
-            /* verify the signature */
             if (ret == 0) {
+                /* verify the signature */
                 ptls_iovec_t sig;
                 sig.base = signature.base;
                 sig.len = signature.off;
@@ -1136,6 +1135,8 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
                 }
             } 
             else if (certificate_verify.cb != NULL) {
+                /* In case of failure, call with null args to free memory. */
+                DBG_PRINTF("verify_certificate (%s) returns 0x%x (%d)", cert_path, ret, ret);
                 ptls_iovec_t empty;
                 empty.base = NULL;
                 empty.len = 0;
@@ -1164,7 +1165,6 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
 int mbedtls_sign_verify_test()
 {
     int ret = 0;
-
 
     if ((ret = ptls_mbedtls_init()) != 0) {
         DBG_PRINTF("%s", "psa_crypto_init fails.");
@@ -1195,5 +1195,85 @@ int mbedtls_sign_verify_test()
     }
     return ret;
 }
+
+int mbedtls_configure_test()
+{
+    int ret = 0;
+    int cipher_suite_match_low = 0;
+    int cipher_suite_match_high = 0;
+    int key_exchange_max = 0;
+    ptls_cipher_suite_t* targets[3] = {
+        &ptls_mbedtls_aes128gcmsha256,
+        &ptls_mbedtls_aes256gcmsha384,
+        &ptls_mbedtls_chacha20poly1305sha256
+    };
+    ptls_key_exchange_algorithm_t* exchange[3] = {
+        &ptls_mbedtls_secp256r1, &ptls_mbedtls_x25519 };
+    /* Cleanup previous initiation of the TLS API and do it cleanly. */
+    picoquic_tls_api_reset(TLS_API_INIT_FLAGS_NO_OPENSSL |
+        TLS_API_INIT_FLAGS_NO_FUSION);
+    /* Verify that the negotiated parameters have the expected value */
+    for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX; i++) {
+        for (int j = 0; j < 3; j++) {
+            if (targets[j] == picoquic_cipher_suites[i].high_memory_suite) {
+                cipher_suite_match_high |= (1 << j);
+            }
+            if (targets[j] == picoquic_cipher_suites[i].low_memory_suite) {
+                cipher_suite_match_low |= (1 << j);
+            }
+        }
+        if (cipher_suite_match_low == 0x7 && cipher_suite_match_high == 0x7) {
+            break;
+        }
+    }
+    if (cipher_suite_match_low != 0x7 || cipher_suite_match_high != 0x7) {
+        DBG_PRINTF("Suites registration test fails, expected 0x%x, 0x%x, got 0x%x, 0x%x",
+            7, 7, cipher_suite_match_low, cipher_suite_match_high);
+        ret = -1;
+    }
+
+    if (picoquic_key_exchange_secp256r1[0] != &ptls_mbedtls_secp256r1) {
+        DBG_PRINTF("%s", "key_exchange_secp256r1 does not match");
+        ret = -1;
+    }
+
+    for (int i = 0; i < PICOQUIC_KEY_EXCHANGES_NB_MAX; i++) {
+        for (int j = 0; j < 2; j++) {
+            if (exchange[j] == picoquic_key_exchanges[i]) {
+                key_exchange_max |= (1 << j);
+            }
+            if (key_exchange_max == 0x3) {
+                break;
+            }
+        }
+    }
+
+    if (key_exchange_max != 0x3) {
+        DBG_PRINTF("Exchange registration test fails, expected 0x%x, got 0x%x",
+            7, key_exchange_max);
+        ret = -1;
+    }
+
+    if (picoquic_set_private_key_from_file_fn != ptls_mbedtls_load_private_key ||
+        picoquic_dispose_sign_certificate_fn != ptls_mbedtls_dispose_sign_certificate ||
+        picoquic_get_certs_from_file_fn != picoquic_mbedtls_get_certs_from_file) {
+        DBG_PRINTF("%s", "At least one private key function does not match mbedtls");
+        ret = -1;
+    }
+
+    if (picoquic_certificate_verifier_fn != picoquic_mbedtls_get_certificate_verifier ||
+        ptls_mbedtls_dispose_verify_certificate != ptls_mbedtls_dispose_verify_certificate) {
+        DBG_PRINTF("%s", "At least one verify certs function does not match mbedtls");
+        ret = -1;
+    }
+
+    if (picoquic_crypto_random_provider_fn != ptls_mbedtls_random_bytes) {
+        DBG_PRINTF("%s", "Crypto random provider does not match mbedtls");
+        ret = -1;
+    }
+        
+    return ret;
+}
+
 
 #endif

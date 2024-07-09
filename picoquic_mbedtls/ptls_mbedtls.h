@@ -79,7 +79,7 @@ typedef struct st_mbedtls_message_verify_ctx_t {
     psa_key_id_t key_id;
 } mbedtls_message_verify_ctx_t;
 
-int ptls_mbedtls_load_private_key(ptls_context_t* ctx, char const* pem_fname);
+int ptls_mbedtls_load_private_key(char const* pem_fname, ptls_context_t* ctx);
 void ptls_mbedtls_dispose_sign_certificate(ptls_sign_certificate_t* _self);
 int ptls_mbedtls_sign_certificate(ptls_sign_certificate_t* _self, ptls_t* tls, ptls_async_job_t** async,
     uint16_t* selected_algorithm, ptls_buffer_t* outbuf, ptls_iovec_t input,
@@ -88,7 +88,7 @@ int ptls_mbedtls_sign_certificate(ptls_sign_certificate_t* _self, ptls_t* tls, p
 ptls_iovec_t* picoquic_mbedtls_get_certs_from_file(char const* pem_fname, size_t* count);
 int ptls_mbedtls_load_certificates(ptls_context_t* ctx, char const* cert_pem_file);
 
-int ptls_mbedtls_init_verify_certificate(ptls_context_t* ptls_ctx, char const* pem_fname);
+ptls_verify_certificate_t* ptls_mbedtls_get_certificate_verifier(char const* pem_fname);
 void ptls_mbedtls_dispose_verify_certificate(ptls_verify_certificate_t* v);
 
 int ptls_mbedtls_load_file(char const* file_name, unsigned char** buf, size_t* n);

@@ -24,8 +24,6 @@
 */
 
 #include "picotls.h"
-#include "picoquic_crypto_provider_api.h"
-
 #ifndef PICOQUIC_WITH_MBEDTLS
 void picoquic_mbedtls_load(int unload)
 {
@@ -51,12 +49,26 @@ void picoquic_mbedtls_load(int unload)
 #include "mbedtls/chacha20.h"
 #include "mbedtls/ecdh.h"
 
+#include "picoquic_crypto_provider_api.h"
+
+
 /* Set the certificate signature function and context using MbedSSL
 */
 
-static int set_mbdetls_private_key_from_key_file(char const* keypem, ptls_context_t* ctx)
+ptls_verify_certificate_t* picoquic_mbedtls_get_certificate_verifier(char const* cert_root_file_name,
+    unsigned int* is_cert_store_not_empty, picoquic_free_verify_certificate_ctx * free_certificate_verifier_fn)
 {
-    return ptls_mbedtls_load_private_key(ctx, keypem);
+    ptls_verify_certificate_t* verifier = ptls_mbedtls_get_certificate_verifier(cert_root_file_name,
+        is_cert_store_not_empty);
+
+    if (verifier == NULL) {
+        free_certificate_verifier_fn = NULL;
+        *is_cert_store_not_empty = 0;
+    }
+    else {
+        *free_certificate_verifier_fn = picoquic_openssl_dispose_certificate_verifier;
+    }
+    return verifier;
 }
 
 /* Register the mbedtls functions
@@ -76,18 +88,18 @@ void picoquic_mbedtls_load(int unload)
         picoquic_register_key_exchange_algorithm(&ptls_mbedtls_x25519);
 
         picoquic_register_tls_key_provider_fn(
-            set_mbdetls_private_key_from_key_file,
+            ptls_mbedtls_load_private_key,
             ptls_mbedtls_dispose_sign_certificate,
             picoquic_mbedtls_get_certs_from_file);
 
-        /*
         picoquic_register_verify_certificate_fn(
-            picoquic_openssl_get_certificate_verifier);
+            picoquic_mbedtls_get_certificate_verifier,
+            ptls_mbedtls_dispose_verify_certificate,
+            NULL);
+        /*
         picoquic_register_explain_crypto_error_fn(picoquic_open_ssl_explain_crypto_error,
             picoquic_openssl_clear_crypto_errors);
-        */
-
-
+            */
 
         picoquic_register_crypto_random_provider_fn(ptls_mbedtls_random_bytes);
     }

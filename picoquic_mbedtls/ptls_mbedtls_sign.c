@@ -790,7 +790,7 @@ int ptls_mbedtls_load_file(char const * file_name, unsigned char ** buf, size_t 
     return ret;
 }
 
-int ptls_mbedtls_load_private_key(ptls_context_t *ctx, char const *pem_fname)
+int ptls_mbedtls_load_private_key(char const *pem_fname, ptls_context_t *ctx)
 {
     int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
     size_t n;
@@ -1288,17 +1288,14 @@ int ptls_mbedtls_load_certificates(ptls_context_t *ctx, char const *cert_pem_fil
 * parameter is a file name for the list of trusted certificates. 
 */
 
-int ptls_mbedssl_init_verify_certificate_complete(ptls_context_t * ptls_ctx,
+ptls_mbedtls_verify_certificate_t* ptls_mbedssl_init_verify_certificate_complete(
     mbedtls_x509_crt* trust_ca, mbedtls_x509_crl* trust_crl,
     int (*f_vrfy)(void*, mbedtls_x509_crt*, int, uint32_t*), void* p_vrfy)
 {
     int ret = 0;
     ptls_mbedtls_verify_certificate_t* verifier =
         (ptls_mbedtls_verify_certificate_t*)malloc(sizeof(ptls_mbedtls_verify_certificate_t));
-    if (verifier == NULL) {
-        ret = PTLS_ERROR_NO_MEMORY;
-    }
-    else {
+    if (verifier != NULL) {
         memset(verifier, 0, sizeof(ptls_mbedtls_verify_certificate_t));
         verifier->super.cb = mbedtls_verify_certificate;
         verifier->super.algos = mbedtls_verify_sign_algos; /* list of supported algorithms, end with 0xFFFF */
@@ -1306,44 +1303,32 @@ int ptls_mbedssl_init_verify_certificate_complete(ptls_context_t * ptls_ctx,
         verifier->trust_crl = trust_crl;
         verifier->f_vrfy = f_vrfy;
         verifier->p_vrfy = p_vrfy;
-        ptls_ctx->verify_certificate = &verifier->super;
     }
-    return ret;
+    return ptls_mbedtls_verify_certificate_t;
 }
 
-int ptls_mbedtls_init_verify_certificate(ptls_context_t* ptls_ctx, char const* pem_fname)
+ptls_verify_certificate_t* ptls_mbedtls_get_certificate_verifier(char const* pem_fname,
+    unsigned int* is_cert_store_not_empty)
 {
-    int ret = 0;
+    ptls_mbedtls_verify_certificate_t* verifier = NULL;
+    *is_cert_store_not_empty = 0;
     mbedtls_x509_crt* chain_head = (mbedtls_x509_crt*)malloc(sizeof(mbedtls_x509_crt));
-
-    if (chain_head == NULL) {
-        ret = PTLS_ERROR_NO_MEMORY;
-    }
-    else {
+    if (chain_head != NULL) {
         int psa_ret;
         mbedtls_x509_crt_init(chain_head);
 
         psa_ret = mbedtls_x509_crt_parse_file(chain_head, pem_fname);
         if (psa_ret == 0) {
-            ret = ptls_mbedssl_init_verify_certificate_complete(ptls_ctx,
+            *is_cert_store_not_empty = 1;
+            verifier = ptls_mbedssl_init_verify_certificate_complete(ptls_ctx,
                 chain_head, NULL, NULL, NULL);
         }
-        else if (psa_ret > 0) {
-            /* some of the certificates could not parsed */
-            ret = PTLS_ALERT_BAD_CERTIFICATE;
-        }
-        else if (psa_ret == PSA_ERROR_INSUFFICIENT_MEMORY) {
-            ret = PTLS_ERROR_NO_MEMORY;
-        }
         else {
-            ret = PTLS_ERROR_LIBRARY;
-        }
 
-        if (ret != 0 && chain_head != NULL) {
             mbedtls_x509_crt_free(chain_head);
         }
     }
-    return ret;
+    return (verifier==NULL)?NULL:&verifier.super;
 }
 
 void ptls_mbedtls_dispose_verify_certificate(ptls_verify_certificate_t* v)

@@ -101,29 +101,20 @@ struct st_picoquic_log_event_t {
 
 #ifdef CRYPTO_PROVIDERS_REGION
 
-#define PICOQUIC_CIPHER_SUITES_NB_MAX 8
-struct st_picoquic_cipher_suites_t {
-    ptls_cipher_suite_t* high_memory_suite;
-    ptls_cipher_suite_t* low_memory_suite;
-};
-
-static struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
+struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
 
 #define PICOQUIC_KEY_EXCHANGES_NB_MAX 4
-static ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
-static ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
+ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
+ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
 picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn = NULL;
-static picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn = NULL;
-static picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn = NULL;
-
-static picoquic_get_certificate_verifier_t picoquic_certificate_verifier_fn = NULL;
-static picoquic_dispose_certificate_verifier_t picoquic_dispose_certificate_verifier_fn = NULL;
-static picoquic_set_tls_root_certificates_t picoquic_set_tls_root_certificates_fn = NULL;
-
-static picoquic_explain_crypto_error_t picoquic_explain_crypto_error_fn = NULL;
-static picoquic_clear_crypto_errors_t picoquic_clear_crypto_errors_fn = NULL;
-
-static picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn = NULL;
+picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn = NULL;
+picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn = NULL;
+picoquic_get_certificate_verifier_t picoquic_get_certificate_verifier_fn = NULL;
+picoquic_dispose_certificate_verifier_t picoquic_dispose_certificate_verifier_fn = NULL;
+picoquic_set_tls_root_certificates_t picoquic_set_tls_root_certificates_fn = NULL;
+picoquic_explain_crypto_error_t picoquic_explain_crypto_error_fn = NULL;
+picoquic_clear_crypto_errors_t picoquic_clear_crypto_errors_fn = NULL;
+picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn = NULL;
 
 /* Initialization of the cryptographic tables and functions
  * 
@@ -201,7 +192,7 @@ static void picoquic_tls_api_zero()
     picoquic_dispose_sign_certificate_fn = NULL;
     picoquic_get_certs_from_file_fn = NULL;
 
-    picoquic_certificate_verifier_fn = NULL;
+    picoquic_get_certificate_verifier_fn = NULL;
     picoquic_dispose_certificate_verifier_fn = NULL;
     picoquic_set_tls_root_certificates_fn = NULL;
 
@@ -261,7 +252,7 @@ void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory
 /* Registration of key exchange algorithms */
 void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key_exchange)
 {
-    for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX; i++) {
+    for (int i = 0; i < PICOQUIC_KEY_EXCHANGES_NB_MAX; i++) {
         if (picoquic_key_exchanges[i] == NULL ||
             picoquic_key_exchanges[i]->id == key_exchange->id) {
             /* Replace the lower priority provider if present! */
@@ -291,7 +282,7 @@ void picoquic_register_verify_certificate_fn(picoquic_get_certificate_verifier_t
     picoquic_dispose_certificate_verifier_t dispose_certificate_verifier_fn,
     picoquic_set_tls_root_certificates_t set_tls_root_certificates_fn)
 {
-    picoquic_certificate_verifier_fn = certificate_verifier_fn;
+    picoquic_get_certificate_verifier_fn = certificate_verifier_fn;
     picoquic_dispose_certificate_verifier_fn = dispose_certificate_verifier_fn;
     picoquic_set_tls_root_certificates_fn = set_tls_root_certificates_fn;
 }
@@ -590,11 +581,11 @@ ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count
 ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_root_file_name,
     unsigned int* is_cert_store_not_empty, picoquic_free_verify_certificate_ctx * p_free_certificate_verifier_fn)
 {
-    if (picoquic_certificate_verifier_fn == NULL) {
+    if (picoquic_get_certificate_verifier_fn == NULL) {
         return NULL;
     }
     else {
-        return picoquic_certificate_verifier_fn(cert_root_file_name, is_cert_store_not_empty,
+        return picoquic_get_certificate_verifier_fn(cert_root_file_name, is_cert_store_not_empty,
             p_free_certificate_verifier_fn);
     }
 }
