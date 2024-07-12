@@ -62,6 +62,7 @@
 #include "picoquic_crypto_provider_api.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "picoquic_unified_log.h"
 
 #define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
