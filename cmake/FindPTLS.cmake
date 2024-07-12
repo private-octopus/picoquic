@@ -2,7 +2,9 @@
 
 if (PICOQUIC_FETCH_PTLS OR PICOQUIC_PTLS_SUBMODULE)
     set(PTLS_CORE_LIBRARY picotls-core)
-    set(PTLS_OPENSSL_LIBRARY picotls-openssl)
+    if (WITH_OPENSSL)
+        set(PTLS_OPENSSL_LIBRARY picotls-openssl)
+    endif ()
     set(PTLS_MINICRYPTO_LIBRARY picotls-minicrypto)
     if(WITH_FUSION)
         set(PTLS_FUSION_LIBRARY picotls-fusion)

@@ -53,7 +53,11 @@
 #include <stddef.h>
 #include "picotls.h"
 #include "picoquic_internal.h"
+
+#ifndef PTLS_WITHOUT_OPENSSL
 #include "picotls/openssl.h"
+#endif
+
 #include "tls_api.h"
 #include "picoquic_crypto_provider_api.h"
 #include <stdio.h>
