@@ -27,9 +27,9 @@ jobs:
         run: |
              pwd
              cd ..
-             git clone https://github.com/Mbed-TLS/mbedtls
+             git clone --single-branch --branch master https://github.com/Mbed-TLS/mbedtls
              cd mbedtls
-             echo "cloned mbedtls"
+             echo "cloned mbedtls, branch=master"
              git submodule init
              git submodule update
              mkdir build
@@ -40,8 +40,6 @@ jobs:
              echo "compiled MbedTLS"
              pwd
              cd ../../picoquic
-             pwd
-             ls
 
       - name: Building picoquic
         run: |
@@ -52,6 +50,8 @@ jobs:
           # $CC --version
           ./ci/build_picotls.sh
           cmake -S . -B build "-DWITH_OPENSSL=OFF" "-DWITH_MBEDTLS=ON"
+          echo ls  /home/runner/work/picoquic/mbedtls/include
+          ls /home/runner/work/picoquic/mbedtls/include
           cmake --build build
 
       - name: Perform Unit Tests
@@ -59,6 +59,8 @@ jobs:
             ulimit -c unlimited -S
             cd build
             make picoquic_ct
-            ./picoquic_ct -S .. mbedtls_crypto minicrypto_is_last mbedtls && QUICRESULT=$?
+            ./picoquic_ct -S .. mbedtls_crypto mbedtls_load_key mbedtls_load_key_fail \
+                          mbedtls_retrieve_pubkey mbedtls_sign_verify \
+                          minicrypto_is_last mbedtls && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
             exit 1

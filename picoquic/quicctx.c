@@ -4861,14 +4861,11 @@ void picoquic_disable_keep_alive(picoquic_cnx_t* cnx)
     cnx->keep_alive_interval = 0;
 }
 
-int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, 
-    struct st_ptls_verify_certificate_t * cb, picoquic_free_verify_certificate_ctx free_fn) {
+void picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, 
+    ptls_verify_certificate_t * cb, picoquic_free_verify_certificate_ctx free_fn) {
     picoquic_dispose_verify_certificate_callback(quic);
 
-    quic->verify_certificate_callback = cb;
-    quic->free_verify_certificate_callback_fn = free_fn;
-
-    return picoquic_enable_custom_verify_certificate_callback(quic);
+    picoquic_tls_set_verify_certificate_callback(quic, cb, free_fn);
 }
 
 int picoquic_is_client(picoquic_cnx_t* cnx)
