@@ -5080,7 +5080,6 @@ int set_verify_certificate_callback_test()
             ret = -1;
         }
     }
-
     /* recreate the client connection */
     if (ret == 0) {
         test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_connection_id,
@@ -5094,17 +5093,15 @@ int set_verify_certificate_callback_test()
             ret = picoquic_start_client_cnx(test_ctx->cnx_client);
         }
     }
-
     /* Set the verify callback for the client */
     if (ret == 0) {
-        ret = picoquic_set_verify_certificate_callback(test_ctx->qclient, &verify_cb.super, NULL);
+        picoquic_set_verify_certificate_callback(test_ctx->qclient, &verify_cb.super, NULL);
     }
 
     /* Set the verify callback for the server */
     if (ret == 0) {
-        ret = picoquic_set_verify_certificate_callback(test_ctx->qserver, &verify_cb.super, NULL);
+        picoquic_set_verify_certificate_callback(test_ctx->qserver, &verify_cb.super, NULL);
     }
-
     /* Activate client authentication */
     if (ret == 0) {
         picoquic_set_client_authentication(test_ctx->qserver, 1);

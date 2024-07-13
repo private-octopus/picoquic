@@ -21,6 +21,7 @@
 
 #ifndef PICOQUIC_CRYPTO_PROVIDER_API_H
 #define PICOQUIC_CRYPTO_PROVIDER_API_H
+#include "picoquic.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,9 +39,9 @@ extern "C" {
     typedef int (*picoquic_set_private_key_from_file_t)(char const* keypem, ptls_context_t* ctx);
     typedef void (*picoquic_dispose_sign_certificate_t)(ptls_sign_certificate_t* cert);
     typedef ptls_iovec_t* (*picoquic_get_certs_from_file_t)(char const* file_name, size_t* count);
-    typedef ptls_verify_certificate_t* (*picoquic_get_certificate_verifier_t)(char const* cert_root_file_name,
-        unsigned int* is_cert_store_not_empty);
     typedef void (*picoquic_dispose_certificate_verifier_t)(ptls_verify_certificate_t* verifier);
+    typedef ptls_verify_certificate_t* (*picoquic_get_certificate_verifier_t)(char const* cert_root_file_name,
+        unsigned int* is_cert_store_not_empty, picoquic_dispose_certificate_verifier_t * free_certificate_verifier_fn);
     typedef int (*picoquic_set_tls_root_certificates_t)(ptls_context_t* ctx, ptls_iovec_t* certs, size_t count);
     typedef int (*picoquic_explain_crypto_error_t)(char const** err_file, int* err_line);
     typedef void (*picoquic_clear_crypto_errors_t)();
@@ -61,6 +62,36 @@ extern "C" {
 
     void picoquic_register_crypto_random_provider_fn(picoquic_crypto_random_provider_t random_provider);
 
+/* Additional definitions required for testing and verification */
+
+#define PICOQUIC_CIPHER_SUITES_NB_MAX 8
+    struct st_picoquic_cipher_suites_t {
+        ptls_cipher_suite_t* high_memory_suite;
+        ptls_cipher_suite_t* low_memory_suite;
+    };
+
+    extern struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
+
+#define PICOQUIC_KEY_EXCHANGES_NB_MAX 4
+    extern ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
+    extern ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
+    extern picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn;
+    extern picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn;
+    extern picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn;
+    extern picoquic_get_certificate_verifier_t picoquic_get_certificate_verifier_fn;
+    extern picoquic_dispose_certificate_verifier_t picoquic_dispose_certificate_verifier_fn;
+    extern picoquic_set_tls_root_certificates_t picoquic_set_tls_root_certificates_fn;
+    extern picoquic_explain_crypto_error_t picoquic_explain_crypto_error_fn;
+    extern picoquic_clear_crypto_errors_t picoquic_clear_crypto_errors_fn;
+    extern picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn;
+
+#ifdef PICOQUIC_WITH_MBEDTLS
+    /* Picoquic variant of the get certificate verifier API */
+    ptls_verify_certificate_t* picoquic_mbedtls_get_certificate_verifier(
+        char const* cert_root_file_name,
+        unsigned int* is_cert_store_not_empty,
+        picoquic_dispose_certificate_verifier_t * free_certificate_verifier_fn);
+#endif
 #ifdef __cplusplus
 }
 #endif

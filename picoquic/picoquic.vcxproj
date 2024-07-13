@@ -192,6 +192,7 @@
     <ClCompile Include="winsockloop.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\picoquic_mbedtls\ptls_mbedtls.h" />
     <ClInclude Include="bytestream.h" />
     <ClInclude Include="cc_common.h" />
     <ClInclude Include="frames.h" />
