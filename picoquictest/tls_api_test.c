@@ -3775,7 +3775,7 @@ int tls_retry_token_valid_test()
 
         /* test of an invalid token, overly long */
         if (ret == 0 && token_mode == 0) {
-            uint8_t big_token[1024];
+            uint8_t big_token[PICOQUIC_MAX_PACKET_SIZE];
             if (token_size < sizeof(big_token)) {
                 memcpy(big_token, token_buffer, token_size);
                 memset(big_token + token_size, 0xa5, sizeof(big_token) - token_size);
