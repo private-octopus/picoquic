@@ -2902,8 +2902,16 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
     odcid->id_len = 0;
 
     /* decode the encrypted token */
-    ret = picoquic_server_decrypt_retry_token(quic, addr_peer, is_new_token, token, token_size,
-        text, &text_len);
+    if (token_size > sizeof(text)) {
+        /* regular tokens produced by picoquic are always short, and a short decoding
+        * buffer should be sufficient. If this text fires, it probably because of
+        * an attack, or buggy code at the peer. */
+        ret = -1;
+    }
+    else {
+        ret = picoquic_server_decrypt_retry_token(quic, addr_peer, is_new_token, token, token_size,
+            text, &text_len);
+    }
 
     if (ret == 0) {
         /* Decode the clear text components */

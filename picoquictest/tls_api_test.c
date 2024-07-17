@@ -3772,6 +3772,22 @@ int tls_retry_token_valid_test()
                 ret = -1;
             }
         }
+
+        /* test of an invalid token, overly long */
+        if (ret == 0 && token_mode == 0) {
+            uint8_t big_token[PICOQUIC_MAX_PACKET_SIZE];
+            if (token_size < sizeof(big_token)) {
+                memcpy(big_token, token_buffer, token_size);
+                memset(big_token + token_size, 0xa5, sizeof(big_token) - token_size);
+                verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
+                    &is_new_token, &odcid_found, cid[0], pn[2],
+                    token_buffer, sizeof(big_token), 0);
+                if (verified == 0) {
+                    DBG_PRINTF("%s", "Bad length check fails\n");
+                    ret = -1;
+                }
+            }
+        }
     }
 
     picoquic_free(quic);
