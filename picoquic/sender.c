@@ -2593,11 +2593,27 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
     int no_space_left = 0;
     picoquic_local_cnxid_list_t* local_cnxid_list = cnx->first_local_cnxid_list;
     if (cnx->is_multipath_enabled) {
+        /* If the number of local list is lower than the max number of paths, 
+        * update that number and queue a MAX PATH ID frame.
+         */
+        uint64_t new_max_path_id = cnx->next_path_id_in_lists +
+            cnx->local_parameters.initial_max_path_id -
+            cnx->nb_local_cnxid_lists;
+        if (cnx->max_path_id_local < new_max_path_id) {
+            uint8_t * bytes_next = picoquic_format_max_path_id_frame(bytes, bytes_max, new_max_path_id);
+            if (bytes_next == NULL) {
+                no_space_left = 1;
+            }
+            else {
+                bytes = bytes_next;
+                cnx->max_path_id_local = new_max_path_id;
+            }
+        }
         /* If the number of local lists is lower than the max number of paths,
          * create more. The code assume that path[0] is created during handshake. */
-        while (cnx->nb_local_cnxid_lists < cnx->local_parameters.initial_max_paths &&
-            cnx->max_paths_remote > cnx->nb_local_cnxid_lists) {
-            (void) picoquic_find_or_create_local_cnxid_list(cnx, cnx->nb_local_cnxid_lists, 1);
+        while (!no_space_left && cnx->nb_local_cnxid_lists < cnx->local_parameters.initial_max_path_id &&
+            cnx->next_path_id_in_lists < cnx->max_path_id_remote) {
+            (void) picoquic_find_or_create_local_cnxid_list(cnx, cnx->next_path_id_in_lists, 1);
         }
     }
 

@@ -188,14 +188,14 @@ uint8_t client_param4[] = {
     picoquic_tp_idle_timeout, 1, 0x1E,
     picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
-    0xC0 | (uint8_t)((picoquic_tp_initial_max_paths >> 56) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_paths >> 48) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_paths >> 40) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_paths >> 32) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_paths >> 24) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_paths >> 16) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_paths >> 8) & 0xFF),
-    (uint8_t)(picoquic_tp_initial_max_paths&0xFF), 1, 4,
+    0xC0 | (uint8_t)((picoquic_tp_initial_max_path_id >> 56) & 0xFF),
+    (uint8_t)((picoquic_tp_initial_max_path_id >> 48) & 0xFF),
+    (uint8_t)((picoquic_tp_initial_max_path_id >> 40) & 0xFF),
+    (uint8_t)((picoquic_tp_initial_max_path_id >> 32) & 0xFF),
+    (uint8_t)((picoquic_tp_initial_max_path_id >> 24) & 0xFF),
+    (uint8_t)((picoquic_tp_initial_max_path_id >> 16) & 0xFF),
+    (uint8_t)((picoquic_tp_initial_max_path_id >> 8) & 0xFF),
+    (uint8_t)(picoquic_tp_initial_max_path_id&0xFF), 1, 4,
 };
 
 uint8_t client_param5[] = {
@@ -516,9 +516,9 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
         param->is_multipath_enabled, ref->is_multipath_enabled);
     ret = -1;
     }
-    else if (param->initial_max_paths != ref->initial_max_paths) {
-    DBG_PRINTF("initial_max_paths: got %" PRIu64 ", expected%" PRIu64 "\n",
-        param->initial_max_paths, ref->initial_max_paths);
+    else if (param->initial_max_path_id != ref->initial_max_path_id) {
+    DBG_PRINTF("initial_max_path_id: got %" PRIu64 ", expected%" PRIu64 "\n",
+        param->initial_max_path_id, ref->initial_max_path_id);
     ret = -1;
     }
 

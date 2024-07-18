@@ -368,13 +368,13 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
         test_parameters->enable_multipath = 0;
         test_parameters->enable_simple_multipath = 1;
         test_parameters->is_multipath_enabled = 0;
-        test_parameters->initial_max_paths = 0;
+        test_parameters->initial_max_path_id = 0;
         break;
     case multipath_variant_unique:
         test_parameters->enable_multipath = 0;
         test_parameters->enable_simple_multipath = 0;
         test_parameters->is_multipath_enabled = 1;
-        test_parameters->initial_max_paths = 3;
+        test_parameters->initial_max_path_id = 3;
         break;
     default:
         break;
@@ -731,7 +731,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             break;
         case multipath_variant_unique:
             test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
-            test_ctx->cnx_client->local_parameters.initial_max_paths = 3;
+            test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
             break;
         default:
             ret = -1;
