@@ -361,8 +361,8 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_enable_bdp_frame:
                     qlog_vint_transport_extension(f, "enable_bdp_frame", s, extension_length);
                     break;
-                case picoquic_tp_initial_max_paths:
-                    qlog_vint_transport_extension(f, "initial_max_paths", s, extension_length);
+                case picoquic_tp_initial_max_path_id:
+                    qlog_vint_transport_extension(f, "initial_max_path_id", s, extension_length);
                     break;
                 default:
                     /* dump unknown extensions */
@@ -818,11 +818,11 @@ void qlog_path_available_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"sequence\": %"PRIu64, sequence);
 }
 
-void qlog_max_paths_frame(FILE* f, bytestream* s)
+void qlog_max_path_id_frame(FILE* f, bytestream* s)
 {
-    uint64_t max_paths = 0;
-    byteread_vint(s, &max_paths);
-    fprintf(f, ", \"max_paths\": %"PRIu64, max_paths);
+    uint64_t max_path_id = 0;
+    byteread_vint(s, &max_path_id);
+    fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
 }
 
 void qlog_reset_stream_frame(FILE* f, bytestream* s)
@@ -1052,7 +1052,7 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
     uint64_t ack_delay = 0;
     uint64_t num = 0;
     uint64_t path_id = 0;
-    if (ftype == picoquic_frame_type_ack_mp || ftype == picoquic_frame_type_ack_mp_ecn) {
+    if (ftype == picoquic_frame_type_mp_ack || ftype == picoquic_frame_type_mp_ack_ecn) {
         byteread_vint(s, &path_id);
         fprintf(f, ", \"path_id\": %"PRIu64"", path_id);
     }
@@ -1083,7 +1083,7 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
         largest -= range + 1;
     }
     fprintf(f, "]");
-    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_ack_mp_ecn) {
+    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_mp_ack_ecn) {
         char const* ecn_name[3] = { "ect0", "ect1", "ce" };
         for (int ecnx = 0; ecnx < 3; ecnx++) {
             uint64_t ecn_v = 0;
@@ -1198,8 +1198,8 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_ack:
     case picoquic_frame_type_ack_ecn:
-    case picoquic_frame_type_ack_mp:
-    case picoquic_frame_type_ack_mp_ecn:
+    case picoquic_frame_type_mp_ack:
+    case picoquic_frame_type_mp_ack_ecn:
         qlog_ack_frame(ftype, f, s);
         break;
     case picoquic_frame_type_reset_stream:
@@ -1276,8 +1276,8 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     case picoquic_frame_type_bdp:
         qlog_bdp_frame(f, s);
         break;
-    case picoquic_frame_type_max_paths:
-        qlog_max_paths_frame(f, s);
+    case picoquic_frame_type_max_path_id:
+        qlog_max_path_id_frame(f, s);
         break;
     default:
         s->ptr = ptr_before_type;

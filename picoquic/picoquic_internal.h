@@ -151,13 +151,13 @@ typedef enum {
     picoquic_frame_type_ack_frequency = 0xAF,
     picoquic_frame_type_immediate_ack = 0xAC,
     picoquic_frame_type_time_stamp = 757,
-    picoquic_frame_type_ack_mp = 0x15228c00,
-    picoquic_frame_type_ack_mp_ecn =  0x15228c01,
+    picoquic_frame_type_mp_ack = 0x15228c00,
+    picoquic_frame_type_mp_ack_ecn =  0x15228c01,
     picoquic_frame_type_path_abandon =  0x15228c05,
     picoquic_frame_type_path_standby =  0x15228c07,
     picoquic_frame_type_path_available =  0x15228c08,
     picoquic_frame_type_bdp = 0xebd9,
-    picoquic_frame_type_max_paths = 0x15228c0b
+    picoquic_frame_type_max_path_id = 0x15228c0c
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -593,7 +593,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_enable_simple_multipath  0x29e3d19e
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
-#define picoquic_tp_initial_max_paths  0x0f739bbc1b666d07ull /* per PR 292 draft quic multipath 06 */
+#define picoquic_tp_initial_max_path_id  0x0f739bbc1b666d09ull /* per draft quic multipath 09 */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
  * This is kept private for now; and will only be set through the "set quic log"
@@ -1485,13 +1485,17 @@ typedef struct st_picoquic_cnx_t {
     uint64_t unique_path_id_next;
     picoquic_path_t* nominal_path_for_ack;
     uint64_t status_sequence_to_send_next;
-    uint64_t max_paths_local;
-    uint64_t max_paths_acknowledged;
-    uint64_t max_paths_remote;
+    uint64_t max_path_id_local;
+    uint64_t max_path_id_acknowledged;
+    uint64_t max_path_id_remote;
     /* Management of the CNX-ID stash */
     picoquic_remote_cnxid_stash_t * first_remote_cnxid_stash;
-    /* management of local CID stash */
+    /* management of local CID stash.
+    * the number of lists represents the number of list already created,
+    * minus the number of lists deleted.
+    * */
     uint64_t nb_local_cnxid_lists;
+    uint64_t next_path_id_in_lists;
     picoquic_local_cnxid_list_t * first_local_cnxid_list;
 
     /* Management of ACK frequency */
@@ -1962,6 +1966,7 @@ uint8_t* picoquic_format_path_challenge_frame(uint8_t* bytes, uint8_t* bytes_max
 uint8_t* picoquic_format_path_response_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t challenge);
 int picoquic_should_repeat_path_response_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_max);
 uint8_t* picoquic_format_new_connection_id_frame(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_local_cnxid_t* l_cid);
+uint8_t* picoquic_format_max_path_id_frame(uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id);
 uint8_t* picoquic_format_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t unique_path_id, uint64_t sequence);
 int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length);

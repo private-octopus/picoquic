@@ -38,9 +38,9 @@ int picoquic_check_max_streams_frame_needs_repeat(picoquic_cnx_t* cnx, const uin
     const uint8_t* p_last_byte, int* no_need_to_repeat);
 int picoquic_path_available_or_standby_frame_need_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     const uint8_t* bytes_max, int* no_need_to_repeat);
-int picoquic_max_paths_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+int picoquic_max_path_id_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     const uint8_t* bytes_max, int* no_need_to_repeat);
-int picoquic_process_ack_of_max_paths_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+int picoquic_process_ack_of_max_path_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, size_t* consumed);
 
 picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote)
@@ -463,7 +463,8 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
             picoquic_frame_type_new_connection_id);
         bytes = NULL;
     }
-    else if (unique_path_id > cnx->max_paths_local) {
+    else if (unique_path_id >= cnx->max_path_id_local &&
+        cnx->is_multipath_enabled) {
         /* Error -- the peer is not authorized to use this path ID */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_MP_PROTOCOL_VIOLATION,
             (is_mp) ? picoquic_frame_type_mp_new_connection_id : picoquic_frame_type_new_connection_id);
@@ -3037,8 +3038,8 @@ int picoquic_process_ack_of_ack_frame(
 /* Forward declaration of skip frame function */
 static const uint8_t* picoquic_skip_ack_frame_maybe_ecn(const uint8_t* bytes, const uint8_t* bytes_max, int is_ecn, int has_path);
 
-/* For ACK_MP frame, ACK of ACK needs to retrieve the ACK context associated with the path */
-int picoquic_process_ack_of_ack_mp_frame(
+/* For MP_ACK frame, ACK of ACK needs to retrieve the ACK context associated with the path */
+int picoquic_process_ack_of_mp_ack_frame(
     picoquic_cnx_t * cnx, uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn)
 {
     int ret;
@@ -3286,8 +3287,8 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                 case picoquic_frame_type_immediate_ack:
                     *no_need_to_repeat = 0;
                     break;
-                case picoquic_frame_type_ack_mp:
-                case picoquic_frame_type_ack_mp_ecn:
+                case picoquic_frame_type_mp_ack:
+                case picoquic_frame_type_mp_ack_ecn:
                 case picoquic_frame_type_time_stamp:
                     *no_need_to_repeat = 1;
                     break;
@@ -3300,8 +3301,8 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     (void)picoquic_path_available_or_standby_frame_need_repeat(cnx, bytes,
                         bytes + bytes_max, no_need_to_repeat);
                     break;
-                case picoquic_frame_type_max_paths:
-                    (void)picoquic_max_paths_frame_needs_repeat(cnx, bytes,
+                case picoquic_frame_type_max_path_id:
+                    (void)picoquic_max_path_id_frame_needs_repeat(cnx, bytes,
                         bytes + bytes_max, no_need_to_repeat);
                     break;
                 case picoquic_frame_type_mp_new_connection_id:
@@ -3388,12 +3389,12 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                 &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
             byte_index += frame_length;
             break;
-        case picoquic_frame_type_ack_mp:
-            ret = picoquic_process_ack_of_ack_mp_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
+        case picoquic_frame_type_mp_ack:
+            ret = picoquic_process_ack_of_mp_ack_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
             byte_index += frame_length;
             break;
-        case picoquic_frame_type_ack_mp_ecn:
-            ret = picoquic_process_ack_of_ack_mp_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
+        case picoquic_frame_type_mp_ack_ecn:
+            ret = picoquic_process_ack_of_mp_ack_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
             byte_index += frame_length;
             break;
         case picoquic_frame_type_handshake_done:
@@ -3443,8 +3444,8 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
             ret = picoquic_process_ack_of_reset_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
             break;
-        case picoquic_frame_type_max_paths:
-            ret = picoquic_process_ack_of_max_paths_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+        case picoquic_frame_type_max_path_id:
+            ret = picoquic_process_ack_of_max_path_id_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
             break;
         default:
@@ -3726,7 +3727,7 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
     uint8_t* after_stamp = bytes;
     uint64_t ack_type_byte = (multipath_sequence == UINT64_MAX) ?
         (((is_ecn) ? picoquic_frame_type_ack_ecn : picoquic_frame_type_ack)) :
-        (((is_ecn) ? picoquic_frame_type_ack_mp_ecn : picoquic_frame_type_ack_mp));
+        (((is_ecn) ? picoquic_frame_type_mp_ack_ecn : picoquic_frame_type_mp_ack));
 
     /* Check that there something to acknowledge */
     if (!picoquic_sack_list_is_empty(&ack_ctx->sack_list)) {
@@ -5452,86 +5453,85 @@ int picoquic_path_available_or_standby_frame_need_repeat(picoquic_cnx_t* cnx, co
 }
 
 /* MAX PATHS frame */
-
-uint8_t* picoquic_format_max_paths_frame(
-    uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_paths)
+uint8_t* picoquic_format_max_path_id_frame(
+    uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id)
 {
     /* This code assumes that the frame type is already skipped */
-    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_max_paths)) != NULL){
-        bytes = picoquic_frames_varint_encode(bytes, bytes_max, max_paths);
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_max_path_id)) != NULL){
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, max_path_id);
     }
     return bytes;
 }
 
-int picoquic_queue_max_paths_frame(
+int picoquic_queue_max_path_id_frame(
     picoquic_cnx_t* cnx)
 {
     int ret = 0;
     uint8_t frame_buffer[256];
     int is_pure_ack = 0;
-    uint8_t* bytes_next = picoquic_format_max_paths_frame(
-        frame_buffer, frame_buffer + sizeof(frame_buffer), cnx->max_paths_local);
+    uint8_t* bytes_next = picoquic_format_max_path_id_frame(
+        frame_buffer, frame_buffer + sizeof(frame_buffer), cnx->max_path_id_local);
     size_t consumed = bytes_next - frame_buffer;
     ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed, is_pure_ack);
     return ret;
 }
 
-const uint8_t* picoquic_skip_max_paths_frame(const uint8_t* bytes, const uint8_t* bytes_max)
+const uint8_t* picoquic_skip_max_path_id_frame(const uint8_t* bytes, const uint8_t* bytes_max)
 {
     /* This code assumes that the frame type is already skipped */
     bytes = picoquic_frames_varint_skip(bytes, bytes_max);
     return bytes;
 }
 
-const uint8_t* picoquic_parse_max_paths_frame(const uint8_t* bytes, const uint8_t* bytes_max,
-    uint64_t* max_paths)
+const uint8_t* picoquic_parse_max_path_id_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t* max_path_id)
 {
-    bytes = picoquic_frames_varint_decode(bytes, bytes_max, max_paths);
+    bytes = picoquic_frames_varint_decode(bytes, bytes_max, max_path_id);
     return bytes;
 }
 
-const uint8_t* picoquic_decode_max_paths_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+const uint8_t* picoquic_decode_max_path_id_frame(const uint8_t* bytes, const uint8_t* bytes_max,
     picoquic_cnx_t* cnx)
 {
-    uint64_t max_paths;
+    uint64_t max_path_id;
 
     /* This code assumes that the frame type is already skipped */
 
     if (!cnx->is_multipath_enabled) {
         /* Frame is unexpected */
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-            picoquic_frame_type_max_paths, "unique path_id not negotiated");
+            picoquic_frame_type_max_path_id, "unique path_id not negotiated");
     }
-    else if ((bytes = picoquic_parse_max_paths_frame(bytes, bytes_max, &max_paths)) == NULL) {
+    else if ((bytes = picoquic_parse_max_path_id_frame(bytes, bytes_max, &max_path_id)) == NULL) {
         /* Bad frame encoding */
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-            picoquic_frame_type_max_paths, "bad max paths frame");
+            picoquic_frame_type_max_path_id, "bad max paths frame");
     }
     else {
         /* process the max paths frame */
-        if (cnx->max_paths_remote < max_paths) {
-            cnx->max_paths_remote = max_paths;
+        if (cnx->max_path_id_remote < max_path_id) {
+            cnx->max_path_id_remote = max_path_id;
         }
     }
     return bytes;
 }
 
-int picoquic_max_paths_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+int picoquic_max_path_id_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     const uint8_t* bytes_max, int* no_need_to_repeat)
 {
     int ret = 0;
-    uint64_t max_paths = 0;
+    uint64_t max_path_id = 0;
 
     *no_need_to_repeat = 0;
 
-    if ((bytes = picoquic_parse_max_paths_frame(bytes, bytes_max, &max_paths)) == NULL){
+    if ((bytes = picoquic_parse_max_path_id_frame(bytes, bytes_max, &max_path_id)) == NULL){
         /* Malformed frame, do not retransmit */
         *no_need_to_repeat = 1;
     }
     else {
         /* check whether this is the last frame sent, and whether we already
          * have received an ack */
-        if (max_paths < cnx->max_paths_local || max_paths <= cnx->max_paths_acknowledged){
+        if (max_path_id < cnx->max_path_id_local || max_path_id <= cnx->max_path_id_acknowledged){
             *no_need_to_repeat = 1;
         }
     }
@@ -5539,16 +5539,16 @@ int picoquic_max_paths_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* by
 }
 
 
-int picoquic_process_ack_of_max_paths_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+int picoquic_process_ack_of_max_path_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
-    uint64_t max_paths = 0;
+    uint64_t max_path_id = 0;
 
-    const uint8_t * bytes_next = picoquic_parse_max_paths_frame(bytes, bytes + bytes_max, &max_paths);
+    const uint8_t * bytes_next = picoquic_parse_max_path_id_frame(bytes, bytes + bytes_max, &max_path_id);
 
-    if (bytes_next != NULL && cnx->max_paths_acknowledged < max_paths){
-        cnx->max_paths_acknowledged = max_paths;
+    if (bytes_next != NULL && cnx->max_path_id_acknowledged < max_path_id){
+        cnx->max_path_id_acknowledged = max_path_id;
         *consumed = bytes_next - bytes;
     }
     else {
@@ -5884,7 +5884,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                     case picoquic_frame_type_time_stamp:
                         bytes = picoquic_decode_time_stamp_frame(bytes, bytes_max, cnx, &packet_data);
                         break;
-                    case picoquic_frame_type_ack_mp: {
+                    case picoquic_frame_type_mp_ack: {
                         if (epoch == picoquic_epoch_0rtt) {
                             DBG_PRINTF("Ack frame (0x%x) not expected in 0-RTT packet", first_byte);
                             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
@@ -5894,7 +5894,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                         bytes = picoquic_decode_ack_frame(cnx, bytes0, bytes_max, current_time, epoch, 0, 1, &packet_data);
                         break;
                     }
-                    case picoquic_frame_type_ack_mp_ecn: {
+                    case picoquic_frame_type_mp_ack_ecn: {
                         if (epoch == picoquic_epoch_0rtt) {
                             DBG_PRINTF("Ack-ECN frame (0x%x) not expected in 0-RTT packet", first_byte);
                             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
@@ -5913,8 +5913,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                         bytes = picoquic_decode_path_available_or_standby_frame(bytes, bytes_max, frame_id64, cnx, current_time);
                         ack_needed = 1;
                         break;
-                    case picoquic_frame_type_max_paths:
-                        bytes = picoquic_decode_max_paths_frame(bytes, bytes_max, cnx);
+                    case picoquic_frame_type_max_path_id:
+                        bytes = picoquic_decode_max_path_id_frame(bytes, bytes_max, cnx);
                         ack_needed = 1;
                         break;
                     case picoquic_frame_type_mp_new_connection_id:
@@ -6231,10 +6231,10 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
                 case picoquic_frame_type_time_stamp:
                     bytes = picoquic_skip_time_stamp_frame(bytes, bytes_max);
                     break;
-                case picoquic_frame_type_ack_mp:
+                case picoquic_frame_type_mp_ack:
                     bytes = picoquic_skip_ack_frame_maybe_ecn(bytes_before_type, bytes_max, 0, 1);
                     break;
-                case picoquic_frame_type_ack_mp_ecn:
+                case picoquic_frame_type_mp_ack_ecn:
                     bytes = picoquic_skip_ack_frame_maybe_ecn(bytes_before_type, bytes_max, 1, 1);
                     break;
                 case picoquic_frame_type_path_abandon:
@@ -6246,8 +6246,8 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
                     bytes = picoquic_skip_path_available_or_standby_frame(bytes, bytes_max);
                     *pure_ack = 0;
                     break;
-                case picoquic_frame_type_max_paths:
-                    bytes = picoquic_skip_max_paths_frame(bytes, bytes_max);
+                case picoquic_frame_type_max_path_id:
+                    bytes = picoquic_skip_max_path_id_frame(bytes, bytes_max);
                     *pure_ack = 0;
                     break;
                 case picoquic_frame_type_bdp:
