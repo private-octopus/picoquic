@@ -270,11 +270,11 @@ static uint8_t test_frame_type_bdp[] = {
     0x04, 0x0A, 0x0, 0x0, 0x01
 };
 
-static uint8_t test_frame_type_ack_mp[] = {
-    (uint8_t)(0x80|(picoquic_frame_type_ack_mp>>24)),
-    (uint8_t)(picoquic_frame_type_ack_mp>>16),
-    (uint8_t)(picoquic_frame_type_ack_mp>>8),
-    (uint8_t)(picoquic_frame_type_ack_mp),
+static uint8_t test_frame_type_mp_ack[] = {
+    (uint8_t)(0x80|(picoquic_frame_type_mp_ack>>24)),
+    (uint8_t)(picoquic_frame_type_mp_ack>>16),
+    (uint8_t)(picoquic_frame_type_mp_ack>>8),
+    (uint8_t)(picoquic_frame_type_mp_ack),
     0,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
     0x44, 0,
@@ -284,11 +284,11 @@ static uint8_t test_frame_type_ack_mp[] = {
     5, 12
 };
 
-static uint8_t test_frame_type_ack_mp_ecn[] = {
-    (uint8_t)(0x80|(picoquic_frame_type_ack_mp_ecn>>24)),
-    (uint8_t)(picoquic_frame_type_ack_mp_ecn>>16),
-    (uint8_t)(picoquic_frame_type_ack_mp_ecn>>8),
-    (uint8_t)(picoquic_frame_type_ack_mp_ecn),
+static uint8_t test_frame_type_mp_ack_ecn[] = {
+    (uint8_t)(0x80|(picoquic_frame_type_mp_ack_ecn>>24)),
+    (uint8_t)(picoquic_frame_type_mp_ack_ecn>>16),
+    (uint8_t)(picoquic_frame_type_mp_ack_ecn>>8),
+    (uint8_t)(picoquic_frame_type_mp_ack_ecn),
     0,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
     0x44, 0,
@@ -299,9 +299,9 @@ static uint8_t test_frame_type_ack_mp_ecn[] = {
     3, 0, 1
 };
 
-static uint8_t test_frame_type_max_paths[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_max_paths >> 24)), (uint8_t)(picoquic_frame_type_max_paths >> 16),
-    (uint8_t)(picoquic_frame_type_max_paths >> 8), (uint8_t)(picoquic_frame_type_max_paths & 0xFF),
+static uint8_t test_frame_type_max_path_id[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_max_path_id >> 24)), (uint8_t)(picoquic_frame_type_max_path_id >> 16),
+    (uint8_t)(picoquic_frame_type_max_path_id >> 8), (uint8_t)(picoquic_frame_type_max_path_id & 0xFF),
     0x11, /* max paths = 17 */
 };
 
@@ -358,7 +358,7 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM_MPATH("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0, 1),
     TEST_SKIP_ITEM_MPATH("path_standby", test_frame_type_path_standby, 0, 0, 3, 0, 0, 1),
     TEST_SKIP_ITEM_MPATH("path_available", test_frame_type_path_available, 0, 0, 3, 0, 0, 1),
-    TEST_SKIP_ITEM_MPATH("max paths", test_frame_type_max_paths, 0, 0, 3, 0, 0, 2),
+    TEST_SKIP_ITEM_MPATH("max paths", test_frame_type_max_path_id, 0, 0, 3, 0, 0, 2),
 
     TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3, 0, 0)
 };
@@ -644,8 +644,8 @@ size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_sk
 * should not be added to the "skip list" 
  */
 test_skip_frames_t test_log_list[] = {
-    TEST_SKIP_ITEM("ack_mp", test_frame_type_ack_mp, 1, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("ack_mp_ecn", test_frame_type_ack_mp_ecn, 1, 0, 3, 0, 0)
+    TEST_SKIP_ITEM("mp_ack", test_frame_type_mp_ack, 1, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("mp_ack_ecn", test_frame_type_mp_ack_ecn, 1, 0, 3, 0, 0)
 };
 size_t nb_test_log_list = sizeof(test_log_list) / sizeof(test_skip_frames_t);
 
@@ -847,7 +847,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         /* Enable multipath so the test of multipath frames works. */
         if (mpath != 0) {
             cnx->is_multipath_enabled = 1;
-            cnx->max_paths_local = 5;
+            cnx->max_path_id_local = 5;
         }
        
         /* if testing handshake done, set state to ready so frame is ignored. */

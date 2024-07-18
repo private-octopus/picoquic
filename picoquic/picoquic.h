@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.21.1"
+#define PICOQUIC_VERSION "1.1.21.2"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -307,7 +307,7 @@ typedef struct st_picoquic_tp_t {
     int enable_bdp_frame;
     int enable_simple_multipath;
     int is_multipath_enabled;
-    uint64_t initial_max_paths;
+    uint64_t initial_max_path_id;
 } picoquic_tp_t;
 
 /*
