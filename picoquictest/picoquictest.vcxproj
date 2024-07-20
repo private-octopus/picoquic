@@ -175,6 +175,7 @@
     <ClCompile Include="openssl_test.c" />
     <ClCompile Include="pacing_test.c" />
     <ClCompile Include="parseheadertest.c" />
+    <ClCompile Include="picomask_test.c" />
     <ClCompile Include="picoquic_lb_test.c" />
     <ClCompile Include="pn2pn64test.c" />
     <ClCompile Include="quic_tester.c" />

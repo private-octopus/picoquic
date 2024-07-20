@@ -25,6 +25,7 @@
 #include "picohash.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
+#include "picoquic_internal.h"
 
 /*
 * Context is split between two levels:
@@ -38,12 +39,24 @@
 * service.
 */
 
+/* We need to reserve an interface ID that does not collude with
+* values likely used by the operating system. This excludes
+* small numbers, and special numbers like 0 or -1. We pick
+* a random 31 bit numbers, derived from the SHA1 hash of
+* "Picomask UDP interface":
+* 2798c62715dd8ce6e2c6dd92a37a8276f16c029e
+*/
+#define picomask_interface_id 0x2798c627
 
 typedef struct st_picomask_ctx_t {
     picohash_table* table_udp_ctx;
     uint64_t picomask_number_next;
-
 } picomask_ctx_t;
+
+typedef struct st_picomask_h3_ctx_t {
+    struct sockaddr_storage target_addr;
+    picoquic_cnx_t* cnx;
+} picomask_h3_ctx_t;
 
 typedef struct st_picomask_cnx_ctx_t {
     picohash_item hash_item;
@@ -51,9 +64,13 @@ typedef struct st_picomask_cnx_ctx_t {
     picoquic_cnx_t* cnx;
     uint64_t stream_id;
     struct sockaddr_storage target_addr;
-
     /* Management of capsule protocol on control stream */
-
+    /* Management of datagram queue -- incoming packets
+     * that have to be processed locally */
+    picoquic_packet_t* outgoing_first;
+    picoquic_packet_t* outgoing_last;
 } picomask_cnx_ctx_t;
+
+
 
 #endif /* PICOMASK_H */
