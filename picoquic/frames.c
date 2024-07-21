@@ -463,7 +463,7 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
             picoquic_frame_type_new_connection_id);
         bytes = NULL;
     }
-    else if (unique_path_id >= cnx->max_path_id_local &&
+    else if (unique_path_id > cnx->max_path_id_local &&
         cnx->is_multipath_enabled) {
         /* Error -- the peer is not authorized to use this path ID */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_MP_PROTOCOL_VIOLATION,
@@ -5533,7 +5533,7 @@ int picoquic_max_path_id_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* 
     else {
         /* check whether this is the last frame sent, and whether we already
          * have received an ack */
-        if (max_path_id < cnx->max_path_id_local || max_path_id <= cnx->max_path_id_acknowledged){
+        if (max_path_id <= cnx->max_path_id_local || max_path_id <= cnx->max_path_id_acknowledged){
             *no_need_to_repeat = 1;
         }
     }
