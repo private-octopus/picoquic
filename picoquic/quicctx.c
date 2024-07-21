@@ -1517,12 +1517,6 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
             /* Set the addresses */
             picoquic_store_addr(&path_x->peer_addr, peer_addr);
             picoquic_store_addr(&path_x->local_addr, local_addr);
-
-            /* Set the challenge used for this path */
-            for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                path_x->challenge[ichal] = picoquic_public_random_64();
-            }
-
             /* Initialize per path time measurement */
             path_x->smoothed_rtt = PICOQUIC_INITIAL_RTT;
             path_x->rtt_variant = 0;
@@ -1553,6 +1547,9 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
             /* Record the path */
             cnx->path[cnx->nb_paths] = path_x;
             ret = cnx->nb_paths++;
+
+            /* Set the challenge used for this path */
+            picoquic_set_path_challenge(cnx, cnx->nb_paths-1, start_time);
         }
     }
 
@@ -4415,22 +4412,21 @@ int picoquic_connection_error_ex(picoquic_cnx_t* cnx, uint64_t local_error, uint
         cnx->local_error = local_error;
         cnx->local_error_reason = local_reason;
         cnx->cnx_state = picoquic_state_disconnecting;
-
-        picoquic_log_app_message(cnx, "Protocol error 0x%x", local_error);
-        DBG_PRINTF("Protocol error (%x)", local_error);
     } else if (cnx->cnx_state < picoquic_state_server_false_start) {
         if (cnx->cnx_state != picoquic_state_handshake_failure &&
             cnx->cnx_state != picoquic_state_handshake_failure_resend) {
             cnx->local_error = local_error;
             cnx->local_error_reason = local_reason;
             cnx->cnx_state = picoquic_state_handshake_failure;
-
-            picoquic_log_app_message(cnx, "Protocol error 0x%x", local_error);
-            DBG_PRINTF("Protocol error %x", local_error);
         }
     }
 
     cnx->offending_frame_type = frame_type;
+
+    picoquic_log_app_message(cnx, "Protocol error 0x%x, frame %" PRIu64 ", reason: %s",
+        local_error, frame_type, (local_reason==NULL)?"?":local_reason);
+    DBG_PRINTF("Protocol error 0x%x, frame %" PRIu64 ", reason: %s",
+        local_error, frame_type, (local_reason==NULL)?"?":local_reason);
 
     return PICOQUIC_ERROR_DETECTED;
 }
