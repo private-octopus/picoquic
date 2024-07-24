@@ -505,6 +505,13 @@ install(TARGETS picoquic-core
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib)
 
+if(TARGET picotls)
+    message(STATUS "picotls target exists")
+    install(TARGETS picotls
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib)
+endif()
+
 install(FILES
         ${PICOQUIC_CORE_HEADERS}
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
