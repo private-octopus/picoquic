@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+
+set(picoquic_VERSION "@PACKAGE_PROJECT_VERSION@")
+set_and_check(picoquic_LIBRARIES "@PACKAGE_LIB_PATH@")
+set_and_check(picoquic_INCLUDE_DIR "@PACKAGE_INCLUDE_INSTALL_DIR@")
+
+check_required_components(picoquic)

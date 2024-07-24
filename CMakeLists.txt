@@ -17,6 +17,10 @@ find_package(Threads REQUIRED)
 option(DISABLE_DEBUG_PRINTF "Disable Picoquic debug output" OFF)
 option(ENABLE_ASAN "Enable AddressSanitizer (ASAN) for debugging" OFF)
 option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan) for debugging" OFF)
+option(BUILD_DEMO "Build picoquicdemo" ON)
+option(BUILD_HTTP "Build picohttp" ON)
+option(BUILD_LOGLIB "Build picoquic-log" ON)
+option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
 
 message(STATUS "Initial CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
 
@@ -327,50 +331,70 @@ target_link_libraries(picoquic-core
         Threads::Threads)
 set_picoquic_compile_settings(picoquic-core)
 
-add_library(picoquic-log ${LOGLIB_LIBRARY_FILES})
-target_include_directories(picoquic-log
-    PRIVATE
-        ${PTLS_INCLUDE_DIRS}
-    PUBLIC
-        picoquic
-        loglib)
-set_picoquic_compile_settings(picoquic-log)
+if (BUILD_DEMO OR BUILD_LOGREADER OR (BUILD_TESTING AND picoquic_BUILD_TESTS))
+    if (NOT BUILD_LOGLIB)
+        set(BUILD_LOGLIB ON)
+    endif()
+endif()
 
-add_library(picohttp-core ${PICOHTTP_LIBRARY_FILES})
-target_link_libraries(picohttp-core
-    PRIVATE
-        ${PTLS_LIBRARIES}
-        ${OPENSSL_LIBRARIES}
-        ${MBEDTLS_LIBRARIES}
-    PUBLIC
-        picoquic-core)
-target_include_directories(picohttp-core
-    PRIVATE
-        ${PTLS_INCLUDE_DIRS}
-        ${OPENSSL_INCLUDE_DIR}
-        ${MBEDTLS_INCLUDE_DIRS}
-    PUBLIC
-        picoquic)
-set_picoquic_compile_settings(picohttp-core)
+if (BUILD_LOGLIB)
+    add_library(picoquic-log ${LOGLIB_LIBRARY_FILES})
+    target_include_directories(picoquic-log
+        PRIVATE
+            ${PTLS_INCLUDE_DIRS}
+        PUBLIC
+            picoquic
+            loglib)
+    set_picoquic_compile_settings(picoquic-log)
+endif()
 
-add_executable(picoquicdemo
-    picoquicfirst/picoquicdemo.c
-    picoquicfirst/getopt.c)
-target_link_libraries(picoquicdemo
-    PUBLIC
-        ${PTLS_LIBRARIES}
-        ${OPENSSL_LIBRARIES}
-        ${MBEDTLS_LIBRARIES}
-        picoquic-log
-        picoquic-core
-        picohttp-core)
-target_include_directories(picoquicdemo PRIVATE picohttp)
-set_picoquic_compile_settings(picoquicdemo)
+if (BUILD_DEMO)
+    if (NOT BUILD_HTTP)
+        set(BUILD_HTTP ON)
+    endif()
+endif()
 
-add_executable(picolog_t picolog/picolog.c)
-target_link_libraries(picolog_t PRIVATE picoquic-log picoquic-core)
-target_include_directories(picolog_t PRIVATE loglib)
-set_picoquic_compile_settings(picolog_t)
+if (BUILD_HTTP)
+    add_library(picohttp-core ${PICOHTTP_LIBRARY_FILES})
+    target_link_libraries(picohttp-core
+        PRIVATE
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+        PUBLIC
+            picoquic-core)
+    target_include_directories(picohttp-core
+        PRIVATE
+            ${PTLS_INCLUDE_DIRS}
+            ${OPENSSL_INCLUDE_DIR}
+            ${MBEDTLS_INCLUDE_DIRS}
+        PUBLIC
+            picoquic)
+    set_picoquic_compile_settings(picohttp-core)
+endif()
+
+if (BUILD_DEMO)
+    add_executable(picoquicdemo
+        picoquicfirst/picoquicdemo.c
+        picoquicfirst/getopt.c)
+    target_link_libraries(picoquicdemo
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picoquic-log
+            picoquic-core
+            picohttp-core)
+    target_include_directories(picoquicdemo PRIVATE picohttp)
+    set_picoquic_compile_settings(picoquicdemo)
+endif()
+
+if (BUILD_LOGREADER)
+    add_executable(picolog_t picolog/picolog.c)
+    target_link_libraries(picolog_t PRIVATE picoquic-log picoquic-core)
+    target_include_directories(picolog_t PRIVATE loglib)
+    set_picoquic_compile_settings(picolog_t)
+endif()
 
 include(CTest)
 
@@ -436,14 +460,77 @@ add_custom_target(
     ${CLANG_FORMAT_SOURCE_FILES})
 
 # Specify Install targets
-install(TARGETS picoquicdemo picolog_t picoquic-core picoquic-log picohttp-core
-        RUNTIME DESTINATION bin
+
+# cmake -Dpicoquic_BUILD_TESTS=OFF -DPICOQUIC_FETCH_PTLS=ON -DBUILD_DEMO=OFF -DBUILD_HTTP=OFF -DBUILD_LOGREADER=OFF -DBUILD_LOGLIB=OFF -DCMAKE_PREFIX_PATH=/root/nametag/libraries -DCMAKE_INSTALL_PREFIX=/root/dummy -DCMAKE_INSTALL_INCLUDEDIR=/root/dummy/include/picoquic -S . -B build
+
+# cmake --build build --parallel $(nproc)
+
+# cmake --install build
+
+if (NOT CMAKE_INSTALL_INCLUDEDIR)
+    set(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_INSTALL_PREFIX}/include)
+endif()
+
+if (TARGET picoquicdemo)
+    install(TARGETS picoquicdemo
+        RUNTIME DESTINATION bin)
+endif()
+
+if (TARGET picohttp-core)
+    install(TARGETS picohttp-core
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib)
+
+    install(FILES
+        ${PICOHTTP_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+endif()
+
+if (TARGET picolog_t)
+    install(TARGETS picolog_t
+        RUNTIME DESTINATION bin)
+endif()
+
+if (TARGET picoquic-log)
+    install(TARGETS picoquic-log
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib)
+
+    install(FILES
+        ${PICOQUIC_LOGLIB_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+endif()
+
+install(TARGETS picoquic-core
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib)
 
 install(FILES
         ${PICOQUIC_CORE_HEADERS}
-        ${PICOQUIC_LOGLIB_HEADERS}
-        ${PICOHTTP_HEADERS}
-        DESTINATION include)
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
+include(CMakePackageConfigHelpers)
+
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+set(PROJECT_VERSION "0.0.0-${GIT_HASH}")
+message(STATUS "Project version: ${PROJECT_VERSION}")
+
+if (NOT CMAKE_INSTALL_LIBDIR)
+    set(CMAKE_INSTALL_LIBDIR ${CMAKE_INSTALL_PREFIX}/lib)
+endif()
+
+set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location of header files")
+set(LIB_PATH ${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a CACHE PATH "Path of library file")
+
+set(INSTALL_CONFIG_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+
+configure_package_config_file(${PROJECT_NAME}-config.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake PATH_VARS PROJECT_VERSION LIB_PATH INCLUDE_INSTALL_DIR INSTALL_DESTINATION ${INSTALL_CONFIG_DIR})
+write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake VERSION ${PROJECT_VERSION} COMPATIBILITY ExactVersion)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake DESTINATION ${INSTALL_CONFIG_DIR})
