@@ -247,7 +247,6 @@ else()
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
 
-
 OPTION(WITH_MBEDTLS "enable MBEDTLS" OFF)
 
 IF (WITH_MBEDTLS)
@@ -266,7 +265,6 @@ IF (WITH_MBEDTLS)
         MESSAGE (FATAL_ERROR "MbedTLS not found")
     ENDIF()
 ENDIF ()
-
 
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
@@ -307,9 +305,7 @@ macro(set_picoquic_compile_settings)
     target_link_options(${ARGV0} PRIVATE ${PICOQUIC_LINKER_FLAGS})
 endmacro()
 
-
 add_library(picoquic-core ${PICOQUIC_CORE_HEADERS} ${PICOQUIC_LIBRARY_FILES})
-
 
 message(STATUS "Defining picoquic-core")
 message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
@@ -459,28 +455,26 @@ add_custom_target(
     -i
     ${CLANG_FORMAT_SOURCE_FILES})
 
-# Specify Install targets
-
-# cmake -Dpicoquic_BUILD_TESTS=OFF -DPICOQUIC_FETCH_PTLS=ON -DBUILD_DEMO=OFF -DBUILD_HTTP=OFF -DBUILD_LOGREADER=OFF -DBUILD_LOGLIB=OFF -DCMAKE_PREFIX_PATH=/root/nametag/libraries -DCMAKE_INSTALL_PREFIX=/root/dummy -DCMAKE_INSTALL_INCLUDEDIR=/root/dummy/include/picoquic -S . -B build
-
-# cmake --build build --parallel $(nproc)
-
-# cmake --install build
-
 if (NOT CMAKE_INSTALL_INCLUDEDIR)
     set(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_INSTALL_PREFIX}/include)
 endif()
 
+if (NOT CMAKE_INSTALL_LIBDIR)
+    set(CMAKE_INSTALL_LIBDIR ${CMAKE_INSTALL_PREFIX}/lib)
+endif()
+
+if (NOT CMAKE_INSTALL_BINDIR)
+    set(CMAKE_INSTALL_BINDIR ${CMAKE_INSTALL_PREFIX}/bin)
+endif()
+
 if (TARGET picoquicdemo)
     install(TARGETS picoquicdemo
-        RUNTIME DESTINATION bin)
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 if (TARGET picohttp-core)
     install(TARGETS picohttp-core
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib)
-
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
     install(FILES
         ${PICOHTTP_HEADERS}
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
@@ -488,29 +482,25 @@ endif()
 
 if (TARGET picolog_t)
     install(TARGETS picolog_t
-        RUNTIME DESTINATION bin)
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 if (TARGET picoquic-log)
     install(TARGETS picoquic-log
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib)
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
     install(FILES
         ${PICOQUIC_LOGLIB_HEADERS}
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 
-install(TARGETS picoquic-core
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib)
+set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-fusion.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-openssl.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-minicrypto.a" CACHE PATH "Path of library files")
 
-if(TARGET picotls)
-    message(STATUS "picotls target exists")
-    install(TARGETS picotls
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib)
-endif()
+install(TARGETS picoquic-core
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+install(TARGETS ${PTLS_LIBRARIES}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 install(FILES
         ${PICOQUIC_CORE_HEADERS}
@@ -533,7 +523,6 @@ if (NOT CMAKE_INSTALL_LIBDIR)
 endif()
 
 set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location of header files")
-set(LIB_PATH ${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a CACHE PATH "Path of library file")
 
 set(INSTALL_CONFIG_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
 
