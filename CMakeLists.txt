@@ -494,17 +494,18 @@ if (TARGET picoquic-log)
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 
-if(PICOQUIC_FETCH_PTLS)
-    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-fusion.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-openssl.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-minicrypto.a" CACHE PATH "Path of library files")
-else()
-    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a" CACHE PATH "Path of library file")
-endif()
 
 install(TARGETS picoquic-core
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-install(TARGETS ${PTLS_LIBRARIES}
+if(PICOQUIC_FETCH_PTLS)
+    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-fusion.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-openssl.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-minicrypto.a" CACHE PATH "Path of library files")
+
+    install(TARGETS ${PTLS_LIBRARIES}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+else()
+    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a" CACHE PATH "Path of library file")
+endif()
 
 install(FILES
         ${PICOQUIC_CORE_HEADERS}
