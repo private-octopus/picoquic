@@ -2149,6 +2149,7 @@ uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
 {
     int more_retransmit = 0;
     int packet_dequeued = 0;
+    uint8_t* bytes_first = bytes_next;
     picoquic_packet_t* packet = NULL;
     do {
         packet_dequeued = 0;
@@ -2165,6 +2166,15 @@ uint8_t* picoquic_copy_stream_frames_for_retransmit(picoquic_cnx_t* cnx,
                 bytes_next, bytes_max, current_priority, &more_retransmit, &packet_dequeued, is_pure_ack);
         }
     } while (bytes_next != NULL && packet_dequeued /* bytes_first < bytes_next */ && bytes_next < bytes_max);
+
+    /* The call to copy frame can fail if the data in memory is somehow corrupted,
+    * which mainly happens if we are engaged in fuzzing. In that case, we 
+    * need to generate an internal error, but also let the pointer to
+    * a reasonable value */
+    if (bytes_next == NULL) {
+        (void)picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0, "data frame was fuzzed, cannot be resent");
+        bytes_next = bytes_first;
+    }
 
     if (packet_dequeued) {
         more_retransmit = (picoquic_first_data_repeat_packet(cnx) != NULL);

@@ -536,6 +536,7 @@ int usage(char const * argv0)
     fprintf(stderr, "  -o n1 n2          Only run test numbers in range [n1,n2]");
     fprintf(stderr, "  -s nnn            Run stress for nnn minutes.\n");
     fprintf(stderr, "  -f nnn            Run fuzz for nnn minutes.\n");
+    fprintf(stderr, "  -C ccc            Use nnn stress clients in parallel.\n");
     fprintf(stderr, "  -c nnn ccc        Run connection stress for nnn minutes, ccc connections.\n");
     fprintf(stderr, "  -d ppp uuu dir    Run connection ddoss for ppp packets, uuu usec intervals,\n");
     fprintf(stderr, "  -F nnn            Run the corrupt file fuzzer nnn times,\n");
@@ -567,6 +568,7 @@ int main(int argc, char** argv)
     int nb_test_tried = 0;
     int nb_test_failed = 0;
     int stress_minutes = 0;
+    int stress_clients = 0;
     int auto_bypass = 0;
     int cf_rounds = 0;
     test_status_t * test_status = (test_status_t *) calloc(nb_tests, sizeof(test_status_t));
@@ -598,7 +600,7 @@ int main(int argc, char** argv)
     {
         memset(test_status, 0, nb_tests * sizeof(test_status_t));
 
-        while (ret == 0 && (opt = getopt(argc, argv, "c:d:f:F:s:S:x:o:nrh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "c:C:d:f:F:s:S:x:o:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 optind--;
@@ -664,6 +666,15 @@ int main(int argc, char** argv)
                     ret = usage(argv[0]);
                 }
                 break;
+            case 'C':
+                do_stress = 1;
+                stress_clients = atoi(optarg);
+                if (stress_clients <= 0) {
+                    fprintf(stderr, "Incorrect number of stress clients: %s\n", optarg);
+                    ret = usage(argv[0]);
+                }
+                break;
+
             case 'c':
                 if (optind + 1 > argc) {
                     fprintf(stderr, "option requires more arguments -- c\n");
@@ -753,6 +764,7 @@ int main(int argc, char** argv)
             if (do_stress || do_fuzz) {
                 picoquic_stress_test_duration = stress_minutes;
                 picoquic_stress_test_duration *= 60000000;
+                picoquic_stress_nb_clients = stress_clients;
             }
 
             for (size_t i = 0; i < nb_tests; i++) {
