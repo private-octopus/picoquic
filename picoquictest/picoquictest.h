@@ -31,7 +31,8 @@ void debug_printf_suspend();
 
 /* Control variables for the duration of the stress test */
 
-extern uint64_t picoquic_stress_test_duration; /* In microseconds; defaults to 2 minutes */
+extern uint64_t picoquic_stress_test_duration; /* In microseconds; defaults to 1 minute */
+extern size_t picoquic_stress_nb_clients; /* number of stress clients, defaults to 4 */
 
 /* List of test functions */
 int util_connection_id_print_test();
