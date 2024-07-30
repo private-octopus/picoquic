@@ -409,9 +409,6 @@ char const* textlog_tp_name(picoquic_tp_enum tp_number)
     case picoquic_tp_grease_quic_bit:
         tp_name = "grease_quic_bit";
         break;
-    case picoquic_tp_enable_multipath:
-        tp_name = "enable_multipath";
-        break;
     case picoquic_tp_enable_simple_multipath:
         tp_name = "enable_simple_multipath";
         break;
