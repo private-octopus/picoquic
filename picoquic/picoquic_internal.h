@@ -589,7 +589,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_min_ack_delay 0xff04de1aull 
 #define picoquic_tp_enable_time_stamp 0x7158  /* x&1 */
 #define picoquic_tp_grease_quic_bit 0x2ab2
-#define picoquic_tp_enable_multipath 0x0f739bbc1b666d06ull
+// #define picoquic_tp_enable_multipath 0x0f739bbc1b666d06ull
 #define picoquic_tp_enable_simple_multipath  0x29e3d19e
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */

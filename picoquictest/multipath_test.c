@@ -365,13 +365,11 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
     picoquic_init_transport_parameters(test_parameters, 1);
     switch (m_variant) {
     case multipath_variant_simple:
-        test_parameters->enable_multipath = 0;
         test_parameters->enable_simple_multipath = 1;
         test_parameters->is_multipath_enabled = 0;
         test_parameters->initial_max_path_id = 0;
         break;
     case multipath_variant_unique:
-        test_parameters->enable_multipath = 0;
         test_parameters->enable_simple_multipath = 0;
         test_parameters->is_multipath_enabled = 1;
         test_parameters->initial_max_path_id = 3;
@@ -380,6 +378,11 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
         break;
     }
     test_parameters->enable_time_stamp = 3;
+}
+
+void multipath_init_params_unique(picoquic_tp_t* test_parameters, int enable_time_stamp)
+{
+    multipath_init_params(test_parameters, enable_time_stamp, multipath_variant_unique);
 }
 
 /* wait until the migration completes */
@@ -1195,13 +1198,7 @@ int multipath_quality_test()
 #else
 int multipath_quality_test()
 {
-#if 1
-    /* TODO: investigate after BBRv3 complete */
-    uint64_t max_completion_microsec = 1100000;
-#else
     uint64_t max_completion_microsec = 1000000;
-#endif
-
 
     return multipath_test_one(max_completion_microsec, multipath_test_quality, multipath_variant_unique);
 }

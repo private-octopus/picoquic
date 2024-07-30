@@ -4160,7 +4160,7 @@ int session_resume_test()
  * Zero RTT test. Like the session resume test, but with a twist...
  * Use multipath_init_params procedure to set up parameters for the multipath test.
  */
-void multipath_init_params(picoquic_tp_t* test_parameters, int enable_time_stamp);
+void multipath_init_params_unique(picoquic_tp_t* test_parameters, int enable_time_stamp);
 
 int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, 
     unsigned int no_coal, unsigned int long_data, uint64_t extra_delay, int do_multipath)
@@ -4199,9 +4199,10 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
 
             if (ret == 0 && do_multipath) {
                 /* Set the multipath option at both client and server */
-                multipath_init_params(&server_parameters, 0);
+                multipath_init_params_unique(&server_parameters, 0);
                 picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
-                test_ctx->cnx_client->local_parameters.enable_multipath = 1;
+                test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
+                test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
                 test_ctx->cnx_client->local_parameters.enable_time_stamp = 0;
             }
 
@@ -4266,6 +4267,17 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
             } else {
                 /* run a receive loop until no outstanding data */
                 ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, 0, 0);
+            }
+        }
+
+        if (ret == 0 && i == 1 && do_multipath) {
+            /* verify that multipath was negotiated */
+            if (!test_ctx->cnx_client->is_multipath_enabled ||
+                !test_ctx->cnx_server->is_multipath_enabled) {
+                DBG_PRINTF("Zero RTT test, multipath not negotiated (client: %d, server: %d).\n",
+                    test_ctx->cnx_client->is_multipath_enabled,
+                    test_ctx->cnx_server->is_multipath_enabled);
+                ret = -1;
             }
         }
 
