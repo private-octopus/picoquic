@@ -751,8 +751,6 @@ int quic_client(const char* ip_address_text, int server_port,
     picoquic_cnx_t* cnx_client = NULL;
     picoquic_demo_callback_ctx_t callback_ctx = { 0 };
     uint64_t current_time = 0;
-    uint64_t system_call_duration_max = 0;
-    uint64_t system_call_duration_smoothed = 0;
 
     int is_name = 0;
     size_t client_sc_nb = 0;
