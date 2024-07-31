@@ -261,20 +261,7 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
     uint64_t pn64, uint64_t current_microsec)
 {
     int ret = 0;
-#if 1
     picoquic_sack_list_t* sack_list = picoquic_sack_list_from_cnx_context(cnx, pc, l_cid);
-#else
-    picoquic_sack_list_t* sack_list = NULL;
-    if (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) {
-        int path_id = picoquic_find_path_by_unique_id(cnx, l_cid->path_id);
-        if (path_id >= 0) {
-            sack_list = &cnx->path[path_id]->ack_ctx.sack_list;
-        }
-    }
-    else {
-        sack_list = picoquic_sack_list_from_cnx_context(cnx, pc, l_cid);
-    }
-#endif
 
     if (sack_list != NULL) {
         if (picoquic_sack_list_is_empty(sack_list)) {

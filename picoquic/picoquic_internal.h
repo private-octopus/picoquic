@@ -1584,14 +1584,16 @@ uint64_t picoquic_stash_remote_cnxid(picoquic_cnx_t * cnx, uint64_t retire_befor
     const uint64_t unique_path_id, const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes,
     const uint8_t * secret_bytes, picoquic_remote_cnxid_t ** pstashed);
 
-picoquic_remote_cnxid_t* picoquic_remove_cnxid_from_stash(picoquic_cnx_t* cnx, picoquic_remote_cnxid_stash_t* remote_cnxid_stash, picoquic_remote_cnxid_t* removed, picoquic_remote_cnxid_t* previous, int recycle_packets);
+picoquic_remote_cnxid_t* picoquic_remove_cnxid_from_stash(picoquic_cnx_t* cnx, picoquic_remote_cnxid_stash_t* remote_cnxid_stash, picoquic_remote_cnxid_t* removed, picoquic_remote_cnxid_t* previous);
 
 picoquic_remote_cnxid_t* picoquic_remove_stashed_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_remote_cnxid_t* removed, 
-    picoquic_remote_cnxid_t* previous, int recycle_packets);
+    picoquic_remote_cnxid_t* previous);
 
 picoquic_remote_cnxid_t* picoquic_obtain_stashed_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 void picoquic_dereference_stashed_cnxid(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_deleting_cnx);
 uint64_t picoquic_remove_not_before_from_stash(picoquic_cnx_t* cnx, picoquic_remote_cnxid_stash_t* cnxid_stash, uint64_t not_before, uint64_t current_time);
+void picoquic_delete_remote_cnxid_stash(picoquic_cnx_t* cnx, picoquic_remote_cnxid_stash_t* cnxid_stash);
+
 uint64_t picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t not_before, uint64_t current_time);
 int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 

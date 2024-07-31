@@ -932,7 +932,7 @@ static void picoquic_count_and_notify_loss(
     if (timer_based_retransmit < 2) {
         picoquic_log_packet_lost(cnx, old_p->send_path, old_p->ptype, old_p->sequence_number,
             (timer_based_retransmit) ? "timer" : "repeat",
-            (old_p->send_path == NULL) ? NULL : &old_p->send_path->p_remote_cnxid->cnx_id,
+            (old_p->send_path == NULL || old_p->send_path->p_remote_cnxid == NULL) ? NULL : &old_p->send_path->p_remote_cnxid->cnx_id,
             old_p->length, current_time);
 
         if (!old_p->is_preemptive_repeat) {

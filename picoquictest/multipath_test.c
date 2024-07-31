@@ -75,6 +75,19 @@ static void multipath_test_kill_links(picoquic_test_tls_api_ctx_t* test_ctx, int
 }
 
 
+static void multipath_test_kill_server_links(picoquic_test_tls_api_ctx_t* test_ctx, int link_id)
+{
+    /* Make sure that nothing gets sent on the old links */
+    if (link_id == 0) {
+        test_ctx->s_to_c_link->next_send_time = UINT64_MAX;
+        test_ctx->s_to_c_link->is_switched_off = 1;
+    }
+    else {
+        test_ctx->s_to_c_link_2->next_send_time = UINT64_MAX;
+        test_ctx->s_to_c_link_2->is_switched_off = 1;
+    }
+}
+
 static void multipath_test_set_unreachable(picoquic_test_tls_api_ctx_t* test_ctx, int link_id)
 {
     if (link_id == 0) {
@@ -435,6 +448,46 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
+
+/* wait until the path removal completes */
+int wait_multipath_failed(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time)
+{
+    int ret = 0;
+    uint64_t time_out = *simulated_time + 4000000;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+    int was_active = 0;
+
+    while (*simulated_time < time_out &&
+        ret == 0 &&
+        (test_ctx->cnx_client->nb_paths > 1 ||
+            test_ctx->cnx_server->nb_paths > 1) &&
+        nb_trials < 5000 &&
+        nb_inactive < 64) {
+        nb_trials++;
+
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+    }
+
+    if (ret == 0 && 
+        (test_ctx->cnx_client->nb_paths != 1 ||
+        (test_ctx->cnx_server == NULL || test_ctx->cnx_server->nb_paths != 1))){
+        DBG_PRINTF("Could not delete failing path , client state = %d\n",
+            test_ctx->cnx_client->cnx_state);
+        ret = -1;
+    }
+
+    return ret;
+}
+
 typedef enum {
     multipath_test_basic = 0,
     multipath_test_drop_first,
@@ -456,7 +509,8 @@ typedef enum {
     multipath_test_dg_af,
     multipath_test_standby,
     multipath_test_standup,
-    multipath_test_tunnel
+    multipath_test_tunnel,
+    multipath_test_fail
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -792,15 +846,21 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
-    /* Add the multipath links and initiate the migration */
+    /* Add the multipath links and initiate the path creation */
     if (ret == 0) {
         ret = multipath_test_add_links(test_ctx, 0);
-        if (ret == 0 && test_id == multipath_test_sat_plus) {
-            /* Simulate an asymmetric "satellite and landline" scenario */
-            multipath_test_sat_links(test_ctx, 1);
-        }
-        else if (test_id == multipath_test_perf) {
-            multipath_test_perf_links(test_ctx, 1);
+        if (ret == 0) {
+            if (test_id == multipath_test_sat_plus) {
+                /* Simulate an asymmetric "satellite and landline" scenario */
+                multipath_test_sat_links(test_ctx, 1);
+            }
+            else if (test_id == multipath_test_perf) {
+                multipath_test_perf_links(test_ctx, 1);
+            }
+            else if (test_id == multipath_test_fail) {
+                /* Kill link #1 in server to client direction. This will cause path challenges to fail */
+                multipath_test_kill_server_links(test_ctx, 1);
+            }
         }
     }
 
@@ -810,10 +870,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
     /* Check that the two paths are established */
-    if (ret == 0) {
+    if (ret == 0 && test_id != multipath_test_fail) {
         ret = wait_multipath_ready(test_ctx, &simulated_time);
     }
-    if (ret == 0){
+     if (ret == 0){
         if (test_id == multipath_test_stream_af) {
             ret = picoquic_set_stream_path_affinity(test_ctx->cnx_server, 4, 0);
             if (ret != 0) {
@@ -915,7 +975,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         if (test_id == multipath_test_datagram || test_id == multipath_test_dg_af) {
             ret = multipath_datagram_send_loop(test_ctx, &dg_ctx, &loss_mask, &simulated_time);
         }
-        else {
+        else if (!test_ctx->test_finished ||
+            !picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) ||
+            !picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)){
             ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
         }
 
@@ -928,6 +990,15 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     /* Check that the transmission succeeded */
     if (ret == 0) {
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
+    }
+
+    if (ret == 0 && test_id == multipath_test_fail) {
+        ret = wait_multipath_failed(test_ctx, &simulated_time);
+        if (ret != 0) {
+            DBG_PRINTF("Delete failing path failed, client = %d paths, server = %d paths\n",
+                test_ctx->cnx_client->nb_paths,
+                (test_ctx->cnx_server == NULL) ? 0 : test_ctx->cnx_client->nb_paths);
+        }
     }
 
     if (ret == 0 && test_id == multipath_test_renew) {
@@ -1066,6 +1137,17 @@ int multipath_basic_test()
     return multipath_test_one(max_completion_microsec, multipath_test_basic, multipath_variant_unique);
 }
 
+/* Multipath fail test. Same as basic, but the multipath setup is expected to fail.
+*/
+
+int multipath_fail_test()
+{
+    uint64_t max_completion_microsec = 2000000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_fail, multipath_variant_unique);
+}
+
+
 /* Drop first multipath test. Set up two links in parallel, start using them, then
  * drop the first one of them. Check that the transmission succeeds.
  */
@@ -1178,12 +1260,7 @@ int multipath_callback_test()
 #else
 int multipath_callback_test()
 {
-#if 1
-    /* TODO: investigate after BBRv3 port */
-    uint64_t max_completion_microsec = 1100000;
-#else
     uint64_t max_completion_microsec = 1000000;
-#endif
 
     return multipath_test_one(max_completion_microsec, multipath_test_callback, multipath_variant_unique);
 }

@@ -2465,6 +2465,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_fail) {
+            int ret = multipath_fail_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_sat_plus) {
             int ret = multipath_sat_plus_test();
 
@@ -2623,12 +2629,6 @@ namespace UnitTest1
 
         TEST_METHOD(simple_multipath_socket_error) {
             int ret = simple_multipath_socket_error_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_abandon) {
-            int ret = simple_multipath_abandon_test();
 
             Assert::AreEqual(ret, 0);
         }
