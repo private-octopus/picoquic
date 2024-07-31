@@ -74,42 +74,42 @@
 
 static picoquic_tp_t transport_param_test1 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test2 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 1, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 1, { 0 }, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test3 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, { 0 }, 0, 1, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, { 0 }, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test4 = {
     65535, 0, 0, 0x400000, 16384, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test5 = {
     0x1000000, 0, 0, 0x1000000, 2, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test6 = {
     0x10000, 0, 0, 0xffffffff, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 1, 4
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 1, 4
 };
 
 static picoquic_tp_t transport_param_test7 = {
     8192, 0, 0, 16384, 2, 0, 10, 1472, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 17, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test8 = {
     65535, 0, 0, 0x400000, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test9 = {
@@ -117,17 +117,17 @@ static picoquic_tp_t transport_param_test9 = {
     { 1, { 10, 0, 0, 1}, 4433, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0,
     {{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },4},
         { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }},
-        0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+        0, 0, 0, 0, 0, { 0 }, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test10 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 1,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test11 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 1, { 0 }, 0, 0, 0, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 1, { 0 }, 0, 0, 0
 };
 
 #define LOCAL_CONNECTION_ID  2, 3, 4, 5, 6, 7, 8, 9
@@ -164,13 +164,7 @@ uint8_t client_param3[] = {
     picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
     0xC0, 0, 0, 0, 0xFF, 0x04, 0xDE, 0x1A, 2, 0x43, 0xE8, /* min ack delay */
-    0x80, 0, 0x71, 0x58, 0x01, 0x03,
-
-    0x80 | 
-    (uint8_t)((picoquic_tp_enable_simple_multipath >> 24) & 0xFF),
-    (uint8_t)((picoquic_tp_enable_simple_multipath >> 16) & 0xFF),
-    (uint8_t)((picoquic_tp_enable_simple_multipath >> 8) & 0xFF),
-    (uint8_t)(picoquic_tp_enable_simple_multipath&0xFF), 1, 0x01,
+    0x80, 0, 0x71, 0x58, 0x01, 0x03
 };
 
 uint8_t client_param4[] = {
@@ -492,27 +486,15 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
             param->enable_bdp_frame, ref->enable_bdp_frame);
         ret = -1;
     }
-#if 0
-    else if (param->enable_multipath != ref->enable_multipath) {
-        DBG_PRINTF("enable_multipath: got %d, expected %d\n",
-            param->enable_multipath, ref->enable_multipath);
-        ret = -1;
-    }
-#endif
-    else if (param->enable_simple_multipath != ref->enable_simple_multipath) {
-        DBG_PRINTF("enable_simple_multipath: got %d, expected %d\n",
-            param->enable_simple_multipath, ref->enable_simple_multipath);
-        ret = -1;
-    }
     else if (param->is_multipath_enabled != ref->is_multipath_enabled) {
-    DBG_PRINTF("is_multipath_enabled: got %d, expected %d\n",
-        param->is_multipath_enabled, ref->is_multipath_enabled);
-    ret = -1;
+        DBG_PRINTF("is_multipath_enabled: got %d, expected %d\n",
+            param->is_multipath_enabled, ref->is_multipath_enabled);
+        ret = -1;
     }
     else if (param->initial_max_path_id != ref->initial_max_path_id) {
-    DBG_PRINTF("initial_max_path_id: got %" PRIu64 ", expected%" PRIu64 "\n",
-        param->initial_max_path_id, ref->initial_max_path_id);
-    ret = -1;
+        DBG_PRINTF("initial_max_path_id: got %" PRIu64 ", expected%" PRIu64 "\n",
+            param->initial_max_path_id, ref->initial_max_path_id);
+        ret = -1;
     }
 
     return ret;

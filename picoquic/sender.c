@@ -2730,11 +2730,6 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
             picoquic_aead_confidentiality_limit(cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
     }
 
-    /* Use ACK list optimization if simple multipath */
-    if (cnx->is_simple_multipath_enabled) {
-        cnx->ack_ctx[0].sack_list.horizon_delay = 1000000;
-    }
-
     /* Start migration to server preferred address if present */
     if (cnx->client_mode) {
         (void)picoquic_prepare_server_address_migration(cnx);
@@ -2962,7 +2957,7 @@ static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoq
         * packet is full or there is nothing more to send. */
         uint64_t datagram_present = cnx->first_datagram != NULL || cnx->is_datagram_ready || path_x->is_datagram_ready;
         picoquic_stream_head_t* first_stream = picoquic_find_ready_stream_path(cnx,
-            (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) ? path_x : NULL);
+            (cnx->is_multipath_enabled) ? path_x : NULL);
         picoquic_packet_t* first_repeat = picoquic_first_data_repeat_packet(cnx);
         uint64_t current_priority = UINT64_MAX;
         uint64_t stream_priority = UINT64_MAX;
@@ -3383,7 +3378,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     int more_data = 0;
     int ack_sent = 0;
     int is_challenge_padding_needed = 0;
-    int is_nominal_ack_path = (cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled) ?
+    int is_nominal_ack_path = (cnx->is_multipath_enabled) ?
         (path_x->is_nominal_ack_path || cnx->nb_paths == 1) : path_x == cnx->path[0];
 
     picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled) ?
@@ -3714,7 +3709,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 }
             }
 
-            if (is_pure_ack && (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) && 
+            if (is_pure_ack && cnx->is_multipath_enabled && 
                 path_x->is_ack_lost && !path_x->is_ack_expected) {
                 /* In some multipath scenarios, we may need to ping a path if we see 
                  * non-ackable packets being lost. */
@@ -4205,7 +4200,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
 {
     int path_id = -1;
 
-    if ((cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled) && cnx->cnx_state >= picoquic_state_ready) {
+    if (cnx->is_multipath_enabled && cnx->cnx_state >= picoquic_state_ready) {
         return picoquic_select_next_path_mp(cnx, current_time, next_wake_time, p_addr_to, p_addr_from, if_index);
     }
 

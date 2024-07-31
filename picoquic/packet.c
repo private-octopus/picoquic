@@ -2140,8 +2140,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             /* First packet from the peer. Remember the CNX ID. No further action */
             cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, 0, &ph->dest_cnx_id);
             if (cnx->path[path_id]->was_local_cnxid_retired){
-                if (cnx->client_mode == 0 &&
-                    (path_id == 0 || cnx->is_simple_multipath_enabled)) {
+                if (cnx->client_mode == 0 && path_id == 0) {
                     /* If on a server, dereference the current CID, and pick a new one */
                     (void)picoquic_renew_connection_id(cnx, path_id);
                 }
@@ -2151,7 +2150,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             /* The peer switched to a new CID */
             cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, 0, &ph->dest_cnx_id);
             if (cnx->client_mode == 0 && cnx->first_remote_cnxid_stash->cnxid_stash_first != NULL &&
-                (path_id == 0 || cnx->is_simple_multipath_enabled)) {
+                path_id == 0) {
                 /* If on a server, dereference the current CID, and pick a new one */
                 (void)picoquic_renew_connection_id(cnx, path_id);
                 cnx->path[path_id]->was_local_cnxid_retired = 0;
