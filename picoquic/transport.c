@@ -353,29 +353,18 @@ int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
 {
     int ret = 0;
 
-    cnx->is_simple_multipath_enabled = 0;
     cnx->is_multipath_enabled = 0;
 
-    if (cnx->remote_parameters.enable_simple_multipath &&
-        cnx->local_parameters.enable_simple_multipath) {
-        /* Negotiate the simple multipath option */
-        cnx->is_simple_multipath_enabled = 1;
-        if (!cnx->client_mode) {
-            cnx->local_parameters.is_multipath_enabled = 0;
-        }
-    }
-    else if (cnx->remote_parameters.is_multipath_enabled &&
+    if (cnx->remote_parameters.is_multipath_enabled &&
         cnx->local_parameters.is_multipath_enabled) {
         /* Enable the multipath option */
         cnx->is_multipath_enabled = 1;
         cnx->max_path_id_acknowledged = cnx->local_parameters.initial_max_path_id;
         cnx->max_path_id_remote = cnx->remote_parameters.initial_max_path_id;
-        cnx->local_parameters.enable_simple_multipath = 0;
         cnx->max_path_id_local = cnx->local_parameters.initial_max_path_id;
     }
     else {
         if (!cnx->client_mode) {
-            cnx->local_parameters.enable_simple_multipath = 0;
             cnx->local_parameters.is_multipath_enabled = 0;
         } 
     }
@@ -523,11 +512,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
     if (cnx->local_parameters.do_grease_quic_bit && bytes != NULL) {
         bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_grease_quic_bit);
-    }
-
-    if (cnx->local_parameters.enable_simple_multipath > 0 && bytes != NULL) {
-        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_simple_multipath,
-            (uint64_t)cnx->local_parameters.enable_simple_multipath);
     }
 
     if (cnx->do_version_negotiation && bytes != NULL) {
@@ -844,19 +828,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         cnx->remote_parameters.do_grease_quic_bit = 1;
                     }
                     break;
-                case picoquic_tp_enable_simple_multipath: {
-                    uint64_t enable_simple_multipath =
-                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    if (ret == 0) {
-                        if (enable_simple_multipath > 1) {
-                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Simple Multipath TP");
-                        }
-                        else {
-                            cnx->remote_parameters.enable_simple_multipath = (int)enable_simple_multipath;
-                        }
-                    }
-                    break;
-                }
                 case picoquic_tp_initial_max_path_id: {
                     cnx->remote_parameters.is_multipath_enabled = 1;
                     cnx->remote_parameters.initial_max_path_id = 

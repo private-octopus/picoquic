@@ -1779,7 +1779,7 @@ uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_p
 {
     uint8_t* bytes_previous = bytes_next;
     picoquic_stream_head_t* stream = picoquic_find_ready_stream_path(cnx,
-        (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)?path_x: NULL);
+        (cnx->is_multipath_enabled)?path_x: NULL);
     int more_stream_data = 0;
 
     while (*ret == 0 && stream != NULL && stream->stream_priority <= current_priority && bytes_next < bytes_max) {
@@ -1788,7 +1788,7 @@ uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_p
 
         if (*ret == 0) {
             stream = picoquic_find_ready_stream_path(cnx,
-                (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)?path_x: NULL);
+                (cnx->is_multipath_enabled)?path_x: NULL);
             if (stream != NULL && bytes_next + 17 >= bytes_max) {
                 more_stream_data = 1;
                 break;
@@ -2459,8 +2459,7 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                     old_path->path_packet_acked_time_sent = p->send_time;
                     old_path->path_packet_acked_received = current_time;
                     if (old_path->nb_retransmit > 0 &&
-                        ((!cnx->is_multipath_enabled && 
-                            !cnx->is_simple_multipath_enabled) ||
+                        (!cnx->is_multipath_enabled ||
                             (old_path->path_packet_last == NULL ||
                                 p->path_packet_number >= old_path->path_packet_last->path_packet_number))) {
                         old_path->nb_retransmit = 0;
@@ -2710,7 +2709,7 @@ static uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate
         ack_gap = ack_gap_min;
     }
     else if (ack_gap > 32) {
-        if (cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled ||
+        if (cnx->is_multipath_enabled ||
             cnx->congestion_alg == NULL ||
             cnx->congestion_alg->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_NEW_RENO ||
             cnx->congestion_alg->congestion_algorithm_number == PICOQUIC_CC_ALGO_NUMBER_FAST
@@ -3531,8 +3530,7 @@ static int picoquic_process_ack_range(
                         old_path->path_packet_acked_time_sent = p->send_time;
                         old_path->path_packet_acked_received = current_time;
                         if (old_path->nb_retransmit > 0 &&
-                            ((!cnx->is_multipath_enabled && 
-                                !cnx->is_simple_multipath_enabled) ||
+                            (!cnx->is_multipath_enabled ||
                             (old_path->path_packet_last == NULL ||
                                 p->path_packet_number >= old_path->path_packet_last->path_packet_number))) {
                             old_path->nb_retransmit = 0;
@@ -3937,18 +3935,6 @@ uint64_t picoquic_ack_gap_override_if_needed(picoquic_cnx_t* cnx, int path_index
             cnx->path[path_index]->challenge_verified &&
             cnx->path[path_index]->received < 100 * PICOQUIC_MAX_PACKET_SIZE) {
             ack_gap = 2;
-        }
-    }
-    else if (cnx->is_simple_multipath_enabled) {
-        for (int path_id = 0; path_id < cnx->nb_paths; path_id++) {
-            if (!cnx->path[path_id]->path_is_demoted &&
-                !cnx->path[path_id]->challenge_failed &&
-                !cnx->path[path_id]->response_required &&
-                cnx->path[path_id]->challenge_verified &&
-                cnx->path[path_id]->received < 100 * PICOQUIC_MAX_PACKET_SIZE) {
-                ack_gap = 2;
-                break;
-            }
         }
     }
     else if (cnx->nb_packets_received < 128) {
@@ -5275,7 +5261,7 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
 
     /* This code assumes that the frame type is already skipped */
 
-    if (!cnx->is_simple_multipath_enabled && !cnx->is_multipath_enabled) {
+    if (!cnx->is_multipath_enabled) {
         /* Frame is unexpected */
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_path_abandon, "multipath not negotiated");
@@ -5399,7 +5385,7 @@ const uint8_t* picoquic_decode_path_available_or_standby_frame(const uint8_t* by
 
     /* This code assumes that the frame type is already skipped */
 
-    if (!cnx->is_simple_multipath_enabled && !cnx->is_multipath_enabled) {
+    if (!cnx->is_multipath_enabled) {
         /* Frame is unexpected */
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             frame_id64, "multipath not negotiated");

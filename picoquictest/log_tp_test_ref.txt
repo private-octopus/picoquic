@@ -20,7 +20,7 @@
 0102030405060708:         Extension type: 29016 (enable_time_stamp), length 1, 03
 0102030405060708:         Extension type: 10930 (grease_quic_bit), length 0
 
-0102030405060708:     Extension list (52 bytes):
+0102030405060708:     Extension list (46 bytes):
 0102030405060708:         Extension type: 5 (max_stream_data_bidi_local), length 4, 81000000
 0102030405060708:         Extension type: 4 (initial_max_data), length 4, 81000000
 0102030405060708:         Extension type: 8 (max_streams_bidi), length 1, 01
@@ -28,7 +28,6 @@
 0102030405060708:         Extension type: 15 (hcid), length 8, 0203040506070809
 0102030405060708:         Extension type: 4278509082 (min_ack_delay), length 2, 43e8
 0102030405060708:         Extension type: 29016 (enable_time_stamp), length 1, 03
-0102030405060708:         Extension type: 702796190 (enable_simple_multipath), length 1, 01
 
 0102030405060708:     Extension list (63 bytes):
 0102030405060708:         Extension type: 5 (max_stream_data_bidi_local), length 4, 8000ffff
