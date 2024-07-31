@@ -753,7 +753,7 @@ int picoquic_process_ack_of_retire_connection_id_frame(picoquic_cnx_t* cnx, cons
             while (stashed != NULL) {
                 if (stashed->sequence == sequence) {
                     stashed->retire_acked = 1;
-                    (void)picoquic_remove_cnxid_from_stash(cnx, remote_cnxid_stash, stashed, NULL, 1);
+                    (void)picoquic_remove_cnxid_from_stash(cnx, remote_cnxid_stash, stashed, NULL);
                     break;
                 }
                 stashed = stashed->next;
