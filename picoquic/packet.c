@@ -2043,7 +2043,7 @@ int picoquic_find_incoming_unique_path(picoquic_cnx_t* cnx, picoquic_packet_head
          */
         if (cnx->nb_paths < PICOQUIC_NB_PATH_TARGET &&
             (cnx->quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from)) &&
-            picoquic_create_path(cnx, current_time, addr_to, addr_from) > 0) {
+            picoquic_create_path(cnx, current_time, addr_to, addr_from, ph->l_cid->path_id) > 0) {
             /* if we do create a new path, it should have the right path_id. We cannot
             * assume that paths will be created in the full order, so that means we may
             * have to create "empty" paths in invalid state. Or, more simply,
@@ -2178,7 +2178,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
 
         if (cnx->nb_paths < PICOQUIC_NB_PATH_TARGET &&
             (cnx->quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from)) &&
-            picoquic_create_path(cnx, current_time, addr_to, addr_from) > 0) {
+            picoquic_create_path(cnx, current_time, addr_to, addr_from, UINT64_MAX) > 0) {
             /* The peer is probing for a new path, or there was a path rebinding */
             path_id = cnx->nb_paths - 1;
 

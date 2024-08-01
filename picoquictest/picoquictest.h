@@ -432,6 +432,7 @@ int monopath_0rtt_loss_test();
 int multipath_aead_test();
 int multipath_basic_test();
 int multipath_fail_test();
+int multipath_ab1_test();
 int multipath_drop_first_test();
 int multipath_drop_second_test();
 int multipath_sat_plus_test();

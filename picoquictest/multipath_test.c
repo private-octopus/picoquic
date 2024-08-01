@@ -488,7 +488,8 @@ typedef enum {
     multipath_test_standby,
     multipath_test_standup,
     multipath_test_tunnel,
-    multipath_test_fail
+    multipath_test_fail,
+    multipath_test_ab1
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -781,6 +782,22 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = wait_client_connection_ready(test_ctx, &simulated_time);
     }
 
+    if (ret == 0 && test_id == multipath_test_ab1) {
+        /* for no reason at all, abandon path number 1 */
+        ret = picoquic_abandon_path(test_ctx->cnx_client, 1, 0, 
+            "delete before using", simulated_time);
+        if (ret != 0) {
+            DBG_PRINTF("Could not abandon path 1, ret=%d", ret);
+        }
+        else {
+            /* wait about 250ms for the abandon to be noticed at both ends. */
+            ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 250000);
+            if (ret != 0) {
+                DBG_PRINTF("Issue after abandon path 1, ret=%d", ret);
+            }
+        }
+    }
+
     /* Prepare to send data */
     if (ret == 0) {
         if (test_id == multipath_test_sat_plus || test_id == multipath_test_perf) {
@@ -866,7 +883,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             }
             else if (test_id == multipath_test_abandon) {
                 /* Client abandons the path, causes it to be demoted. Server should follow suit. */
-                picoquic_abandon_path(test_ctx->cnx_client, 0, 0, "test");
+                picoquic_abandon_path(test_ctx->cnx_client, 0, 0, "test",
+                    simulated_time);
             }
             else if (test_id == multipath_test_break2) {
                 /* Trigger "destination unreachable" error on next socket call to link 1 */
@@ -1096,6 +1114,17 @@ int multipath_fail_test()
     return multipath_test_one(max_completion_microsec, multipath_test_fail);
 }
 
+/* Multipath abandon path 1. Same as basic, but abandon a path before it is
+* even established.
+*/
+
+int multipath_ab1_test()
+{
+    uint64_t max_completion_microsec = 2000000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_ab1);
+}
+
 
 /* Drop first multipath test. Set up two links in parallel, start using them, then
  * drop the first one of them. Check that the transmission succeeds.
@@ -1274,7 +1303,7 @@ int multipath_standup_test()
 typedef enum {
     monopath_test_basic = 0,
     monopath_test_hole,
-    monopath_test_rotation
+    monopath_test_rotation,
 } monopath_test_enum_t;
 
 /* Basic connection with the multicast option enabled. */
