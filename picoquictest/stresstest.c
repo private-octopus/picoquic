@@ -41,7 +41,7 @@
 #define PICOQUIC_STRESS_MAX_CLIENT_STREAMS 16
 
 uint64_t picoquic_stress_test_duration = 60000000; /* Default to 1 minutes */
-size_t picoquic_stress_nb_clients = 4; /* 4; /* Default to 4 clients */
+size_t picoquic_stress_nb_clients = 4; /* Default to 4 clients */
 uint64_t picoquic_stress_max_bidir = 8 * 4; /* Default to 8 streams max per connection */
 size_t picoquic_stress_max_open_streams = 4; /* Default to 4 simultaneous streams max per connection */
 uint64_t stress_random_ctx = 0xBabaC001BaddBab1ull;

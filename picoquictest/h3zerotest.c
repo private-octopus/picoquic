@@ -2619,7 +2619,7 @@ int http_multi_file_test_one(char const * alpn, picoquic_stream_data_cb_fn serve
 
     int ret = demo_test_multi_scenario_create(&scenario, &stream_length, random_seed, nb_files, name_length, file_length, dir_www, dir_download);
 
-    if (ret == 0) {
+    if (ret == 0 && stream_length != NULL) {
         ret = demo_server_test(alpn, server_callback_fn, (void*)&file_param, scenario, nb_files,
             stream_length, 0, do_loss, 5000000, 0, NULL, MULTI_FILE_CLIENT_BIN, MULTI_FILE_SERVER_BIN, do_preemptive_repeat);
     }
