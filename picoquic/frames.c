@@ -5254,9 +5254,9 @@ const uint8_t* picoquic_parse_path_abandon_frame(const uint8_t* bytes, const uin
 }
 
 const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max,
-    picoquic_cnx_t* cnx,uint64_t current_time)
+    picoquic_cnx_t* cnx, uint64_t current_time)
 {
-    uint64_t path_id;
+    uint64_t unique_path_id;
     uint64_t reason = 0;
 
     /* This code assumes that the frame type is already skipped */
@@ -5266,35 +5266,59 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_path_abandon, "multipath not negotiated");
     }
-    else if ((bytes = picoquic_parse_path_abandon_frame(bytes, bytes_max, &path_id, &reason)) != NULL) {
+    else if ((bytes = picoquic_parse_path_abandon_frame(bytes, bytes_max, &unique_path_id, &reason)) == NULL) {
+        /* Bad frame encoding */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_frame_type_path_abandon, "bad abandon frame");
+    }
+    else if (unique_path_id > cnx->max_path_id_local) {
+        /* Invalid path ID */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_path_abandon, "Path ID over limit");
+        bytes = NULL;
+    }
+    else {
         /* process the abandon frame */
-        int path_number = (cnx->is_multipath_enabled)?
-            picoquic_find_path_by_unique_id(cnx, path_id):
-            picoquic_find_path_by_cnxid_id(cnx, 1, path_id);
-        if (path_number < 0) {
-            /* Invalid path ID. Just ignore this frame. Add line in log for debug */
-            picoquic_log_app_message(cnx, "Ignore abandon path with invalid ID: %" PRIu64,
-                path_id);
-        }
-        else if (cnx->path[path_number]->path_is_demoted) {
-            if (!cnx->path[path_number]->path_abandon_received) {
-                cnx->path[path_number]->path_abandon_received = 1;
+        int path_index = picoquic_find_path_by_unique_id(cnx, unique_path_id);
+        if (path_index >= 0) {
+            if (!cnx->path[path_index]->path_is_demoted) {
+                /* The peer is asking to abandon an existing path */
+                cnx->path[path_index]->path_abandon_received = 1;
+                picoquic_demote_path(cnx, path_index, current_time, 0, NULL);
+            }
+            else if (!cnx->path[path_index]->path_abandon_received) {
+                cnx->path[path_index]->path_abandon_received = 1;
             }
             else {
                 /* Already abandoned... */
                 picoquic_log_app_message(cnx, "Ignore redundant abandon path with ID: %" PRIu64,
-                    path_id);
+                    unique_path_id);
             }
         }
         else {
-            cnx->path[path_number]->path_abandon_received = 1;
-            picoquic_demote_path(cnx, path_number, current_time, 0, NULL);
+            /* The path is either not created yet or already deleted. This is not an
+             * error because the path ID is valid. We may need to delete the
+             * stash of CID, send an Abandon frame, etc. */
+            picoquic_local_cnxid_list_t* local_cnxid_list =
+                picoquic_find_or_create_local_cnxid_list(cnx, unique_path_id, 0);
+            if (local_cnxid_list == NULL) {
+                /* Already deleted. Add line in log for debug */
+                picoquic_log_app_message(cnx, "Ignore abandon path with deleted ID: %" PRIu64,
+                    unique_path_id);
+            }
+            else {
+                if (!local_cnxid_list->is_demoted) {
+                    /* Do the demotion work of a local cnxid. */
+                    if (picoquic_demote_local_cnxid_list(cnx, unique_path_id,
+                        0, "Abandoned by peer", current_time) != 0) {
+                        /* Sorry, this is a local error */
+                        bytes = NULL;
+                    }
+                }
+                /* The path id was demoted. We can clear the list of local ID */
+                picoquic_delete_local_cnxid_list(cnx, local_cnxid_list);
+            }
         }
-    }
-    else {
-        /* Bad frame encoding */
-        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-            picoquic_frame_type_path_abandon, "bad abandon frame");
     }
     return bytes;
 }
@@ -5315,6 +5339,22 @@ uint8_t* picoquic_format_path_abandon_frame(uint8_t* bytes, uint8_t* bytes_max, 
     return bytes;
 }
 
+int picoquic_queue_path_abandon_frame(picoquic_cnx_t* cnx,
+    uint64_t unique_path_id, uint64_t reason, char const* phrase)
+{
+    int ret = 0;
+    uint8_t buffer[512];
+    uint8_t* end_bytes;
+    int more_data = 0;
+    end_bytes = picoquic_format_path_abandon_frame(buffer, buffer + sizeof(buffer), &more_data,
+        unique_path_id, reason, phrase);
+    if (end_bytes == NULL ||
+        picoquic_queue_misc_frame(cnx, buffer, end_bytes - buffer, 0) != 0) {
+        /* Could not format or could not queue. Internal error. */
+        ret = -1;
+    }
+    return ret;
+}
 
 /* Multipath PATH SNADBY and AVAILABLE frames
 */

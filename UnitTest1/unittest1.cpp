@@ -2471,6 +2471,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_ab1) {
+            int ret = multipath_ab1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_sat_plus) {
             int ret = multipath_sat_plus_test();
 
