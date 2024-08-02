@@ -579,7 +579,7 @@ static int multipath_test_abandon_cycle(picoquic_test_tls_api_ctx_t* test_ctx, u
         ret = picoquic_abandon_path(test_ctx->cnx_client, deleted_id, 0,
             "cycle of delete", *simulated_time);
         if (ret != 0) {
-            DBG_PRINTF("Could not abandon path %" PRIu64 ", ret=%d", ret);
+            DBG_PRINTF("Could not abandon path %" PRIu64 ", ret=%d", deleted_id, ret);
         }
         else {
             /* wait about 250ms for the abandon to be noticed at both ends. */
