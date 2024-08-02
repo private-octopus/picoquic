@@ -3644,42 +3644,6 @@ picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, uint64_t 
     return local_cnxid;
 }
 
-picoquic_local_cnxid_t* picoquic_find_local_cnxid_by_number(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t sequence)
-{
-
-    picoquic_local_cnxid_t* local_cnxid = NULL;
-    picoquic_local_cnxid_list_t* local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, unique_path_id, 0);
-
-    if (local_cnxid_list != NULL && (local_cnxid = local_cnxid_list->local_cnxid_first) != NULL) {
-        while (local_cnxid != NULL) {
-            if (local_cnxid->sequence == sequence) {
-                break;
-            }
-            else {
-                local_cnxid = local_cnxid->next;
-            }
-        }
-    }
-
-    return local_cnxid;
-}
-
-picoquic_remote_cnxid_t* picoquic_find_remote_cnxid_by_number(picoquic_cnx_t* cnx, uint64_t sequence)
-{
-    picoquic_remote_cnxid_t* remote_cnxid = cnx->first_remote_cnxid_stash->cnxid_stash_first;
-
-    while (remote_cnxid != NULL) {
-        if (remote_cnxid->sequence == sequence) {
-            break;
-        }
-        else {
-            remote_cnxid = remote_cnxid->next;
-        }
-    }
-
-    return remote_cnxid;
-}
-
 /* Connection management
  */
 

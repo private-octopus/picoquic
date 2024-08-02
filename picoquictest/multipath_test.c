@@ -558,6 +558,78 @@ int multipath_verify_callbacks(multipath_test_enum_t test_id)
     return ret;
 }
 
+static int multipath_test_abandon_cycle(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time)
+{
+    int ret = 0;
+    uint64_t deleted_id = UINT64_MAX;
+    picoquic_local_cnxid_list_t* local_cnxid_list = test_ctx->cnx_client->first_local_cnxid_list;
+
+    while (local_cnxid_list != NULL) {
+        if (!local_cnxid_list->is_demoted &&
+            local_cnxid_list->unique_path_id != 0 &&
+            local_cnxid_list->unique_path_id < deleted_id) {
+            deleted_id = local_cnxid_list->unique_path_id;
+        }
+        local_cnxid_list = local_cnxid_list->next_list;
+    }
+    if (deleted_id == UINT64_MAX) {
+        ret = -1;
+    }
+    else {
+        ret = picoquic_abandon_path(test_ctx->cnx_client, deleted_id, 0,
+            "cycle of delete", *simulated_time);
+        if (ret != 0) {
+            DBG_PRINTF("Could not abandon path %" PRIu64 ", ret=%d", deleted_id, ret);
+        }
+        else {
+            /* wait about 250ms for the abandon to be noticed at both ends. */
+            ret = tls_api_wait_for_timeout(test_ctx, simulated_time, 250000);
+            if (ret != 0) {
+                DBG_PRINTF("Issue after abandon path %" PRIu64 ", ret = % d", deleted_id, ret);
+            }
+        }
+    }
+    /* Verify that the deleted ID is gone. */
+    if (ret == 0) {
+        picoquic_local_cnxid_list_t* local_cnxid_list = test_ctx->cnx_client->first_local_cnxid_list;
+
+        while (local_cnxid_list != NULL) {
+            if (local_cnxid_list->unique_path_id == deleted_id) {
+                DBG_PRINTF("Deleted ID %" PRIu64 " is still present", deleted_id);
+                ret = -1;
+                break;
+            }
+            local_cnxid_list = local_cnxid_list->next_list;
+        }
+    }
+    if (ret == 0) {
+        int stash_count = 0;
+        /* Verify that we have enough remote path ID to continue. */
+        for (int i = 0; i <= 10 && ret == 0; i++) {
+            picoquic_remote_cnxid_stash_t* remote_cnxid_stash = test_ctx->cnx_client->first_remote_cnxid_stash;
+
+            stash_count = 0;
+            while (remote_cnxid_stash != NULL) {
+                stash_count++;
+                remote_cnxid_stash = remote_cnxid_stash->next_stash;
+            }
+
+            if (stash_count >= 2) {
+                break;
+            }
+            else if (i < 10 && stash_count < 2) {
+                ret = tls_api_wait_for_timeout(test_ctx, simulated_time, 100000);
+            }
+        }
+        if (stash_count < 2) {
+            DBG_PRINTF("Only %d stashes of CID available", stash_count);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 void multipath_init_datagram_ctx(picoquic_test_tls_api_ctx_t* test_ctx, test_datagram_send_recv_ctx_t * dg_ctx)
 {
     /* Initialize the datagram targets as a function of the test id */
@@ -783,18 +855,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
     if (ret == 0 && test_id == multipath_test_ab1) {
-        /* for no reason at all, abandon path number 1 */
-        ret = picoquic_abandon_path(test_ctx->cnx_client, 1, 0, 
-            "delete before using", simulated_time);
-        if (ret != 0) {
-            DBG_PRINTF("Could not abandon path 1, ret=%d", ret);
-        }
-        else {
-            /* wait about 250ms for the abandon to be noticed at both ends. */
-            ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 250000);
-            if (ret != 0) {
-                DBG_PRINTF("Issue after abandon path 1, ret=%d", ret);
-            }
+        for (int i = 0; ret == 0 && i < 7; i++) {
+            ret = multipath_test_abandon_cycle(test_ctx, &simulated_time);
         }
     }
 
@@ -1115,16 +1177,17 @@ int multipath_fail_test()
 }
 
 /* Multipath abandon path 1. Same as basic, but abandon a path before it is
-* even established.
+* even established. And then repeat a cycle of abandon path / wait for
+* new CID to make sure that the peer properly provisions new CID. And then
+* create a path for real and use it.
 */
 
 int multipath_ab1_test()
 {
-    uint64_t max_completion_microsec = 2000000;
+    uint64_t max_completion_microsec = 3000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_ab1);
 }
-
 
 /* Drop first multipath test. Set up two links in parallel, start using them, then
  * drop the first one of them. Check that the transmission succeeds.
