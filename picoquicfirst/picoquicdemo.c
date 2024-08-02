@@ -577,11 +577,14 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                      */
                     int remote_cid_ready = (picoquic_obtain_stashed_cnxid(cb_ctx->cnx_client, 1) != NULL);
                     if (remote_cid_ready) {
-                        struct sockaddr_in6 addr_zero = { 0 };
-                        addr_zero.sin6_family = AF_INET6;
+                        struct sockaddr_in6 addr_zero6 = { 0 };
+                        struct sockaddr_in addr_zero4 = { 0 };
+                        addr_zero6.sin6_family = AF_INET6;
+                        addr_zero4.sin_family = AF_INET;
 
                         for (int i = 0; i < cb_ctx->nb_alt_paths; i++) {
-                            if (picoquic_compare_addr((struct sockaddr*)&addr_zero, (struct sockaddr*)&cb_ctx->client_alt_address[i]) == 0) {
+                            if (picoquic_compare_addr((struct sockaddr*)&addr_zero6, (struct sockaddr*)&cb_ctx->client_alt_address[i]) == 0 ||
+                                picoquic_compare_addr((struct sockaddr*)&addr_zero4, (struct sockaddr*)&cb_ctx->client_alt_address[i]) == 0) {
                                 simulate_multipath = 1;
                                 picoquic_log_app_message(cb_ctx->cnx_client, "%s\n", "Will try to simulate new path");
                             }
@@ -1213,6 +1216,8 @@ void usage()
     fprintf(stderr, "  -A \"ip/ifindex[,ip/ifindex]\"  IP and interface index for multipath alternative\n");
     fprintf(stderr, "                        path, e.g. \"10.0.0.2/3,10.0.0.3/4\". This option only\n");
     fprintf(stderr, "                        affects the behavior of the client.\n");
+    fprintf(stderr, "                        Use -A ::0/0 or -A 0.0.0.0/0 to test multipath with\n");
+    fprintf(stderr, "                        a second path from the same IP and different port.\n");
     fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
     fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
     fprintf(stderr, "                        -f 2  test CNXID renewal,\n");
