@@ -27,8 +27,11 @@
 #include "picoquic_config.h"
 #include "picoquictest_internal.h"
 
+#ifdef PICOQUIC_WITHOUT_SSLKEYLOG
 static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:h";
-
+#else
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8h";
+#endif
 int config_option_letters_test()
 {
     char option_text[256];
@@ -76,6 +79,9 @@ static picoquic_quic_config_t param1 = {
     1, /* unsigned int do_preemptive_repeat : 1; */
     1, /* unsigned int do_not_use_gso : 1 */
     0, /* disable port blocking */
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+    0,
+#endif
     /* Server only */
     "/data/www/", /* char const* www_dir; */
     { 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
@@ -158,6 +164,9 @@ static picoquic_quic_config_t param2 = {
     0, /* unsigned int do_preemptive_repeat : 1; */
     0, /* unsigned int do_not_use_gso : 1 */
     1, /* disable port blocking */
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+    1,
+#endif
     /* Server only */
     NULL, /* char const* www_dir; */
     { 0 }, /* Reset seed */
@@ -193,6 +202,9 @@ static const char* config_argv2[] = {
     "-D",
     "-Q",
     "-X",
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+    "-8",
+#endif
     "-I", "5",
     "-T", "/data/tickets.bin",
     "-N", "/data/tokens.bin",
@@ -238,7 +250,10 @@ static config_error_test_t config_errors[] = {
     { 2, { "-I", "255" }},
     { 2, { "-U", "XY000002" }},
     { 2, { "-W", "cwin" }},
-    { 2, { "-d", "idle" }}
+    { 2, { "-d", "idle" }},
+#ifdef PICOQUIC_WITHOUT_SSLKEYLOG
+    { 1, {"-8"}},
+#endif
 };
 
 static size_t nb_config_errors = sizeof(config_errors) / sizeof(config_error_test_t);
@@ -340,6 +355,10 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_int("bdp", expected->bdp_frame_option, actual->bdp_frame_option);
     ret |= config_test_compare_int("idle_timeout", expected->idle_timeout, actual->idle_timeout);
     ret |= config_test_compare_uint64("cwin_max", expected->cwin_max, actual->cwin_max);
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+    ret |= config_test_compare_int("sslkeylog", expected->enable_sslkeylog, actual->enable_sslkeylog);
+#endif
+    
     return ret;
 }
 

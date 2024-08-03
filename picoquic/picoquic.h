@@ -421,6 +421,28 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
  */
 void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_names);
 
+/* The SSLKEYLOG function defines a way to publish the encryption keys
+* used by QUIC. If that feature is enabled, the code read the environment
+* variable SSLKEYLOG to find the path of the file where to log the encryption
+* file. If the environment variable is not present, no file is set.
+* 
+* This is a very dangerous feature, that can be abused to break encryption.
+* Using an environment variable may be a fine way to specify on which file
+* copies of keys have to be written, but it is a terrible way to specify
+* whether these keys should be. Environment variables can be installed by
+* scripts, etc., and there are many ways of doing that without user awareness.
+* 
+* This feature is enabled by setting the "SSLKEYLOG" option (option -8 if
+* using the "config" module in the application), or by calling
+* the "picoquic_enable_sslkeylog" API. This setting is "off" by default.
+* The SSLKEYLOG feature will be disabled, whatever the
+* setting, on builds of picoquic that are compiled with the macro
+* "PICOQUIC_WITHOUT_SSLKEYLOG" defined (e.g., set CFLAGS=-DPICOQUIC_WITHOUT_SSLKEYLOG).
+*/
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+void picoquic_enable_sslkeylog(picoquic_quic_t* quic, int enable_sslkeylog);
+int picoquic_is_sslkeylog_enabled(picoquic_quic_t* quic);
+#endif
 /* 
  * picoquic_set_random_initial:
  * randomization of initial PN numbers, i.e.. the number assigned to

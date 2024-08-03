@@ -95,79 +95,13 @@ static option_table_line_t option_table[] = {
     { picoquic_option_No_GSO, '0', "no_gso", 0, "", "Do not use UDP GSO or equivalent" },
     { picoquic_option_BDP_frame, 'j', "bdp", 1, "number", "use bdp extension frame(1) or don\'t (0). Default=0" },
     { picoquic_option_CWIN_MAX, 'W', "cwin_max", 1, "bytes", "Max value for CWIN. Default=UINT64_MAX"},
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+    { picoquic_option_SSLKEYLOG, '8', "sslkeylog", 0, "", "Enable SSLKEYLOG" },
+#endif
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
 static size_t option_table_size = sizeof(option_table) / sizeof(option_table_line_t);
-
-#if 0
-/* Not in use and not tests. Reevaluate if we use files of parameters */
-static int skip_spaces(const char* line, int offset)
-{
-    int c;
-
-    while ((c = line[offset]) != 0) {
-        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
-            offset++;
-        }
-        else {
-            break;
-        }
-    }
-    return offset;
-}
-
-static int skip_name(const char* line, int offset)
-{
-    int c;
-
-    while ((c = line[offset]) != 0) {
-        if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == ':' || c == '#') {
-            break;
-        }
-        else {
-            offset++;
-        }
-    }
-    return offset;
-}
-
-static int parse_line_params(const char* line, int offset, option_param_t* params, int params_max, int* nb_params)
-{
-    int nb_found = 0;
-
-    offset = skip_spaces(line, offset);
-    if (line[offset] == ':') {
-        while (nb_found < params_max) {
-            int offset_start;
-            offset_start = skip_spaces(line, offset);
-            offset = skip_name(line, offset);
-            if (offset == offset_start) {
-                /* Nothing there. */
-                break;
-            }
-            else {
-                params[nb_found].param = line + offset_start;
-                params[nb_found].length = offset - offset_start;
-                nb_found++;
-            }
-        }
-    }
-    *nb_params = nb_found;
-    return offset;
-}
-
-static int compare_option_name(const char * line, int offset, size_t length, char const* option_name)
-{
-    int ret = -1;
-    
-    if (length == strlen(option_name)) {
-        ret = strncmp(option_name, line + offset, length);
-    }
-
-    return ret;
-}
-#endif
 
 static uint32_t config_parse_target_version(char const* v_arg)
 {
@@ -345,6 +279,11 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_DisablePortBlocking:
         config->disable_port_blocking = 1;
         break;
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+    case picoquic_option_SSLKEYLOG:
+        config->enable_sslkeylog = 1;
+        break;
+#endif
     case picoquic_option_SOLUTION_DIR:
         ret = config_set_string_param(&config->solution_dir, params, nb_params, 0);
         break;
@@ -814,6 +753,10 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_preemptive_repeat_policy(quic, config->do_preemptive_repeat);
 
         picoquic_disable_port_blocking(quic, config->disable_port_blocking);
+
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+        picoquic_enable_sslkeylog(quic, config->enable_sslkeylog);
+#endif
 
         if (config->initial_random >= 0 && config->initial_random <= 2) {
             picoquic_set_random_initial(quic, config->initial_random);
