@@ -4191,6 +4191,18 @@ void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_nam
     quic->use_unique_log_names = use_unique_log_names;
 }
 
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+void picoquic_enable_sslkeylog(picoquic_quic_t* quic, int enable_sslkeylog)
+{
+    quic->enable_sslkeylog = (enable_sslkeylog != 0);
+}
+
+int picoquic_is_sslkeylog_enabled(picoquic_quic_t* quic)
+{
+    return quic->enable_sslkeylog;
+}
+#endif
+
 void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial)
 {
     /* If set, triggers randomization of initial PN numbers. */
