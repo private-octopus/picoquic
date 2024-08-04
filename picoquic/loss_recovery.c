@@ -751,10 +751,9 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
                         * add_to_data_repeat_queue = 1;
                     }
                     else {
-                        if ((force_queue || frame_length > send_buffer_max_minus_checksum - *length) &&
-                            (old_p->ptype == picoquic_packet_0rtt_protected ||
-                                old_p->ptype == picoquic_packet_1rtt_protected)) {
-                            ret = picoquic_queue_misc_frame(cnx, &old_p->bytes[byte_index], frame_length, 0);
+                        if ((force_queue || frame_length > send_buffer_max_minus_checksum - *length)) {
+                            ret = picoquic_queue_misc_frame(cnx, &old_p->bytes[byte_index], frame_length, 0,
+                                old_p->pc);
                         }
                         else if (frame_length <= send_buffer_max_minus_checksum - *length) {
                             memcpy(&new_bytes[*length], &old_p->bytes[byte_index], frame_length);

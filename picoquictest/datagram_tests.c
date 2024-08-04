@@ -357,8 +357,10 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
             if (all_sent_time == 0) {
                 /* Queue a Ping frame to trigger acks */
                 uint8_t ping_frame[] = { picoquic_frame_type_ping };
-                picoquic_queue_misc_frame(test_ctx->cnx_client, ping_frame, sizeof(ping_frame), 0);
-                picoquic_queue_misc_frame(test_ctx->cnx_server, ping_frame, sizeof(ping_frame), 0);
+                picoquic_queue_misc_frame(test_ctx->cnx_client, ping_frame, sizeof(ping_frame), 0,
+                    picoquic_packet_context_application);
+                picoquic_queue_misc_frame(test_ctx->cnx_server, ping_frame, sizeof(ping_frame), 0,
+                    picoquic_packet_context_application);
                 loss_mask = 0;
                 all_sent_time = simulated_time;
             }

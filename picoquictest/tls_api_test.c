@@ -6053,7 +6053,8 @@ int client_error_test_modal(int mode)
         if (mode == 0) {
             /* Queue a data frame on stream 4, which was already closed */
             uint8_t stream_error_frame[] = { 0x17, 0x04, 0x41, 0x01, 0x08, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
-            picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame), 0);
+            picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame), 0,
+                picoquic_packet_context_application);
         }
         else if (mode == 1) {
             /* Test injection of a wrong NEW CONNECTION ID */
@@ -6070,12 +6071,14 @@ int client_error_test_modal(int mode)
             /* deliberate error: repeat the reset secret defined for path[0] */
             memcpy(x, test_ctx->cnx_server->path[0]->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
             x += PICOQUIC_RESET_SECRET_SIZE;
-            picoquic_queue_misc_frame(test_ctx->cnx_client, new_cnxid_error, x - new_cnxid_error, 0);
+            picoquic_queue_misc_frame(test_ctx->cnx_client, new_cnxid_error, x - new_cnxid_error, 0,
+                picoquic_packet_context_application);
         }
         else if (mode == 2) {
             /* Queue a stop sending on stream 2, which is unidir */
             uint8_t stop_sending_error_frame[] = { (uint8_t)picoquic_frame_type_stop_sending, 2, 0 };
-            picoquic_queue_misc_frame(test_ctx->cnx_client, stop_sending_error_frame, sizeof(stop_sending_error_frame), 0);
+            picoquic_queue_misc_frame(test_ctx->cnx_client, stop_sending_error_frame, sizeof(stop_sending_error_frame), 0,
+                picoquic_packet_context_application);
         }
         else {
             DBG_PRINTF("Error mode %d is not defined yet", mode);
@@ -12959,7 +12962,8 @@ int immediate_ack_test()
         int all_acked = 0;
         uint8_t immediate_ack_frame[2] = { 0x40, picoquic_frame_type_immediate_ack };
         /* Queue misc frame with "Immediate ACK" set */
-        picoquic_queue_misc_frame(test_ctx->cnx_client, immediate_ack_frame, 2, 0);
+        picoquic_queue_misc_frame(test_ctx->cnx_client, immediate_ack_frame, 2, 0,
+            picoquic_packet_context_application);
         /* Do couple of rounds until the frame is received;
          * Check that it is received my verifying that the "immediate ACK" 
          * is set in the ACK context at the server. Check the time.

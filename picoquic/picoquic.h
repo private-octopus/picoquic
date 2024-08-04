@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.21.7"
+#define PICOQUIC_VERSION "1.1.21.8"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -173,6 +173,15 @@ typedef enum {
     picoquic_state_draining,
     picoquic_state_disconnected
 } picoquic_state_enum;
+
+/* Packet contexts */
+typedef enum {
+    picoquic_packet_context_application = 0,
+    picoquic_packet_context_handshake = 1,
+    picoquic_packet_context_initial = 2,
+    picoquic_nb_packet_context = 3
+} picoquic_packet_context_enum;
+
 
 /* PMTUD 
  */
@@ -1013,7 +1022,8 @@ picoquic_stream_data_cb_fn picoquic_get_callback_function(picoquic_cnx_t * cnx);
 void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
 
 /* Send extra frames */
-int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length, int is_pure_ack);
+int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length,
+    int is_pure_ack, picoquic_packet_context_enum pc);
 
 /* Queue a datagram frame for sending later.
  * The datagram length must be no more than PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH,
