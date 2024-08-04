@@ -4548,8 +4548,20 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
             (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)) {
             path_x->challenge_response = challenge_response;
             path_x->response_required = 1;
-        } else {
-            DBG_PRINTF("%s", "Path challenge ignored, wrong addresses\n");
+        }
+        else if (path_x == NULL) {
+            picoquic_log_app_message(cnx, "%s", "Incoming challenge ignored, path=NULL.\n");
+        }
+        else {
+            char buf1[128], buf2[128], buf3[128], buf4[128];
+            picoquic_log_app_message(cnx,
+                "Path challenge[%" PRIu64 "] from %s to %s ignored, wrong addresses, expected %s - %s.\n",
+                path_x->unique_path_id,
+                picoquic_addr_text(addr_from, buf1, sizeof(buf1)),
+                picoquic_addr_text(addr_to, buf2, sizeof(buf2)),
+                picoquic_addr_text((struct sockaddr*)&path_x->peer_addr, buf3, sizeof(buf3)),
+                picoquic_addr_text((struct sockaddr*)&path_x->local_addr, buf4, sizeof(buf4))
+            );
         }
     }
 
