@@ -1977,6 +1977,7 @@ picoquic_misc_frame_header_t* picoquic_find_first_misc_frame(picoquic_cnx_t* cnx
 uint8_t* picoquic_format_misc_frames_in_context(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, picoquic_packet_context_enum pc);
 int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length, int is_pure_ack, picoquic_packet_context_enum pc);
+void picoquic_purge_misc_frames_after_ready(picoquic_cnx_t* cnx);
 void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame);
 void picoquic_clear_ack_ctx(picoquic_ack_context_t* ack_ctx);
 void picoquic_reset_ack_context(picoquic_ack_context_t* ack_ctx);

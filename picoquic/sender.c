@@ -2721,6 +2721,9 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_0rtt]);
     picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_handshake]);
 
+    /* Remove the frames queued in initial and handshake contexts */
+    picoquic_purge_misc_frames_after_ready(cnx);
+
     /* Trim the memory buffers allocated during handshake */
     picoquic_tlscontext_trim_after_handshake(cnx);
 
