@@ -4306,7 +4306,8 @@ void * picoquic_get_callback_context(picoquic_cnx_t * cnx)
     return cnx->callback_ctx;
 }
 
-picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length, int is_pure_ack)
+picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length, int is_pure_ack,
+    picoquic_packet_context_enum pc)
 {
     size_t l_alloc = sizeof(picoquic_misc_frame_header_t) + length;
 
@@ -4319,6 +4320,7 @@ picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, s
             memset(head, 0, sizeof(picoquic_misc_frame_header_t));
             head->length = length;
             head->is_pure_ack = is_pure_ack;
+            head->pc = pc;
             memcpy(((uint8_t *)head) + sizeof(picoquic_misc_frame_header_t), bytes, length);
         }
         return head;
@@ -4326,10 +4328,11 @@ picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, s
 }
 
 int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t * cnx, picoquic_misc_frame_header_t** first, 
-    picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length, int is_pure_ack)
+    picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length, int is_pure_ack,
+    picoquic_packet_context_enum pc)
 {
     int ret = 0;
-    picoquic_misc_frame_header_t* misc_frame = picoquic_create_misc_frame(bytes, length, is_pure_ack);
+    picoquic_misc_frame_header_t* misc_frame = picoquic_create_misc_frame(bytes, length, is_pure_ack, pc);
 
     if (misc_frame == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -4350,9 +4353,24 @@ int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t * cnx, picoquic_misc_frame_he
     return ret;
 }
 
-int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length, int is_pure_ack)
+int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length,
+    int is_pure_ack, picoquic_packet_context_enum pc)
 {
-    return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_misc_frame, &cnx->last_misc_frame, bytes, length, is_pure_ack);
+    return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_misc_frame, &cnx->last_misc_frame, bytes, length, is_pure_ack, pc);
+}
+
+void picoquic_purge_misc_frames_after_ready(picoquic_cnx_t* cnx)
+{
+    picoquic_misc_frame_header_t* misc_frame = cnx->first_misc_frame;
+
+    while (misc_frame != NULL) {
+        picoquic_misc_frame_header_t* next_frame = misc_frame->next_misc_frame;
+
+        if (misc_frame->pc != picoquic_packet_context_application) {
+            picoquic_delete_misc_or_dg(&cnx->first_misc_frame, &cnx->last_misc_frame, misc_frame);
+        }
+        misc_frame = next_frame;
+    }
 }
 
 void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame)

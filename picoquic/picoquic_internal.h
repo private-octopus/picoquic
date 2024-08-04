@@ -265,13 +265,6 @@ typedef enum {
     picoquic_packet_type_max
 } picoquic_packet_type_enum;
 
-typedef enum {
-    picoquic_packet_context_application = 0,
-    picoquic_packet_context_handshake = 1,
-    picoquic_packet_context_initial = 2,
-    picoquic_nb_packet_context = 3
-} picoquic_packet_context_enum;
-
 /* Packet header structure.
  * This structure is used internally when parsing or
  * formatting the header of a Quic packet.
@@ -868,6 +861,7 @@ typedef struct st_picoquic_misc_frame_header_t {
     struct st_picoquic_misc_frame_header_t* next_misc_frame;
     struct st_picoquic_misc_frame_header_t* previous_misc_frame;
     size_t length;
+    picoquic_packet_context_enum pc;
     int is_pure_ack;
 } picoquic_misc_frame_header_t;
 
@@ -1976,9 +1970,14 @@ uint8_t* picoquic_format_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uin
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t unique_path_id, uint64_t sequence);
 int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length);
 uint8_t* picoquic_format_one_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_stream_head_t* stream);
-uint8_t* picoquic_format_first_misc_or_dg_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last);
+uint8_t* picoquic_format_first_misc_or_dg_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
+    picoquic_misc_frame_header_t* misc_frame, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last);
 uint8_t* picoquic_format_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
-int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length, int is_pure_ack);
+picoquic_misc_frame_header_t* picoquic_find_first_misc_frame(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc);
+uint8_t* picoquic_format_misc_frames_in_context(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
+    int* more_data, int* is_pure_ack, picoquic_packet_context_enum pc);
+int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length, int is_pure_ack, picoquic_packet_context_enum pc);
+void picoquic_purge_misc_frames_after_ready(picoquic_cnx_t* cnx);
 void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame);
 void picoquic_clear_ack_ctx(picoquic_ack_context_t* ack_ctx);
 void picoquic_reset_ack_context(picoquic_ack_context_t* ack_ctx);
@@ -2026,7 +2025,8 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 
-picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length, int is_pure_ack);
+picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length, int is_pure_ack,
+    picoquic_packet_context_enum pc);
 
 /* Supported version upgrade.
  * Upgrades are only supported between compatible versions.
