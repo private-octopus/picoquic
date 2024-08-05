@@ -2464,6 +2464,18 @@ int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoq
     return ret;
 }
 
+int picoquic_get_path_addr(picoquic_cnx_t* cnx, uint64_t unique_path_id, int local, struct sockaddr_storage* addr)
+{
+    int ret = 0;
+    int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
+    if (path_id >= 0) {
+        picoquic_store_addr(addr, (struct sockaddr*)
+            ((local) ? &cnx->path[path_id]->local_addr : &cnx->path[path_id]->peer_addr));
+    }
+
+    return ret;
+}
+
 /* Reset the path MTU, for example if too many packet losses are detected */
 void picoquic_reset_path_mtu(picoquic_path_t* path_x)
 {
