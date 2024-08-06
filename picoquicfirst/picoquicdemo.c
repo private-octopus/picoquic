@@ -598,6 +598,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                                 picoquic_log_app_message(cb_ctx->cnx_client, "Cannot add new path, wrong address family, %d vs. %d\n", 
                                     cb_ctx->client_alt_address[i].ss_family, path0_addr.ss_family);
                             } else {
+#if 0
                                 /* The configuration code sets the port number in "client_alt_address" to zero,
                                 * but it should be set to the actual value because of the "matching address"
                                 * test when processing path challenges. The actual value is the same as
@@ -610,6 +611,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                                     ((struct sockaddr_in*)&cb_ctx->client_alt_address[i])->sin_port =
                                         ((struct sockaddr_in*)&path0_addr)->sin_port;
                                 }
+#endif
                                 if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr*)&cb_ctx->server_address,
                                     (struct sockaddr*)&cb_ctx->client_alt_address[i], cb_ctx->client_alt_if[i], picoquic_get_quic_time(quic), 0)) != 0) {
                                     picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d", ret);

@@ -4536,7 +4536,10 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
     } else {
         /*
          * Queue a response frame as response to path challenge.
-         * TODO: ensure it goes out on the same path as the incoming challenge.
+         * If the path already exists, we verify that the IP addresses match expectation:
+         * - source IP and port shall match the address and port with which the path was created.
+         * - destination IP shall match the local address.
+         * - destination port shall match the local port if that local port is not zero.
          */
         uint64_t challenge_response;
 
@@ -4545,7 +4548,10 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
         bytes += challenge_length;
         if (path_x != NULL &&
             (addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->peer_addr) == 0) &&
-            (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)) {
+            (addr_to == NULL || 
+                (picoquic_get_addr_port((struct sockaddr*)&path_x->local_addr) == 0 &&
+                    picoquic_compare_ip_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0) ||
+                picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)){
             path_x->challenge_response = challenge_response;
             path_x->response_required = 1;
         }
