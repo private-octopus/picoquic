@@ -2825,6 +2825,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+	    TEST_METHOD(h3zero_get_content_type_by_path) {
+            int ret = h3zero_get_content_type_by_path_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(http_drop) {
             int ret = http_drop_test();
 
