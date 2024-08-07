@@ -1101,6 +1101,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_pto_required : 1; /* Should send PTO probe */
     unsigned int is_probing_nat : 1; /* When path transmission is scheduled only for NAT probing */
     unsigned int is_lost_feedback_notified : 1; /* Lost feedback has been notified */
+    unsigned int is_cca_probing_up : 1; /* congestion control algorithm is seeking more bandwidth */
     
     /* Management of retransmissions in a path.
      * The "path_packet" variables are used for the RACK algorithm, per path, to avoid
@@ -1295,6 +1296,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_immediate_ack_required : 1; /* Should send an ACK asap */
     unsigned int is_multipath_enabled : 1; /* Unique path ID extension has been negotiated */
     unsigned int is_lost_feedback_notification_required : 1; /* CC algorithm requests lost feedback notification */
+    unsigned int is_forced_probe_up_required : 1; /* application wants "probe up" if CC requests it */
     
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;

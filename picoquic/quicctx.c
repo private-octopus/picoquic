@@ -4902,6 +4902,11 @@ void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int s
     cnx->is_lost_feedback_notification_required = should_notify;
 }
 
+void picoquic_request_forced_probe_up(picoquic_cnx_t* cnx, unsigned int request_forced_probe_up)
+{
+    cnx->is_forced_probe_up_required = request_forced_probe_up;
+}
+
 void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrease_threshold, uint64_t increase_threshold)
 {
     cnx->pacing_decrease_threshold = decrease_threshold;
