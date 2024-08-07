@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.21.8"
+#define PICOQUIC_VERSION "1.1.21.9"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -894,6 +894,12 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
+/* The get path addr API provides the IP addresses used by a specific path.
+* The "local" argument determines whether the APi returns the local address
+* (local == 1) or the address of the peer (local == 2).
+*/
+int picoquic_get_path_addr(picoquic_cnx_t* cnx, uint64_t unique_path_id, int local, struct sockaddr_storage* addr);
+
 /*
 * The calls to picoquic_get_path_quality takes as argument a structure
 * of type `picoquic_path_quality_t`.
