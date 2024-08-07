@@ -3358,7 +3358,7 @@ static size_t nb_h3zero_string_content_type_compare = sizeof(h3zero_string_conte
 int h3zero_get_content_type_by_path_test() {
     int ret = 0;
 
-    for (int i = 0; i < nb_h3zero_string_content_type_compare; i++) {
+    for (size_t i = 0; i < nb_h3zero_string_content_type_compare; i++) {
         h3zero_string_content_type_compare_list_t item = h3zero_string_content_type_compare_list[i];
 
         h3zero_content_type_enum ct_res;
