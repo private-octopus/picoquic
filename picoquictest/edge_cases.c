@@ -515,7 +515,7 @@ int ec5c_silly_cid_test()
     }
 
     if (ret == 0) {
-        ret = edge_case_complete(test_ctx, &simulated_time, 600000);
+        ret = edge_case_complete(test_ctx, &simulated_time, 3000000);
     }
 
     if (test_ctx != NULL) {

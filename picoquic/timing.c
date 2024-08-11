@@ -184,8 +184,9 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
 
         if (current_time > send_time) {
             rtt_estimate = current_time - send_time;
-            /* We cannot blindly trust the ack delay.. */
-            if (ack_delay > 0 && cnx->cnx_state >= picoquic_state_ready) {
+            /* We cannot blindly trust the ack delay,
+             * and especially not for the first sample */
+            if (!is_first && ack_delay > 0 && cnx->cnx_state >= picoquic_state_ready) {
                 if (ack_delay > cnx->local_parameters.max_ack_delay) {
                     ack_delay = cnx->local_parameters.max_ack_delay;
                 }
@@ -305,7 +306,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
                     rtt_var_sample = old_path->max_rtt_estimate_in_period - old_path->smoothed_rtt;
                 }
                 else {
-                    uint64_t rtt_var_sample_min = old_path->smoothed_rtt - old_path->min_rtt_estimate_in_period ;
+                    uint64_t rtt_var_sample_min = old_path->smoothed_rtt - old_path->min_rtt_estimate_in_period;
 
                     rtt_var_sample = old_path->max_rtt_estimate_in_period - old_path->smoothed_rtt;
                     if (rtt_var_sample_min > rtt_var_sample) {
@@ -314,9 +315,9 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
                 }
                 old_path->rtt_variant = (3 * old_path->rtt_variant + rtt_var_sample) / 4;
                 old_path->smoothed_rtt = (7 * old_path->smoothed_rtt + rtt_estimate) / 8;
-                old_path->retransmit_timer = old_path->smoothed_rtt + 3 * old_path->rtt_variant +
-                    cnx->remote_parameters.max_ack_delay;
             }
+            old_path->retransmit_timer = old_path->smoothed_rtt + 3 * old_path->rtt_variant +
+                cnx->remote_parameters.max_ack_delay;
 
             /* if RTT updated, reset delayed ACK parameters */
             if (old_path == cnx->path[0]) {
