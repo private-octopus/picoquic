@@ -2849,7 +2849,7 @@ int queue_network_input_test()
     /* Fill 0..3 */
     if (ret == 0) {
         new_data_available = 0;
-        if ((ret = picoquic_queue_network_input(quic, tree, 0, 0, data, 4, 0, NULL,
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 0, data, 4, 1, NULL,
             &new_data_available)) != 0) {
             DBG_PRINTF("picoquic_queue_network_input(0, 0, 4) failed (%d)", ret);
         }
@@ -2862,7 +2862,7 @@ int queue_network_input_test()
     /* Fill 6..9 */
     if (ret == 0) {
         new_data_available = 0;
-        if ((ret = picoquic_queue_network_input(quic, tree, 0, 6, data + 6, 4, 0, NULL, &new_data_available)) != 0) {
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 6, data + 6, 4, 1, NULL, &new_data_available)) != 0) {
             DBG_PRINTF("picoquic_queue_network_input(0, 6, 4) failed (%d)", ret);
         } else if (new_data_available == 0) {
             DBG_PRINTF("new_data_available doesn't signal new data (%d)", new_data_available);
@@ -2873,7 +2873,7 @@ int queue_network_input_test()
     /* Fill the gap from 4..5 with a chunk from 2..7 */
     if (ret == 0) {
         new_data_available = 0;
-        if ((ret = picoquic_queue_network_input(quic, tree, 0, 2, data + 2, 6, 0, NULL, &new_data_available)) != 0) {
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 2, data + 2, 6, 1, NULL, &new_data_available)) != 0) {
             DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed (%d)", ret);
         } else if (new_data_available == 0) {
             DBG_PRINTF("new_data_available signals new data (%d)", new_data_available);
@@ -2884,7 +2884,7 @@ int queue_network_input_test()
     /* No new data delivered by chunk 2..7 */
     if (ret == 0) {
         new_data_available = 0;
-        if ((ret = picoquic_queue_network_input(quic, tree, 0, 2, data, 6, 0, NULL, &new_data_available)) != 0) {
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 2, data, 6, 1, NULL, &new_data_available)) != 0) {
             DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed (%d)", ret);
         }
 
