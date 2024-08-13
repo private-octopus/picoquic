@@ -1279,7 +1279,7 @@ const int picoquic_is_last_stream_frame(const uint8_t* bytes, const uint8_t* byt
     while (bytes < bytes_max && *bytes == picoquic_frame_type_padding) {
         bytes++;
     }
-    return (bytes < bytes_max) ? 1 : 0;
+    return (bytes < bytes_max) ? 0 : 1;
 }
 
 const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
