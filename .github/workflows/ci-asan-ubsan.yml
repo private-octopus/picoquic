@@ -35,7 +35,7 @@ jobs:
       - name: Perform Unit Tests and Check for Leaks
         run: |
             ulimit -c unlimited -S
-            ./picoquic_ct -n -x satellite_cubic_loss -r 1>quic_ct.txt 2>sanity.txt || QUICRESULT=$? 
+            ./picoquic_ct -n -r 1>quic_ct.txt 2>sanity.txt || QUICRESULT=$? 
             echo "running picoquic_ct returns <$QUICRESULT> "
             cat sanity.txt
             if [ ! -z ${QUICRESULT} ]; then
