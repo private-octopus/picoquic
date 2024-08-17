@@ -77,7 +77,7 @@
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 6, "packet_number": 35, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "path_available", "path_id": 0, "sequence": 15}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 5, "packet_number": 36, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "max_paths", "max_paths": 17}]}],
+    "frame_type": "max_path_id", "max_path_id": 17}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 12, "packet_number": 37, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "bdp", "lifetime": 1, "bytes_in_flight": 2, "min_rtt": 3, "ip": "0a000001"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 11, "packet_number": 0, "dcid": "01020304" }, "frames": [{ 

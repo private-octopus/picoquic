@@ -3772,6 +3772,22 @@ int tls_retry_token_valid_test()
                 ret = -1;
             }
         }
+
+        /* test of an invalid token, overly long */
+        if (ret == 0 && token_mode == 0) {
+            uint8_t big_token[PICOQUIC_MAX_PACKET_SIZE];
+            if (token_size < sizeof(big_token)) {
+                memcpy(big_token, token_buffer, token_size);
+                memset(big_token + token_size, 0xa5, sizeof(big_token) - token_size);
+                verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
+                    &is_new_token, &odcid_found, cid[0], pn[2],
+                    token_buffer, sizeof(big_token), 0);
+                if (verified == 0) {
+                    DBG_PRINTF("%s", "Bad length check fails\n");
+                    ret = -1;
+                }
+            }
+        }
     }
 
     picoquic_free(quic);
@@ -4185,7 +4201,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
                 /* Set the multipath option at both client and server */
                 multipath_init_params(&server_parameters, 0);
                 picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
-                test_ctx->cnx_client->local_parameters.enable_multipath = 1;
+                test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
+                test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
                 test_ctx->cnx_client->local_parameters.enable_time_stamp = 0;
             }
 
@@ -4250,6 +4267,17 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
             } else {
                 /* run a receive loop until no outstanding data */
                 ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, 0, 0);
+            }
+        }
+
+        if (ret == 0 && i == 1 && do_multipath) {
+            /* verify that multipath was negotiated */
+            if (!test_ctx->cnx_client->is_multipath_enabled ||
+                !test_ctx->cnx_server->is_multipath_enabled) {
+                DBG_PRINTF("Zero RTT test, multipath not negotiated (client: %d, server: %d).\n",
+                    test_ctx->cnx_client->is_multipath_enabled,
+                    test_ctx->cnx_server->is_multipath_enabled);
+                ret = -1;
             }
         }
 
@@ -6025,7 +6053,8 @@ int client_error_test_modal(int mode)
         if (mode == 0) {
             /* Queue a data frame on stream 4, which was already closed */
             uint8_t stream_error_frame[] = { 0x17, 0x04, 0x41, 0x01, 0x08, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
-            picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame), 0);
+            picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame), 0,
+                picoquic_packet_context_application);
         }
         else if (mode == 1) {
             /* Test injection of a wrong NEW CONNECTION ID */
@@ -6042,12 +6071,14 @@ int client_error_test_modal(int mode)
             /* deliberate error: repeat the reset secret defined for path[0] */
             memcpy(x, test_ctx->cnx_server->path[0]->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
             x += PICOQUIC_RESET_SECRET_SIZE;
-            picoquic_queue_misc_frame(test_ctx->cnx_client, new_cnxid_error, x - new_cnxid_error, 0);
+            picoquic_queue_misc_frame(test_ctx->cnx_client, new_cnxid_error, x - new_cnxid_error, 0,
+                picoquic_packet_context_application);
         }
         else if (mode == 2) {
             /* Queue a stop sending on stream 2, which is unidir */
             uint8_t stop_sending_error_frame[] = { (uint8_t)picoquic_frame_type_stop_sending, 2, 0 };
-            picoquic_queue_misc_frame(test_ctx->cnx_client, stop_sending_error_frame, sizeof(stop_sending_error_frame), 0);
+            picoquic_queue_misc_frame(test_ctx->cnx_client, stop_sending_error_frame, sizeof(stop_sending_error_frame), 0,
+                picoquic_packet_context_application);
         }
         else {
             DBG_PRINTF("Error mode %d is not defined yet", mode);
@@ -6976,7 +7007,7 @@ int retire_cnxid_test()
             ret = -1;
         } else {
             ret = picoquic_queue_retire_connection_id_frame(test_ctx->cnx_client, 0, stashed->sequence);
-            (void)picoquic_remove_stashed_cnxid(test_ctx->cnx_client, 0, stashed, NULL, 0);
+            (void)picoquic_remove_stashed_cnxid(test_ctx->cnx_client, 0, stashed, NULL);
         }
     }
 
@@ -12931,7 +12962,8 @@ int immediate_ack_test()
         int all_acked = 0;
         uint8_t immediate_ack_frame[2] = { 0x40, picoquic_frame_type_immediate_ack };
         /* Queue misc frame with "Immediate ACK" set */
-        picoquic_queue_misc_frame(test_ctx->cnx_client, immediate_ack_frame, 2, 0);
+        picoquic_queue_misc_frame(test_ctx->cnx_client, immediate_ack_frame, 2, 0,
+            picoquic_packet_context_application);
         /* Do couple of rounds until the frame is received;
          * Check that it is received my verifying that the "immediate ACK" 
          * is set in the ACK context at the server. Check the time.

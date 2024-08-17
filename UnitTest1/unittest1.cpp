@@ -2477,6 +2477,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_fail) {
+            int ret = multipath_fail_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_ab1) {
+            int ret = multipath_ab1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_sat_plus) {
             int ret = multipath_sat_plus_test();
 
@@ -2581,90 +2593,6 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_tunnel) {
             int ret = multipath_tunnel_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_basic) {
-            int ret = simple_multipath_basic_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_drop_first) {
-            int ret = simple_multipath_drop_first_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_drop_second) {
-            int ret = simple_multipath_drop_second_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_sat_plus) {
-            int ret = simple_multipath_sat_plus_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_renew) {
-            int ret = simple_multipath_renew_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_rotation) {
-            int ret = simple_multipath_rotation_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_nat) {
-            int ret = simple_multipath_nat_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_break1) {
-            int ret = simple_multipath_break1_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_socket_error) {
-            int ret = simple_multipath_socket_error_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_abandon) {
-            int ret = simple_multipath_abandon_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_back1) {
-            int ret = simple_multipath_back1_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_perf) {
-            int ret = simple_multipath_perf_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_qlog) {
-            int ret = simple_multipath_qlog_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(simple_multipath_quality) {
-            int ret = simple_multipath_quality_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2905,6 +2833,12 @@ namespace UnitTest1
 
         TEST_METHOD(h3zero_settings) {
             int ret = h3zero_settings_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+	    TEST_METHOD(h3zero_get_content_type_by_path) {
+            int ret = h3zero_get_content_type_by_path_test();
 
             Assert::AreEqual(ret, 0);
         }

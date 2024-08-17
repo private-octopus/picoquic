@@ -440,6 +440,8 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_basic", multipath_basic_test },
     { "multipath_drop_first", multipath_drop_first_test },
     { "multipath_drop_second", multipath_drop_second_test },
+    { "multipath_fail", multipath_fail_test },
+    { "multipath_ab1", multipath_ab1_test },
     { "multipath_sat_plus", multipath_sat_plus_test },
     { "multipath_renew", multipath_renew_test },
     { "multipath_rotation", multipath_rotation_test },
@@ -460,20 +462,6 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_tunnel", multipath_tunnel_test },
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },
-    { "simple_multipath_basic", simple_multipath_basic_test },
-    { "simple_multipath_drop_first", simple_multipath_drop_first_test },
-    { "simple_multipath_drop_second", simple_multipath_drop_second_test },
-    { "simple_multipath_sat_plus", simple_multipath_sat_plus_test },
-    { "simple_multipath_renew", simple_multipath_renew_test },
-    { "simple_multipath_rotation", simple_multipath_rotation_test },
-    { "simple_multipath_break1", simple_multipath_break1_test },
-    { "simple_multipath_socket_error", simple_multipath_socket_error_test },
-    { "simple_multipath_abandon", simple_multipath_abandon_test },
-    { "simple_multipath_back1", simple_multipath_back1_test },
-    { "simple_multipath_nat", simple_multipath_nat_test },
-    { "simple_multipath_perf", simple_multipath_perf_test },
-    { "simple_multipath_qlog", simple_multipath_qlog_test },
-    { "simple_multipath_quality", simple_multipath_quality_test },
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },
     { "pn_random", pn_random_test },
@@ -538,6 +526,7 @@ int usage(char const * argv0)
     fprintf(stderr, "  -o n1 n2          Only run test numbers in range [n1,n2]");
     fprintf(stderr, "  -s nnn            Run stress for nnn minutes.\n");
     fprintf(stderr, "  -f nnn            Run fuzz for nnn minutes.\n");
+    fprintf(stderr, "  -C ccc            Use nnn stress clients in parallel.\n");
     fprintf(stderr, "  -c nnn ccc        Run connection stress for nnn minutes, ccc connections.\n");
     fprintf(stderr, "  -d ppp uuu dir    Run connection ddoss for ppp packets, uuu usec intervals,\n");
     fprintf(stderr, "  -F nnn            Run the corrupt file fuzzer nnn times,\n");
@@ -569,6 +558,7 @@ int main(int argc, char** argv)
     int nb_test_tried = 0;
     int nb_test_failed = 0;
     int stress_minutes = 0;
+    int stress_clients = 0;
     int auto_bypass = 0;
     int cf_rounds = 0;
     test_status_t * test_status = (test_status_t *) calloc(nb_tests, sizeof(test_status_t));
@@ -600,7 +590,7 @@ int main(int argc, char** argv)
     {
         memset(test_status, 0, nb_tests * sizeof(test_status_t));
 
-        while (ret == 0 && (opt = getopt(argc, argv, "c:d:f:F:s:S:x:o:nrh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "c:C:d:f:F:s:S:x:o:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 optind--;
@@ -666,6 +656,15 @@ int main(int argc, char** argv)
                     ret = usage(argv[0]);
                 }
                 break;
+            case 'C':
+                do_stress = 1;
+                stress_clients = atoi(optarg);
+                if (stress_clients <= 0) {
+                    fprintf(stderr, "Incorrect number of stress clients: %s\n", optarg);
+                    ret = usage(argv[0]);
+                }
+                break;
+
             case 'c':
                 if (optind + 1 > argc) {
                     fprintf(stderr, "option requires more arguments -- c\n");
@@ -755,6 +754,7 @@ int main(int argc, char** argv)
             if (do_stress || do_fuzz) {
                 picoquic_stress_test_duration = stress_minutes;
                 picoquic_stress_test_duration *= 60000000;
+                picoquic_stress_nb_clients = stress_clients;
             }
 
             for (size_t i = 0; i < nb_tests; i++) {

@@ -2043,7 +2043,7 @@ int picoquic_find_incoming_unique_path(picoquic_cnx_t* cnx, picoquic_packet_head
          */
         if (cnx->nb_paths < PICOQUIC_NB_PATH_TARGET &&
             (cnx->quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from)) &&
-            picoquic_create_path(cnx, current_time, addr_to, addr_from) > 0) {
+            picoquic_create_path(cnx, current_time, addr_to, addr_from, ph->l_cid->path_id) > 0) {
             /* if we do create a new path, it should have the right path_id. We cannot
             * assume that paths will be created in the full order, so that means we may
             * have to create "empty" paths in invalid state. Or, more simply,
@@ -2140,8 +2140,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             /* First packet from the peer. Remember the CNX ID. No further action */
             cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, 0, &ph->dest_cnx_id);
             if (cnx->path[path_id]->was_local_cnxid_retired){
-                if (cnx->client_mode == 0 &&
-                    (path_id == 0 || cnx->is_simple_multipath_enabled)) {
+                if (cnx->client_mode == 0 && path_id == 0) {
                     /* If on a server, dereference the current CID, and pick a new one */
                     (void)picoquic_renew_connection_id(cnx, path_id);
                 }
@@ -2151,7 +2150,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             /* The peer switched to a new CID */
             cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, 0, &ph->dest_cnx_id);
             if (cnx->client_mode == 0 && cnx->first_remote_cnxid_stash->cnxid_stash_first != NULL &&
-                (path_id == 0 || cnx->is_simple_multipath_enabled)) {
+                path_id == 0) {
                 /* If on a server, dereference the current CID, and pick a new one */
                 (void)picoquic_renew_connection_id(cnx, path_id);
                 cnx->path[path_id]->was_local_cnxid_retired = 0;
@@ -2179,7 +2178,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
 
         if (cnx->nb_paths < PICOQUIC_NB_PATH_TARGET &&
             (cnx->quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from)) &&
-            picoquic_create_path(cnx, current_time, addr_to, addr_from) > 0) {
+            picoquic_create_path(cnx, current_time, addr_to, addr_from, UINT64_MAX) > 0) {
             /* The peer is probing for a new path, or there was a path rebinding */
             path_id = cnx->nb_paths - 1;
 
