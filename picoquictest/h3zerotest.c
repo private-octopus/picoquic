@@ -2619,7 +2619,7 @@ int http_multi_file_test_one(char const * alpn, picoquic_stream_data_cb_fn serve
 
     int ret = demo_test_multi_scenario_create(&scenario, &stream_length, random_seed, nb_files, name_length, file_length, dir_www, dir_download);
 
-    if (ret == 0) {
+    if (ret == 0 && stream_length != NULL) {
         ret = demo_server_test(alpn, server_callback_fn, (void*)&file_param, scenario, nb_files,
             stream_length, 0, do_loss, 5000000, 0, NULL, MULTI_FILE_CLIENT_BIN, MULTI_FILE_SERVER_BIN, do_preemptive_repeat);
     }
@@ -3288,6 +3288,85 @@ int h3zero_settings_test()
 
     if (ret == 0) {
         ret = h3zero_settings_encode_test(h3zero_default_setting_frame + 1, h3zero_default_setting_frame_size - 1, &default_setting_expected);
+    }
+
+    return ret;
+}
+
+            /*
+            * h3zero_content_type_none = 0,
+            * h3zero_content_type_not_supported,
+            * h3zero_content_type_text_html,
+            * h3zero_content_type_text_plain,
+            * h3zero_content_type_image_gif,
+            * h3zero_content_type_image_jpeg,
+            * h3zero_content_type_image_png,
+            * h3zero_content_type_dns_message,
+            * h3zero_content_type_javascript,
+            * h3zero_content_type_json,
+            * h3zero_content_type_www_form_urlencoded,
+            * h3zero_content_type_text_css
+            */
+
+typedef struct st_h3zero_string_content_type_compar_list_t {
+    const char *path;
+    const h3zero_content_type_enum content_type;
+} h3zero_string_content_type_compare_list_t;
+
+char const root_path_str[] = { '/' , 0 };
+char const no_ext_path_str[] = { '/', 'n', 'o', 'e', 'x', 't' , 0 };
+char const htm_path_str[] = { '/', 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'h', 't', 'm', 0 };
+char const html_path_str[] = { '/', 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'h', 't', 'm', 'l', 0 };
+char const txt_path_str[] = { '/', 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 't', 'x', 't', 0 };
+char const gif_path_str[] = { '/', 'i', 'm', 'g', '.', 'g', 'i', 'f', 0 };
+char const jpg_path_str[] = { '/', 'i', 'm', 'g', '.', 'j', 'p', 'g', 0 };
+char const jpeg_path_str[] = { '/', 'i', 'm', 'g', '.', 'j', 'p', 'e', 'g', 0 };
+char const png_path_str[] = { '/', 'i', 'm', 'g', '.', 'p', 'n', 'g', 0 };
+char const js_path_str[] = { '/', 's', 'c', 'r', 'i', 'p', 't', '.', 'j', 's', 0 };
+char const json_path_str[] = { '/', 'd', 'a', 't', 'a', '.', 'j', 's', 'o', 'n', 0 };
+char const css_path_str[] = { '/', 's', 't', 'y', 'l', 'e', '.', 'c', 's', 's', 0 };
+
+char const double_dot_path_str[] = { '/', 's', 't', 'y', 'l', 'e', '.', 'e', 'x', 't', '.', 'h', 't', 'm', 'l', 0 };
+
+static const h3zero_string_content_type_compare_list_t h3zero_string_content_type_compare_list[] = {
+    /* Invalid paths and paths without extensions. */
+    { NULL, h3zero_content_type_text_plain },
+    { root_path_str, h3zero_content_type_text_plain },
+    { no_ext_path_str, h3zero_content_type_text_plain },
+    { txt_path_str, h3zero_content_type_text_plain },
+
+    /* Valid paths with extensions. */
+    { htm_path_str, h3zero_content_type_text_html },
+    { html_path_str, h3zero_content_type_text_html },
+    { gif_path_str, h3zero_content_type_image_gif },
+    { jpg_path_str, h3zero_content_type_image_jpeg },
+    { jpeg_path_str, h3zero_content_type_image_jpeg },
+    { png_path_str, h3zero_content_type_image_png },
+    { js_path_str, h3zero_content_type_javascript },
+    { json_path_str, h3zero_content_type_json },
+    { css_path_str, h3zero_content_type_text_css },
+
+    /* Special cases but valid. */
+    { double_dot_path_str, h3zero_content_type_text_html }
+    /* TODO Add more test cases.
+     * e.g. query string?
+     */
+};
+
+static size_t nb_h3zero_string_content_type_compare = sizeof(h3zero_string_content_type_compare_list) / sizeof(h3zero_string_content_type_compare_list_t);
+
+int h3zero_get_content_type_by_path_test() {
+    int ret = 0;
+
+    for (size_t i = 0; i < nb_h3zero_string_content_type_compare; i++) {
+        h3zero_string_content_type_compare_list_t item = h3zero_string_content_type_compare_list[i];
+
+        h3zero_content_type_enum ct_res;
+        if ((ct_res = h3zero_get_content_type_by_path(item.path)) != item.content_type) {
+            fprintf(stdout, "Path %s expects content type %d, but got %d. \n", item.path, item.content_type, ct_res);
+            ret = -1;
+            break;
+        }
     }
 
     return ret;

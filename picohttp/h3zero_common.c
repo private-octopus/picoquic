@@ -914,6 +914,54 @@ int h3zero_find_path_item(const uint8_t * path, size_t path_length, const picoht
 	return -1;
 }
 
+/* TODO find a better place. */
+h3zero_content_type_enum h3zero_get_content_type_by_path(const char *path) {
+	if (path != NULL) {
+		/* Dots in paths allowed.
+		 * https://datatracker.ietf.org/doc/html/rfc1738
+		 * path -> segment -> xpalphas -> xalpha -> alpha | digit | safe | extra | escape -> safe = $ | - | _ | @ | . |
+		 */
+
+		const char *dot = strrchr(path, '.'); /* recursive to get the last occuraence. */
+		/* if dot is found. */
+		if(dot && dot != path) {
+			const char *ext = dot + 1;
+
+			/*
+			* h3zero_content_type_none = 0,
+			* h3zero_content_type_not_supported,
+			* h3zero_content_type_text_html,
+			* h3zero_content_type_text_plain,
+			* h3zero_content_type_image_gif,
+			* h3zero_content_type_image_jpeg,
+			* h3zero_content_type_image_png,
+			* h3zero_content_type_dns_message,
+			* h3zero_content_type_javascript,
+			* h3zero_content_type_json,
+			* h3zero_content_type_www_form_urlencoded,
+			* h3zero_content_type_text_css
+			*/
+			if (strcmp(ext, "html") == 0 || strcmp(ext, "htm") == 0) {
+				return h3zero_content_type_text_html;
+			} else if (strcmp(ext, "gif") == 0) {
+				return h3zero_content_type_image_gif;
+			} else if (strcmp(ext, "jpg") == 0 || strcmp(ext, "jpeg") == 0) {
+				return h3zero_content_type_image_jpeg;
+			} else if (strcmp(ext, "png") == 0) {
+				return h3zero_content_type_image_png;
+			} else if (strcmp(ext, "js") == 0) {
+				return h3zero_content_type_javascript;
+			} else if (strcmp(ext, "json") == 0) {
+				return h3zero_content_type_json;
+			} else if (strcmp(ext, "css") == 0) {
+				return h3zero_content_type_text_css;
+			}
+		}
+	}
+
+	/* PATH == NULL OR dot not found OR unknown extension. */
+	return h3zero_content_type_text_plain;
+}
 
 /* Processing of the request frame.
 * This function is called after the client's stream is closed,
@@ -953,7 +1001,10 @@ int h3zero_process_request_frame(
 				strlen(h3zero_server_default_page) : stream_ctx->echo_length;
 			o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max,
 				(stream_ctx->echo_length == 0) ? h3zero_content_type_text_html :
-				h3zero_content_type_text_plain);
+				h3zero_get_content_type_by_path(stream_ctx->file_path));
+			/* TODO handle query string
+			 * Currently picoquic doesn't support query strings.
+			 */
 		}
 	}
 	else if (stream_ctx->ps.stream_state.header.method == h3zero_method_post) {

@@ -650,15 +650,7 @@ static uint64_t binlog_get_path_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
     uint64_t path_id = 0;
 
-    if (cnx->is_simple_multipath_enabled && path_x != NULL && path_x->p_remote_cnxid != NULL) {
-        if (path_x->p_remote_cnxid->cnx_id.id_len > 0) {
-            path_id = path_x->p_remote_cnxid->sequence;
-        }
-        else if (path_x->p_local_cnxid != NULL) {
-            path_id = path_x->p_local_cnxid->sequence;
-        }
-    }
-    else if (cnx->is_multipath_enabled && path_x != NULL) {
+    if (cnx->is_multipath_enabled && path_x != NULL) {
         path_id = path_x->unique_path_id;
     }
 
@@ -1029,7 +1021,7 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
 
     if (ret == 0) {
         cnx->f_binlog = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic),
-            cnx->local_parameters.enable_multipath | cnx->local_parameters.enable_simple_multipath | cnx->local_parameters.is_multipath_enabled);
+           cnx->local_parameters.is_multipath_enabled);
         if (cnx->f_binlog == NULL) {
             cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
             ret = -1;
@@ -1132,7 +1124,7 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 
     bytestream_buf stream_msg;
     bytestream* ps_msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
-    int path_max = (cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled) ? cnx->nb_paths : 1;
+    int path_max = (cnx->is_multipath_enabled) ? cnx->nb_paths : 1;
 
     for (int path_id = 0; path_id < path_max; path_id++)
     {
@@ -1177,7 +1169,7 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         bytewrite_vint(ps_msg, path->receive_rate_estimate);
         bytewrite_vint(ps_msg, path->send_mtu);
         bytewrite_vint(ps_msg, path->pacing.packet_time_microsec);
-        if (cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled) {
+        if (cnx->is_multipath_enabled) {
             bytewrite_vint(ps_msg, path->nb_losses_found);
             bytewrite_vint(ps_msg, path->nb_spurious);
         }

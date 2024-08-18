@@ -265,13 +265,6 @@ typedef enum {
     picoquic_packet_type_max
 } picoquic_packet_type_enum;
 
-typedef enum {
-    picoquic_packet_context_application = 0,
-    picoquic_packet_context_handshake = 1,
-    picoquic_packet_context_initial = 2,
-    picoquic_nb_packet_context = 3
-} picoquic_packet_context_enum;
-
 /* Packet header structure.
  * This structure is used internally when parsing or
  * formatting the header of a Quic packet.
@@ -589,8 +582,6 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_min_ack_delay 0xff04de1aull 
 #define picoquic_tp_enable_time_stamp 0x7158  /* x&1 */
 #define picoquic_tp_grease_quic_bit 0x2ab2
-#define picoquic_tp_enable_multipath 0x0f739bbc1b666d06ull
-#define picoquic_tp_enable_simple_multipath  0x29e3d19e
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
 #define picoquic_tp_initial_max_path_id  0x0f739bbc1b666d09ull /* per draft quic multipath 09 */
@@ -656,6 +647,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int is_cert_store_not_empty : 1;
     unsigned int use_long_log : 1;
     unsigned int should_close_log : 1;
+    unsigned int enable_sslkeylog : 1; /* Enable the SSLKEYLOG feature */
     unsigned int use_unique_log_names : 1; /* Add 64 bit random number to log names for uniqueness */
     unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
     unsigned int one_way_grease_quic_bit : 1; /* Grease of QUIC bit, but do not announce support */
@@ -869,6 +861,7 @@ typedef struct st_picoquic_misc_frame_header_t {
     struct st_picoquic_misc_frame_header_t* next_misc_frame;
     struct st_picoquic_misc_frame_header_t* previous_misc_frame;
     size_t length;
+    picoquic_packet_context_enum pc;
     int is_pure_ack;
 } picoquic_misc_frame_header_t;
 
@@ -963,6 +956,8 @@ typedef struct st_picoquic_local_cnxid_list_t {
     uint64_t local_cnxid_oldest_created;
     int nb_local_cnxid;
     int nb_local_cnxid_expired;
+    unsigned int is_demoted : 1;
+    uint64_t demotion_time;
     picoquic_local_cnxid_t* local_cnxid_first;
 } picoquic_local_cnxid_list_t;
 
@@ -987,6 +982,7 @@ typedef struct st_picoquic_remote_cnxid_stash_t {
     uint64_t unique_path_id;
     uint64_t retire_cnxid_before;
     picoquic_remote_cnxid_t* cnxid_stash_first;
+    unsigned int is_in_use : 1;
 } picoquic_remote_cnxid_stash_t;
 
 /*
@@ -1105,6 +1101,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_pto_required : 1; /* Should send PTO probe */
     unsigned int is_probing_nat : 1; /* When path transmission is scheduled only for NAT probing */
     unsigned int is_lost_feedback_notified : 1; /* Lost feedback has been notified */
+    unsigned int is_cca_probing_up : 1; /* congestion control algorithm is seeking more bandwidth */
     
     /* Management of retransmissions in a path.
      * The "path_packet" variables are used for the RACK algorithm, per path, to avoid
@@ -1289,7 +1286,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int did_receive_short_initial : 1; /* whether peer sent unpadded initial packet */
     unsigned int ack_ignore_order_local : 1; /* Request peer to not generate immediate ack if out of order packet received */
     unsigned int ack_ignore_order_remote : 1; /* Peer requested no immediate ack if out of order packet received */
-    unsigned int is_simple_multipath_enabled : 1; /* Usage of simple multipath was negotiated */
     unsigned int are_path_callbacks_enabled : 1; /* Enable path specific callbacks */
     unsigned int is_sending_large_buffer : 1; /* Buffer provided by application is sufficient for PMTUD */
     unsigned int is_preemptive_repeat_enabled : 1; /* Preemptive repat of packets to reduce transaction latency */
@@ -1300,6 +1296,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_immediate_ack_required : 1; /* Should send an ACK asap */
     unsigned int is_multipath_enabled : 1; /* Unique path ID extension has been negotiated */
     unsigned int is_lost_feedback_notification_required : 1; /* CC algorithm requests lost feedback notification */
+    unsigned int is_forced_probe_up_required : 1; /* application wants "probe up" if CC requests it */
     
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
@@ -1553,7 +1550,8 @@ void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_
 
 /* Management of path */
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
-    const struct sockaddr* local_addr, const struct sockaddr* peer_addr);
+    const struct sockaddr* local_addr, const struct sockaddr* peer_addr,
+    uint64_t unique_path_id);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 void picoquic_enqueue_packet_with_path(picoquic_packet_t* p);
@@ -1584,14 +1582,17 @@ uint64_t picoquic_stash_remote_cnxid(picoquic_cnx_t * cnx, uint64_t retire_befor
     const uint64_t unique_path_id, const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes,
     const uint8_t * secret_bytes, picoquic_remote_cnxid_t ** pstashed);
 
-picoquic_remote_cnxid_t* picoquic_remove_cnxid_from_stash(picoquic_cnx_t* cnx, picoquic_remote_cnxid_stash_t* remote_cnxid_stash, picoquic_remote_cnxid_t* removed, picoquic_remote_cnxid_t* previous, int recycle_packets);
+picoquic_remote_cnxid_t* picoquic_remove_cnxid_from_stash(picoquic_cnx_t* cnx, picoquic_remote_cnxid_stash_t* remote_cnxid_stash, picoquic_remote_cnxid_t* removed, picoquic_remote_cnxid_t* previous);
 
 picoquic_remote_cnxid_t* picoquic_remove_stashed_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_remote_cnxid_t* removed, 
-    picoquic_remote_cnxid_t* previous, int recycle_packets);
+    picoquic_remote_cnxid_t* previous);
 
+picoquic_remote_cnxid_t* picoquic_get_cnxid_from_stash(picoquic_remote_cnxid_stash_t* stash);
 picoquic_remote_cnxid_t* picoquic_obtain_stashed_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 void picoquic_dereference_stashed_cnxid(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_deleting_cnx);
 uint64_t picoquic_remove_not_before_from_stash(picoquic_cnx_t* cnx, picoquic_remote_cnxid_stash_t* cnxid_stash, uint64_t not_before, uint64_t current_time);
+void picoquic_delete_remote_cnxid_stash(picoquic_cnx_t* cnx, picoquic_remote_cnxid_stash_t* cnxid_stash);
+
 uint64_t picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t not_before, uint64_t current_time);
 int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
@@ -1954,14 +1955,14 @@ void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t * strea
 picoquic_local_cnxid_list_t* picoquic_find_or_create_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id, int do_create);
 picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx,
     uint64_t unique_path_id, picoquic_connection_id_t* suggested_value, uint64_t current_time);
+int picoquic_demote_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id,
+    uint64_t reason, char const* phrase, uint64_t current_time);
 void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
 void picoquic_delete_local_cnxid_list(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list);
 void picoquic_delete_local_cnxid_lists(picoquic_cnx_t* cnx);
 void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t sequence);
 void picoquic_check_local_cnxid_ttl(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list, uint64_t current_time, uint64_t* next_wake_time);
 picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_connection_id_t* cnxid);
-picoquic_local_cnxid_t* picoquic_find_local_cnxid_by_number(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t sequence);
-picoquic_remote_cnxid_t* picoquic_find_remote_cnxid_by_number(picoquic_cnx_t* cnx, uint64_t sequence);
 uint8_t* picoquic_format_path_challenge_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t challenge);
 uint8_t* picoquic_format_path_response_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t challenge);
 int picoquic_should_repeat_path_response_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_max);
@@ -1971,9 +1972,14 @@ uint8_t* picoquic_format_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uin
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t unique_path_id, uint64_t sequence);
 int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length);
 uint8_t* picoquic_format_one_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_stream_head_t* stream);
-uint8_t* picoquic_format_first_misc_or_dg_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last);
+uint8_t* picoquic_format_first_misc_or_dg_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
+    picoquic_misc_frame_header_t* misc_frame, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last);
 uint8_t* picoquic_format_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
-int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length, int is_pure_ack);
+picoquic_misc_frame_header_t* picoquic_find_first_misc_frame(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc);
+uint8_t* picoquic_format_misc_frames_in_context(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
+    int* more_data, int* is_pure_ack, picoquic_packet_context_enum pc);
+int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length, int is_pure_ack, picoquic_packet_context_enum pc);
+void picoquic_purge_misc_frames_after_ready(picoquic_cnx_t* cnx);
 void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame);
 void picoquic_clear_ack_ctx(picoquic_ack_context_t* ack_ctx);
 void picoquic_reset_ack_context(picoquic_ack_context_t* ack_ctx);
@@ -1991,7 +1997,8 @@ size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_t
 uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, picoquic_path_t* path_x, int* more_data, int * is_pure_ack);
 uint8_t* picoquic_format_path_abandon_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data,
     uint64_t path_id, uint64_t reason, char const* phrase);
-
+int picoquic_queue_path_abandon_frame(picoquic_cnx_t* cnx,
+    uint64_t unique_path_id, uint64_t reason, char const* phrase);
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
     picoquic_stream_data_node_t* received_data,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, int path_is_not_allocated, uint64_t current_time);
@@ -2020,7 +2027,8 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 
-picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length, int is_pure_ack);
+picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length, int is_pure_ack,
+    picoquic_packet_context_enum pc);
 
 /* Supported version upgrade.
  * Upgrades are only supported between compatible versions.

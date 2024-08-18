@@ -80,8 +80,8 @@
 #include <sys/select.h>
 
 #ifndef __APPLE__
-/* On Linux systems, add macro to define the GNU extension for pthread_setname_np */
-#define _GNU_SOURCE
+#include <linux/prctl.h>  /* Definition of PR_* constants */
+#include <sys/prctl.h>
 #endif
 
 #include <pthread.h>
@@ -756,6 +756,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         if (picoquic_store_loopback_addr(&l_addr, s_ctx[0].af, s_ctx[0].port) == 0) {
             ret = loop_callback(quic, picoquic_packet_loop_port_update, loop_callback_ctx, &l_addr);
         }
+        if (ret == 0 && options.provide_alt_port) {
+            uint16_t alt_port = ntohs(s_ctx[1].port);
+            ret = loop_callback(quic, picoquic_packet_loop_alt_port, loop_callback_ctx, &alt_port);
+        }
     }
 
     if (ret == 0) {
@@ -1170,7 +1174,7 @@ void picoquic_internal_thread_setname(char const * thread_name)
 #ifdef __APPLE__
     pthread_setname_np(thread_name);
 #else
-    int r=pthread_setname_np(pthread_self(), thread_name);
+    int r=prctl(PR_SET_NAME, thread_name, 0, 0, 0);
     if (r != 0) {
         DBG_PRINTF("Set thread name <%s> returns: 0x%x", thread_name, r);
     }

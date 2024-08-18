@@ -192,42 +192,6 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
             }
         }
     }
-    else if (cnx->is_simple_multipath_enabled && cnx->cnx_state == picoquic_state_ready) {
-        /* The per-path algorithm excludes the packets that were sent on
-        * a path now deleted. The path is set to NULL. */
-        picoquic_packet_t* old_p;
-        int continue_next = 1;
-
-        /* This code checks all paths in numerical order. This may or may not
-        * be what we want. It might be better to check the current path first.
-        */
-        for (int i_path = 0; i_path < cnx->nb_paths; i_path++) {
-            old_p = cnx->path[i_path]->path_packet_first;
-
-            /* We test the length of the packet before starting a per path loop.
-             * If the packet is filled up, we cannot continue the loop.
-             */
-            if (length == 0) {
-                continue_next = 1;
-
-                /* Call the per packet routine in a loop */
-                while (old_p != 0 && continue_next) {
-                    picoquic_packet_t* p_next = old_p->path_packet_next;
-                    if (old_p->pc == pc) {
-                        length = picoquic_retransmit_needed_packet(cnx, &cnx->pkt_ctx[pc], old_p, pc, path_x, current_time,
-                            next_wake_time, packet, send_buffer_max, header_length, &continue_next);
-                    }
-                    old_p = p_next;
-                }
-            }
-            else {
-                /* If more retransmission are queued, set the timer appropriately */
-                if (old_p != NULL) {
-                    picoquic_set_wake_up_from_packet_retransmit(cnx, old_p, current_time, next_wake_time);
-                }
-            }
-        }
-    }
     else {
         length = picoquic_retransmit_needed_loop(cnx, &cnx->pkt_ctx[pc], pc, path_x, current_time, next_wake_time,
             packet, send_buffer_max, header_length);
@@ -440,7 +404,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
              */
 
             /* If ack only packets are lost, bundle a ping next time an ACK is sent on that path */
-            if (old_p->send_path != NULL && (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)) {
+            if (old_p->send_path != NULL && cnx->is_multipath_enabled) {
                 old_p->send_path->is_ack_lost = 1;
             }
             picoquic_count_and_notify_loss(cnx, old_p, 2, current_time);
@@ -485,7 +449,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                     }
                     old_path->nb_retransmit++;
                     old_path->last_loss_event_detected = current_time;
-                    if ((cnx->is_simple_multipath_enabled || cnx->is_multipath_enabled) && cnx->nb_paths > 1) {
+                    if (cnx->is_multipath_enabled && cnx->nb_paths > 1) {
                         picoquic_retransmit_path_packet_queue(cnx, old_path, pkt_ctx, current_time);
                     }
                     if (old_path->nb_retransmit > 9 &&
@@ -494,7 +458,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                         DBG_PRINTF("%s\n", "Too many data retransmits, abandon path");
                         picoquic_log_app_message(cnx, "%s", "Too many data retransmits, abandon path");
 
-                        if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
+                        if (cnx->is_multipath_enabled) {
                             int all_paths_dubious = 1;
                             for (int path_id = 0; path_id < cnx->nb_paths; path_id++) {
                                 if (cnx->path[path_id]->nb_retransmit == 0) {
@@ -518,7 +482,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                     cnx->cnx_state >= picoquic_state_ready) {
                     /* TODO: only disconnect if there is no other available path */
                     int all_paths_bad = 1;
-                    if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
+                    if (cnx->is_multipath_enabled) {
                         for (int path_id = 0; path_id < cnx->nb_paths; path_id++) {
                             if (cnx->path[path_id]->nb_retransmit <= 9) {
                                 all_paths_bad = 0;
@@ -787,10 +751,9 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
                         * add_to_data_repeat_queue = 1;
                     }
                     else {
-                        if ((force_queue || frame_length > send_buffer_max_minus_checksum - *length) &&
-                            (old_p->ptype == picoquic_packet_0rtt_protected ||
-                                old_p->ptype == picoquic_packet_1rtt_protected)) {
-                            ret = picoquic_queue_misc_frame(cnx, &old_p->bytes[byte_index], frame_length, 0);
+                        if ((force_queue || frame_length > send_buffer_max_minus_checksum - *length)) {
+                            ret = picoquic_queue_misc_frame(cnx, &old_p->bytes[byte_index], frame_length, 0,
+                                old_p->pc);
                         }
                         else if (frame_length <= send_buffer_max_minus_checksum - *length) {
                             memcpy(&new_bytes[*length], &old_p->bytes[byte_index], frame_length);
@@ -886,7 +849,7 @@ static picoquic_packet_t* picoquic_process_lost_packet(picoquic_cnx_t* cnx, pico
     }
 
     /* If ack only packets are lost, bundle a ping next time an ACK is sent on that path */
-    if (old_p->send_path != NULL && (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)) {
+    if (old_p->send_path != NULL && cnx->is_multipath_enabled) {
         old_p->send_path->is_ack_lost = 1;
     }
 
@@ -932,7 +895,7 @@ static void picoquic_count_and_notify_loss(
     if (timer_based_retransmit < 2) {
         picoquic_log_packet_lost(cnx, old_p->send_path, old_p->ptype, old_p->sequence_number,
             (timer_based_retransmit) ? "timer" : "repeat",
-            (old_p->send_path == NULL) ? NULL : &old_p->send_path->p_remote_cnxid->cnx_id,
+            (old_p->send_path == NULL || old_p->send_path->p_remote_cnxid == NULL) ? NULL : &old_p->send_path->p_remote_cnxid->cnx_id,
             old_p->length, current_time);
 
         if (!old_p->is_preemptive_repeat) {
@@ -1022,7 +985,7 @@ static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx, picoquic_
         }
 
         /* If ack only packets are lost, bundle a ping next time an ACK is sent on that path */
-        if (old_p->send_path != NULL && (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled)) {
+        if (old_p->send_path != NULL && cnx->is_multipath_enabled) {
             old_p->send_path->is_ack_lost = 1;
         }
 

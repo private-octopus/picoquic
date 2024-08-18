@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.21.3"
+#define PICOQUIC_VERSION "1.1.22.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -174,6 +174,15 @@ typedef enum {
     picoquic_state_disconnected
 } picoquic_state_enum;
 
+/* Packet contexts */
+typedef enum {
+    picoquic_packet_context_application = 0,
+    picoquic_packet_context_handshake = 1,
+    picoquic_packet_context_initial = 2,
+    picoquic_nb_packet_context = 3
+} picoquic_packet_context_enum;
+
+
 /* PMTUD 
  */
 
@@ -302,10 +311,8 @@ typedef struct st_picoquic_tp_t {
     int enable_time_stamp; /* (x&1) want, (x&2) can */
     uint64_t min_ack_delay;
     int do_grease_quic_bit;
-    int enable_multipath;
     picoquic_tp_version_negotiation_t version_negotiation;
     int enable_bdp_frame;
-    int enable_simple_multipath;
     int is_multipath_enabled;
     uint64_t initial_max_path_id;
 } picoquic_tp_t;
@@ -423,6 +430,28 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
  */
 void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_names);
 
+/* The SSLKEYLOG function defines a way to publish the encryption keys
+* used by QUIC. If that feature is enabled, the code read the environment
+* variable SSLKEYLOG to find the path of the file where to log the encryption
+* file. If the environment variable is not present, no file is set.
+* 
+* This is a very dangerous feature, that can be abused to break encryption.
+* Using an environment variable may be a fine way to specify on which file
+* copies of keys have to be written, but it is a terrible way to specify
+* whether these keys should be. Environment variables can be installed by
+* scripts, etc., and there are many ways of doing that without user awareness.
+* 
+* This feature is enabled by setting the "SSLKEYLOG" option (option -8 if
+* using the "config" module in the application), or by calling
+* the "picoquic_enable_sslkeylog" API. This setting is "off" by default.
+* The SSLKEYLOG feature will be disabled, whatever the
+* setting, on builds of picoquic that are compiled with the macro
+* "PICOQUIC_WITHOUT_SSLKEYLOG" defined (e.g., set CFLAGS=-DPICOQUIC_WITHOUT_SSLKEYLOG).
+*/
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+void picoquic_enable_sslkeylog(picoquic_quic_t* quic, int enable_sslkeylog);
+int picoquic_is_sslkeylog_enabled(picoquic_quic_t* quic);
+#endif
 /* 
  * picoquic_set_random_initial:
  * randomization of initial PN numbers, i.e.. the number assigned to
@@ -860,10 +889,17 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
 void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
 void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
 int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
-int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason, char const* phrase);
+int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, 
+    uint64_t reason, char const* phrase, uint64_t current_time);
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
+/* The get path addr API provides the IP addresses used by a specific path.
+* The "local" argument determines whether the APi returns the local address
+* (local == 1) or the address of the peer (local == 2).
+*/
+int picoquic_get_path_addr(picoquic_cnx_t* cnx, uint64_t unique_path_id, int local, struct sockaddr_storage* addr);
+
 /*
 * The calls to picoquic_get_path_quality takes as argument a structure
 * of type `picoquic_path_quality_t`.
@@ -992,7 +1028,8 @@ picoquic_stream_data_cb_fn picoquic_get_callback_function(picoquic_cnx_t * cnx);
 void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
 
 /* Send extra frames */
-int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length, int is_pure_ack);
+int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length,
+    int is_pure_ack, picoquic_packet_context_enum pc);
 
 /* Queue a datagram frame for sending later.
  * The datagram length must be no more than PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH,
@@ -1532,6 +1569,18 @@ void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priorit
 */
 void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify);
 
+/* The experimental API `picoquic_request_forced_probe_up` direct the 
+ * stack to send filler traffic when the congestion control algorithm is 
+ * "probing for bandwidth". This is intended for "real time" applications
+ * that often send less traffic that congestion control will allow, and
+ * may suffer from an insufficient estimate of the path capacity.
+ * Forcing more traffic will remedy that. 
+ * 
+ * When more traffic is requested, there is a risk of filling buffers and
+ * creating packet losses. The stack will try to alleviate that risk
+ * by building traffic with redundant copies of unacknowledged packets.
+ */
+void picoquic_request_forced_probe_up(picoquic_cnx_t* cnx, unsigned int request_forced_probe_up);
 /* Bandwidth update and congestion control parameters value.
  * Congestion control in picoquic is characterized by three values:
  * - pacing rate, expressed in bytes per second (for example, 10Mbps would be noted as 1250000)

@@ -96,6 +96,10 @@ int picoquic_print_connection_id_hexa(char* buf, size_t buf_len, const picoquic_
 uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t srce_len);
 
 int picoquic_compare_addr(const struct sockaddr* expected, const struct sockaddr* actual);
+int picoquic_compare_ip_addr(const struct sockaddr* expected, const struct sockaddr* actual);
+uint16_t picoquic_get_addr_port(const struct sockaddr* addr);
+void picoquic_set_addr_port(const struct sockaddr* addr, uint16_t port);
+
 int picoquic_addr_length(const struct sockaddr* addr);
 void picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr);
 void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * ip_addr_len);

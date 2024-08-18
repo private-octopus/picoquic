@@ -79,7 +79,8 @@ typedef enum {
     picoquic_packet_loop_port_update, /* argument type struct_sockaddr*: new address for wakeup */
     picoquic_packet_loop_time_check, /* argument type packet_loop_time_check_arg_t*. Optional. */
     picoquic_packet_loop_system_call_duration, /* argument type packet_loop_system_call_duration_t*. Optional. */
-    picoquic_packet_loop_wake_up /* no argument (void* NULL). Used when loop wakeup is supported */
+    picoquic_packet_loop_wake_up, /* no argument (void* NULL). Used when loop wakeup is supported */
+    picoquic_packet_loop_alt_port /* Provide alt port for testing multipath or migration */
 } picoquic_packet_loop_cb_enum;
 
 /* System call statistics.
@@ -116,6 +117,7 @@ typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packe
 typedef struct st_picoquic_packet_loop_options_t {
     unsigned int do_time_check : 1; /* App should be polled for next time before sock select */
     unsigned int do_system_call_duration : 1; /* App should be notified if the system call duration varies */
+    unsigned int provide_alt_port : 1; /* Used for simulating multipath or migrations. */
 } picoquic_packet_loop_options_t;
 
 /* Version 2 of packet loop, works in progress.

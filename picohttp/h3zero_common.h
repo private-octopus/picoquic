@@ -237,6 +237,8 @@ extern "C" {
 
     void h3zero_forget_stream(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx);
 
+    h3zero_content_type_enum h3zero_get_content_type_by_path(const char *path);
+
     int h3zero_set_datagram_ready(picoquic_cnx_t* cnx, uint64_t stream_id);
     uint8_t* h3zero_provide_datagram_buffer(void* context, size_t length, int ready_to_send);
 
