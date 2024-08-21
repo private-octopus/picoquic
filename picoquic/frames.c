@@ -4547,42 +4547,57 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
     if (bytes_max - bytes <= (int) challenge_length) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_path_challenge);
         bytes = NULL;
-    } else {
+    }
+    else {
         /*
-         * Queue a response frame as response to path challenge.
-         * If the path already exists, we verify that the IP addresses match expectation:
-         * - source IP and port shall match the address and port with which the path was created.
-         * - destination IP shall match the local address.
-         * - destination port shall match the local port if that local port is not zero.
-         */
+         * Queue a response frame as response to path challenge, if the
+         * path is defined and matching */
         uint64_t challenge_response;
 
         bytes++;
         challenge_response = PICOPARSE_64(bytes);
         bytes += challenge_length;
-        if (path_x != NULL && (cnx->is_multipath_enabled ||
-            (addr_from == NULL || 
-                (picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->peer_addr) == 0 &&
-            (addr_to == NULL || 
-                (picoquic_get_addr_port((struct sockaddr*)&path_x->local_addr) == 0 &&
-                    picoquic_compare_ip_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)) ||
-                picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)))){
-            path_x->challenge_response = challenge_response;
-            path_x->response_required = 1;
-        }
-        else if (path_x == NULL) {
+
+        if (path_x == NULL) {
             picoquic_log_app_message(cnx, "%s", "Incoming challenge ignored, path=NULL.\n");
         }
         else {
-            char buf1[128], buf2[128], buf3[128], buf4[128];
-            picoquic_log_app_message(cnx,
-                "Path challenge[%" PRIu64 "] from %s to %s ignored, wrong addresses, expected %s - %s.\n",
-                path_x->unique_path_id,
-                picoquic_addr_text(addr_from, buf1, sizeof(buf1)),
-                picoquic_addr_text(addr_to, buf2, sizeof(buf2)),
-                picoquic_addr_text((struct sockaddr*)&path_x->peer_addr, buf3, sizeof(buf3)),
-                picoquic_addr_text((struct sockaddr*)&path_x->local_addr, buf4, sizeof(buf4))
-            );
+            /* The path challenge will always be accepted if multipath is enabled,
+             * because the path is uniquely identified by the path ID */
+            int is_valid = cnx->is_multipath_enabled;
+            if (!is_valid) {
+                /* If multipath is not enabled, we must verify that the addresses
+                 * source (addr_from) matches the peer address if known. */
+                if (addr_from == NULL ||
+                    picoquic_compare_addr(addr_from, (struct sockaddr*)&path_x->peer_addr) == 0) {
+                    /* If the source address matches, we must verify that the destination
+                    * address also matches. Given how the socket code works there will be cases
+                    * when the local port is now yet known. In that case, we only compare
+                    * the IP address component . Otherwise, we compare the whole address.
+                    */
+                    if (addr_to == NULL ||
+                        (picoquic_get_addr_port((struct sockaddr*)&path_x->local_addr) == 0 &&
+                            picoquic_compare_ip_addr(addr_to, (struct sockaddr*)&path_x->local_addr) == 0) ||
+                        picoquic_compare_addr(addr_to, (struct sockaddr*)&path_x->local_addr) == 0) {
+                        is_valid = 1;
+                    }
+                }
+            }
+            if (is_valid) {
+                path_x->challenge_response = challenge_response;
+                path_x->response_required = 1;
+            }
+            else {
+                char buf1[128], buf2[128], buf3[128], buf4[128];
+                picoquic_log_app_message(cnx,
+                    "Path challenge[%" PRIu64 "] from %s to %s ignored, wrong addresses, expected %s - %s.\n",
+                    path_x->unique_path_id,
+                    picoquic_addr_text(addr_from, buf1, sizeof(buf1)),
+                    picoquic_addr_text(addr_to, buf2, sizeof(buf2)),
+                    picoquic_addr_text((struct sockaddr*)&path_x->peer_addr, buf3, sizeof(buf3)),
+                    picoquic_addr_text((struct sockaddr*)&path_x->local_addr, buf4, sizeof(buf4))
+                );
+            }
         }
     }
 
