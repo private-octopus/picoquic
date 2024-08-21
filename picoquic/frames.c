@@ -4562,10 +4562,10 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
         bytes += challenge_length;
         if (path_x != NULL && (cnx->is_multipath_enabled ||
             (addr_from == NULL || 
-                (picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->peer_addr) == 0 &&
+                ((picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->peer_addr) == 0 &&
             (addr_to == NULL || 
                 (picoquic_get_addr_port((struct sockaddr*)&path_x->local_addr) == 0 &&
-                    picoquic_compare_ip_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)) ||
+                    picoquic_compare_ip_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0))) ||
                 picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)))){
             path_x->challenge_response = challenge_response;
             path_x->response_required = 1;
