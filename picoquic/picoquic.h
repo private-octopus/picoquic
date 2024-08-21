@@ -315,6 +315,7 @@ typedef struct st_picoquic_tp_t {
     int enable_bdp_frame;
     int is_multipath_enabled;
     uint64_t initial_max_path_id;
+    int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
 } picoquic_tp_t;
 
 /*

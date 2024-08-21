@@ -1140,6 +1140,43 @@ void qlog_bdp_frame(FILE* f, bytestream* s)
     qlog_string(f, s, ip_len);
 }
 
+void qlog_observed_address_frame(uint64_t ftype, FILE* f, bytestream* s)
+{
+    unsigned int port = 0;
+    uint64_t sequence = 0;
+
+    byteread_vint(s, &sequence);
+    fprintf(f, ", \"sequence\": %"PRIu64", \"address\": \"", sequence);
+    if ((ftype & 1) == 0) {
+        /* IPv4 address */
+        for (int x = 0; x < 4 && s->ptr < s->size; x++) {
+            if (x != 0) {
+                fprintf(f, ".");
+            }
+            fprintf(f, "%d", s->data[s->ptr++]);
+        }
+    }
+    else {
+        /* IPv6 address */
+        for (int x = 0; x < 8 && s->ptr < s->size; x++) {
+            uint16_t w = 0;
+            for (int y = 0; y < 2 && s->ptr < s->size; y++) {
+                w <<= 8;
+                w += s->data[s->ptr++];
+            }
+            if (x != 0) {
+                fprintf(f, ":");
+            }
+            fprintf(f, "%x", w);
+        }
+    }
+    for (int y = 0; y < 2 && s->ptr < s->size; y++) {
+        port <<= 8;
+        port += s->data[s->ptr++];
+    }
+    fprintf(f, "\", \"port\": %u", port);
+}
+
 int qlog_packet_frame(bytestream * s, void * ptr)
 {
     qlog_context_t * ctx = (qlog_context_t*)ptr;
@@ -1272,6 +1309,10 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_max_path_id:
         qlog_max_path_id_frame(f, s);
+        break;
+    case picoquic_frame_type_observed_address_v4:
+    case picoquic_frame_type_observed_address_v6:
+        qlog_observed_address_frame(ftype, f, s);
         break;
     default:
         s->ptr = ptr_before_type;

@@ -157,7 +157,9 @@ typedef enum {
     picoquic_frame_type_path_standby =  0x15228c07,
     picoquic_frame_type_path_available =  0x15228c08,
     picoquic_frame_type_bdp = 0xebd9,
-    picoquic_frame_type_max_path_id = 0x15228c0c
+    picoquic_frame_type_max_path_id = 0x15228c0c,
+    picoquic_frame_type_observed_address_v4 = 0x9f81a2,
+    picoquic_frame_type_observed_address_v6 = 0x9f81a3
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -585,6 +587,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
 #define picoquic_tp_initial_max_path_id  0x0f739bbc1b666d09ull /* per draft quic multipath 09 */
+#define picoquic_tp_address_discovery 0x9f81a174 /* per draft-seemann-quic-address-discovery */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
  * This is kept private for now; and will only be set through the "set quic log"
@@ -1042,8 +1045,15 @@ typedef struct st_picoquic_path_t {
     picoquic_packet_context_t pkt_ctx;
     /* Peer address. */
     struct sockaddr_storage peer_addr;
+    /* Local address, on the local network */
     struct sockaddr_storage local_addr;
     unsigned long if_index_dest;
+    /* Address observed by the peer */
+    struct sockaddr_storage observed_addr;
+    /* Manage the acknowledgement and vaildation of observed addresses */
+    uint64_t observed_address_sequence;
+    unsigned int observed_addr_acked:1;
+    /* Manage path probing logic */
     uint64_t last_non_path_probing_pn;
     /* Challenge used for this path */
     uint64_t challenge_response;
@@ -1297,6 +1307,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_multipath_enabled : 1; /* Unique path ID extension has been negotiated */
     unsigned int is_lost_feedback_notification_required : 1; /* CC algorithm requests lost feedback notification */
     unsigned int is_forced_probe_up_required : 1; /* application wants "probe up" if CC requests it */
+    unsigned int is_address_discovery_provider : 1; /* send the address discovery extension */
+    unsigned int is_address_discovery_receiver : 1; /* receive the address discovery extension */
     
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
@@ -2002,6 +2014,8 @@ int picoquic_queue_path_abandon_frame(picoquic_cnx_t* cnx,
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
     picoquic_stream_data_node_t* received_data,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, int path_is_not_allocated, uint64_t current_time);
+const uint8_t* picoquic_parse_observed_address_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t ftype, uint64_t* sequence, const uint8_t** addr, uint16_t* port);
 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max);

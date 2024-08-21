@@ -74,7 +74,7 @@
 
 static picoquic_tp_t transport_param_test1 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 3
 };
 
 static picoquic_tp_t transport_param_test2 = {
@@ -132,6 +132,7 @@ static picoquic_tp_t transport_param_test11 = {
 
 #define LOCAL_CONNECTION_ID  2, 3, 4, 5, 6, 7, 8, 9
 #define INITIAL_CONNECTION_ID  1, 2, 3, 4, 5, 6, 7, 8
+#define ADDRESS_DISCOVERY_TP 0xc0, 0, 0, 0, 0x9f, 0x81, 0xa1, 0x74
 
 uint8_t client_param1[] = {
     picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
@@ -142,6 +143,7 @@ uint8_t client_param1[] = {
     picoquic_tp_initial_max_streams_uni, 4, 0x80, 0, 0x40, 0x00,
     picoquic_tp_active_connection_id_limit, 1, PICOQUIC_NB_PATH_TARGET,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    ADDRESS_DISCOVERY_TP, 1, 2
 };
 
 uint8_t client_param2[] = {
@@ -268,7 +270,8 @@ uint8_t client_param11[] = {
     picoquic_tp_active_connection_id_limit, 1, PICOQUIC_NB_PATH_TARGET,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
     /* Add same grease value that the server will generate */
-    0x40, 0x59, 2, 0x42, 0x03
+    0x40, 0x59, 2, 0x42, 0x03,
+    ADDRESS_DISCOVERY_TP, 1, 2
 };
 
 uint8_t client_param12[] = {
@@ -494,6 +497,11 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
     else if (param->initial_max_path_id != ref->initial_max_path_id) {
         DBG_PRINTF("initial_max_path_id: got %" PRIu64 ", expected%" PRIu64 "\n",
             param->initial_max_path_id, ref->initial_max_path_id);
+        ret = -1;
+    }
+    else if (param->address_discovery_mode != ref->address_discovery_mode) {
+        DBG_PRINTF("address_discovery_mode: got %" PRIu64 ", expected%" PRIu64 "\n",
+            param->address_discovery_mode, ref->address_discovery_mode);
         ret = -1;
     }
 
