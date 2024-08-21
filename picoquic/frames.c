@@ -1295,13 +1295,22 @@ const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* 
     }else if (offset + data_length >= (1ull<<62)){
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0);
         bytes = NULL;
-    } else if (picoquic_stream_network_input(cnx, stream_id, offset, 
-        fin, (bytes += consumed), data_length, received_data,
-        picoquic_is_last_stream_frame(bytes+data_length, bytes_max),
-        current_time) != 0) {
-        bytes = NULL;
-    } else {
-        bytes += data_length;
+    }
+    else {
+        /* Skip the header bytes, and try to deliver the content of the frame.
+        * The "is last" indication is set when we are certain that no other data
+        * follows. It is used to manage the queue of stream chunks awaiting delivery.
+         */
+        bytes += consumed;
+        if (picoquic_stream_network_input(cnx, stream_id, offset,
+            fin, bytes, data_length, received_data,
+            picoquic_is_last_stream_frame(bytes + data_length, bytes_max),
+            current_time) != 0) {
+            bytes = NULL;
+        }
+        else {
+            bytes += data_length;
+        }
     }
 
     return bytes;
