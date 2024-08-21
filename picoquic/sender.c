@@ -2828,18 +2828,18 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
                         uint64_t ftype = 0;
                         uint8_t* ip_addr = NULL;
                         uint16_t port = 0;
-                        uint16_t sequence_number = 0;
+
                         if (path_x->peer_addr.ss_family == AF_INET6) {
                             struct sockaddr_in6* addr = (struct sockaddr_in6*)&path_x->peer_addr;
                             ftype = picoquic_frame_type_observed_address_v6;
-                            ip_addr = &addr->sin6_addr;
-                            port = &addr->sin6_port;
+                            ip_addr = (uint8_t*)&addr->sin6_addr;
+                            port = addr->sin6_port;
                         }
                         else {
                             struct sockaddr_in6* addr = (struct sockaddr_in6*)&path_x->peer_addr;
                             ftype = picoquic_frame_type_observed_address_v6;
-                            ip_addr = &addr->sin6_addr;
-                            port = &addr->sin6_port;
+                            ip_addr = (uint8_t*)&addr->sin6_addr;
+                            port = addr->sin6_port;
                         }
                         bytes_next = picoquic_format_observed_address_frame(
                             bytes_next, bytes_max, ftype, cnx->observed_number,

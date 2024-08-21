@@ -1050,9 +1050,14 @@ typedef struct st_picoquic_path_t {
     unsigned long if_index_dest;
     /* Address observed by the peer */
     struct sockaddr_storage observed_addr;
-    /* Manage the acknowledgement and vaildation of observed addresses */
+    /* Manage the reception of observed addresses */
     uint64_t observed_address_sequence;
+    /* Manage the publishing of observed addresses */
     unsigned int observed_addr_acked:1;
+    unsigned int peer_addr_changed:1;
+    int nb_peer_address_repeat;
+    uint64_t peer_address_sequence;
+    uint64_t peer_address_observed_time;
     /* Manage path probing logic */
     uint64_t last_non_path_probing_pn;
     /* Challenge used for this path */
