@@ -5689,7 +5689,7 @@ int picoquic_process_ack_of_max_path_id_frame(picoquic_cnx_t* cnx, const uint8_t
 
 uint8_t* picoquic_format_observed_address_frame(
     uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype,
-    uint8_t * addr, uint16_t port)
+    uint64_t sequence_number, uint8_t * addr, uint16_t port)
 {
     size_t l_addr = ((ftype & 1) == 0) ? 4 : 16;
 

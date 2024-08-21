@@ -1392,7 +1392,8 @@ typedef struct st_picoquic_cnx_t {
     picoquic_packet_context_t pkt_ctx[picoquic_nb_packet_context];
     /* Acknowledgement state */
     picoquic_ack_context_t ack_ctx[picoquic_nb_packet_context];
-
+    /* Sequence number of the next observed address frame */
+    uint64_t observed_number;
     /* Statistics */
     uint64_t nb_bytes_queued;
     uint32_t nb_zero_rtt_sent;
@@ -2016,6 +2017,9 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, int path_is_not_allocated, uint64_t current_time);
 const uint8_t* picoquic_parse_observed_address_frame(const uint8_t* bytes, const uint8_t* bytes_max,
     uint64_t ftype, uint64_t* sequence, const uint8_t** addr, uint16_t* port);
+uint8_t* picoquic_format_observed_address_frame(
+    uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype,
+    uint64_t sequence_number, uint8_t* addr, uint16_t port);
 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max);
