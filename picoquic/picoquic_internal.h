@@ -1051,13 +1051,12 @@ typedef struct st_picoquic_path_t {
     /* Address observed by the peer */
     struct sockaddr_storage observed_addr;
     /* Manage the reception of observed addresses */
-    uint64_t observed_address_sequence;
+    uint64_t observed_address_received;
     /* Manage the publishing of observed addresses */
     unsigned int observed_addr_acked:1;
-    unsigned int peer_addr_changed:1;
-    int nb_peer_address_repeat;
-    uint64_t peer_address_sequence;
-    uint64_t peer_address_observed_time;
+    int nb_observed_repeat;
+    uint64_t observed_sequence_sent;
+    uint64_t observed_time;
     /* Manage path probing logic */
     uint64_t last_non_path_probing_pn;
     /* Challenge used for this path */
@@ -2025,6 +2024,10 @@ const uint8_t* picoquic_parse_observed_address_frame(const uint8_t* bytes, const
 uint8_t* picoquic_format_observed_address_frame(
     uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype,
     uint64_t sequence_number, uint8_t* addr, uint16_t port);
+uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* bytes_max,
+    picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time,
+    int* more_data, int* is_pure_ack);
+void picoquic_update_peer_addr(picoquic_path_t* path_x, struct sockaddr* peer_addr);
 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max);

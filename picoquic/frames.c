@@ -4671,7 +4671,7 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                 /* while probing NAT, the NAT response arrived before the normal path response */
                 /* Update the addresses */
                 picoquic_store_addr(&path_x->local_addr, (struct sockaddr*)&path_x->nat_local_addr);
-                picoquic_store_addr(&path_x->peer_addr, (struct sockaddr*)&path_x->nat_peer_addr);
+                picoquic_update_peer_addr(path_x, (struct sockaddr*)&path_x->nat_peer_addr);
                 path_x->if_index_dest = path_x->if_index_nat_dest;
                 /* if useful, update the CID */
                 if (path_x->p_remote_nat_cnxid != NULL) {
@@ -5728,6 +5728,66 @@ uint8_t* picoquic_format_observed_address_frame(
     return bytes;
 }
 
+uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* bytes_max,
+    picoquic_path_t* path_x, uint64_t current_time, uint64_t * next_wake_time,
+    int * more_data, int* is_pure_ack)
+{
+    if (!path_x->observed_addr_acked && 
+        path_x->nb_observed_repeat < 4 &&
+        path_x->peer_addr.ss_family != AF_UNSPEC) {
+        int is_needed = 0;
+
+        if (path_x->nb_observed_repeat == 0) {
+            is_needed = 1;
+            path_x->observed_sequence_sent = path_x->cnx->observed_number++;
+        }
+        else {
+            uint64_t repeat_time = path_x->observed_time + path_x->retransmit_timer;
+
+            if (repeat_time <= current_time) {
+                is_needed = 1;
+            }
+            else if (*next_wake_time > repeat_time) {
+                *next_wake_time = repeat_time;
+            }
+        }
+
+        if (is_needed) {
+            uint64_t ftype = 0;
+            uint8_t* ip_addr = NULL;
+            uint16_t port = 0;
+
+            if (path_x->peer_addr.ss_family == AF_INET6) {
+                struct sockaddr_in6* addr = (struct sockaddr_in6*)&path_x->peer_addr;
+                ftype = picoquic_frame_type_observed_address_v6;
+                ip_addr = (uint8_t*)&addr->sin6_addr;
+                port = addr->sin6_port;
+            }
+            else {
+                struct sockaddr_in6* addr = (struct sockaddr_in6*)&path_x->peer_addr;
+                ftype = picoquic_frame_type_observed_address_v6;
+                ip_addr = (uint8_t*)&addr->sin6_addr;
+                port = addr->sin6_port;
+            }
+
+            uint8_t bytes_next = picoquic_format_observed_address_frame(
+                bytes_next, bytes_max, ftype, path_x->observed_sequence_sent,
+                ip_addr, port);
+            if (bytes_next == NULL) {
+                *more_data = 1;
+            }
+            else {
+                *is_pure_ack = 0;
+                bytes = bytes_next;
+                path_x->nb_observed_repeat += 1;
+                path_x->observed_time = current_time;
+            }
+        }
+    }
+
+    return bytes;
+}
+
 const uint8_t* picoquic_skip_observed_address_frame(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype)
 {
     /* This code assumes that the frame type is already skipped */
@@ -5774,9 +5834,9 @@ const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             ftype, "bad observed address frame");
     }
-    else if (sequence > path_x->observed_address_sequence || (path_x->observed_address_sequence == 0 && path_x->observed_addr.ss_family == AF_UNSPEC)) {
+    else if (sequence > path_x->observed_address_received || (path_x->observed_address_received == 0 && path_x->observed_addr.ss_family == AF_UNSPEC)) {
         /* We only update the observed address if this is a new value*/
-        path_x->observed_address_sequence = sequence;
+        path_x->observed_address_received = sequence;
         if ((ftype & 1) == 0) {
             struct sockaddr_in* o_addr = (struct sockaddr_in *)&path_x->observed_addr;
             memset(o_addr, 0, sizeof(struct sockaddr_in));
@@ -5791,6 +5851,8 @@ const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const
             memcpy(&o_addr->sin6_addr, addr, 16);
             o_addr->sin6_port = port;
         }
+
+        (void)cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_address_observed, cnx->callback_ctx, path_x->app_path_ctx);
     }
     return bytes;
 }

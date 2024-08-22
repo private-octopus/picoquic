@@ -270,7 +270,8 @@ typedef enum {
     picoquic_callback_path_available, /* A new path is available, or a suspended path is available again */
     picoquic_callback_path_suspended, /* An available path is suspended */
     picoquic_callback_path_deleted, /* An existing path has been deleted */
-    picoquic_callback_path_quality_changed /* Some path quality parameters have changed */
+    picoquic_callback_path_quality_changed, /* Some path quality parameters have changed */
+    picoquic_callback_path_address_observed /* The peer has reported an address for the path */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -897,7 +898,7 @@ int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, u
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
 /* The get path addr API provides the IP addresses used by a specific path.
 * The "local" argument determines whether the APi returns the local address
-* (local == 1) or the address of the peer (local == 2).
+* (local == 1), the address of the peer (local == 2) or the address observed by the peer (local == 3).
 */
 int picoquic_get_path_addr(picoquic_cnx_t* cnx, uint64_t unique_path_id, int local, struct sockaddr_storage* addr);
 

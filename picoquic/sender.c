@@ -2819,37 +2819,7 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
                         /* never pad the packets sent in response to NAT rebinding. */
                         *is_challenge_padding_needed = 0;
                     }
-
-                    /* If requested, add an observed address frame
-                    * TODO: better logic!!!
-                     */
-                    if (cnx->is_address_discovery_provider &&
-                        path_x->peer_addr.ss_family != AF_UNSPEC) {
-                        uint64_t ftype = 0;
-                        uint8_t* ip_addr = NULL;
-                        uint16_t port = 0;
-
-                        if (path_x->peer_addr.ss_family == AF_INET6) {
-                            struct sockaddr_in6* addr = (struct sockaddr_in6*)&path_x->peer_addr;
-                            ftype = picoquic_frame_type_observed_address_v6;
-                            ip_addr = (uint8_t*)&addr->sin6_addr;
-                            port = addr->sin6_port;
-                        }
-                        else {
-                            struct sockaddr_in6* addr = (struct sockaddr_in6*)&path_x->peer_addr;
-                            ftype = picoquic_frame_type_observed_address_v6;
-                            ip_addr = (uint8_t*)&addr->sin6_addr;
-                            port = addr->sin6_port;
-                        }
-                        bytes_next = picoquic_format_observed_address_frame(
-                            bytes_next, bytes_max, ftype, cnx->observed_number,
-                            ip_addr, port);
-                        if (path_x->challenge_repeat_count == 0) {
-                            cnx->observed_number++;
-                        }
-                    }
                 }
-
 
                 /* add an ACK just to be nice */
                 if (ack_needed && is_nominal_ack_path) {
@@ -3605,6 +3575,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     if (picoquic_is_tls_stream_ready(cnx)) {
                         bytes_next = picoquic_format_crypto_hs_frame(&cnx->tls_stream[picoquic_epoch_1rtt],
                             bytes_next, bytes_max, &more_data, &is_pure_ack);
+                    }
+
+                    if (cnx->is_address_discovery_provider) {
+                        /* If a new address was learned, prepare an observed address frame */
+                        bytes_next = picoquic_prepare_observed_address_frame(bytes_next, bytes_max,
+                            path_x, current_time, next_wake_time, more_data, &is_pure_ack);
                     }
 
                     if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required ||
