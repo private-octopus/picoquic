@@ -2494,7 +2494,7 @@ int picoquic_get_path_addr(picoquic_cnx_t* cnx, uint64_t unique_path_id, int loc
     return ret;
 }
 
-void picoquic_update_peer_addr(picoquic_path_t* path_x, struct sockaddr* peer_addr)
+void picoquic_update_peer_addr(picoquic_path_t* path_x, const struct sockaddr* peer_addr)
 {
     /* Set the addresses */
     picoquic_store_addr(&path_x->peer_addr, peer_addr);

@@ -5770,8 +5770,8 @@ uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* 
                 port = addr->sin6_port;
             }
 
-            uint8_t bytes_next = picoquic_format_observed_address_frame(
-                bytes_next, bytes_max, ftype, path_x->observed_sequence_sent,
+            uint8_t *bytes_next = picoquic_format_observed_address_frame(
+                bytes, bytes_max, ftype, path_x->observed_sequence_sent,
                 ip_addr, port);
             if (bytes_next == NULL) {
                 *more_data = 1;

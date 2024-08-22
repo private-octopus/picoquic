@@ -2027,7 +2027,7 @@ uint8_t* picoquic_format_observed_address_frame(
 uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* bytes_max,
     picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time,
     int* more_data, int* is_pure_ack);
-void picoquic_update_peer_addr(picoquic_path_t* path_x, struct sockaddr* peer_addr);
+void picoquic_update_peer_addr(picoquic_path_t* path_x, const struct sockaddr* peer_addr);
 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max);
