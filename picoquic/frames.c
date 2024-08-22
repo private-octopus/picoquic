@@ -5851,8 +5851,9 @@ const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const
             memcpy(&o_addr->sin6_addr, addr, 16);
             o_addr->sin6_port = port;
         }
-
-        (void)cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_address_observed, cnx->callback_ctx, path_x->app_path_ctx);
+        if (cnx->callback_fn != NULL) {
+            (void)cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_address_observed, cnx->callback_ctx, path_x->app_path_ctx);
+        }
     }
     return bytes;
 }

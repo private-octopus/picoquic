@@ -424,6 +424,9 @@ char const* textlog_tp_name(picoquic_tp_enum tp_number)
     case picoquic_tp_initial_max_path_id:
         tp_name = "initial_max_path_id";
         break;
+    case picoquic_tp_address_discovery:
+        tp_name = "address_discovery";
+        break;
     default:
         break;
     }
