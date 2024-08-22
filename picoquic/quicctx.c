@@ -811,6 +811,17 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
     }
 }
 
+void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode)
+{
+    if (mode > 0 && mode <= 3) {
+        quic->default_tp.address_discovery_mode = mode;
+    }
+    else
+    {
+        quic->default_tp.address_discovery_mode = 0;
+    }
+}
+
 void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max)
 {
     quic->cwin_max = (cwin_max == 0) ? UINT64_MAX : cwin_max;

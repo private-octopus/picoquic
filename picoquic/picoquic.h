@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.22.0"
+#define PICOQUIC_VERSION "1.1.23.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -639,6 +639,9 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 
 /* Set the multipath option for the context */
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option);
+
+/* Set the Address Discovery mode for the context */
+void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode);
 
 /** picoquic_set_cwin_max:
  * Set a maximum value for the congestion window (default: UINT64_MAX)

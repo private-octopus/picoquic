@@ -677,6 +677,12 @@ int test_api_callback(picoquic_cnx_t* cnx,
         return 0;
     }
 
+    if (fin_or_event == picoquic_callback_path_address_observed)
+    {
+        ctx->nb_address_observed++;
+        return 0;
+    }
+
     if (fin_or_event == picoquic_callback_prepare_datagram)
     {
         int ret = -1;

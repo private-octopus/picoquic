@@ -5718,6 +5718,7 @@ uint8_t* picoquic_format_observed_address_frame(
     size_t l_addr = ((ftype & 1) == 0) ? 4 : 16;
 
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ftype)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, sequence_number)) != NULL &&
         bytes + l_addr < bytes_max) {
         memcpy(bytes, addr, l_addr);
         bytes = picoquic_frames_uint16_encode(bytes + l_addr, bytes_max, port);
@@ -5764,10 +5765,10 @@ uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* 
                 port = addr->sin6_port;
             }
             else {
-                struct sockaddr_in6* addr = (struct sockaddr_in6*)&path_x->peer_addr;
-                ftype = picoquic_frame_type_observed_address_v6;
-                ip_addr = (uint8_t*)&addr->sin6_addr;
-                port = addr->sin6_port;
+                struct sockaddr_in* addr = (struct sockaddr_in*)&path_x->peer_addr;
+                ftype = picoquic_frame_type_observed_address_v4;
+                ip_addr = (uint8_t*)&addr->sin_addr;
+                port = addr->sin_port;
             }
 
             uint8_t *bytes_next = picoquic_format_observed_address_frame(
@@ -5869,6 +5870,7 @@ int picoquic_process_ack_of_observed_address_frame(picoquic_cnx_t* cnx, picoquic
     }
     else {
         path_x->observed_addr_acked = 1;
+        *consumed = bytes_next - bytes;
     }
 
     return ret;

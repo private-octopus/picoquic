@@ -358,6 +358,9 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_initial_max_path_id:
                     qlog_vint_transport_extension(f, "initial_max_path_id", s, extension_length);
                     break;
+                case picoquic_tp_address_discovery:
+                    qlog_vint_transport_extension(f, "address_discovery", s, extension_length);
+                    break;
                 default:
                     /* dump unknown extensions */
                     fprintf(f, "\"%" PRIx64 "\": ", extension_type);
