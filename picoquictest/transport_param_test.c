@@ -132,7 +132,7 @@ static picoquic_tp_t transport_param_test11 = {
 
 #define LOCAL_CONNECTION_ID  2, 3, 4, 5, 6, 7, 8, 9
 #define INITIAL_CONNECTION_ID  1, 2, 3, 4, 5, 6, 7, 8
-#define ADDRESS_DISCOVERY_TP 0xc0, 0, 0, 0, 0x9f, 0x81, 0xa1, 0x74
+#define ADDRESS_DISCOVERY_TP 0xc0, 0, 0, 0, 0x9f, 0x81, 0xa1, 0x76
 
 uint8_t client_param1[] = {
     picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
