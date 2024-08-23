@@ -7,7 +7,7 @@
 0102030405060708:         Extension type: 9 (max_streams_uni), length 4, 80004000
 0102030405060708:         Extension type: 14 (active_connection_id_limit), length 1, 08
 0102030405060708:         Extension type: 15 (hcid), length 8, 0203040506070809
-0102030405060708:         Extension type: 2676072820 (address_discovery), length 1, 02
+0102030405060708:         Extension type: 2676072822 (address_discovery), length 1, 02
 
 0102030405060708:     Extension list (50 bytes):
 0102030405060708:         Extension type: 5 (max_stream_data_bidi_local), length 4, 81000000
