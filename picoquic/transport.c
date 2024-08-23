@@ -529,6 +529,12 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             (uint64_t)cnx->local_parameters.initial_max_path_id);
     }
 
+    if (cnx->local_parameters.address_discovery_mode > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max,
+            picoquic_tp_address_discovery,
+            (uint64_t)(cnx->local_parameters.address_discovery_mode - 1));
+    }
+
     /* This test extension must be the last one in the encoding, as it consumes all the available space */
     if (extension_mode == 1 && !cnx->test_large_chello &&
         cnx->quic->test_large_server_flight && bytes != NULL){
@@ -863,6 +869,29 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         }
                         else {
                             cnx->remote_parameters.enable_bdp_frame = (int)enable_bdp;
+                        }
+                    }
+                    break;
+                }
+                case picoquic_tp_address_discovery: {
+                    uint64_t address_discovery_mode =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    if (ret == 0) {
+                        if (address_discovery_mode > 2) {
+                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Address discovery parameter");
+                        }
+                        else {
+                            /* After doing +1, we get the following:
+                            * address_discovery_mode == 0: nothing goes (TP is absent)
+                            * address_discovery_mode == 1: send only (TP value 0)
+                            * address_discovery_mode == 2: receive only (TP value 1)
+                            * address_discovery_mode == 3: both (TP value 2)
+                            */
+                            cnx->remote_parameters.address_discovery_mode = (int)(address_discovery_mode + 1);
+                            cnx->is_address_discovery_provider = ((cnx->remote_parameters.address_discovery_mode & 2) != 0 &&
+                                (cnx->local_parameters.address_discovery_mode & 1) != 0);
+                            cnx->is_address_discovery_receiver = ((cnx->remote_parameters.address_discovery_mode & 1) != 0 &&
+                                (cnx->local_parameters.address_discovery_mode & 2) != 0);
                         }
                     }
                     break;

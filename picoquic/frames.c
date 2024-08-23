@@ -42,6 +42,8 @@ int picoquic_max_path_id_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* 
     const uint8_t* bytes_max, int* no_need_to_repeat);
 int picoquic_process_ack_of_max_path_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, size_t* consumed);
+int picoquic_process_ack_of_observed_address_frame(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const uint8_t* bytes,
+    size_t bytes_max, uint64_t ftype, size_t* consumed);
 
 picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote)
 {
@@ -3346,6 +3348,11 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                 case picoquic_frame_type_mp_retire_connection_id:
                     ret = picoquic_check_retire_connection_id_needs_repeat(cnx, type_bytes, bytes_max, no_need_to_repeat, 1);
                     break;
+                case picoquic_frame_type_observed_address_v4:
+                case picoquic_frame_type_observed_address_v6:
+                    /* These frames have a special case processing, tied to path challenge */
+                    ret = 0;
+                    break;
                 default:
                     *no_need_to_repeat = 0;
                     break;
@@ -3481,6 +3488,11 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
             break;
         case picoquic_frame_type_max_path_id:
             ret = picoquic_process_ack_of_max_path_id_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+            byte_index += frame_length;
+            break;
+        case picoquic_frame_type_observed_address_v4:
+        case picoquic_frame_type_observed_address_v6:
+            ret = picoquic_process_ack_of_observed_address_frame(cnx, p->send_path, &p->bytes[byte_index], p->length - byte_index, ftype, &frame_length);
             byte_index += frame_length;
             break;
         default:
@@ -4659,7 +4671,7 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                 /* while probing NAT, the NAT response arrived before the normal path response */
                 /* Update the addresses */
                 picoquic_store_addr(&path_x->local_addr, (struct sockaddr*)&path_x->nat_local_addr);
-                picoquic_store_addr(&path_x->peer_addr, (struct sockaddr*)&path_x->nat_peer_addr);
+                picoquic_update_peer_addr(path_x, (struct sockaddr*)&path_x->nat_peer_addr);
                 path_x->if_index_dest = path_x->if_index_nat_dest;
                 /* if useful, update the CID */
                 if (path_x->p_remote_nat_cnxid != NULL) {
@@ -5697,6 +5709,173 @@ int picoquic_process_ack_of_max_path_id_frame(picoquic_cnx_t* cnx, const uint8_t
     return ret;
 }
 
+/* The observed address frames are used to enable NAT traversal, and other statistics. */
+
+uint8_t* picoquic_format_observed_address_frame(
+    uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype,
+    uint64_t sequence_number, uint8_t * addr, uint16_t port)
+{
+    size_t l_addr = ((ftype & 1) == 0) ? 4 : 16;
+
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ftype)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, sequence_number)) != NULL &&
+        bytes + l_addr < bytes_max) {
+        memcpy(bytes, addr, l_addr);
+        bytes = picoquic_frames_uint16_encode(bytes + l_addr, bytes_max, port);
+    }
+    else {
+        bytes = NULL;
+    }
+    return bytes;
+}
+
+uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* bytes_max,
+    picoquic_path_t* path_x, uint64_t current_time, uint64_t * next_wake_time,
+    int * more_data, int* is_pure_ack)
+{
+    if (!path_x->observed_addr_acked && 
+        path_x->nb_observed_repeat < 4 &&
+        path_x->peer_addr.ss_family != AF_UNSPEC) {
+        int is_needed = 0;
+
+        if (path_x->nb_observed_repeat == 0) {
+            is_needed = 1;
+            path_x->observed_sequence_sent = path_x->cnx->observed_number++;
+        }
+        else {
+            uint64_t repeat_time = path_x->observed_time + path_x->retransmit_timer;
+
+            if (repeat_time <= current_time) {
+                is_needed = 1;
+            }
+            else if (*next_wake_time > repeat_time) {
+                *next_wake_time = repeat_time;
+            }
+        }
+
+        if (is_needed) {
+            uint64_t ftype = 0;
+            uint8_t* ip_addr = NULL;
+            uint16_t port = 0;
+
+            if (path_x->peer_addr.ss_family == AF_INET6) {
+                struct sockaddr_in6* addr = (struct sockaddr_in6*)&path_x->peer_addr;
+                ftype = picoquic_frame_type_observed_address_v6;
+                ip_addr = (uint8_t*)&addr->sin6_addr;
+                port = addr->sin6_port;
+            }
+            else {
+                struct sockaddr_in* addr = (struct sockaddr_in*)&path_x->peer_addr;
+                ftype = picoquic_frame_type_observed_address_v4;
+                ip_addr = (uint8_t*)&addr->sin_addr;
+                port = addr->sin_port;
+            }
+
+            uint8_t *bytes_next = picoquic_format_observed_address_frame(
+                bytes, bytes_max, ftype, path_x->observed_sequence_sent,
+                ip_addr, port);
+            if (bytes_next == NULL) {
+                *more_data = 1;
+            }
+            else {
+                *is_pure_ack = 0;
+                bytes = bytes_next;
+                path_x->nb_observed_repeat += 1;
+                path_x->observed_time = current_time;
+            }
+        }
+    }
+
+    return bytes;
+}
+
+const uint8_t* picoquic_skip_observed_address_frame(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype)
+{
+    /* This code assumes that the frame type is already skipped */
+    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL) {
+        size_t l_addr = ((ftype & 1) == 0) ? 4 : 16;
+        size_t l_frame = l_addr + 2;
+
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, l_frame);
+    }
+    return bytes;
+}
+
+const uint8_t* picoquic_parse_observed_address_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t ftype, uint64_t* sequence, const uint8_t** addr, uint16_t* port)
+{
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, sequence)) != NULL) {
+        size_t l_addr = ((ftype & 1) == 0) ? 4 : 16;
+
+        *addr = bytes;
+        if ((bytes = picoquic_frames_fixed_skip(bytes, bytes_max, l_addr)) != NULL) {
+            bytes = picoquic_frames_uint16_decode(bytes, bytes_max, port);
+        }
+    }
+
+    return bytes;
+}
+
+const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
+    picoquic_path_t * path_x, uint64_t ftype)
+{
+    const uint8_t* addr = NULL;
+    uint16_t port = 0;
+    uint64_t sequence = 0;
+
+    /* This code assumes that the frame type is already skipped */
+
+    if (!cnx->is_address_discovery_receiver) {
+        /* Frame is unexpected */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            ftype, "address discovery not negotiated as receiver");
+    }
+    else if ((bytes = picoquic_parse_observed_address_frame(bytes, bytes_max, ftype, &sequence, &addr, &port)) == NULL) {
+        /* Bad frame encoding */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            ftype, "bad observed address frame");
+    }
+    else if (sequence > path_x->observed_address_received || (path_x->observed_address_received == 0 && path_x->observed_addr.ss_family == AF_UNSPEC)) {
+        /* We only update the observed address if this is a new value*/
+        path_x->observed_address_received = sequence;
+        if ((ftype & 1) == 0) {
+            struct sockaddr_in* o_addr = (struct sockaddr_in *)&path_x->observed_addr;
+            memset(o_addr, 0, sizeof(struct sockaddr_in));
+            o_addr->sin_family = AF_INET;
+            memcpy(&o_addr->sin_addr, addr, 4);
+            o_addr->sin_port = port;
+        }
+        else {
+            struct sockaddr_in6* o_addr = (struct sockaddr_in6*)&path_x->observed_addr;
+            memset(o_addr, 0, sizeof(struct sockaddr_in6));
+            o_addr->sin6_family = AF_INET6;
+            memcpy(&o_addr->sin6_addr, addr, 16);
+            o_addr->sin6_port = port;
+        }
+        if (cnx->callback_fn != NULL) {
+            (void)cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_address_observed, cnx->callback_ctx, path_x->app_path_ctx);
+        }
+    }
+    return bytes;
+}
+
+int picoquic_process_ack_of_observed_address_frame(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes,
+    size_t bytes_max, uint64_t ftype, size_t* consumed)
+{
+    int ret = 0;
+    const uint8_t* bytes_next = picoquic_skip_observed_address_frame(bytes, bytes + bytes_max, ftype);
+
+    if (bytes_next == NULL) {
+        ret = -1;
+    }
+    else {
+        path_x->observed_addr_acked = 1;
+        *consumed = bytes_next - bytes;
+    }
+
+    return ret;
+}
+
 
 /* BDP frames as defined in https://tools.ietf.org/html/draft-kuhn-quic-0rtt-bdp-09
 */
@@ -6086,6 +6265,12 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                         bytes = picoquic_decode_bdp_frame(cnx, bytes, bytes_max, current_time, addr_from, path_x);
                         ack_needed = 1;
                         break;
+                    case picoquic_frame_type_observed_address_v4:
+                    case picoquic_frame_type_observed_address_v6:
+                        is_path_probing_frame = 1;
+                        ack_needed = 1;
+                        bytes = picoquic_decode_observed_address_frame(cnx, bytes, bytes_max, path_x, frame_id64);
+                        break;
                     default:
                         /* Not implemented yet! */
                         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, frame_id64);
@@ -6397,6 +6582,11 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
                     break;
                 case picoquic_frame_type_mp_retire_connection_id:
                     bytes = picoquic_skip_retire_connection_id_frame(bytes_before_type, bytes_max, 1);
+                    *pure_ack = 0;
+                    break;
+                case picoquic_frame_type_observed_address_v4:
+                case picoquic_frame_type_observed_address_v6:
+                    bytes = picoquic_skip_observed_address_frame(bytes, bytes_max, frame_id64);
                     *pure_ack = 0;
                     break;
                 default:

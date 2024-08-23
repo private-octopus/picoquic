@@ -223,6 +223,8 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     int streams_finished;
     int reset_received;
     int immediate_exit;
+    /* Checking that addresses are discovered */
+    int nb_address_observed;
 
     /* Blackhole period if needed */
     uint64_t blackhole_start;

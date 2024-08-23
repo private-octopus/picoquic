@@ -3219,6 +3219,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             bytes_next, bytes_max, &more_data, &is_pure_ack);
                     }
 
+
                     if (pc != picoquic_packet_context_application) {
                         bytes_next = picoquic_format_misc_frames_in_context(cnx, bytes_next, bytes_max,
                             &more_data, &is_pure_ack, pc);
@@ -3232,6 +3233,12 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             /* If present, send misc frame */
                             bytes_next = picoquic_format_misc_frames_in_context(cnx, bytes_next, bytes_max,
                                 &more_data, &is_pure_ack, pc);
+
+                            if (cnx->is_address_discovery_provider) {
+                                /* If a new address was learned, prepare an observed address frame */
+                                bytes_next = picoquic_prepare_observed_address_frame(bytes_next, bytes_max,
+                                    path_x, current_time, next_wake_time, &more_data, &is_pure_ack);
+                            }
 
                             /* If there are not enough published CID, create and advertise */
                             if (ret == 0) {
@@ -3575,6 +3582,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     if (picoquic_is_tls_stream_ready(cnx)) {
                         bytes_next = picoquic_format_crypto_hs_frame(&cnx->tls_stream[picoquic_epoch_1rtt],
                             bytes_next, bytes_max, &more_data, &is_pure_ack);
+                    }
+
+                    if (cnx->is_address_discovery_provider) {
+                        /* If a new address was learned, prepare an observed address frame */
+                        bytes_next = picoquic_prepare_observed_address_frame(bytes_next, bytes_max,
+                            path_x, current_time, next_wake_time, &more_data, &is_pure_ack);
                     }
 
                     if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required ||

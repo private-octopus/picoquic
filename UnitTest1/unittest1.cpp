@@ -2150,6 +2150,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(address_discovery) {
+            int ret = address_discovery_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(app_limit_cc) {
             int ret = app_limit_cc_test();
 
@@ -2581,6 +2587,12 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_standup) {
             int ret = multipath_standup_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_discovery) {
+            int ret = multipath_discovery_test();
 
             Assert::AreEqual(ret, 0);
         }

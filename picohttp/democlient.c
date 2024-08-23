@@ -612,6 +612,26 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_set_alpn:
         ctx->alpn = picoquic_parse_alpn((const char*)bytes);
         break;
+    case picoquic_callback_path_address_observed:
+    {
+        struct sockaddr_storage addr_local;
+        struct sockaddr_storage addr_observed;
+        uint64_t unique_path_id = stream_id;
+
+        if (picoquic_get_path_addr(cnx, unique_path_id, 1, &addr_local) != 0 ||
+            picoquic_get_path_addr(cnx, unique_path_id, 3, &addr_observed) != 0) {
+            fprintf(stdout, "Cannot read local or observed address on path %" PRIu64 "\n",
+                unique_path_id);
+        } else {
+            char text1[256];
+            char text2[256];
+            fprintf(stdout, "Path %" PRIu64 ", Local: % s, observed : % s\n", unique_path_id,
+                picoquic_addr_text((struct sockaddr*)&addr_local, text1, sizeof(text1)),
+                picoquic_addr_text((struct sockaddr*)&addr_observed, text2, sizeof(text2)));
+        }
+
+        break;
+    }
     default:
         /* unexpected */
         break;

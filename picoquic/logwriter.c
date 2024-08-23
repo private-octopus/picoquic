@@ -514,6 +514,22 @@ static const uint8_t* picoquic_log_bdp_frame(FILE* f, const uint8_t* bytes, cons
     return bytes;
 }
 
+static const uint8_t* picoquic_log_observed_address_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype)
+{
+    const uint8_t* bytes_begin = bytes;
+    size_t ip_len = ((ftype & 1) == 0) ? 4 : 16;
+    size_t data_len = ip_len + 2;
+
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Frame type */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Sequence number */
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, data_len); /* IP address and port */
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
 void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
 {
     const uint8_t* bytes_max = bytes + length;
@@ -628,6 +644,10 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
             break;
         case picoquic_frame_type_bdp:
             bytes = picoquic_log_bdp_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_observed_address_v4:
+        case picoquic_frame_type_observed_address_v6:
+            bytes = picoquic_log_observed_address_frame(f, bytes, bytes_max, ftype);
             break;
         default:
             bytes = picoquic_log_erroring_frame(f, bytes, bytes_max);
