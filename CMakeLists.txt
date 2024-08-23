@@ -162,7 +162,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
     picoquictest/openssl_test.c
-    picoquictest/p2ptest.c
+    picoquictest/p2p_test.c
     picoquictest/pacing_test.c
     picoquictest/parseheadertest.c
     picoquictest/picoquic_lb_test.c
