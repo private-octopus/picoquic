@@ -158,8 +158,8 @@ typedef enum {
     picoquic_frame_type_path_available =  0x15228c08,
     picoquic_frame_type_bdp = 0xebd9,
     picoquic_frame_type_max_path_id = 0x15228c0c,
-    picoquic_frame_type_observed_address_v4 = 0x9f81a2,
-    picoquic_frame_type_observed_address_v6 = 0x9f81a3
+    picoquic_frame_type_observed_address_v4 = 0x9f81a6,
+    picoquic_frame_type_observed_address_v6 = 0x9f81a7
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -587,7 +587,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
 #define picoquic_tp_initial_max_path_id  0x0f739bbc1b666d09ull /* per draft quic multipath 09 */
-#define picoquic_tp_address_discovery 0x9f81a174 /* per draft-seemann-quic-address-discovery */
+#define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
  * This is kept private for now; and will only be set through the "set quic log"
