@@ -10165,9 +10165,11 @@ int ddos_amplification_test_one(int use_0rtt, int do_8k)
 
     if (ret == 0) {
         /* Prepare a first packet from the client to the server */
-        ret = picoquic_prepare_packet(test_ctx->cnx_client, simulated_time,
-            packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-            &packet->addr_to, &packet->addr_from, NULL);
+        {
+            ret = picoquic_prepare_packet(test_ctx->cnx_client, simulated_time,
+                packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+                &packet->addr_to, &packet->addr_from, NULL);
+        }
 
         if (packet->length == 0) {
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;

@@ -1232,3 +1232,168 @@ int reset_need_stop_test()
 {
     return reset_repeat_test_one(reset_need_stop_sending);
 }
+
+/*
+* Initial PTO test:
+* Test the scenario in which:
+* - the client sends an initial message
+* - the server sends an ACK
+* - no further packets from the server, either because they are lost
+*   or because the server is hitting the amplification limit.
+* Verify that the client sends a message after a PTO commensurate
+* with the RTT.
+*/
+
+int initial_pto_prepare(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* p_simulated_time,
+    size_t *length)
+{
+    int ret = 0;
+    uint8_t buf[PICOQUIC_MAX_PACKET_SIZE];
+    struct sockaddr_storage addr_to;
+    struct sockaddr_storage addr_from;
+
+    ret = picoquic_prepare_packet(test_ctx->cnx_client, *p_simulated_time,
+        buf, PICOQUIC_MAX_PACKET_SIZE, length,
+        &addr_to, &addr_from, NULL);
+
+    if (ret == 0) {
+        /* Submit initial packet to server context, so we get the
+         * crypto context created */
+        ret = picoquic_incoming_packet_ex(test_ctx->qserver, buf, *length, 
+            (struct sockaddr*)&addr_from, (struct sockaddr*)&addr_to, 0, 0,
+            &test_ctx->cnx_server, *p_simulated_time);
+        if (ret == 0 && test_ctx->cnx_server == NULL) {
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
+int initial_pto_wait(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* p_simulated_time,
+    uint64_t max_wait, size_t* length_sent)
+{
+    int ret = 0;
+    size_t length = 0;
+    *length_sent = 0;
+    while (ret == 0 && *p_simulated_time < max_wait) {
+        uint64_t client_departure = test_ctx->cnx_client->next_wake_time;
+
+        if (client_departure >= max_wait) {
+            *p_simulated_time = max_wait;
+            break;
+        }
+        else {
+            if (*p_simulated_time < client_departure) {
+                *p_simulated_time = client_departure;
+            }
+            ret = initial_pto_prepare(test_ctx, p_simulated_time, &length);
+            if (length > 0 || test_ctx->cnx_client->cnx_state >= picoquic_state_handshake_failure) {
+                *length_sent = length;
+                break;
+            }
+        }
+    }
+    return ret;
+}
+
+int initial_pto_ack(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* p_simulated_time)
+{
+    int ret = 0;
+    uint8_t buf[PICOQUIC_INITIAL_MTU_IPV6];
+    uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
+    picoquic_epoch_enum epoch = picoquic_epoch_initial;
+    picoquic_packet_type_enum packet_type = picoquic_packet_initial;
+    picoquic_packet_context_enum pc = picoquic_packet_context_initial;
+    size_t checksum_overhead = 16;
+    uint8_t * bytes_max = buf + PICOQUIC_INITIAL_MTU_IPV6 - checksum_overhead;
+    uint8_t* bytes_next = buf;
+    uint64_t sequence_number = 0;
+    size_t length = 0;
+    size_t header_length = 0;
+    int more_data = 0;
+    size_t send_length = 0;
+    /* Format the header */
+    header_length = picoquic_predict_packet_header_length(test_ctx->cnx_server, packet_type,
+        &test_ctx->cnx_server->pkt_ctx[pc]);
+    bytes_next += header_length;
+    /* add ack, function of client sequence number */
+    bytes_next = picoquic_format_ack_frame(test_ctx->cnx_server, bytes_next, bytes_max, &more_data,
+        *p_simulated_time, pc, 0);
+    /* add padding to minimum length */
+    length = picoquic_pad_to_target_length(buf, bytes_next - buf,
+        PICOQUIC_INITIAL_MTU_IPV6 - checksum_overhead);
+
+    /* Finalize */
+    send_length = picoquic_protect_packet(test_ctx->cnx_server, packet_type, buf, 0,
+        length, header_length,
+        send_buffer, PICOQUIC_MAX_PACKET_SIZE, 
+        test_ctx->cnx_server->crypto_context[picoquic_epoch_initial].aead_encrypt,
+        test_ctx->cnx_server->crypto_context[picoquic_epoch_initial].pn_enc,
+        test_ctx->cnx_server->path[0], *p_simulated_time);
+    /* Submit to client. */
+    if (send_length == 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_cnx_t* last_cnx = NULL;
+        ret = picoquic_incoming_packet_ex(test_ctx->qclient, send_buffer, send_length,
+            (struct sockaddr*)&test_ctx->server_addr, (struct sockaddr*)&test_ctx->client_addr, 0, 0,
+            &last_cnx, *p_simulated_time);
+    }
+    return ret;
+}
+
+int initial_pto_test()
+{
+    int ret = 0;
+    picoquic_test_tls_api_ctx_t *test_ctx = NULL;
+    size_t length = 0;
+    uint64_t simulated_time = 0;
+    uint64_t simulated_rtt = 20000;
+    uint64_t simulated_pto = 4*simulated_rtt;
+    picoquic_connection_id_t initial_cid = { { 0x94, 0x01, 0x41, 0, 0, 0, 0, 0}, 8 };
+
+    /* Create a client. */
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot initialize context, ret = 0x%x", ret);
+    }
+    else {
+        /* Set the binlog */
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        /* start the client connection */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+    /* Send the initial packet */
+    if (ret == 0) {
+        ret = initial_pto_prepare(test_ctx, &simulated_time, &length);
+        if (ret == 0 && length < 1200) {
+            length = -1;
+        }
+    }
+    /* get the initial message, wait until next client time >= time of ACK */
+    if (ret == 0 && simulated_time < 20000) {
+        ret = initial_pto_wait(test_ctx, &simulated_time, simulated_rtt, &length);
+    }
+    /* format an ACK packet, apply initial protection, submit ACK to client */
+    if (ret == 0) {
+        ret = initial_pto_ack(test_ctx, &simulated_time);
+    }
+    /* Wait until next client time >= expected response, or
+     * client is ready to send and does send. */
+    if (ret == 0 && simulated_time < simulated_pto) {
+        ret = initial_pto_wait(test_ctx, &simulated_time, simulated_pto, &length);
+        if (ret == 0 && length < 1200) {
+            /* Did not send the PTO */
+            ret = -1;
+        }
+    }
+    /* Clean up */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

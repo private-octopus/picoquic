@@ -246,6 +246,7 @@ int reset_extra_stop_test();
 int reset_need_max_test();
 int reset_need_reset_test();
 int reset_need_stop_test();
+int initial_pto_test();
 int ready_to_send_test();
 int ready_to_skip_test();
 int ready_to_zero_test();
