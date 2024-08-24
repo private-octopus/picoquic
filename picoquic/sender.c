@@ -1,3 +1,4 @@
+#include "picoquic_internal.h"
 /*
 * Author: Christian Huitema
 * Copyright (c) 2017, Private Octopus, Inc.
@@ -828,7 +829,7 @@ void picoquic_protect_packet_header(uint8_t * send_buffer, size_t pn_offset, uin
     }
 }
 
-static size_t picoquic_protect_packet(picoquic_cnx_t* cnx, 
+size_t picoquic_protect_packet(picoquic_cnx_t* cnx, 
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, 
     uint64_t sequence_number,

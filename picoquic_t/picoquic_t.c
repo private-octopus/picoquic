@@ -304,6 +304,7 @@ static const picoquic_test_def_t test_table[] = {
     { "reset_need_max", reset_need_max_test },
     { "reset_need_reset", reset_need_reset_test },
     { "reset_need_stop", reset_need_stop_test },
+    { "initial_pto", initial_pto_test },
     { "ready_to_send", ready_to_send_test },
     { "ready_to_skip", ready_to_skip_test },
     { "ready_to_zfin", ready_to_zfin_test },
