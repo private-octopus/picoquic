@@ -625,7 +625,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         } else {
             char text1[256];
             char text2[256];
-            fprintf(stdout, "Path %" PRIu64 ", Local: % s, observed : % s\n", unique_path_id,
+            fprintf(stdout, "Path %" PRIu64 ", Local: %s, observed : %s\n", unique_path_id,
                 picoquic_addr_text((struct sockaddr*)&addr_local, text1, sizeof(text1)),
                 picoquic_addr_text((struct sockaddr*)&addr_observed, text2, sizeof(text2)));
         }

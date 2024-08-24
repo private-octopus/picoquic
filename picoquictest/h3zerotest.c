@@ -1098,7 +1098,7 @@ int h3zero_user_agent_test_one(int test_mode, char const * ua_string, uint8_t * 
             DBG_PRINTF("Bad length (%d vs %d), test mode: %d, ua string %s", length, target_length, test_mode, (ua_string == NULL) ? "NULL" : ua_string);
             ret = -1;
         } else if (memcmp(buffer, target, target_length) != 0) {
-            DBG_PRINTF("Content does not match, test mode : % d, ua string % s", test_mode, (ua_string == NULL) ? "NULL" : ua_string);
+            DBG_PRINTF("Content does not match, test mode : %d, ua string %s", test_mode, (ua_string == NULL) ? "NULL" : ua_string);
             ret = -1;
         }
     }
@@ -1115,7 +1115,7 @@ int h3zero_user_agent_test()
         for (int test_mode = 0; ret == 0 && test_mode < 4; test_mode++) {
             ret = h3zero_user_agent_test_one(test_mode, ua_string[ua_x], test_list[test_mode].data, test_list[test_mode].data_length);
             if (ret != 0) {
-                DBG_PRINTF("Test fails, test mode : % d, ua_x : %d", test_mode,ua_x);
+                DBG_PRINTF("Test fails, test mode : %d, ua_x : %d", test_mode,ua_x);
             }
         }
     }
