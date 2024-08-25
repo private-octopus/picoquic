@@ -64,7 +64,7 @@
     "frame_type": "ack_frequency", "sequence_number": 17, "packet_tolerance": 10, "max_ack_delay": 1056, "reordering_threshold": 0}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 8, "packet_number": 29, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "ack_frequency", "sequence_number": 17, "packet_tolerance": 10, "max_ack_delay": 1056, "reordering_threshold": 5}]}],
-[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 2, "packet_number": 30, "dcid": "01020304" }, "frames": [{ 
+[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 1, "packet_number": 30, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "immediate_ack"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 4, "packet_number": 31, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 1024}]}],

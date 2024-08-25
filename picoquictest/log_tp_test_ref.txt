@@ -27,7 +27,7 @@
 0102030405060708:         Extension type: 8 (max_streams_bidi), length 1, 01
 0102030405060708:         Extension type: 1 (idle_timeout), length 2, 40ff
 0102030405060708:         Extension type: 15 (hcid), length 8, 0203040506070809
-0102030405060708:         Extension type: 4278509082 (min_ack_delay), length 2, 43e8
+0102030405060708:         Extension type: 4278509083 (min_ack_delay), length 2, 43e8
 0102030405060708:         Extension type: 29016 (enable_time_stamp), length 1, 03
 
 0102030405060708:     Extension list (63 bytes):

@@ -221,7 +221,7 @@ static uint8_t test_frame_type_ack_frequency_t5[] = {
 };
 
 static uint8_t test_frame_type_immediate_ack[] = {
-    0x40, picoquic_frame_type_immediate_ack
+    picoquic_frame_type_immediate_ack
 };
 
 static uint8_t test_frame_type_time_stamp[] = {
