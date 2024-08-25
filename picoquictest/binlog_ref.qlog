@@ -64,7 +64,7 @@
     "frame_type": "ack_frequency", "sequence_number": 17, "packet_tolerance": 10, "max_ack_delay": 1056, "reordering_threshold": 0}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 8, "packet_number": 29, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "ack_frequency", "sequence_number": 17, "packet_tolerance": 10, "max_ack_delay": 1056, "reordering_threshold": 5}]}],
-[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 2, "packet_number": 30, "dcid": "01020304" }, "frames": [{ 
+[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 1, "packet_number": 30, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "immediate_ack"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 4, "packet_number": 31, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 1024}]}],
@@ -80,6 +80,10 @@
     "frame_type": "max_path_id", "max_path_id": 17}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 12, "packet_number": 37, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "bdp", "lifetime": 1, "bytes_in_flight": 2, "min_rtt": 3, "ip": "0a000001"}]}],
+[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 11, "packet_number": 38, "dcid": "01020304" }, "frames": [{ 
+    "frame_type": "observed_address_v4", "sequence": 1, "address": "1.2.3.4", "port": 4660}]}],
+[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 23, "packet_number": 39, "dcid": "01020304" }, "frames": [{ 
+    "frame_type": "observed_address_v6", "sequence": 2, "address": "102:304:506:708:90a:b0c:d0e:f00", "port": 17767}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 11, "packet_number": 0, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "reset_stream", "stream_id": 17, "error_code": 1, "final_size": 4611686018427387903}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 11, "packet_number": 1, "dcid": "01020304" }, "frames": [{ 

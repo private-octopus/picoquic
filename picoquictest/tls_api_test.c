@@ -677,6 +677,12 @@ int test_api_callback(picoquic_cnx_t* cnx,
         return 0;
     }
 
+    if (fin_or_event == picoquic_callback_path_address_observed)
+    {
+        ctx->nb_address_observed++;
+        return 0;
+    }
+
     if (fin_or_event == picoquic_callback_prepare_datagram)
     {
         int ret = -1;
@@ -10159,9 +10165,11 @@ int ddos_amplification_test_one(int use_0rtt, int do_8k)
 
     if (ret == 0) {
         /* Prepare a first packet from the client to the server */
-        ret = picoquic_prepare_packet(test_ctx->cnx_client, simulated_time,
-            packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-            &packet->addr_to, &packet->addr_from, NULL);
+        {
+            ret = picoquic_prepare_packet(test_ctx->cnx_client, simulated_time,
+                packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+                &packet->addr_to, &packet->addr_from, NULL);
+        }
 
         if (packet->length == 0) {
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
@@ -12960,7 +12968,7 @@ int immediate_ack_test()
         uint64_t immediate_received_at_server = 0;
         uint64_t immediate_cleared_at_server = 0;
         int all_acked = 0;
-        uint8_t immediate_ack_frame[2] = { 0x40, picoquic_frame_type_immediate_ack };
+        uint8_t immediate_ack_frame[2] = { picoquic_frame_type_immediate_ack };
         /* Queue misc frame with "Immediate ACK" set */
         picoquic_queue_misc_frame(test_ctx->cnx_client, immediate_ack_frame, 2, 0,
             picoquic_packet_context_application);

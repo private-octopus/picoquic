@@ -489,7 +489,8 @@ typedef enum {
     multipath_test_standup,
     multipath_test_tunnel,
     multipath_test_fail,
-    multipath_test_ab1
+    multipath_test_ab1,
+    multipath_test_discovery
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -585,7 +586,7 @@ static int multipath_test_abandon_cycle(picoquic_test_tls_api_ctx_t* test_ctx, u
             /* wait about 250ms for the abandon to be noticed at both ends. */
             ret = tls_api_wait_for_timeout(test_ctx, simulated_time, 250000);
             if (ret != 0) {
-                DBG_PRINTF("Issue after abandon path %" PRIu64 ", ret = % d", deleted_id, ret);
+                DBG_PRINTF("Issue after abandon path %" PRIu64 ", ret = %d", deleted_id, ret);
             }
         }
     }
@@ -829,6 +830,11 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             server_parameters.max_datagram_frame_size = 1536;
             test_ctx->cnx_client->local_parameters.max_datagram_frame_size = 1536;
         }
+        if (test_id == multipath_test_discovery) {
+            server_parameters.address_discovery_mode = 1;
+            test_ctx->cnx_client->local_parameters.address_discovery_mode = 3;
+        }
+
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
         test_ctx->cnx_client->local_parameters.enable_time_stamp = 3;
 
@@ -1142,6 +1148,26 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             ret = -1;
         }
     }
+
+    if (ret == 0 && test_id == multipath_test_discovery) {
+        if (test_ctx->nb_address_observed < 2) {
+            DBG_PRINTF("Got % addresses observed", test_ctx->nb_address_observed);
+            ret = -1;
+        }
+        for (int p = 0; p < 2; p++) {
+            if (picoquic_compare_addr(
+                (struct sockaddr*)&test_ctx->cnx_client->path[p]->local_addr,
+                (struct sockaddr*)&test_ctx->cnx_client->path[p]->observed_addr) != 0) {
+                char text1[256];
+                char text2[256];
+
+                DBG_PRINTF("Path %d, Local: %s, observed: %s", p,
+                    picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[p]->local_addr, text1, sizeof(text1)),
+                    picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[p]->observed_addr, text2, sizeof(text2)));
+                ret = -1;
+            }
+        }
+    }
     /* Delete the context */
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
@@ -1356,6 +1382,13 @@ int multipath_standup_test()
     uint64_t max_completion_microsec = 3000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_standup);
+}
+
+int multipath_discovery_test()
+{
+    uint64_t max_completion_microsec = 2000000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_discovery);
 }
 
 /* Monopath tests:

@@ -121,6 +121,10 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "bdp";
     case picoquic_frame_type_max_path_id:
         return "max_path_id";
+    case picoquic_frame_type_observed_address_v4:
+        return "observed_address_v4";
+    case picoquic_frame_type_observed_address_v6:
+        return "observed_address_v6";
     default:
         return "unknown";
     }
