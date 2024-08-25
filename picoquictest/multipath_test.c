@@ -586,7 +586,7 @@ static int multipath_test_abandon_cycle(picoquic_test_tls_api_ctx_t* test_ctx, u
             /* wait about 250ms for the abandon to be noticed at both ends. */
             ret = tls_api_wait_for_timeout(test_ctx, simulated_time, 250000);
             if (ret != 0) {
-                DBG_PRINTF("Issue after abandon path %" PRIu64 ", ret = % d", deleted_id, ret);
+                DBG_PRINTF("Issue after abandon path %" PRIu64 ", ret = %d", deleted_id, ret);
             }
         }
     }

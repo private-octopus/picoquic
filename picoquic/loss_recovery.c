@@ -762,7 +762,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
                         else {
                             uint64_t error_frame_type = 0;
                             (void)picoquic_varint_decode(&old_p->bytes[byte_index], frame_length, &error_frame_type);
-                            picoquic_log_app_message(cnx, "Cannot copy frame 0x%" PRIu64 ", packet type = % d, force queue = % d, repeat buffer : % zu, previous length : % zu.",
+                            picoquic_log_app_message(cnx, "Cannot copy frame 0x%" PRIu64 ", packet type = %d, force queue = %d, repeat buffer : %zu, previous length : %zu.",
                                 error_frame_type, old_p->ptype, force_queue);
                             ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
                                 error_frame_type, "Cannot copy frame for retransmit");
@@ -879,7 +879,7 @@ static void picoquic_check_path_mtu_on_losses(
             picoquic_reset_path_mtu(old_p->send_path);
             if (old_mtu != old_p->send_path->send_mtu) {
                 picoquic_log_app_message(cnx,
-                    "Reset path %" PRIu64 " MTU after %" PRIu64 " retransmissions, %" PRIu64 "MTU losses, Timer mode : % d",
+                    "Reset path %" PRIu64 " MTU after %" PRIu64 " retransmissions, %" PRIu64 "MTU losses, Timer mode : %d",
                     old_p->send_path->unique_path_id,
                     old_p->send_path->nb_retransmit,
                     old_p->send_path->nb_mtu_losses,

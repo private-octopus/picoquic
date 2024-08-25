@@ -1301,13 +1301,11 @@ int initial_pto_ack(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* p_simulated
     int ret = 0;
     uint8_t buf[PICOQUIC_INITIAL_MTU_IPV6];
     uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
-    picoquic_epoch_enum epoch = picoquic_epoch_initial;
     picoquic_packet_type_enum packet_type = picoquic_packet_initial;
     picoquic_packet_context_enum pc = picoquic_packet_context_initial;
     size_t checksum_overhead = 16;
     uint8_t * bytes_max = buf + PICOQUIC_INITIAL_MTU_IPV6 - checksum_overhead;
     uint8_t* bytes_next = buf;
-    uint64_t sequence_number = 0;
     size_t length = 0;
     size_t header_length = 0;
     int more_data = 0;

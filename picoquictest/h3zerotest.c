@@ -1098,7 +1098,7 @@ int h3zero_user_agent_test_one(int test_mode, char const * ua_string, uint8_t * 
             DBG_PRINTF("Bad length (%d vs %d), test mode: %d, ua string %s", length, target_length, test_mode, (ua_string == NULL) ? "NULL" : ua_string);
             ret = -1;
         } else if (memcmp(buffer, target, target_length) != 0) {
-            DBG_PRINTF("Content does not match, test mode : % d, ua string % s", test_mode, (ua_string == NULL) ? "NULL" : ua_string);
+            DBG_PRINTF("Content does not match, test mode : %d, ua string %s", test_mode, (ua_string == NULL) ? "NULL" : ua_string);
             ret = -1;
         }
     }
@@ -1115,7 +1115,7 @@ int h3zero_user_agent_test()
         for (int test_mode = 0; ret == 0 && test_mode < 4; test_mode++) {
             ret = h3zero_user_agent_test_one(test_mode, ua_string[ua_x], test_list[test_mode].data, test_list[test_mode].data_length);
             if (ret != 0) {
-                DBG_PRINTF("Test fails, test mode : % d, ua_x : %d", test_mode,ua_x);
+                DBG_PRINTF("Test fails, test mode : %d, ua_x : %d", test_mode,ua_x);
             }
         }
     }
@@ -2619,9 +2619,14 @@ int http_multi_file_test_one(char const * alpn, picoquic_stream_data_cb_fn serve
 
     int ret = demo_test_multi_scenario_create(&scenario, &stream_length, random_seed, nb_files, name_length, file_length, dir_www, dir_download);
 
-    if (ret == 0 && stream_length != NULL) {
-        ret = demo_server_test(alpn, server_callback_fn, (void*)&file_param, scenario, nb_files,
-            stream_length, 0, do_loss, 5000000, 0, NULL, MULTI_FILE_CLIENT_BIN, MULTI_FILE_SERVER_BIN, do_preemptive_repeat);
+    if (ret == 0) {
+        if (stream_length == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = demo_server_test(alpn, server_callback_fn, (void*)&file_param, scenario, nb_files,
+                stream_length, 0, do_loss, 5000000, 0, NULL, MULTI_FILE_CLIENT_BIN, MULTI_FILE_SERVER_BIN, do_preemptive_repeat);
+        }
     }
 
     if (ret == 0) {
