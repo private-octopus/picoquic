@@ -149,7 +149,7 @@ typedef enum {
     picoquic_frame_type_datagram = 0x30,
     picoquic_frame_type_datagram_l = 0x31,
     picoquic_frame_type_ack_frequency = 0xAF,
-    picoquic_frame_type_immediate_ack = 0xAC,
+    picoquic_frame_type_immediate_ack = 0x1F,
     picoquic_frame_type_time_stamp = 757,
     picoquic_frame_type_mp_ack = 0x15228c00,
     picoquic_frame_type_mp_ack_ecn =  0x15228c01,
@@ -581,7 +581,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_max_datagram_frame_size 32 /* per draft-pauly-quic-datagram-05 */ 
 #define picoquic_tp_test_large_chello 3127 
 #define picoquic_tp_enable_loss_bit 0x1057 
-#define picoquic_tp_min_ack_delay 0xff04de1aull 
+#define picoquic_tp_min_ack_delay 0xff04de1bull 
 #define picoquic_tp_enable_time_stamp 0x7158  /* x&1 */
 #define picoquic_tp_grease_quic_bit 0x2ab2
 #define picoquic_tp_version_negotiation 0x11

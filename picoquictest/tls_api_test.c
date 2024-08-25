@@ -12968,7 +12968,7 @@ int immediate_ack_test()
         uint64_t immediate_received_at_server = 0;
         uint64_t immediate_cleared_at_server = 0;
         int all_acked = 0;
-        uint8_t immediate_ack_frame[2] = { 0x40, picoquic_frame_type_immediate_ack };
+        uint8_t immediate_ack_frame[2] = { picoquic_frame_type_immediate_ack };
         /* Queue misc frame with "Immediate ACK" set */
         picoquic_queue_misc_frame(test_ctx->cnx_client, immediate_ack_frame, 2, 0,
             picoquic_packet_context_application);
