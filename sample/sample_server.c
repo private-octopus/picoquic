@@ -278,6 +278,7 @@ int sample_server_callback(picoquic_cnx_t* cnx,
                         /* If fin, mark read, check the file, open it. Or reset if there is no such file */
                         stream_ctx->file_name[stream_ctx->name_length + 1] = 0;
                         stream_ctx->is_name_read = 1;
+                        printf("File requested: <%s>\n", stream_ctx->file_name);
                         stream_ret = sample_server_open_stream(server_ctx, stream_ctx);
 
                         if (stream_ret == 0) {
@@ -390,6 +391,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     default_context.default_dir_len = strlen(default_dir);
 
     printf("Starting Picoquic Sample server on port %d\n", server_port);
+    printf("Serving files from %s\n", default_dir);
 
     /* Create the QUIC context for the server */
     current_time = picoquic_current_time();

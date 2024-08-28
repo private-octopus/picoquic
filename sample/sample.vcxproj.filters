@@ -24,5 +24,8 @@
     <ClCompile Include="sample_client.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="sample_background.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

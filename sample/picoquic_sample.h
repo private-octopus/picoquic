@@ -43,8 +43,12 @@ extern "C" {
 #define PICOQUIC_SAMPLE_CLIENT_QLOG_DIR ".";
 #define PICOQUIC_SAMPLE_SERVER_QLOG_DIR ".";
 
+#define PICOQUIC_SAMPLE_BACKGROUND_MAX_FILES 32
+
 int picoquic_sample_client(char const* server_name, int server_port, char const* default_dir,
     int nb_files, char const** file_names);
+
+int picoquic_sample_background(char const* server_name, int server_port, char const* default_dir);
 
 int picoquic_sample_server(int server_port, const char* pem_cert, const char* pem_key, const char * default_dir);
 

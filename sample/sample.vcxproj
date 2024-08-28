@@ -168,6 +168,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="sample.c" />
+    <ClCompile Include="sample_background.c" />
     <ClCompile Include="sample_client.c" />
     <ClCompile Include="sample_server.c" />
   </ItemGroup>
