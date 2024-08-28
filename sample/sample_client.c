@@ -438,7 +438,7 @@ static int sample_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_
  * - Find the server's address
  * - Initialize the client context and create a client connection.
  */
-static sample_client_init(char const* server_name, int server_port, char const* default_dir,
+static int sample_client_init(char const* server_name, int server_port, char const* default_dir,
     char const* ticket_store_filename, char const* token_store_filename,
     struct sockaddr_storage * server_address, picoquic_quic_t** quic, picoquic_cnx_t** cnx, sample_client_ctx_t *client_ctx)
 {

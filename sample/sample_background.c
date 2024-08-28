@@ -398,7 +398,7 @@ int sample_background_callback(picoquic_cnx_t* cnx,
  * - Find the server's address
  * - Initialize the client context and create a client connection.
  */
-static sample_background_init(char const* server_name, int server_port, char const* default_dir,
+static int sample_background_init(char const* server_name, int server_port, char const* default_dir,
     char const* ticket_store_filename, char const* token_store_filename,
     struct sockaddr_storage * server_address, picoquic_quic_t** quic, picoquic_cnx_t** cnx, sample_background_ctx_t *client_ctx)
 {
