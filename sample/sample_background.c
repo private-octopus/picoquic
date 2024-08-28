@@ -48,32 +48,46 @@
 #include <picoquic_packet_loop.h>
 #include "picoquic_sample.h"
 
- /* Client context and callback management:
-  *
-  * The client application context is created before the connection
-  * is created. It contains the list of files that will be required
-  * from the server.
-  * On initial start, the client creates all the stream contexts 
-  * that will be needed for the requested files, and marks all
-  * these contexts as active.
-  * Each stream context includes:
-  *  - description of the stream state:
-  *      name sent or not, FILE open or not, stream reset or not,
-  *      stream finished or not.
-  *  - index of the file in the list.
-  *  - number of file name bytes sent.
-  *  - stream ID.
-  *  - the FILE pointer for reading the data.
-  * Server side stream context is created when the client starts the
-  * stream. It is closed when the file transmission
-  * is finished, or when the stream is abandoned.
-  *
-  * The server side callback is a large switch statement, with one entry
-  * for each of the call back events.
+ /* Background thread management:
+  * 
+  * The "background" sample is an example of application split
+  * between application threads for the application logic, and a
+  * background thread for the picoquic stack. 
+  * 
+  * In the "background client" mode, the files are requested from
+  * the UI thread, but the corresponding streams are created in the
+  * background thread. The shared state between the two
+  * threads is kept in the "background context", visible by
+  * both threads, and all interactions with the stack happen
+  * in the background thread, because the stack code is not
+  * thread safe.
+  * 
+  * The goal of the sample is not to demonstrate distributed programming
+  * techniques. In a real application, the code running in the background
+  * would probably send messages and events to the application, but that
+  * kind of code is very application specific. In our sample, we use a simple
+  * ad hoc coordination between the two threads:
+  * - the variable "nb_files" documents the number of files
+  *   that have been documented by the client. It is updated by
+  *   the UI thread when a new file is requested.
+  * - the variable "nb_files_processed" documents the number
+  *   of files for which a stream has been created. It is
+  *   updated by the UI thread.
+  * - the flag "is_closing_requested" is set by the application
+  *   when it wants to close the connection. The background thread
+  *   will call the `picoquic_close` API in the background thread,
+  *   set the flag `is_closing` after that, and set the flag
+  *   `is_disconnected` when the stack has completed the closing.
+  * After the application updates the shared state, it calls the
+  * API `picoquic_wake_up_network_thread`. This cause the background
+  * thread to stop waiting for packets or timeout, and to issue
+  * a loop callback `picoquic_packet_loop_wake_up`, during which the
+  * application provided call can interact safely with the
+  * picoquic stack.
   */
 
-typedef struct st_sample_client_stream_ctx_t {
-    struct st_sample_client_stream_ctx_t* next_stream;
+typedef struct st_sample_background_stream_ctx_t {
+    struct st_sample_background_stream_ctx_t* next_stream;
     size_t file_rank;
     uint64_t stream_id;
     size_t name_length;
@@ -85,33 +99,36 @@ typedef struct st_sample_client_stream_ctx_t {
     unsigned int is_file_open : 1;
     unsigned int is_stream_reset : 1;
     unsigned int is_stream_finished : 1;
-} sample_client_stream_ctx_t;
+} sample_background_stream_ctx_t;
 
-typedef struct st_sample_client_ctx_t {
+typedef struct st_sample_background_ctx_t {
+    unsigned int is_closing : 1;
+    unsigned int is_closing_requested : 1;
     picoquic_cnx_t* cnx;
     char const* default_dir;
     char const** file_names;
-    sample_client_stream_ctx_t* first_stream;
-    sample_client_stream_ctx_t* last_stream;
+    sample_background_stream_ctx_t* first_stream;
+    sample_background_stream_ctx_t* last_stream;
     int nb_files;
+    int nb_files_processed;
     int nb_files_received;
     int nb_files_failed;
     int is_disconnected;
-} sample_client_ctx_t;
+} sample_background_ctx_t;
 
-static int sample_client_create_stream(picoquic_cnx_t* cnx,
-    sample_client_ctx_t* client_ctx, int file_rank)
+static int sample_background_create_stream(picoquic_cnx_t* cnx,
+    sample_background_ctx_t* client_ctx, int file_rank)
 {
     int ret = 0;
-    sample_client_stream_ctx_t* stream_ctx = (sample_client_stream_ctx_t*)
-        malloc(sizeof(sample_client_stream_ctx_t));
+    sample_background_stream_ctx_t* stream_ctx = (sample_background_stream_ctx_t*)
+        malloc(sizeof(sample_background_stream_ctx_t));
 
     if (stream_ctx == NULL) {
         fprintf(stdout, "Memory Error, cannot create stream for file number %d\n", (int)file_rank);
         ret = -1;
     }
     else {
-        memset(stream_ctx, 0, sizeof(sample_client_stream_ctx_t));
+        memset(stream_ctx, 0, sizeof(sample_background_stream_ctx_t));
         if (client_ctx->first_stream == NULL) {
             client_ctx->first_stream = stream_ctx;
             client_ctx->last_stream = stream_ctx;
@@ -130,17 +147,14 @@ static int sample_client_create_stream(picoquic_cnx_t* cnx,
         if (ret != 0) {
             fprintf(stdout, "Error %d, cannot initialize stream for file number %d\n", ret, (int)file_rank);
         }
-        else {
-            printf("Opened stream %d for file %s\n", 4 * file_rank, client_ctx->file_names[file_rank]);
-        }
     }
 
     return ret;
 }
 
-static void sample_client_report(sample_client_ctx_t* client_ctx)
+static void sample_background_report(sample_background_ctx_t* client_ctx)
 {
-    sample_client_stream_ctx_t* stream_ctx = client_ctx->first_stream;
+    sample_background_stream_ctx_t* stream_ctx = client_ctx->first_stream;
 
     while (stream_ctx != NULL) {
         char const* status;
@@ -182,9 +196,9 @@ static void sample_client_report(sample_client_ctx_t* client_ctx)
     }
 }
 
-static void sample_client_free_context(sample_client_ctx_t* client_ctx)
+static void sample_background_free_context(sample_background_ctx_t* client_ctx)
 {
-    sample_client_stream_ctx_t* stream_ctx;
+    sample_background_stream_ctx_t* stream_ctx;
 
     while ((stream_ctx = client_ctx->first_stream) != NULL) {
         client_ctx->first_stream = stream_ctx->next_stream;
@@ -197,13 +211,13 @@ static void sample_client_free_context(sample_client_ctx_t* client_ctx)
 }
 
 
-int sample_client_callback(picoquic_cnx_t* cnx,
+int sample_background_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
-    sample_client_ctx_t* client_ctx = (sample_client_ctx_t*)callback_ctx;
-    sample_client_stream_ctx_t* stream_ctx = (sample_client_stream_ctx_t*)v_stream_ctx;
+    sample_background_ctx_t* client_ctx = (sample_background_ctx_t*)callback_ctx;
+    sample_background_stream_ctx_t* stream_ctx = (sample_background_stream_ctx_t*)v_stream_ctx;
 
     if (client_ctx == NULL) {
         /* This should never happen, because the callback context for the client is initialized 
@@ -283,11 +297,6 @@ int sample_client_callback(picoquic_cnx_t* cnx,
                     stream_ctx->F = picoquic_file_close(stream_ctx->F);
                     stream_ctx->is_stream_finished = 1;
                     client_ctx->nb_files_received++;
-
-                    if ((client_ctx->nb_files_received + client_ctx->nb_files_failed) >= client_ctx->nb_files) {
-                        /* everything is done, close the connection */
-                        ret = picoquic_close(cnx, 0);
-                    }
                 }
             }
             break;
@@ -309,19 +318,11 @@ int sample_client_callback(picoquic_cnx_t* cnx,
                 stream_ctx->remote_error = picoquic_get_remote_stream_error(cnx, stream_id);
                 stream_ctx->is_stream_reset = 1;
                 client_ctx->nb_files_failed++;
-
-                if ((client_ctx->nb_files_received + client_ctx->nb_files_failed) >= client_ctx->nb_files) {
-                    /* everything is done, close the connection */
-                    fprintf(stdout, "All done, closing the connection.\n");
-                    ret = picoquic_close(cnx, 0);
-                }
             }
             break;
         case picoquic_callback_stateless_reset:
         case picoquic_callback_close: /* Received connection close */
         case picoquic_callback_application_close: /* Received application close */
-            fprintf(stdout, "Connection closed.\n");
-            /* Mark the connection as completed */
             client_ctx->is_disconnected = 1;
             /* Remove the application callback */
             picoquic_set_callback(cnx, NULL, NULL);
@@ -330,14 +331,14 @@ int sample_client_callback(picoquic_cnx_t* cnx,
             /* The client did not get the right version.
              * TODO: some form of negotiation?
              */
-            fprintf(stdout, "Received a version negotiation request:");
+            fprintf(stderr, "Received a version negotiation request:");
             for (size_t byte_index = 0; byte_index + 4 <= length; byte_index += 4) {
                 uint32_t vn = 0;
                 for (int i = 0; i < 4; i++) {
                     vn <<= 8;
                     vn += bytes[byte_index + i];
                 }
-                fprintf(stdout, "%s%08x", (byte_index == 0) ? " " : ", ", vn);
+                fprintf(stderr, "%s%08x", (byte_index == 0) ? " " : ", ", vn);
             }
             fprintf(stdout, "\n");
             break;
@@ -370,7 +371,7 @@ int sample_client_callback(picoquic_cnx_t* cnx,
                     stream_ctx->is_name_sent = is_fin;
                 }
                 else {
-                    fprintf(stderr, "\nError, coulfd not get data buffer.\n");
+                    fprintf(stderr, "\nError, could not get data buffer.\n");
                     ret = -1;
                 }
             }
@@ -379,11 +380,8 @@ int sample_client_callback(picoquic_cnx_t* cnx,
             }
             break;
         case picoquic_callback_almost_ready:
-            fprintf(stdout, "Connection to the server completed, almost ready.\n");
             break;
         case picoquic_callback_ready:
-            /* TODO: Check that the transport parameters are what the sample expects */
-            fprintf(stdout, "Connection to the server confirmed.\n");
             break;
         default:
             /* unexpected -- just ignore. */
@@ -394,53 +392,15 @@ int sample_client_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-/* Sample client,  loop call back management.
- * The function "picoquic_packet_loop" will call back the application when it is ready to
- * receive or send packets, after receiving a packet, and after sending a packet.
- * We implement here a minimal callback that instruct  "picoquic_packet_loop" to exit
- * when the connection is complete.
- */
-
-static int sample_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
-    void* callback_ctx, void * callback_arg)
-{
-    int ret = 0;
-    sample_client_ctx_t* cb_ctx = (sample_client_ctx_t*)callback_ctx;
-
-    if (cb_ctx == NULL) {
-        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-    }
-    else {
-        switch (cb_mode) {
-        case picoquic_packet_loop_ready:
-            fprintf(stdout, "Waiting for packets.\n");
-            break;
-        case picoquic_packet_loop_after_receive:
-            break;
-        case picoquic_packet_loop_after_send:
-            if (cb_ctx->is_disconnected) {
-                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
-            }
-            break;
-        case picoquic_packet_loop_port_update:
-            break;
-        default:
-            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-            break;
-        }
-    }
-    return ret;
-}
-
-/* Prepare the context used by the simple client:
+/* Prepare the context used by the background client.:
  * - Create the QUIC context.
  * - Open the sockets
  * - Find the server's address
  * - Initialize the client context and create a client connection.
  */
-static sample_client_init(char const* server_name, int server_port, char const* default_dir,
+static sample_background_init(char const* server_name, int server_port, char const* default_dir,
     char const* ticket_store_filename, char const* token_store_filename,
-    struct sockaddr_storage * server_address, picoquic_quic_t** quic, picoquic_cnx_t** cnx, sample_client_ctx_t *client_ctx)
+    struct sockaddr_storage * server_address, picoquic_quic_t** quic, picoquic_cnx_t** cnx, sample_background_ctx_t *client_ctx)
 {
     int ret = 0;
     char const* sni = PICOQUIC_SAMPLE_SNI;
@@ -514,7 +474,7 @@ static sample_client_init(char const* server_name, int server_port, char const* 
             /* Document connection in client's context */
             client_ctx->cnx = *cnx;
             /* Set the client callback context */
-            picoquic_set_callback(*cnx, sample_client_callback, client_ctx);
+            picoquic_set_callback(*cnx, sample_background_callback, client_ctx);
             /* Client connection parameters could be set here, before starting the connection. */
             ret = picoquic_start_client_cnx(*cnx);
             if (ret < 0) {
@@ -535,56 +495,204 @@ static sample_client_init(char const* server_name, int server_port, char const* 
     return ret;
 }
 
-/* Client:
- * - Call the init function to:
- *    - Create the QUIC context.
- *    - Open the sockets
- *    - Find the server's address
- *    - Create a client context and a client connection.
- * - Initialize the list of required files based on the CLI parameters.
- * - On a forever loop:
- *     - get the next wakeup time
- *     - wait for arrival of message on sockets until that time
- *     - if a message arrives, process it.
- *     - else, check whether there is something to send.
- *       if there is, send it.
- * - The loop breaks if the client connection is finished.
- */
+/* Loop callback for the background client.
+* 
+* The main difference with the simpler loop used for the basic client
+* is the support for the "wake up" callback, which we use to create
+* streams inside the background thread because the picoquic code
+* is not generally thread safe.
+* 
+* The support for the wakeup call is declared 
+* 
+* 
+* In the "background client" mode, the files are requested from
+* the UI thread, but the corresponding streams are created in the
+* background thread. We use a very simple thread coordination
+* process to keep the sample simple:
+* - the variable "nb_files" documents the number of files
+*   that have been documented by the client. It is updated by
+*   the UI thread when a new file is requested.
+* - the variable "nb_files_processed" documents the number
+*   of files for which a stream has been created. It is
+*   updated by the UI thread.
+* This is implemented in the "sample process wakeup" function.
+*/
 
-int picoquic_sample_client(char const * server_name, int server_port, char const * default_dir,
-    int nb_files, char const ** file_names)
+
+static int sample_background_wakeup(sample_background_ctx_t* client_ctx)
+{
+    int ret = 0;
+
+    while (client_ctx->nb_files > client_ctx->nb_files_processed) {
+        ret = sample_background_create_stream(client_ctx->cnx, client_ctx, client_ctx->nb_files_processed);
+        if (ret < 0) {
+            fprintf(stderr, "\nCould not initiate stream for file #%d, %s\n", 
+                client_ctx->nb_files_processed,
+                client_ctx->file_names[client_ctx->nb_files_processed]);
+            break;
+        }
+        client_ctx->nb_files_processed++;
+    }
+
+    if (client_ctx->is_closing_requested && !client_ctx->is_closing) {
+        picoquic_close(client_ctx->cnx, 0);
+    }
+
+    return ret;
+}
+
+static int sample_background_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
+    void* callback_ctx, void * callback_arg)
+{
+    int ret = 0;
+    sample_background_ctx_t* client_ctx = (sample_background_ctx_t*)callback_ctx;
+
+    if (client_ctx == NULL) {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    else {
+        switch (cb_mode) {
+        case picoquic_packet_loop_ready:
+            break;
+        case picoquic_packet_loop_wake_up:
+            ret = sample_background_wakeup(client_ctx);
+            break;
+        case picoquic_packet_loop_after_receive:
+            break;
+        case picoquic_packet_loop_after_send:
+            if (client_ctx->is_disconnected) {
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+            }
+            break;
+        case picoquic_packet_loop_port_update:
+            break;
+        default:
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            break;
+        }
+    }
+    return ret;
+}
+
+/* Background client.
+*/
+int picoquic_sample_background(char const* server_name, int server_port, char const* default_dir)
 {
     int ret = 0;
     struct sockaddr_storage server_address;
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
-    sample_client_ctx_t client_ctx = { 0 };
+    sample_background_ctx_t client_ctx = { 0 };
     char const* ticket_store_filename = PICOQUIC_SAMPLE_CLIENT_TICKET_STORE;
     char const* token_store_filename = PICOQUIC_SAMPLE_CLIENT_TOKEN_STORE;
+    picoquic_network_thread_ctx_t* thread_ctx = NULL;
+    int thread_ret = 0;
+    int wait_cycles = 0;
+    int wait_limit_sec = 1; /* By default, wait 1 second until completion */
+    picoquic_packet_loop_param_t param = { 0 };
+    char const* file_names[PICOQUIC_SAMPLE_BACKGROUND_MAX_FILES];
+    char buf[256];
 
-    ret = sample_client_init(server_name, server_port, default_dir,
+    ret = sample_background_init(server_name, server_port, default_dir,
         ticket_store_filename, token_store_filename,
         &server_address, &quic, &cnx, &client_ctx);
 
-    if (ret == 0) {
-        /* Initialize all the streams contexts from the list of streams passed on the API. */
-        client_ctx.file_names = file_names;
-        client_ctx.nb_files = nb_files;
+    /* Initialize the files field in the context to an empty vector*/
+    client_ctx.file_names = file_names;
 
-        /* Create a stream context for all the files that should be downloaded */
-        for (int i = 0; ret == 0 && i < client_ctx.nb_files; i++) {
-            ret = sample_client_create_stream(cnx, &client_ctx, i);
-            if (ret < 0) {
-                fprintf(stderr, "Could not initiate stream for fi\n");
+    /* set the thread parameters */
+    param.local_af = server_address.ss_family;
+
+    /* Start the background thread. */
+    thread_ctx = picoquic_start_custom_network_thread(quic, &param,
+        picoquic_internal_thread_create, picoquic_internal_thread_delete,
+        picoquic_internal_thread_setname,"sample_background", 
+        sample_background_loop_cb,
+        &client_ctx, &thread_ret);
+
+    /* Loop on the UI until the client calls it quit. */
+    while (!client_ctx.is_closing_requested && !client_ctx.is_disconnected &&
+        client_ctx.nb_files < PICOQUIC_SAMPLE_BACKGROUND_MAX_FILES) {
+        size_t line_size = 0;
+        printf("\nNext file (or empty line to quit)?\n");
+        if (fgets(buf, sizeof(buf), stdin) != NULL) {
+            /* clean the line feed characters if present */
+            line_size = strlen(buf);
+            while(line_size > 0) {
+                int c = buf[line_size - 1];
+                if (c != '\n' && c != '\r' && c != ' ' && c != '\t') {
+                    break;
+                }
+                line_size--;
+            }
+        }
+        if (line_size == 0) {
+            printf("OK, empty name, closing.\n");
+            break;
+        }
+        else {
+            char * f_name = (char*)malloc(line_size + 1);
+            if (f_name == NULL) {
+                /* Error! Cannot continue */
+                printf("Not enough memory for name, closing.\n");
+                client_ctx.is_closing_requested = 1;
+            }
+            else {
+                memcpy(f_name, buf, line_size);
+                f_name[line_size] = 0;
+                file_names[client_ctx.nb_files] = f_name;
+                client_ctx.nb_files++;
+            }
+        }
+        /* wakeup the background thread */
+        picoquic_wake_up_network_thread(thread_ctx);
+    }
+
+    /* Wait until all files have been received.
+    * If this was not just a sample, we would develop some code
+    * to wait until the completion of the transport. Here,
+    * we simply resort to active polling.
+     */
+    while (!thread_ctx->thread_is_closed) {
+        if (client_ctx.is_disconnected) {
+            printf("Disconnected.\n");
+            break;
+        }
+        if ((client_ctx.nb_files_received + client_ctx.nb_files_failed) >= client_ctx.nb_files &&
+            !client_ctx.is_closing_requested) {
+            client_ctx.is_closing_requested = 1;
+            picoquic_wake_up_network_thread(thread_ctx);
+        }
+        else {
+#ifdef _WINDOWS
+            Sleep(10);
+#else
+            usleep(10000);
+#endif
+            wait_cycles++;
+            if (wait_cycles > wait_limit_sec * 100) {
+                printf("\nDo you want to wait longer (y|n, default=y)?\n");
+                if (fgets(buf, sizeof(buf), stdin) == NULL) {
+                    break;
+                }
+                else {
+                    if (buf[0] != 'n') {
+                        wait_limit_sec *= 2;
+                    }
+                    else {
+                        break;
+                    }
+                }
             }
         }
     }
 
-    /* Wait for packets */
-    ret = picoquic_packet_loop(quic, 0, server_address.ss_family, 0, 0, 0, sample_client_loop_cb, &client_ctx);
+    /* close the network thread. */
+    picoquic_delete_network_thread(thread_ctx);
+    thread_ctx = NULL;
 
     /* Done. At this stage, we could print out statistics, etc. */
-    sample_client_report(&client_ctx);
+    sample_background_report(&client_ctx);
 
     /* Save tickets and tokens, and free the QUIC context */
     if (quic != NULL) {
@@ -596,9 +704,14 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
         }
         picoquic_free(quic);
     }
-
+    /* Free the file names */
+    for (int i = 0; i < client_ctx.nb_files; i++) {
+        if (client_ctx.file_names[i] != NULL) {
+            free((void*)client_ctx.file_names[i]);
+        }
+    }
     /* Free the Client context */
-    sample_client_free_context(&client_ctx);
+    sample_background_free_context(&client_ctx);
 
     return ret;
 }
