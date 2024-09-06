@@ -28,9 +28,9 @@
 #include "picoquictest_internal.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:h";
 #endif
 int config_option_letters_test()
 {
@@ -73,6 +73,7 @@ static picoquic_quic_config_t param1 = {
     "127.0.0.1",
     1,
     UINT64_MAX, /* Do not limit CWIN */
+    3, /* Address discovery mode = 3 (cli param -J 2)*/
     /* Common flags */
     1, /* unsigned int initial_random : 1; */
     1, /* unsigned int use_long_log : 1; */
@@ -132,6 +133,7 @@ static char const* config_argv1[] = {
     "-j", "1",
     "-0",
     "-i", "0N8C-000123",
+    "-J", "2",
     NULL
 };
 
@@ -158,6 +160,7 @@ static picoquic_quic_config_t param2 = {
     "127.0.0.1",
     0,
     1000000, /* Limit CWIN to 1 million bytes */
+    0, /* Do not enable address discovery */
     /* Common flags */
     3, /* unsigned int initial_random : 1; */
     0, /* unsigned int use_long_log : 1; */

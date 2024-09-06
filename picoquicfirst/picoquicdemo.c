@@ -1031,7 +1031,11 @@ int quic_client(const char* ip_address_text, int server_port,
             picoquic_log_app_message(cnx_client, "Out of %d zero RTT packets, %d were acked by the server.",
                 cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
         }
-
+        fprintf(stdout, "Address Discovery mode: %d / %d (%u:%u)\n",
+            cnx_client->local_parameters.address_discovery_mode,
+            cnx_client->remote_parameters.address_discovery_mode,
+            cnx_client->is_address_discovery_provider,
+            cnx_client->is_address_discovery_receiver);
         fprintf(stdout, "Quic Bit was %sgreased by the client.\n", (cnx_client->quic_bit_greased) ? "" : "NOT ");
         fprintf(stdout, "Quic Bit was %sgreased by the server.\n", (cnx_client->quic_bit_received_0) ? "" : "NOT ");
 

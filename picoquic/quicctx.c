@@ -811,6 +811,17 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
     }
 }
 
+void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode)
+{
+    if (mode > 0 && mode <= 3) {
+        quic->default_tp.address_discovery_mode = mode;
+    }
+    else
+    {
+        quic->default_tp.address_discovery_mode = 0;
+    }
+}
+
 void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max)
 {
     quic->cwin_max = (cwin_max == 0) ? UINT64_MAX : cwin_max;
@@ -1539,7 +1550,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
             path_x->cnx = cnx;
 
             /* Set the addresses */
-            picoquic_store_addr(&path_x->peer_addr, peer_addr);
+            picoquic_update_peer_addr(path_x, peer_addr);
             picoquic_store_addr(&path_x->local_addr, local_addr);
             /* Initialize per path time measurement */
             path_x->smoothed_rtt = PICOQUIC_INITIAL_RTT;
@@ -2469,11 +2480,38 @@ int picoquic_get_path_addr(picoquic_cnx_t* cnx, uint64_t unique_path_id, int loc
     int ret = 0;
     int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
     if (path_id >= 0) {
-        picoquic_store_addr(addr, (struct sockaddr*)
-            ((local) ? &cnx->path[path_id]->local_addr : &cnx->path[path_id]->peer_addr));
+        struct sockaddr_storage* local_addr = NULL;
+        switch (local) {
+        case 1:
+            local_addr = &cnx->path[path_id]->local_addr;
+            break;
+        case 2:
+            local_addr = &cnx->path[path_id]->peer_addr;
+            break;
+        case 3:
+            local_addr = &cnx->path[path_id]->observed_addr;
+            break;
+        default:
+            break;
+        }
+        if (local_addr == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_store_addr(addr, (struct sockaddr*)local_addr);
+        }
     }
 
     return ret;
+}
+
+void picoquic_update_peer_addr(picoquic_path_t* path_x, const struct sockaddr* peer_addr)
+{
+    /* Set the addresses */
+    picoquic_store_addr(&path_x->peer_addr, peer_addr);
+    /* Keep track of the update */
+    path_x->observed_addr_acked = 0;
+    path_x->nb_observed_repeat = 0;
 }
 
 /* Reset the path MTU, for example if too many packet losses are detected */

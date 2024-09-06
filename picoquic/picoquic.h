@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.22.0"
+#define PICOQUIC_VERSION "1.1.24.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -137,6 +137,7 @@ extern "C" {
 #define PICOQUIC_RESET_SECRET_SIZE 16
 #define PICOQUIC_RESET_PACKET_PAD_SIZE 23
 #define PICOQUIC_RESET_PACKET_MIN_SIZE (PICOQUIC_RESET_PACKET_PAD_SIZE + PICOQUIC_RESET_SECRET_SIZE)
+#define PICOQUIC_MAX_CRYPTO_BUFFER_GAP 16384
 
 #define PICOQUIC_LOG_PACKET_MAX_SEQUENCE 100
 
@@ -270,7 +271,8 @@ typedef enum {
     picoquic_callback_path_available, /* A new path is available, or a suspended path is available again */
     picoquic_callback_path_suspended, /* An available path is suspended */
     picoquic_callback_path_deleted, /* An existing path has been deleted */
-    picoquic_callback_path_quality_changed /* Some path quality parameters have changed */
+    picoquic_callback_path_quality_changed, /* Some path quality parameters have changed */
+    picoquic_callback_path_address_observed /* The peer has reported an address for the path */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -315,6 +317,7 @@ typedef struct st_picoquic_tp_t {
     int enable_bdp_frame;
     int is_multipath_enabled;
     uint64_t initial_max_path_id;
+    int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
 } picoquic_tp_t;
 
 /*
@@ -638,6 +641,9 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 /* Set the multipath option for the context */
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option);
 
+/* Set the Address Discovery mode for the context */
+void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode);
+
 /** picoquic_set_cwin_max:
  * Set a maximum value for the congestion window (default: UINT64_MAX)
  * This option can be used to limit the amount of memory that the sender
@@ -896,7 +902,7 @@ int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, u
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
 /* The get path addr API provides the IP addresses used by a specific path.
 * The "local" argument determines whether the APi returns the local address
-* (local == 1) or the address of the peer (local == 2).
+* (local == 1), the address of the peer (local == 2) or the address observed by the peer (local == 3).
 */
 int picoquic_get_path_addr(picoquic_cnx_t* cnx, uint64_t unique_path_id, int local, struct sockaddr_storage* addr);
 

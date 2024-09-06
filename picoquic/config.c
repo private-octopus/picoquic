@@ -98,6 +98,7 @@ static option_table_line_t option_table[] = {
 #ifndef PICOQUIC_WITHOUT_SSLKEYLOG
     { picoquic_option_SSLKEYLOG, '8', "sslkeylog", 0, "", "Enable SSLKEYLOG" },
 #endif
+    { picoquic_option_AddressDiscovery, 'J', "addr_disc", 1, "mode", "provider (0), receiver (1) or both (2)."},
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -425,6 +426,17 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         break;
     }
+    case picoquic_option_AddressDiscovery: {
+        int v = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || v < 0 || v > 2) {
+            fprintf(stderr, "Invalid address discovery option: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = (ret == 0) ? -1 : ret;
+        }
+        else {
+            config->address_discovery_mode = v + 1;
+        }
+        break;
+    }
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -711,6 +723,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_default_idle_timeout(quic, (uint64_t)config->idle_timeout);
 
         picoquic_set_cwin_max(quic, config->cwin_max);
+        picoquic_set_default_address_discovery_mode(quic, config->address_discovery_mode);
 
         if (config->token_file_name) {
             if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {

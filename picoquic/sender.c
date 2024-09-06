@@ -1,3 +1,4 @@
+#include "picoquic_internal.h"
 /*
 * Author: Christian Huitema
 * Copyright (c) 2017, Private Octopus, Inc.
@@ -828,7 +829,7 @@ void picoquic_protect_packet_header(uint8_t * send_buffer, size_t pn_offset, uin
     }
 }
 
-static size_t picoquic_protect_packet(picoquic_cnx_t* cnx, 
+size_t picoquic_protect_packet(picoquic_cnx_t* cnx, 
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, 
     uint64_t sequence_number,
@@ -2001,7 +2002,8 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             *is_initial_sent = (packet->ptype == picoquic_packet_initial);
         }
         else if (ret == 0 && is_cleartext_mode && tls_ready == 0
-            && cnx->first_misc_frame == NULL && !cnx->ack_ctx[pc].act[0].ack_needed && !force_handshake_padding) {
+            && picoquic_find_first_misc_frame(cnx, pc) == NULL
+            && !cnx->ack_ctx[pc].act[0].ack_needed && !force_handshake_padding) {
             /* when in a clear text mode, only send packets if there is
             * actually something to send, or resend. */
 
@@ -2025,7 +2027,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 if ((tls_ready == 0 || path_x->cwin <= path_x->bytes_in_transit || cnx->quic->cwin_max <= path_x->bytes_in_transit)
                     && (cnx->cnx_state == picoquic_state_client_almost_ready
                         || picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc, 0) == 0)
-                    && cnx->first_misc_frame == NULL && !force_handshake_padding) {
+                    && picoquic_find_first_misc_frame(cnx, pc) == NULL && !force_handshake_padding) {
                     length = 0;
                 }
                 else {
@@ -3168,7 +3170,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                  * several RTT.
                  */
                 if (length <= header_length && cnx->client_mode &&
-                    cnx->first_misc_frame == NULL &&
+                    picoquic_find_first_misc_frame(cnx, pc) == NULL &&
                     (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet,
                         send_buffer_min_max, &header_length)) > 0) {
                     /* Check whether it makes sense to add an ACK at the end of the retransmission */
@@ -3219,6 +3221,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             bytes_next, bytes_max, &more_data, &is_pure_ack);
                     }
 
+
                     if (pc != picoquic_packet_context_application) {
                         bytes_next = picoquic_format_misc_frames_in_context(cnx, bytes_next, bytes_max,
                             &more_data, &is_pure_ack, pc);
@@ -3232,6 +3235,12 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             /* If present, send misc frame */
                             bytes_next = picoquic_format_misc_frames_in_context(cnx, bytes_next, bytes_max,
                                 &more_data, &is_pure_ack, pc);
+
+                            if (cnx->is_address_discovery_provider) {
+                                /* If a new address was learned, prepare an observed address frame */
+                                bytes_next = picoquic_prepare_observed_address_frame(bytes_next, bytes_max,
+                                    path_x, current_time, next_wake_time, &more_data, &is_pure_ack);
+                            }
 
                             /* If there are not enough published CID, create and advertise */
                             if (ret == 0) {
@@ -3575,6 +3584,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     if (picoquic_is_tls_stream_ready(cnx)) {
                         bytes_next = picoquic_format_crypto_hs_frame(&cnx->tls_stream[picoquic_epoch_1rtt],
                             bytes_next, bytes_max, &more_data, &is_pure_ack);
+                    }
+
+                    if (cnx->is_address_discovery_provider) {
+                        /* If a new address was learned, prepare an observed address frame */
+                        bytes_next = picoquic_prepare_observed_address_frame(bytes_next, bytes_max,
+                            path_x, current_time, next_wake_time, &more_data, &is_pure_ack);
                     }
 
                     if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required ||

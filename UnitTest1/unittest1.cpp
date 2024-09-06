@@ -1834,6 +1834,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(initial_pto)
+        {
+            int ret = initial_pto_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ready_to_send)
         {
             int ret = ready_to_send_test();
@@ -1858,6 +1865,13 @@ namespace UnitTest1
         TEST_METHOD(ready_to_zfin)
         {
             int ret= ready_to_zfin_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(crypto_hs_offset)
+        {
+            int ret = crypto_hs_offset_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2146,6 +2160,12 @@ namespace UnitTest1
 
         TEST_METHOD(direct_receive) {
             int ret = direct_receive_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(address_discovery) {
+            int ret = address_discovery_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2581,6 +2601,12 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_standup) {
             int ret = multipath_standup_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_discovery) {
+            int ret = multipath_discovery_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -304,10 +304,12 @@ static const picoquic_test_def_t test_table[] = {
     { "reset_need_max", reset_need_max_test },
     { "reset_need_reset", reset_need_reset_test },
     { "reset_need_stop", reset_need_stop_test },
+    { "initial_pto", initial_pto_test },
     { "ready_to_send", ready_to_send_test },
     { "ready_to_skip", ready_to_skip_test },
     { "ready_to_zfin", ready_to_zfin_test },
     { "ready_to_zero", ready_to_zero_test },
+    { "crypto_hs_offset", crypto_hs_offset_test },
     { "cubic", cubic_test },
     { "cubic_jitter", cubic_jitter_test },
     { "fastcc", fastcc_test },
@@ -374,6 +376,7 @@ static const picoquic_test_def_t test_table[] = {
     { "pacing_update", pacing_update_test },
     { "quality_update", quality_update_test },
     { "direct_receive", direct_receive_test },
+    { "address_discovery", address_discovery_test },
     { "app_limit_cc", app_limit_cc_test },
     { "app_limited_bbr", app_limited_bbr_test },
     { "app_limited_cubic", app_limited_cubic_test },
@@ -458,6 +461,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_dg_af", multipath_dg_af_test },
     { "multipath_standby", multipath_standby_test },
     { "multipath_standup", multipath_standup_test },
+    { "multipath_discovery", multipath_discovery_test },
     { "multipath_qlog", multipath_qlog_test },
     { "multipath_tunnel", multipath_tunnel_test },
     { "monopath_0rtt", monopath_0rtt_test },
@@ -529,8 +533,8 @@ int usage(char const * argv0)
     fprintf(stderr, "  -C ccc            Use nnn stress clients in parallel.\n");
     fprintf(stderr, "  -c nnn ccc        Run connection stress for nnn minutes, ccc connections.\n");
     fprintf(stderr, "  -d ppp uuu dir    Run connection ddoss for ppp packets, uuu usec intervals,\n");
-    fprintf(stderr, "  -F nnn            Run the corrupt file fuzzer nnn times,\n");
     fprintf(stderr, "                    logs in dir. No logs if dir=\"-\"");
+    fprintf(stderr, "  -F nnn            Run the corrupt file fuzzer nnn times,\n");
     fprintf(stderr, "  -n                Disable debug prints.\n");
     fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
