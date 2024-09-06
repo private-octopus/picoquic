@@ -1869,6 +1869,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(crypto_hs_offset)
+        {
+            int ret = crypto_hs_offset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cubic)
         {
             int ret = cubic_test();

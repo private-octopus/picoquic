@@ -2002,7 +2002,8 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             *is_initial_sent = (packet->ptype == picoquic_packet_initial);
         }
         else if (ret == 0 && is_cleartext_mode && tls_ready == 0
-            && cnx->first_misc_frame == NULL && !cnx->ack_ctx[pc].act[0].ack_needed && !force_handshake_padding) {
+            && picoquic_find_first_misc_frame(cnx, pc) == NULL
+            && !cnx->ack_ctx[pc].act[0].ack_needed && !force_handshake_padding) {
             /* when in a clear text mode, only send packets if there is
             * actually something to send, or resend. */
 
@@ -2026,7 +2027,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 if ((tls_ready == 0 || path_x->cwin <= path_x->bytes_in_transit || cnx->quic->cwin_max <= path_x->bytes_in_transit)
                     && (cnx->cnx_state == picoquic_state_client_almost_ready
                         || picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc, 0) == 0)
-                    && cnx->first_misc_frame == NULL && !force_handshake_padding) {
+                    && picoquic_find_first_misc_frame(cnx, pc) == NULL && !force_handshake_padding) {
                     length = 0;
                 }
                 else {
@@ -3169,7 +3170,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                  * several RTT.
                  */
                 if (length <= header_length && cnx->client_mode &&
-                    cnx->first_misc_frame == NULL &&
+                    picoquic_find_first_misc_frame(cnx, pc) == NULL &&
                     (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet,
                         send_buffer_min_max, &header_length)) > 0) {
                     /* Check whether it makes sense to add an ACK at the end of the retransmission */

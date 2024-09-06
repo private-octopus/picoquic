@@ -309,6 +309,7 @@ static const picoquic_test_def_t test_table[] = {
     { "ready_to_skip", ready_to_skip_test },
     { "ready_to_zfin", ready_to_zfin_test },
     { "ready_to_zero", ready_to_zero_test },
+    { "crypto_hs_offset", crypto_hs_offset_test },
     { "cubic", cubic_test },
     { "cubic_jitter", cubic_jitter_test },
     { "fastcc", fastcc_test },
@@ -532,8 +533,8 @@ int usage(char const * argv0)
     fprintf(stderr, "  -C ccc            Use nnn stress clients in parallel.\n");
     fprintf(stderr, "  -c nnn ccc        Run connection stress for nnn minutes, ccc connections.\n");
     fprintf(stderr, "  -d ppp uuu dir    Run connection ddoss for ppp packets, uuu usec intervals,\n");
-    fprintf(stderr, "  -F nnn            Run the corrupt file fuzzer nnn times,\n");
     fprintf(stderr, "                    logs in dir. No logs if dir=\"-\"");
+    fprintf(stderr, "  -F nnn            Run the corrupt file fuzzer nnn times,\n");
     fprintf(stderr, "  -n                Disable debug prints.\n");
     fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
