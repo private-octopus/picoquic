@@ -309,6 +309,7 @@ static const picoquic_test_def_t test_table[] = {
     { "ready_to_skip", ready_to_skip_test },
     { "ready_to_zfin", ready_to_zfin_test },
     { "ready_to_zero", ready_to_zero_test },
+    { "crypto_hs_offset", crypto_hs_offset_test },
     { "cubic", cubic_test },
     { "cubic_jitter", cubic_jitter_test },
     { "fastcc", fastcc_test },

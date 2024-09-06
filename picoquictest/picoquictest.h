@@ -251,6 +251,7 @@ int ready_to_send_test();
 int ready_to_skip_test();
 int ready_to_zero_test();
 int ready_to_zfin_test();
+int crypto_hs_offset_test();
 int cubic_test();
 int cubic_jitter_test();
 int satellite_basic_test();

@@ -1395,3 +1395,82 @@ int initial_pto_test()
 
     return ret;
 }
+
+/* Test of out of order crypto packets.
+* We test that by injecting a crypto handshake frame with an
+* offset of 64K in the crypto context. There will be three tests,
+* for initial, handshake and 1 rtt contexts.
+ */
+
+
+int crypto_hs_offset_test_one(picoquic_packet_context_enum pc)
+{
+    int ret = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    size_t length = 0;
+    uint64_t simulated_time = 0;
+    picoquic_connection_id_t initial_cid = { { 0xC0, 0xFF, 0x5E, 0x40, 0, 0, 0, 0}, 8 };
+    uint8_t bad_crypto_hs[] = { picoquic_frame_type_crypto_hs, 0x80, 0x01, 0, 0, 4, 1, 2, 3, 4 };
+
+    initial_cid.id[4] = (uint8_t)pc;
+
+    /* Create a client. */
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot initialize context, ret = 0x%x", ret);
+    }
+    else {
+        /* Set the binlog */
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        /* start the client connection */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        /* Inject the  made up packet */
+        ret = picoquic_queue_misc_frame(test_ctx->cnx_client, bad_crypto_hs, sizeof(bad_crypto_hs), 1, pc);
+    }
+
+
+    /* Try to establish the connection */
+    if (ret == 0) {
+        if (wait_client_connection_ready(test_ctx, &simulated_time) == 0) {
+            if (test_ctx->cnx_server != NULL) {
+                if (test_ctx->cnx_server->cnx_state != picoquic_state_handshake_failure &&
+                    test_ctx->cnx_server->cnx_state < picoquic_state_disconnecting) {
+                    /* Should wait for ready state */
+                    DBG_PRINTF("Unexpected success, pc=%d\n", pc);
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->remote_error != PICOQUIC_TRANSPORT_CRYPTO_BUFFER_EXCEEDED) {
+        DBG_PRINTF("For pc=%d, expected error 0x%x, got 0x%x\n", pc,
+            PICOQUIC_TRANSPORT_CRYPTO_BUFFER_EXCEEDED, test_ctx->cnx_client->remote_error);
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int crypto_hs_offset_test()
+{
+    picoquic_packet_context_enum pc[] = { picoquic_packet_context_initial,
+        picoquic_packet_context_handshake, picoquic_packet_context_application };
+    size_t nb_pc = sizeof(pc) / sizeof(picoquic_packet_context_enum);
+    int ret = 0;
+
+    for (size_t i = 0; i < nb_pc && ret == 0; i++) {
+        ret = crypto_hs_offset_test_one(pc[i]);
+    }
+
+    return ret;
+}
