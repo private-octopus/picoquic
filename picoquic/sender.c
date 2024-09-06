@@ -2002,8 +2002,8 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             *is_initial_sent = (packet->ptype == picoquic_packet_initial);
         }
         else if (ret == 0 && is_cleartext_mode && tls_ready == 0
-            && picoquic_find_first_misc_frame(cnx, pc) != NULL
-            && cnx->first_misc_frame == NULL && !cnx->ack_ctx[pc].act[0].ack_needed && !force_handshake_padding) {
+            && picoquic_find_first_misc_frame(cnx, pc) == NULL
+            && !cnx->ack_ctx[pc].act[0].ack_needed && !force_handshake_padding) {
             /* when in a clear text mode, only send packets if there is
             * actually something to send, or resend. */
 
