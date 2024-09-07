@@ -40,7 +40,6 @@
 * - there is one UDP_CONNECT context per <proxy, target> tuple,
 *   where target is identified by IP address and port number.
 * 
-* 
 * On the client, the proper matching between connections, paths and UDP
 * CONNECT contexts is debatable. We don't want something too
 * intrusive. One solution would be to use a specific interface
@@ -217,7 +216,6 @@ int picomask_accept(picoquic_cnx_t* cnx,
 /* Prepare datagram. This is the call from the inner connection,
 * stating that a datagram can now be sent. The masque context
 * pick the UDP connect context with the smallest wakeup time,
-* 
  */
 
 /* picomask callback. This will be called from the web server
