@@ -19,6 +19,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stdlib.h>
+#include <string.h>
 #include "picomask.h"
 #include "h3zero.h"
 #include "h3zero_common.h"
