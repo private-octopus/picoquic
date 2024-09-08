@@ -46,7 +46,50 @@ typedef struct st_picomask_test_ctx_t {
 * 
 * Build a test network with three nodes: client, proxy, target.
 */
+picoquic_picomask_test_ctx_t * picomask_test_config()
+{
+    int ret = 0;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    picoquic_picomask_test_ctx_t* pt_ctx = NULL;
 
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret == 0) {
+        pt_ctx = (picoquic_picomask_test_ctx_t*)malloc(sizeof(picoquic_picomask_test_ctx_t));
+        if (pt_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            memset(pt_ctx, 0, sizeof(picoquic_picomask_test_ctx_t));
+        }
+    }
+
+    if (ret == 0) {
+        /* Create addresses */
+        /* Create client context */
+        /* Create server context */
+        /* Create target context */
+        /* Create server - client link [0] */
+        /* Create client - server link [1] */
+        /* Create server - target link [2] */
+        /* Create target - server link [3] */
+
+    }
+    return pt_ctx;
+}
 
 /* Process arrival of a packet from a link */
 int picomask_test_packet_arrival(picoquic_picomask_test_ctx_t* pt_ctx, int link_id, int * is_active)
@@ -145,13 +188,15 @@ int picomask_test_packet_departure(picoquic_picomask_test_ctx_t* pt_ctx, int nod
                 link_id = 2;
                 break;
             }
-            /* If the source address is not set, set it */
-            if (packet->addr_from.ss_family == 0) {
-                picoquic_store_addr(&packet->addr_from, (struct sockaddr*)&pt_ctx->addr[node_id]);
+            if (ret == 0) {
+                /* If the source address is not set, set it */
+                if (packet->addr_from.ss_family == 0) {
+                    picoquic_store_addr(&packet->addr_from, (struct sockaddr*)&pt_ctx->addr[node_id]);
+                }
+                /* send now. */
+                *is_active = 1;
+                picoquictest_sim_link_submit(pt_ctx->link[link_id], packet, pt_ctx->simulated_time);
             }
-            /* send now. */
-            *is_active = 1;
-            picoquictest_sim_link_submit(pt_ctx->link[link_id], packet, pt_ctx->simulated_time);
         }
         else {
             free(packet);

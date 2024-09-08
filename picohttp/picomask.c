@@ -92,10 +92,11 @@
 *
 */
 
-
+#include <stdlib.h>
 #include "picomask.h"
 #include "h3zero.h"
 #include "h3zero_common.h"
+#include "string.h"
 
 int picomask_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
@@ -303,7 +304,9 @@ int picomask_connect(picoquic_cnx_t* cnx, picomask_ctx_t* picomask_ctx,
     uint64_t stream_id = picoquic_get_next_local_stream_id(cnx, 0);
     h3zero_stream_ctx_t* stream_ctx = NULL;
     picomask_cnx_ctx_t* cnx_ctx = NULL;
+#ifdef _WINDOWS
     UNREFERENCED_PARAMETER(server_path);
+#endif
     /* Create an H3 stream context */
     if ((stream_ctx = h3zero_find_or_create_stream(
         cnx, stream_id, h3_ctx, 1, 1)) == NULL) {
