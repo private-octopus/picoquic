@@ -32,6 +32,8 @@ typedef struct st_picomask_test_ctx_t {
     /* Three quic nodes: client(0), proxy(1), target(2) */
     picoquic_quic_t* quic[3];
     struct sockaddr_storage addr[3];
+    picohttp_server_parameters_t server_context;
+    picohttp_server_parameters_t target_context;
     /* Four links: server->client[0], client->server[1], server->target[2], target->server[3],
      */
     picoquictest_sim_link_t* link[4];
@@ -43,6 +45,25 @@ typedef struct st_picomask_test_ctx_t {
     uint8_t recv_ecn_server;
 } picoquic_picomask_test_ctx_t;
 
+/*
+* Delete the configuration
+*/
+void picomask_test_delete(picoquic_picomask_test_ctx_t* pt_ctx)
+{
+    for (int i = 0; i < 3; i++) {
+        if (pt_ctx->quic[i] != NULL) {
+            picoquic_free(pt_ctx->quic[i]);
+            pt_ctx->quic[i] = NULL;
+        }
+    }
+
+    for (int i = 0; i < 4; i++) {
+        if (pt_ctx->link[i] != NULL) {
+            picoquictest_sim_link_delete(pt_ctx->link[i]);
+            pt_ctx->link[i] = NULL;
+        }
+    }
+}
 /*
 * test configuration.
 * 
@@ -80,16 +101,58 @@ picoquic_picomask_test_ctx_t * picomask_test_config()
     }
 
     if (ret == 0) {
-        /* Create addresses */
+        /* Set addresses */
+        for (int i = 0; i < 3; i++) {
+            unsigned long h = 0xa0000001;
+            struct sockaddr_in* a = (struct sockaddr_in*)&pt_ctx->addr[i];
+            a->sin_family = AF_INET;
+#ifdef _WINDOWS
+            a->sin_addr.S_un.S_addr = htonl(h + i);
+#else
+
+            a->sin_addr.s_addr = htonl(h + i);
+#endif
+            a->sin_port = htons(1234);
+        }
         /* Create client context */
+        pt_ctx->quic[0] = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL,
+            h3zero_callback,
+            /* TODO: default client callback context */ NULL,
+            NULL, NULL, NULL, pt_ctx->simulated_time,
+            &pt_ctx->simulated_time,
+            /* TODO -- should we store tickets? */NULL,
+            NULL, 0);
         /* Create server context */
+        pt_ctx->quic[1] = picoquic_create(8, test_server_key_file, test_server_cert_file, NULL, "h3",
+            h3zero_callback,
+            &pt_ctx->server_context,
+            NULL, NULL, NULL, pt_ctx->simulated_time,
+            &pt_ctx->simulated_time,
+            /* TODO -- should we store tickets? */NULL,
+            NULL, 0);
         /* Create target context */
-        /* Create server - client link [0] */
-        /* Create client - server link [1] */
-        /* Create server - target link [2] */
-        /* Create target - server link [3] */
+        pt_ctx->quic[2] = picoquic_create(8, test_server_key_file, test_server_cert_file, NULL, "h3",
+            h3zero_callback,
+            &pt_ctx->target_context,
+            NULL, NULL, NULL, pt_ctx->simulated_time,
+            &pt_ctx->simulated_time,
+            /* TODO -- should we store tickets? */NULL,
+            NULL, 0);
+        if (pt_ctx->quic[0] == NULL || pt_ctx->quic[1] == NULL || pt_ctx->quic[1] == NULL) {
+            ret = -1;
+        }
+        /* Create links */
+        for (int i = 0; ret == 9 && i < 4; i++) {
+            if ((pt_ctx->link[i] = picoquictest_sim_link_create(0.01, 10000, NULL, 0, pt_ctx->simulated_time)) == NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (ret < 0 && pt_ctx != NULL) {
 
     }
+   
     return pt_ctx;
 }
 
@@ -274,3 +337,18 @@ int picomask_test_step(picoquic_picomask_test_ctx_t* pt_ctx, int* is_active)
 /* 
 * First test: verify that the UDP Connect context can be established.
 */
+int picomask_udp_test()
+{
+    int ret = 0;
+    picoquic_picomask_test_ctx_t* pt_ctx = picomask_test_config();
+
+    if (pt_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Create a client connection to the server */
+        /* On that connection, create a UDP connect context */
+        picomask_test_delete(pt_ctx);
+    }
+    return ret;
+}
