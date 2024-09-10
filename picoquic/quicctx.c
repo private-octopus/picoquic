@@ -4925,6 +4925,12 @@ void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantu
     quic->bbr_quantum_ratio = quantum_ratio;
 }
 
+#ifdef BBRExperiment
+void picoquic_set_bbr_exp(picoquic_quic_t* quic, bbr_exp* exp)
+{
+    quic->bbr_exp_flags = *exp;
+}
+#endif
 void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit)
 {
     cnx->priority_limit_for_bypass = priority_limit;

@@ -25,6 +25,14 @@
 #include "cc_common.h"
 #include "picoquic_utils.h"
 
+#ifdef BBRExperiment
+#define BBRExpGate(ctx, test, action) { if (ctx->exp_flags.test) action; }
+#define BBRExpTest(ctx, test) ( (ctx)->exp_flags.test )
+#else
+#define BBRExpGate(ctx, test, action) {}
+#define BBRExpTest(ctx, test) (1)
+#endif
+
 #define RTTJitterBuffer On
 #define RTTJitterBufferStartup On
 #define RTTJitterBufferProbe On
@@ -251,6 +259,10 @@ typedef struct st_picoquic_bbr_state_t {
     /* Experimental extensions, may or maynot be a good idea. */
     uint64_t wifi_shadow_rtt; /* Shadow RTT used for wifi connections. */
     double quantum_ratio; /* allow application to use a different default than 0.1% of bandwidth (or 1ms of traffic) */
+#ifdef BBRExperiment
+    /* Control flags for BBR improvements */
+    bbr_exp exp_flags;
+#endif
 
 } picoquic_bbr_state_t;
 
@@ -669,7 +681,7 @@ static void BBROnExitRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
         bbr_state->recovery_packet_number = UINT64_MAX;
         bbr_state->packet_conservation = 0;
 
-        if (bbr_state->is_pto_recovery) {
+        if (bbr_state->is_pto_recovery && BBRExpTest(bbr_state, do_handle_suspension)) {
             /* TODO:
              * we should try to enter startup with a high enough BW. However, 
              * simple attempts to restore the BW parameters have proven ineffective.
@@ -1602,7 +1614,7 @@ static void BBRStartProbeBW_DOWN(picoquic_bbr_state_t* bbr_state, picoquic_path_
     bbr_state->cwnd_gain = BBRProbeBwDownCwndGain;   /* maintain cwnd */
     BBRResetCongestionSignals(bbr_state);
     bbr_state->bw_probe_up_cnt = UINT32_MAX; /* not growing inflight_hi */
-    if (bbr_state->probe_probe_bw_quickly) {
+    if (bbr_state->probe_probe_bw_quickly && BBRExpTest(bbr_state, do_rapid_start)) {
         BBRPickProbeWaitEarly(bbr_state);
     }
     else {
@@ -1847,7 +1859,7 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
         BBRCheckStartupFullBandwidth(bbr_state, rs);
         BBRCheckStartupHighLoss(bbr_state, path_x, rs);
 #ifdef RTTJitterBufferStartup
-        if (IsRTTTooHigh(bbr_state)) {
+        if (IsRTTTooHigh(bbr_state) && BBRExpTest(bbr_state, do_early_exit)) {
             bbr_state->filled_pipe = 1;
         }
 #endif
@@ -2232,6 +2244,7 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_lost_feedback:
             /* Feedback has been lost. It will be restored at the next notification. */
+            BBRExpGate(bbr_state, do_control_lost, break);
             BBREnterLostFeedback(bbr_state, path_x);
             break;
         case picoquic_congestion_notification_rtt_measurement:

@@ -735,6 +735,11 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_unified_logging_t* qlog_fns;
     picoquic_performance_log_fn perflog_fn;
     void* v_perflog_ctx;
+
+#ifdef BBRExperiment
+    bbr_exp bbr_exp_flags;
+#endif
+
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);
