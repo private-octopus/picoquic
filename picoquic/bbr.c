@@ -445,6 +445,11 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
     bbr_state->extra_acked_delivered = 0;
     /* Support for the wifi_shadow_rtt hack */
     bbr_state->wifi_shadow_rtt = path_x->cnx->quic->wifi_shadow_rtt;
+
+#ifdef BBRExperiment
+    /* Support for BBR Experiment */
+    bbr_state->exp_flags = path_x->cnx->quic->bbr_exp_flags;
+#endif
     /* Support for experimenting with the send_quantum ratio */
     bbr_state->quantum_ratio = path_x->cnx->quic->bbr_quantum_ratio;
     if (bbr_state->quantum_ratio == 0) {

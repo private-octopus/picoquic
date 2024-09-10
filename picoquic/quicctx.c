@@ -736,7 +736,17 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
                 }
             }
         }
-        
+#ifdef BBRExperiment
+        if (ret == 0) {
+            quic->bbr_exp_flags.do_early_exit = 1;
+            quic->bbr_exp_flags.do_rapid_start = 1;
+            quic->bbr_exp_flags.do_handle_suspension = 1;
+            quic->bbr_exp_flags.do_control_lost = 1;
+            quic->bbr_exp_flags.do_exit_probeBW_up_on_delay = 1;
+            quic->bbr_exp_flags.do_enter_probeBW_up_on_streams = 1;
+        }
+#endif
+
         if (ret != 0) {
             picoquic_free(quic);
             quic = NULL;
