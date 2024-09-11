@@ -1724,7 +1724,7 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
 
     case picoquic_bbr_alg_probe_bw_up:
         if (BBRHasElapsedInPhase(bbr_state, bbr_state->min_rtt, current_time) &&
-            (bbr_state->nb_rtt_excess > 0 ||
+            ((BBRExpTest(bbr_state, do_exit_probeBW_up_on_delay) && bbr_state->nb_rtt_excess > 0) ||
             path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw))) {
             BBRStartProbeBW_DOWN(bbr_state, path_x, current_time);
         }
