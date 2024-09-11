@@ -3126,7 +3126,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                 packet->checksum_overhead = checksum_overhead;
                 packet->pc = picoquic_packet_context_handshake;
                 is_pure_ack = 0;
-                *is_initial_sent++;
+                *is_initial_sent += 1;
             }
             if (length > 0) {
                 checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
