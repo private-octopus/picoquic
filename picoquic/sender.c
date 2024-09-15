@@ -3116,6 +3116,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                 /* Add a simple Handshake Ping to work around bugs in some implementations */
                 packet->ptype = picoquic_packet_handshake;
                 length = picoquic_predict_packet_header_length(cnx, packet->ptype, &cnx->pkt_ctx[picoquic_packet_context_handshake]);
+                header_length = length;
                 packet->offset = length;
                 packet->sequence_number = cnx->pkt_ctx[picoquic_packet_context_handshake].send_sequence;
                 packet->send_time = current_time;
