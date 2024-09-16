@@ -1656,7 +1656,7 @@ static int BBRCheckTimeToProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_
 {
     if (BBRHasElapsedInPhase(bbr_state, bbr_state->bw_probe_wait, current_time) ||
         BBRIsRenoCoexistenceProbeTime(bbr_state, path_x) ||
-        BBRCheckAppLimitedEnded(bbr_state, rs)) {
+        (BBRExpTest(bbr_state, do_enter_probeBW_after_limited) && BBRCheckAppLimitedEnded(bbr_state, rs))) {
         BBRStartProbeBW_REFILL(bbr_state, path_x);
         return 1;
     }

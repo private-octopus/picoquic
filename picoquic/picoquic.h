@@ -1541,7 +1541,7 @@ typedef struct st_bbr_exp {
     unsigned int do_handle_suspension : 1;
     unsigned int do_control_lost : 1;
     unsigned int do_exit_probeBW_up_on_delay : 1;
-    unsigned int do_enter_probeBW_up_on_streams : 1;
+    unsigned int do_enter_probeBW_after_limited : 1;
 } bbr_exp;
 
 void picoquic_set_bbr_exp(picoquic_quic_t * quic, bbr_exp* exp);

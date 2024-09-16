@@ -743,7 +743,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
             quic->bbr_exp_flags.do_handle_suspension = 1;
             quic->bbr_exp_flags.do_control_lost = 1;
             quic->bbr_exp_flags.do_exit_probeBW_up_on_delay = 1;
-            quic->bbr_exp_flags.do_enter_probeBW_up_on_streams = 1;
+            quic->bbr_exp_flags.do_enter_probeBW_after_limited = 1;
         }
 #endif
 
