@@ -2262,13 +2262,22 @@ const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_crypto_hs);
     } else {
         picoquic_stream_head_t* stream = &cnx->tls_stream[epoch];
-        int new_data_available;
-        int ret = picoquic_queue_network_input(cnx->quic, &stream->stream_data_tree, stream->consumed_offset,
-            offset, data_bytes, (size_t)data_length, picoquic_is_last_stream_frame(bytes+data_length, bytes_max),
-            received_data, &new_data_available);
-        if (ret != 0) {
-            picoquic_connection_error(cnx, (int64_t)ret, picoquic_frame_type_crypto_hs);
+
+        if (stream->consumed_offset < offset &&
+            stream->consumed_offset + PICOQUIC_MAX_CRYPTO_BUFFER_GAP < offset + data_length) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_CRYPTO_BUFFER_EXCEEDED, picoquic_frame_type_crypto_hs);
             bytes = NULL;
+        }
+        else {
+            int new_data_available;
+            int ret = picoquic_queue_network_input(cnx->quic, &stream->stream_data_tree, stream->consumed_offset,
+                offset, data_bytes, (size_t)data_length, picoquic_is_last_stream_frame(bytes + data_length, bytes_max),
+                received_data, &new_data_available);
+
+            if (ret != 0) {
+                picoquic_connection_error(cnx, (int64_t)ret, picoquic_frame_type_crypto_hs);
+                bytes = NULL;
+            }
         }
     }
 

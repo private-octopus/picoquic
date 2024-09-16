@@ -2002,7 +2002,8 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             *is_initial_sent = (packet->ptype == picoquic_packet_initial);
         }
         else if (ret == 0 && is_cleartext_mode && tls_ready == 0
-            && cnx->first_misc_frame == NULL && !cnx->ack_ctx[pc].act[0].ack_needed && !force_handshake_padding) {
+            && picoquic_find_first_misc_frame(cnx, pc) == NULL
+            && !cnx->ack_ctx[pc].act[0].ack_needed && !force_handshake_padding) {
             /* when in a clear text mode, only send packets if there is
             * actually something to send, or resend. */
 
@@ -2026,7 +2027,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 if ((tls_ready == 0 || path_x->cwin <= path_x->bytes_in_transit || cnx->quic->cwin_max <= path_x->bytes_in_transit)
                     && (cnx->cnx_state == picoquic_state_client_almost_ready
                         || picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc, 0) == 0)
-                    && cnx->first_misc_frame == NULL && !force_handshake_padding) {
+                    && picoquic_find_first_misc_frame(cnx, pc) == NULL && !force_handshake_padding) {
                     length = 0;
                 }
                 else {
@@ -3111,6 +3112,23 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
         if (length == 0) {
             length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
                 path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
+            if (length == 0 && (*is_initial_sent == 1) && cnx->cnx_state == picoquic_state_server_false_start) {
+                /* Add a simple Handshake Ping to work around bugs in some implementations */
+                packet->ptype = picoquic_packet_handshake;
+                length = picoquic_predict_packet_header_length(cnx, packet->ptype, &cnx->pkt_ctx[picoquic_packet_context_handshake]);
+                header_length = length;
+                packet->offset = length;
+                packet->sequence_number = cnx->pkt_ctx[picoquic_packet_context_handshake].send_sequence;
+                packet->send_time = current_time;
+                packet->send_path = path_x;
+                packet->bytes[length] = picoquic_frame_type_ping;
+                length++;
+                checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
+                packet->checksum_overhead = checksum_overhead;
+                packet->pc = picoquic_packet_context_handshake;
+                is_pure_ack = 0;
+                *is_initial_sent += 1;
+            }
             if (length > 0) {
                 checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
                 bytes_max = bytes + send_buffer_min_max - checksum_overhead;
@@ -3169,7 +3187,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                  * several RTT.
                  */
                 if (length <= header_length && cnx->client_mode &&
-                    cnx->first_misc_frame == NULL &&
+                    picoquic_find_first_misc_frame(cnx, pc) == NULL &&
                     (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet,
                         send_buffer_min_max, &header_length)) > 0) {
                     /* Check whether it makes sense to add an ACK at the end of the retransmission */
@@ -3341,7 +3359,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
         /* Ensure that all packets are properly padded before being sent. */
 
-        if (*is_initial_sent || (is_challenge_padding_needed && length < PICOQUIC_ENFORCED_INITIAL_MTU)){
+        if ((*is_initial_sent && (packet->ptype != picoquic_packet_initial || length + checksum_overhead + PICOQUIC_MIN_SEGMENT_SIZE > send_buffer_min_max || cnx->quic->dont_coalesce_init)) ||
+            (is_challenge_padding_needed && length < PICOQUIC_ENFORCED_INITIAL_MTU) ){
             length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
         }
         else {

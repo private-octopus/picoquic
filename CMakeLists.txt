@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.23.1
+        VERSION 1.1.24.1
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -426,6 +426,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
 
     add_executable(picoquic_sample
         sample/sample.c
+        sample/sample_background.c
         sample/sample_client.c
         sample/sample_server.c)
     target_link_libraries(picoquic_sample PRIVATE picoquic-log picoquic-core)

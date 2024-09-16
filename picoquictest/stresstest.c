@@ -127,7 +127,7 @@ static picosplay_node_t *stress_client_node_create(void * value)
 
 void * stress_client_node_value(picosplay_node_t * node)
 {
-    return (void*)((char*)node - offsetof(struct st_picoquic_stress_client_t, client_node));
+    return (node == NULL)?NULL:(void*)((char*)node - offsetof(struct st_picoquic_stress_client_t, client_node));
 }
 
 static void stress_client_node_delete(void * tree, picosplay_node_t * node)

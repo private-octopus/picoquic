@@ -1841,6 +1841,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(initial_pto_srv)
+        {
+            int ret = initial_pto_srv_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ready_to_send)
         {
             int ret = ready_to_send_test();
@@ -1865,6 +1872,13 @@ namespace UnitTest1
         TEST_METHOD(ready_to_zfin)
         {
             int ret= ready_to_zfin_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(crypto_hs_offset)
+        {
+            int ret = crypto_hs_offset_test();
 
             Assert::AreEqual(ret, 0);
         }
