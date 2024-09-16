@@ -264,6 +264,7 @@ int satellite_preemptive_fc_test();
 int satellite_small_test();
 int satellite_small_up_test();
 int satellite_cubic_test();
+int satellite_cubic_seeded_test();
 int satellite_cubic_loss_test();
 int bdp_basic_test();
 int bdp_reno_test();

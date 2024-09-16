@@ -345,6 +345,7 @@ static const picoquic_test_def_t test_table[] = {
     { "satellite_small", satellite_small_test },
     { "satellite_small_up", satellite_small_up_test },
     { "satellite_cubic", satellite_cubic_test },
+    { "satellite_cubic_seeded", satellite_cubic_seeded_test },
     { "satellite_cubic_loss", satellite_cubic_loss_test },
     { "bdp_basic", bdp_basic_test },
     { "bdp_delay", bdp_delay_test },
