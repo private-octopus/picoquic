@@ -1509,6 +1509,32 @@ uint64_t picoquic_find_avalaible_unique_path_id(picoquic_cnx_t* cnx, uint64_t re
     return unique_path_id;
 }
 
+/* Shortcuts to packet numbers, last ack, last ack time.
+ */
+uint64_t picoquic_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
+{
+    return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.send_sequence:
+        cnx->pkt_ctx[pc].send_sequence;
+}
+
+uint64_t picoquic_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
+{
+    return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.highest_acknowledged :
+        cnx->pkt_ctx[pc].highest_acknowledged;
+}
+
+uint64_t picoquic_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
+{
+    return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.latest_time_acknowledged :
+        cnx->pkt_ctx[pc].latest_time_acknowledged;
+}
+
+picoquic_packet_t* picoquic_get_last_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
+{
+    return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.pending_last :
+        cnx->pkt_ctx[pc].pending_last;
+}
+
 /* Path management -- returns the index of the path that was created. */
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct sockaddr* local_addr,
     const struct sockaddr* peer_addr, uint64_t requested_id)
@@ -1620,6 +1646,9 @@ static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path
     free(path_x);
 }
 
+#if 1
+#else
+
 void picoquic_enqueue_packet_with_path(picoquic_packet_t* p)
 {
     /* Add at last position of packet per path list
@@ -1682,6 +1711,7 @@ void picoquic_empty_path_packet_queue(picoquic_path_t* path_x)
         p = p_next;
     }
 }
+#endif
 
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 {
@@ -1711,9 +1741,11 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
         cnx->callback_ctx, path_x->app_path_ctx) != 0) {
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0, "Path deleted callback failed.");
     }
-
+#if 1
+#else
     /* Remove old path data from retransmit queue */
     picoquic_empty_path_packet_queue(path_x);
+#endif
     /* Remove old path data from retransmitted queue */
     /* TODO: what if using multiple number spaces? */
     for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++)
@@ -2359,7 +2391,11 @@ static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, pico
     quality->rtt_variant = path_x->rtt_variant;
     quality->pacing_rate = path_x->pacing.rate;
     quality->receive_rate_estimate = path_x->receive_rate_estimate;
+#if 1
+    quality->sent = picoquic_get_sequence_number(path_x->cnx, path_x, picoquic_packet_context_application);
+#else
     quality->sent = path_x->path_packet_number;
+#endif
     quality->lost = path_x->nb_losses_found;
     quality->timer_losses = path_x->nb_timer_losses;
     quality->spurious_losses = path_x->nb_spurious;

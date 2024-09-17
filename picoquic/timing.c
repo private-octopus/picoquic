@@ -329,7 +329,10 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
             }
 
             /* reset the period counters */
+#if 1
+#else
             old_path->path_packet_previous_period = old_path->path_packet_number;
+#endif
             old_path->nb_rtt_estimate_in_period = 0;
             old_path->sum_rtt_estimate_in_period = 0;
             old_path->max_rtt_estimate_in_period = 0;

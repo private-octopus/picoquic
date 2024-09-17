@@ -381,11 +381,17 @@ typedef struct st_picoquic_packet_t {
     struct st_picoquic_packet_t* packet_next;
     struct st_picoquic_packet_t* packet_previous;
     struct st_picoquic_path_t* send_path;
+#if 1
+#else
     struct st_picoquic_packet_t* path_packet_next;
     struct st_picoquic_packet_t* path_packet_previous;
+#endif
     picosplay_node_t queue_data_repeat_node;
     uint64_t sequence_number;
+#if 1
+#else
     uint64_t path_packet_number;
+#endif
     uint64_t send_time;
     uint64_t delivered_prior;
     uint64_t delivered_time_prior;
@@ -1076,11 +1082,14 @@ typedef struct st_picoquic_path_t {
     struct sockaddr_storage nat_local_addr;
     /* Last time a packet was sent on this path. */
     uint64_t last_sent_time;
+#if 1
+#else
     /* Number of packets sent on this path*/
     uint64_t path_packet_number;
     /* The packet list holds unkacknowledged packets sent on this path.*/
     picoquic_packet_t* path_packet_first;
     picoquic_packet_t* path_packet_last;
+#endif
     uint64_t status_sequence_to_receive_next;
     uint64_t status_sequence_sent_last;
     /* Last 1-RTT "non path validating" packet received on this path */
@@ -1130,9 +1139,12 @@ typedef struct st_picoquic_path_t {
     uint64_t nb_losses_found;
     uint64_t nb_timer_losses;
     uint64_t nb_spurious; /* Number of spurious retransmissions for the path */
+#if 0
+#else
     uint64_t path_packet_acked_number; /* path packet number of highest ack */
     uint64_t path_packet_acked_time_sent; /* path packet number of highest ack */
     uint64_t path_packet_acked_received; /* time at which the highest ack was received */
+#endif
                                          
     /* Loss bit data */
     uint64_t nb_losses_reported;
@@ -1571,9 +1583,12 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     uint64_t unique_path_id);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
+#if 1
+#else
 void picoquic_enqueue_packet_with_path(picoquic_packet_t* p);
 void picoquic_dequeue_packet_from_path(picoquic_packet_t* p);
 void picoquic_empty_path_packet_queue(picoquic_path_t* path_x);
+#endif
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason, char const * phrase);
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
@@ -1759,6 +1774,16 @@ int picoquic_parse_header_and_decrypt(
     picoquic_cnx_t** pcnx,
     size_t * consumed,
     int * new_context_created);
+
+/* Shortcuts to packet numbers, last ack, last ack time.
+ */
+uint64_t picoquic_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
+
+uint64_t picoquic_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
+
+uint64_t picoquic_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
+
+picoquic_packet_t * picoquic_get_last_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
 
 /* handling of ACK logic */
 void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx);

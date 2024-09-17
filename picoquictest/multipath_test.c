@@ -1805,9 +1805,11 @@ int multipath_tunnel_test()
     return multipath_test_one(max_completion_microsec, multipath_test_tunnel);
 }
 
-/* Test that queuing of packets in paths wroks correctly */
+/* Test that queuing of packets in paths works correctly */
 #define NB_QUEUE_TEST_PACKETS 5
 
+#if 1
+#else
 int path_packet_queue_verify(picoquic_path_t* path_x, picoquic_packet_t** pverif, int nb_verif)
 {
     int ret = 0;
@@ -1919,6 +1921,7 @@ int path_packet_queue_test()
     /* And that's it */
     return ret;
 }
+#endif
 
 /* 
  * TODO: Unit test of path selection.

@@ -1683,12 +1683,15 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+#if 1
+#else
         TEST_METHOD(path_packet_queue)
         {
             int ret = path_packet_queue_test();
 
             Assert::AreEqual(ret, 0);
         }
+#endif
 
         TEST_METHOD(perflog)
         {
