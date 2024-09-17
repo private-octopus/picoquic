@@ -580,14 +580,22 @@ static int picoquic_is_packet_probably_lost(picoquic_cnx_t* cnx,
         else if (delta_seq > 0) {
             /* Set a timer relative to that last packet */
             int64_t rack_delay = (old_p->send_path->smoothed_rtt >> 2);
-
+#if 1
+            delta_sent = pkt_ctx->latest_time_acknowledged - old_p->send_time;
+#else
             delta_sent = old_p->send_path->path_packet_acked_time_sent - old_p->send_time;
+#endif
             if (rack_delay > PICOQUIC_RACK_DELAY / 2) {
                 rack_delay = PICOQUIC_RACK_DELAY / 2;
             }
             retransmit_time = old_p->send_time + old_p->send_path->retransmit_timer;
+#if 1
+            rack_timer_min = pkt_ctx->highest_acknowledged_time + rack_delay
+                - delta_sent + cnx->remote_parameters.max_ack_delay;
+#else
             rack_timer_min = old_p->send_path->path_packet_acked_received + rack_delay
                 - delta_sent + cnx->remote_parameters.max_ack_delay;
+#endif
             if (retransmit_time > rack_timer_min) {
                 retransmit_time = rack_timer_min;
             }

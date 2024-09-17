@@ -11430,7 +11430,16 @@ int multi_segment_test()
 * Simulate a connection experiencing heavy packet
 * loss, such as 50% packet loss, for a duration of
 * 5 seconds. The test succeeds if the connection stays
-* up and the transfer completes. 
+* up and the transfer completes.
+* 
+* The "interactive" scenario repeats the same test, but
+* instead of just retrieving 4 files of 1MB each, it
+* tries to conduct 100 transactions, each with a 255 bytes
+* "query" and a 1KB "response".
+* 
+* The "total loass" test is similar to the first test, but
+* instead of simulating 5 seconds with 50% losses,
+* it simulates 5 seconds with 100% loss.
  */
 
 test_api_stream_desc_t* heavy_loss_inter_scenario(size_t* scenario_size)
@@ -11550,7 +11559,7 @@ int heavy_loss_test()
 
 int heavy_loss_inter_test()
 {
-    return heavy_loss_test_one(1, 21000000);
+    return heavy_loss_test_one(1, 22000000);
 }
 
 int heavy_loss_total_test()

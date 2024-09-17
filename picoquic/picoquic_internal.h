@@ -1139,7 +1139,7 @@ typedef struct st_picoquic_path_t {
     uint64_t nb_losses_found;
     uint64_t nb_timer_losses;
     uint64_t nb_spurious; /* Number of spurious retransmissions for the path */
-#if 0
+#if 1
 #else
     uint64_t path_packet_acked_number; /* path packet number of highest ack */
     uint64_t path_packet_acked_time_sent; /* path packet number of highest ack */
@@ -1163,8 +1163,14 @@ typedef struct st_picoquic_path_t {
     uint64_t max_reorder_gap;
     uint64_t latest_sent_time;
 
+#if 1
+    uint64_t rtt_packet_previous_period;
+    uint64_t rtt_time_previous_period;
+
+#else
     uint64_t path_packet_previous_period;
     uint64_t path_rtt_last_period_time;
+#endif
     uint64_t nb_rtt_estimate_in_period;
     uint64_t sum_rtt_estimate_in_period;
     uint64_t max_rtt_estimate_in_period;
