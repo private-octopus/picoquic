@@ -1742,7 +1742,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
             bytes_next = bytes + length;
             /* If present, send misc frame */
             bytes_next = picoquic_format_misc_frames_in_context(cnx, bytes_next, bytes_max,
-                &more_data, &is_pure_ack, picoquic_packet_context_application);
+                &more_data, &is_pure_ack, pc);
             if (packet->ptype != picoquic_packet_0rtt_protected) {
                 /* Check whether it makes sense to add an ACK at the end of the retransmission */
                 bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data,

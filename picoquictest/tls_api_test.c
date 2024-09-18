@@ -3069,12 +3069,6 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
 
     int ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
         proposed_version, client_params, server_params);
-#if 1
-    if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, ".");
-    }
-#endif
-
 
     if (ret == 0) {
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,

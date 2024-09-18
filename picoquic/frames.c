@@ -2902,7 +2902,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         uint64_t lost_before_ack = path_x->total_bytes_lost;
         uint64_t nb_bytes_newly_lost = 0;
 
-        picoquic_update_path_rtt(cnx, packet_data->path_ack[i].acked_path, path_x,
+        picoquic_update_path_rtt(cnx, packet_data->path_ack[i].acked_path, path_x, epoch,
             packet_data->path_ack[i].largest_sent_time, current_time, packet_data->last_ack_delay,
             packet_data->last_time_stamp_received);
 
@@ -4714,11 +4714,17 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                 /* TODO: update the RTT if using initial value */
                 path_x->challenge_verified = 1;
 
+#if 1
+                /* Provide a qualified time estimate from challenge time */
+                picoquic_update_path_rtt(cnx, path_x, path_x, -1, path_x->challenge_time_first, current_time, 0, 0);
+
+#else
                 if (path_x->smoothed_rtt == PICOQUIC_INITIAL_RTT
                     && path_x->rtt_variant == 0) {
                     /* We received a first packet from the peer! */
-                    picoquic_update_path_rtt(cnx, path_x, path_x, path_x->challenge_time_first, current_time, 0, 0);
+                    picoquic_update_path_rtt(cnx, path_x, path_x, -1, path_x->challenge_time_first, current_time, 0, 0);
                 }
+#endif
 
                 if (cnx->are_path_callbacks_enabled &&
                     cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_available,
@@ -5963,7 +5969,7 @@ const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                 picoquic_seed_ticket(cnx, path_x);
                 path_x->is_ticket_seeded = is_ticket_seed; 
             }
-            else {
+            else if (lifetime > current_time) {
                 uint8_t* client_ip;
                 uint8_t client_ip_length;
                 picoquic_get_ip_addr((struct sockaddr*) & path_x->peer_addr, &client_ip, &client_ip_length);

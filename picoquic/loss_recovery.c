@@ -208,11 +208,6 @@ static size_t picoquic_retransmit_needed_loop(picoquic_cnx_t* cnx, picoquic_pack
     int continue_next = 1;
     size_t length = 0;
     picoquic_packet_t* old_p = pkt_ctx->pending_first;
-#if 1
-    if (pkt_ctx->pending_first != pkt_ctx->pending_last) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
 
     /* Call the per packet routine in a loop */
     while (old_p != 0 && continue_next) {
