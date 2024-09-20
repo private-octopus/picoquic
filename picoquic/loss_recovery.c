@@ -382,7 +382,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
         int packet_is_pure_ack;
         if (old_path != NULL &&
 #if 1
-            ((old_p->sequence_number > pkt_ctx->highest_acknowledged &&
+            (((old_p->sequence_number > pkt_ctx->highest_acknowledged || pkt_ctx->highest_acknowledged == UINT64_MAX) &&
 #else
             ((old_p->path_packet_number > old_path->path_packet_acked_number &&
 #endif

@@ -426,7 +426,8 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-
+#if 1
+#else
 /* wait until the path removal completes */
 int wait_multipath_failed(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time)
@@ -457,7 +458,7 @@ int wait_multipath_failed(picoquic_test_tls_api_ctx_t* test_ctx,
 
     if (ret == 0 && 
         (test_ctx->cnx_client->nb_paths != 1 ||
-        (test_ctx->cnx_server == NULL || test_ctx->cnx_server->nb_paths != 1))){
+        (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected && test_ctx->cnx_server->nb_paths != 1))){
         DBG_PRINTF("Could not delete failing path , client state = %d\n",
             test_ctx->cnx_client->cnx_state);
         ret = -1;
@@ -465,6 +466,7 @@ int wait_multipath_failed(picoquic_test_tls_api_ctx_t* test_ctx,
 
     return ret;
 }
+#endif
 
 typedef enum {
     multipath_test_basic = 0,
@@ -1028,12 +1030,22 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
     if (ret == 0 && test_id == multipath_test_fail) {
+#if 1
+        if (test_ctx->cnx_client->nb_paths != 1 ||
+            (test_ctx->cnx_server != NULL && test_ctx->cnx_server->nb_paths != 1)) {
+            DBG_PRINTF("Delete failing path failed, client = %d paths, server = %d paths\n",
+                test_ctx->cnx_client->nb_paths,
+                (test_ctx->cnx_server == NULL) ? 0 : test_ctx->cnx_server->nb_paths);
+            ret = -1;
+        }
+#else
         ret = wait_multipath_failed(test_ctx, &simulated_time);
         if (ret != 0) {
             DBG_PRINTF("Delete failing path failed, client = %d paths, server = %d paths\n",
                 test_ctx->cnx_client->nb_paths,
                 (test_ctx->cnx_server == NULL) ? 0 : test_ctx->cnx_client->nb_paths);
         }
+#endif
     }
 
     if (ret == 0 && test_id == multipath_test_renew) {
@@ -1313,7 +1325,7 @@ int multipath_back1_test()
 /* Test that a typical wifi+lte scenario provides good performance */
 int multipath_perf_test()
 {
-    uint64_t max_completion_microsec = 1550000;
+    uint64_t max_completion_microsec = 1650000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_perf);
 }

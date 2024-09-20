@@ -91,21 +91,23 @@ uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_path_t 
 static void picoquic_validate_bdp_seed(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t rtt_sample, uint64_t current_time)
 {
     if (path_x == cnx->path[0] && cnx->seed_cwin != 0 &&
-        !cnx->cwin_notified_from_seed &&
-        cnx->seed_rtt_min <= rtt_sample &&
-        (rtt_sample - cnx->seed_rtt_min) < cnx->seed_rtt_min / 4) {
-        uint8_t* ip_addr;
-        uint8_t ip_addr_length;
-        picoquic_get_ip_addr((struct sockaddr*)&path_x->peer_addr, &ip_addr, &ip_addr_length);
+        !cnx->cwin_notified_from_seed){
+        uint64_t rtt_margin = rtt_sample / 4;
+        if (cnx->seed_rtt_min >= rtt_sample - rtt_margin &&
+            cnx->seed_rtt_min <= rtt_sample + rtt_margin) {
+            uint8_t* ip_addr;
+            uint8_t ip_addr_length;
+            picoquic_get_ip_addr((struct sockaddr*)&path_x->peer_addr, &ip_addr, &ip_addr_length);
 
-        if (ip_addr_length == cnx->seed_ip_addr_length &&
-            memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
-            picoquic_per_ack_state_t ack_state = { 0 };
-            ack_state.nb_bytes_acknowledged = (uint64_t)cnx->seed_cwin;
-            cnx->cwin_notified_from_seed = 1;
-            cnx->congestion_alg->alg_notify(cnx, path_x,
-                picoquic_congestion_notification_seed_cwin,
-                &ack_state, current_time);
+            if (ip_addr_length == cnx->seed_ip_addr_length &&
+                memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
+                picoquic_per_ack_state_t ack_state = { 0 };
+                ack_state.nb_bytes_acknowledged = (uint64_t)cnx->seed_cwin;
+                cnx->cwin_notified_from_seed = 1;
+                cnx->congestion_alg->alg_notify(cnx, path_x,
+                    picoquic_congestion_notification_seed_cwin,
+                    &ack_state, current_time);
+            }
         }
     }
 }

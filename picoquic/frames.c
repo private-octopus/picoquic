@@ -5243,7 +5243,8 @@ uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes
         cnx->path[0]->bandwidth_estimate, &ack_gap, &ack_delay_max);
     
     if (ack_gap <= cnx->ack_gap_local &&
-        ack_delay_max == cnx->ack_frequency_delay_local) {
+        ack_delay_max >= (7*cnx->ack_frequency_delay_local)/8 &&
+        ack_delay_max <= (9* cnx->ack_frequency_delay_local) / 8) {
         cnx->is_ack_frequency_updated = 0;
     }
     else {

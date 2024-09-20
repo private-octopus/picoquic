@@ -2170,7 +2170,11 @@ uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path
         next_challenge_time = current_time;
     } else {
         if (path_x->challenge_repeat_count >= 2) {
+#if 1
+            next_challenge_time += path_x->retransmit_timer << (path_x->challenge_repeat_count-1);
+#else
             next_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
+#endif
         }
         else {
             next_challenge_time += PICOQUIC_INITIAL_RETRANSMIT_TIMER;
@@ -2839,6 +2843,14 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
                     bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, more_data,
                         current_time, pc, 1);
                 }
+#if 1
+                /* Reset the next challenge time to match the new challenge count */
+                next_challenge_time = picoquic_next_challenge_time(cnx, path_x, current_time, &is_nat);
+                if (next_challenge_time < *next_wake_time) {
+                    *next_wake_time = next_challenge_time;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                }
+#endif
             }
             else {
                 if (path_x == cnx->path[0]) {
@@ -4200,7 +4212,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     for (i += 1; i < cnx->nb_paths; i++) {
         cnx->path[i]->is_nominal_ack_path = 0;
     }
-    if (i_min_rtt >= 0) {
+     if (i_min_rtt >= 0) {
         is_ack_needed = picoquic_is_ack_needed(cnx, current_time, next_wake_time, 0, 0);
         cnx->path[i_min_rtt]->is_nominal_ack_path = 1;
     }
