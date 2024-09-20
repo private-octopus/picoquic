@@ -2489,26 +2489,11 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
             /* Update congestion control and statistics */
             if (old_path != NULL) {
                 old_path->nb_spurious++;
-
-#if 1
                 /* If this was the
-                 * packet that trigger a retransmit, reset the retransmit count */
+                 * packet that triggered a retransmit, reset the retransmit count */
                 if (p->sequence_number >= picoquic_get_ack_number(cnx, old_path, pc)) {
                     old_path->nb_retransmit = 0;
                 }
-#else
-                if (p->path_packet_number > old_path->path_packet_acked_number) {
-                    old_path->path_packet_acked_number = p->path_packet_number;
-                    old_path->path_packet_acked_time_sent = p->send_time;
-                    old_path->path_packet_acked_received = current_time;
-                    if (old_path->nb_retransmit > 0 &&
-                        (!cnx->is_multipath_enabled ||
-                            (old_path->path_packet_last == NULL ||
-                                p->path_packet_number >= old_path->path_packet_last->path_packet_number))) {
-                        old_path->nb_retransmit = 0;
-                    }
-                }
-#endif
 
                 /* Record the updated delay and CC data in packet context
                  * TODO: verify that accounting for acked data at this point is correct.
@@ -3579,23 +3564,9 @@ static int picoquic_process_ack_range(
                     old_path->is_ack_lost = 0;
                     old_path->is_ack_expected = 0;
                     /* Track timer for the packet */
-#if 1
                     if (p->sequence_number >= picoquic_get_ack_number(cnx, old_path, pc)) {
                         old_path->nb_retransmit = 0;
                     }
-#else
-                    if (p->path_packet_number > old_path->path_packet_acked_number) {
-                        old_path->path_packet_acked_number = p->path_packet_number;
-                        old_path->path_packet_acked_time_sent = p->send_time;
-                        old_path->path_packet_acked_received = current_time;
-                        if (old_path->nb_retransmit > 0 &&
-                            (!cnx->is_multipath_enabled ||
-                            (old_path->path_packet_last == NULL ||
-                                p->path_packet_number >= old_path->path_packet_last->path_packet_number))) {
-                            old_path->nb_retransmit = 0;
-                        }
-                    }
-#endif
 
                     picoquic_record_ack_packet_data(packet_data, p);
                     /* If packet is larger than the current MTU, update the MTU */
@@ -3686,11 +3657,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
             picoquic_packet_t* p_retransmitted_previous = pkt_ctx->retransmitted_newest;
 
             if (top_packet != NULL && is_new_ack) {
-#if 1
                 largest_in_path = top_packet->sequence_number;
-#else
-                largest_in_path = top_packet->path_packet_number;
-#endif
                 ack_path = top_packet->send_path;
 
                 if (pkt_ctx->latest_time_acknowledged < top_packet->send_time) {
@@ -4714,17 +4681,8 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                 /* TODO: update the RTT if using initial value */
                 path_x->challenge_verified = 1;
 
-#if 1
                 /* Provide a qualified time estimate from challenge time */
                 picoquic_update_path_rtt(cnx, path_x, path_x, -1, path_x->challenge_time_first, current_time, 0, 0);
-
-#else
-                if (path_x->smoothed_rtt == PICOQUIC_INITIAL_RTT
-                    && path_x->rtt_variant == 0) {
-                    /* We received a first packet from the peer! */
-                    picoquic_update_path_rtt(cnx, path_x, path_x, -1, path_x->challenge_time_first, current_time, 0, 0);
-                }
-#endif
 
                 if (cnx->are_path_callbacks_enabled &&
                     cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_available,

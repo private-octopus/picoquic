@@ -26,7 +26,6 @@
 
 uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-#if 1
     uint64_t sequence_number;
 
     if (cnx->is_multipath_enabled) {
@@ -36,16 +35,10 @@ uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* p
        sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
     }
     return sequence_number;
-#else
-    uint64_t ret = path_x->path_packet_number;
-
-    return ret;
-#endif
 }
 
 uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-#if 1
     uint64_t highest_acknowledged;
 
     if (cnx->is_multipath_enabled) {
@@ -55,16 +48,10 @@ uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x
         highest_acknowledged = cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged;
     }
     return highest_acknowledged;
-#else
-    uint64_t ret = path_x->path_packet_acked_number;
-
-    return ret;
-#endif
 }
 
 uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-#if 1
     uint64_t latest_time_acknowledged;
 
     if (cnx->is_multipath_enabled) {
@@ -74,10 +61,6 @@ uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* pat
         latest_time_acknowledged = cnx->pkt_ctx[picoquic_packet_context_application].latest_time_acknowledged;
     }
     return latest_time_acknowledged;
-#else
-    uint64_t ret = path_x->path_packet_acked_time_sent;
-    return ret;
-#endif
 }
 
 

@@ -943,12 +943,6 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
     pkt_ctx->pending_last = packet;
     packet->is_queued_for_retransmit = 1;
 
-#if 1
-#else
-    /* Add at last position of packet per path list
-     */
-    picoquic_enqueue_packet_with_path(packet);
-#endif
     if (!packet->is_ack_trap) {
         /* Account for bytes in transit, for congestion control */
         path_x->bytes_in_transit += length;
@@ -993,12 +987,6 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
         }
         p->send_path->is_cc_data_updated = 1;
     }
-
-#if 1
-#else
-    /* Remove from per path list */
-    picoquic_dequeue_packet_from_path(p);
-#endif
 
     /* Replace head of preemptive repeat list if it was this packet. */
     if (pkt_ctx->preemptive_repeat_ptr == p) {
@@ -1088,10 +1076,6 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, picoqu
                 packet->ptype = picoquic_packet_1rtt_protected;
                 packet->send_time = current_time;
                 packet->send_path = NULL;
-#if 1
-#else
-                packet->path_packet_number = 0;
-#endif
                 packet->sequence_number = pkt_ctx->send_sequence++;
                 picoquic_queue_for_retransmit(cnx, path_x, packet, 0, current_time);
                 *next_wake_time = current_time;
@@ -1128,10 +1112,6 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
         } else {
             packet->sequence_number = cnx->pkt_ctx[packet->pc].send_sequence++;
         }
-#if 1
-#else
-        packet->path_packet_number = path_x->path_packet_number++;
-#endif
         path_x->latest_sent_time = current_time;
         path_x->path_cid_rotated = 0;
         packet->delivered_prior = path_x->delivered_last;
@@ -2170,11 +2150,7 @@ uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path
         next_challenge_time = current_time;
     } else {
         if (path_x->challenge_repeat_count >= 2) {
-#if 1
             next_challenge_time += path_x->retransmit_timer << (path_x->challenge_repeat_count-1);
-#else
-            next_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
-#endif
         }
         else {
             next_challenge_time += PICOQUIC_INITIAL_RETRANSMIT_TIMER;
@@ -2843,14 +2819,12 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
                     bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, more_data,
                         current_time, pc, 1);
                 }
-#if 1
                 /* Reset the next challenge time to match the new challenge count */
                 next_challenge_time = picoquic_next_challenge_time(cnx, path_x, current_time, &is_nat);
                 if (next_challenge_time < *next_wake_time) {
                     *next_wake_time = next_challenge_time;
                     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                 }
-#endif
             }
             else {
                 if (path_x == cnx->path[0]) {

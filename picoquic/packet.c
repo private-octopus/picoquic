@@ -2417,16 +2417,7 @@ int  picoquic_incoming_not_decrypted(
             * Setting epoch parameter = -1 guarantees the hint is only used if the RTT is not
             * yet known.
             */
-#if 1
             picoquic_update_path_rtt(cnx, cnx->path[0], cnx->path[0], -1, cnx->start_time, current_time, 0, 0);
-#else
-            if (cnx->path[0]->smoothed_rtt == PICOQUIC_INITIAL_RTT
-                && cnx->path[0]->rtt_variant == 0 &&
-                current_time - cnx->start_time < cnx->path[0]->smoothed_rtt) {
-                /* We received a first packet from the peer! */
-                picoquic_update_path_rtt(cnx, cnx->path[0], cnx->path[0], -1, cnx->start_time, current_time, 0, 0);
-            }
-#endif
 
             if (length <= PICOQUIC_MAX_PACKET_SIZE &&
                 ((ph->ptype == picoquic_packet_handshake && cnx->client_mode) || ph->ptype == picoquic_packet_1rtt_protected)) {

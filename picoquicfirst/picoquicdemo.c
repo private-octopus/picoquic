@@ -1176,13 +1176,8 @@ int quic_client(const char* ip_address_text, int server_port,
                 printf("max_mtu_received: %zu\n", cnx_client->max_mtu_received);
                 if (config->multipath_option != 0) {
                     for (int i = 0; i < cnx_client->nb_paths; i++) {
-#if 1
                         printf("Path[%d], packets sent: %" PRIu64 "\n", i,
                             cnx_client->path[i]->pkt_ctx.send_sequence);
-#else
-                        printf("Path[%d], packets sent: %" PRIu64 "\n", i,
-                            cnx_client->path[i]->path_packet_number);
-#endif
                     }
                 }
                 /* Print details on system call durations */

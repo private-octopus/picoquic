@@ -426,48 +426,6 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-#if 1
-#else
-/* wait until the path removal completes */
-int wait_multipath_failed(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t* simulated_time)
-{
-    int ret = 0;
-    uint64_t time_out = *simulated_time + 4000000;
-    int nb_trials = 0;
-    int nb_inactive = 0;
-    int was_active = 0;
-
-    while (*simulated_time < time_out &&
-        ret == 0 &&
-        (test_ctx->cnx_client->nb_paths > 1 ||
-            test_ctx->cnx_server->nb_paths > 1) &&
-        nb_trials < 5000 &&
-        nb_inactive < 64) {
-        nb_trials++;
-
-        ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
-
-        if (was_active) {
-            nb_inactive = 0;
-        }
-        else {
-            nb_inactive++;
-        }
-    }
-
-    if (ret == 0 && 
-        (test_ctx->cnx_client->nb_paths != 1 ||
-        (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected && test_ctx->cnx_server->nb_paths != 1))){
-        DBG_PRINTF("Could not delete failing path , client state = %d\n",
-            test_ctx->cnx_client->cnx_state);
-        ret = -1;
-    }
-
-    return ret;
-}
-#endif
-
 typedef enum {
     multipath_test_basic = 0,
     multipath_test_drop_first,
@@ -1030,7 +988,6 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
     if (ret == 0 && test_id == multipath_test_fail) {
-#if 1
         if (test_ctx->cnx_client->nb_paths != 1 ||
             (test_ctx->cnx_server != NULL && test_ctx->cnx_server->nb_paths != 1)) {
             DBG_PRINTF("Delete failing path failed, client = %d paths, server = %d paths\n",
@@ -1038,14 +995,6 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 (test_ctx->cnx_server == NULL) ? 0 : test_ctx->cnx_server->nb_paths);
             ret = -1;
         }
-#else
-        ret = wait_multipath_failed(test_ctx, &simulated_time);
-        if (ret != 0) {
-            DBG_PRINTF("Delete failing path failed, client = %d paths, server = %d paths\n",
-                test_ctx->cnx_client->nb_paths,
-                (test_ctx->cnx_server == NULL) ? 0 : test_ctx->cnx_client->nb_paths);
-        }
-#endif
     }
 
     if (ret == 0 && test_id == multipath_test_renew) {
@@ -1816,124 +1765,6 @@ int multipath_tunnel_test()
 
     return multipath_test_one(max_completion_microsec, multipath_test_tunnel);
 }
-
-/* Test that queuing of packets in paths works correctly */
-#define NB_QUEUE_TEST_PACKETS 5
-
-#if 1
-#else
-int path_packet_queue_verify(picoquic_path_t* path_x, picoquic_packet_t** pverif, int nb_verif)
-{
-    int ret = 0;
-    int nb_found = 0;
-    picoquic_packet_t* p = path_x->path_packet_first;
-    picoquic_packet_t* p_previous = NULL;
-
-    while (ret == 0 && p != NULL && nb_found < nb_verif) {
-        if (p != pverif[nb_found]) {
-            ret = -1;
-        } else if (p->path_packet_previous != p_previous){
-            ret = -1;
-        }
-        else {
-            nb_found++;
-            p_previous = p;
-            p = p->path_packet_next;
-        }
-    }
-
-    if (p != NULL) {
-        ret = -1;
-    }
-    else if (nb_found != nb_verif) {
-        ret = -1;
-    }
-    else if (path_x->path_packet_last != p_previous) {
-        ret = -1;
-    }
-    return ret;
-}
-
-int path_packet_queue_test()
-{
-    int ret = 0;
-    uint64_t simulated_time = 0;
-    struct sockaddr_in saddr = { 0 };
-    picoquic_quic_t* qclient = NULL;
-    picoquic_packet_t* plist[NB_QUEUE_TEST_PACKETS];
-    picoquic_packet_t* pverif[NB_QUEUE_TEST_PACKETS];
-    picoquic_cnx_t* cnx = NULL;
-    int remain_in_list = 0;
-
-
-    for (int i = 0; i < NB_QUEUE_TEST_PACKETS; i++) {
-        plist[i] = (picoquic_packet_t*)malloc(sizeof(picoquic_packet_t));
-        if (plist[i] == NULL) {
-            ret = -1;
-        }
-    }
-    if (ret == 0) {
-        for (int i = 0; i < NB_QUEUE_TEST_PACKETS; i++) {
-            memset(plist[i], 0, sizeof(picoquic_packet_t));
-            plist[i]->path_packet_number = i;
-        }
-        qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
-            NULL, NULL, NULL, NULL, simulated_time,
-            &simulated_time, NULL, NULL, 0);
-        if (qclient == NULL) {
-            ret = -1;
-        }
-        else
-        {
-            cnx = picoquic_create_cnx(qclient,
-                picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr*)&saddr,
-                simulated_time, 0, "test-sni", "test-alpn", 1);
-            if (cnx == NULL) {
-                ret = -1;
-            }
-        }
-    }
-    /* First test, add in order */
-    for (int i = 0; ret == 0 && i < NB_QUEUE_TEST_PACKETS; i++) {
-        memset(plist[i], 0, sizeof(picoquic_packet_t));
-        plist[i]->path_packet_number = i;
-        plist[i]->send_path = cnx->path[0];
-        picoquic_enqueue_packet_with_path(plist[i]);
-        pverif[i] = plist[i];
-        ret = path_packet_queue_verify(cnx->path[0], pverif, i + 1);
-    }
-    /* Remove half the packets */
-    remain_in_list = NB_QUEUE_TEST_PACKETS;
-    for (int i = NB_QUEUE_TEST_PACKETS - 1; ret == 0 && i >= 0; i -= 2) {
-        picoquic_dequeue_packet_from_path(plist[i]);
-        for (int j = i + 1; j < NB_QUEUE_TEST_PACKETS; j++) {
-            pverif[j - 1] = pverif[j];
-        }
-        remain_in_list--;
-        pverif[remain_in_list] = NULL;
-        ret = path_packet_queue_verify(cnx->path[0], pverif, remain_in_list);
-    }
-
-    /* Empty the packet list completely */
-    if (ret == 0) {
-        picoquic_empty_path_packet_queue(cnx->path[0]);
-        ret = path_packet_queue_verify(cnx->path[0], pverif, 0);
-    }
-
-    /* delete everything */
-    if (qclient != NULL) {
-        picoquic_free(qclient);
-    }
-    for (int i = 0; i < NB_QUEUE_TEST_PACKETS; i++) {
-        if (plist[i] != NULL) {
-            free(plist[i]);
-            plist[i] = NULL;
-        }
-    }
-    /* And that's it */
-    return ret;
-}
-#endif
 
 /* 
  * TODO: Unit test of path selection.
