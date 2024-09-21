@@ -2241,10 +2241,13 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
             cnx->remote_parameters.initial_max_stream_data_uni = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_stream_data_uni];
             cnx->remote_parameters.initial_max_stream_id_bidir = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir];
             cnx->remote_parameters.initial_max_stream_id_unidir = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir];
-            /* Seed connection with remembered data */
-            picoquic_seed_bandwidth(cnx, stored_ticket->tp_0rtt[picoquic_tp_0rtt_rtt_local],
-                stored_ticket->tp_0rtt[picoquic_tp_0rtt_cwin_local],
-                stored_ticket->ip_addr, stored_ticket->ip_addr_length);
+
+            if (stored_ticket->time_valid_until > current_time) {
+                /* Seed connection with remembered data */
+                picoquic_seed_bandwidth(cnx, stored_ticket->tp_0rtt[picoquic_tp_0rtt_rtt_local],
+                    stored_ticket->tp_0rtt[picoquic_tp_0rtt_cwin_local],
+                    stored_ticket->ip_addr, stored_ticket->ip_addr_length);
+            }
         }
     }
 

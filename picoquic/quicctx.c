@@ -1509,6 +1509,32 @@ uint64_t picoquic_find_avalaible_unique_path_id(picoquic_cnx_t* cnx, uint64_t re
     return unique_path_id;
 }
 
+/* Shortcuts to packet numbers, last ack, last ack time.
+ */
+uint64_t picoquic_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
+{
+    return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.send_sequence:
+        cnx->pkt_ctx[pc].send_sequence;
+}
+
+uint64_t picoquic_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
+{
+    return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.highest_acknowledged :
+        cnx->pkt_ctx[pc].highest_acknowledged;
+}
+
+uint64_t picoquic_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
+{
+    return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.latest_time_acknowledged :
+        cnx->pkt_ctx[pc].latest_time_acknowledged;
+}
+
+picoquic_packet_t* picoquic_get_last_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
+{
+    return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.pending_last :
+        cnx->pkt_ctx[pc].pending_last;
+}
+
 /* Path management -- returns the index of the path that was created. */
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct sockaddr* local_addr,
     const struct sockaddr* peer_addr, uint64_t requested_id)
@@ -1620,69 +1646,6 @@ static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path
     free(path_x);
 }
 
-void picoquic_enqueue_packet_with_path(picoquic_packet_t* p)
-{
-    /* Add at last position of packet per path list
-     */
-    if (p->send_path != NULL) {
-        p->path_packet_previous = p->send_path->path_packet_last;
-        p->path_packet_next = NULL;
-        if (p->send_path->path_packet_last == NULL) {
-            p->send_path->path_packet_first = p;
-        }
-        else {
-            p->send_path->path_packet_last->path_packet_next = p;
-        }
-        p->send_path->path_packet_last = p;
-        p->is_queued_to_path = 1;
-    }
-}
-
-void picoquic_dequeue_packet_from_path(picoquic_packet_t* p)
-{
-    if (p->send_path != NULL && p->is_queued_to_path) {
-        if (p->path_packet_previous == NULL && p->path_packet_next == NULL) {
-            /* verify that the packet was not already dequeued before making any correction. */
-            if (p->send_path->path_packet_first == p) {
-                p->send_path->path_packet_first = NULL;
-            }
-            if (p->send_path->path_packet_last == p) {
-                p->send_path->path_packet_last = NULL;
-            }
-        }
-        else {
-            if (p->path_packet_previous == NULL) {
-                p->send_path->path_packet_first = p->path_packet_next;
-            }
-            else {
-                p->path_packet_previous->path_packet_next = p->path_packet_next;
-            }
-
-            if (p->path_packet_next == NULL) {
-                p->send_path->path_packet_last = p->path_packet_previous;
-            }
-            else {
-                p->path_packet_next->path_packet_previous = p->path_packet_previous;
-            }
-            p->path_packet_previous = NULL;
-            p->path_packet_next = NULL;
-        }
-        p->is_queued_to_path = 0;
-    }
-}
-
-void picoquic_empty_path_packet_queue(picoquic_path_t* path_x)
-{
-    picoquic_packet_t* p = path_x->path_packet_first;
-
-    while (p != NULL) {
-        picoquic_packet_t* p_next = p->path_packet_next;
-        picoquic_dequeue_packet_from_path(p);
-        p->send_path = NULL;
-        p = p_next;
-    }
-}
-
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 {
     picoquic_path_t * path_x = cnx->path[path_index];
@@ -1711,9 +1674,6 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
         cnx->callback_ctx, path_x->app_path_ctx) != 0) {
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0, "Path deleted callback failed.");
     }
-
-    /* Remove old path data from retransmit queue */
-    picoquic_empty_path_packet_queue(path_x);
     /* Remove old path data from retransmitted queue */
     /* TODO: what if using multiple number spaces? */
     for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++)
@@ -2359,7 +2319,7 @@ static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, pico
     quality->rtt_variant = path_x->rtt_variant;
     quality->pacing_rate = path_x->pacing.rate;
     quality->receive_rate_estimate = path_x->receive_rate_estimate;
-    quality->sent = path_x->path_packet_number;
+    quality->sent = picoquic_get_sequence_number(path_x->cnx, path_x, picoquic_packet_context_application);
     quality->lost = path_x->nb_losses_found;
     quality->timer_losses = path_x->nb_timer_losses;
     quality->spurious_losses = path_x->nb_spurious;
@@ -3534,13 +3494,6 @@ void picoquic_delete_local_cnxid_listed(picoquic_cnx_t* cnx,
         if (cnx->path[i]->p_local_cnxid == l_cid) {
             cnx->path[i]->p_local_cnxid = NULL;
             cnx->path[i]->was_local_cnxid_retired = 1;
-#if 1
-#else
-            if (cnx->cnx_state == picoquic_state_ready &&
-                cnx->is_simple_multipath_enabled) {
-                picoquic_set_path_challenge(cnx, i, picoquic_get_quic_time(cnx->quic));
-            }
-#endif
         }
     }
 

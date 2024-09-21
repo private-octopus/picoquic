@@ -1683,13 +1683,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(path_packet_queue)
-        {
-            int ret = path_packet_queue_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(perflog)
         {
             int ret = perflog_test();
@@ -1837,6 +1830,13 @@ namespace UnitTest1
         TEST_METHOD(initial_pto)
         {
             int ret = initial_pto_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(initial_pto_srv)
+        {
+            int ret = initial_pto_srv_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -197,6 +197,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     test_api_callback_t server_callback;
     size_t nb_test_streams;
     test_api_stream_t test_stream[PICOQUIC_TEST_MAX_TEST_STREAMS];
+    uint64_t loss_mask_default;
     picoquictest_sim_link_t* c_to_s_link;
     picoquictest_sim_link_t* c_to_s_link_2; /* for use in multipath tests */
     picoquictest_sim_link_t* s_to_c_link;
