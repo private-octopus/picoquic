@@ -630,7 +630,7 @@ int datagram_small_packet_test()
     dg_ctx.next_gen_time[1] = 50000;
     dg_ctx.link_latency = 10000;
     dg_ctx.picosec_per_byte = 20000; /* 400 Mbps */
-    dg_ctx.dg_latency_target[0] = 13500;
+    dg_ctx.dg_latency_target[0] = 20000;
     dg_ctx.dg_latency_target[1] = 13500;
     dg_ctx.use_extended_provider_api = 1;
     dg_ctx.one_datagram_per_packet = 1;

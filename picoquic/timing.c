@@ -91,21 +91,23 @@ uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_path_t 
 static void picoquic_validate_bdp_seed(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t rtt_sample, uint64_t current_time)
 {
     if (path_x == cnx->path[0] && cnx->seed_cwin != 0 &&
-        !cnx->cwin_notified_from_seed &&
-        cnx->seed_rtt_min <= rtt_sample &&
-        (rtt_sample - cnx->seed_rtt_min) < cnx->seed_rtt_min / 4) {
-        uint8_t* ip_addr;
-        uint8_t ip_addr_length;
-        picoquic_get_ip_addr((struct sockaddr*)&path_x->peer_addr, &ip_addr, &ip_addr_length);
+        !cnx->cwin_notified_from_seed){
+        uint64_t rtt_margin = rtt_sample / 4;
+        if (cnx->seed_rtt_min >= rtt_sample - rtt_margin &&
+            cnx->seed_rtt_min <= rtt_sample + rtt_margin) {
+            uint8_t* ip_addr;
+            uint8_t ip_addr_length;
+            picoquic_get_ip_addr((struct sockaddr*)&path_x->peer_addr, &ip_addr, &ip_addr_length);
 
-        if (ip_addr_length == cnx->seed_ip_addr_length &&
-            memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
-            picoquic_per_ack_state_t ack_state = { 0 };
-            ack_state.nb_bytes_acknowledged = (uint64_t)cnx->seed_cwin;
-            cnx->cwin_notified_from_seed = 1;
-            cnx->congestion_alg->alg_notify(cnx, path_x,
-                picoquic_congestion_notification_seed_cwin,
-                &ack_state, current_time);
+            if (ip_addr_length == cnx->seed_ip_addr_length &&
+                memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
+                picoquic_per_ack_state_t ack_state = { 0 };
+                ack_state.nb_bytes_acknowledged = (uint64_t)cnx->seed_cwin;
+                cnx->cwin_notified_from_seed = 1;
+                cnx->congestion_alg->alg_notify(cnx, path_x,
+                    picoquic_congestion_notification_seed_cwin,
+                    &ack_state, current_time);
+            }
         }
     }
 }
@@ -174,13 +176,19 @@ void picoquic_update_path_rtt_one_way(picoquic_cnx_t* cnx, picoquic_path_t* old_
 * pace computation of averages and variants, so that average delays and variations are
 * computed just a few times per round trip.
 */
-void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, picoquic_path_t* path_x,
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, picoquic_path_t* path_x, int epoch,
     uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp)
 {
-    if (old_path != NULL) {
+    if (old_path != NULL && (!old_path->rtt_is_initialized || epoch >= 0)) {
         uint64_t rtt_estimate = 0;
-        int is_first = (old_path->path_packet_previous_period == 0) ||
-            (old_path == cnx->path[0] && old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT);
+        int is_first = !old_path->rtt_is_initialized;
+        picoquic_packet_context_t* pkt_ctx = NULL;
+        if (cnx->is_multipath_enabled) {
+            pkt_ctx = &old_path->pkt_ctx;
+        }
+        else if (epoch == picoquic_epoch_1rtt || epoch == picoquic_epoch_0rtt) {
+            pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+        }
 
         if (current_time > send_time) {
             rtt_estimate = current_time - send_time;
@@ -196,53 +204,6 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
             }
         }
         old_path->rtt_sample = rtt_estimate;
-#ifdef PICOQUIC_TESTING_CLASSIC_RTT_COMPUTATION
-        if (is_first) {
-            old_path->smoothed_rtt = rtt_estimate;
-            old_path->rtt_variant = rtt_estimate / 2;
-            old_path->rtt_min = rtt_estimate;
-            old_path->rtt_max = rtt_estimate;
-            old_path->path_packet_previous_period = old_path->path_packet_number;
-        }
-        else {
-            if (rtt_estimate < old_path->smoothed_rtt) {
-                old_path->rtt_variant = (3 * old_path->rtt_variant + (old_path->smoothed_rtt - rtt_estimate)) / 4;
-            }
-            else {
-                old_path->rtt_variant = (3 * old_path->rtt_variant + (rtt_estimate - old_path->smoothed_rtt)) / 4;
-            }
-            old_path->smoothed_rtt = (7 * old_path->smoothed_rtt + rtt_estimate) / 8;
-            if (rtt_estimate < old_path->rtt_min) {
-                old_path->rtt_min = rtt_estimate;
-            }
-            if (rtt_estimate > old_path->rtt_max) {
-                old_path->rtt_max = rtt_estimate;
-            }
-        }
-        old_path->retransmit_timer = old_path->smoothed_rtt + 4 * old_path->rtt_variant +
-            cnx->remote_parameters.max_ack_delay;
-
-        /* if one way delay measured, use it */
-        if (time_stamp > 0) {
-            picoquic_update_path_rtt_one_way(cnx, old_path, path_x, send_time, current_time,ack_delay, time_stamp);
-        }
-
-        /* Pass the new values to the congestion algorithm */
-        if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_notify(cnx, old_path,
-                picoquic_congestion_notification_rtt_measurement,
-                rtt_estimate, (cnx->is_time_stamp_enabled)?old_path->one_way_delay_sample:0,
-                0, 0, current_time);
-        }
-
-        /* On very first sample, apply the saved BDP */
-        if (is_first) {
-            picoquic_validate_bdp_seed(cnx, old_path, rtt_estimate, current_time);
-        }
-        /* Perform a quality changed callback if needed */
-        (void)picoquic_issue_path_quality_update(cnx, old_path);
-    }
-#else
         /* During a measurement period, accumulate data:
         * - number of estimates since update
         * - sum of all estimates since update
@@ -277,14 +238,13 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
 
         /* if one way delay measured, use it */
         if (time_stamp > 0) {
-            picoquic_update_path_rtt_one_way(cnx, old_path, path_x, send_time, current_time,ack_delay, time_stamp);
+            picoquic_update_path_rtt_one_way(cnx, old_path, path_x, send_time, current_time, ack_delay, time_stamp);
         }
-
         /* At the end of the period, update the smoothed and variants statistics.
         */
-        if (old_path->path_packet_acked_number >= old_path->path_packet_previous_period ||
-            old_path->path_rtt_last_period_time + (rtt_estimate/4) > current_time) {
-            old_path->path_rtt_last_period_time = current_time;
+        if (pkt_ctx == NULL || pkt_ctx->highest_acknowledged > old_path->rtt_packet_previous_period ||
+            old_path->rtt_time_previous_period + (rtt_estimate / 4) > current_time) {
+            old_path->rtt_time_previous_period = current_time;
 
             if (old_path->nb_rtt_estimate_in_period > 1) {
                 rtt_estimate = old_path->sum_rtt_estimate_in_period / old_path->nb_rtt_estimate_in_period;
@@ -294,6 +254,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
                 old_path->smoothed_rtt = rtt_estimate;
                 old_path->rtt_variant = rtt_estimate / 2;
                 old_path->rtt_min = old_path->min_rtt_estimate_in_period;
+                old_path->rtt_is_initialized = 1;
             }
             else {
                 /* use the average of all samples to adjust the average */
@@ -320,7 +281,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
                 cnx->remote_parameters.max_ack_delay;
 
             /* if RTT updated, reset delayed ACK parameters */
-            if (old_path == cnx->path[0]) {
+            if (old_path == cnx->path[0] && cnx->cnx_state >= picoquic_state_ready) {
                 cnx->is_ack_frequency_updated = cnx->is_ack_frequency_negotiated;
                 if (!cnx->is_ack_frequency_negotiated || cnx->cnx_state != picoquic_state_ready) {
                     picoquic_compute_ack_gap_and_delay(cnx, cnx->path[0]->rtt_min, PICOQUIC_ACK_DELAY_MIN,
@@ -329,7 +290,9 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
             }
 
             /* reset the period counters */
-            old_path->path_packet_previous_period = old_path->path_packet_number;
+            if (pkt_ctx != NULL) {
+                old_path->rtt_packet_previous_period = pkt_ctx->highest_acknowledged;
+            }
             old_path->nb_rtt_estimate_in_period = 0;
             old_path->sum_rtt_estimate_in_period = 0;
             old_path->max_rtt_estimate_in_period = 0;
@@ -353,5 +316,4 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         /* Perform a quality changed callback if needed */
         (void)picoquic_issue_path_quality_update(cnx, old_path);
     }
-#endif
 }

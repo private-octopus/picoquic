@@ -500,7 +500,7 @@ int netperf_bbr_test()
 
 /* Address natting stress.
  * The attacker has the capability to intercept traffic and rewrite addresses.
- * It waits for a sclient to start a connection, and then keeps changing the
+ * It waits for a client to start a connection, and then keeps changing the
  * "source IP" that appears in the client's packets. The test verifies simply that
  * the server remains functional.
  */

@@ -381,11 +381,8 @@ typedef struct st_picoquic_packet_t {
     struct st_picoquic_packet_t* packet_next;
     struct st_picoquic_packet_t* packet_previous;
     struct st_picoquic_path_t* send_path;
-    struct st_picoquic_packet_t* path_packet_next;
-    struct st_picoquic_packet_t* path_packet_previous;
     picosplay_node_t queue_data_repeat_node;
     uint64_t sequence_number;
-    uint64_t path_packet_number;
     uint64_t send_time;
     uint64_t delivered_prior;
     uint64_t delivered_time_prior;
@@ -1081,11 +1078,6 @@ typedef struct st_picoquic_path_t {
     struct sockaddr_storage nat_local_addr;
     /* Last time a packet was sent on this path. */
     uint64_t last_sent_time;
-    /* Number of packets sent on this path*/
-    uint64_t path_packet_number;
-    /* The packet list holds unkacknowledged packets sent on this path.*/
-    picoquic_packet_t* path_packet_first;
-    picoquic_packet_t* path_packet_last;
     uint64_t status_sequence_to_receive_next;
     uint64_t status_sequence_sent_last;
     /* Last 1-RTT "non path validating" packet received on this path */
@@ -1121,6 +1113,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_probing_nat : 1; /* When path transmission is scheduled only for NAT probing */
     unsigned int is_lost_feedback_notified : 1; /* Lost feedback has been notified */
     unsigned int is_cca_probing_up : 1; /* congestion control algorithm is seeking more bandwidth */
+    unsigned int rtt_is_initialized : 1; /* RTT was measured at least once. */
     
     /* Management of retransmissions in a path.
      * The "path_packet" variables are used for the RACK algorithm, per path, to avoid
@@ -1135,9 +1128,6 @@ typedef struct st_picoquic_path_t {
     uint64_t nb_losses_found;
     uint64_t nb_timer_losses;
     uint64_t nb_spurious; /* Number of spurious retransmissions for the path */
-    uint64_t path_packet_acked_number; /* path packet number of highest ack */
-    uint64_t path_packet_acked_time_sent; /* path packet number of highest ack */
-    uint64_t path_packet_acked_received; /* time at which the highest ack was received */
                                          
     /* Loss bit data */
     uint64_t nb_losses_reported;
@@ -1155,9 +1145,8 @@ typedef struct st_picoquic_path_t {
     uint64_t max_reorder_delay;
     uint64_t max_reorder_gap;
     uint64_t latest_sent_time;
-
-    uint64_t path_packet_previous_period;
-    uint64_t path_rtt_last_period_time;
+    uint64_t rtt_packet_previous_period;
+    uint64_t rtt_time_previous_period;
     uint64_t nb_rtt_estimate_in_period;
     uint64_t sum_rtt_estimate_in_period;
     uint64_t max_rtt_estimate_in_period;
@@ -1576,9 +1565,6 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     uint64_t unique_path_id);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
-void picoquic_enqueue_packet_with_path(picoquic_packet_t* p);
-void picoquic_dequeue_packet_from_path(picoquic_packet_t* p);
-void picoquic_empty_path_packet_queue(picoquic_path_t* path_x);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason, char const * phrase);
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
@@ -1765,6 +1751,16 @@ int picoquic_parse_header_and_decrypt(
     size_t * consumed,
     int * new_context_created);
 
+/* Shortcuts to packet numbers, last ack, last ack time.
+ */
+uint64_t picoquic_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
+
+uint64_t picoquic_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
+
+uint64_t picoquic_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
+
+picoquic_packet_t * picoquic_get_last_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
+
 /* handling of ACK logic */
 void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx);
 
@@ -1850,7 +1846,7 @@ void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwi
 uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 /* Update the path RTT upon receiving an explict or implicit acknowledgement */
-void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, picoquic_path_t* path_x,
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, picoquic_path_t* path_x, int epoch,
     uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp);
 
 /* stream management */

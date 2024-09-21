@@ -1177,7 +1177,7 @@ int quic_client(const char* ip_address_text, int server_port,
                 if (config->multipath_option != 0) {
                     for (int i = 0; i < cnx_client->nb_paths; i++) {
                         printf("Path[%d], packets sent: %" PRIu64 "\n", i,
-                            cnx_client->path[i]->path_packet_number);
+                            cnx_client->path[i]->pkt_ctx.send_sequence);
                     }
                 }
                 /* Print details on system call durations */

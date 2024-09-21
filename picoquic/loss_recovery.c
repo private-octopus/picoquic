@@ -381,7 +381,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
         /* We do not follow the PTO logic before the connection is complete */
         int packet_is_pure_ack;
         if (old_path != NULL &&
-            ((old_p->path_packet_number > old_path->path_packet_acked_number &&
+            (((old_p->sequence_number > pkt_ctx->highest_acknowledged || pkt_ctx->highest_acknowledged == UINT64_MAX) &&
             old_p->send_time > old_path->last_loss_event_detected) ||
             old_path->last_loss_event_detected == 0)){
             old_path->nb_retransmit++;
@@ -554,7 +554,10 @@ static int picoquic_is_packet_probably_lost(picoquic_cnx_t* cnx,
         retransmit_time = current_time + old_p->send_path->smoothed_rtt + PICOQUIC_RACK_DELAY;
     }
     else {
-        delta_seq = old_p->send_path->path_packet_acked_number - old_p->path_packet_number;
+        picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled && old_p->pc == picoquic_packet_context_application) ?
+            &old_p->send_path->pkt_ctx : &cnx->pkt_ctx[old_p->pc];
+        delta_seq = pkt_ctx->highest_acknowledged - old_p->sequence_number;
+
         if (delta_seq >= 3) {
             /* Last acknowledged packet is ways ahead. That means this packet
             * is most probably lost.
@@ -565,13 +568,12 @@ static int picoquic_is_packet_probably_lost(picoquic_cnx_t* cnx,
         else if (delta_seq > 0) {
             /* Set a timer relative to that last packet */
             int64_t rack_delay = (old_p->send_path->smoothed_rtt >> 2);
-
-            delta_sent = old_p->send_path->path_packet_acked_time_sent - old_p->send_time;
+            delta_sent = pkt_ctx->latest_time_acknowledged - old_p->send_time;
             if (rack_delay > PICOQUIC_RACK_DELAY / 2) {
                 rack_delay = PICOQUIC_RACK_DELAY / 2;
             }
             retransmit_time = old_p->send_time + old_p->send_path->retransmit_timer;
-            rack_timer_min = old_p->send_path->path_packet_acked_received + rack_delay
+            rack_timer_min = pkt_ctx->highest_acknowledged_time + rack_delay
                 - delta_sent + cnx->remote_parameters.max_ack_delay;
             if (retransmit_time > rack_timer_min) {
                 retransmit_time = rack_timer_min;
@@ -588,7 +590,7 @@ static int picoquic_is_packet_probably_lost(picoquic_cnx_t* cnx,
         * in a timer based manner. If not, set the timer to
         * the specified value. */
         uint64_t retransmit_time_timer;
-        picoquic_packet_t* last_packet = old_p->send_path->path_packet_last;
+        picoquic_packet_t* last_packet = picoquic_get_last_packet(cnx, old_p->send_path, old_p->pc);
 
         if (last_packet == NULL) {
             last_packet = old_p;
@@ -918,7 +920,7 @@ static void picoquic_count_and_notify_loss(
 
         if (cnx->congestion_alg != NULL && cnx->cnx_state >= picoquic_state_ready && old_p->send_path != NULL) {
             picoquic_per_ack_state_t ack_state = { 0 };
-            ack_state.lost_packet_number = old_p->path_packet_number;
+            ack_state.lost_packet_number = old_p->sequence_number;
             ack_state.nb_bytes_newly_lost = old_p->length;
             cnx->congestion_alg->alg_notify(cnx, old_p->send_path,
                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
@@ -962,14 +964,16 @@ static int picoquic_is_packet_ack_eliciting(picoquic_packet_t * packet)
     return is_ack_eliciting;
 }
 
+/* In multipath operation, schedule all packets queued on a path for retransmission
+ */
 static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_packet_context_t* pkt_ctx, uint64_t current_time)
 {
-    picoquic_packet_t* old_p = path_x->path_packet_first;
+    picoquic_packet_t* old_p = pkt_ctx->pending_first;
     int ret;
 
     while (old_p != NULL) {
-        picoquic_packet_t* next_packet = old_p->path_packet_next;
+        picoquic_packet_t* next_packet = old_p->packet_next;
         int packet_is_pure_ack = 1;
         int do_not_detect_spurious = 0;
         int add_to_data_repeat_queue = 0;
@@ -980,7 +984,7 @@ static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx, picoquic_
         /* Call the copy routine but force it to not put anything in the copy */
         if ((ret = picoquic_copy_before_retransmit(old_p, cnx,
             NULL, 0, &packet_is_pure_ack, &do_not_detect_spurious, 1, &length,
-            &add_to_data_repeat_queue)) != 0){
+            &add_to_data_repeat_queue)) != 0) {
             DBG_PRINTF("Copy before retransmit returns %d\n", ret);
         }
 
@@ -992,12 +996,13 @@ static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx, picoquic_
         /* Update the number of bytes in transit and remove old packet from queue */
         /* If not pure ack, the packet will be placed in the "retransmitted" queue,
         * in order to enable detection of spurious restransmissions */
-        (void) picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, packet_is_pure_ack & do_not_detect_spurious,
+        (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, packet_is_pure_ack & do_not_detect_spurious,
             add_to_data_repeat_queue);
 
         /* move to next packet */
         old_p = next_packet;
     }
+
 }
 
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
