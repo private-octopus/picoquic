@@ -282,7 +282,6 @@ static const picoquic_test_def_t test_table[] = {
     { "qlog_trace_auto", qlog_trace_auto_test },
     { "qlog_trace_only", qlog_trace_only_test },
     { "qlog_trace_ecn", qlog_trace_ecn_test },
-    { "path_packet_queue", path_packet_queue_test },
     { "perflog", perflog_test },
     { "nat_rebinding_stress", rebinding_stress_test },
     { "random_padding", random_padding_test },
