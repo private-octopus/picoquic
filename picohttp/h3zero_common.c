@@ -1392,7 +1392,9 @@ int h3zero_callback_data(picoquic_cnx_t* cnx,
 		}
 		if (stream_ctx == NULL) {
 			if (fin_or_event == picoquic_callback_stream_fin) {
-				DBG_PRINTF("Received %zu bytes & FIN after stream %" PRIu64 " was discarded\n", length, stream_id);
+				if (length > 0) {
+					DBG_PRINTF("Received %zu bytes & FIN after stream %" PRIu64 " was discarded\n", length, stream_id);
+				}
 			}
 			else {
 				ret = picoquic_stop_sending(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
