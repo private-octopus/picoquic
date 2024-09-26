@@ -43,7 +43,7 @@ extern "C" {
      *              this is defined in h3zero_common.h
      * wt_ctx: application level context for that connection.
      */
-    int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
+    int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
     /* Send capsule to close web transport session,
      * and close web transport control stream.
      */

@@ -129,6 +129,7 @@ static int picowt_baton_test_one(
             /* Initialize the callback context. First, create a bidir stream */
             wt_baton_ctx_init(&baton_ctx, h3zero_cb, NULL, NULL);
             baton_ctx.is_client = 1;
+            baton_ctx.authority = PICOQUIC_TEST_SNI;
             baton_ctx.server_path = baton_path;
             /* Create a stream context for the connect call. */
             ret = wt_baton_connect(test_ctx->cnx_client, &baton_ctx, h3zero_cb);

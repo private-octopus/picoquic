@@ -242,8 +242,8 @@ uint8_t* h3zero_create_request_header_frame_ex(uint8_t* bytes, uint8_t* bytes_ma
     uint8_t const* path, size_t path_length, uint8_t const* range, size_t range_length,
     char const* host, char const* ua_string);
 uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
-    uint8_t const* path, size_t path_length, char const* protocol, char const* origin,
-    char const* ua_string);
+    char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
+    char const* origin, char const* ua_string);
 uint8_t* h3zero_create_post_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
     uint8_t const* path, size_t path_length, uint8_t const* range, size_t range_length,
     char const* host, h3zero_content_type_enum content_type, char const* ua_string);

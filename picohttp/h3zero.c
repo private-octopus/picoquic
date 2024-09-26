@@ -817,8 +817,8 @@ uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zer
 }
 
 uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
-    uint8_t const* path, size_t path_length, char const* protocol, char const * origin,
-    char const* ua_string)
+    char const * authority, uint8_t const* path, size_t path_length, char const* protocol,
+    char const * origin, char const* ua_string)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -835,6 +835,10 @@ uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     /* Protocol. Use literal plus name format */
     if (protocol != NULL) {
         bytes = h3zero_qpack_literal_plus_name_encode(bytes, bytes_max, (uint8_t*)":protocol", 9, (uint8_t*)protocol, strlen(protocol));
+    }
+    /* Authority. Use literal plus reference format */
+    if (authority != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const*)authority, strlen(authority));
     }
     /* Origin. Use literal plus ref format */
     if (origin != NULL) {

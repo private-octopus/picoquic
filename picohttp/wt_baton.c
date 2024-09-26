@@ -916,7 +916,7 @@ int wt_baton_connect(picoquic_cnx_t * cnx, wt_baton_ctx_t* baton_ctx, h3zero_cal
         }
         if (ret == 0) {
             /* send the WT CONNECT */
-            ret = picowt_connect(cnx, h3_ctx, stream_ctx, baton_ctx->server_path, wt_baton_callback, baton_ctx);
+            ret = picowt_connect(cnx, h3_ctx, stream_ctx, baton_ctx->authority, baton_ctx->server_path, wt_baton_callback, baton_ctx);
         }
         if (ret == 0) {
             wt_baton_set_receive_ready(baton_ctx);
