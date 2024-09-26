@@ -425,7 +425,4 @@ void picowt_deregister(picoquic_cnx_t* cnx,
     h3zero_forget_stream(cnx, control_stream_ctx);
 #endif
     picoquic_log_app_message(cnx, "Prefix for control stream %"PRIu64 " was unregistered", control_stream_id);
-#if 1
-    h3_ctx->wt_unregistered = 1;
-#endif
 }
