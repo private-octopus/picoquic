@@ -351,9 +351,6 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                 ret = picoquic_close(cnx, 0);
             }
             else {
-                if (!stream_ctx->ps.stream_state.is_fin_sent) {
-                    picoquic_add_to_stream(cnx, stream_ctx->stream_id, NULL, 0, 1);
-                }
                 h3zero_delete_stream_prefix(cnx, baton_ctx->h3_ctx, stream_ctx->stream_id);
             }
         }

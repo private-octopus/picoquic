@@ -874,10 +874,12 @@ int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
 void h3zero_forget_stream(picoquic_cnx_t* cnx,
 	h3zero_stream_ctx_t* stream_ctx)
 {
-	if (stream_ctx != NULL && !stream_ctx->ps.stream_state.is_fin_sent) {
-		stream_ctx->ps.stream_state.is_fin_sent = 1;
-		picoquic_reset_stream(cnx, stream_ctx->stream_id, 0);
-		picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
+	if (stream_ctx != NULL){
+		if (!stream_ctx->ps.stream_state.is_fin_sent) {
+			stream_ctx->ps.stream_state.is_fin_sent = 1;
+			picoquic_reset_stream(cnx, stream_ctx->stream_id, 0);
+		}
+		picoquic_unlink_app_stream_ctx(cnx, stream_ctx->stream_id);
 	}
 }
 
