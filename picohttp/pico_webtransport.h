@@ -62,8 +62,10 @@ extern "C" {
         size_t error_msg_len;
     } picowt_capsule_t;
 
-    int picowt_receive_capsule(picoquic_cnx_t *cnx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t* capsule);
+    int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t* capsule, h3zero_callback_ctx_t* h3_ctx);
     void picowt_release_capsule(picowt_capsule_t* capsule);
+
+    void picowt_deregister(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* control_stream_ctx);
 
     /**
     * Create local stream: when a stream is created locally. 

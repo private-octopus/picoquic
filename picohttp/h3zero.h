@@ -51,6 +51,7 @@ extern "C" {
 #define H3ZERO_USER_AGENT_STRING "H3Zero/1.0"
 
 #define H3ZERO_CAPSULE_CLOSE_WEBTRANSPORT_SESSION 0x2843
+#define H3ZERO_CAPSULE_DRAIN_WEBTRANSPORT_SESSION 0x78ae
 
 typedef enum {
 	h3zero_frame_data = 0,
@@ -193,7 +194,11 @@ typedef struct st_h3zero_header_parts_t {
     unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
 
-/* Setting codes. */
+/* Setting codes.
+* This list includes the "extension" settings for datagrams and web
+* transport, because we want to have common functions for coding and
+* decoding setting values.
+ */
 #define h3zero_setting_reserved = 0x0
 #define h3zero_setting_header_table_size 0x1
 #define h3zero_setting_max_header_list_size 0x6
