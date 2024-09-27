@@ -90,6 +90,7 @@ extern "C" {
     typedef struct st_wt_baton_ctx_t {
         picoquic_cnx_t* cnx;
         h3zero_callback_ctx_t* h3_ctx;
+        char const* authority;
         char const* server_path;
         uint64_t control_stream_id;
         /* Capsule state */
