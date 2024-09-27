@@ -205,6 +205,7 @@ int wt_baton_client(char const * server_name, int server_port, char const * path
             wt_baton_ctx_init(&baton_ctx, h3_ctx, NULL, NULL);
             baton_ctx.cnx = cnx;
             baton_ctx.is_client = 1;
+            baton_ctx.authority = server_name;
             baton_ctx.server_path = path;
 
             /* Create a stream context for the connect call. */
