@@ -117,34 +117,37 @@ static int picowt_baton_test_one(
     * We want to replace that by the demo client callback */
 
     if (ret == 0) {
-        /* use the generic H3 callback */
-        /* Set the client callback context */
-        h3zero_cb = h3zero_callback_create_context(NULL);
-        if (h3zero_cb == NULL) {
-            ret = 1;
-        }
-        else {
-            h3zero_cb->no_print = 1;
-            picoquic_set_callback(test_ctx->cnx_client, h3zero_callback, h3zero_cb);
-            /* Initialize the callback context. First, create a bidir stream */
-            wt_baton_ctx_init(&baton_ctx, h3zero_cb, NULL, NULL);
-            baton_ctx.is_client = 1;
-            baton_ctx.authority = PICOQUIC_TEST_SNI;
-            baton_ctx.server_path = baton_path;
-            /* Create a stream context for the connect call. */
-            ret = wt_baton_connect(test_ctx->cnx_client, &baton_ctx, h3zero_cb);
-        }
-        /* Initialize the server -- should include the path setup for connect action */
-        memset(&server_param, 0, sizeof(picohttp_server_parameters_t));
-        server_param.web_folder = NULL;
-        server_param.path_table = path_item_list;
-        server_param.path_table_nb = 1;
+        /* Set the client callback context using as much as possible
+        * the generic picowt calls. */
+        h3zero_stream_ctx_t* control_stream_ctx = NULL;
 
-        picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
-        picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
+        ret = picowt_prepare_client_cnx(test_ctx->qclient, (struct sockaddr*)NULL,
+            &test_ctx->cnx_client, &h3zero_cb, &control_stream_ctx, simulated_time, PICOQUIC_TEST_SNI);
+
+        if (ret == 0) {
+            ret = wt_baton_prepare_context(test_ctx->cnx_client, &baton_ctx, h3zero_cb,
+                control_stream_ctx, PICOQUIC_TEST_SNI, baton_path);
+        }
+
+        if (ret == 0) {
+            ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
+                baton_ctx.authority, baton_ctx.server_path,
+                wt_baton_callback, &baton_ctx);
+        }
 
         if (ret == 0) {
             ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
+
+        if (ret == 0) {
+            /* Initialize the server -- should include the path setup for connect action */
+            memset(&server_param, 0, sizeof(picohttp_server_parameters_t));
+            server_param.web_folder = NULL;
+            server_param.path_table = path_item_list;
+            server_param.path_table_nb = 1;
+
+            picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
+            picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
         }
     }
 
