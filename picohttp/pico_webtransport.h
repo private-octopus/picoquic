@@ -36,6 +36,25 @@ extern "C" {
 
     /* Create the control stream for the Web Transport session on the client. */
     h3zero_stream_ctx_t* picowt_set_control_stream(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx);
+
+
+    /*
+    * picowt_prepare_client_cnx:
+    * Prepare a QUIC connection and allocate the parameters required for
+    * the web transport setup:
+    * - p_cnx points to a quic connection context. If *p_cnx is null, a connection context
+    *   will be created.
+    * - p_h3_ctx points to an HTTP3 connection context. If *p_h3_ctx is null,
+    *   an HTTP3 context will be created.
+    * - p_control_stream_ctx should be NULL. On successfull return, it will
+    *   point to the stream context for the "control stream" of
+    *   the web transport connection.
+     */
+    int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_address,
+        picoquic_cnx_t** p_cnx, h3zero_callback_ctx_t** p_h3_ctx,
+        h3zero_stream_ctx_t** p_stream_ctx,
+        uint64_t current_time, const char* sni);
+
     /* Web transport initiate, client side
      * cnx: an established QUIC connection, set to ALPN=H3.
      * stream_ctx: the stream context returned by picowt_set_control_stream
