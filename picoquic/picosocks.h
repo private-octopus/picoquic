@@ -104,8 +104,11 @@
 #ifndef WSA_LAST_ERROR
 #define WSA_LAST_ERROR(x) ((long)(x))
 #endif
-#ifndef IPV6_RECVPKTINFO
-#define IPV6_RECVPKTINFO IPV6_PKTINFO /* Cygwin */
+
+#ifdef IPV6_PKTINFO
+    #ifndef IPV6_RECVPKTINFO
+    #define IPV6_RECVPKTINFO IPV6_PKTINFO /* Cygwin */
+    #endif
 #endif
 #endif
 
