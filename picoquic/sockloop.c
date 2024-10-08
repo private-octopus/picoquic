@@ -382,10 +382,12 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
         int tos = 0xb8; // 0x88 = AF41, 0xb8 == EF
 
         if (local_address.ss_family == AF_INET6) {
+
+#ifndef LWIP_IPV6
             if(setsockopt(s_ctx->fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(tos)) < 0) {
                 DBG_PRINTF("setsockopt IPv46 TC CLASS (0x%x) fails, errno: %d\n", tos, errno);
             }
-
+#endif
             s_ctx->port = ntohs(((struct sockaddr_in6*)&local_address)->sin6_port);
         }
         else if (local_address.ss_family == AF_INET) {

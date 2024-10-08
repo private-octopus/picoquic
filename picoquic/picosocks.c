@@ -71,10 +71,12 @@ int picoquic_socket_set_pkt_info(SOCKET_TYPE sd, int af)
         int val = 1;
         ret = setsockopt(sd, IPPROTO_IPV6, IPV6_V6ONLY,
             &val, sizeof(val));
+#ifdef IPV6_RECVPKTINFO
         if (ret == 0) {
             val = 1;
             ret = setsockopt(sd, IPPROTO_IPV6, IPV6_RECVPKTINFO, (char*)&val, sizeof(int));
         }
+#endif
     }
     else {
         int val = 1;
@@ -370,6 +372,7 @@ void picoquic_socks_cmsg_parse(
                 DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
             }
         }
+#ifdef IPV6_PKTINFO
         else if (cmsg->cmsg_level == IPPROTO_IPV6) {
             if (cmsg->cmsg_type == IPV6_PKTINFO) {
                 if (addr_dest != NULL) {
@@ -392,6 +395,7 @@ void picoquic_socks_cmsg_parse(
                     *received_ecn = *((unsigned char*)WSA_CMSG_DATA(cmsg));
                 }
             }
+#endif // #ifndef IPV6_PKTINFO
             else {
                 DBG_PRINTF("Cmsg level: %d, type: %d\n", cmsg->cmsg_level, cmsg->cmsg_type);
             }
@@ -447,13 +451,16 @@ void picoquic_socks_cmsg_parse(
                 }
             }
 #endif
+#ifdef IP_RECVTOS
             else if ((cmsg->cmsg_type == IP_TOS || cmsg->cmsg_type == IP_RECVTOS) && cmsg->cmsg_len > 0) {
                 if (received_ecn != NULL) {
                     *received_ecn = *((unsigned char*)CMSG_DATA(cmsg));
                 }
             }
+#endif
         }
         else if (cmsg->cmsg_level == IPPROTO_IPV6) {
+#ifdef IPV6_PKTINFO
             if (cmsg->cmsg_type == IPV6_PKTINFO) {
                 if (addr_dest != NULL) {
                     struct in6_pktinfo* pPktInfo6 = (struct in6_pktinfo*)CMSG_DATA(cmsg);
@@ -467,11 +474,14 @@ void picoquic_socks_cmsg_parse(
                     }
                 }
             }
+#endif
+#ifdef IPV6_TCLASS
             else if (cmsg->cmsg_type == IPV6_TCLASS) {
                 if (cmsg->cmsg_len > 0 && received_ecn != NULL) {
                     *received_ecn = *((unsigned char*)CMSG_DATA(cmsg));
                 }
             }
+#endif
         }
     }
 #endif
@@ -632,13 +642,17 @@ void picoquic_socks_cmsg_format(
             struct in_pktinfo* pktinfo = (struct in_pktinfo*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
                 &control_length, IPPROTO_IP, IP_PKTINFO, sizeof(struct in_pktinfo));
             if (pktinfo != NULL) {
+#ifdef LWIP_IPV4
+                pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
+#else
                 pktinfo->ipi_spec_dst.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
+#endif
                 pktinfo->ipi_ifindex = (unsigned long)dest_if;
             }
             else {
                 is_null = 1;
             }
-#else 
+#else
             /* The IP_PKTINFO structure is not defined on BSD */
             struct in_addr* pktinfo = (struct in_addr*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
                 &control_length, IPPROTO_IP, IP_SENDSRCADDR, sizeof(struct in_addr));
@@ -665,6 +679,7 @@ void picoquic_socks_cmsg_format(
 #endif
         }
         else {
+#ifdef IPV6_PKTINFO
             struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
                 &control_length, IPPROTO_IPV6, IPV6_PKTINFO, sizeof(struct in6_pktinfo));
             if (pktinfo6 != NULL) {
@@ -674,6 +689,9 @@ void picoquic_socks_cmsg_format(
             else {
                 is_null = 1;
             }
+#else
+            is_null = 1;
+#endif
 #ifdef IPV6_DONTFRAG
             if (!is_null) {
                 int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
