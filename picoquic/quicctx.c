@@ -4583,6 +4583,11 @@ void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx)
 void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
     if (cnx != NULL) {
+#ifdef PICOQUIC_MEMORY_LOG
+        if (cnx->memlog_call_back != NULL) {
+            cnx->memlog_call_back(cnx, NULL, cnx->memlog_ctx, 1, 0);
+        }
+#endif
         if (cnx->quic->perflog_fn != NULL) {
             (void)(cnx->quic->perflog_fn)(cnx->quic, cnx, 0);
         }

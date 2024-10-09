@@ -151,6 +151,7 @@
     <ClCompile Include="csv.c" />
     <ClCompile Include="logconvert.c" />
     <ClCompile Include="logreader.c" />
+    <ClCompile Include="memory_log.c" />
     <ClCompile Include="qlog.c" />
     <ClCompile Include="svg.c" />
   </ItemGroup>

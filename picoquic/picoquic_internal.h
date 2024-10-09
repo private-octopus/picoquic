@@ -1518,7 +1518,10 @@ typedef struct st_picoquic_cnx_t {
     uint16_t log_unique;
     FILE* f_binlog;
     char* binlog_file_name;
-
+#ifdef PICOQUIC_MEMORY_LOG
+    void (*memlog_call_back)(picoquic_cnx_t* cnx, picoquic_path_t* path, void* v_memlog, int op_code, uint64_t current_time);
+    void *memlog_ctx;
+#endif
 } picoquic_cnx_t;
 
 typedef struct st_picoquic_packet_data_t {
