@@ -132,7 +132,7 @@ set(LOGLIB_LIBRARY_FILES
     loglib/csv.c
     loglib/logconvert.c
     loglib/logreader.c
-    loglib/memlog.c
+    loglib/memory_log.c
     loglib/qlog.c
     loglib/svg.c)
 
