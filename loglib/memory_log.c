@@ -250,7 +250,7 @@ void memlog_call_back(picoquic_cnx_t* cnx, picoquic_path_t* path, void* v_memlog
     }
 }
 
-int memlog_init(picoquic_cnx_t* cnx, uint64_t nb_lines, const char * memlog_file)
+int memlog_init(picoquic_cnx_t* cnx, size_t nb_lines, const char * memlog_file)
 {
     int ret = -1;
     picoquic_memory_log_t* memlog = (picoquic_memory_log_t*)malloc(sizeof(picoquic_memory_log_t));

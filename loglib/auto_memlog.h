@@ -26,7 +26,7 @@
 extern "C" {
 #endif
     /* Initialize the memory log for a specific connection */
-    int memlog_init(picoquic_cnx_t* cnx, uint64_t nb_lines, const char* memlog_file);
+    int memlog_init(picoquic_cnx_t* cnx, size_t nb_lines, const char* memlog_file);
 #ifdef __cplusplus
 }
 #endif
