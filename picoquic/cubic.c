@@ -309,6 +309,9 @@ static void picoquic_cubic_notify(
                         path_x->cwin = ack_state->nb_bytes_acknowledged;
                     }
                     cubic_state->ssthresh = ack_state->nb_bytes_acknowledged;
+                    cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
+                    cubic_state->W_last_max = cubic_state->W_max;
+                    cubic_state->W_reno = ((double)path_x->cwin);
                     path_x->is_ssthresh_initialized = 1;
                     picoquic_cubic_enter_avoidance(cubic_state, current_time);
                 }

@@ -79,6 +79,11 @@
 #include <netinet/in.h>
 #include <sys/select.h>
 
+#ifndef __APPLE__
+#include <linux/prctl.h>  /* Definition of PR_* constants */
+#include <sys/prctl.h>
+#endif
+
 #include <pthread.h>
 
 #ifndef SOCKET_TYPE
@@ -676,6 +681,36 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     return bytes_recv;
 }
 #endif
+
+static int monitor_system_call_duration(packet_loop_system_call_duration_t* sc_duration, uint64_t current_time, uint64_t previous_time)
+{
+    uint64_t duration = current_time - previous_time;
+    int64_t dev = sc_duration->scd_smoothed - duration;
+    int shall_notify = 0;
+
+    if (duration > sc_duration->scd_max) {
+        shall_notify = 1;
+        sc_duration->scd_max = duration;
+    }
+    else if (duration != sc_duration->scd_last) {
+        int64_t delta_d = sc_duration->scd_last - duration;
+
+        if (delta_d > 1000 || delta_d < -1000 || delta_d < (int64_t)sc_duration->scd_last) {
+            shall_notify = 1;
+        }
+        sc_duration->scd_last = duration;
+    }
+
+    sc_duration->scd_smoothed = (duration + 15 * sc_duration->scd_smoothed) / 16;
+    if (dev < 0) {
+        dev = -dev;
+    }
+    sc_duration->scd_dev = (7 * sc_duration->scd_dev + dev) / 8;
+
+    return shall_notify;
+}
+
+
 #ifdef _WINDOWS
     DWORD WINAPI picoquic_packet_loop_v3(LPVOID v_ctx)
 #else
@@ -710,6 +745,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     int loop_immediate = 0;
     unsigned int nb_loop_immediate = 0;
     picoquic_packet_loop_options_t options = { 0 };
+    packet_loop_system_call_duration_t sc_duration = { 0 };
+
     int is_wake_up_event;
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
@@ -736,6 +773,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 
         if (picoquic_store_loopback_addr(&l_addr, s_ctx[0].af, s_ctx[0].port) == 0) {
             ret = loop_callback(quic, picoquic_packet_loop_port_update, loop_callback_ctx, &l_addr);
+        }
+        if (ret == 0 && options.provide_alt_port) {
+            uint16_t alt_port = ntohs(s_ctx[1].port);
+            ret = loop_callback(quic, picoquic_packet_loop_alt_port, loop_callback_ctx, &alt_port);
         }
     }
 
@@ -767,6 +808,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         int64_t delta_t = 0;
         uint8_t received_ecn;
         uint8_t* received_buffer;
+        uint64_t previous_time;
 
         if_index_to = 0;
         /* The "loop immediate" condition is set when a packet has been
@@ -778,6 +820,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         * ever sending responses or ACKs. We moderate that by counting the number
         * of loops in "immediate" mode, and ignoring the "loop
         * immediate" condition if that number reaches a limit */
+        current_time = picoquic_current_time();
         if (!loop_immediate) {
             nb_loop_immediate = 1;
             delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
@@ -799,6 +842,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         * packets received "immediately" does not exceed the limit.
          */
         loop_immediate = 0;
+        /* Remember the time before the select call, so it duration be monitored */
+        previous_time = current_time;
 #ifdef _WINDOWS
         bytes_recv = picoquic_packet_loop_wait(s_ctx, nb_sockets_available,
             &addr_from, &addr_to, &if_index_to, &received_ecn, &received_buffer,
@@ -812,6 +857,12 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         received_buffer = buffer;
 #endif
         current_time = picoquic_current_time();
+        if (options.do_system_call_duration && delta_t == 0 &&
+            monitor_system_call_duration(&sc_duration, current_time, previous_time)) {
+            ret = loop_callback(quic, picoquic_packet_loop_system_call_duration,
+                loop_callback_ctx, &sc_duration);
+        }
+
         if (bytes_recv < 0) {
             /* The interrupt error is expected if the loop is closing. */
             ret = (thread_ctx->thread_should_close) ? PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP : -1;
@@ -1141,7 +1192,7 @@ void picoquic_internal_thread_setname(char const * thread_name)
 #ifdef __APPLE__
     pthread_setname_np(thread_name);
 #else
-    int r=pthread_setname_np(pthread_self(), thread_name);
+    int r=prctl(PR_SET_NAME, thread_name, 0, 0, 0);
     if (r != 0) {
         DBG_PRINTF("Set thread name <%s> returns: 0x%x", thread_name, r);
     }

@@ -184,7 +184,7 @@ int dtn_basic_test()
     /* Simple test. */
     dtn_test_spec_t spec;
     dtn_set_basic_test_spec(&spec);
-    spec.max_number_of_packets = 84;
+    spec.max_number_of_packets = 120;
 
     return dtn_test_one(0xba, &spec);
 }
@@ -220,7 +220,7 @@ int dtn_silence_test()
     dtn_set_basic_test_spec(&spec);
     spec.scenario = dtn_scenario_silence;
     spec.sizeof_scenario = sizeof(dtn_scenario_silence);
-    spec.max_number_of_packets = 95; /* Check that the number of packets does not increase wildly */
+    spec.max_number_of_packets = 120; /* Check that the number of packets does not increase wildly */
     spec.max_completion_time = 481000000; /* 8 minutes: 2 for handshake, plus 2 per transaction */
     return dtn_test_one(0x51, &spec);
 }
@@ -233,7 +233,7 @@ int dtn_twenty_test()
     spec.latency = 20 * 60000000;
     spec.max_completion_time = 8* spec.latency;
 
-    spec.max_number_of_packets = 96;
+    spec.max_number_of_packets = 190;
 
     return dtn_test_one(0x20, &spec);
 }

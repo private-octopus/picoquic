@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.20.0
+        VERSION 1.1.25.1
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -17,6 +17,10 @@ find_package(Threads REQUIRED)
 option(DISABLE_DEBUG_PRINTF "Disable Picoquic debug output" OFF)
 option(ENABLE_ASAN "Enable AddressSanitizer (ASAN) for debugging" OFF)
 option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan) for debugging" OFF)
+option(BUILD_DEMO "Build picoquicdemo" ON)
+option(BUILD_HTTP "Build picohttp" ON)
+option(BUILD_LOGLIB "Build picoquic-log" ON)
+option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
 
 message(STATUS "Initial CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
 
@@ -158,6 +162,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
     picoquictest/openssl_test.c
+    picoquictest/p2p_test.c
     picoquictest/pacing_test.c
     picoquictest/parseheadertest.c
     picoquictest/picoquic_lb_test.c
@@ -185,7 +190,7 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_client.c
     picohttp/h3zero_common.c
     picohttp/h3zero_server.c
-     picohttp/h3zero_uri.c
+    picohttp/h3zero_uri.c
     picohttp/quicperf.c
     picohttp/siduck.c
     picohttp/webtransport.c
@@ -245,29 +250,24 @@ else()
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
 
-
-
 OPTION(WITH_MBEDTLS "enable MBEDTLS" OFF)
 
 IF (WITH_MBEDTLS)
     FIND_PACKAGE(MbedTLS)
     IF (MbedTLS_FOUND)
+        message(STATUS "Enabling MbedTLS support")
         message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
         message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
         list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_MBEDTLS)
-# TODO:
-#       add mbedtls include dir to include path?
-#       maybe, create an mbed-ltls library in picoquic?
-#       either ADD_LIBRARY(picoquic-mbedtls lib/ptls_mbedtls.c)
-#       or ADD file to core libraries, easier for users?
-#       list(APPEND PICOQUIC_LIBRARY_FILES picoquic/ptls_mbedtls.c)
+        list(APPEND PICOQUIC_LIBRARY_FILES
+                    picoquic_mbedtls/ptls_mbedtls.c
+                    picoquic_mbedtls/ptls_mbedtls_sign.c)
     ELSE ()
         message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
         message(STATUS "mbedtls libraries: ${MBEDTLS_LIBRARIES}")
         MESSAGE (FATAL_ERROR "MbedTLS not found")
     ENDIF()
 ENDIF ()
-
 
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
@@ -308,15 +308,19 @@ macro(set_picoquic_compile_settings)
     target_link_options(${ARGV0} PRIVATE ${PICOQUIC_LINKER_FLAGS})
 endmacro()
 
-
 add_library(picoquic-core ${PICOQUIC_CORE_HEADERS} ${PICOQUIC_LIBRARY_FILES})
+
+message(STATUS "Defining picoquic-core")
+message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
+
 target_include_directories(picoquic-core
     PRIVATE
         ${PTLS_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR}
-        ${MBEDTLS_INCLUDE_DIRS}
     PUBLIC
-        picoquic)
+        ${MBEDTLS_INCLUDE_DIRS}
+        picoquic
+        picoquic_mbedtls)
 target_link_libraries(picoquic-core
     PRIVATE
         ${OPENSSL_LIBRARIES}
@@ -326,49 +330,70 @@ target_link_libraries(picoquic-core
         Threads::Threads)
 set_picoquic_compile_settings(picoquic-core)
 
-add_library(picoquic-log ${LOGLIB_LIBRARY_FILES})
-target_include_directories(picoquic-log
-    PRIVATE
-        ${PTLS_INCLUDE_DIRS}
-    PUBLIC
-        picoquic
-        loglib)
-set_picoquic_compile_settings(picoquic-log)
+if (BUILD_DEMO OR BUILD_LOGREADER OR (BUILD_TESTING AND picoquic_BUILD_TESTS))
+    if (NOT BUILD_LOGLIB)
+        set(BUILD_LOGLIB ON)
+    endif()
+endif()
 
-add_library(picohttp-core ${PICOHTTP_LIBRARY_FILES})
-target_link_libraries(picohttp-core
-    PRIVATE
-        ${PTLS_LIBRARIES}
-        ${OPENSSL_LIBRARIES}
-        ${MBEDTLS_LIBRARIES}
-    PUBLIC
-        picoquic-core)
-target_include_directories(picohttp-core
-    PRIVATE
-        ${PTLS_INCLUDE_DIRS}
-        ${OPENSSL_INCLUDE_DIR}
-    PUBLIC
-        picoquic)
-set_picoquic_compile_settings(picohttp-core)
+if (BUILD_LOGLIB)
+    add_library(picoquic-log ${LOGLIB_LIBRARY_FILES})
+    target_include_directories(picoquic-log
+        PRIVATE
+            ${PTLS_INCLUDE_DIRS}
+        PUBLIC
+            picoquic
+            loglib)
+    set_picoquic_compile_settings(picoquic-log)
+endif()
 
-add_executable(picoquicdemo
-    picoquicfirst/picoquicdemo.c
-    picoquicfirst/getopt.c)
-target_link_libraries(picoquicdemo
-    PRIVATE
-        ${PTLS_LIBRARIES}
-        ${OPENSSL_LIBRARIES}
-        ${MBEDTLS_LIBRARIES}
-        picoquic-log
-        picoquic-core
-        picohttp-core)
-target_include_directories(picoquicdemo PRIVATE picohttp)
-set_picoquic_compile_settings(picoquicdemo)
+if (BUILD_DEMO)
+    if (NOT BUILD_HTTP)
+        set(BUILD_HTTP ON)
+    endif()
+endif()
 
-add_executable(picolog_t picolog/picolog.c)
-target_link_libraries(picolog_t PRIVATE picoquic-log picoquic-core)
-target_include_directories(picolog_t PRIVATE loglib)
-set_picoquic_compile_settings(picolog_t)
+if (BUILD_HTTP)
+    add_library(picohttp-core ${PICOHTTP_LIBRARY_FILES})
+    target_link_libraries(picohttp-core
+        PRIVATE
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+        PUBLIC
+            picoquic-core)
+    target_include_directories(picohttp-core
+        PRIVATE
+            ${PTLS_INCLUDE_DIRS}
+            ${OPENSSL_INCLUDE_DIR}
+            ${MBEDTLS_INCLUDE_DIRS}
+        PUBLIC
+            picoquic)
+    set_picoquic_compile_settings(picohttp-core)
+endif()
+
+if (BUILD_DEMO)
+    add_executable(picoquicdemo
+        picoquicfirst/picoquicdemo.c
+        picoquicfirst/getopt.c)
+    target_link_libraries(picoquicdemo
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picoquic-log
+            picoquic-core
+            picohttp-core)
+    target_include_directories(picoquicdemo PRIVATE picohttp)
+    set_picoquic_compile_settings(picoquicdemo)
+endif()
+
+if (BUILD_LOGREADER)
+    add_executable(picolog_t picolog/picolog.c)
+    target_link_libraries(picolog_t PRIVATE picoquic-log picoquic-core)
+    target_include_directories(picolog_t PRIVATE loglib)
+    set_picoquic_compile_settings(picolog_t)
+endif()
 
 include(CTest)
 
@@ -403,6 +428,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
 
     add_executable(picoquic_sample
         sample/sample.c
+        sample/sample_background.c
         sample/sample_client.c
         sample/sample_server.c)
     target_link_libraries(picoquic_sample PRIVATE picoquic-log picoquic-core)
@@ -433,17 +459,83 @@ add_custom_target(
     -i
     ${CLANG_FORMAT_SOURCE_FILES})
 
-# Specify Install targets
-install(TARGETS picoquicdemo picolog_t picoquic-core picoquic-log picohttp-core
-        RUNTIME DESTINATION bin
-        BUNDLE DESTINATION bin
-        FRAMEWORK DESTINATION lib
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib)
+if (NOT CMAKE_INSTALL_INCLUDEDIR)
+    set(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_INSTALL_PREFIX}/include)
+endif()
+
+if (NOT CMAKE_INSTALL_LIBDIR)
+    set(CMAKE_INSTALL_LIBDIR ${CMAKE_INSTALL_PREFIX}/lib)
+endif()
+
+if (NOT CMAKE_INSTALL_BINDIR)
+    set(CMAKE_INSTALL_BINDIR ${CMAKE_INSTALL_PREFIX}/bin)
+endif()
+
+if (TARGET picoquicdemo)
+    install(TARGETS picoquicdemo
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+if (TARGET picohttp-core)
+    install(TARGETS picohttp-core
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    install(FILES
+        ${PICOHTTP_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+endif()
+
+if (TARGET picolog_t)
+    install(TARGETS picolog_t
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+if (TARGET picoquic-log)
+    install(TARGETS picoquic-log
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+    install(FILES
+        ${PICOQUIC_LOGLIB_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+endif()
+
+
+install(TARGETS picoquic-core
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+if(PICOQUIC_FETCH_PTLS)
+    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-fusion.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-openssl.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-minicrypto.a" CACHE PATH "Path of library files")
+
+    install(TARGETS ${PTLS_LIBRARIES}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+else()
+    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a" CACHE PATH "Path of library file")
+endif()
 
 install(FILES
         ${PICOQUIC_CORE_HEADERS}
-        ${PICOQUIC_LOGLIB_HEADERS}
-        ${PICOHTTP_HEADERS}
-        DESTINATION include)
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
+include(CMakePackageConfigHelpers)
+
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+set(PROJECT_VERSION "0.0.0-${GIT_HASH}")
+message(STATUS "Project version: ${PROJECT_VERSION}")
+
+if (NOT CMAKE_INSTALL_LIBDIR)
+    set(CMAKE_INSTALL_LIBDIR ${CMAKE_INSTALL_PREFIX}/lib)
+endif()
+
+set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location of header files")
+
+set(INSTALL_CONFIG_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+
+configure_package_config_file(${PROJECT_NAME}-config.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake PATH_VARS PROJECT_VERSION LIB_PATH INCLUDE_INSTALL_DIR INSTALL_DESTINATION ${INSTALL_CONFIG_DIR})
+write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake VERSION ${PROJECT_VERSION} COMPATIBILITY ExactVersion)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake DESTINATION ${INSTALL_CONFIG_DIR})

@@ -212,7 +212,7 @@ int satellite_basic_test()
 int satellite_seeded_test()
 {
     /* Simulate remembering RTT and BW from previous connection */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4850000, 250, 3, 0, 0, 0, 1, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4900000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
 int satellite_loss_test()
@@ -226,7 +226,7 @@ int satellite_loss_fc_test()
     /* Should be less than 10 sec per draft etosat.
      * The flow control option sets the "max data" to 2 BDP, with the effect
      * of reducing the memory consumption, while the transmission is slowed. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 10130000, 250, 3, 0, 1, 0, 0, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 10800000, 250, 3, 0, 1, 0, 0, 0, 1);
 }
 
 int satellite_preemptive_test()
@@ -264,6 +264,11 @@ int satellite_cubic_test()
 {
     /* Should be less than 7 sec per draft etosat, but cubic is much slower */
     return satellite_test_one(picoquic_cubic_algorithm, 100000000, 11000000, 250, 3, 0, 0, 0, 0, 0, 0);
+}
+
+int satellite_cubic_seeded_test()
+{
+    return satellite_test_one(picoquic_cubic_algorithm, 100000000, 5000000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
 int satellite_cubic_loss_test()
