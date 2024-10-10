@@ -191,6 +191,7 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_common.c
     picohttp/h3zero_server.c
     picohttp/h3zero_uri.c
+    picohttp/picomask.c
     picohttp/quicperf.c
     picohttp/siduck.c
     picohttp/webtransport.c
@@ -203,12 +204,14 @@ set(PICOHTTP_HEADERS
      picohttp/democlient.h
      picohttp/demoserver.h
      picohttp/pico_webtransport.h
+     picohttp/picomask.h
      picohttp/wt_baton.h)
 
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
     picoquictest/h3zero_stream_test.c
     picoquictest/h3zero_uri_test.c
+    picoquictest/picomask_test.c
     picoquictest/webtransport_test.c)
 
 OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
