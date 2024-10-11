@@ -92,10 +92,10 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "new_token";
     case picoquic_frame_type_ack_ecn:
         return "ack";
-    case picoquic_frame_type_ack_mp:
-        return "ack_mp";
-    case picoquic_frame_type_ack_mp_ecn:
-        return "ack_mp";
+    case picoquic_frame_type_mp_ack:
+        return "mp_ack";
+    case picoquic_frame_type_mp_ack_ecn:
+        return "mp_ack";
     case picoquic_frame_type_retire_connection_id:
         return "retire_connection_id";
     case picoquic_frame_type_mp_retire_connection_id:
@@ -119,8 +119,12 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "path_available";
     case picoquic_frame_type_bdp:
         return "bdp";
-    case picoquic_frame_type_max_paths:
-        return "max_paths";
+    case picoquic_frame_type_max_path_id:
+        return "max_path_id";
+    case picoquic_frame_type_observed_address_v4:
+        return "observed_address_v4";
+    case picoquic_frame_type_observed_address_v6:
+        return "observed_address_v6";
     default:
         return "unknown";
     }

@@ -226,7 +226,7 @@ int h09_demo_client_prepare_stream_open_command(
 
 static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx,
-    uint64_t stream_id, char const* doc_name, char const* fname, uint64_t post_size, uint64_t nb_repeat)
+    uint64_t stream_id, char const* doc_name, char const* fname, char const* range, uint64_t post_size, uint64_t nb_repeat)
 {
     int ret = 0;
     uint8_t buffer[1024];
@@ -315,8 +315,10 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
 
         switch (ctx->alpn) {
         case picoquic_alpn_http_3:
-            ret = h3zero_client_create_stream_request(
-                buffer, sizeof(buffer), path, path_len, post_size, cnx->sni, &request_length);
+            ret = h3zero_client_create_stream_request_ex(
+                buffer, sizeof(buffer), path, path_len, 
+                range, (range == NULL)?0:strlen(range), post_size,
+                cnx->sni, &request_length);
             break;
         case picoquic_alpn_http_0_9:
         default:
@@ -397,6 +399,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
                 ret = picoquic_demo_client_open_stream(cnx, ctx, ctx->demo_stream[i].stream_id,
                     ctx->demo_stream[i].doc_name,
                     ctx->demo_stream[i].f_name,
+                    ctx->demo_stream[i].range,
                     (size_t)ctx->demo_stream[i].post_size,
                     repeat_nb);
                 repeat_nb++;
@@ -609,6 +612,26 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_set_alpn:
         ctx->alpn = picoquic_parse_alpn((const char*)bytes);
         break;
+    case picoquic_callback_path_address_observed:
+    {
+        struct sockaddr_storage addr_local;
+        struct sockaddr_storage addr_observed;
+        uint64_t unique_path_id = stream_id;
+
+        if (picoquic_get_path_addr(cnx, unique_path_id, 1, &addr_local) != 0 ||
+            picoquic_get_path_addr(cnx, unique_path_id, 3, &addr_observed) != 0) {
+            fprintf(stdout, "Cannot read local or observed address on path %" PRIu64 "\n",
+                unique_path_id);
+        } else {
+            char text1[256];
+            char text2[256];
+            fprintf(stdout, "Path %" PRIu64 ", Local: %s, observed : %s\n", unique_path_id,
+                picoquic_addr_text((struct sockaddr*)&addr_local, text1, sizeof(text1)),
+                picoquic_addr_text((struct sockaddr*)&addr_observed, text2, sizeof(text2)));
+        }
+
+        break;
+    }
     default:
         /* unexpected */
         break;
@@ -871,10 +894,40 @@ char const * demo_client_parse_post_size(char const * text, uint64_t * post_size
     return text;
 }
 
+char const * demo_client_parse_range(char const * text, char ** range)
+{
+    if (text[0]  != '#') {
+        *range = NULL;
+    }
+    else {
+        char const* range_start = ++text;
+        size_t l_range = 0;
+        
+        while (*text != ':' && *text != ';' && *text != 0) {
+            text++;
+        }
+        l_range = text - range_start;
+        *range = malloc(l_range + 1);
+        if (*range == NULL) {
+            text = NULL;
+        } else {
+            memcpy(*range, range_start, l_range);
+            (*range)[l_range] = 0;
+
+            if (*text == ':') {
+                text++;
+            }
+        }
+    }
+
+    return text;
+}
 
 char const * demo_client_parse_stream_desc(char const * text, uint64_t default_stream, uint64_t default_previous,
     picoquic_demo_stream_desc_t * desc)
 {
+    memset(desc, 0, sizeof(picoquic_demo_stream_desc_t));
+
     text = demo_client_parse_stream_repeat(text, &desc->repeat_count);
 
     if (text != NULL) {
@@ -895,6 +948,10 @@ char const * demo_client_parse_stream_desc(char const * text, uint64_t default_s
         text = demo_client_parse_post_size(demo_client_parse_stream_spaces(text), &desc->post_size);
     }
 
+    if (text != NULL) {
+        text = demo_client_parse_range(demo_client_parse_stream_spaces(text), (char **)&desc->range);
+    }
+
     /* Skip the final ';' */
     if (text != NULL && *text == ';') {
         text++;
@@ -913,6 +970,10 @@ void demo_client_delete_scenario_desc(size_t nb_streams, picoquic_demo_stream_de
         if (desc[i].doc_name != NULL) {
             free((char*)desc[i].doc_name);
             *(char**)(&desc[i].doc_name) = NULL;
+        }
+        if (desc[i].range != NULL) {
+            free((char*)desc[i].range);
+            *(char**)(&desc[i].range) = NULL;
         }
     }
     free(desc);

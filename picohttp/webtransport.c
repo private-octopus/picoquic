@@ -186,8 +186,58 @@ h3zero_stream_ctx_t* picowt_set_control_stream(picoquic_cnx_t* cnx, h3zero_callb
     return stream_ctx;
 }
 
+int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_address,
+    picoquic_cnx_t** p_cnx, h3zero_callback_ctx_t** p_h3_ctx,
+    h3zero_stream_ctx_t** p_stream_ctx,
+    uint64_t current_time, const char* sni)
+{
+    int ret = 0;
 
-int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stream_ctx_t* stream_ctx, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
+
+    /* use the generic H3 callback */
+    /* Set the client callback context */
+    if (*p_h3_ctx == NULL) {
+        *p_h3_ctx = h3zero_callback_create_context(NULL);
+    }
+    if (*p_h3_ctx == NULL) {
+        ret = 1;
+    }
+    else
+    {
+        /* Create a client connection */
+        if (*p_cnx == NULL) {
+            *p_cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
+                (struct sockaddr*)server_address, current_time, 0, sni, "h3", 1);
+        }
+        if (*p_cnx == NULL) {
+            fprintf(stderr, "Could not create connection context\n");
+            ret = -1;
+        }
+        else {
+            picowt_set_transport_parameters(*p_cnx);
+            picoquic_set_callback(*p_cnx, h3zero_callback, *p_h3_ctx);
+            *p_stream_ctx = picowt_set_control_stream(*p_cnx, *p_h3_ctx);
+
+            if (*p_stream_ctx == NULL) {
+                ret = -1;
+            }
+            else {
+                /* Perform the initialization, settings and QPACK streams
+                 */
+                ret = h3zero_protocol_init(*p_cnx);
+            }
+        }
+    }
+    return ret;
+}
+
+
+/*
+* Connect
+*/
+
+int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stream_ctx_t* stream_ctx, 
+    const char * authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
 {
     /* register the stream ID as session ID */
     int ret = h3zero_declare_stream_prefix(ctx, stream_ctx->stream_id, wt_callback, wt_ctx);
@@ -211,7 +261,7 @@ int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stre
         *bytes++ = h3zero_frame_header;
         bytes += 2; /* reserve two bytes for frame length */
 
-        bytes = h3zero_create_connect_header_frame(bytes, bytes_max, (const uint8_t*)path, strlen(path), "webtransport", NULL,
+        bytes = h3zero_create_connect_header_frame(bytes, bytes_max, authority, (const uint8_t*)path, strlen(path), "webtransport", NULL,
             H3ZERO_USER_AGENT_STRING);
 
         if (bytes == NULL) {
@@ -330,35 +380,56 @@ int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
 
 
 /* Receive a WT capsule.
- */
-int picowt_receive_capsule(picoquic_cnx_t *cnx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule)
+* With web transport, we expect three types of capsule:
+* - Datagram, if datagram was not negotiated at the QUIC level,
+* - Drain session,
+* - Close session.
+* 
+*/
+int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule, h3zero_callback_ctx_t* h3_ctx)
 {
-    int ret = 0;
-    const uint8_t* bytes_next = h3zero_accumulate_capsule(bytes, bytes_max, &capsule->h3_capsule);
+    int ret = 0; 
+    
+    while (ret == 0 && bytes < bytes_max) {
+        const uint8_t* bytes_first = bytes;
+        bytes = h3zero_accumulate_capsule(bytes, bytes_max, &capsule->h3_capsule);
 
-    if (bytes_next == NULL) {
-        picoquic_log_app_message(cnx, "Cannot parse %zu capsule bytes", bytes_max - bytes);
-        ret = -1;
-    }
-    else if (capsule->h3_capsule.is_stored) {
-        if (capsule->h3_capsule.capsule_type != picowt_capsule_close_webtransport_session) {
-            picoquic_log_app_message(cnx, "Received web transport drain session capsule, type: %" PRIu64, capsule->h3_capsule.capsule_type);
-        }
-        else if (capsule->h3_capsule.capsule_type != picowt_capsule_close_webtransport_session) {
-            picoquic_log_app_message(cnx, "Unexpected web transport capsule type: %" PRIu64, capsule->h3_capsule.capsule_type);
+        if (bytes == NULL) {
+            picoquic_log_app_message(cnx, "Cannot parse %zu capsule bytes", bytes_max - bytes_first);
             ret = -1;
+            break;
         }
-        else if (capsule->h3_capsule.capsule_length < 4) {
-            picoquic_log_app_message(cnx, "Web transport capsule too short, %zu bytes", capsule->h3_capsule.capsule_length);
-            ret = -1;
-        }
-        else {
-            capsule->error_msg = picoquic_frames_uint32_decode(
-                capsule->h3_capsule.capsule, capsule->h3_capsule.capsule + capsule->h3_capsule.capsule_length,
-                &capsule->error_code);
-            capsule->error_msg_len = capsule->h3_capsule.capsule_length - 4;
+        else{
+            if (capsule->h3_capsule.is_stored) {
+                switch (capsule->h3_capsule.capsule_type) {
+                case h3zero_capsule_type_datagram:
+                    h3zero_receive_datagram_capsule(cnx, stream_ctx, &capsule->h3_capsule, h3_ctx);
+                    break;
+                case picowt_capsule_drain_webtransport_session:
+                case picowt_capsule_close_webtransport_session:
+                    picoquic_log_app_message(cnx, "Received web transport session capsule, type: 0x%" PRIx64 " (%s)",
+                        capsule->h3_capsule.capsule_type,
+                        (capsule->h3_capsule.capsule_type == picowt_capsule_close_webtransport_session)?"close session":"drain session");
+                    if (capsule->h3_capsule.capsule_length < 4) {
+                        picoquic_log_app_message(cnx, "Web transport capsule too short, %zu bytes", capsule->h3_capsule.capsule_length);
+                        ret = -1;
+                    }
+                    else {
+                        capsule->error_msg = picoquic_frames_uint32_decode(
+                            capsule->h3_capsule.capsule_buffer, capsule->h3_capsule.capsule_buffer + capsule->h3_capsule.capsule_length,
+                            &capsule->error_code);
+                        capsule->error_msg_len = capsule->h3_capsule.capsule_length - 4;
+                    }
+                    break;
+                default:
+                    picoquic_log_app_message(cnx, "Unexpected web transport capsule type: 0x%" PRIx64, capsule->h3_capsule.capsule_type);
+                    ret = -1;
+                    break;
+                }
+            }
         }
     }
+
     return ret;
 }
 
@@ -367,3 +438,40 @@ void picowt_release_capsule(picowt_capsule_t* capsule)
     h3zero_release_capsule(&capsule->h3_capsule);
 }
 
+void picowt_deregister(picoquic_cnx_t* cnx,
+    h3zero_callback_ctx_t* h3_ctx,
+    h3zero_stream_ctx_t* control_stream_ctx)
+{
+    picosplay_node_t* previous = NULL;
+    uint64_t control_stream_id = control_stream_ctx->stream_id;
+    /* Free the streams created for this session */
+    while (1) {
+        picosplay_node_t* next = (previous == NULL) ? picosplay_first(&h3_ctx->h3_stream_tree) : picosplay_next(previous);
+        if (next == NULL) {
+            break;
+        }
+        else {
+            h3zero_stream_ctx_t* stream_ctx =
+                (h3zero_stream_ctx_t*)picohttp_stream_node_value(next);
+
+            if (control_stream_id == stream_ctx->ps.stream_state.control_stream_id &&
+                control_stream_id != stream_ctx->stream_id) {
+                stream_ctx->ps.stream_state.control_stream_id = UINT64_MAX;
+                stream_ctx->path_callback = NULL;
+                stream_ctx->path_callback_ctx = NULL;
+                h3zero_forget_stream(cnx, stream_ctx);
+                picosplay_delete_hint(&h3_ctx->h3_stream_tree, next);
+            }
+            else {
+                previous = next;
+            }
+        }
+    }
+    /* Then deregister the control stream */
+    if (!control_stream_ctx->ps.stream_state.is_fin_sent) {
+        picoquic_add_to_stream(cnx, control_stream_ctx->stream_id, NULL, 0, 1);
+        control_stream_ctx->ps.stream_state.is_fin_sent = 1;
+    }
+    picoquic_unlink_app_stream_ctx(cnx, control_stream_ctx->stream_id);
+    picoquic_log_app_message(cnx, "Prefix for control stream %"PRIu64 " was unregistered", control_stream_id);
+}

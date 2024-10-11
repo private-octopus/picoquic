@@ -546,6 +546,8 @@ int qpack_huffman_base_test()
 #define QPACK_TEST_HEADER_INDEX_HTML_LEN 10
 #define QPACK_TEST_HEADER_PATH ':', 'p', 'a', 't', 'h'
 #define QPACK_TEST_HEADER_PATH_LEN 5
+#define QPACK_TEST_HEADER_RANGE 'r', 'a', 'n', 'g', 'e'
+#define QPACK_TEST_HEADER_RANGE_LEN 5
 #define QPACK_TEST_HEADER_STATUS ':', 's', 't', 'a', 't', 'u', 's'
 #define QPACK_TEST_HEADER_STATUS_LEN 7
 #define QPACK_TEST_HEADER_QPACK_PATH 0xFD, 0xFD, 0xFD 
@@ -554,7 +556,8 @@ int qpack_huffman_base_test()
 #define QPACK_TEST_HEADER_ALLOW_GET_POST 
 #define QPACK_TEST_ALLOWED_METHODS 'G', 'E', 'T', ',', ' ', 'P', 'O', 'S', 'T', ',', ' ', 'C', 'O', 'N', 'N', 'E', 'C', 'T'
 #define QPACK_TEST_ALLOWED_METHODS_LEN 18
-
+#define QPACK_TEST_VALUE_RANGE10 'b', 'y', 't', 'e', 's', '=', '1', '-', '1', '0'
+#define QPACK_TEST_VALUE_RANGE10_LEN 10
 static uint8_t qpack_test_get_slash[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0|17, 0xC0 | 1 };
 
@@ -632,6 +635,17 @@ static uint8_t qpack_status200_akamai[] = {
     0x42, 0x6c, 0x28, 0xe9, 0xe3
 };
 
+static uint8_t qpack_test_get_slash_range[] = {
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0xC0 | 1,
+    0x5f, 0x28, QPACK_TEST_VALUE_RANGE10_LEN, QPACK_TEST_VALUE_RANGE10
+};
+
+static uint8_t qpack_test_get_slash_range_long[] = {
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0xC0 | 1,
+    0x20 | QPACK_TEST_HEADER_RANGE_LEN, QPACK_TEST_HEADER_RANGE,
+    QPACK_TEST_VALUE_RANGE10_LEN, QPACK_TEST_VALUE_RANGE10
+};
+
 #define FILE_10Z '0', '0', '0', '0', '0', '0', '0', '0', '0', '0'
 #define FILE_50Z FILE_10Z , FILE_10Z , FILE_10Z , FILE_10Z , FILE_10Z
 #define FILE_100Z  FILE_50Z , FILE_50Z
@@ -706,6 +720,7 @@ static uint8_t qpack_test_string_zzz[] = { 'Z', 'Z', 'Z' };
 static uint8_t qpack_test_string_1234[] = { '/', '1', '2', '3', '4' };
 static uint8_t qpack_test_string_long[] = { '/', FILE_NAME_LONG };
 static uint8_t qpack_test_string_wtp[] = { CONNECT_TEST_PROTOCOL_PATH };
+static uint8_t qpack_test_range_text[] = { 'b', 'y', 't', 'e', 's', '=', '1', '-', '1', '0' };
 
 typedef struct st_qpack_test_case_t {
     uint8_t * bytes;
@@ -716,84 +731,96 @@ typedef struct st_qpack_test_case_t {
 static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_get_slash, sizeof(qpack_test_get_slash),
-        { h3zero_method_get, qpack_test_string_slash, 1, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_slash, 1, NULL, 0, 0, 0, NULL, 0}
     },
     {
         qpack_test_get_slash_null, sizeof(qpack_test_get_slash_null),
-        { h3zero_method_get, qpack_test_string_slash, 1, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_slash, 1, NULL, 0, 0, 0, NULL, 0}
     },
     {
         qpack_test_get_slash_prefix, sizeof(qpack_test_get_slash_prefix),
-        { h3zero_method_get, qpack_test_string_slash, 1, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_slash, 1, NULL, 0, 0, 0, NULL, 0}
     },
     {
         qpack_test_get_index_html, sizeof(qpack_test_get_index_html),
-        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL, 0, 0, 0, NULL, 0}
     },
     {
         qpack_test_get_index_html_long, sizeof(qpack_test_get_index_html_long),
-        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL, 0, 0, 0, NULL, 0}
     },
     {
         qpack_test_status_404, sizeof(qpack_test_status_404),
-        { 0, NULL, 0, 404, 0, NULL, 0}
+        { 0, NULL, 0, NULL, 0, 404, 0, NULL, 0}
     },
     {
         qpack_test_status_404_code, sizeof(qpack_test_status_404_code),
-        { 0, NULL, 0, 404, 0, NULL, 0}
+        { 0, NULL, 0, NULL, 0, 404, 0, NULL, 0}
     },
     {
         qpack_test_status_404_long, sizeof(qpack_test_status_404_long),
-        { 0, NULL, 0, 404, 0, NULL, 0}
+        { 0, NULL, 0, NULL, 0, 404, 0, NULL, 0}
     },
     {
         qpack_test_response_html, sizeof(qpack_test_response_html),
-        { 0, NULL, 0, 200, h3zero_content_type_text_html, NULL, 0}
+        { 0, NULL, 0, NULL, 0, 200, h3zero_content_type_text_html, NULL, 0}
     },
     {
         qpack_test_status_405_code, sizeof(qpack_test_status_405_code),
-        { 0, NULL, 0, 405, 0, NULL, 0}
+        { 0, NULL, 0, NULL, 0, 405, 0, NULL, 0}
     },
     {
         qpack_test_status_405_null, sizeof(qpack_test_status_405_null),
-        { 0, NULL, 0, 405, 0, NULL, 0}
+        { 0, NULL, 0, NULL, 0, 405, 0, NULL, 0}
     },
     {
         qpack_test_get_zzz, sizeof(qpack_test_get_zzz),
-        { h3zero_method_get, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL, 0, 0, 0, NULL, 0}
     },
     {
         qpack_test_get_1234, sizeof(qpack_test_get_1234),
-        { h3zero_method_get, qpack_test_string_1234, sizeof(qpack_test_string_1234), 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_1234, sizeof(qpack_test_string_1234), NULL, 0, 0, 0, NULL, 0}
     },
     {
         qpack_test_get_ats, sizeof(qpack_test_get_ats),
-        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL, 0, 0, 0, NULL, 0}
     },
     {
         qpack_test_get_ats2, sizeof(qpack_test_get_ats2),
-        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL, 0, 0, 0, NULL, 0}
     },
     {
         qpack_test_post_zzz, sizeof(qpack_test_post_zzz),
-        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), 0, h3zero_content_type_text_plain, NULL, 0}
+        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0}
     },
     {
         qpack_test_post_zzz_null, sizeof(qpack_test_post_zzz_null),
-        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), 0, h3zero_content_type_text_plain, NULL, 0}
+        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0}
     },
     {
         qpack_status200_akamai, sizeof(qpack_status200_akamai),
-        { h3zero_method_none, NULL, 0, 200, h3zero_content_type_not_supported, NULL, 0}
+        { h3zero_method_none, NULL, 0, NULL, 0, 200, h3zero_content_type_not_supported, NULL, 0}
     },
     {
         qpack_get_long_file_name, sizeof(qpack_get_long_file_name),
-        { h3zero_method_get, qpack_test_string_long, sizeof(qpack_test_string_long), 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_long, sizeof(qpack_test_string_long), NULL, 0, 0, 0, NULL, 0}
     },
     {
         qpack_connect_webtransport, sizeof(qpack_connect_webtransport),
-        { h3zero_method_connect, qpack_test_string_wtp, sizeof(qpack_test_string_wtp), 0, 0,
+        { h3zero_method_connect, qpack_test_string_wtp, sizeof(qpack_test_string_wtp), NULL, 0, 0, 0,
         (uint8_t *)web_transport_str, CONNECT_TEST_PROTOCOL_WTP_LEN}
+    },
+    {
+        qpack_test_get_slash_range, sizeof(qpack_test_get_slash_range),
+        { h3zero_method_get, qpack_test_string_slash, 1,
+        qpack_test_range_text, sizeof(qpack_test_range_text),
+        0, 0, NULL, 0}
+    },
+    {
+        qpack_test_get_slash_range_long, sizeof(qpack_test_get_slash_range_long),
+        { h3zero_method_get, qpack_test_string_slash, 1,
+        qpack_test_range_text, sizeof(qpack_test_range_text),
+        0, 0, NULL, 0}
     }
 };
 
@@ -834,6 +861,18 @@ static int h3zero_parse_qpack_test_one(size_t i, uint8_t * data, size_t data_len
     else if (parts.path != NULL && parts.path_length > 0 &&
         memcmp(parts.path, qpack_test_case[i].parts.path, parts.path_length) != 0) {
         DBG_PRINTF("Qpack case %d parse wrong path", i);
+        ret = -1;
+    } else if (parts.range_length != qpack_test_case[i].parts.range_length) {
+        DBG_PRINTF("Qpack case %d parse wrong range length", i);
+        ret = -1;
+    }
+    else if (parts.range == NULL && qpack_test_case[i].parts.range_length > 0) {
+        DBG_PRINTF("Qpack case %d parse range not null", i);
+        ret = -1;
+    }
+    else if (parts.range_length > 0 &&
+        memcmp(parts.range, qpack_test_case[i].parts.range, parts.range_length) != 0) {
+        DBG_PRINTF("Qpack case %d parse wrong range", i);
         ret = -1;
     }
     else if (parts.status != qpack_test_case[i].parts.status) {
@@ -885,7 +924,7 @@ int h3zero_parse_qpack_test()
 int h3zero_prepare_qpack_test()
 {
     int ret = 0;
-    int qpack_compare_test[] = { 0, 2, 4, 7, 8, 13, -1 };
+    int qpack_compare_test[] = { 0, 2, 4, 7, 8, 13, 20, -1 };
     
     for (int i = 0; ret == 0 && qpack_compare_test[i] >= 0; i++) {
         uint8_t buffer[256];
@@ -897,8 +936,10 @@ int h3zero_prepare_qpack_test()
             if (qpack_test_case[j].parts.method == h3zero_method_get)
             {
                 /* Create a request header */
-                bytes = h3zero_create_request_header_frame(buffer, bytes_max,
-                    qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length, "example.com");
+                bytes = h3zero_create_request_header_frame_ex(buffer, bytes_max,
+                    qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length,
+                    qpack_test_case[j].parts.range, qpack_test_case[j].parts.range_length,
+                    "example.com", NULL);
             }
             else  if (qpack_test_case[j].parts.method == h3zero_method_post)
             {
@@ -1029,12 +1070,12 @@ int h3zero_user_agent_test_one(int test_mode, char const * ua_string, uint8_t * 
     switch (test_mode) {
     case 0:
         bytes = h3zero_create_request_header_frame_ex(buffer, bytes_max,
-            (uint8_t*)"/", 1, "example.com", ua_string);
+            (uint8_t*)"/", 1, NULL, 0, "example.com", ua_string);
         break;
     case 1:
         bytes = h3zero_create_post_header_frame_ex(buffer, bytes_max,
             (uint8_t *)h3zero_test_ua_post_path, strlen(h3zero_test_ua_post_path),
-            "example.com", h3zero_content_type_text_plain, ua_string);
+            NULL, 0, "example.com", h3zero_content_type_text_plain, ua_string);
         break;
     case 2:
         bytes = h3zero_create_not_found_header_frame_ex(buffer, bytes_max, ua_string);
@@ -1057,7 +1098,7 @@ int h3zero_user_agent_test_one(int test_mode, char const * ua_string, uint8_t * 
             DBG_PRINTF("Bad length (%d vs %d), test mode: %d, ua string %s", length, target_length, test_mode, (ua_string == NULL) ? "NULL" : ua_string);
             ret = -1;
         } else if (memcmp(buffer, target, target_length) != 0) {
-            DBG_PRINTF("Content does not match, test mode : % d, ua string % s", test_mode, (ua_string == NULL) ? "NULL" : ua_string);
+            DBG_PRINTF("Content does not match, test mode : %d, ua string %s", test_mode, (ua_string == NULL) ? "NULL" : ua_string);
             ret = -1;
         }
     }
@@ -1074,7 +1115,7 @@ int h3zero_user_agent_test()
         for (int test_mode = 0; ret == 0 && test_mode < 4; test_mode++) {
             ret = h3zero_user_agent_test_one(test_mode, ua_string[ua_x], test_list[test_mode].data, test_list[test_mode].data_length);
             if (ret != 0) {
-                DBG_PRINTF("Test fails, test mode : % d, ua_x : %d", test_mode,ua_x);
+                DBG_PRINTF("Test fails, test mode : %d, ua_x : %d", test_mode,ua_x);
             }
         }
     }
@@ -1333,39 +1374,45 @@ int h3zero_stream_test()
  */
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc1[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0},
-    { 0, 4, 0, "test.html", "test.html", 0 },
-    { 0, 8, 0, "main.jpg", "main.jpg", 0 },
-    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, NULL},
+    { 0, 4, 0, "test.html", "test.html", 0, NULL },
+    { 0, 8, 0, "main.jpg", "main.jpg", 0, NULL },
+    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0, NULL }
 };
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc2[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
-    { 0, 4, 0, "main.jpg", "main.jpg", 0 },
-    { 0, 8, 4, "test.html", "test.html", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, NULL },
+    { 0, 4, 0, "main.jpg", "main.jpg", 0, NULL },
+    { 0, 8, 4, "test.html", "test.html", 0, NULL }
 };
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc3[] = {
-    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 }
+    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, NULL }
 };
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc4[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 1000000 },
-    { 0, 4, 0, "/", "_", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 1000000, NULL },
+    { 0, 4, 0, "/", "_", 0, NULL }
 };
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc5[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/32", "_32", 0 },
-    { 0, 4, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/33", "_33", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/32", "_32", 0, NULL },
+    { 0, 4, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/33", "_33", 0, NULL }
 };
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc6[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/200000000000", "_200000000000", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/200000000000", "_200000000000", 0, NULL }
 };
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc7[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 100000000000 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 100000000000, NULL }
 };
+
+static picoquic_demo_stream_desc_t const parse_demo_scenario_desc8[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "test.html", "test.html", 0, "bytes=80-800"},
+    { 0, 4, 0, "/cgi-sink", "_cgi-sink", 10000, "bytes=100-1000" }
+};
+
 
 typedef struct st_demo_scenario_test_case_t {
     char const* text;
@@ -1380,7 +1427,8 @@ static const demo_scenario_test_case_t demo_scenario_test_cases[] = {
     { "/cgi-sink:1000000;4:/", parse_demo_scenario_desc4, sizeof(parse_demo_scenario_desc4) / sizeof(picoquic_demo_stream_desc_t) },
     { "-:/32;-:/33", parse_demo_scenario_desc5, sizeof(parse_demo_scenario_desc5) / sizeof(picoquic_demo_stream_desc_t) },
     { "-:/200000000000", parse_demo_scenario_desc6, sizeof(parse_demo_scenario_desc6) / sizeof(picoquic_demo_stream_desc_t) },
-    { "/cgi-sink:100000000000", parse_demo_scenario_desc7, sizeof(parse_demo_scenario_desc7) / sizeof(picoquic_demo_stream_desc_t) }
+    { "/cgi-sink:100000000000", parse_demo_scenario_desc7, sizeof(parse_demo_scenario_desc7) / sizeof(picoquic_demo_stream_desc_t) },
+    { "test.html:#bytes=80-800;/cgi-sink:10000:#bytes=100-1000;", parse_demo_scenario_desc8, sizeof(parse_demo_scenario_desc8) / sizeof(picoquic_demo_stream_desc_t) }
 };
 
 static size_t nb_demo_scenario_test_cases = sizeof(demo_scenario_test_cases) / sizeof(demo_scenario_test_case_t);
@@ -1411,6 +1459,18 @@ int parse_demo_scenario_test_one(const char * text, picoquic_demo_stream_desc_t 
                     ret = -1;
                 }
                 else if (desc[i].post_size !=  desc_ref[i].post_size) {
+                    ret = -1;
+                }
+                else if (desc[i].range == NULL &&
+                    desc_ref[i].range != NULL) {
+                    ret = -1;
+                }
+                else if (desc[i].range != NULL &&
+                    desc_ref[i].range == NULL) {
+                    ret = -1;
+                }
+                else if (desc[i].range != NULL &&
+                    strcmp(desc[i].range, desc_ref[i].range) != 0) {
                     ret = -1;
                 }
             }
@@ -2335,6 +2395,7 @@ int h3_long_file_name_test()
         scenario_line.doc_name = doc_name_var;
         scenario_line.f_name = file_name_var;
         scenario_line.post_size = 0;
+        scenario_line.range = NULL;
 
         ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, &scenario_line, 1,
             long_file_name_stream_length, 0, 0, 400000, 0, NULL, NULL, NULL, 0);
@@ -2559,8 +2620,13 @@ int http_multi_file_test_one(char const * alpn, picoquic_stream_data_cb_fn serve
     int ret = demo_test_multi_scenario_create(&scenario, &stream_length, random_seed, nb_files, name_length, file_length, dir_www, dir_download);
 
     if (ret == 0) {
-        ret = demo_server_test(alpn, server_callback_fn, (void*)&file_param, scenario, nb_files,
-            stream_length, 0, do_loss, 5000000, 0, NULL, MULTI_FILE_CLIENT_BIN, MULTI_FILE_SERVER_BIN, do_preemptive_repeat);
+        if (stream_length == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = demo_server_test(alpn, server_callback_fn, (void*)&file_param, scenario, nb_files,
+                stream_length, 0, do_loss, 5000000, 0, NULL, MULTI_FILE_CLIENT_BIN, MULTI_FILE_SERVER_BIN, do_preemptive_repeat);
+        }
     }
 
     if (ret == 0) {
@@ -3227,6 +3293,85 @@ int h3zero_settings_test()
 
     if (ret == 0) {
         ret = h3zero_settings_encode_test(h3zero_default_setting_frame + 1, h3zero_default_setting_frame_size - 1, &default_setting_expected);
+    }
+
+    return ret;
+}
+
+            /*
+            * h3zero_content_type_none = 0,
+            * h3zero_content_type_not_supported,
+            * h3zero_content_type_text_html,
+            * h3zero_content_type_text_plain,
+            * h3zero_content_type_image_gif,
+            * h3zero_content_type_image_jpeg,
+            * h3zero_content_type_image_png,
+            * h3zero_content_type_dns_message,
+            * h3zero_content_type_javascript,
+            * h3zero_content_type_json,
+            * h3zero_content_type_www_form_urlencoded,
+            * h3zero_content_type_text_css
+            */
+
+typedef struct st_h3zero_string_content_type_compar_list_t {
+    const char *path;
+    const h3zero_content_type_enum content_type;
+} h3zero_string_content_type_compare_list_t;
+
+char const root_path_str[] = { '/' , 0 };
+char const no_ext_path_str[] = { '/', 'n', 'o', 'e', 'x', 't' , 0 };
+char const htm_path_str[] = { '/', 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'h', 't', 'm', 0 };
+char const html_path_str[] = { '/', 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'h', 't', 'm', 'l', 0 };
+char const txt_path_str[] = { '/', 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 't', 'x', 't', 0 };
+char const gif_path_str[] = { '/', 'i', 'm', 'g', '.', 'g', 'i', 'f', 0 };
+char const jpg_path_str[] = { '/', 'i', 'm', 'g', '.', 'j', 'p', 'g', 0 };
+char const jpeg_path_str[] = { '/', 'i', 'm', 'g', '.', 'j', 'p', 'e', 'g', 0 };
+char const png_path_str[] = { '/', 'i', 'm', 'g', '.', 'p', 'n', 'g', 0 };
+char const js_path_str[] = { '/', 's', 'c', 'r', 'i', 'p', 't', '.', 'j', 's', 0 };
+char const json_path_str[] = { '/', 'd', 'a', 't', 'a', '.', 'j', 's', 'o', 'n', 0 };
+char const css_path_str[] = { '/', 's', 't', 'y', 'l', 'e', '.', 'c', 's', 's', 0 };
+
+char const double_dot_path_str[] = { '/', 's', 't', 'y', 'l', 'e', '.', 'e', 'x', 't', '.', 'h', 't', 'm', 'l', 0 };
+
+static const h3zero_string_content_type_compare_list_t h3zero_string_content_type_compare_list[] = {
+    /* Invalid paths and paths without extensions. */
+    { NULL, h3zero_content_type_text_plain },
+    { root_path_str, h3zero_content_type_text_plain },
+    { no_ext_path_str, h3zero_content_type_text_plain },
+    { txt_path_str, h3zero_content_type_text_plain },
+
+    /* Valid paths with extensions. */
+    { htm_path_str, h3zero_content_type_text_html },
+    { html_path_str, h3zero_content_type_text_html },
+    { gif_path_str, h3zero_content_type_image_gif },
+    { jpg_path_str, h3zero_content_type_image_jpeg },
+    { jpeg_path_str, h3zero_content_type_image_jpeg },
+    { png_path_str, h3zero_content_type_image_png },
+    { js_path_str, h3zero_content_type_javascript },
+    { json_path_str, h3zero_content_type_json },
+    { css_path_str, h3zero_content_type_text_css },
+
+    /* Special cases but valid. */
+    { double_dot_path_str, h3zero_content_type_text_html }
+    /* TODO Add more test cases.
+     * e.g. query string?
+     */
+};
+
+static size_t nb_h3zero_string_content_type_compare = sizeof(h3zero_string_content_type_compare_list) / sizeof(h3zero_string_content_type_compare_list_t);
+
+int h3zero_get_content_type_by_path_test() {
+    int ret = 0;
+
+    for (size_t i = 0; i < nb_h3zero_string_content_type_compare; i++) {
+        h3zero_string_content_type_compare_list_t item = h3zero_string_content_type_compare_list[i];
+
+        h3zero_content_type_enum ct_res;
+        if ((ct_res = h3zero_get_content_type_by_path(item.path)) != item.content_type) {
+            fprintf(stdout, "Path %s expects content type %d, but got %d. \n", item.path, item.content_type, ct_res);
+            ret = -1;
+            break;
+        }
     }
 
     return ret;

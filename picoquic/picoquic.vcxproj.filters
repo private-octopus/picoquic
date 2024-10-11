@@ -203,5 +203,8 @@
     <ClInclude Include="sockloop.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\picoquic_mbedtls\ptls_mbedtls.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

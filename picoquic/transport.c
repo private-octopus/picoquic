@@ -353,32 +353,18 @@ int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
 {
     int ret = 0;
 
-    cnx->is_simple_multipath_enabled = 0;
     cnx->is_multipath_enabled = 0;
 
-    if (cnx->remote_parameters.enable_simple_multipath &&
-        cnx->local_parameters.enable_simple_multipath) {
-        /* Negotiate the simple multipath option */
-        cnx->is_simple_multipath_enabled = 1;
-        if (!cnx->client_mode) {
-            cnx->local_parameters.enable_multipath = 0;
-            cnx->local_parameters.is_multipath_enabled = 0;
-        }
-    }
-    else if (cnx->remote_parameters.is_multipath_enabled &&
+    if (cnx->remote_parameters.is_multipath_enabled &&
         cnx->local_parameters.is_multipath_enabled) {
         /* Enable the multipath option */
         cnx->is_multipath_enabled = 1;
-        cnx->max_paths_acknowledged = cnx->local_parameters.initial_max_paths;
-        cnx->max_paths_remote = cnx->remote_parameters.initial_max_paths;
-        cnx->local_parameters.enable_multipath = 0;
-        cnx->local_parameters.enable_simple_multipath = 0;
-        cnx->max_paths_local = cnx->local_parameters.initial_max_paths;
+        cnx->max_path_id_acknowledged = cnx->local_parameters.initial_max_path_id;
+        cnx->max_path_id_remote = cnx->remote_parameters.initial_max_path_id;
+        cnx->max_path_id_local = cnx->local_parameters.initial_max_path_id;
     }
     else {
         if (!cnx->client_mode) {
-            cnx->local_parameters.enable_simple_multipath = 0;
-            cnx->local_parameters.enable_multipath = 0;
             cnx->local_parameters.is_multipath_enabled = 0;
         } 
     }
@@ -528,22 +514,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_grease_quic_bit);
     }
 
-    if (cnx->local_parameters.enable_multipath && bytes != NULL) {
-        if (cnx->path[0]->p_local_cnxid->cnx_id.id_len >= 0) {
-            bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_enable_multipath);
-        }
-        else {
-            DBG_PRINTF("Do not propose multipath option, cid_len = %u",
-                cnx->path[0]->p_local_cnxid->cnx_id.id_len);
-            cnx->local_parameters.enable_multipath = 0;
-        }
-    }
-
-    if (cnx->local_parameters.enable_simple_multipath > 0 && bytes != NULL) {
-        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_simple_multipath,
-            (uint64_t)cnx->local_parameters.enable_simple_multipath);
-    }
-
     if (cnx->do_version_negotiation && bytes != NULL) {
         bytes = picoquic_encode_transport_param_version_negotiation(bytes, bytes_max, extension_mode, cnx);
     }
@@ -554,8 +524,15 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     }
 
     if (cnx->local_parameters.is_multipath_enabled > 0 && bytes != NULL){
-        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_initial_max_paths,
-            (uint64_t)cnx->local_parameters.initial_max_paths);
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, 
+            picoquic_tp_initial_max_path_id,
+            (uint64_t)cnx->local_parameters.initial_max_path_id);
+    }
+
+    if (cnx->local_parameters.address_discovery_mode > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max,
+            picoquic_tp_address_discovery,
+            (uint64_t)(cnx->local_parameters.address_discovery_mode - 1));
     }
 
     /* This test extension must be the last one in the encoding, as it consumes all the available space */
@@ -614,7 +591,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->remote_parameters.min_ack_delay = 0;
     cnx->remote_parameters.do_grease_quic_bit = 0;
     cnx->remote_parameters.enable_bdp_frame = 0;
-    cnx->remote_parameters.initial_max_paths = 0;
+    cnx->remote_parameters.initial_max_path_id = 0;
 }
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
@@ -857,33 +834,9 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         cnx->remote_parameters.do_grease_quic_bit = 1;
                     }
                     break;
-                case picoquic_tp_enable_multipath: 
-                    if (extension_length != 0) {
-                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Enable Multipath TP");
-                    }
-                    else if (!cnx->client_mode && cnx->path[0]->p_remote_cnxid->cnx_id.id_len == 0) {
-                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0, "Multipath TP, cid length = 0");
-                    }
-                    else {
-                        cnx->remote_parameters.enable_multipath = 1;
-                    }
-                    break;
-                case picoquic_tp_enable_simple_multipath: {
-                    uint64_t enable_simple_multipath =
-                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    if (ret == 0) {
-                        if (enable_simple_multipath > 1) {
-                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Simple Multipath TP");
-                        }
-                        else {
-                            cnx->remote_parameters.enable_simple_multipath = (int)enable_simple_multipath;
-                        }
-                    }
-                    break;
-                }
-                case picoquic_tp_initial_max_paths: {
+                case picoquic_tp_initial_max_path_id: {
                     cnx->remote_parameters.is_multipath_enabled = 1;
-                    cnx->remote_parameters.initial_max_paths = 
+                    cnx->remote_parameters.initial_max_path_id = 
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     break;
                 }
@@ -916,6 +869,29 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         }
                         else {
                             cnx->remote_parameters.enable_bdp_frame = (int)enable_bdp;
+                        }
+                    }
+                    break;
+                }
+                case picoquic_tp_address_discovery: {
+                    uint64_t address_discovery_mode =
+                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    if (ret == 0) {
+                        if (address_discovery_mode > 2) {
+                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Address discovery parameter");
+                        }
+                        else {
+                            /* After doing +1, we get the following:
+                            * address_discovery_mode == 0: nothing goes (TP is absent)
+                            * address_discovery_mode == 1: send only (TP value 0)
+                            * address_discovery_mode == 2: receive only (TP value 1)
+                            * address_discovery_mode == 3: both (TP value 2)
+                            */
+                            cnx->remote_parameters.address_discovery_mode = (int)(address_discovery_mode + 1);
+                            cnx->is_address_discovery_provider = ((cnx->remote_parameters.address_discovery_mode & 2) != 0 &&
+                                (cnx->local_parameters.address_discovery_mode & 1) != 0);
+                            cnx->is_address_discovery_receiver = ((cnx->remote_parameters.address_discovery_mode & 1) != 0 &&
+                                (cnx->local_parameters.address_discovery_mode & 2) != 0);
                         }
                     }
                     break;

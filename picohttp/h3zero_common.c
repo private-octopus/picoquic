@@ -287,10 +287,13 @@ int h3zero_protocol_init(picoquic_cnx_t* cnx)
 	int ret = 0;
 
 	settings.enable_connect_protocol = 1;
+
+	/* Web transport is only enabled if h3 datagrams are supported.
+	 */
 	if (cnx->local_parameters.max_datagram_frame_size > 0) {
 		settings.h3_datagram = 1;
+		settings.webtransport_max_sessions = 1;
 	}
-	settings.webtransport_max_sessions = 1;
 
 	settings_buffer[0] = (uint8_t)h3zero_stream_type_control;
 	if ((settings_last = h3zero_settings_encode(settings_buffer + 1, settings_buffer + sizeof(settings_buffer), &settings)) == NULL) {
@@ -871,10 +874,12 @@ int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
 void h3zero_forget_stream(picoquic_cnx_t* cnx,
 	h3zero_stream_ctx_t* stream_ctx)
 {
-	if (stream_ctx != NULL && !stream_ctx->ps.stream_state.is_fin_sent) {
-		stream_ctx->ps.stream_state.is_fin_sent = 1;
-		picoquic_reset_stream(cnx, stream_ctx->stream_id, 0);
-		picoquic_set_app_stream_ctx(cnx, stream_ctx->stream_id, NULL);
+	if (stream_ctx != NULL){
+		if (!stream_ctx->ps.stream_state.is_fin_sent) {
+			stream_ctx->ps.stream_state.is_fin_sent = 1;
+			picoquic_reset_stream(cnx, stream_ctx->stream_id, 0);
+		}
+		picoquic_unlink_app_stream_ctx(cnx, stream_ctx->stream_id);
 	}
 }
 
@@ -914,6 +919,54 @@ int h3zero_find_path_item(const uint8_t * path, size_t path_length, const picoht
 	return -1;
 }
 
+/* TODO find a better place. */
+h3zero_content_type_enum h3zero_get_content_type_by_path(const char *path) {
+	if (path != NULL) {
+		/* Dots in paths allowed.
+		 * https://datatracker.ietf.org/doc/html/rfc1738
+		 * path -> segment -> xpalphas -> xalpha -> alpha | digit | safe | extra | escape -> safe = $ | - | _ | @ | . |
+		 */
+
+		const char *dot = strrchr(path, '.'); /* recursive to get the last occuraence. */
+		/* if dot is found. */
+		if(dot && dot != path) {
+			const char *ext = dot + 1;
+
+			/*
+			* h3zero_content_type_none = 0,
+			* h3zero_content_type_not_supported,
+			* h3zero_content_type_text_html,
+			* h3zero_content_type_text_plain,
+			* h3zero_content_type_image_gif,
+			* h3zero_content_type_image_jpeg,
+			* h3zero_content_type_image_png,
+			* h3zero_content_type_dns_message,
+			* h3zero_content_type_javascript,
+			* h3zero_content_type_json,
+			* h3zero_content_type_www_form_urlencoded,
+			* h3zero_content_type_text_css
+			*/
+			if (strcmp(ext, "html") == 0 || strcmp(ext, "htm") == 0) {
+				return h3zero_content_type_text_html;
+			} else if (strcmp(ext, "gif") == 0) {
+				return h3zero_content_type_image_gif;
+			} else if (strcmp(ext, "jpg") == 0 || strcmp(ext, "jpeg") == 0) {
+				return h3zero_content_type_image_jpeg;
+			} else if (strcmp(ext, "png") == 0) {
+				return h3zero_content_type_image_png;
+			} else if (strcmp(ext, "js") == 0) {
+				return h3zero_content_type_javascript;
+			} else if (strcmp(ext, "json") == 0) {
+				return h3zero_content_type_json;
+			} else if (strcmp(ext, "css") == 0) {
+				return h3zero_content_type_text_css;
+			}
+		}
+	}
+
+	/* PATH == NULL OR dot not found OR unknown extension. */
+	return h3zero_content_type_text_plain;
+}
 
 /* Processing of the request frame.
 * This function is called after the client's stream is closed,
@@ -953,7 +1006,10 @@ int h3zero_process_request_frame(
 				strlen(h3zero_server_default_page) : stream_ctx->echo_length;
 			o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max,
 				(stream_ctx->echo_length == 0) ? h3zero_content_type_text_html :
-				h3zero_content_type_text_plain);
+				h3zero_get_content_type_by_path(stream_ctx->file_path));
+			/* TODO handle query string
+			 * Currently picoquic doesn't support query strings.
+			 */
 		}
 	}
 	else if (stream_ctx->ps.stream_state.header.method == h3zero_method_post) {
@@ -1335,18 +1391,25 @@ int h3zero_callback_data(picoquic_cnx_t* cnx,
 			stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, ctx, 1, 1);
 		}
 		if (stream_ctx == NULL) {
-			ret = picoquic_stop_sending(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
-
-			if (ret == 0 && IS_BIDIR_STREAM_ID(stream_id)) {
-				ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
+			if (fin_or_event == picoquic_callback_stream_fin) {
+				if (length > 0) {
+					DBG_PRINTF("Received %zu bytes & FIN after stream %" PRIu64 " was discarded\n", length, stream_id);
+				}
 			}
-			ret = -1;
+			else {
+				ret = picoquic_stop_sending(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
+
+				if (ret == 0 && IS_BIDIR_STREAM_ID(stream_id)) {
+					ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
+				}
+				ret = -1;
+			}
 		}
 		else {
 			picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
 		}
 	}
-	if (ret == 0) {
+	if (ret == 0 && stream_ctx != NULL) {
 		if (stream_ctx->is_upgraded) {
 			ret = h3zero_post_data_or_fin(cnx, bytes, length, fin_or_event, stream_ctx);
 		}
@@ -1526,7 +1589,7 @@ int h3zero_callback_datagram(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length,
 		/* find the control stream context, using the full stream ID */
 		h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(h3_ctx, quarter_stream_id*4);
 
-		if (prefix_ctx->function_call == NULL) {
+		if (prefix_ctx == NULL || prefix_ctx->function_call == NULL) {
 			/* Should signal the error HTTP_DATAGRAM_ERROR */
 		} else {
 			h3zero_stream_ctx_t* stream_ctx = h3zero_find_stream(h3_ctx, prefix_ctx->prefix);
@@ -1538,6 +1601,23 @@ int h3zero_callback_datagram(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length,
 		}
 	}
 	return ret;
+}
+
+/* Arrival of a datagram capsule */
+void h3zero_receive_datagram_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, h3zero_capsule_t* capsule, h3zero_callback_ctx_t* h3_ctx)
+{
+	if (stream_ctx == NULL) {
+		/* Application is not yet ready -- just ignore the datagram */
+	}
+	else {
+		h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(h3_ctx, stream_ctx->stream_id);
+		if ( prefix_ctx == NULL || prefix_ctx->function_call == NULL) {
+			/* Should signal the error HTTP_DATAGRAM_ERROR */
+		}
+		else {
+			prefix_ctx->function_call(cnx, capsule->capsule_buffer, capsule->capsule_length, picohttp_callback_post_datagram, stream_ctx, prefix_ctx->function_ctx);
+		}
+	}
 }
 
 typedef struct st_h3zero_prepare_datagram_ctx_t {
@@ -1711,13 +1791,14 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 				stream_ctx = h3zero_find_stream(ctx, stream_id);
 			}
 			if (stream_ctx != NULL) {
-				/* reset post callback. */
 				if (stream_ctx->path_callback != NULL) {
+					/* reset post callback. */
 					ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_reset, stream_ctx, stream_ctx->path_callback_ctx);
 				}
-
-			    /* If a file is open on a client, close and do the accounting. */
-				ret = h3zero_client_close_stream(cnx, ctx, stream_ctx);
+				else {
+					/* If a file is open on a client, close and do the accounting. */
+					ret = h3zero_client_close_stream(cnx, ctx, stream_ctx);
+				}
 			}
 			if (IS_BIDIR_STREAM_ID(stream_id)) {
 				picoquic_reset_stream(cnx, stream_id, 0);
@@ -1901,8 +1982,8 @@ const uint8_t* h3zero_settings_decode(const uint8_t* bytes, const uint8_t* bytes
 
 void h3zero_release_capsule(h3zero_capsule_t* capsule)
 {
-	if (capsule->capsule != NULL) {
-		free(capsule->capsule);
+	if (capsule->capsule_buffer != NULL) {
+		free(capsule->capsule_buffer);
 	}
 	memset(capsule, 0, sizeof(h3zero_capsule_t));
 }
@@ -1969,15 +2050,15 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 		if (capsule->capsule_buffer_size < capsule->capsule_length) {
 			uint8_t* capsule_buffer = (uint8_t*)malloc(capsule->capsule_length);
 			if (capsule_buffer != NULL && capsule->value_read > 0) {
-				memcpy(capsule_buffer, capsule->capsule, capsule->value_read);
+				memcpy(capsule_buffer, capsule->capsule_buffer, capsule->value_read);
 			}
-			if (capsule->capsule != NULL) {
-				free(capsule->capsule);
+			if (capsule->capsule_buffer != NULL) {
+				free(capsule->capsule_buffer);
 			}
-			capsule->capsule = capsule_buffer;
+			capsule->capsule_buffer = capsule_buffer;
 			capsule->capsule_buffer_size = capsule->capsule_length;
 		}
-		if (capsule->capsule == NULL) {
+		if (capsule->capsule_buffer == NULL) {
 			capsule->value_read = 0;
 			capsule->capsule_buffer_size = 0;
 			bytes = NULL;
@@ -1986,7 +2067,7 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 			if (capsule->value_read + available > capsule->capsule_length) {
 				available = capsule->capsule_length - capsule->value_read;
 			}
-			memcpy(capsule->capsule + capsule->value_read, bytes, available);
+			memcpy(capsule->capsule_buffer + capsule->value_read, bytes, available);
 			bytes += available;
 			capsule->value_read += available;
 			if (capsule->value_read >= capsule->capsule_length) {

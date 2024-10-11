@@ -14,7 +14,7 @@ Picoquic options:
   -G cc_algorithm Use the specified congestion control algorithm: reno, cubic, bbr or fast. Defaults to bbr.
   -P number       Set the default spinbit policy
   -O number       Set the default lossbit policy
-  -M number       Multipath option: none(0), full(1), simple(2), both(3)
+  -M              Enable QUIC multipath extension
   -e if           Send on interface (default: -1)
   -C cipher_suite_id specify cipher suite (e.g. -C 20 = chacha20)
   -i per-text-lb-spec See documentation for LB compatible CID configuration
@@ -41,4 +41,6 @@ Picoquic options:
   -j number       use bdp extension frame(1) or don't (0). Default=0
   -W bytes        Max value for CWIN. Default=UINT64_MAX
   -u bytes        Minimum value for CWIN. Default=3072
+  -8              Enable SSLKEYLOG
+  -J mode         provider (0), receiver (1) or both (2).
   -h              This help message

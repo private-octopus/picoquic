@@ -139,6 +139,8 @@ extern "C" {
     void h3zero_init_stream_tree(picosplay_tree_t* h3_stream_tree);
 
     /* Handling of capsules */
+#define h3zero_capsule_type_datagram 0x00
+
 #define H3ZERO_CAPSULE_HEADER_SIZE_MAX 16
     typedef struct st_h3zero_capsule_t {
         uint8_t header_buffer[H3ZERO_CAPSULE_HEADER_SIZE_MAX];
@@ -148,7 +150,7 @@ extern "C" {
         size_t capsule_buffer_size;
         uint64_t capsule_type;
         size_t capsule_length;
-        uint8_t* capsule;
+        uint8_t* capsule_buffer;
         unsigned int is_length_known:1;
         unsigned int is_stored;
     } h3zero_capsule_t;
@@ -182,6 +184,8 @@ extern "C" {
 
     /* CLIENT DEFINITIONS 
      */
+    int h3zero_client_create_stream_request_ex(
+        uint8_t* buffer, size_t max_bytes, uint8_t const* path, size_t path_len, const char* range, size_t range_len, uint64_t post_size, const char* host, size_t* consumed);
     int h3zero_client_create_stream_request(
         uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed);
 
@@ -235,7 +239,10 @@ extern "C" {
 
     void h3zero_forget_stream(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx);
 
+    h3zero_content_type_enum h3zero_get_content_type_by_path(const char *path);
+
     int h3zero_set_datagram_ready(picoquic_cnx_t* cnx, uint64_t stream_id);
+    void h3zero_receive_datagram_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, h3zero_capsule_t* capsule, h3zero_callback_ctx_t* h3_ctx);
     uint8_t* h3zero_provide_datagram_buffer(void* context, size_t length, int ready_to_send);
 
     int h3zero_callback(picoquic_cnx_t* cnx,

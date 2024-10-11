@@ -270,8 +270,8 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_ack:
         frame_name = "ack";
         break;
-    case picoquic_frame_type_ack_mp:
-        frame_name = "ack_mp";
+    case picoquic_frame_type_mp_ack:
+        frame_name = "mp_ack";
         break;
     case picoquic_frame_type_path_challenge:
         frame_name = "path_challenge";
@@ -288,8 +288,8 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_ack_ecn:
         frame_name = "ack_ecn";
         break;
-    case picoquic_frame_type_ack_mp_ecn:
-        frame_name = "ack_mp_ecn";
+    case picoquic_frame_type_mp_ack_ecn:
+        frame_name = "mp_ack_ecn";
         break;
     case picoquic_frame_type_retire_connection_id:
         frame_name = "retire_connection_id";
@@ -319,11 +319,17 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_path_available:
         frame_name = "path_available";
         break;
-    case picoquic_frame_type_max_paths:
-        frame_name = "max_paths";
+    case picoquic_frame_type_max_path_id:
+        frame_name = "max_path_id";
         break;
     case picoquic_frame_type_bdp:
         frame_name = "bdp_frame";
+        break;
+    case picoquic_frame_type_observed_address_v4:
+        frame_name = "observed_address_v4";
+        break;
+    case picoquic_frame_type_observed_address_v6:
+        frame_name = "observed_address_v6";
         break;
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
@@ -409,20 +415,17 @@ char const* textlog_tp_name(picoquic_tp_enum tp_number)
     case picoquic_tp_grease_quic_bit:
         tp_name = "grease_quic_bit";
         break;
-    case picoquic_tp_enable_multipath:
-        tp_name = "enable_multipath";
-        break;
-    case picoquic_tp_enable_simple_multipath:
-        tp_name = "enable_simple_multipath";
-        break;
     case picoquic_tp_version_negotiation:
         tp_name = "version_negotiation";
         break;
     case picoquic_tp_enable_bdp_frame:
         tp_name = "enable_bdp_frame";
         break;
-    case picoquic_tp_initial_max_paths:
-        tp_name = "initial_max_paths";
+    case picoquic_tp_initial_max_path_id:
+        tp_name = "initial_max_path_id";
+        break;
+    case picoquic_tp_address_discovery:
+        tp_name = "address_discovery";
         break;
     default:
         break;
@@ -1396,15 +1399,15 @@ size_t textlog_path_available_or_standby_frame(FILE* F, const uint8_t* bytes, si
     return byte_index;
 }
 
-size_t textlog_max_paths_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+size_t textlog_max_path_id_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     const uint8_t* bytes_end = bytes + bytes_max;
     const uint8_t* bytes0 = bytes;
     uint64_t frame_id = 0;
-    uint64_t max_paths;
+    uint64_t max_path_id;
     size_t byte_index = 0;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_end, &frame_id)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &max_paths)) == NULL) {
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &max_path_id)) == NULL) {
         /* log format error */
         fprintf(F, "    Malformed %s frame: ", textlog_frame_names(frame_id));
         /* log format error */
@@ -1418,9 +1421,9 @@ size_t textlog_max_paths_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
         byte_index = bytes_max;
     }
     else {
-        fprintf(F, "    %s, max_paths: %" PRIu64 "\n",
-            textlog_frame_names(picoquic_frame_type_max_paths),
-            max_paths);
+        fprintf(F, "    %s, max_path_id: %" PRIu64 "\n",
+            textlog_frame_names(picoquic_frame_type_max_path_id),
+            max_path_id);
         byte_index = (bytes - bytes0);
     }
     return byte_index;
@@ -1471,6 +1474,41 @@ size_t textlog_bdp_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
+size_t textlog_observed_address_frame(FILE* F, const uint8_t* bytes, size_t byte_size, uint64_t frame_id)
+{
+    size_t bytes_index = byte_size;
+    const uint8_t* bytes_max = bytes + byte_size;
+    const uint8_t* addr = NULL;
+    uint16_t port = 0;
+    uint64_t sequence = 0;
+    const uint8_t* bytes_next = NULL;
+
+    if ((bytes_next = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
+        (bytes_next = picoquic_parse_observed_address_frame(bytes_next, bytes_max,
+        frame_id, &sequence, &addr, &port)) == NULL) {
+        fprintf(F, "    Malformed %s frame.\n",
+            textlog_frame_names(frame_id));
+    }
+    else {
+        bytes_index = bytes_next - bytes;
+        fprintf(F, "    %s, sequence: %" PRIu64 ", ", textlog_frame_names(frame_id), sequence);
+        if ((frame_id & 1) == 0) {
+            /* IPv4 address */
+            fprintf(F, "addr: %u.%u.%u.%u, ", addr[0], addr[1], addr[2], addr[3]);
+        }
+        else {
+            /* IPv6 address */
+            fprintf(F, "addr: %x:%x:%x:%x:%x:%x:%x:%x, ",
+                256 * addr[0] + addr[1], 256 * addr[2] + addr[3],
+                256 * addr[4] + addr[5], 256 * addr[6] + addr[7],
+                256 * addr[8] + addr[9], 256 * addr[10] + addr[11],
+                256 * addr[12] + addr[13], 256 * addr[14] + addr[15]);
+        }
+        fprintf(F, "port: %u\n", port);
+    }
+    return bytes_index;
+}
+
 void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_t length)
 {
     size_t byte_index = 0;
@@ -1509,10 +1547,10 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
         case picoquic_frame_type_ack_ecn:
             byte_index += textlog_ack_frame(F, cnx_id64, frame_id, bytes + byte_index, length - byte_index, 1, 0);
             break;
-        case picoquic_frame_type_ack_mp:
+        case picoquic_frame_type_mp_ack:
             byte_index += textlog_ack_frame(F, cnx_id64, frame_id, bytes + byte_index, length - byte_index, 0, 1);
             break;
-        case picoquic_frame_type_ack_mp_ecn:
+        case picoquic_frame_type_mp_ack_ecn:
             byte_index += textlog_ack_frame(F, cnx_id64, frame_id, bytes + byte_index, length - byte_index, 1, 1);
             break;
         case picoquic_frame_type_retire_connection_id:
@@ -1615,11 +1653,15 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
         case picoquic_frame_type_path_available:
             byte_index += textlog_path_available_or_standby_frame(F, bytes + byte_index, length - byte_index);
             break;
-        case picoquic_frame_type_max_paths:
-            byte_index += textlog_max_paths_frame(F, bytes + byte_index, length - byte_index);
+        case picoquic_frame_type_max_path_id:
+            byte_index += textlog_max_path_id_frame(F, bytes + byte_index, length - byte_index);
             break;
         case picoquic_frame_type_bdp:
             byte_index += textlog_bdp_frame(F, bytes + byte_index, length - byte_index);
+            break;
+        case picoquic_frame_type_observed_address_v4:
+        case picoquic_frame_type_observed_address_v6:
+            byte_index += textlog_observed_address_frame(F, bytes + byte_index, length - byte_index, frame_id);
             break;
         default: {
             /* Not implemented yet! */

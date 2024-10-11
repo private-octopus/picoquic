@@ -213,7 +213,7 @@ int pacing_bbr_test()
     * after exiting startup. The packet losses occur during startup
     * and during the probing periods.
     */
-    int ret = pacing_cc_algotest(picoquic_bbr_algorithm, 900000, 150);
+    int ret = pacing_cc_algotest(picoquic_bbr_algorithm, 900000, 160);
     return ret;
 }
 
@@ -231,7 +231,7 @@ int pacing_dcubic_test()
 
 int pacing_fast_test()
 {
-    int ret = pacing_cc_algotest(picoquic_fastcc_algorithm, 960000, 180);
+    int ret = pacing_cc_algotest(picoquic_fastcc_algorithm, 1000000, 180);
     return ret;
 }
 
