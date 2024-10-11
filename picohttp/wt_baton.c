@@ -892,32 +892,36 @@ int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
     return ret;
 }
 
-/* Queue the connection to a baton server 
- */
-int wt_baton_connect(picoquic_cnx_t * cnx, wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx)
+/*
+* wt_baton_prepare_context:
+* Prepare the application context (baton_ctx), documenting the h3 context,
+* and initializing the application. Should be called before calling
+* picowt_connect.
+*/
+
+int wt_baton_prepare_context(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx,
+    h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* control_stream_ctx,
+    const char* server_name, const char* path)
 {
     int ret = 0;
 
-    /* Create a stream context for the connect call. */
-    h3zero_stream_ctx_t* stream_ctx = picowt_set_control_stream(cnx, h3_ctx);
-    if (stream_ctx == NULL) {
-        ret = -1;
-    }
-    else {
-        baton_ctx->connection_ready = 1;
-        baton_ctx->is_client = 1;
+    wt_baton_ctx_init(baton_ctx, h3_ctx, NULL, NULL);
+    baton_ctx->cnx = cnx;
+    baton_ctx->is_client = 1;
+    baton_ctx->authority = server_name;
+    baton_ctx->server_path = path;
 
-        if (baton_ctx->server_path != NULL) {
-            ret = wt_baton_ctx_path_params(baton_ctx, (const uint8_t*)baton_ctx->server_path, 
-                strlen(baton_ctx->server_path));
-        }
-        if (ret == 0) {
-            /* send the WT CONNECT */
-            ret = picowt_connect(cnx, h3_ctx, stream_ctx, baton_ctx->authority, baton_ctx->server_path, wt_baton_callback, baton_ctx);
-        }
-        if (ret == 0) {
-            wt_baton_set_receive_ready(baton_ctx);
-        }
+    baton_ctx->connection_ready = 1;
+    baton_ctx->is_client = 1;
+
+    if (baton_ctx->server_path != NULL) {
+        ret = wt_baton_ctx_path_params(baton_ctx, (const uint8_t*)baton_ctx->server_path,
+            strlen(baton_ctx->server_path));
     }
+
+    if (ret == 0) {
+        wt_baton_set_receive_ready(baton_ctx);
+    }
+
     return ret;
 }

@@ -734,6 +734,11 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_unified_logging_t* qlog_fns;
     picoquic_performance_log_fn perflog_fn;
     void* v_perflog_ctx;
+
+#ifdef BBRExperiment
+    bbr_exp bbr_exp_flags;
+#endif
+
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);
@@ -1520,7 +1525,10 @@ typedef struct st_picoquic_cnx_t {
     uint16_t log_unique;
     FILE* f_binlog;
     char* binlog_file_name;
-
+#ifdef PICOQUIC_MEMORY_LOG
+    void (*memlog_call_back)(picoquic_cnx_t* cnx, picoquic_path_t* path, void* v_memlog, int op_code, uint64_t current_time);
+    void *memlog_ctx;
+#endif
 } picoquic_cnx_t;
 
 typedef struct st_picoquic_packet_data_t {

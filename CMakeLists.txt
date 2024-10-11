@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.25.1
+        VERSION 1.1.25.2
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -132,10 +132,13 @@ set(LOGLIB_LIBRARY_FILES
     loglib/csv.c
     loglib/logconvert.c
     loglib/logreader.c
+    loglib/memory_log.c
     loglib/qlog.c
     loglib/svg.c)
 
-set(PICOQUIC_LOGLIB_HEADERS loglib/autoqlog.h)
+set(PICOQUIC_LOGLIB_HEADERS
+    loglib/autoqlog.h
+    loglib/auto_memlog.h)
 
 set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c

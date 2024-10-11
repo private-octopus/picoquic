@@ -127,7 +127,9 @@ extern "C" {
         int nb_turns_required;
     } wt_baton_app_ctx_t;
 
-    int wt_baton_connect(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx);
+    int wt_baton_prepare_context(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx,
+        h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* control_stream_ctx,
+        const char* server_name, const char* path);
 
     int wt_baton_ctx_path_params(wt_baton_ctx_t* baton_ctx, const uint8_t* path, size_t path_length);
 
