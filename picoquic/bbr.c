@@ -928,7 +928,7 @@ static void  BBRUpdateCongestionSignals(picoquic_bbr_state_t* bbr_state, picoqui
     if (rs->newly_lost > 0) {
         bbr_state->loss_in_round = 1;
     }
-#ifdef RTTJitterBuffer
+#ifdef RTTJitterBufferAdapt
     if (IsRTTTooHigh(bbr_state)) {
         bbr_state->rtt_too_high_in_round = 1;
     }
@@ -938,7 +938,7 @@ static void  BBRUpdateCongestionSignals(picoquic_bbr_state_t* bbr_state, picoqui
     }
     BBRAdaptLowerBoundsFromCongestion(bbr_state, path_x);
     bbr_state->loss_in_round = 0;
-#ifdef RTTJitterBuffer
+#ifdef RTTJitterBufferAdapt
     bbr_state->rtt_too_high_in_round = 0;
 #endif
 }
@@ -1227,9 +1227,9 @@ static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
         bbr_state->min_rtt_stamp = bbr_state->probe_rtt_min_stamp;
     }
 
-    if (bbr_state->rtt_short_term_min > bbr_state->min_rtt)
+    if (bbr_state->rtt_short_term_min > bbr_state->min_rtt && bbr_state->min_rtt > PICOQUIC_MINRTT_MARGIN)
     {
-        uint64_t delta_max = bbr_state->min_rtt / 4;
+        uint64_t delta_max = PICOQUIC_MINRTT_MARGIN + bbr_state->min_rtt / 4;
         if (bbr_state->rtt_short_term_min > bbr_state->min_rtt + delta_max) {
             bbr_state->nb_rtt_excess++;
         }
@@ -1762,8 +1762,9 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
 
     case picoquic_bbr_alg_probe_bw_up:
         if (BBRHasElapsedInPhase(bbr_state, bbr_state->min_rtt, current_time) &&
+            bbr_state->min_rtt > PICOQUIC_MINRTT_MARGIN &&
             (bbr_state->nb_rtt_excess > 0 ||
-            path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw))) {
+                path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw))) {
             BBRStartProbeBW_DOWN(bbr_state, path_x, current_time);
         }
         break;
@@ -1902,7 +1903,7 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
         BBRCheckStartupFullBandwidth(bbr_state, rs);
         BBRCheckStartupHighLoss(bbr_state, path_x, rs);
 #ifdef RTTJitterBufferStartup
-        if (IsRTTTooHigh(bbr_state)) {
+        if (bbr_state->min_rtt > PICOQUIC_MINRTT_MARGIN && IsRTTTooHigh(bbr_state)) {
             bbr_state->filled_pipe = 1;
         }
 #endif
