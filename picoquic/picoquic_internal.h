@@ -74,6 +74,9 @@ extern "C" {
 #define PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MIN 1000
 #define PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX 15000
 
+#define PICOQUIC_MINRTT_MARGIN 128 /* Typical uncertainty on RTT measurement, caused for example by process scheduling */
+#define PICOQUIC_MINRTT_THRESHOLD 128 /* RTT MIN value under which congestion control should not be driven by RTT changes */
+
 #define PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX 1000000ull /* one second */
 
 #define PICOQUIC_MICROSEC_SILENCE_MAX 120000000ull /* 120 seconds for now */
