@@ -1244,7 +1244,7 @@ static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
         bbr_state->min_rtt_stamp = bbr_state->probe_rtt_min_stamp;
     }
 
-    if (bbr_state->rtt_short_term_min > bbr_state->min_rtt && bbr_state->min_rtt > PICOQUIC_MINRTT_MARGIN)
+    if (bbr_state->rtt_short_term_min > bbr_state->min_rtt && bbr_state->min_rtt > PICOQUIC_MINRTT_THRESHOLD)
     {
         uint64_t delta_max = PICOQUIC_MINRTT_MARGIN + bbr_state->min_rtt / 4;
         if (bbr_state->rtt_short_term_min > bbr_state->min_rtt + delta_max) {
@@ -1779,7 +1779,7 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
 
     case picoquic_bbr_alg_probe_bw_up:
         if (BBRHasElapsedInPhase(bbr_state, bbr_state->min_rtt, current_time) &&
-            bbr_state->min_rtt > PICOQUIC_MINRTT_MARGIN &&
+            bbr_state->min_rtt > PICOQUIC_MINRTT_THRESHOLD &&
             BBRExpTest(bbr_state, do_exit_probeBW_up_on_delay) &&
             (bbr_state->nb_rtt_excess > 0 ||
                 path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw))) {
@@ -1921,7 +1921,7 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
         BBRCheckStartupFullBandwidth(bbr_state, rs);
         BBRCheckStartupHighLoss(bbr_state, path_x, rs);
 #ifdef RTTJitterBufferStartup
-        if (bbr_state->min_rtt > PICOQUIC_MINRTT_MARGIN && IsRTTTooHigh(bbr_state)) {
+        if (bbr_state->min_rtt > PICOQUIC_MINRTT_THRESHOLD && IsRTTTooHigh(bbr_state)) {
             bbr_state->filled_pipe = 1;
         }
 #endif
