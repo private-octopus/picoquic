@@ -101,3 +101,113 @@ The performance logs are formatted as CSV file, with the following columns:
 * bwe_max: Largest bandwidth estimate (bytes per second)
 * p_quantum: Largest pacing quantum
 * p_rate: Largest pacing rate (bytes per second)
+
+## Media Transport Extensions
+
+Picoquic extends the QPERF specification to enable performance testing for
+"Multimedia" applications, such as application based on "Media over QUIC"
+transport. MoQ transport uses "media streams", which are sent over
+a series of QUIC streams. Example of MoQ transport encoding could be:
+
+* for a media composed of a series of independent frames, open a stream to send
+  a new frame 30 or 60 times per second.
+* send an audio stream as a series of QUIC datagrams, 50 times per seconds.
+* send a video stream as a series of QUIC streams, each stream containing
+  a large I frame followed 30 or 60 times per second by a P frame.
+
+A typical client-server connection may have:
+
+* a client sending an audio stream and three simultaneous video streams for 
+  low, medium and high definition video,
+* a server sending 12 sets of audio and video streams from remote clients.
+
+The media transport sets different priorities to different QUIC streams, so
+that in case of congestion the audio and low definition video streams are properly
+received, while the higher definition video streams may be delayed. If a QUIC
+stream carrying high definition video "falls behind" too much, it will be
+reset; that video transmission will restart as a new stream after the next
+I frame is available.
+
+Our goal here is to test transport level performance, not audio and video
+encodings. We may tolerate some small differences. For example, MoQ sends
+media on unidirectional streams, but we find it easier to have the client
+request media from the server on bidirectional streams, because that
+let us entirely specify the test scenarios from the client.
+
+The current syntax for quicperf scenario description is:
+~~~
+scenario = stream_description |  stream_description ';' *scenario
+
+stream_description = ['*' repeat_count ':'] [ stream_number ':'] post_size ':' response_size
+~~~
+Where "[ xx ]" describes an optional element, "xx | yy" describes an alternative between xx and yy,
+and  *xx describes any number of element xx, including zero.
+
+To enable media testing, we change that description.
+We allow two alternatives to "stream_description": "stream media" and "datagram media",
+and, we add a stream_id to the description, to be used in reports.
+The multimedia stream description starts with the letter "m" (media stream) or
+'d' (datagram stream), followed by priority, a specification of the number of
+frames per second, post and response size. When multiple
+frames can be sent of the same stream, we add to the description
+the number of marks, the size of the mark data sent by the client,
+the size of the mark response from the server, and the delay for
+noticing that the stream has fallen behind and should be reset.
+
+The formal syntax becomes:
+~~~
+scenario = stream_choice |  stream_choice ';' *scenario
+
+id = alphanumeric-string
+
+stream_choice = [ '=' id ':' ]['*' repeat_count ':'] { stream_description | media_stream | datagram_stream }
+
+stream_description = [ stream_number ':'] post_size ':' response_size
+
+
+media_stream = stream_media_description | datagram_media_description
+
+stream_media_description = 's' media_description
+
+datagram_media_description = 'd' media_description
+
+media_description = priority ':' period ':' post_size ':' response_size
+                    [ ':' nb_marks ':'  marks_size ':' mark_response_size ':' reset_delay ]
+~~~
+The modified QPERF program produces a report as a CSV file, with one line per "frame" -- a post/response
+or a mark/response. The columns in the CSV file are:
+
+* id: the alphanumerical "id" field in the scenario specification,
+* stream_type: 's' or 'd' for stream or datagram,
+* repeat_number: the repetition number of this stream,
+* mark_count: the number of the `mark`, or zero if this is the first frame on the stream.
+* send_time: in microseconds from the beginning of the test.
+* nb_bytes_send: number of bytes sent, which should be either `post_size` or `mark_size`,
+* recv_time: time at which the last byte of the `post` or `mark` was received,
+* nb_bytes_recv: number of bytes received, which should be either `post_size` or `mark_size`,
+* is_reset: 1 if the stream was reset at this point, 0 otherwise.
+
+We also modify the "on the wire" format of the PERF protocol. According to
+[the](https://datatracker.ietf.org/doc/draft-banks-quic-performance/),
+_Every stream opened by the client uses the first 8 bytes of the
+stream data to encode a 64-bit unsigned integer in network byte order
+to indicate the length of data the client wishes the server to
+respond with_. We changed that as follow:
+
+* If the first byte is lower than 0xFF, the first 8 bytes encode the desired length of the server response.
+* If the first byte is set to 0xFF, the first 8 bytes encode a media stream specification, using the syntax:
+
+~~~
+media_stream_header {
+   first_byte_mark (8) = 0xFF
+   priority (8),
+   post_size(24),
+   response_size (24)
+}
+~~~
+Once the server has received the media stream header and `post_size` bytes, it posts
+the requested number of response bytes on the stream. The server may
+find on the same stream either a FIN mark or the next media stream header,
+corresponding to the next mark. It repeats the processing, until it encounters
+the FIN mark for the stream.
+
