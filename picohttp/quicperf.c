@@ -30,6 +30,23 @@
 #include "quicperf.h"
 
 /* management of scenarios by the quicperf client 
+* scenario = stream_choice |  stream_choice ';' *scenario
+
+id = alphanumeric-string
+
+stream_choice = [ '=' id ':' ]['*' repeat_count ':'] { stream_description | media_stream | datagram_stream }
+
+stream_description = [ stream_number ':'] post_size ':' response_size
+
+
+media_stream = stream_media_description | datagram_media_description
+
+stream_media_description = 's' media_description
+
+datagram_media_description = 'd' media_description
+
+media_description = priority ':' frequency ':' post_size ':' response_size
+                    [ ':' nb_marks ':'  marks_size ':' mark_response_size ':' reset_delay ]
  */
 
 size_t quicperf_parse_nb_stream(char const* text) {
@@ -84,6 +101,31 @@ char const* quicperf_parse_number(char const* text, int *is_present, int* is_sig
     return text;
 }
 
+char const* quicperf_parse_alphanum(char const* text, int* is_present, char * s, size_t l)
+{
+    size_t nb_read = 0 ;
+    *is_present = 0;
+
+    while (nb_read + 1 < l){
+        char c = *text;
+
+        if ((c >= '0' && c <= '9') ||
+            (c >= 'a' && c <= 'z') ||
+            (c >= 'A' && c <= 'Z')) {
+            s[nb_read++] = c;
+            text++;
+        }
+        else {
+            break;
+        }
+    }
+    if (nb_read >= 0) {
+        *is_present = 1;
+        s[nb_read] = 0;
+    }
+    return text;
+}
+
 char const* quicperf_skip_colon_if_present(char const* text, int is_present)
 {
     if (is_present && text != NULL) {
@@ -92,10 +134,28 @@ char const* quicperf_skip_colon_if_present(char const* text, int is_present)
             text++;
             text = quicperf_parse_stream_spaces(text);
         }
-        else {
+        else if (*text != 0 && *text != ';'){
             text = NULL;
         }
     }
+    return text;
+}
+
+
+char const* quicperf_parse_stream_id(char const* text, char * id, size_t id_size)
+{
+    int is_present = 0;
+   
+    id[0] = 0;
+
+    if (*text == '=') {
+        text = quicperf_parse_stream_spaces(text+1);
+        text = quicperf_parse_alphanum(text, &is_present, id, id_size);
+        if (text != NULL) {
+            text = quicperf_skip_colon_if_present(text, 1);
+        }
+    }
+
     return text;
 }
 
@@ -104,7 +164,8 @@ char const* quicperf_parse_stream_repeat(char const* text, uint64_t* number)
     int is_present = 0;
 
     if (*text == '*') {
-        text = quicperf_parse_number(++text, &is_present, NULL, number);
+        text = quicperf_parse_stream_spaces(text + 1);
+        text = quicperf_parse_number(text, &is_present, NULL, number);
         if (!is_present) {
             text = NULL;
         }
@@ -119,26 +180,25 @@ char const* quicperf_parse_stream_repeat(char const* text, uint64_t* number)
     return text;
 }
 
-char const* quicperf_parse_stream_number(char const* text, uint64_t default_number, uint64_t* number)
+char const* quicperf_parse_media_type(char const* text, quicperf_stream_desc_t* desc)
 {
-    int is_present = 0;
-    int is_signed = 0;
-
-    text = quicperf_parse_number(text, &is_present, &is_signed, number);
-
-    if (!is_present) {
-        text = NULL;
+    if (*text == 's') {
+        desc->media_type = quicperf_media_stream;
+        text++;
     }
-    else if (is_signed) {
-        if (*number == 0) {
-            *number = default_number;
-        }
-        else {
-            text = NULL;
-        }
+    else if (*text == 'd') {
+        desc->media_type = quicperf_media_datagram;
+        text++;
+    }
+    else if (*text == 'b') {
+        desc->media_type = quicperf_media_batch;
+        text++;
+    }
+    else {
+        desc->media_type = quicperf_media_batch;
     }
 
-    return quicperf_skip_colon_if_present(text, is_present);
+    return text;
 }
 
 char const* quicperf_parse_post_size(char const* text, uint64_t default_number, uint64_t* number)
@@ -176,18 +236,120 @@ char const* quicperf_parse_response_size(char const* text, int *is_signed, uint6
     return text;
 }
 
-char const* quicperf_parse_stream_desc(char const* text, uint64_t default_stream, uint64_t default_previous,
-    quicperf_stream_desc_t* desc)
+char const* quicperf_parse_number_param(char const* text, uint64_t max_value, uint64_t* number)
 {
-    text = quicperf_parse_stream_repeat(quicperf_parse_stream_spaces(text), &desc->repeat_count);
+    int is_present = 0;
+    int is_signed = 0;
 
+    text = quicperf_parse_number(text, &is_present, &is_signed, number);
+
+    if (!is_present || is_signed || *number > max_value) {
+        text = NULL;
+    }
+
+    return quicperf_skip_colon_if_present(text, is_present);
+}
+
+char const* quicperf_parse_frequency(char const* text, uint64_t* number)
+{
+    int is_present = 0;
+
+    text = quicperf_parse_number(text, &is_present, NULL, number);
+
+    if (!is_present) {
+        text = NULL;
+    }
+
+    return quicperf_skip_colon_if_present(text, is_present);
+}
+
+char const* quicperf_parse_letter_number_param(char const* text, char letter, uint64_t max_value, uint64_t* number)
+{
+    int is_present = 0;
+    int is_signed = 0;
+
+    if (*text == letter) {
+        text = quicperf_parse_stream_spaces(text + 1);
+        text = quicperf_parse_number(text, &is_present, &is_signed, number);
+
+        if (!is_present || is_signed || (max_value != 0 && *number > max_value)) {
+            text = NULL;
+        }
+        else {
+            text = quicperf_skip_colon_if_present(text, is_present);
+        }
+    }
+
+    return text;
+}
+
+char const* quicperf_parse_priority(char const* text, uint8_t* priority)
+{
+    uint64_t number = 0;
+
+    text = quicperf_parse_letter_number_param(text, 'p', 255, &number);
+    *priority = (uint8_t)number;
+
+    return text;
+}
+
+char const* quicperf_parse_client_server(char const* text, int * is_client_media)
+{
+    if (*text == 'C') {
+        *is_client_media = 1;
+        text = quicperf_skip_colon_if_present(text+1, 1);
+    }
+    else if (*text == 'S') {
+        *is_client_media = 0;
+        text = quicperf_skip_colon_if_present(text+1, 1);
+    }
+    else {
+        *is_client_media = 0;
+    }
+
+    return text;
+}
+
+
+char const* quicperf_parse_media_desc(char const* text, quicperf_stream_desc_t* desc)
+{
     if (text != NULL) {
-        text = quicperf_parse_stream_number(text, default_stream, &desc->stream_id);
+        text = quicperf_parse_frequency(quicperf_parse_stream_spaces(text), &desc->frequency);
     }
 
     if (text != NULL) {
-        text = quicperf_parse_stream_number(text, default_previous, &desc->previous_stream_id);
+        text = quicperf_parse_priority(quicperf_parse_stream_spaces(text), &desc->priority);
     }
+
+    if (text != NULL) {
+        text = quicperf_parse_client_server(quicperf_parse_stream_spaces(text), &desc->is_client_media);
+    }
+
+    if (text != NULL) {
+        text = quicperf_parse_letter_number_param(text, 'n', 0, &desc->nb_frames);
+    }
+
+    if (text != NULL) {
+        text = quicperf_parse_number_param(quicperf_parse_stream_spaces(text), 0xffffff, &desc->frame_size);
+    }
+
+    if (text != NULL) {
+        text = quicperf_parse_letter_number_param(text, 'G', 0, &desc->group_size);
+    }
+
+    if (text != NULL) {
+        text = quicperf_parse_letter_number_param(text, 'I', 0, &desc->first_frame_size);
+    }
+
+    if (text != NULL) {
+        text = quicperf_parse_letter_number_param(text, 'D', 0, &desc->reset_delay);
+    }
+
+    return text;
+}
+
+char const* quicperf_parse_stream_desc(char const* text, quicperf_stream_desc_t* desc)
+{
 
     if (text != NULL) {
         text = quicperf_parse_post_size(quicperf_parse_stream_spaces(text), 0, &desc->post_size);
@@ -198,27 +360,54 @@ char const* quicperf_parse_stream_desc(char const* text, uint64_t default_stream
             &desc->is_infinite, &desc->response_size);
     }
 
+    return text;
+}
+
+/* stream_choice = [ '=' id ':' ][ '=' previous_id ':' ]['*' repeat_count ':'] { stream_description | media_stream | datagram_stream } */
+char const* quicperf_parse_stream_choice(char const* text, quicperf_stream_desc_t* desc)
+{
+    /* Parse the stream ID if present */
+    text = quicperf_parse_stream_id(quicperf_parse_stream_spaces(text), desc->id, sizeof(desc->id));
+
+    /* Parse the previous stream ID if present */
+    if (text != NULL) {
+        text = quicperf_parse_stream_id(quicperf_parse_stream_spaces(text), desc->previous_id, sizeof(desc->previous_id));
+    }
+
+    /* Parse the repeat count. */
+    if (text != NULL) {
+        text = quicperf_parse_stream_repeat(quicperf_parse_stream_spaces(text), &desc->repeat_count);
+    }
+    /* Check whether this is a media stream */
+    if (text != NULL) {
+        text = quicperf_parse_media_type(quicperf_parse_stream_spaces(text), desc);
+    }
+    /* Parse the stream or media description */
+    if (desc->media_type == quicperf_media_batch) {
+        text = quicperf_parse_stream_desc(text, desc);
+    }
+    else {
+        text = quicperf_parse_media_desc(text, desc);
+    }
+
     /* Skip the final ';' */
     if (text != NULL) {
         if (*text == ';') {
-            text++;
+            text = quicperf_parse_stream_spaces(text + 1);
         }
         else if (*text != 0) {
             text = NULL;
         }
     }
-
     return text;
 }
+
 
 int quicperf_parse_scenario_desc(char const* text, size_t* nb_streams, quicperf_stream_desc_t** desc)
 {
     int ret = 0;
     /* first count the number of streams and allocate memory */
     size_t nb_desc = quicperf_parse_nb_stream(text);
-    size_t i = 0;
-    uint64_t previous = QUICPERF_STREAM_ID_INITIAL;
-    uint64_t stream_id = 0;
 
     *desc = (quicperf_stream_desc_t*)malloc(nb_desc * sizeof(quicperf_stream_desc_t));
 
@@ -227,29 +416,17 @@ int quicperf_parse_scenario_desc(char const* text, size_t* nb_streams, quicperf_
         ret = -1;
     }
     else {
-        while (text != NULL) {
-            text = quicperf_parse_stream_spaces(text);
-            if (*text == 0) {
-                break;
-            }
-            if (i >= nb_desc) {
-                /* count was wrong! */
-                break;
-            }
-            else {
-                quicperf_stream_desc_t* stream_desc = &(*desc)[i];
-                text = quicperf_parse_stream_desc(text, stream_id, previous, stream_desc);
-                if (text != NULL) {
-                    stream_id = stream_desc->stream_id + 4;
-                    previous = stream_desc->stream_id;
-                    i++;
-                }
-            }
+        size_t i = 0;
+        memset(*desc, 0, nb_desc * sizeof(quicperf_stream_desc_t));
+
+        while (text != NULL && *text != 0 && i < nb_desc) {
+            text = quicperf_parse_stream_choice(text, &(*desc)[i]);
+            i++;
         }
 
         *nb_streams = i;
 
-        if (text == NULL) {
+        if (text == NULL || i != nb_desc) {
             ret = -1;
         }
     }
@@ -363,16 +540,17 @@ void quicperf_delete_stream_ctx(quicperf_ctx_t* ctx, quicperf_stream_ctx_t* stre
     picosplay_delete_hint(&ctx->quicperf_stream_tree, &stream_ctx->quicperf_stream_node);
 }
 
-int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t stream_id)
+int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, char const *id)
 {
     int ret = 0;
 
     for (size_t i = 0; ret == 0 && i < ctx->nb_scenarios; i++) {
-        if (ctx->scenarios[i].previous_stream_id == stream_id) {
+        if (strcmp(id, ctx->scenarios[i].previous_id) == 0) {
             uint64_t repeat_nb = 0;
-            uint64_t stream_x = ctx->scenarios[i].stream_id;
             do {
+                uint64_t stream_x = picoquic_get_next_local_stream_id(cnx, 0);
                 quicperf_stream_ctx_t* stream_ctx = quicperf_create_stream_ctx(ctx, stream_x);
+
                 stream_ctx->post_size = ctx->scenarios[i].post_size;
                 stream_ctx->response_size = ctx->scenarios[i].response_size;
 
@@ -387,10 +565,12 @@ int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx
                         stream_ctx->length_header[x] = (uint8_t)((stream_ctx->response_size >> ((7 - x) * 8)) & 0xFF);
                     }
                 }
-                ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
-                stream_x += 4;
-                ctx->nb_open_streams++;
                 repeat_nb++;
+                if (repeat_nb == ctx->scenarios[i].repeat_count) {
+                    memcpy(stream_ctx->id, ctx->scenarios[i].id, sizeof(stream_ctx->id));
+                }
+                ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
+                ctx->nb_open_streams++;
             } while (ret == 0 && repeat_nb < ctx->scenarios[i].repeat_count);
         }
     }
@@ -454,7 +634,9 @@ int quicperf_process_stream_data(picoquic_cnx_t * cnx, quicperf_ctx_t * ctx, qui
 
             if (stream_ctx->is_closed){
                 ctx->nb_open_streams--;
-                ret = quicperf_init_streams_from_scenario(cnx, ctx, stream_ctx->stream_id);
+                if (stream_ctx->id[0] != 0) {
+                    ret = quicperf_init_streams_from_scenario(cnx, ctx, stream_ctx->id);
+                }
                 if (ctx->nb_open_streams == 0) {
                     ret = picoquic_close(cnx, QUICPERF_NO_ERROR);
                 } else if (ret == 0 && ctx->is_client) {
@@ -608,7 +790,7 @@ int quicperf_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_ready:
         picoquic_cnx_set_pmtud_required(cnx, 1);
         if (ctx->is_client && ctx->quicperf_stream_tree.root == NULL) {
-            ret = quicperf_init_streams_from_scenario(cnx, ctx, UINT64_MAX);
+            ret = quicperf_init_streams_from_scenario(cnx, ctx, "");
             if (ret != 0 || ctx->nb_open_streams == 0) {
                 picoquic_close(cnx, QUICPERF_ERROR_INTERNAL_ERROR);
             }
