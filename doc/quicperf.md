@@ -145,12 +145,19 @@ and  *xx describes any number of element xx, including zero.
 
 To enable media testing, we change that description.
 We allow two alternatives to "stream_description": "stream media" and "datagram media",
-and, we add a stream_id to the description, to be used in reports.
+and, we add a stream_id to the description, to be used in reports. For all
+streams, we can specify a "previous stream" to indicate that the
+specified stream shall only start after all repetitions of this previous stream
+are complete. For all streams, we may also specify a "priority", which should
+be applied by both client and server.
+
 The multimedia stream description starts with the letter "m" (media stream) or
-'d' (datagram stream), followed by priority, a specification of the number of
-frames per second, post and response size. When multiple
+'d' (datagram stream), followed by frequency expressed as the number of
+frames per second, and indication of whether  then number of frames and frame size. 
+
+When multiple
 frames can be sent of the same stream, we add to the description
-the number of marks, the size of the mark data sent by the client,
+the number of frames per group, the size of the mark data sent by the client,
 the size of the mark response from the server, and the delay for
 noticing that the stream has fallen behind and should be reset.
 
@@ -158,21 +165,31 @@ The formal syntax becomes:
 ~~~
 scenario = stream_choice |  stream_choice ';' *scenario
 
-id = alphanumeric-string
+id = alphanumeric-string | '-'
+previous-stream-id = alphanumeric-string
 
-stream_choice = [ '=' id ':' ]['*' repeat_count ':'] { stream_description | media_stream | datagram_stream }
+stream_choice = [ '=' id [':' previous-stream-id ':' ]]['*' repeat_count ':']
+                [ ':' 'p' priority ] { stream_description | media_stream | datagram_stream }
 
-stream_description = [ stream_number ':'] post_size ':' response_size
-
+stream_description = post_size ':' response_size
 
 media_stream = stream_media_description | datagram_media_description
 
-stream_media_description = 's' media_description
+stream_media_description = 'm' media_description
 
 datagram_media_description = 'd' media_description
 
-media_description = priority ':' period ':' post_size ':' response_size
-                    [ ':' nb_marks ':'  marks_size ':' mark_response_size ':' reset_delay ]
+media_description = frequency  ':' [ 'n' nb_frames ':' ] [ client_or_server ':' ] frame_size ':' 
+              [ group_description ':' ] [ first_frame ':'] [ reset_delay ':' ]
+
+client_or_server = 'C' | 'S'
+
+group_description = 'G' frames_per_group
+
+first_frame = ['I' first_frame_size ]
+
+reset_delay = ['D' reset_delay_in_ms ]
+
 ~~~
 The modified QPERF program produces a report as a CSV file, with one line per "frame" -- a post/response
 or a mark/response. The columns in the CSV file are:

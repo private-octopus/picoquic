@@ -178,6 +178,7 @@
     <ClCompile Include="parseheadertest.c" />
     <ClCompile Include="picoquic_lb_test.c" />
     <ClCompile Include="pn2pn64test.c" />
+    <ClCompile Include="quicperf_test.c" />
     <ClCompile Include="quic_tester.c" />
     <ClCompile Include="sacktest.c" />
     <ClCompile Include="satellite_test.c" />

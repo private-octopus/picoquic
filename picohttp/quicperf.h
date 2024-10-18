@@ -37,17 +37,33 @@
 extern "C" {
 #endif
 
+typedef enum {
+    quicperf_media_batch = 0,
+    quicperf_media_stream,
+    quicperf_media_datagram,
+} quicperf_media_type_enum;
+
 typedef struct st_quicperf_stream_desc_t {
+    char id[16];
+    char previous_id[16];
     uint64_t repeat_count;
-    uint64_t stream_id; /* if -, use default  */
-    uint64_t previous_stream_id; /* if -, use default  */
-    uint64_t post_size; /* Mandatory */
+    quicperf_media_type_enum media_type;
+    uint64_t frequency;
+    uint64_t post_size;
     uint64_t response_size; /* If infinite, client will ask stop sending at this size */
+    uint64_t nb_frames;
+    uint64_t frame_size;
+    uint64_t group_size;
+    uint64_t first_frame_size;
+    uint64_t reset_delay;
+    uint8_t priority;
     int is_infinite; /* Set if the response size was set to "-xxx" */
+    int is_client_media;
 } quicperf_stream_desc_t;
 
 typedef struct st_quicperf_stream_ctx {
     picosplay_node_t quicperf_stream_node;
+    char id[16];
     uint64_t stream_id;
     uint8_t length_header[8];
     uint64_t post_size; /* Unknown on server, from scenario on client */
@@ -58,6 +74,12 @@ typedef struct st_quicperf_stream_ctx {
     uint64_t post_fin_time; /* Time last byte sent (client) or received (server) */
     uint64_t response_time; /* Time first byte sent (server) or received (client) */
     uint64_t response_fin_time; /* Time last byte sent (server) or received (client) */
+    uint64_t next_mark_time;
+    uint64_t nb_marks; /* number of frames required */
+    uint64_t nb_mark_sent;
+    uint64_t mark_size;
+    uint64_t mark_response_size;
+    uint8_t priority;
     int stop_for_fin;
     int is_stopped;
     int is_closed;
