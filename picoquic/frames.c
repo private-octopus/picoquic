@@ -2836,6 +2836,9 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
             }
         }
     }
+    if (cnx->path[0]->rtt_min < PICOQUIC_MINRTT_THRESHOLD && *ack_gap > 32) {
+        *ack_gap = 32;
+    }
 }
 
 /* In a multipath environment, a packet can carry acknowledgements for multiple paths.
