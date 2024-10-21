@@ -354,6 +354,7 @@ set_picoquic_compile_settings(picohttp-core)
 add_executable(picoquicdemo
     picoquicfirst/picoquicdemo.c
     picoquicfirst/getopt.c)
+idf_build_executable(picoquicdemo)
 target_link_libraries(picoquicdemo
     PRIVATE
         ${PTLS_LIBRARIES}
@@ -366,6 +367,7 @@ target_include_directories(picoquicdemo PRIVATE picohttp)
 set_picoquic_compile_settings(picoquicdemo)
 
 add_executable(picolog_t picolog/picolog.c)
+idf_build_executable(picolog_t)
 target_link_libraries(picolog_t PRIVATE picoquic-log picoquic-core)
 target_include_directories(picolog_t PRIVATE loglib)
 set_picoquic_compile_settings(picolog_t)
