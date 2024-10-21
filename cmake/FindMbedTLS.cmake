@@ -2,6 +2,8 @@
 # set(MBEDTLS_LIBRARY mbedtls)
 # set(MBEDTLS_INCLUDE_DIRS ${MBEDTLS_SOURCE_DIR}/include)
 
+if (NOT MbedTLS_FOUND)
+
 message(STATUS "mbedtls/prefix: ${MBEDTLS_PREFIX}")
 message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
 message(STATUS "CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
@@ -37,4 +39,6 @@ find_package_handle_standard_args(MbedTLS REQUIRED_VARS
 if (MbedTLS_FOUND)
     set(MBEDTLS_LIBRARIES ${MBEDTLS_LIBRARY} ${MBEDTLS_X509} ${MBEDTLS_CRYPTO})
     mark_as_advanced(MBEDTLS_LIBRARIES MBEDTLS_INCLUDE_DIRS)
+endif ()
+
 endif ()
