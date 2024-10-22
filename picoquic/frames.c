@@ -2717,7 +2717,7 @@ static uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate
     if (cnx->path[0]->rtt_min < 4 * PICOQUIC_ACK_DELAY_MIN) {
         uint64_t mult = 4;
         if (cnx->path[0]->rtt_min > PICOQUIC_ACK_DELAY_MIN) {
-            mult = ((uint64_t)(4 * PICOQUIC_ACK_DELAY_MIN)) / cnx->path[0]->smoothed_rtt;
+            mult = ((uint64_t)(4 * PICOQUIC_ACK_DELAY_MIN)) / cnx->path[0] ->rtt_min;
         }
         nb_packets *= mult;
     }
@@ -5172,14 +5172,6 @@ const uint8_t* picoquic_decode_ack_frequency_frame(const uint8_t* bytes, const u
             if (delta > 0) {
                 cnx->ack_frequency_sequence_remote = seq;
                 cnx->ack_gap_remote = packets;
-#if 0
-                if (2 * microsec > cnx->path[0]->rtt_min) {
-                    microsec = cnx->path[0]->rtt_min >> 1;
-                    if (microsec < 10) {
-                        microsec = 10;
-                    }
-                }
-#endif
                 cnx->ack_delay_remote = microsec;
                 cnx->ack_ignore_order_remote = (ignore_order) ? 1 : 0;
                 cnx->ack_reordering_threshold_remote = reordering_threshold;
