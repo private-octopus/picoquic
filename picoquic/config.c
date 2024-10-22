@@ -696,6 +696,10 @@ int picoquic_config_command_line_ex(char const * opt_string, int* p_optind, int 
     return ret;
 }
 
+#if 0
+/* Reading parameters from a file instead of the command line.
+* Apparently never used, also not tested.
+ */
 int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
 {
     int ret = 0;
@@ -769,7 +773,7 @@ int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
 
     return ret;
 }
-
+#endif
 
 
 /* Create a QUIC Context based on configuration data.
