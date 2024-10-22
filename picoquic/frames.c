@@ -2714,11 +2714,10 @@ static uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate
     if (cnx->is_ack_frequency_negotiated && !cnx->path[0]->is_ssthresh_initialized) {
         nb_packets /= 2;
     }
-
-    if (cnx->path[0]->smoothed_rtt < 4 * PICOQUIC_ACK_DELAY_MIN) {
+    if (cnx->path[0]->rtt_min < 4 * PICOQUIC_ACK_DELAY_MIN) {
         uint64_t mult = 4;
-        if (cnx->path[0]->smoothed_rtt > PICOQUIC_ACK_DELAY_MIN) {
-            mult = ((uint64_t)(4 * PICOQUIC_ACK_DELAY_MIN)) / cnx->path[0]->smoothed_rtt;
+        if (cnx->path[0]->rtt_min > PICOQUIC_ACK_DELAY_MIN) {
+            mult = ((uint64_t)(4 * PICOQUIC_ACK_DELAY_MIN)) / cnx->path[0] ->rtt_min;
         }
         nb_packets *= mult;
     }
@@ -2779,13 +2778,14 @@ uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t* cnx, uint64_t rtt, uint6
 void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint64_t remote_min_ack_delay,
     uint64_t data_rate, uint64_t* ack_gap, uint64_t* ack_delay_max)
 {
-    uint64_t return_data_rate = 0;
     uint64_t nb_packets = picoquic_compute_packets_in_window(cnx, data_rate);
 
     *ack_delay_max = picoquic_compute_ack_delay_max(cnx, rtt, remote_min_ack_delay);
     *ack_gap = picoquic_compute_ack_gap(cnx, data_rate, nb_packets);
 
     if (2 * cnx->path[0]->smoothed_rtt > 3 * cnx->path[0]->rtt_min) {
+        uint64_t return_data_rate = 0;
+
         /* This code kicks in when the smoothed RTT is larger than 1.5 times the RTT Min.
          * If that is the case, the default computation of ACK gap and ACK delay may
          * be wrong, and a more conservative computation is required.
@@ -2835,6 +2835,9 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
                 }
             }
         }
+    }
+    if (cnx->path[0]->rtt_min < *ack_delay_max * 4 && *ack_gap > 32) {
+        *ack_gap = 32;
     }
 }
 

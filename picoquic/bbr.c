@@ -25,6 +25,14 @@
 #include "cc_common.h"
 #include "picoquic_utils.h"
 
+#ifdef BBRExperiment
+#define BBRExpGate(ctx, test, action) { if (ctx->exp_flags.test) action; }
+#define BBRExpTest(ctx, test) ( (ctx)->exp_flags.test )
+#else
+#define BBRExpGate(ctx, test, action) {}
+#define BBRExpTest(ctx, test) (1)
+#endif
+
 #define RTTJitterBuffer On
 #define RTTJitterBufferStartup On
 #define RTTJitterBufferProbe On
@@ -257,6 +265,10 @@ typedef struct st_picoquic_bbr_state_t {
     /* Experimental extensions, may or maynot be a good idea. */
     uint64_t wifi_shadow_rtt; /* Shadow RTT used for wifi connections. */
     double quantum_ratio; /* allow application to use a different default than 0.1% of bandwidth (or 1ms of traffic) */
+#ifdef BBRExperiment
+    /* Control flags for BBR improvements */
+    bbr_exp exp_flags;
+#endif
 
 } picoquic_bbr_state_t;
 
@@ -439,6 +451,11 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
     bbr_state->extra_acked_delivered = 0;
     /* Support for the wifi_shadow_rtt hack */
     bbr_state->wifi_shadow_rtt = path_x->cnx->quic->wifi_shadow_rtt;
+
+#ifdef BBRExperiment
+    /* Support for BBR Experiment */
+    bbr_state->exp_flags = path_x->cnx->quic->bbr_exp_flags;
+#endif
     /* Support for experimenting with the send_quantum ratio */
     bbr_state->quantum_ratio = path_x->cnx->quic->bbr_quantum_ratio;
     if (bbr_state->quantum_ratio == 0) {
@@ -675,7 +692,7 @@ static void BBROnExitRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
         bbr_state->recovery_packet_number = UINT64_MAX;
         bbr_state->packet_conservation = 0;
 
-        if (bbr_state->is_pto_recovery) {
+        if (bbr_state->is_pto_recovery && BBRExpTest(bbr_state, do_handle_suspension)) {
             /* TODO:
              * we should try to enter startup with a high enough BW. However, 
              * simple attempts to restore the BW parameters have proven ineffective.
@@ -928,7 +945,7 @@ static void  BBRUpdateCongestionSignals(picoquic_bbr_state_t* bbr_state, picoqui
     if (rs->newly_lost > 0) {
         bbr_state->loss_in_round = 1;
     }
-#ifdef RTTJitterBuffer
+#ifdef RTTJitterBufferAdapt
     if (IsRTTTooHigh(bbr_state)) {
         bbr_state->rtt_too_high_in_round = 1;
     }
@@ -938,7 +955,7 @@ static void  BBRUpdateCongestionSignals(picoquic_bbr_state_t* bbr_state, picoqui
     }
     BBRAdaptLowerBoundsFromCongestion(bbr_state, path_x);
     bbr_state->loss_in_round = 0;
-#ifdef RTTJitterBuffer
+#ifdef RTTJitterBufferAdapt
     bbr_state->rtt_too_high_in_round = 0;
 #endif
 }
@@ -1227,9 +1244,9 @@ static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
         bbr_state->min_rtt_stamp = bbr_state->probe_rtt_min_stamp;
     }
 
-    if (bbr_state->rtt_short_term_min > bbr_state->min_rtt)
+    if (bbr_state->rtt_short_term_min > bbr_state->min_rtt && bbr_state->min_rtt > PICOQUIC_MINRTT_THRESHOLD)
     {
-        uint64_t delta_max = bbr_state->min_rtt / 4;
+        uint64_t delta_max = PICOQUIC_MINRTT_MARGIN + bbr_state->min_rtt / 4;
         if (bbr_state->rtt_short_term_min > bbr_state->min_rtt + delta_max) {
             bbr_state->nb_rtt_excess++;
         }
@@ -1639,7 +1656,7 @@ static int BBRCheckTimeToProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_
 {
     if (BBRHasElapsedInPhase(bbr_state, bbr_state->bw_probe_wait, current_time) ||
         BBRIsRenoCoexistenceProbeTime(bbr_state, path_x) ||
-        BBRCheckAppLimitedEnded(bbr_state, rs)) {
+        (BBRExpTest(bbr_state, do_enter_probeBW_after_limited) && BBRCheckAppLimitedEnded(bbr_state, rs))) {
         BBRStartProbeBW_REFILL(bbr_state, path_x);
         return 1;
     }
@@ -1654,7 +1671,7 @@ static void BBRStartProbeBW_DOWN(picoquic_bbr_state_t* bbr_state, picoquic_path_
     bbr_state->cwnd_gain = BBRProbeBwDownCwndGain;   /* maintain cwnd */
     BBRResetCongestionSignals(bbr_state);
     bbr_state->bw_probe_up_cnt = UINT32_MAX; /* not growing inflight_hi */
-    if (bbr_state->probe_probe_bw_quickly) {
+    if (bbr_state->probe_probe_bw_quickly && BBRExpTest(bbr_state, do_rapid_start)) {
         BBRPickProbeWaitEarly(bbr_state);
     }
     else {
@@ -1762,8 +1779,10 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
 
     case picoquic_bbr_alg_probe_bw_up:
         if (BBRHasElapsedInPhase(bbr_state, bbr_state->min_rtt, current_time) &&
+            bbr_state->min_rtt > PICOQUIC_MINRTT_THRESHOLD &&
+            BBRExpTest(bbr_state, do_exit_probeBW_up_on_delay) &&
             (bbr_state->nb_rtt_excess > 0 ||
-            path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw))) {
+                path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw))) {
             BBRStartProbeBW_DOWN(bbr_state, path_x, current_time);
         }
         break;
@@ -1902,7 +1921,7 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
         BBRCheckStartupFullBandwidth(bbr_state, rs);
         BBRCheckStartupHighLoss(bbr_state, path_x, rs);
 #ifdef RTTJitterBufferStartup
-        if (IsRTTTooHigh(bbr_state)) {
+        if (bbr_state->min_rtt > PICOQUIC_MINRTT_THRESHOLD && IsRTTTooHigh(bbr_state)) {
             bbr_state->filled_pipe = 1;
         }
 #endif
@@ -2287,6 +2306,7 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_lost_feedback:
             /* Feedback has been lost. It will be restored at the next notification. */
+            BBRExpGate(bbr_state, do_control_lost, break);
             BBREnterLostFeedback(bbr_state, path_x);
             break;
         case picoquic_congestion_notification_rtt_measurement:

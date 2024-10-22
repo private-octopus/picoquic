@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.25.1"
+#define PICOQUIC_VERSION "1.1.25.3"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1528,6 +1528,24 @@ void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_s
 */
 void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio);
 
+/* Temporary code, do define a set of BBR flags that
+* turn on and off individual extensions. We want to use that
+* to do "before/after" measurements.
+ */
+#define BBRExperiment on
+#ifdef BBRExperiment
+/* Control flags for BBR improvements */
+typedef struct st_bbr_exp {
+    unsigned int do_early_exit : 1;
+    unsigned int do_rapid_start : 1;
+    unsigned int do_handle_suspension : 1;
+    unsigned int do_control_lost : 1;
+    unsigned int do_exit_probeBW_up_on_delay : 1;
+    unsigned int do_enter_probeBW_after_limited : 1;
+} bbr_exp;
+
+void picoquic_set_bbr_exp(picoquic_quic_t * quic, bbr_exp* exp);
+#endif
 /* The experimental API 'picoquic_set_priority_limit_for_bypass' 
 * instruct the stack to send the high priority streams or datagrams
 * immediately, even if congestion control would normally prevent it.

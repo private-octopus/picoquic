@@ -736,7 +736,17 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
                 }
             }
         }
-        
+#ifdef BBRExperiment
+        if (ret == 0) {
+            quic->bbr_exp_flags.do_early_exit = 1;
+            quic->bbr_exp_flags.do_rapid_start = 1;
+            quic->bbr_exp_flags.do_handle_suspension = 1;
+            quic->bbr_exp_flags.do_control_lost = 1;
+            quic->bbr_exp_flags.do_exit_probeBW_up_on_delay = 1;
+            quic->bbr_exp_flags.do_enter_probeBW_after_limited = 1;
+        }
+#endif
+
         if (ret != 0) {
             picoquic_free(quic);
             quic = NULL;
@@ -4583,6 +4593,11 @@ void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx)
 void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
     if (cnx != NULL) {
+#ifdef PICOQUIC_MEMORY_LOG
+        if (cnx->memlog_call_back != NULL) {
+            cnx->memlog_call_back(cnx, NULL, cnx->memlog_ctx, 1, 0);
+        }
+#endif
         if (cnx->quic->perflog_fn != NULL) {
             (void)(cnx->quic->perflog_fn)(cnx->quic, cnx, 0);
         }
@@ -4878,6 +4893,12 @@ void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantu
     quic->bbr_quantum_ratio = quantum_ratio;
 }
 
+#ifdef BBRExperiment
+void picoquic_set_bbr_exp(picoquic_quic_t* quic, bbr_exp* exp)
+{
+    quic->bbr_exp_flags = *exp;
+}
+#endif
 void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit)
 {
     cnx->priority_limit_for_bypass = priority_limit;
