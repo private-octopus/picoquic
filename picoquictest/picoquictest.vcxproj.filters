@@ -123,7 +123,7 @@
     <ClCompile Include="delay_tolerant_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-        <ClCompile Include="webtransport_test.c">
+    <ClCompile Include="webtransport_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="code_version_test.c">
@@ -133,6 +133,45 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="webtransport_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="h3zero_uri_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="wifitest.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="quic_tester.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="cpu_limited.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="minicrypto_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="app_limited.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mbedtls_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="sockloop_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="h3zero_stream_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="openssl_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pacing_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="p2p_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ack_frequency_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

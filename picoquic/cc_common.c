@@ -26,22 +26,41 @@
 
 uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-    uint64_t ret = path_x->path_packet_number;
+    uint64_t sequence_number;
 
-    return ret;
+    if (cnx->is_multipath_enabled) {
+            sequence_number = path_x->pkt_ctx.send_sequence;
+        }
+    else {
+       sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
+    }
+    return sequence_number;
 }
 
 uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-    uint64_t ret = path_x->path_packet_acked_number;
+    uint64_t highest_acknowledged;
 
-    return ret;
+    if (cnx->is_multipath_enabled) {
+        highest_acknowledged = path_x->pkt_ctx.highest_acknowledged;
+    }
+    else {
+        highest_acknowledged = cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged;
+    }
+    return highest_acknowledged;
 }
 
 uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-    uint64_t ret = path_x->path_packet_acked_time_sent;
-    return ret;
+    uint64_t latest_time_acknowledged;
+
+    if (cnx->is_multipath_enabled) {
+        latest_time_acknowledged = path_x->pkt_ctx.latest_time_acknowledged;
+    }
+    else {
+        latest_time_acknowledged = cnx->pkt_ctx[picoquic_packet_context_application].latest_time_acknowledged;
+    }
+    return latest_time_acknowledged;
 }
 
 
@@ -73,7 +92,8 @@ void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t * rtt_track, uint64_t rt
     }
 }
 
-int picoquic_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event, uint64_t lost_packet_number)
+int picoquic_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event,
+    uint64_t lost_packet_number, double error_rate_max)
 {
     int ret = 0;
     uint64_t next_number = rtt_track->last_lost_packet_number;
@@ -93,13 +113,42 @@ int picoquic_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_conge
 
         switch (event) {
         case picoquic_congestion_notification_repeat:
-            ret = rtt_track->smoothed_drop_rate > PICOQUIC_SMOOTHED_LOSS_THRESHOLD;
+            ret = rtt_track->smoothed_drop_rate > error_rate_max;
             break;
         case picoquic_congestion_notification_timeout:
             ret = 1;
         default:
             break;
         }
+    }
+
+    return ret;
+}
+
+int picoquic_hystart_loss_volume_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event,  uint64_t nb_bytes_newly_acked, uint64_t nb_bytes_newly_lost)
+{
+    int ret = 0;
+
+    rtt_track->smoothed_bytes_lost_16 -= rtt_track->smoothed_bytes_lost_16 / 16;
+    rtt_track->smoothed_bytes_lost_16 += nb_bytes_newly_lost;
+    rtt_track->smoothed_bytes_sent_16 -= rtt_track->smoothed_bytes_sent_16 / 16;
+    rtt_track->smoothed_bytes_sent_16 += nb_bytes_newly_acked + nb_bytes_newly_lost;
+
+    if (rtt_track->smoothed_bytes_sent_16 > 0) {
+        rtt_track->smoothed_drop_rate = ((double)rtt_track->smoothed_bytes_lost_16) / ((double)rtt_track->smoothed_bytes_sent_16);
+    }
+    else {
+        rtt_track->smoothed_drop_rate = 0;
+    }
+
+    switch (event) {
+    case picoquic_congestion_notification_acknowledgement:
+        ret = rtt_track->smoothed_drop_rate > PICOQUIC_SMOOTHED_LOSS_THRESHOLD;
+        break;
+    case picoquic_congestion_notification_timeout:
+        ret = 1;
+    default:
+        break;
     }
 
     return ret;

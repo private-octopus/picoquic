@@ -643,7 +643,7 @@ int warptest_check_stats(warptest_ctx_t* mt_ctx, warptest_type_enum media_type)
         else if (stats->nb_frames != 0) {
             uint64_t average = stats->sum_delays / stats->nb_frames;
             uint64_t variance = (stats->sum_square_delays / stats->nb_frames) - (average * average);
-            uint64_t sigma = (uint64_t)sqrt((double)variance);
+            uint64_t sigma = picoquic_sqrt_for_tests(variance);
 
             if (average > 25000 || sigma > 12500 || stats->max_delay > 100000) {
                 ret = -1;
@@ -1266,7 +1266,7 @@ void warptest_init_transport_parameters(picoquic_tp_t* tp, int client_mode, warp
     else {
         tp->initial_max_stream_id_unidir = spec->max_streams_client;
     }
-    tp->idle_timeout = 30000;
+    tp->max_idle_timeout = 30000;
     tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE;
     tp->ack_delay_exponent = 3;
     tp->active_connection_id_limit = 4;

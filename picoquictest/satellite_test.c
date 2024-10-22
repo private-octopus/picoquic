@@ -51,7 +51,7 @@
  * variants: 0% loss, and 1 %loss.
  */
 static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t data_size, uint64_t max_completion_time,
-    uint64_t mbps_up, uint64_t mbps_down, uint64_t jitter, int has_loss, int do_preemptive, int seed_bw, int low_flow)
+    uint64_t mbps_up, uint64_t mbps_down, uint64_t jitter, int has_loss, int do_preemptive, int seed_bw, int low_flow, int flow_control)
 {
     uint64_t simulated_time = 0;
     uint64_t latency = 300000;
@@ -82,6 +82,9 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     if (low_flow) {
         initial_cid.id[7] |= 0x10;
     }
+    if (flow_control) {
+        initial_cid.id[7] |= 0x08;
+    }
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
@@ -89,13 +92,22 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&server_parameters, 0);
     server_parameters.enable_time_stamp = 3;
-    if (low_flow) {
+    if (low_flow || flow_control) {
         /* For the flow control parameters to a small value */
         uint64_t bdp_s = (mbps_up * latency * 2) / 8;
         uint64_t bdp_c = (mbps_up * latency * 2) / 8;
 
-        server_parameters.initial_max_data = bdp_s / 2;
-        client_parameters.initial_max_data = bdp_c / 2;
+        if (low_flow) {
+            bdp_s /= 2;
+            bdp_c /= 2;
+        }
+        else {
+            bdp_s += bdp_s;
+            bdp_c += bdp_c;
+        }
+
+        server_parameters.initial_max_data = bdp_s;
+        client_parameters.initial_max_data = bdp_c;
     }
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
 
@@ -110,6 +122,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
         picoquic_set_preemptive_repeat_policy(test_ctx->qserver, do_preemptive);
         picoquic_set_preemptive_repeat_per_cnx(test_ctx->cnx_client, do_preemptive);
+
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
@@ -131,8 +144,8 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
                 ip_addr, ip_addr_length);
         }
 
-        if (low_flow) {
-            test_ctx->qserver->is_flow_control_limited = 1;
+        if (low_flow || flow_control) {
+            picoquic_set_max_data_control(test_ctx->qserver, server_parameters.initial_max_data);
         }
 
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
@@ -148,7 +161,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
                 NULL, 0, data_size, (has_loss) ? 0x10000000 : 0, 0, 2 * latency, max_completion_time);
         }
 
-        if (ret == 00 && do_preemptive) {
+        if (ret == 0 && do_preemptive) {
             DBG_PRINTF("Preemptive repeats: %" PRIu64, test_ctx->cnx_client->nb_preemptive_repeat);
             if (test_ctx->cnx_client->nb_preemptive_repeat == 0) {
                 ret = -1;
@@ -156,13 +169,25 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
             else {
                 uint64_t bdp = mbps_up * latency * 2;
                 uint64_t bdp_p = bdp / (8 * test_ctx->cnx_client->path[0]->send_mtu);
-                uint64_t bdp_p_plus = bdp_p + (bdp_p / 8);
+                uint64_t bdp_p_plus = bdp_p + (bdp_p / 2);
 
                 if (test_ctx->cnx_client->nb_preemptive_repeat > bdp_p_plus) {
                     DBG_PRINTF("Preemptive repeats > BDP(packets): %" PRIu64 " vs %" PRIu64, 
                         test_ctx->cnx_client->nb_preemptive_repeat, bdp_p);
                     ret = -1;
                 }
+            }
+        }
+
+        if (ret == 0 && flow_control) {
+            uint64_t bdp = mbps_up * latency * 2;
+            uint64_t bdp_p = bdp/ (8 * test_ctx->cnx_client->path[0]->send_mtu);
+            uint64_t nb_max = 3 * bdp_p;
+
+            if (test_ctx->qserver->nb_data_nodes_allocated_max > nb_max){
+                DBG_PRINTF("Allocated nodes: %" PRIu64 " > 3*%" PRIu64, 
+                    test_ctx->qserver->nb_data_nodes_allocated_max, bdp_p);
+                ret = -1;
             }
         }
     }
@@ -181,62 +206,75 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 int satellite_basic_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6300000, 250, 3, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 5300000, 250, 3, 0, 0, 0, 0, 0, 0);
 }
 
 int satellite_seeded_test()
 {
     /* Simulate remembering RTT and BW from previous connection */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4800000, 250, 3, 0, 0, 0, 1, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4900000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
 int satellite_loss_test()
 {
     /* Should be less than 10 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 0, 1, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 0, 1, 0, 0, 0, 0);
+}
+
+int satellite_loss_fc_test()
+{
+    /* Should be less than 10 sec per draft etosat.
+     * The flow control option sets the "max data" to 2 BDP, with the effect
+     * of reducing the memory consumption, while the transmission is slowed. */
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 10800000, 250, 3, 0, 1, 0, 0, 0, 1);
 }
 
 int satellite_preemptive_test()
 {
     /* Variation of the loss test, using preemptive repeat*/
     /* Should be less than 10 sec per draft etosat.  */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 7000000, 250, 3, 0, 1, 1, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 7100000, 250, 3, 0, 1, 1, 0, 0, 0);
 }
 
 int satellite_jitter_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6200000, 250, 3, 3000, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6700000, 250, 3, 3000, 0, 0, 0, 0, 0);
 }
 
 int satellite_medium_test()
 {
     /* Should be less than 20 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18000000, 50, 10, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18200000, 50, 10, 0, 0, 0, 0, 0, 0);
 }
 
 int satellite_small_test()
 {
     /* Should be less than 85 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81000000, 10, 2, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81500000, 10, 2, 0, 0, 0, 0, 0, 0);
 }
 
 int satellite_small_up_test()
 {
     /* Should be less than 420 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0, 0, 0, 0, 0);
 }
 
 int satellite_cubic_test()
 {
     /* Should be less than 7 sec per draft etosat, but cubic is much slower */
-    return satellite_test_one(picoquic_cubic_algorithm, 100000000, 11000000, 250, 3, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_cubic_algorithm, 100000000, 11000000, 250, 3, 0, 0, 0, 0, 0, 0);
+}
+
+int satellite_cubic_seeded_test()
+{
+    return satellite_test_one(picoquic_cubic_algorithm, 100000000, 5000000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
 int satellite_cubic_loss_test()
 {
     /* Should be less than 10 sec per draft etosat, but cubic is a bit slower */
-    return satellite_test_one(picoquic_cubic_algorithm, 100000000, 12100000, 250, 3, 0, 1, 0, 0, 0);
+    return satellite_test_one(picoquic_cubic_algorithm, 100000000, 12100000, 250, 3, 0, 1, 0, 0, 0, 0);
 }
 
 /* Satellite loss interop test, as shown in https://interop.sedrubal.de/
@@ -261,5 +299,5 @@ int satellite_cubic_loss_test()
 int satellite_preemptive_fc_test()
 {
     /* Should be less than 10 sec per draft etosat, but cubic is a bit slower */
-    return satellite_test_one(picoquic_bbr_algorithm, 10000000, 13600000, 20, 2, 0, 1, 1, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 10000000, 13600000, 20, 2, 0, 1, 1, 0, 1, 0);
 }

@@ -98,7 +98,6 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     if (af == AF_INET6) {
 #ifdef IPV6_ECN
         {
-            DWORD ecn = PICOQUIC_ECN_ECT_0;
             DWORD recvEcn = 1;
             /* Request receiving ECN reports in recvmsg */
             ret = setsockopt(sd, IPPROTO_IPV6, IPV6_ECN, (char *)&recvEcn, sizeof(recvEcn));
@@ -111,16 +110,8 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
                 *recv_set = 1;
                 ret = 0;
             }
-
-            /* Request setting ECN_ECT_0 in outgoing packets */
-            if (setsockopt(sd, IPPROTO_IP, IPV6_ECN, (const char *)&ecn, sizeof(ecn)) < 0) {
-                DBG_PRINTF("setsockopt IPv6_ECN (0x%x) fails, errno: %d\n", ecn, errno);
-                *send_set = 0;
-            }
-            else {
-                *send_set = 1;
-            }
         }
+        * send_set = 0;
 #else
         * recv_set = 0;
         * send_set = 0;
@@ -130,8 +121,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
         /* Using IPv4 options. */
 #if defined(IP_ECN)
         {
-            DWORD ecn = PICOQUIC_ECN_ECT_0;
-            INT recvEcn =1;
+            DWORD recvEcn =1;
 
             /* Request receiving ECN reports in recvmsg */
             ret = setsockopt(sd, IPPROTO_IP, IP_ECN, (CHAR*)&recvEcn, sizeof(recvEcn));
@@ -144,15 +134,6 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
                 *recv_set = 1;
                 ret = 0;
             }
-
-            /* Request setting ECN_ECT_0 in outgoing packets */
-            if (setsockopt(sd, IPPROTO_IP, IP_ECN, (const char*)&ecn, sizeof(ecn)) < 0) {
-                DBG_PRINTF("setsockopt IP_ECN (0x%x) fails, errno: %d\n", ecn, errno);
-                *send_set = 0;
-            }
-            else {
-                *send_set = 1;
-            }
         }
 #else
         * recv_set = 0;
@@ -163,7 +144,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     if (af == AF_INET6) {
 #if defined(IPV6_TCLASS)
         {
-            unsigned int ecn = PICOQUIC_ECN_ECT_0; /* Setting ECN_ECT_0 in outgoing packets */
+            unsigned int ecn = PICOQUIC_ECN_ECT_1; /* Setting ECN_ECT_1 in outgoing packets */
             if (setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPV6_TCLASS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
@@ -200,8 +181,8 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     else {
 #if defined(IP_TOS)
         {
-            unsigned int ecn = PICOQUIC_ECN_ECT_0;
-            /* Request setting ECN_ECT_0 in outgoing packets */
+            unsigned int ecn = PICOQUIC_ECN_ECT_1;
+            /* Request setting ECN_ECT_1 in outgoing packets */
             if (setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPv4 IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
@@ -555,7 +536,6 @@ void picoquic_socks_cmsg_format(
     int control_length = 0;
     struct cmsghdr* last_cmsg = NULL;
     int is_null = 0;
-
     /* Format the control message */
     if (addr_from != NULL && addr_from->sa_family != 0) {
         if (addr_from->sa_family == AF_INET) {
@@ -578,7 +558,19 @@ void picoquic_socks_cmsg_format(
                     is_null = 1;
                 }
             }
-
+#ifdef IP_ECN
+            if (!is_null) {
+                /* Request setting ECN_ECT_1 in outgoing packets */
+                DWORD* p_ecn = (DWORD*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+                    &control_length, IPPROTO_IP, IP_ECN, sizeof(DWORD));
+                if (p_ecn != NULL) {
+                    *p_ecn = PICOQUIC_ECN_ECT_1;
+                }
+                else {
+                    is_null = 1;
+                }
+            }
+#endif
         }
         else {
             struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
@@ -600,6 +592,19 @@ void picoquic_socks_cmsg_format(
                     is_null = 1;
                 }
             }
+#ifdef IPV6_ECN
+            if (!is_null) {
+                /* Request setting ECN_ECT_1 in outgoing packets */
+                DWORD* p_ecn = (DWORD*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
+                    &control_length, IPPROTO_IPV6, IPV6_ECN, sizeof(DWORD));
+                if (p_ecn != NULL) {
+                    *p_ecn = PICOQUIC_ECN_ECT_1;
+                }
+                else {
+                    is_null = 1;
+                }
+            }
+#endif
         }
     }
     if (!is_null && send_msg_size > 0 && send_msg_size < message_length) {
@@ -912,8 +917,6 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t* ctx)
             }
         }
         else {
-            DBG_PRINTF("Receive async immediate (WSARecvMsg) on UDP socket %d -- %d bytes !\n",
-                (int)ctx->fd, numberOfBytesReceived);
             ctx->nb_immediate_receive++;
         }
     } while (should_retry);
@@ -1327,27 +1330,41 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
  * In Unix and Windows, Wireshark reads these keys from a file. The name
  * of the file is passed in the environment variable SSLKEYLOGFILE,
  * which is accessed through system dependent API.
+ * 
+ * This is a very dangerous API, so we implement two levels of protection:
+ *  * The feature can only be enabled if the build is compiled without
+ *    the option "PICOQUIC_WITHOUT_SSLKEYLOG"
+ *  * The feature is only enabled if the "SSLKEYLOG" option is
+ *    explicitly set.
  */
 
 void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
 {
-    char* keylog_filename = NULL;
+#ifdef PICOQUIC_WITHOUT_SSLKEYLOG
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+#endif /* WINDOWS*/
+#else
+    if (picoquic_is_sslkeylog_enabled(quic)) {
+        char* keylog_filename = NULL;
 
 #ifdef _WINDOWS
-    size_t len;
-    
-    if (_dupenv_s(&keylog_filename, &len, "SSLKEYLOGFILE") != 0 ||
-        keylog_filename == NULL) {
-        return;
-    }
+        size_t len;
+
+        if (_dupenv_s(&keylog_filename, &len, "SSLKEYLOGFILE") != 0 ||
+            keylog_filename == NULL) {
+            return;
+        }
 #else
-    keylog_filename = getenv("SSLKEYLOGFILE");
-    if (keylog_filename == NULL) {
-        return;
-    }
+        keylog_filename = getenv("SSLKEYLOGFILE");
+        if (keylog_filename == NULL) {
+            return;
+        }
 #endif
 
-    picoquic_set_key_log_file(quic, keylog_filename);
+        picoquic_set_key_log_file(quic, keylog_filename);
+    }
+#endif /* PICOQUIC_WITHOUT_SSLKEYLOG */
 }
 
 /* Some socket errors, but not all, indicate that a destination is

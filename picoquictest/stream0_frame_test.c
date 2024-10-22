@@ -671,11 +671,12 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
         if (R_or_F == 0) {
             stream->fin_requested = 1;
             stream->fin_sent = 1;
-            ret = picoquic_sack_list_reset(&stream->sack_list, 0, stream->sent_offset, 0);
+            ret = picoquic_sack_list_reset(&stream->sack_list, 0, stream->sent_offset + 1, 0);
         }
         else {
             stream->reset_requested = 1;
             stream->reset_sent = 1;
+            stream->reset_acked = 1;
         }
     }
     if (ret == 0) {
@@ -895,5 +896,157 @@ int stream_rank_test()
     ret |= stream_rank_test_one(n, stream_rank, stream_server_bidir, 0, 0);
     ret |= stream_rank_test_one(n, stream_rank, stream_server_unidir, 1, 0);
 
+    return ret;
+}
+
+/* Unit test of "picoquic_provide_stream_data_buffer"
+ */
+
+static int picoquic_set_stream_buffer_context(picoquic_stream_data_buffer_argument_t * stream_data_context,
+    uint8_t * bytes, uint8_t * bytes_max, uint64_t stream_id, uint64_t stream_offset)
+{
+    int ret = 0;
+    uint8_t* bytes0 = bytes;
+    memset(stream_data_context, 0, sizeof(picoquic_stream_data_buffer_argument_t));
+    if ((bytes = picoquic_format_stream_frame_header(bytes, bytes_max, stream_id, stream_offset)) == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Compute the length */
+        stream_data_context->bytes = bytes0;
+        stream_data_context->byte_index = bytes - bytes0;
+        stream_data_context->allowed_space = bytes_max - bytes;
+        stream_data_context->byte_space = bytes_max - bytes;
+        stream_data_context->length = 0;
+        stream_data_context->is_fin = 0;
+        stream_data_context->is_still_active = 0;
+        stream_data_context->app_buffer = NULL;
+    }
+    return ret;
+}
+
+typedef enum {
+    size_test_full = 0,
+    size_test_minus_1,
+    size_test_minus_2,
+    size_test_minus_3,
+    size_test_1,
+    size_test_0,
+    size_test_too_long,
+    size_test_last
+} size_test_enum;
+
+int provide_stream_buffer_test_one(uint64_t stream_id, uint64_t stream_offset, size_test_enum size_test, int is_fin)
+{
+    uint8_t packet[512];
+    uint8_t test_data[512];
+    picoquic_stream_data_buffer_argument_t stream_data_context;
+    int ret = picoquic_set_stream_buffer_context(&stream_data_context, packet, packet + sizeof(packet), stream_id, stream_offset);
+    size_t length = 0;
+
+    if (ret == 0) {
+
+        switch (size_test) {
+        case size_test_full:
+            length = stream_data_context.byte_space;
+            break;
+        case size_test_minus_1:
+            length = stream_data_context.byte_space - 1;
+            break;
+        case size_test_minus_2:
+            length = stream_data_context.byte_space - 2;
+            break;
+        case size_test_minus_3:
+            length = stream_data_context.byte_space - 3;
+            break;
+        case size_test_1:
+            length = 1;
+            break;
+        case size_test_0:
+            length = 0;
+            break;
+        case size_test_too_long:
+            length = stream_data_context.byte_space;
+            stream_data_context.allowed_space = length - 1;
+            break;
+        default:
+            ret = -1;
+            break;
+        }
+    }
+
+    if (ret == 0) {
+        uint8_t * data_ptr = picoquic_provide_stream_data_buffer(&stream_data_context, length, is_fin, 0);
+
+        if (size_test == size_test_too_long) {
+            ret = (data_ptr == NULL) ? 0 : -1;
+        }
+        else if (data_ptr == NULL) {
+            ret = -1;
+        }
+        else if (data_ptr + length > packet + sizeof(packet)) {
+            ret = -1;
+        }
+        else {
+            uint8_t* packet_start = packet;
+            uint64_t received_stream_id;
+            uint64_t received_offset;
+            size_t received_length = 0;
+            size_t consumed = 0;
+            int received_fin = 0;
+
+            if (length > 0) {
+                /* set test data value */
+                for (size_t i = 0; i < length; i++) {
+                    test_data[i] = (uint8_t)(i ^ 0x7f);
+                }
+                /* Fill the data space */
+                memcpy(data_ptr, test_data, length);
+            }
+            /* Get the start point of the data frame */
+            while (*packet_start == picoquic_frame_type_padding && packet_start < packet + sizeof(packet)) {
+                packet_start++;
+            }
+            /* decode the stream header */
+            if (picoquic_parse_stream_header(packet_start,
+                sizeof(packet) - (packet_start - packet), &received_stream_id, &received_offset,
+                &received_length, &received_fin, &consumed) != 0) {
+                ret = -1;
+            }
+            else if (received_stream_id != stream_id ||
+                received_offset != stream_offset ||
+                received_length != length ||
+                received_fin != is_fin) {
+                ret = -1;
+            }
+            else if (length > 0 &&
+                memcmp(packet_start + consumed, test_data, length) != 0) {
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}
+
+int provide_stream_buffer_test()
+{
+    uint64_t stream_ids[4] = { 0, 7, 127, 0x10000 };
+    uint64_t offsets[4] = { 0, 1, 65, 0x10000 };
+    int ret = 0;
+
+    for (int i_stream = 0; ret == 0 && i_stream < 4; i_stream++) {
+        for (int i_offset = 0; ret == 0 &&  i_offset < 4; i_offset++) {
+            for (int is_fin = 0; ret == 0 &&  is_fin < 2; is_fin++) {
+                for (size_test_enum size_test = 0; ret == 0 &&  size_test < size_test_last; size_test++) {
+                    ret = provide_stream_buffer_test_one(stream_ids[i_stream], offsets[i_offset], size_test, is_fin);
+                    if (ret != 0) {
+                        DBG_PRINTF("Fails for stream %" PRIu64 ", offset %" PRIu64 ", fin %d, test %d",
+                            stream_ids[i_stream], offsets[i_offset], is_fin, size_test);
+                        break;
+                    }
+                }
+            }
+        }
+    }
     return ret;
 }

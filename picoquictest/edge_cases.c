@@ -302,7 +302,7 @@ int ec00_zero_test()
     int ret = edge_case_prepare(&test_ctx, 0, 1, &simulated_time, 0, 4);
 
     if (ret == 0) {
-        ret = edge_case_complete(test_ctx, &simulated_time, 40000);
+        ret = edge_case_complete(test_ctx, &simulated_time, 100000);
     }
 
     if (ret == 0) {
@@ -515,7 +515,7 @@ int ec5c_silly_cid_test()
     }
 
     if (ret == 0) {
-        ret = edge_case_complete(test_ctx, &simulated_time, 600000);
+        ret = edge_case_complete(test_ctx, &simulated_time, 3000000);
     }
 
     if (test_ctx != NULL) {
@@ -537,6 +537,8 @@ int ec9a_preemptive_amok_test()
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     uint64_t initial_losses = 0b100000000000;
     uint8_t test_case_id = 0x9a;
+    uint64_t cnx_server_idle_timeout = 0;
+    uint64_t cnx_server_nb_preemptive_repeat = 0;
     int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 12);
 
     if (ret == 0) {
@@ -547,10 +549,10 @@ int ec9a_preemptive_amok_test()
         }
         else if ( test_ctx->cnx_server->cnx_state != picoquic_state_ready ||
             !test_ctx->test_finished || 
-            test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest == NULL){
+            test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].pending_first == NULL){
             DBG_PRINTF("Unexpected state, server: %d, test finished: %d, queue for repeat %s",
                 test_ctx->cnx_server->cnx_state, test_ctx->test_finished, 
-                (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest == NULL)?"empty":"full");
+                (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].pending_first == NULL)?"empty":"full");
             ret = -1;
         }
     }
@@ -566,14 +568,18 @@ int ec9a_preemptive_amok_test()
         picoquic_cnx_t * last_cnx;
         int loop_count = 0;
         int send_count = 0;
-        const int send_count_max = 25;
+        const int send_count_max = 50;
         uint64_t repeat_begin = simulated_time;
         uint64_t repeat_duration = 0;
 
+        cnx_server_idle_timeout = test_ctx->cnx_server->idle_timeout;
+        cnx_server_nb_preemptive_repeat = test_ctx->cnx_server->nb_preemptive_repeat;
+
         picoquic_reinsert_by_wake_time(test_ctx->qserver, test_ctx->cnx_server, simulated_time);
 
-        while (test_ctx->cnx_server->cnx_state == picoquic_state_ready && loop_count < 10000 && ret == 0) {
+        while (test_ctx->qserver->current_number_connections > 0 && test_ctx->cnx_server->cnx_state == picoquic_state_ready && loop_count < 10000 && ret == 0) {
             loop_count++;
+            cnx_server_nb_preemptive_repeat = test_ctx->cnx_server->nb_preemptive_repeat;
             simulated_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
             ret = picoquic_prepare_next_packet_ex(test_ctx->qserver, simulated_time, buffer,
                 sizeof(buffer), &send_length, &addr_to, &addr_from, &if_index, &log_id,
@@ -593,12 +599,12 @@ int ec9a_preemptive_amok_test()
                     send_count, send_count_max);
                 ret = -1;
             }
-            else if (repeat_duration > test_ctx->cnx_server->idle_timeout) {
+            else if (repeat_duration > cnx_server_idle_timeout) {
                 DBG_PRINTF("End at t=%" PRIu64 ", later than %" PRIu64,
-                    simulated_time, test_ctx->cnx_server->idle_timeout);
+                    simulated_time, cnx_server_idle_timeout);
                 ret = -1;
             }
-            else if (test_ctx->cnx_server->nb_preemptive_repeat == 0) {
+            else if (cnx_server_nb_preemptive_repeat == 0) {
                 DBG_PRINTF("%s", "No preemptive repeat");
                 ret = -1;
             }
@@ -608,6 +614,1032 @@ int ec9a_preemptive_amok_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* testing the negotiation of the idle timeout.
+*/
+int idle_timeout_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t server_timeout, uint64_t expected_timeout)
+{
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_connection_id_t initial_cid = { { 0x41, 0x9e, 0x00, 0x94, 0, 0, 0, 0}, 8 };
+    uint64_t half_time = (expected_timeout == UINT64_MAX) ? 20000000 : (expected_timeout / 2);
+    uint64_t full_time = (expected_timeout == UINT64_MAX) ? 600000000 : (half_time + 100000);
+    int ret = 0;
+
+    initial_cid.id[4] = test_id;
+
+    /* Create the test context */
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    }
+    /* Set the binlog */
+    if (ret == 0) {
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        /* Set the timeout */
+        picoquic_set_default_idle_timeout(test_ctx->qclient, client_timeout);
+        picoquic_set_default_idle_timeout(test_ctx->qserver, server_timeout);
+        /* Directly set the timeout in the client parameters,
+           because the connection context is already created */
+        test_ctx->cnx_client->local_parameters.max_idle_timeout = client_timeout;
+    }
+
+    /* Do the connection */
+    if (ret == 0) {
+        test_ctx->cnx_client->max_early_data_size = 0;
+
+        if ((ret = picoquic_start_client_cnx(test_ctx->cnx_client)) == 0) {
+            ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        }
+    }
+
+    /* Verify the timer negotiation */
+    if (ret == 0) {
+        if (test_ctx->cnx_client->local_parameters.max_idle_timeout != client_timeout) {
+            DBG_PRINTF("Idle timeout test %d. Client parameter set to %" PRIu64 " instead of %" PRIu64 "\n",
+                test_id, test_ctx->cnx_client->local_parameters.max_idle_timeout, client_timeout);
+            ret = -1;
+        }
+        if (test_ctx->cnx_server->local_parameters.max_idle_timeout != server_timeout) {
+            DBG_PRINTF("Idle timeout test %d. Server parameter set to %" PRIu64 " instead of %" PRIu64 "\n",
+                test_id, test_ctx->cnx_server->local_parameters.max_idle_timeout, server_timeout);
+            ret = -1;
+        }
+        if (test_ctx->cnx_client->idle_timeout != expected_timeout) {
+            DBG_PRINTF("Idle timeout test %d. Client negotiated %" PRIu64 " instead of %" PRIu64 "\n",
+                test_id, test_ctx->cnx_client->idle_timeout, expected_timeout);
+            ret = -1;
+        }
+        if (test_ctx->cnx_server->idle_timeout != expected_timeout) {
+            DBG_PRINTF("Idle timeout test %d. Server negotiated %" PRIu64 " instead of %" PRIu64 "\n",
+                test_id, test_ctx->cnx_server->idle_timeout, expected_timeout);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Wait for half time. Expectation: connections are still up */
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, half_time);
+        if (ret != 0 || !((TEST_CLIENT_READY && TEST_SERVER_READY))) {
+            DBG_PRINTF("Idle timeout test %d. Broke early, time = %" PRIu64 "\n", test_id, simulated_time);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Wait for full time. Expectation: connections are down, unless timeout == 0 */
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, full_time);
+
+        if (ret == 0){
+            if (TEST_CLIENT_READY && TEST_SERVER_READY) {
+                if (expected_timeout != UINT64_MAX) {
+                    DBG_PRINTF("Idle timeout test %d. Waited too long, time = %" PRIu64 "\n", test_id, simulated_time);
+                    ret = -1;
+                }
+            }
+            else {
+                if (expected_timeout == UINT64_MAX) {
+                    DBG_PRINTF("Idle timeout test %d. Broke early, time = %" PRIu64 "\n", test_id, simulated_time);
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int idle_timeout_test()
+{
+    int ret = 0;
+
+    if ((ret = idle_timeout_test_one(1, 30000, 30000, 30000000)) == 0 &&
+        (ret = idle_timeout_test_one(2, 60000, 20000, 20000000)) == 0 &&
+        (ret = idle_timeout_test_one(3, 20000, 60000, 20000000)) == 0 &&
+        (ret = idle_timeout_test_one(4, 5000, 300000, 5000000)) == 0 &&
+        (ret = idle_timeout_test_one(5, 300000, 5000, 5000000)) == 0 &&
+        (ret = idle_timeout_test_one(6, 0, 5000, 5000000)) == 0 &&
+        (ret = idle_timeout_test_one(7, 0, 60000, 60000000)) == 0 &&
+        (ret = idle_timeout_test_one(8, 5000, 0, 5000000)) == 0 &&
+        (ret = idle_timeout_test_one(9, 60000, 0, 60000000)) == 0 &&
+        (ret = idle_timeout_test_one(10, 0, 0, UINT64_MAX)) == 0) {
+        DBG_PRINTF("%s", "All idle timeout tests pass.\n");
+    }
+    return ret;
+}
+
+/* Testing that connection attempt against a non responding server
+ * finishes after the timeout value.
+ */
+
+int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t handshake_timeout, uint64_t expected_timeout)
+{
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t simulated_time = 0;
+    uint64_t target_timeout;
+    picoquic_connection_id_t initial_cid = { { 0x41, 0x9e, 0xc0, 0x99, 0, 0, 0, 0}, 8 };
+    uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
+    int ret = 0;
+
+    initial_cid.id[4] = test_id;
+
+    /* derive target timeout form spec */
+    target_timeout = handshake_timeout;
+    if (handshake_timeout == 0) {
+        target_timeout = client_timeout * 1000;
+        if (client_timeout == 0) {
+            target_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX;
+        }
+    }
+
+    /* Create the test context */
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    }
+
+    /* Set the binlog */
+    if (ret == 0) {
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        /* Set the timeout */
+        picoquic_set_default_idle_timeout(test_ctx->qclient, client_timeout);
+        if (handshake_timeout > 0) {
+            picoquic_set_default_handshake_timeout(test_ctx->qclient, handshake_timeout);
+        }
+        /* Directly set the timeout in the client parameters,
+        because the connection context is already created */
+        test_ctx->cnx_client->local_parameters.max_idle_timeout = client_timeout;
+        /* Start the client */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* Run a simulation loop -- the server never responds. */
+    if (ret == 0) {
+        int nb_trials = 0;
+        while (ret == 0 && simulated_time < expected_timeout) {
+            size_t send_length = 0;
+            struct sockaddr_storage addr_to;
+            struct sockaddr_storage addr_from;
+
+            ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time,
+                send_buffer, sizeof(send_buffer), &send_length,
+                &addr_to, &addr_from, 0, NULL);
+            if (ret != 0) {
+                break;
+            }
+            else if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected) {
+                break;
+            }
+            else if (simulated_time > test_ctx->cnx_client->next_wake_time) {
+                DBG_PRINTF("Idle server test %d. Bug, simulation is walking back in time.", test_id);
+                ret = -1;
+            }
+            else if (nb_trials >= 512) {
+                DBG_PRINTF("Idle server test %d. Bug, simulation exceeds %d steps.", test_id, nb_trials);
+                ret = -1;
+            }
+            else {
+                nb_trials++;
+                simulated_time = test_ctx->cnx_client->next_wake_time;
+            }
+        }
+    }
+
+    if ((ret == 0 && test_ctx->cnx_client->cnx_state == picoquic_state_disconnected) ||
+        ret == PICOQUIC_ERROR_DISCONNECTED) {
+        if (simulated_time < target_timeout) {
+            DBG_PRINTF("Idle server test %d. Client gave up too soon, time = %" PRIu64 "\n", test_id, simulated_time);
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+    else if (ret == 0) {
+        DBG_PRINTF("Idle server test %d. Client did not disconnect, time = %" PRIu64 "\n", test_id, simulated_time);
+        ret = -1;
+    }
+    else {
+        DBG_PRINTF("Idle server test %d. ret=0x%x, time = %" PRIu64 "\n", ret, test_id, simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int idle_server_test()
+{
+    int ret = 0;
+
+    if ((ret = idle_server_test_one(1, 30000, 0, 30100000)) == 0 &&
+        (ret = idle_server_test_one(2, 60000, 0, 60100000)) == 0 &&
+        (ret = idle_server_test_one(3, 5000, 0, 5100000)) == 0 &&
+        (ret = idle_server_test_one(4, 0, 0, 30100000)) == 0 &&
+        (ret = idle_server_test_one(5, 0, 10000, 10100000)) == 0 &&
+        (ret = idle_server_test_one(6, 20000, 60000, 60100000)) == 0 &&
+        (ret = idle_server_test_one(7, 60000, 5000, 5100000)) == 0){
+        DBG_PRINTF("%s", "All idle timeout tests pass.\n");
+    }
+    return ret;
+}
+
+/*
+* Testing issues caused by frame events after a stream is reset.
+* 
+* We are concerned with possible errors when copies of "old"
+* frames cause processing of a stream after the stream has been
+* closed. This includes:
+* 
+* - reset stream frames,
+* - stop sending frames,
+* - max stream data frames.
+* 
+* We are concerned with three events:
+* 
+* - processing the ACK of a packet that contained the frame, because
+*   the ACK may be received after the reset after the stream context
+*   was deleted,
+* - receiving extra copies of the frames after the stream is deleted.
+*   These extra copies shall be ignored with no side effect.
+* - processing of frames in packets detected as lost after the
+*   stream was deleted. The stack whether the packets needs to
+*   be repeated.
+* 
+* The combination of "ack/extra/need" with three frame types produces
+* 9 possible tests. However, there is no acking processing for
+* stop sending frames, so we do not implement a test for
+* "reset_ack_stop_sending".
+ */
+
+typedef enum {
+    reset_ack_max_stream = 0,
+    reset_ack_reset,
+    reset_ack_stop_sending,
+    reset_extra_max_stream,
+    reset_extra_reset,
+    reset_extra_stop_sending,
+    reset_need_max_stream,
+    reset_need_reset,
+    reset_need_stop_sending
+} reset_test_enum;
+
+static test_api_stream_desc_t test_scenario_edge_reset[] = {
+    { 4, 0, 1000000, 1000000 }
+};
+
+int picoquic_process_ack_of_reset_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_size, size_t* consumed);
+int picoquic_process_ack_of_max_stream_data_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_size, size_t* consumed);
+
+int reset_repeat_test_receive_frame(int test_id, picoquic_cnx_t * cnx, const uint8_t * frame, size_t frame_size,
+    uint64_t simulated_time, uint64_t stream_id, int do_not_create)
+{
+    picoquic_stream_data_node_t dn;
+    int ret = picoquic_decode_frames(cnx, cnx->path[0], frame, frame_size,
+        &dn, picoquic_epoch_1rtt,
+        (struct sockaddr*)&cnx->path[0]->peer_addr,
+        (struct sockaddr*)&cnx->path[0]->local_addr,
+        123, 0, simulated_time);
+
+    if (ret != 0 || cnx->cnx_state > picoquic_state_ready) {
+        DBG_PRINTF("Test %d. Error after stop sending, ret = 0x%x.", test_id, ret);
+        ret = -1;
+    }
+    else if (ret == 0 && stream_id != UINT64_MAX && do_not_create && picoquic_find_stream(cnx, stream_id) != NULL) {
+        DBG_PRINTF("Test %d. Stream %" PRIu64 " was created.", test_id, stream_id);
+        ret = -1;
+    }
+    return ret;
+}
+
+int reset_repeat_test_need_repeat(int test_id, picoquic_cnx_t* cnx, const uint8_t* frame, size_t frame_size,
+    uint64_t simulated_time, uint64_t stream_id, int do_not_create)
+{
+    int no_need_to_repeat = 0;
+    int do_not_detect_spurious = 0;
+    int is_preemptive_needed = 0;
+
+    int ret = picoquic_check_frame_needs_repeat(cnx, frame, frame_size, picoquic_packet_1rtt_protected,
+        &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed);
+
+    if (ret != 0 || cnx->cnx_state > picoquic_state_ready || !no_need_to_repeat) {
+        DBG_PRINTF("Test %d. Error after ack of frame 0x%x, ret = 0x%x.", test_id, frame[0], ret);
+        ret = -1;
+    }
+    return ret;
+}
+
+int reset_loop_check_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t data_stream_id)
+{
+    int is_opened = 0;
+    if (test_ctx->cnx_client != NULL && test_ctx->cnx_server != NULL) {
+        picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
+        if (c_stream != NULL && c_stream->sent_offset > 10000) {
+            picoquic_stream_head_t* s_stream = picoquic_find_stream(test_ctx->cnx_server, data_stream_id);
+            if (s_stream != NULL) {
+                is_opened = 1;
+            }
+        }
+    }
+    return is_opened;
+}
+
+int reset_loop_wait_stream_opened(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, uint64_t data_stream_id, uint64_t loop1_time)
+{
+    int ret = 0;
+    int nb_inactive = 0;
+    uint64_t time_out = *simulated_time + loop1_time;
+    int was_active = 0;
+    int is_opened = 0;
+
+    while (ret == 0 && *simulated_time < time_out &&
+        TEST_CLIENT_READY &&
+        TEST_SERVER_READY &&
+        nb_inactive < 64) {
+
+        if (reset_loop_check_stream_opened(test_ctx, data_stream_id)) {
+            is_opened = 1;
+            break;
+        }
+
+        was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+    }
+    if (!is_opened) {
+        ret = -1;
+    }
+    return ret;
+}
+
+int reset_repeat_test_one(uint8_t test_id)
+{
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t data_stream_id = 4;
+    uint64_t loop1_time = 50000;
+    uint64_t loop2_time = 1000000;
+    picoquic_connection_id_t initial_cid = { { 0x8e, 0x5e, 0x48, 0xe9, 0, 0, 0, 0}, 8 };
+    int ret = 0;
+    uint8_t stop_sending_frame[3] = {
+        (uint8_t)picoquic_frame_type_stop_sending,
+        (uint8_t)data_stream_id,
+        0x17 };
+    uint8_t max_stream_data_frame[3] = {
+        (uint8_t)picoquic_frame_type_max_stream_data,
+        (uint8_t)data_stream_id,
+        63 };
+    uint8_t reset_frame[4] = {
+        (uint8_t)picoquic_frame_type_reset_stream,
+        (uint8_t)data_stream_id,
+        1,
+        1 };
+
+    initial_cid.id[4] = test_id;
+
+    /* Create the test context */
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    }
+
+    /* Set the binlog */
+    if (ret == 0) {
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* set the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_edge_reset, sizeof(test_scenario_edge_reset));
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Init send receive scenario returns %d\n", ret);
+        }
+    }
+
+    /* Run for a short time, so the stream is created and the transfer started */
+    if (ret == 0) {
+        ret = reset_loop_wait_stream_opened(test_ctx, &simulated_time, data_stream_id, loop1_time);
+        if (ret != 0) {
+            DBG_PRINTF("Test #%d. Loop wait stream failed!", test_id);
+            ret = -1;
+        }
+    }
+
+    /* Verify that the stream #4 is present, and the
+     * transmission has not stopped.
+     */
+    if (ret == 0 && (!(TEST_CLIENT_READY) || !(TEST_SERVER_READY))) {
+        DBG_PRINTF("%s", "Server or client not ready!");
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_stream_head_t* stream = picoquic_find_stream(test_ctx->cnx_client, data_stream_id);
+        if (stream == NULL || stream->fin_sent) {
+            DBG_PRINTF("Waited too long, stream is %s\n", (stream == NULL) ? "deleted" : "finished");
+            ret = -1;
+        }
+    }
+    /* Reset the stream, then run the connection for a short time.
+     */
+    if (ret == 0) {
+        ret = picoquic_reset_stream(test_ctx->cnx_client, data_stream_id, 0);
+    }
+    if (ret == 0) {
+        ret = picoquic_reset_stream(test_ctx->cnx_server, data_stream_id, 0);
+    }
+    if (ret == 0) {
+        int was_active = 0;
+        int nb_inactive = 0;
+        int client_stream_gone = 0;
+        uint64_t time_out = simulated_time + loop2_time;
+        while (ret == 0 && simulated_time < time_out &&
+            TEST_CLIENT_READY &&
+            TEST_SERVER_READY &&
+            nb_inactive < 64) {
+            was_active = 0;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+            if (picoquic_find_stream(test_ctx->cnx_client, data_stream_id) == NULL) {
+                client_stream_gone = 1;
+                break;
+            }
+        }
+        if (!client_stream_gone) {
+            DBG_PRINTF("%s", "Did not wait long enough, stream is still there.");
+            ret = -1;
+        }
+    }
+    /* Perform the specified test.
+     */
+    switch (test_id) {
+    case reset_ack_max_stream: {
+        size_t consumed = 0;
+        ret = picoquic_process_ack_of_max_stream_data_frame(test_ctx->cnx_client, reset_frame, sizeof(reset_frame), &consumed);
+
+        if (ret != 0 || test_ctx->cnx_client->cnx_state > picoquic_state_ready) {
+            DBG_PRINTF("Test %d. Error after ack of max stream, ret = 0x%x.", test_id, ret);
+            ret = -1;
+        }
+        break;
+    }
+    case reset_ack_reset:/* spurious ack of reset frame. */ {
+        size_t consumed = 0;
+        ret = picoquic_process_ack_of_reset_stream_frame(test_ctx->cnx_client, reset_frame, sizeof(reset_frame), &consumed);
+
+        if (ret != 0 || test_ctx->cnx_client->cnx_state > picoquic_state_ready) {
+            DBG_PRINTF("Test %d. Error after ack of reset, ret = 0x%x.", test_id, ret);
+            ret = -1;
+        }
+        break;
+    }
+    case reset_ack_stop_sending:
+        /* TODO: there is no code yet for processing acks of stop sending frame. */
+        ret = -1;
+        break;
+    case reset_extra_max_stream:
+        /* arrival of stream related frame on a non existing stream.
+        * this is a bit more subtle than the ACK test.
+        * - if this is a remotely created stream:
+        *     - if it is bidir, this could be an out of order request to
+        *       not send response, or it could be an old stream that was
+        *       already deleted.
+        *     - if it is monodir, it does not make sense.
+        * - if it is locally created:
+        *     - if it is closed, just ignore it.
+        *     - if it is not created yet, this is a protocol error.
+        */
+        ret = reset_repeat_test_receive_frame(test_id, test_ctx->cnx_client, max_stream_data_frame, sizeof(max_stream_data_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    case reset_extra_reset:
+        /* arrival of extra reset frame.
+        * see, arrival of stop sending.
+        */
+        ret = reset_repeat_test_receive_frame(test_id, test_ctx->cnx_client, reset_frame, sizeof(reset_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    case reset_extra_stop_sending:
+        ret = reset_repeat_test_receive_frame(test_id, test_ctx->cnx_client, stop_sending_frame, sizeof(stop_sending_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    case reset_need_max_stream:
+        /* Check whether a frame needs to be repeated.
+        * this should never cause an error! If the stream is not
+        * there any more, this means the original reset was
+        * successful, there is no need to resend it.
+        */
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, max_stream_data_frame, sizeof(max_stream_data_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    case reset_need_reset:
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, reset_frame, sizeof(reset_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    case reset_need_stop_sending:
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, stop_sending_frame, sizeof(stop_sending_frame),
+            simulated_time, data_stream_id, 1);
+        break;
+    default:
+        DBG_PRINTF("What test is that: %d?", test_id);
+        ret = -1;
+        break;
+    }
+
+    /* Clean up */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int reset_ack_max_test()
+{
+    return reset_repeat_test_one(reset_ack_max_stream);
+}
+
+int reset_ack_reset_test()
+{
+    return reset_repeat_test_one(reset_ack_reset);
+}
+
+int reset_extra_max_test()
+{
+    return reset_repeat_test_one(reset_extra_max_stream);
+}
+
+int reset_extra_reset_test()
+{
+    return reset_repeat_test_one(reset_extra_reset);
+}
+
+int reset_extra_stop_test()
+{
+    return reset_repeat_test_one(reset_extra_stop_sending);
+}
+
+int reset_need_max_test()
+{
+    return reset_repeat_test_one(reset_need_max_stream);
+}
+
+int reset_need_reset_test()
+{
+    return reset_repeat_test_one(reset_need_reset);
+}
+
+int reset_need_stop_test()
+{
+    return reset_repeat_test_one(reset_need_stop_sending);
+}
+
+/*
+* Initial PTO test:
+* Test the scenario in which:
+* - the client sends an initial message
+* - the server sends an ACK
+* - no further packets from the server, either because they are lost
+*   or because the server is hitting the amplification limit.
+* Verify that the client sends a message after a PTO commensurate
+* with the RTT.
+*/
+
+int initial_pto_prepare(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* p_simulated_time,
+    size_t *length)
+{
+    int ret = 0;
+    uint8_t buf[PICOQUIC_MAX_PACKET_SIZE];
+    struct sockaddr_storage addr_to;
+    struct sockaddr_storage addr_from;
+
+    ret = picoquic_prepare_packet(test_ctx->cnx_client, *p_simulated_time,
+        buf, PICOQUIC_MAX_PACKET_SIZE, length,
+        &addr_to, &addr_from, NULL);
+
+    if (ret == 0) {
+        /* Submit initial packet to server context, so we get the
+         * crypto context created */
+        ret = picoquic_incoming_packet_ex(test_ctx->qserver, buf, *length, 
+            (struct sockaddr*)&addr_from, (struct sockaddr*)&addr_to, 0, 0,
+            &test_ctx->cnx_server, *p_simulated_time);
+        if (ret == 0 && test_ctx->cnx_server == NULL) {
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
+int initial_pto_wait(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* p_simulated_time,
+    uint64_t max_wait, size_t* length_sent)
+{
+    int ret = 0;
+    size_t length = 0;
+    *length_sent = 0;
+    while (ret == 0 && *p_simulated_time < max_wait) {
+        uint64_t client_departure = test_ctx->cnx_client->next_wake_time;
+
+        if (client_departure >= max_wait) {
+            *p_simulated_time = max_wait;
+            break;
+        }
+        else {
+            if (*p_simulated_time < client_departure) {
+                *p_simulated_time = client_departure;
+            }
+            ret = initial_pto_prepare(test_ctx, p_simulated_time, &length);
+            if (length > 0 || test_ctx->cnx_client->cnx_state >= picoquic_state_handshake_failure) {
+                *length_sent = length;
+                break;
+            }
+        }
+    }
+    return ret;
+}
+
+int initial_pto_ack(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* p_simulated_time)
+{
+    int ret = 0;
+    uint8_t buf[PICOQUIC_INITIAL_MTU_IPV6];
+    uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
+    picoquic_packet_type_enum packet_type = picoquic_packet_initial;
+    picoquic_packet_context_enum pc = picoquic_packet_context_initial;
+    size_t checksum_overhead = 16;
+    uint8_t * bytes_max = buf + PICOQUIC_INITIAL_MTU_IPV6 - checksum_overhead;
+    uint8_t* bytes_next = buf;
+    size_t length = 0;
+    size_t header_length = 0;
+    int more_data = 0;
+    size_t send_length = 0;
+    /* Format the header */
+    header_length = picoquic_predict_packet_header_length(test_ctx->cnx_server, packet_type,
+        &test_ctx->cnx_server->pkt_ctx[pc]);
+    bytes_next += header_length;
+    /* add ack, function of client sequence number */
+    bytes_next = picoquic_format_ack_frame(test_ctx->cnx_server, bytes_next, bytes_max, &more_data,
+        *p_simulated_time, pc, 0);
+    /* add padding to minimum length */
+    length = picoquic_pad_to_target_length(buf, bytes_next - buf,
+        PICOQUIC_INITIAL_MTU_IPV6 - checksum_overhead);
+
+    /* Finalize */
+    send_length = picoquic_protect_packet(test_ctx->cnx_server, packet_type, buf, 0,
+        length, header_length,
+        send_buffer, PICOQUIC_MAX_PACKET_SIZE, 
+        test_ctx->cnx_server->crypto_context[picoquic_epoch_initial].aead_encrypt,
+        test_ctx->cnx_server->crypto_context[picoquic_epoch_initial].pn_enc,
+        test_ctx->cnx_server->path[0], *p_simulated_time);
+    /* Submit to client. */
+    if (send_length == 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_cnx_t* last_cnx = NULL;
+        ret = picoquic_incoming_packet_ex(test_ctx->qclient, send_buffer, send_length,
+            (struct sockaddr*)&test_ctx->server_addr, (struct sockaddr*)&test_ctx->client_addr, 0, 0,
+            &last_cnx, *p_simulated_time);
+    }
+    return ret;
+}
+
+int initial_pto_test()
+{
+    int ret = 0;
+    picoquic_test_tls_api_ctx_t *test_ctx = NULL;
+    size_t length = 0;
+    uint64_t simulated_time = 0;
+    uint64_t simulated_rtt = 20000;
+    uint64_t simulated_pto = 4*simulated_rtt;
+    picoquic_connection_id_t initial_cid = { { 0x94, 0x01, 0x41, 0, 0, 0, 0, 0}, 8 };
+
+    /* Create a client. */
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot initialize context, ret = 0x%x", ret);
+    }
+    else {
+        /* Set the binlog */
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        /* start the client connection */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+    /* Send the initial packet */
+    if (ret == 0) {
+        ret = initial_pto_prepare(test_ctx, &simulated_time, &length);
+        if (ret == 0 && length < 1200) {
+            length = -1;
+        }
+    }
+    /* get the initial message, wait until next client time >= time of ACK */
+    if (ret == 0 && simulated_time < 20000) {
+        ret = initial_pto_wait(test_ctx, &simulated_time, simulated_rtt, &length);
+    }
+    /* format an ACK packet, apply initial protection, submit ACK to client */
+    if (ret == 0) {
+        ret = initial_pto_ack(test_ctx, &simulated_time);
+    }
+    /* Wait until next client time >= expected response, or
+     * client is ready to send and does send. */
+    if (ret == 0 && simulated_time < simulated_pto) {
+        ret = initial_pto_wait(test_ctx, &simulated_time, simulated_pto, &length);
+        if (ret == 0 && length < 1200) {
+            /* Did not send the PTO */
+            ret = -1;
+        }
+    }
+    /* Clean up */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Skip through packets, document types and next pointer */
+const uint8_t* v1_header_skip(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_packet_type_enum* ptype)
+{
+    uint8_t first_byte = *bytes++;
+
+    *ptype = picoquic_packet_error;
+
+    if ((first_byte & 0x80) == 0) {
+        bytes = bytes_max;
+        *ptype = picoquic_packet_1rtt_protected;
+    }
+    else {
+        uint8_t lcid;
+        if (bytes + 5 > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            bytes += 4; /* skip version */
+            lcid = *bytes++;
+            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, lcid);
+
+            if (bytes == NULL || bytes + 1 >= bytes_max) {
+                bytes = NULL;
+            }
+            else {
+                lcid = *bytes++;
+                bytes = picoquic_frames_fixed_skip(bytes, bytes_max, lcid);
+            }
+        }
+        if (bytes != NULL) {
+            /* The next part is not version invariant. We assume v1 */
+            int p_type_number = ((first_byte) >> 4) & 3;
+            /* int number_length = ((first_byte) & 3) + 1; */
+            uint64_t length = 0;
+            uint64_t token_length = 0;
+
+            if (p_type_number == 0) {
+                *ptype = picoquic_packet_initial;
+                if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &token_length)) != NULL &&
+                    (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, token_length)) != NULL &&
+                    (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) != NULL /* &&
+                    (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, number_length)) != NULL */) {
+                    bytes = picoquic_frames_fixed_skip(bytes, bytes_max, length);
+                }
+            }
+            else if (p_type_number == 2) {
+                *ptype = picoquic_packet_handshake;
+                if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) != NULL /* &&
+                    (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, number_length)) != NULL */) {
+                    bytes = picoquic_frames_fixed_skip(bytes, bytes_max, length);
+                }
+            }
+            else {
+                /* unexpected in our scenario */
+                bytes = NULL;
+            }
+        }
+    }
+    return bytes;
+}
+
+
+/* test that when the initial packet is repeated, a handshake is included */
+int pto_server_prepare(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t simulated_time, int * has_packet, int* has_initial, int* has_handshake)
+{
+    int ret = 0;
+    uint8_t buf[PICOQUIC_MAX_PACKET_SIZE];
+    struct sockaddr_storage addr_to;
+    struct sockaddr_storage addr_from;
+    size_t length;
+
+    ret = picoquic_prepare_packet(test_ctx->cnx_server, simulated_time,
+        buf, PICOQUIC_MAX_PACKET_SIZE, &length,
+        &addr_to, &addr_from, NULL);
+    if (ret == 0 && length > 0) {
+        *has_packet = 1;
+        const uint8_t* bytes = buf;
+        const uint8_t* bytes_max = buf + length;
+
+        while (bytes < bytes_max) {
+            picoquic_packet_type_enum ptype;
+            if ((bytes = v1_header_skip(bytes, bytes_max, &ptype)) == NULL) {
+                break;
+            }
+            else {
+                if (ptype == picoquic_packet_initial) {
+                    *has_initial = 1;
+                }
+                else if (ptype == picoquic_packet_handshake) {
+                    *has_handshake = 1;
+                }
+            }
+        }
+    }
+    return ret;
+}
+
+int initial_pto_srv_test()
+{
+    int ret = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    size_t length = 0;
+    int has_packet;
+    int has_initial;
+    int has_handshake;
+    uint64_t simulated_time = 0;
+    uint64_t simulated_rtt = 20000;
+    uint64_t simulated_pto = 4 * simulated_rtt;
+    picoquic_connection_id_t initial_cid = { { 0x94, 0x01, 0x85, 0, 0, 0, 0, 0}, 8 };
+
+    /* Create a client. */
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot initialize context, ret = 0x%x", ret);
+    }
+    else {
+        /* Set the binlog */
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        /* start the client connection */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+    /* Send the initial packet */
+    if (ret == 0) {
+        ret = initial_pto_prepare(test_ctx, &simulated_time, &length);
+        if (ret == 0 && length < 1200) {
+            length = -1;
+        }
+    }
+    if (ret == 0) {
+        /* pretend that the address is validated, so the server sends ACKS, etc. */
+        test_ctx->cnx_server->initial_validated = 1;
+        /* Set the time to server next wake. */
+        simulated_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
+        has_initial = 0;
+        has_handshake = 0;
+        /* Get the first flight. */
+        do {
+            has_packet = 0;
+            ret = pto_server_prepare(test_ctx, simulated_time, &has_packet, &has_initial, &has_handshake);
+        } while (ret == 0 && has_packet);
+    }
+
+    /* verify that the packet has Initial and Handshake */
+    if (ret == 0) {
+        /* Set the time to server next wake. */
+        has_initial = 0;
+        has_handshake = 0;
+        simulated_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
+        /* Get the PTO. */
+        do {
+            has_packet = 0;
+            ret = pto_server_prepare(test_ctx, simulated_time, &has_packet, &has_initial, &has_handshake);
+        } while (ret == 0 && has_packet);
+
+        if (ret == 0 && !(has_initial && has_handshake)) {
+            /* Bug. The server out to repeat both the initial packet and some handshake packet */
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
+/* Test of out of order crypto packets.
+* We test that by injecting a crypto handshake frame with an
+* offset of 64K in the crypto context. There will be three tests,
+* for initial, handshake and 1 rtt contexts.
+ */
+
+
+int crypto_hs_offset_test_one(picoquic_packet_context_enum pc)
+{
+    int ret = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    size_t length = 0;
+    uint64_t simulated_time = 0;
+    picoquic_connection_id_t initial_cid = { { 0xC0, 0xFF, 0x5E, 0x40, 0, 0, 0, 0}, 8 };
+    uint8_t bad_crypto_hs[] = { picoquic_frame_type_crypto_hs, 0x80, 0x01, 0, 0, 4, 1, 2, 3, 4 };
+
+    initial_cid.id[4] = (uint8_t)pc;
+
+    /* Create a client. */
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot initialize context, ret = 0x%x", ret);
+    }
+    else {
+        /* Set the binlog */
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        /* start the client connection */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        /* Inject the  made up packet */
+        ret = picoquic_queue_misc_frame(test_ctx->cnx_client, bad_crypto_hs, sizeof(bad_crypto_hs), 1, pc);
+    }
+
+
+    /* Try to establish the connection */
+    if (ret == 0) {
+        if (wait_client_connection_ready(test_ctx, &simulated_time) == 0) {
+            if (test_ctx->cnx_server != NULL) {
+                if (test_ctx->cnx_server->cnx_state != picoquic_state_handshake_failure &&
+                    test_ctx->cnx_server->cnx_state < picoquic_state_disconnecting) {
+                    /* Should wait for ready state */
+                    DBG_PRINTF("Unexpected success, pc=%d\n", pc);
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->remote_error != PICOQUIC_TRANSPORT_CRYPTO_BUFFER_EXCEEDED) {
+        DBG_PRINTF("For pc=%d, expected error 0x%x, got 0x%x\n", pc,
+            PICOQUIC_TRANSPORT_CRYPTO_BUFFER_EXCEEDED, test_ctx->cnx_client->remote_error);
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int crypto_hs_offset_test()
+{
+    picoquic_packet_context_enum pc[] = { picoquic_packet_context_initial,
+        picoquic_packet_context_handshake, picoquic_packet_context_application };
+    size_t nb_pc = sizeof(pc) / sizeof(picoquic_packet_context_enum);
+    int ret = 0;
+
+    for (size_t i = 0; i < nb_pc && ret == 0; i++) {
+        ret = crypto_hs_offset_test_one(pc[i]);
     }
 
     return ret;

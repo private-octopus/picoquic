@@ -26,7 +26,7 @@
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
-#include "autoqlog.h"
+#include "picoquic_binlog.h"
 
 /* Media tests: simulate media transmission, include cases in which
 * the media bandwidth is much lower than the available bandwidth on
@@ -58,13 +58,27 @@
 #define MEDIATEST_DURATION 10000000
 #define MEDIATEST_AUDIO_PERIOD 20000
 #define MEDIATEST_VIDEO_PERIOD 33333
+#define MEDIATEST_VIDEO2_PERIOD 16666
 #define MEDIATEST_DATA_FRAME_SIZE 0x4000
 
+typedef enum {
+    mediatest_video = 1,
+    mediatest_video_audio = 2,
+    mediatest_video_data_audio = 3,
+    mediatest_worst = 4,
+    mediatest_video2_down = 5,
+    mediatest_wifi = 6,
+    mediatest_video2_back = 7,
+    mediatest_suspension = 8,
+    mediatest_video2_probe = 9,
+    mediatest_suspension2 = 10
+} mediatest_id_enum;
 
 typedef enum {
     media_test_data = 0,
     media_test_audio,
     media_test_video,
+    media_test_video2,
     media_test_nb_types
 } media_test_type_enum;
 
@@ -91,13 +105,16 @@ typedef struct st_mediatest_stream_ctx_t {
     unsigned int finished_sending : 1;
     unsigned int fin_received : 1;
     unsigned int is_fin_sent : 1;
+    unsigned int is_reset : 1;
 
     uint64_t frames_to_send;
     uint64_t frames_sent;
+    uint64_t frames_skipped;
     uint64_t frames_received;
     size_t bytes_sent;
     size_t bytes_received;
     uint64_t next_frame_time;
+    uint64_t next_iframe_time;
 
     mediatest_message_buffer_t message_sent;
     mediatest_message_buffer_t message_received;
@@ -136,6 +153,8 @@ typedef struct st_mediatest_ctx_t {
     mediatest_cnx_ctx_t* client_cnx; /* client connection context */
     struct st_mediatest_cnx_ctx_t* first_cnx;
     struct st_mediatest_cnx_ctx_t* last_cnx;
+    /* Starting point of statistics -- after the initial disruption */
+    uint64_t disruption_clear;
     /* managemenent of datagram load */
     size_t datagram_data_requested;
     size_t datagram_data_sent;
@@ -152,9 +171,21 @@ typedef struct st_mediatest_spec_t {
     picoquic_congestion_algorithm_t* ccalgo; 
     int do_audio;
     int do_video;
+    int do_video2;
+    int do_probe_up;
     size_t data_size;
     size_t datagram_data_size;
     double bandwidth;
+    uint64_t link_latency;
+    uint64_t latency_average;
+    uint64_t latency_max;
+    uint8_t priority_limit_for_bypass;
+    int do_not_check_video2;
+    int nb_suspensions;
+    uint64_t suspension_start_time;
+    uint64_t suspension_up_time;
+    uint64_t suspension_down_time;
+
 } mediatest_spec_t;
 
 int mediatest_callback(picoquic_cnx_t* cnx,
@@ -293,41 +324,61 @@ mediatest_cnx_ctx_t* mediatest_create_cnx_context(mediatest_ctx_t* mt_ctx, picoq
 
 void mediatest_record_stats(mediatest_ctx_t* mt_ctx, mediatest_stream_ctx_t* stream_ctx)
 {
-    uint64_t delay = mt_ctx->simulated_time - stream_ctx->message_received.sent_time;
+    if (stream_ctx->message_received.sent_time > mt_ctx->disruption_clear) {
+        uint64_t delay = mt_ctx->simulated_time - stream_ctx->message_received.sent_time;
 
-    if (stream_ctx->message_received.message_type >= 0 && stream_ctx->message_received.message_type < media_test_nb_types) {
-        mediatest_media_stats_t* stats = mt_ctx->media_stats + stream_ctx->message_received.message_type;
-        stats->nb_frames++;
-        stats->sum_delays += delay;
-        stats->sum_square_delays += delay * delay;
-        if (stats->min_delay > delay) {
-            stats->min_delay = delay;
-        }
-        if (stats->max_delay < delay) {
-            stats->max_delay = delay;
+        if (stream_ctx->message_received.message_type >= 0 && stream_ctx->message_received.message_type < media_test_nb_types) {
+            mediatest_media_stats_t* stats = mt_ctx->media_stats + stream_ctx->message_received.message_type;
+            stats->nb_frames++;
+            stats->sum_delays += delay;
+            stats->sum_square_delays += delay * delay;
+            if (stats->min_delay > delay) {
+                stats->min_delay = delay;
+            }
+            if (stats->max_delay < delay) {
+                stats->max_delay = delay;
+            }
         }
     }
 }
 
-int mediatest_check_stats(mediatest_ctx_t* mt_ctx, media_test_type_enum media_type)
+int mediatest_check_stats(mediatest_ctx_t* mt_ctx, mediatest_spec_t * spec, media_test_type_enum media_type)
 {
     int ret = 0;
 
     if (media_type >= 0 && media_type < media_test_nb_types) {
         mediatest_media_stats_t* stats = mt_ctx->media_stats + media_type;
-        uint64_t period = (media_type == media_test_audio) ? MEDIATEST_AUDIO_PERIOD : MEDIATEST_VIDEO_PERIOD;
+        uint64_t period = (media_type == media_test_audio) ? MEDIATEST_AUDIO_PERIOD :
+            ((media_type == media_test_video2) ? MEDIATEST_VIDEO2_PERIOD : MEDIATEST_VIDEO_PERIOD);
         uint64_t expected = MEDIATEST_DURATION / period;
 
-        if (stats->nb_frames != expected) {
+        if (stats->nb_frames != expected && mt_ctx->disruption_clear == 0) {
             ret = -1;
         }
         else if (stats->nb_frames != 0) {
             uint64_t average = stats->sum_delays / stats->nb_frames;
             uint64_t variance = (stats->sum_square_delays / stats->nb_frames) - (average * average);
-            uint64_t sigma = (uint64_t)sqrt((double)variance);
+            uint64_t sigma = picoquic_sqrt_for_tests(variance);
 
-            if (average > 25000 || sigma > 12500 || stats->max_delay > 100000) {
-                ret = -1;
+            if (spec->latency_average == 0)
+            {
+                if (average > 25000 || sigma > 12500 || stats->max_delay > 100000) {
+                    DBG_PRINTF("Latency average: %" PRIu64 ", sigma: %" PRIu64 ", max: %" PRIu64,
+                        average, sigma, stats->max_delay);
+                    ret = -1;
+                }
+            }
+            else {
+                if (average > spec->latency_average) {
+                    DBG_PRINTF("Average latency expected: %" PRIu64 ", got %" PRIu64,
+                        spec->latency_average, average);
+                    ret = -1;
+                }
+                else if (spec->latency_max > 0 && stats->max_delay > spec->latency_max) {
+                    DBG_PRINTF("Max latency expected: %" PRIu64 ", got %" PRIu64,
+                        spec->latency_max, stats->max_delay);
+                    ret = -1;
+                }
             }
         }
     }
@@ -410,11 +461,40 @@ int mediatest_receive_stream_data(mediatest_stream_ctx_t* stream_ctx, uint8_t* b
     return ret;
 }
 
+/* For the high speed video stream, check if the media is far behind. if
+ * it is, mark the current state as "skipping". If the state is marked
+ * "reset", abstain from sending any frame until the next I frame.
+ */
+void  mediatest_simulate_reset(mediatest_stream_ctx_t* stream_ctx, uint64_t current_time, uint64_t frame_duration, uint64_t cycle_length, uint64_t queue_limit)
+{
+    uint64_t frame_rank = stream_ctx->frames_sent % cycle_length;
+
+    if (frame_rank > 0 && stream_ctx->frames_sent > queue_limit){
+        if (((stream_ctx->frames_sent - queue_limit) * frame_duration) > current_time) {
+            stream_ctx->is_reset = 1;
+        }
+        if (stream_ctx->is_reset) {
+            for (uint64_t i = frame_rank; i < cycle_length; i++) {
+                stream_ctx->next_frame_time += frame_duration;
+                stream_ctx->frames_sent++;
+                stream_ctx->frames_skipped++;
+            }
+        }
+    }
+    else {
+        stream_ctx->is_reset = 0;
+    }
+}
+
 /* Prepare next frame. Do this as soon as we know that a new frame can be sent. */
 int mediatest_prepare_new_frame(mediatest_stream_ctx_t* stream_ctx, uint64_t current_time)
 {
     int ret = 0;
-        /* Is this the right time? */
+    /* Is the high bandwidth stream reset? */
+    if (stream_ctx->stream_type == media_test_video2) {
+        mediatest_simulate_reset(stream_ctx, current_time, MEDIATEST_VIDEO2_PERIOD, 100, 20);
+    }
+    /* Is this the right time? */
     if (stream_ctx->next_frame_time <= current_time) {
         if (stream_ctx->frames_sent == 0) {
             stream_ctx->next_frame_time = current_time;
@@ -434,6 +514,14 @@ int mediatest_prepare_new_frame(mediatest_stream_ctx_t* stream_ctx, uint64_t cur
         case media_test_video:
             stream_ctx->message_sent.message_size = ((stream_ctx->frames_sent % 100) == 0) ? 0x8000 : 0x800;
             stream_ctx->next_frame_time += MEDIATEST_VIDEO_PERIOD;
+             
+            break;
+        case media_test_video2:
+            if ((stream_ctx->frames_sent % 100) == 0) {
+                stream_ctx->next_iframe_time = stream_ctx->next_frame_time + 100 * MEDIATEST_VIDEO2_PERIOD;
+            }
+            stream_ctx->message_sent.message_size = ((stream_ctx->frames_sent % 100) == 0) ? 0x10000 : 0x1800;
+            stream_ctx->next_frame_time += MEDIATEST_VIDEO2_PERIOD;
             break;
         default:
             ret = -1;
@@ -697,7 +785,7 @@ int mediatest_callback(picoquic_cnx_t* cnx,
 
 
 /* Process arrival of a packet from a link */
-int mediatest_packet_arrival(mediatest_ctx_t* mt_ctx, int link_id, int * is_active)
+int mediatest_packet_arrival(mediatest_ctx_t* mt_ctx, int link_id, int is_losing_data, int * is_active)
 {
     int ret = 0;
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_dequeue(mt_ctx->link[link_id], mt_ctx->simulated_time);
@@ -709,11 +797,13 @@ int mediatest_packet_arrival(mediatest_ctx_t* mt_ctx, int link_id, int * is_acti
     else {
         *is_active = 1;
 
-        ret = picoquic_incoming_packet(mt_ctx->quic[link_id],
+        if (!is_losing_data) {
+            ret = picoquic_incoming_packet(mt_ctx->quic[link_id],
                 packet->bytes, (uint32_t)packet->length,
                 (struct sockaddr*)&packet->addr_from,
                 (struct sockaddr*)&packet->addr_to, 0, 0,
-            mt_ctx->simulated_time);
+                mt_ctx->simulated_time);
+        }
 
         free(packet);
     }
@@ -768,7 +858,7 @@ int mediatest_packet_departure(mediatest_ctx_t* mt_ctx, int node_id, int* is_act
 
 
 /* Simulation step */
-int mediatest_step(mediatest_ctx_t* mt_ctx, int* is_active)
+int mediatest_step(mediatest_ctx_t* mt_ctx, int is_losing_data, int* is_active)
 {
     int ret = 0;
     uint64_t next_arrival_time = UINT64_MAX;
@@ -850,7 +940,7 @@ int mediatest_step(mediatest_ctx_t* mt_ctx, int* is_active)
         /* Perform earliest action */
         if (next_arrival_time <= next_time) {
             /* Process next packet from simulated link */
-            ret = mediatest_packet_arrival(mt_ctx, arrival_index, is_active);
+            ret = mediatest_packet_arrival(mt_ctx, arrival_index, is_losing_data, is_active);
         }
         else {
             /* Prepare next packet from selected connection */
@@ -907,6 +997,10 @@ int mediatest_configure_stream(mediatest_cnx_ctx_t * cnx_ctx, media_test_type_en
             stream_ctx->frames_to_send = MEDIATEST_DURATION / MEDIATEST_VIDEO_PERIOD;
             ret = picoquic_set_stream_priority(cnx_ctx->cnx, stream_ctx->stream_id, 4);
             break;
+        case media_test_video2:
+            stream_ctx->frames_to_send = MEDIATEST_DURATION / MEDIATEST_VIDEO2_PERIOD;
+            ret = picoquic_set_stream_priority(cnx_ctx->cnx, stream_ctx->stream_id, 6);
+            break;
         case media_test_data:
         default:
             stream_ctx->frames_to_send = data_size / MEDIATEST_DATA_FRAME_SIZE;
@@ -928,7 +1022,7 @@ void mediatest_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->initial_max_data = 0x100000;
     tp->initial_max_stream_id_bidir = 512;
     tp->initial_max_stream_id_unidir = 512;
-    tp->idle_timeout = 30000;
+    tp->max_idle_timeout = 30000;
     tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE;
     tp->ack_delay_exponent = 3;
     tp->active_connection_id_limit = 4;
@@ -1006,7 +1100,7 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
         if (spec->ccalgo != NULL) {
             for (int i = 0; i < 2 && ret == 0; i++) {
                 picoquic_set_default_congestion_algorithm(mt_ctx->quic[i], spec->ccalgo);
-                ret = picoquic_set_qlog(mt_ctx->quic[i], ".");
+                ret = picoquic_set_binlog(mt_ctx->quic[i], ".");
             }
         }
     }
@@ -1022,7 +1116,8 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
         }
         /* register the links */
         for (int i = 0; i < 2; i++) {
-            mt_ctx->link[i] = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
+            mt_ctx->link[i] = picoquictest_sim_link_create(0.01,
+                (spec->link_latency == 0)?10000:spec->link_latency, NULL, 0, 0);
             if (mt_ctx->link[i] == NULL) {
                 ret = -1;
                 break;
@@ -1039,6 +1134,7 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
             picoquic_tp_t client_parameters;
             mediatest_init_transport_parameters(&client_parameters, 1);
             picoquic_set_transport_parameters(cnx, &client_parameters);
+            picoquic_set_feedback_loss_notification(cnx, 1);
 
             if (picoquic_start_client_cnx(cnx) != 0) {
                 picoquic_delete_cnx(cnx);
@@ -1059,9 +1155,19 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
                 if (spec->do_video && ret == 0) {
                     ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_video, 0);
                 }
+                if (spec->do_video2 && ret == 0) {
+                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_video2, 0);
+                }
+                if (spec->do_probe_up && ret == 0) {
+                    picoquic_request_forced_probe_up(mt_ctx->client_cnx->cnx, 1);
+                }
                 if (spec->datagram_data_size > 0 && ret == 0) {
                     mt_ctx->datagram_data_requested = spec->datagram_data_size;
                 }
+                if (spec->priority_limit_for_bypass > 0) {
+                    picoquic_set_priority_limit_for_bypass(mt_ctx->client_cnx->cnx, spec->priority_limit_for_bypass);
+                }
+
             
                 for (int i = 0; i < media_test_nb_types; i++) {
                     mt_ctx->media_stats[i].min_delay = UINT64_MAX;
@@ -1078,12 +1184,33 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
     return mt_ctx;
 }
 
-/* One test */
-int mediatest_one(int media_test_id, mediatest_spec_t * spec)
+int mediatest_loop(mediatest_ctx_t* mt_ctx, uint64_t simulated_time_max, int is_losing_data, int * is_finished)
 {
     int ret = 0;
     int nb_steps = 0;
     int nb_inactive = 0;
+
+    /* Run the simulation until done */
+    while (ret == 0 && !(*is_finished) && nb_steps < 100000 && nb_inactive < 512 && mt_ctx->simulated_time < simulated_time_max) {
+        int is_active = 0;
+        nb_steps += 1;
+        ret = mediatest_step(mt_ctx, is_losing_data, &is_active);
+        if (is_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive += 1;
+        }
+        *is_finished = mediatest_is_finished(mt_ctx);
+    }
+
+    return ret;
+}
+
+/* One test */
+int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
+{
+    int ret = 0;
     int is_finished = 0;
 
     /* set the configuration */
@@ -1091,18 +1218,82 @@ int mediatest_one(int media_test_id, mediatest_spec_t * spec)
     if (mt_ctx == NULL) {
         ret = -1;
     }
+
+    /* Three special cases in which we manipulate the configuration
+    * to simulate various downgrade or suspension patterns.
+     */
+    if (media_test_id == mediatest_worst) {
+        /* Only collect statistics after expected end of disruption. */
+        mt_ctx->disruption_clear = 2500000;
+        /* Run the simulation for 1 second. */
+        ret = mediatest_loop(mt_ctx, 1000000, 0, &is_finished);
+        /* Lose data for 1 second */
+        if (ret == 0) {
+            ret = mediatest_loop(mt_ctx, 2000000, 1, &is_finished);
+        }
+    }
+    else if (media_test_id == mediatest_video2_down ||
+        media_test_id == mediatest_video2_back) {
+        uint64_t picosec_per_byte_ref[2];
+        uint64_t latency_ref[2];
+        uint64_t down_time = (media_test_id == mediatest_video2_down) ? 4000000 : 2000000;
+        uint64_t back_time = (media_test_id == mediatest_video2_down) ? 24000000 : 4000000;
+
+        /* Run the simulation for the first period. */
+        ret = mediatest_loop(mt_ctx, down_time, 0, &is_finished);
+        /* Drop the bandwidth and increase latency for specified down time */
+        for (int i = 0; i < 2; i++) {
+            picosec_per_byte_ref[i] = mt_ctx->link[i]->picosec_per_byte;
+            mt_ctx->link[i]->picosec_per_byte = 8000000; /* 8 us per byte, i.e., 1Mbps*/
+            latency_ref[i] = mt_ctx->link[i]->microsec_latency;
+        }
+        if (ret == 0) {
+            ret = mediatest_loop(mt_ctx, back_time, 0, &is_finished);
+        }
+        /* restore the bandwidth */
+        for (int i = 0; i < 2; i++) {
+            mt_ctx->link[i]->picosec_per_byte = picosec_per_byte_ref[i];
+            mt_ctx->link[i]->microsec_latency = latency_ref[i];
+        }
+    }
+    else if (spec->nb_suspensions > 0) {
+        /* Set the time of the first suspension */
+        uint64_t sim_time = spec->suspension_start_time;
+        /* Execute the specified suspensions */
+        for (int i = 0; ret == 0 && !is_finished && i < spec->nb_suspensions; i++) {
+            /* Run the simulation until the beginning of the suspension */
+            ret = mediatest_loop(mt_ctx, sim_time, 0, &is_finished);
+            /* set the end of suspension time */
+            sim_time += spec->suspension_down_time;
+            /* program the suspension */
+            picoquic_test_simlink_suspend(mt_ctx->link[0], sim_time, 0);
+            picoquic_test_simlink_suspend(mt_ctx->link[1], sim_time, 1);
+            /* Run the simulation until the end of the suspension */
+            ret = mediatest_loop(mt_ctx, sim_time, 0, &is_finished);
+            /* deliver the packets that were queued at the beginning of the suspension */
+            if (spec->suspension_up_time == 0) {
+                /* simulating back to back suspensions */
+                picoquictest_sim_packet_t* packet;
+                for (int i = 0; i < 2; i++) {
+                    while ((packet = picoquictest_sim_link_dequeue(mt_ctx->link[i], sim_time)) != NULL && ret == 0) {
+                        ret = picoquic_incoming_packet(mt_ctx->quic[i],
+                            packet->bytes, (uint32_t)packet->length,
+                            (struct sockaddr*)&packet->addr_from,
+                            (struct sockaddr*)&packet->addr_to, 0, 0,
+                            mt_ctx->simulated_time);
+                        free(packet);
+                    }
+                }
+            }
+            /* Compute the time of the next suspension */
+            sim_time += spec->suspension_up_time;
+        }
+        /* After that, continue running as specified. */
+    }
+
     /* Run the simulation until done */
-    while (ret == 0 && !is_finished && nb_steps < 100000 && nb_inactive < 512 && mt_ctx->simulated_time < 30000000) {
-        int is_active = 0;
-        nb_steps += 1;
-        ret = mediatest_step(mt_ctx, &is_active);
-        if (is_active) {
-            nb_inactive = 0;
-        }
-        else {
-            nb_inactive += 1;
-        }
-        is_finished = mediatest_is_finished(mt_ctx);
+    if (ret == 0) {
+        ret = mediatest_loop(mt_ctx, 30000000, 0, &is_finished);
     }
 
     /* Check that the simulation ran to the end. */
@@ -1112,12 +1303,22 @@ int mediatest_one(int media_test_id, mediatest_spec_t * spec)
         }
         /* Check that the results are as expected. */
         if (ret == 0 && spec->do_audio) {
-            ret = mediatest_check_stats(mt_ctx, media_test_audio);
+            ret = mediatest_check_stats(mt_ctx, spec, media_test_audio);
         }
         if (ret == 0 && spec->do_video) {
-            ret = mediatest_check_stats(mt_ctx, media_test_video);
+            ret = mediatest_check_stats(mt_ctx, spec, media_test_video);
         }
-        
+        if (ret == 0 && spec->do_video2 && !spec->do_not_check_video2) {
+            ret = mediatest_check_stats(mt_ctx, spec, media_test_video2);
+        }
+    }
+    if (ret == 0 && media_test_id == mediatest_wifi) {
+        picoquic_path_quality_t quality = { 0 };
+        picoquic_get_default_path_quality(mt_ctx->client_cnx->cnx, &quality);
+        if (quality.lost == 0 || quality.spurious_losses == 0 || quality.timer_losses == 0) {
+            /* Unexpected. the wifi tst should have triggered at least on spurious timer loss. */
+            ret = -1;
+        }
     }
     if (mt_ctx != NULL) {
         mediatest_delete_ctx(mt_ctx);
@@ -1133,7 +1334,7 @@ int mediatest_video_test()
     spec.ccalgo = picoquic_bbr_algorithm;
     spec.bandwidth = 0.01;
     spec.do_video = 1;
-    ret = mediatest_one(1, &spec);
+    ret = mediatest_one(mediatest_video, &spec);
 
     return ret;
 }
@@ -1146,7 +1347,7 @@ int mediatest_video_audio_test()
     spec.bandwidth = 0.01;
     spec.do_video = 1;
     spec.do_audio = 1;
-    ret = mediatest_one(2, &spec);
+    ret = mediatest_one(mediatest_video_audio, &spec);
 
     return ret;
 }
@@ -1160,7 +1361,61 @@ int mediatest_video_data_audio_test()
     spec.do_video = 1;
     spec.do_audio = 1;
     spec.data_size = 10000000;
-    ret = mediatest_one(3, &spec);
+    ret = mediatest_one(mediatest_video_data_audio, &spec);
+
+    return ret;
+}
+
+int mediatest_video2_down_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.01;
+    spec.do_video = 1;
+    spec.do_video2 = 1;
+    spec.do_audio = 1;
+    spec.data_size = 0;
+    spec.latency_average = 100000;
+    spec.latency_max = 600000;
+    spec.do_not_check_video2 = 1;
+    ret = mediatest_one(mediatest_video2_down, &spec);
+
+    return ret;
+}
+
+int mediatest_video2_back_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.01;
+    spec.do_video = 1;
+    spec.do_video2 = 1;
+    spec.do_audio = 1;
+    spec.data_size = 0;
+    spec.latency_average = 80000;
+    spec.latency_max = 500000;
+    spec.do_not_check_video2 = 1;
+    ret = mediatest_one(mediatest_video2_back, &spec);
+
+    return ret;
+}
+
+int mediatest_video2_probe_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.1;
+    spec.do_video = 1;
+    spec.do_video2 = 1;
+    spec.do_audio = 1;
+    spec.data_size = 0;
+    spec.latency_average = 25000;
+    spec.latency_max = 150000;
+    spec.do_probe_up = 1;
+    ret = mediatest_one(mediatest_video2_probe, &spec);
 
     return ret;
 }
@@ -1173,8 +1428,74 @@ int mediatest_worst_test()
     spec.bandwidth = 0.01;
     spec.do_video = 1;
     spec.do_audio = 1;
-    spec.datagram_data_size = 10000000;
-    ret = mediatest_one(4, &spec);
+    spec.data_size = 10000000;
+    ret = mediatest_one(mediatest_worst, &spec);
+
+    return ret;
+}
+
+int mediatest_wifi_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.01;
+    spec.do_video = 1;
+    spec.do_video2 = 1;
+    spec.do_audio = 1;
+    spec.data_size = 0;
+    spec.link_latency = 15000;
+    spec.latency_average = 60000;
+    spec.latency_max = 350000;
+    spec.priority_limit_for_bypass = 5;
+    spec.do_not_check_video2 = 1;
+    spec.nb_suspensions = 20;
+    spec.suspension_start_time = 4000000;
+    spec.suspension_down_time = 150000;
+    spec.suspension_up_time = 0;
+
+    ret = mediatest_one(mediatest_wifi, &spec);
+
+    return ret;
+}
+
+int mediatest_suspension_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.1;
+    spec.do_video = 1;
+    spec.do_video2 = 1;
+    spec.do_audio = 1;
+    spec.data_size = 0;
+    spec.latency_average = 50000;
+    spec.latency_max = 300000;
+    spec.do_not_check_video2 = 1;
+    spec.nb_suspensions = 1;
+    spec.suspension_start_time = 4000000;
+    spec.suspension_down_time = 150000;
+    spec.suspension_up_time = 50000;
+    ret = mediatest_one(mediatest_suspension, &spec);
+
+    return ret;
+}
+
+int mediatest_suspension2_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.1;
+    spec.do_video = 1;
+    spec.do_video2 = 1;
+    spec.do_audio = 1;
+    spec.data_size = 0;
+    spec.latency_average = 50000;
+    spec.latency_max = 300000;
+    spec.do_not_check_video2 = 1;
+    spec.do_probe_up = 1;
+    ret = mediatest_one(mediatest_suspension2, &spec);
 
     return ret;
 }

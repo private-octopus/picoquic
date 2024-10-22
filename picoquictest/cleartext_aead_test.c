@@ -329,8 +329,11 @@ int pn_ctr_test()
     uint8_t in_bytes[16];
     uint8_t out_bytes[16];
     uint8_t decoded[16];
+
+    picoquic_tls_api_init();
+
     ptls_aead_algorithm_t* aead = (ptls_aead_algorithm_t*)picoquic_get_aes128gcm_v(0);
-    ptls_cipher_context_t *pn_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
+    ptls_cipher_context_t *pn_enc = (aead == NULL)?NULL:ptls_cipher_new(aead->ctr_cipher, 1, key);
 
     if (pn_enc == NULL) {
         ret = -1;
@@ -1079,9 +1082,9 @@ int key_rotation_vector_test()
         NULL, NULL, NULL, NULL };
     uint8_t new_secret[PTLS_MAX_DIGEST_SIZE];
 
-    key_rotation_test_suites[0] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(256, 0); /* AES256GCM_SHA384 */
-    key_rotation_test_suites[1] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(128, 0); /* AES128GCM_SHA256 */
-    key_rotation_test_suites[2] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(20, 0); /* CHACHA0 */
+    key_rotation_test_suites[0] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_256_GCM_SHA384, 0);
+    key_rotation_test_suites[1] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256, 0);
+    key_rotation_test_suites[2] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_CHACHA20_POLY1305_SHA256, 0);
     key_rotation_test_suites[3] = NULL;
 
     memcpy(new_secret, key_rotation_test_init, PTLS_MAX_DIGEST_SIZE);

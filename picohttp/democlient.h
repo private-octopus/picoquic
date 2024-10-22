@@ -36,14 +36,6 @@
 extern "C" {
 #endif
 
-typedef enum {
-    picoquic_alpn_undef = 0,
-	picoquic_alpn_http_0_9,
-	picoquic_alpn_http_3,
-    picoquic_alpn_siduck,
-    picoquic_alpn_quicperf
-} picoquic_alpn_enum;
-
 #define PICOQUIC_DEMO_STREAM_ID_INITIAL UINT64_MAX
 
 typedef struct st_picoquic_demo_stream_desc_t {
@@ -53,6 +45,7 @@ typedef struct st_picoquic_demo_stream_desc_t {
     char const* doc_name;
     char const* f_name;
     uint64_t post_size;
+    char const* range;
 } picoquic_demo_stream_desc_t;
 
 #define PICOQUIC_DEMO_STREAM_LIST_MAX 16
@@ -69,9 +62,9 @@ typedef struct st_picoquic_demo_stream_ctx_t {
     uint64_t post_sent;
     char* f_name;
     FILE* F; /* NULL if stream is closed or no_disk. */
-    int is_open : 1;
-    int is_file_open : 1;
-    int flow_opened : 1;
+    unsigned int is_open : 1;
+    unsigned int is_file_open : 1;
+    unsigned int flow_opened : 1;
 } picoquic_demo_client_stream_ctx_t;
 
 typedef struct st_picoquic_demo_client_callback_ctx_t {
@@ -107,13 +100,8 @@ picoquic_alpn_enum picoquic_parse_alpn_nz(char const* alpn, size_t len);
  */
 
 int picoquic_demo_client_get_alpn_and_version_from_tickets(picoquic_quic_t* quic,
-    char const* sni, char const* alpn, uint32_t proposed_version, uint64_t current_time,
+    char const* sni, char const* alpn, uint32_t proposed_version,
     char const** ticket_alpn, uint32_t* ticket_version);
-
-int h3zero_client_init(picoquic_cnx_t* cnx);
-int demo_client_prepare_to_send(void * context, size_t space, uint64_t echo_length, uint64_t * echo_sent, FILE * F);
-int h3zero_client_create_stream_request(
-    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed);
 
 int h09_demo_client_prepare_stream_open_command(
     uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed);

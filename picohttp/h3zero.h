@@ -51,6 +51,7 @@ extern "C" {
 #define H3ZERO_USER_AGENT_STRING "H3Zero/1.0"
 
 #define H3ZERO_CAPSULE_CLOSE_WEBTRANSPORT_SESSION 0x2843
+#define H3ZERO_CAPSULE_DRAIN_WEBTRANSPORT_SESSION 0x78ae
 
 typedef enum {
 	h3zero_frame_data = 0,
@@ -64,17 +65,6 @@ typedef enum {
     h3zero_frame_reserved_delta = 0x1f,
     h3zero_frame_webtransport_stream = 0x41
 } h3zero_frame_type_enum_t;
-
-typedef enum {
-    h3zero_setting_reserved = 0x0,
-	h3zero_setting_header_table_size = 0x1,
-    h3zero_setting_max_header_list_size = 0x6,
-	h3zero_qpack_blocked_streams = 0x07,
-	h3zero_setting_grease_signature =0x0a0a,
-    h3zero_setting_grease_mask = 0x0f0f,
-    h3zero_settings_enable_web_transport = 0x2b603742,
-    h3zero_settings_webtransport_max_sessions = 0x2b603743
-} h3zero_settings_enum_t;
 
 typedef enum {
     h3zero_stream_type_control = 0,
@@ -152,6 +142,7 @@ typedef enum {
 #define H3ZERO_QPACK_AUTHORITY 0
 #define H3ZERO_QPACK_SCHEME_HTTPS 23
 #define H3ZERO_QPACK_TEXT_PLAIN 53
+#define H3ZERO_QPACK_RANGE 55
 #define H3ZERO_QPACK_USER_AGENT 95
 #define H3ZERO_QPACK_ORIGIN 90
 #define H3ZERO_QPACK_SERVER 92
@@ -162,11 +153,6 @@ typedef struct st_h3zero_qpack_static_t {
     char const * content;
     int enum_as_int; /* Documented for some interesting values */
 } h3zero_qpack_static_t;
-
-typedef struct st_h3zero_settings_t {
-    unsigned int header_size;
-    unsigned int blocked_streams;
-} h3zero_settings_t;
 
 typedef enum {
     h3zero_content_type_none = 0,
@@ -199,12 +185,39 @@ typedef struct st_h3zero_header_parts_t {
     h3zero_method_enum method;
     uint8_t const * path;
     size_t path_length;
+    uint8_t const * range;
+    size_t range_length;
     int status;
     h3zero_content_type_enum content_type;
     uint8_t const * protocol;
     size_t protocol_length;
     unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
+
+/* Setting codes.
+* This list includes the "extension" settings for datagrams and web
+* transport, because we want to have common functions for coding and
+* decoding setting values.
+ */
+#define h3zero_setting_reserved = 0x0
+#define h3zero_setting_header_table_size 0x1
+#define h3zero_setting_max_header_list_size 0x6
+#define h3zero_qpack_blocked_streams 0x07
+#define h3zero_setting_grease_signature 0x0a0a
+#define h3zero_setting_grease_mask 0x0f0f
+#define h3zero_settings_enable_connect_protocol 0x8
+#define h3zero_setting_h3_datagram 0x33
+#define h3zero_settings_webtransport_max_sessions 0xc671706aull
+
+typedef struct st_h3zero_settings_t {
+    uint64_t webtransport_max_sessions;
+    uint64_t table_size;
+    uint64_t max_header_list_size;
+    uint64_t blocked_streams;
+    unsigned int enable_connect_protocol : 1;
+    unsigned int h3_datagram : 1;
+    unsigned int settings_received : 1;
+} h3zero_settings_t;
 
 extern uint8_t const * h3zero_default_setting_frame;
 
@@ -220,15 +233,20 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t const * path, size_t path_length, char const * host);
 uint8_t* h3zero_create_request_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
-    uint8_t const* path, size_t path_length, char const* host, char const* ua_string);
+    uint8_t const* path, size_t path_length, uint8_t const* range, size_t range_length,
+    char const* host, char const* ua_string);
 uint8_t * h3zero_create_post_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t const * path, size_t path_length, char const * host,
     h3zero_content_type_enum content_type);
+uint8_t* h3zero_create_request_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
+    uint8_t const* path, size_t path_length, uint8_t const* range, size_t range_length,
+    char const* host, char const* ua_string);
 uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
-    uint8_t const* path, size_t path_length, char const* protocol, char const* origin,
-    char const* ua_string);
+    char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
+    char const* origin, char const* ua_string);
 uint8_t* h3zero_create_post_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
-    uint8_t const* path, size_t path_length, char const* host, h3zero_content_type_enum content_type, char const* ua_string);
+    uint8_t const* path, size_t path_length, uint8_t const* range, size_t range_length,
+    char const* host, h3zero_content_type_enum content_type, char const* ua_string);
 uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_content_type_enum doc_type);
 uint8_t* h3zero_create_error_frame(uint8_t* bytes, uint8_t* bytes_max, char const* error_code, char const* server_string);
@@ -239,23 +257,11 @@ uint8_t* h3zero_create_not_found_header_frame_ex(uint8_t* bytes, uint8_t* bytes_
 uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes_max);
 uint8_t* h3zero_create_bad_method_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max, char const* server_string);
 
-/* Parsing of a data stream. This is implemented as a filter, with a set of states:
- *
- * - Reading frame length: obtaining the length and type of the next frame.
- * - Reading header frame: obtaining the bytes of the data frame.
- *   When all bytes are obtained, the header is parsed and the header
- *   structure is documented. State moves back to initial, with header-read
- *   flag set. Having two frame headers before a data frame is a bug.
- * - Reading data frame: the frame header indicated a data frame of
- *   length N. Treat the following N bytes as data.
- *
- * There may be several data frames in a stream. The application will pick
- * the bytes and treat them as data.
- */
-
 typedef struct st_h3zero_data_stream_state_t {
+    struct st_h3zero_callback_ctx_t* h3_ctx;
     h3zero_header_parts_t header;
     h3zero_header_parts_t trailer;
+    uint64_t stream_type;
     uint8_t * current_frame;
     uint64_t current_frame_type;
     uint64_t current_frame_length;
@@ -263,26 +269,43 @@ typedef struct st_h3zero_data_stream_state_t {
     uint64_t control_stream_id;
     uint8_t frame_header[16];
     size_t frame_header_read;
+    unsigned int is_upgrade_requested:1;
     unsigned int is_web_transport : 1;
     unsigned int frame_header_parsed : 1;
     unsigned int header_found : 1;
     unsigned int data_found : 1;
     unsigned int trailer_found : 1;
+    unsigned int is_h3_control : 1;
+    unsigned int is_current_frame_ignored : 1;
     /* Keeping track of FIN sent and FIN received, so applications can delete stream contexts that are not useful */
     unsigned int is_fin_received : 1; 
     unsigned int is_fin_sent : 1;
 } h3zero_data_stream_state_t;
 
-uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
-    h3zero_data_stream_state_t * stream_state, size_t * available_data, uint16_t * error_found);
+/* Parsing of a data stream. This is implemented as a filter, with a set of states:
+*
+* - Reading frame length: obtaining the length and type of the next frame.
+* - Reading header frame: obtaining the bytes of the data frame.
+*   When all bytes are obtained, the header is parsed and the header
+*   structure is documented. State moves back to initial, with header-read
+*   flag set. Having two frame headers before a data frame is a bug.
+* - Reading data frame: the frame header indicated a data frame of
+*   length N. Treat the following N bytes as data.
+*
+* There may be several data frames in a stream. The application will pick
+* the bytes and treat them as data.
+*/
 
+size_t h3zero_varint_skip(const uint8_t* bytes);
+size_t h3zero_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
+uint8_t* h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t* result, uint8_t* buffer, size_t* buffer_length);
 void h3zero_release_header_parts(h3zero_header_parts_t* header);
-
-void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state);
 
 int hzero_qpack_huffman_decode(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t * decoded, size_t max_decoded, size_t * nb_decoded);
 
+/* TLV_Buffer_accumulator 
+*/
 #ifdef __cplusplus
 }
 #endif

@@ -934,15 +934,7 @@ int cid_for_lb_test_one(picoquic_quic_t* quic, int test_id, picoquic_load_balanc
     }
     else {
         /* Create a CID. */
-#if 0
-        memset(&result, 0, sizeof(picoquic_connection_id_t));
-        for (size_t i = 0; i < quic->local_cnxid_length; i++) {
-            result.id[i] = (uint8_t)(0x80 + i);
-        }
-        result.id_len = quic->local_cnxid_length;
-#else
         result = *init_cid;
-#endif
 
         if (quic->cnx_id_callback_fn) {
             quic->cnx_id_callback_fn(quic, picoquic_null_connection_id, picoquic_null_connection_id,

@@ -442,18 +442,20 @@ int parseheadertest()
         cnx_10 = picoquic_create_cnx(quic, test_cnxid_ini, test_cnxid_rem, (struct sockaddr*)&addr_10,
             0, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, 1);
 
-        if (cnx_10 == NULL) {
+        if (cnx_10 == NULL || cnx_10->first_local_cnxid_list == NULL) {
             ret = -1;
         }
         else {
             /* Remove old local CID from table and avoid leak. */
+            picoquic_local_cnxid_list_t* local_cnxid_list = cnx_10->first_local_cnxid_list;
+
             picoquic_delete_local_cnxid(cnx_10, cnx_10->path[0]->p_local_cnxid);
-            if (cnx_10->nb_local_cnxid != 0) {
-                DBG_PRINTF("Expected 0 cnxid left, got %d", cnx_10->nb_local_cnxid);
+            if (local_cnxid_list->nb_local_cnxid != 0) {
+                DBG_PRINTF("Expected 0 cnxid left, got %d", local_cnxid_list->nb_local_cnxid);
             }
             else {
                 /* Update the local cnx_id so it be predictable in tests */
-                picoquic_local_cnxid_t* local_cnxid0 = picoquic_create_local_cnxid(cnx_10, &test_cnxid_local, 0);
+                picoquic_local_cnxid_t* local_cnxid0 = picoquic_create_local_cnxid(cnx_10, 0, &test_cnxid_local, 0);
                 if (local_cnxid0 == NULL) {
                     DBG_PRINTF("%s", "Cannot create the new CNX_ID");
                     ret = -1;
@@ -663,7 +665,7 @@ int test_packet_encrypt_one(
     }
     else {
         pkt_ctx = (ptype == picoquic_packet_1rtt_protected && cnx_client->is_multipath_enabled) ?
-            &path_x->p_remote_cnxid->pkt_ctx : &cnx_client->pkt_ctx[pc];
+            &path_x->pkt_ctx : &cnx_client->pkt_ctx[pc];
         memset(packet, 0, sizeof(picoquic_packet_t));
         memset(packet->bytes, 0xbb, length);
         header_length = picoquic_predict_packet_header_length(cnx_client, ptype, pkt_ctx);
@@ -1127,7 +1129,7 @@ static int header_length_test_one(header_length_case_t * hlc)
         /* Reset the retransmit queue to simulate unack */
         if (hlc->sequence_unack != hlc->sequence_unack_after) {
             if (hlc->sequence_unack != UINT64_MAX) {
-                picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->retransmit_oldest, 1);
+                picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->pending_first, 1, 0);
             }
             if (hlc->sequence_unack_after != UINT64_MAX) {
                 ret = header_length_test_set_queue(cnx, hlc, hlc->sequence_unack_after, pc, pkt_ctx, simulated_time);

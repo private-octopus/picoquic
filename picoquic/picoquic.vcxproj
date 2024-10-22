@@ -145,6 +145,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="bbr1.c" />
     <ClCompile Include="bytestream.c" />
     <ClCompile Include="cc_common.c" />
     <ClCompile Include="config.c" />
@@ -154,9 +155,15 @@
     <ClCompile Include="intformat.c" />
     <ClCompile Include="logger.c" />
     <ClCompile Include="logwriter.c" />
+    <ClCompile Include="loss_recovery.c" />
     <ClCompile Include="newreno.c" />
+    <ClCompile Include="pacing.c" />
     <ClCompile Include="performance_log.c" />
     <ClCompile Include="picoquic_lb.c" />
+    <ClCompile Include="picoquic_mbedtls.c" />
+    <ClCompile Include="picoquic_ptls_fusion.c" />
+    <ClCompile Include="picoquic_ptls_minicrypto.c" />
+    <ClCompile Include="picoquic_ptls_openssl.c" />
     <ClCompile Include="picosocks.c" />
     <ClCompile Include="picosplay.c" />
     <ClCompile Include="port_blocking.c" />
@@ -171,6 +178,7 @@
     <ClCompile Include="sockloop.c" />
     <ClCompile Include="spinbit.c" />
     <ClCompile Include="ticket_store.c" />
+    <ClCompile Include="timing.c" />
     <ClCompile Include="tls_api.c" />
     <ClCompile Include="token_store.c" />
     <ClCompile Include="transport.c" />
@@ -184,6 +192,7 @@
     <ClCompile Include="winsockloop.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\picoquic_mbedtls\ptls_mbedtls.h" />
     <ClInclude Include="bytestream.h" />
     <ClInclude Include="cc_common.h" />
     <ClInclude Include="frames.h" />
@@ -191,6 +200,7 @@
     <ClInclude Include="performance_log.h" />
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picoquic_config.h" />
+    <ClInclude Include="picoquic_crypto_provider_api.h" />
     <ClInclude Include="picoquic_internal.h" />
     <ClInclude Include="picoquic_logger.h" />
     <ClInclude Include="picoquic_packet_loop.h" />
@@ -200,6 +210,7 @@
     <ClInclude Include="picosocks.h" />
     <ClInclude Include="picosplay.h" />
     <ClInclude Include="picoquic.h" />
+    <ClInclude Include="sockloop.h" />
     <ClInclude Include="tls_api.h" />
     <ClInclude Include="picoquic_utils.h" />
     <ClInclude Include="wincompat.h" />

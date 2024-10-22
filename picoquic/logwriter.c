@@ -142,7 +142,7 @@ static const uint8_t* picoquic_log_ack_frame(FILE* f, const uint8_t* bytes, cons
 
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Logging the frame type, maybe multiple bytes */
 
-    if (ftype == picoquic_frame_type_ack_mp || ftype == picoquic_frame_type_ack_mp_ecn) {
+    if (ftype == picoquic_frame_type_mp_ack || ftype == picoquic_frame_type_mp_ack_ecn) {
         bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Log the path_id */
     }
 
@@ -157,7 +157,7 @@ static const uint8_t* picoquic_log_ack_frame(FILE* f, const uint8_t* bytes, cons
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
     }
     
-    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_ack_mp_ecn) {
+    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_mp_ack_ecn) {
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
@@ -306,11 +306,41 @@ static const uint8_t* picoquic_log_new_connection_id_frame(FILE* f, const uint8_
     return bytes;
 }
 
+static const uint8_t* picoquic_log_mp_new_connection_id_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    if (bytes != NULL) {
+        bytes = picoquic_log_fixed_skip(bytes, bytes_max, ((size_t)1) + bytes[0]);
+    }
+
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, PICOQUIC_RESET_SECRET_SIZE);
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+    return bytes;
+}
+
 static const uint8_t* picoquic_log_retire_connection_id_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+    return bytes;
+}
+
+static const uint8_t* picoquic_log_mp_retire_connection_id_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
 
     picoquic_binlog_frame(f, bytes_begin, bytes);
@@ -409,6 +439,16 @@ static const uint8_t* picoquic_log_path_abandon_frame(FILE* f, const uint8_t* by
     return bytes;
 }
 
+static const uint8_t* picoquic_log_path_available_or_standby_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
+    bytes = picoquic_skip_path_available_or_standby_frame(bytes, bytes_max); /* skip available or standby frame */
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
 
 static const uint8_t* picoquic_log_ack_frequency_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
@@ -418,8 +458,18 @@ static const uint8_t* picoquic_log_ack_frequency_frame(FILE* f, const uint8_t* b
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Seq num */
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Packet tolerance */
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Max ACK delay */
-    bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1); /* Ignore order */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Reordering threshold */
 
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
+static const uint8_t* picoquic_log_immediate_ack_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
     picoquic_binlog_frame(f, bytes_begin, bytes);
 
     return bytes;
@@ -464,6 +514,22 @@ static const uint8_t* picoquic_log_bdp_frame(FILE* f, const uint8_t* bytes, cons
     return bytes;
 }
 
+static const uint8_t* picoquic_log_observed_address_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype)
+{
+    const uint8_t* bytes_begin = bytes;
+    size_t ip_len = ((ftype & 1) == 0) ? 4 : 16;
+    size_t data_len = ip_len + 2;
+
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Frame type */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Sequence number */
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, data_len); /* IP address and port */
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
 void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
 {
     const uint8_t* bytes_max = bytes + length;
@@ -491,12 +557,15 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         switch (ftype) {
         case picoquic_frame_type_ack:
         case picoquic_frame_type_ack_ecn:
-        case picoquic_frame_type_ack_mp:
-        case picoquic_frame_type_ack_mp_ecn:
+        case picoquic_frame_type_mp_ack:
+        case picoquic_frame_type_mp_ack_ecn:
             bytes = picoquic_log_ack_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_retire_connection_id:
             bytes = picoquic_log_retire_connection_id_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_mp_retire_connection_id:
+            bytes = picoquic_log_mp_retire_connection_id_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_padding:
         case picoquic_frame_type_ping:
@@ -534,6 +603,9 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         case picoquic_frame_type_new_connection_id:
             bytes = picoquic_log_new_connection_id_frame(f, bytes, bytes_max);
             break;
+        case picoquic_frame_type_mp_new_connection_id:
+            bytes = picoquic_log_mp_new_connection_id_frame(f, bytes, bytes_max);
+            break;
         case picoquic_frame_type_stop_sending:
             bytes = picoquic_log_stop_sending_frame(f, bytes, bytes_max);
             break;
@@ -557,14 +629,25 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         case picoquic_frame_type_ack_frequency:
             bytes = picoquic_log_ack_frequency_frame(f, bytes, bytes_max);
             break;
+        case picoquic_frame_type_immediate_ack:
+            bytes = picoquic_log_immediate_ack_frame(f, bytes, bytes_max);
+            break;
         case picoquic_frame_type_time_stamp:
             bytes = picoquic_log_time_stamp_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_path_abandon:
             bytes = picoquic_log_path_abandon_frame(f, bytes, bytes_max);
             break;
+        case picoquic_frame_type_path_standby:
+        case picoquic_frame_type_path_available:
+            bytes = picoquic_log_path_available_or_standby_frame(f, bytes, bytes_max);
+            break;
         case picoquic_frame_type_bdp:
             bytes = picoquic_log_bdp_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_observed_address_v4:
+        case picoquic_frame_type_observed_address_v6:
+            bytes = picoquic_log_observed_address_frame(f, bytes, bytes_max, ftype);
             break;
         default:
             bytes = picoquic_log_erroring_frame(f, bytes, bytes_max);
@@ -587,13 +670,8 @@ static uint64_t binlog_get_path_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
     uint64_t path_id = 0;
 
-    if ((cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) && path_x != NULL && path_x->p_remote_cnxid != NULL) {
-        if (path_x->p_remote_cnxid->cnx_id.id_len > 0) {
-            path_id = path_x->p_remote_cnxid->sequence;
-        }
-        else if (path_x->p_local_cnxid != NULL) {
-            path_id = path_x->p_local_cnxid->sequence;
-        }
+    if (cnx->is_multipath_enabled && path_x != NULL) {
+        path_id = path_x->unique_path_id;
     }
 
     return path_id;
@@ -963,7 +1041,7 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
 
     if (ret == 0) {
         cnx->f_binlog = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic),
-            cnx->local_parameters.enable_multipath);
+           cnx->local_parameters.is_multipath_enabled);
         if (cnx->f_binlog == NULL) {
             cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
             ret = -1;
@@ -1066,14 +1144,15 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 
     bytestream_buf stream_msg;
     bytestream* ps_msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
-    int path_max = (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) ? cnx->nb_paths : 1;
+    int path_max = (cnx->is_multipath_enabled) ? cnx->nb_paths : 1;
 
     for (int path_id = 0; path_id < path_max; path_id++)
     {
         picoquic_path_t* path = cnx->path[path_id];
         picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
-        if (cnx->is_multipath_enabled && cnx->path[path_id]->p_remote_cnxid != NULL) {
-            pkt_ctx = &cnx->path[path_id]->p_remote_cnxid->pkt_ctx;
+        
+        if (cnx->is_multipath_enabled) {
+            pkt_ctx = &cnx->path[path_id]->pkt_ctx;
         }
 
         if (!path->is_cc_data_updated) {
@@ -1109,9 +1188,9 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         bytewrite_vint(ps_msg, path->bandwidth_estimate);
         bytewrite_vint(ps_msg, path->receive_rate_estimate);
         bytewrite_vint(ps_msg, path->send_mtu);
-        bytewrite_vint(ps_msg, path->pacing_packet_time_microsec);
-        if (cnx->is_multipath_enabled || cnx->is_simple_multipath_enabled) {
-            bytewrite_vint(ps_msg, path->retrans_count);
+        bytewrite_vint(ps_msg, path->pacing.packet_time_microsec);
+        if (cnx->is_multipath_enabled) {
+            bytewrite_vint(ps_msg, path->nb_losses_found);
             bytewrite_vint(ps_msg, path->nb_spurious);
         }
         else {
@@ -1137,8 +1216,9 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
             bytewrite_vint(ps_msg, cc_param);
         }
 
-        bytewrite_vint(ps_msg, path->max_bandwidth_estimate);
+        bytewrite_vint(ps_msg, path->peak_bandwidth_estimate);
         bytewrite_vint(ps_msg, path->bytes_in_transit);
+        bytewrite_vint(ps_msg, path->last_bw_estimate_path_limited);
 
         bytestream_buf stream_head;
         bytestream* ps_head = bytestream_buf_init(&stream_head, BYTESTREAM_MAX_BUFFER_SIZE);

@@ -63,7 +63,7 @@ static picoquic_h09_server_callback_ctx_t* first_server_callback_create_context(
     if (ctx != NULL) {
         memset(ctx, 0, sizeof(picoquic_h09_server_callback_ctx_t));
 
-        h3zero_init_stream_tree(&ctx->h09_stream_tree);
+        h3zero_init_stream_tree(&ctx->h3_stream_tree);
 
         if (param != NULL) {
             ctx->path_table = param->path_table;
@@ -78,7 +78,7 @@ static picoquic_h09_server_callback_ctx_t* first_server_callback_create_context(
 static void picoquic_h09_server_callback_delete_context(picoquic_h09_server_callback_ctx_t* ctx)
 {
 
-    picosplay_empty_tree(&ctx->h09_stream_tree);
+    picosplay_empty_tree(&ctx->h3_stream_tree);
 
     free(ctx);
 }
@@ -178,7 +178,7 @@ static void picoquic_h09_server_parse_protocol(uint8_t* command, size_t command_
     }
 }
 
-static int picohttp_server_parse_commandline(uint8_t* command, size_t command_length, picohttp_server_stream_ctx_t* stream_ctx)
+static int picohttp_server_parse_commandline(uint8_t* command, size_t command_length, h3zero_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
     size_t consumed;
@@ -252,7 +252,7 @@ static int picohttp_server_parse_commandline(uint8_t* command, size_t command_le
 int picoquic_h09_server_process_data_header(
     const uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event,
-    picohttp_server_stream_ctx_t* stream_ctx,
+    h3zero_stream_ctx_t* stream_ctx,
     size_t * r_processed)
 {
     int ret = 0;
@@ -321,7 +321,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, 
     picoquic_h09_server_callback_ctx_t* app_ctx,
-    picohttp_server_stream_ctx_t* stream_ctx)
+    h3zero_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
     size_t processed = 0;
@@ -480,7 +480,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     picoquic_h09_server_callback_ctx_t* ctx = NULL;
-    picohttp_server_stream_ctx_t* stream_ctx = (picohttp_server_stream_ctx_t*)v_stream_ctx;
+    h3zero_stream_ctx_t* stream_ctx = (h3zero_stream_ctx_t*)v_stream_ctx;
 
     if (picoquic_cnx_is_still_logging(cnx)) {
         picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d\n",
@@ -524,7 +524,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     }
 
     if (stream_ctx == NULL) {
-        stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, &ctx->h09_stream_tree, 1, 0);
+        stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, ctx, 1, 0);
     }
 
     switch (fin_or_event) {
@@ -562,8 +562,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                     /* TODO-POST: notify callback. */
                     int ret = h3zero_server_prepare_to_send((void*)bytes, length, stream_ctx);
                     if (stream_ctx->echo_sent >= stream_ctx->echo_length) {
-                        h3zero_delete_stream(&ctx->h09_stream_tree, stream_ctx);
-                        picoquic_unlink_app_stream_ctx(cnx, stream_id);
+                        h3zero_delete_stream(cnx, ctx, stream_ctx);
                     }
                     return ret;
                 }
@@ -614,7 +613,7 @@ int picoquic_demo_server_callback(picoquic_cnx_t* cnx,
 
     switch (alpn_code) {
     case picoquic_alpn_http_3:
-        ret = h3zero_server_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);
+        ret = h3zero_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);
         break;
     case picoquic_alpn_siduck:
         ret = siduck_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);

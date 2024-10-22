@@ -22,73 +22,79 @@
 #ifndef pico_webtransport_H
 #define pico_webtransport_H
 
+#include "h3zero_common.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+    /* Capsule types defined for web transport */
+#define picowt_capsule_close_webtransport_session 0x2843
+#define picowt_capsule_drain_webtransport_session 0x78ae 
 
-/* Web transport callback API */
-typedef enum {
-    picowt_cb_ready, /* Data can be sent and received, connection migration can be initiated */
-    picowt_cb_close, /* Control socket closed. Stream=0, bytes=NULL, len=0 */
-    picowt_cb_stream_data, /* Data received from peer on stream N */
-    picowt_cb_stream_fin, /* Fin received from peer on stream N; data is optional */
-    picowt_cb_stream_reset, /* Reset Stream received from peer on stream N; bytes=NULL, len = 0  */
-    picowt_cb_stop_sending, /* Stop sending received from peer on stream N; bytes=NULL, len = 0 */
-    picowt_cb_prepare_to_send, /* Ask application to send data in frame, see picoquic_provide_stream_data_buffer for details */
-    picowt_cb_datagram, /* Datagram frame has been received */
-    picowt_cb_prepare_datagram, /* Prepare the next datagram */
-    picowt_cb_datagram_acked, /* Ack for packet carrying datagram-frame received from peer */
-    picowt_cb_datagram_lost, /* Packet carrying datagram-frame probably lost */
-    picowt_cb_datagram_spurious, /* Packet carrying datagram-frame was not really lost */
-    picowt_cb_pacing_changed /* Pacing rate for the connection changed */
-} picowt_event_t;
+    /* Set required transport parameters for web transport  */
+    void picowt_set_transport_parameters(picoquic_cnx_t* cnx);
 
-#if 0
-/* TODO: Set API to match requirements */
-typedef int (*picowt_ready_cb_fn)(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picowt_event_t event, void* callback_ctx, void* stream_ctx);
-#endif
+    /* Create the control stream for the Web Transport session on the client. */
+    h3zero_stream_ctx_t* picowt_set_control_stream(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx);
 
-/* Web transport initiate, client side
- * cnx: an established QUIC connection, set to ALPN=H3.
- * wt_callback: callback function to use in the web transport connection.
- * wt_ctx: application level context for that connection.
- */
-int picowt_connect(picoquic_cnx_t* cnx, picohttp_server_stream_ctx_t* stream_ctx, h3zero_stream_prefixes_t* stream_prefixes, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
 
-/* Private API for implementing web transport:
- * - process the register request.
- * - process the incoming streams, associate them with webtransport context.
- * - maintain state on streams, to check whether they are 
- * - process the incoming datagrams.
- */
+    /*
+    * picowt_prepare_client_cnx:
+    * Prepare a QUIC connection and allocate the parameters required for
+    * the web transport setup:
+    * - p_cnx points to a quic connection context. If *p_cnx is null, a connection context
+    *   will be created.
+    * - p_h3_ctx points to an HTTP3 connection context. If *p_h3_ctx is null,
+    *   an HTTP3 context will be created.
+    * - p_control_stream_ctx should be NULL. On successfull return, it will
+    *   point to the stream context for the "control stream" of
+    *   the web transport connection.
+     */
+    int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_address,
+        picoquic_cnx_t** p_cnx, h3zero_callback_ctx_t** p_h3_ctx,
+        h3zero_stream_ctx_t** p_stream_ctx,
+        uint64_t current_time, const char* sni);
 
-/* web transport stream context.
- */
-typedef struct st_picowt_stream_ctx_t {
-    /* Pointer to connection context*/
-    /* Chain stream context to pico_web_transport_ctx */
-    uint64_t stream_id; /* stream ID */
-    int header_received; /* Incoming streams: was the web transport header processed ?*/
-    int header_sent;  /* Outgoing streams: was the web transport header sent ?*/
-    int fin_received;
-    int fin_sent;
-} picowt_stream_ctx_t;
+    /* Web transport initiate, client side
+     * cnx: an established QUIC connection, set to ALPN=H3.
+     * stream_ctx: the stream context returned by picowt_set_control_stream
+     * wt_callback: callback function to use in the web transport connection.
+     *              this is defined in h3zero_common.h
+     * wt_ctx: application level context for that connection.
+     */
+    int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
+    /* Send capsule to close web transport session,
+     * and close web transport control stream.
+     */
+    int picowt_send_close_session_message(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* control_stream_ctx, uint32_t picowt_err, const char* err_msg);
+    /* Send drain capsule to tell the peer to finish and then close the session.
+     */
+    int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
+        h3zero_stream_ctx_t* control_stream_ctx);
+    /* accumulate data for the web transport capsule in
+     * specified context.
+     */
+    typedef struct st_picowt_capsule_t {
+        h3zero_capsule_t h3_capsule;
+        uint32_t error_code;
+        const uint8_t* error_msg;
+        size_t error_msg_len;
+    } picowt_capsule_t;
 
-/* Web transport connection context */
-typedef struct st_picowt_cnx_ctx_t {
-    /* Context ID is set to stream ID of the connect stream. */
-    uint64_t context_id;
-} picowt_cnx_ctx_t;
+    int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t* capsule, h3zero_callback_ctx_t* h3_ctx);
+    void picowt_release_capsule(picowt_capsule_t* capsule);
 
-/* Web transport server context */
+    void picowt_deregister(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* control_stream_ctx);
 
-/* Open web transport context */
-
+    /**
+    * Create local stream: when a stream is created locally. 
+    * Send the stream header. Associate the stream with a per_stream
+    * app context.
+    */
+    h3zero_stream_ctx_t* picowt_create_local_stream(picoquic_cnx_t* cnx, int is_bidir, h3zero_callback_ctx_t* h3_ctx,
+        uint64_t control_stream_id);
 
 #ifdef __cplusplus
 }
 #endif
-
 #endif /* PICO_WEBTRANSPORT_H */

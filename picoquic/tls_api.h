@@ -21,6 +21,7 @@
 
 #ifndef TLS_API_H
 #define TLS_API_H
+#include "picoquic.h"
 #include "picoquic_internal.h"
 
 #define PICOQUIC_LABEL_INITIAL_CLIENT "client in"
@@ -89,6 +90,7 @@ uint64_t picoquic_aead_integrity_limit(void* aead_ctx);
 uint64_t picoquic_aead_confidentiality_limit(void* aead_ctx);
 
 void picoquic_aead_free(void* aead_context);
+void picoquic_cipher_free(void* cipher_context);
 
 size_t picoquic_pn_iv_size(void *pn_enc);
 
@@ -110,6 +112,9 @@ int picoquic_setup_initial_secrets(
 
 int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx);
 
+int picoquic_get_initial_aead_context(picoquic_quic_t* quic, int version_index, picoquic_connection_id_t* initial_cnxid,
+    int is_client, int is_enc, void** aead_ctx, void** pn_enc_ctx);
+
 uint8_t * picoquic_get_app_secret(picoquic_cnx_t* cnx, int is_enc);
 size_t picoquic_get_app_secret_size(picoquic_cnx_t* cnx);
 int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx);
@@ -121,26 +126,14 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx);
 void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret, const char *prefix_label);
 void * picoquic_pn_enc_create_for_test(const uint8_t * secret, const char *prefix_label);
 
-#if 0
-/* TODO: find replacement for this test */
-int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_t* cnx2);
-#endif
-
 int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE]);
-
-#if 0
-void picoquic_provide_received_transport_extensions(picoquic_cnx_t* cnx,
-    uint8_t** ext_received,
-    size_t* ext_received_length,
-    int* ext_received_return,
-    int* client_mode);
-#endif
 
 char const* picoquic_tls_get_negotiated_alpn(picoquic_cnx_t* cnx);
 char const* picoquic_tls_get_sni(picoquic_cnx_t* cnx);
 
-int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic);
+void picoquic_tls_set_verify_certificate_callback(picoquic_quic_t* quic,
+    struct st_ptls_verify_certificate_t* cb, picoquic_free_verify_certificate_ctx free_fn);
 
 void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic);
 
@@ -159,7 +152,7 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr * 
 int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
     uint64_t current_time, int * is_new_token, picoquic_connection_id_t * odcid, 
     const picoquic_connection_id_t* rcid, uint32_t initial_pn,
-    const uint8_t * token, size_t token_size, int new_context_created);
+    const uint8_t * token, size_t token_size, int check_reuse);
 
 void picoquic_cid_free_under_mask_ctx(void * v_pn_enc);
 int picoquic_cid_get_under_mask_ctx(void ** v_pn_enc, const void * secret, const char *prefix_label);
@@ -177,13 +170,16 @@ size_t picoquic_hash_get_length(char const* algorithm_name);
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context);
 void picoquic_hash_finalize(uint8_t* output, void* hash_context);
 
-uint8_t* picoquic_get_private_key_from_key_file(char const* file_name, int* key_length);
+#if 0
+uint8_t* picoquic_get_private_key_from_file(char const* file_name, int* key_length);
+#endif
+int picoquic_set_private_key_from_file(picoquic_quic_t* quic, char const* file_name);
 ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count);
 
 
 /* Special AEAD context definition functions used for stateless retry integrity protection */
 void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key, const char *prefix_label);
-void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending);
+void * picoquic_find_retry_protection_context(picoquic_quic_t * quic, int version_index, int sending);
 void picoquic_delete_retry_protection_contexts(picoquic_quic_t * quic);
 size_t picoquic_encode_retry_protection(void * integrity_aead, uint8_t * bytes, size_t bytes_max, size_t byte_index, const picoquic_connection_id_t * odcid);
 int picoquic_verify_retry_protection(void * integrity_aead, uint8_t * bytes, size_t * length, size_t byte_index, const picoquic_connection_id_t * odcid);
@@ -203,7 +199,9 @@ void picoquic_aes128_ecb_free(void* v_aesecb);
 
 void picoquic_aes128_ecb_encrypt(void* v_aesecb, uint8_t* output, const uint8_t* input, size_t len);
 
-void picoquic_clear_openssl();
+void picoquic_tls_api_init();
+void picoquic_tls_api_unload();
+void picoquic_tls_api_reset(uint64_t init_flags);
 
 #ifdef __cplusplus
 }

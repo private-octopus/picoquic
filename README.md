@@ -3,8 +3,7 @@
 Minimalist implementation of the QUIC protocol, as defined by the IETF.
 The IETF spec started with the version of QUIC defined by Google and
 implemented in Chrome, but the IETF spec is independent of Chrome, and
-does not attempt to be backward compatible. The main developer is 
-Christian Huitema.
+does not attempt to be backward compatible.
 
 The first goal of this project was to provide feedback on the development
 of a QUIC standard in the IETF QUIC WG. Information on the WG is available at
@@ -14,11 +13,37 @@ enables developers to test this new work.
 
 The second goal is to experiment with API for non-HTTP development, such as
 DNS over QUIC -- see RFC 9250. Then there are plenty of other features we may dream off,
-such as support for multipath, or support for peer-to-peer applications.
-That's on the horizon, but not there now.
+such as support for peer-to-peer applications or forward error correction.
+That's on the horizon, but not there now. 
 
-The code in this repo is stable, supporting the QUIC v1 and testing compliance.
-It also includes support for a number of extensions. Performance work is
+The current version of Picoquic supports the QUIC specifications per
+[RFC 9000](https://datatracker.ietf.org/doc/rfc9000),
+[RFC 9001](https://datatracker.ietf.org/doc/rfc9001),
+[RFC 9002](https://datatracker.ietf.org/doc/rfc9002),
+and [RFC 8999](https://datatracker.ietf.org/doc/rfc8999). 
+It also implements the following extensions:
+
+* QUIC datagrams, per [RFC 9221]((https://datatracker.ietf.org/doc/rfc9221)
+* Compatible version negotiation for QUIC, per [RFC 9368](https://www.rfc-editor.org/info/rfc9368)
+* QUIC Version 2, per [RFC 3969](https://datatracker.ietf.org/doc/rfc9369/)
+* Greasing the QUIC bit, per [RFC 9287](https://datatracker.ietf.org/doc/rfc9287/)
+* QUIC ACK Frequency, per version 04 of [the ACK Frequency Draft](https://datatracker.ietf.org/doc/draft-ietf-quic-ack-frequency/)
+* QUIC Spin Bit, per RFC 9000,
+* The evolving [QUIC Multipath draft](https://datatracker.ietf.org/doc/draft-ietf-quic-multipath/),
+* The [simple multipath](https://github.com/huitema/quicmpath) alternative to the QUIC Multipath draft 
+* The experimental [BDP draft](https://datatracker.ietf.org/doc/draft-kuhn-quic-bdpframe-extension/),
+  tested in various simulations of satellite links of interspatial links.
+* An experimental [Timestamp Draft](https://datatracker.ietf.org/doc/draft-huitema-quic-ts/)
+
+The distribution also includes a minimal implementation of HTTP3
+per [RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html), including
+a static implementation of QPACK, compatible with [RFC9204](https://www.rfc-editor.org/rfc/rfc9204.html)
+with support for the following extensions:
+
+* HTTP Datagrams and Capsules,per [RFC 9297](https://www.rfc-editor.org/rfc/rfc9114.html)
+* Web Transport over HTTP3, per [Web Transport Draft](https://datatracker.ietf.org/doc/draft-ietf-webtrans-http3/)
+
+The code in this repo is stable. Performance work is
 ongoing -- recent tests showed picoquic sending data at up to 5Gbps.
 
 There are many implementations of Quic, listed
@@ -50,20 +75,7 @@ builds, the tests are run through a command line program.
 
 As explained in the Wiki, Picoquic is actively tested against other implementations
 during the QUIC Interop days. See https://github.com/private-octopus/picoquic/wiki/QUIC-milestones-and-interop-testing.
-
 The current version is aligned with version 1, [RFC 9000](https://datatracker.ietf.org/doc/rfc9000/).
-All big features are supported, including
-the interface between QUIC and TLS, 0-RTT, migration and key rollover. The state of
-development is tracked in the list of issues in this repository. The code also
-supports several features that are not yet standardized, including
-[Datagrams](https://datatracker.ietf.org/doc/draft-ietf-quic-datagram/),
-[ACK Frequency](https://datatracker.ietf.org/doc/draft-ietf-quic-ack-frequency/),
-[Compatible Version Negotiation](https://datatracker.ietf.org/doc/draft-ietf-quic-version-negotiation/),
-and [Multipath](https://datatracker.ietf.org/doc/draft-ietf-quic-multipath/).
-The code includes specific tuning for geostationary satellite links
-and long delay links, including
-support for the [BDP Frame Extension](https://datatracker.ietf.org/doc/draft-kuhn-quic-bdpframe-extension/).
-
 
 An implemention of DNS over QUIC is available
 as [Quicdoq](https://github.com/private-octopus/quicdoq). DNS over Quic is interesting
@@ -77,7 +89,11 @@ but we will improve performance, especially in light of practical experience wit
 applications. To facilitate performance tests, the demo program includes an
 implementation of the [quic performance test protocol](doc/quicperf.md).
 Suggestions for documentation, API, performance and more are wellcome. Feel free to
-open an issue!
+open an issue.
+
+Planned developments include support for the standard version of multipath, improved
+support for Real Time Media over QUIC, as well as various other research issues,
+in particular related to congestion control. 
 
 # Building Picoquic
 
@@ -85,11 +101,13 @@ Picoquic is developed in C, and can be built under Windows or Linux. Building th
 project requires first managing the dependencies, [Picotls](https://github.com/h2o/picotls)
 and OpenSSL. Please note that you will need a recent version of Picotls --
 the Picotls API has evolved recently to support the latest version of QUIC. The
-current code is tested against the Picotls version of Sat Dec 10 01:56:28 2022 +0900,
-after commit `7d294ab4f2e0ed749b4bcfaf533225a4e0c096f7`. (Note that these last
+current code is tested against the Picotls version of Tue Oct 31 11:23:32 2023 +0900,
+after commit `af66fc4aa8853b0725fcb2c18a702e8f1c656cf1`. (Note that these last
 commits changed the Picotls API by removing code for the now obsolete
 ESNI draft; prior versions will not work with Picoquic.)
 The code can use OpenSSL version 1.1.1 or OpenSSL version 3.0.
+
+More information can be found in the [docs](doc/building_picoquic.md)
 
 ## Picoquic on Windows
 

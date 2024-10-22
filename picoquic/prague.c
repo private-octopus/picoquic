@@ -108,7 +108,7 @@ typedef struct st_picoquic_prague_state_t {
     uint64_t recovery_start;
     uint64_t l4s_update_sent;
     uint64_t l4s_epoch_send;
-    uint64_t l4s_epoch_ect0;
+    uint64_t l4s_epoch_ect1;
     uint64_t l4s_epoch_ce;
     picoquic_min_max_rtt_t rtt_filter;
 } picoquic_prague_state_t;
@@ -121,10 +121,13 @@ static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoqui
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
 }
 
-void picoquic_prague_init(picoquic_path_t* path_x, uint64_t current_time)
+void picoquic_prague_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_prague_state_t* pr_state = (picoquic_prague_state_t*)malloc(sizeof(picoquic_prague_state_t));
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
 
     if (pr_state != NULL) {
         memset(pr_state, 0, sizeof(picoquic_prague_state_t));
@@ -142,12 +145,7 @@ static picoquic_packet_context_t* picoquic_prague_get_pkt_ctx(picoquic_cnx_t* cn
 
     /* Reset the L3S measurement context to the current value */
     if (cnx->is_multipath_enabled) {
-        /* TODO: if the RCID index has changed, reset the counters. */
-        picoquic_remote_cnxid_t* r_cid = path_x->p_remote_cnxid;
-
-        if (r_cid != NULL) {
-            pkt_ctx = &r_cid->pkt_ctx;
-        }
+        pkt_ctx = &path_x->pkt_ctx;
     }
 
     return pkt_ctx;
@@ -158,7 +156,7 @@ static void picoquic_prague_reset_l3s(picoquic_cnx_t* cnx, picoquic_prague_state
 {
     picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
     pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
-    pr_state->l4s_epoch_ect0 = pkt_ctx->ecn_ect0_total_remote;
+    pr_state->l4s_epoch_ect1 = pkt_ctx->ecn_ect1_total_remote;
     pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;
     pr_state->alpha = 0;
     pr_state->alpha_shifted = 0;
@@ -217,18 +215,14 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
         uint64_t frac = 0;
         int is_suspect = 0;
         pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
-        uint64_t delta_ect0 = pkt_ctx->ecn_ect0_total_remote - pr_state->l4s_epoch_ect0;
+        uint64_t delta_ect1 = pkt_ctx->ecn_ect1_total_remote - pr_state->l4s_epoch_ect1;
         uint64_t delta_ce = pkt_ctx->ecn_ce_total_remote - pr_state->l4s_epoch_ce;
 
         if (delta_ce > 0) {
-            frac = (delta_ce * 1024) / (delta_ce + delta_ect0);
+            frac = (delta_ce * 1024) / (delta_ce + delta_ect1);
         }
         else {
             frac = 0;
-        }
-
-        if (frac > 512) {
-            DBG_PRINTF("%s", "bug");
         }
 
         if (pr_state->l4s_update_sent != 0 && frac > 512 && pr_state->alpha < 128 &&
@@ -243,7 +237,7 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
         }
         pr_state->l4s_update_sent = update_sent;
 
-        if (delta_ce > 0 || delta_ect0 > 0) {
+        if (delta_ce > 0 || delta_ect1 > 0) {
             if (frac > pr_state->alpha && (frac > 512 || is_suspect)) {
                 pr_state->alpha = frac;
                 pr_state->alpha_shifted = frac << PRAGUE_SHIFT_G;
@@ -256,7 +250,7 @@ static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
             }
         }
         pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
-        pr_state->l4s_epoch_ect0 = pkt_ctx->ecn_ect0_total_remote;
+        pr_state->l4s_epoch_ect1 = pkt_ctx->ecn_ect1_total_remote;
         pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;
 
         if (delta_ce > 0) {
@@ -288,30 +282,34 @@ void picoquic_prague_notify(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
-    uint64_t rtt_measurement,
-    uint64_t one_way_delay,
-    uint64_t nb_bytes_acknowledged,
-    uint64_t lost_packet_number,
+    picoquic_per_ack_state_t * ack_state,
     uint64_t current_time)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(lost_packet_number);
-#endif
     picoquic_prague_state_t* pr_state = (picoquic_prague_state_t*)path_x->congestion_alg_state;
 
     if (pr_state != NULL) {
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement: {
+            if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
+                pr_state->ssthresh == UINT64_MAX) {
+                /* RTT measurements will happen after the back is signalled */
+                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t min_win = max_win /= 2;
+                if (path_x->cwin < min_win) {
+                    path_x->cwin = min_win;
+                }
+            }
+
             /* Regardless of the alg state, update alpha */
-            picoquic_prague_update_alpha(cnx, path_x, pr_state, nb_bytes_acknowledged, current_time);
+            picoquic_prague_update_alpha(cnx, path_x, pr_state, ack_state->nb_bytes_acknowledged, current_time);
             /* Increae or reduce the congestion window based on alpha */
             switch (pr_state->alg_state) {
             case picoquic_prague_alg_slow_start:
                 if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
-                    path_x->cwin += (nb_bytes_acknowledged * (1024 - pr_state->alpha)) / 1024;
+                    path_x->cwin += (ack_state->nb_bytes_acknowledged * (1024 - pr_state->alpha)) / 1024;
                 }
                 else {
-                    uint64_t delta = nb_bytes_acknowledged;
+                    uint64_t delta = ack_state->nb_bytes_acknowledged;
                     delta *= path_x->smoothed_rtt;
                     delta *= (1024 - pr_state->alpha);
                     delta /= PICOQUIC_TARGET_RENO_RTT;
@@ -325,7 +323,7 @@ void picoquic_prague_notify(
                 break;
             case picoquic_prague_alg_congestion_avoidance:
             default: {
-                uint64_t complete_delta = nb_bytes_acknowledged * path_x->send_mtu + pr_state->residual_ack;
+                uint64_t complete_delta = ack_state->nb_bytes_acknowledged * path_x->send_mtu + pr_state->residual_ack;
                 pr_state->residual_ack = complete_delta % path_x->cwin;
                 uint64_t delta = complete_delta / path_x->cwin;
                 delta = (delta * (1024 - pr_state->alpha)) / 1024;
@@ -385,24 +383,13 @@ void picoquic_prague_notify(
                     }
                 }
 
-                if (picoquic_hystart_test(&pr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
-                    cnx->path[0]->pacing_packet_time_microsec, current_time,
+                if (picoquic_hystart_test(&pr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                    cnx->path[0]->pacing.packet_time_microsec, current_time,
                     cnx->is_time_stamp_enabled)) {
                     /* RTT increased too much, get out of slow start! */
                     pr_state->ssthresh = path_x->cwin;
                     pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
                     path_x->is_ssthresh_initialized = 1;
-                }
-            }
-            break;
-        case picoquic_congestion_notification_bw_measurement:
-            if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
-                pr_state->ssthresh == UINT64_MAX) {
-                /* RTT measurements will happen after the bandwidth is estimated */
-                uint64_t max_win = path_x->max_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
-                uint64_t min_win = max_win /= 2;
-                if (path_x->cwin < min_win) {
-                    path_x->cwin = min_win;
                 }
             }
             break;

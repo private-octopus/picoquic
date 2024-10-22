@@ -140,8 +140,10 @@
     <ClCompile Include="democlient.c" />
     <ClCompile Include="demoserver.c" />
     <ClCompile Include="h3zero.c" />
+    <ClCompile Include="h3zero_client.c" />
     <ClCompile Include="h3zero_common.c" />
     <ClCompile Include="h3zero_server.c" />
+    <ClCompile Include="h3zero_uri.c" />
     <ClCompile Include="quicperf.c" />
     <ClCompile Include="siduck.c" />
     <ClCompile Include="webtransport.c" />
@@ -152,6 +154,7 @@
     <ClInclude Include="demoserver.h" />
     <ClInclude Include="h3zero.h" />
     <ClInclude Include="h3zero_common.h" />
+    <ClInclude Include="h3zero_uri.h" />
     <ClInclude Include="pico_webtransport.h" />
     <ClInclude Include="quicperf.h" />
     <ClInclude Include="siduck.h" />

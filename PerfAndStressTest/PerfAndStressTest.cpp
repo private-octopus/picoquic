@@ -55,6 +55,13 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(satellite_loss_fc)
+        {
+            int ret = satellite_loss_fc_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(satellite_jitter)
         {
             int ret = satellite_jitter_test();
@@ -104,6 +111,13 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+	    TEST_METHOD(satellite_cubic_seed)
+        {
+            int ret = satellite_cubic_seeded_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(satellite_cubic_loss)
         {
             int ret = satellite_cubic_loss_test();
@@ -149,6 +163,27 @@ namespace PerfAndStressTest
         TEST_METHOD(bdp_cubic)
         {
             int ret = bdp_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_short)
+        {
+            int ret = bdp_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_short_hi)
+        {
+            int ret = bdp_short_hi_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_short_lo)
+        {
+            int ret = bdp_short_lo_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -76,6 +76,8 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "streams_blocked";
     case picoquic_frame_type_new_connection_id:
         return "new_connection_id";
+    case picoquic_frame_type_mp_new_connection_id:
+        return "mp_new_connection_id";
     case picoquic_frame_type_stop_sending:
         return "stop_sending";
     case picoquic_frame_type_ack:
@@ -90,12 +92,14 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "new_token";
     case picoquic_frame_type_ack_ecn:
         return "ack";
-    case picoquic_frame_type_ack_mp:
-        return "ack_mp";
-    case picoquic_frame_type_ack_mp_ecn:
-        return "ack_mp";
+    case picoquic_frame_type_mp_ack:
+        return "mp_ack";
+    case picoquic_frame_type_mp_ack_ecn:
+        return "mp_ack";
     case picoquic_frame_type_retire_connection_id:
         return "retire_connection_id";
+    case picoquic_frame_type_mp_retire_connection_id:
+        return "mp_retire_connection_id";
     case picoquic_frame_type_handshake_done:
         return "handshake_done";
     case picoquic_frame_type_datagram:
@@ -103,12 +107,24 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "datagram";
     case picoquic_frame_type_ack_frequency:
         return "ack_frequency";
+    case picoquic_frame_type_immediate_ack:
+        return "immediate_ack";
     case picoquic_frame_type_time_stamp:
         return "time_stamp";
     case picoquic_frame_type_path_abandon:
         return "path_abandon";
+    case picoquic_frame_type_path_standby:
+        return "path_standby";
+    case picoquic_frame_type_path_available:
+        return "path_available";
     case picoquic_frame_type_bdp:
         return "bdp";
+    case picoquic_frame_type_max_path_id:
+        return "max_path_id";
+    case picoquic_frame_type_observed_address_v4:
+        return "observed_address_v4";
+    case picoquic_frame_type_observed_address_v6:
+        return "observed_address_v6";
     default:
         return "unknown";
     }

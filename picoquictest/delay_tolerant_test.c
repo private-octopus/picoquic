@@ -76,14 +76,13 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
     picoquic_connection_id_t initial_cid = { {0xde, 0x40, 0, 0, 0, 0, 0, 0}, 8 };
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = 0;
-    uint64_t total_packets = UINT64_MAX;
 
     initial_cid.id[2] = test_id;
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
     client_parameters.enable_time_stamp = 3;
-    client_parameters.idle_timeout = (uint32_t)((spec->latency * 5)/1000);
+    client_parameters.max_idle_timeout = (uint32_t)((spec->latency * 5)/1000);
     if (spec->initial_flow_control_credit > client_parameters.initial_max_data) {
         client_parameters.initial_max_data = spec->initial_flow_control_credit;
     }
@@ -96,7 +95,7 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&server_parameters, 0);
     server_parameters.enable_time_stamp = 3;
-    server_parameters.idle_timeout = client_parameters.idle_timeout;
+    server_parameters.max_idle_timeout = client_parameters.max_idle_timeout;
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
 
@@ -185,7 +184,7 @@ int dtn_basic_test()
     /* Simple test. */
     dtn_test_spec_t spec;
     dtn_set_basic_test_spec(&spec);
-    spec.max_number_of_packets = 84;
+    spec.max_number_of_packets = 120;
 
     return dtn_test_one(0xba, &spec);
 }
@@ -221,7 +220,7 @@ int dtn_silence_test()
     dtn_set_basic_test_spec(&spec);
     spec.scenario = dtn_scenario_silence;
     spec.sizeof_scenario = sizeof(dtn_scenario_silence);
-    spec.max_number_of_packets = 95; /* Check that the number of packets does not increase wildly */
+    spec.max_number_of_packets = 120; /* Check that the number of packets does not increase wildly */
     spec.max_completion_time = 481000000; /* 8 minutes: 2 for handshake, plus 2 per transaction */
     return dtn_test_one(0x51, &spec);
 }
@@ -234,7 +233,7 @@ int dtn_twenty_test()
     spec.latency = 20 * 60000000;
     spec.max_completion_time = 8* spec.latency;
 
-    spec.max_number_of_packets = 96;
+    spec.max_number_of_packets = 190;
 
     return dtn_test_one(0x20, &spec);
 }

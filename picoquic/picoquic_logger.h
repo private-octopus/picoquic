@@ -34,13 +34,13 @@ extern "C" {
 int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);
 
 /* Close the text log, e.g., when closing the QUIC context */
-void picoquic_close_text_log(picoquic_quic_t* quic);
+void picoquic_textlog_close(picoquic_quic_t* quic);
 
 /* Handling of packet logging */
 
 void picoquic_log_prefix_initial_cid64(FILE* F, uint64_t log_cnxid64);
 
-void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
+void picoquic_textlog_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
 
 const char* picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);

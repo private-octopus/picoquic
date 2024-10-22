@@ -125,14 +125,32 @@ int picoquic_sack_list_is_empty(picoquic_sack_list_t* sack_list)
     return (sack_list->ack_tree.size == 0);
 }
 
+/* Find the ack context from the context 
+ */
+picoquic_ack_context_t* picoquic_ack_ctx_from_cnx_context(picoquic_cnx_t* cnx,
+    picoquic_packet_context_enum pc, picoquic_local_cnxid_t* l_cid)
+{
+    picoquic_ack_context_t* ack_ctx = &cnx->ack_ctx[pc];
+
+    if (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) {
+        int path_id = 0;
+        if (l_cid != NULL) {
+            path_id = picoquic_find_path_by_unique_id(cnx, l_cid->path_id);
+        }
+
+        if (path_id >= 0) {
+            ack_ctx = &cnx->path[path_id]->ack_ctx;
+        }
+    }
+    return ack_ctx;
+
+}
 /* Find the sack list for the context
  */
 picoquic_sack_list_t* picoquic_sack_list_from_cnx_context(picoquic_cnx_t* cnx,
-    picoquic_packet_context_enum pc, picoquic_local_cnxid_t* l_cid) {
-    picoquic_sack_list_t* sack_list = (pc == picoquic_packet_context_application && cnx->is_multipath_enabled) ?
-        ((l_cid == NULL) ? &cnx->path[0]->p_local_cnxid->ack_ctx.sack_list :
-            &l_cid->ack_ctx.sack_list) : &cnx->ack_ctx[pc].sack_list;
-    return sack_list;
+    picoquic_packet_context_enum pc, picoquic_local_cnxid_t* l_cid)
+{
+    return &picoquic_ack_ctx_from_cnx_context(cnx, pc, l_cid)->sack_list;
 }
 
 /* Find the closest range below an optional specified sack item
@@ -245,31 +263,33 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx,
     int ret = 0;
     picoquic_sack_list_t* sack_list = picoquic_sack_list_from_cnx_context(cnx, pc, l_cid);
 
-    if (picoquic_sack_list_is_empty(sack_list)) {
-        /* This is the first packet ever received.. */
-        cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
-    }
-    else {
-        uint64_t pn_last = picoquic_sack_list_last(sack_list);
-        if (pn64 > pn_last) {
-            if (pn64 > pn_last + 1) {
-                cnx->ack_ctx[pc].act[0].out_of_order_received = 1;
-                cnx->ack_ctx[pc].act[1].out_of_order_received = 1;
-            }
+    if (sack_list != NULL) {
+        if (picoquic_sack_list_is_empty(sack_list)) {
+            /* This is the first packet ever received.. */
             cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
         }
-        else
-        {
-            if (cnx->ack_ctx[pc].act[0].ack_needed && pn64 < cnx->ack_ctx[pc].act[0].highest_ack_sent) {
-                cnx->ack_ctx[pc].act[0].out_of_order_received = 1;
+        else {
+            uint64_t pn_last = picoquic_sack_list_last(sack_list);
+            if (pn64 > pn_last) {
+                if (pn64 > pn_last + 1) {
+                    cnx->ack_ctx[pc].act[0].out_of_order_received = 1;
+                    cnx->ack_ctx[pc].act[1].out_of_order_received = 1;
+                }
+                cnx->ack_ctx[pc].time_stamp_largest_received = current_microsec;
             }
-            if (cnx->ack_ctx[pc].act[1].ack_needed && pn64 < cnx->ack_ctx[pc].act[1].highest_ack_sent) {
-                cnx->ack_ctx[pc].act[1].out_of_order_received = 1;
+            else
+            {
+                if (cnx->ack_ctx[pc].act[0].ack_needed && pn64 < cnx->ack_ctx[pc].act[0].highest_ack_sent) {
+                    cnx->ack_ctx[pc].act[0].out_of_order_received = 1;
+                }
+                if (cnx->ack_ctx[pc].act[1].ack_needed && pn64 < cnx->ack_ctx[pc].act[1].highest_ack_sent) {
+                    cnx->ack_ctx[pc].act[1].out_of_order_received = 1;
+                }
             }
         }
-    }
 
-    ret = picoquic_update_sack_list(sack_list, pn64, pn64, current_microsec);
+        ret = picoquic_update_sack_list(sack_list, pn64, pn64, current_microsec);
+    }
     return ret;
 }
 

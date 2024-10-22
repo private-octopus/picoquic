@@ -33,6 +33,7 @@
 #include "h3zero.h"
 #include "h3zero_common.h"
 #include "demoserver.h"
+#include "pico_webtransport.h"
 #include "wt_baton.h"
 
 #ifdef _WINDOWS
@@ -51,20 +52,22 @@
 * sending datagrams. Consider extensions!
 */
 
+wt_baton_app_ctx_t baton_test_ctx = {
+    15
+};
 
 picohttp_server_path_item_t path_item_list[1] =
 {
     {
         "/baton",
         6,
-        picowt_h3zero_callback,
-        NULL
+        wt_baton_callback,
+        &baton_test_ctx
     }
 };
 
-
-static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
-    uint8_t test_id, int nb_turns_required, const char* baton_path,
+static int picowt_baton_test_one(
+    uint8_t test_id, const char* baton_path,
     uint64_t do_losses, uint64_t completion_target, const char* client_qlog_dir,
     const char* server_qlog_dir)
 {
@@ -79,17 +82,9 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
     int ret = 0;
     picohttp_server_parameters_t server_param = { 0 };
     picoquic_connection_id_t initial_cid = { {0x77, 0x74, 0xba, 0, 0, 0, 0, 0}, 8 };
+    h3zero_callback_ctx_t* h3zero_cb = NULL;
 
     initial_cid.id[3] = test_id;
-    /*
-    * Should instead initialize the baton context, or maybe the baton app context:
-    *
-    * int wt_baton_ctx_init(wt_baton_ctx_t* ctx, h3zero_server_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t * app_ctx, picohttp_server_stream_ctx_t* stream_ctx)
-
-    ret = picoquic_demo_client_initialize_context(&callback_ctx, demo_scenario, nb_scenario, alpn, 0, 0);
-    callback_ctx.out_dir = out_dir;
-    callback_ctx.no_print = 1;
-    */
 
     if (ret == 0) {
         ret = tls_api_init_ctx_ex(&test_ctx,
@@ -103,6 +98,10 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
 
         if (ret == 0 && client_qlog_dir != NULL) {
             picoquic_set_qlog(test_ctx->qclient, client_qlog_dir);
+        }
+
+        if (ret == 0) {
+            picowt_set_transport_parameters(test_ctx->cnx_client);
         }
     }
 
@@ -118,23 +117,37 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
     * We want to replace that by the demo client callback */
 
     if (ret == 0) {
-        /* Initialize the callback context. First, create a bidir stream */
-        wt_baton_ctx_init(&baton_ctx, NULL, NULL, NULL);
-        baton_ctx.server_path = baton_path;
-        baton_ctx.nb_turns_required = nb_turns_required;
-        /* Set the client callback context */
-        picoquic_set_callback(test_ctx->cnx_client, wt_baton_client_callback, &baton_ctx);
-        /* Initialize the server -- should include the path setup for connect action */
-        memset(&server_param, 0, sizeof(picohttp_server_parameters_t));
-        server_param.web_folder = NULL;
-        server_param.path_table = path_item_list;
-        server_param.path_table_nb = 1;
+        /* Set the client callback context using as much as possible
+        * the generic picowt calls. */
+        h3zero_stream_ctx_t* control_stream_ctx = NULL;
 
-        picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
-        picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, &server_param);
+        ret = picowt_prepare_client_cnx(test_ctx->qclient, (struct sockaddr*)NULL,
+            &test_ctx->cnx_client, &h3zero_cb, &control_stream_ctx, simulated_time, PICOQUIC_TEST_SNI);
+
+        if (ret == 0) {
+            ret = wt_baton_prepare_context(test_ctx->cnx_client, &baton_ctx, h3zero_cb,
+                control_stream_ctx, PICOQUIC_TEST_SNI, baton_path);
+        }
+
+        if (ret == 0) {
+            ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
+                baton_ctx.authority, baton_ctx.server_path,
+                wt_baton_callback, &baton_ctx);
+        }
 
         if (ret == 0) {
             ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
+
+        if (ret == 0) {
+            /* Initialize the server -- should include the path setup for connect action */
+            memset(&server_param, 0, sizeof(picohttp_server_parameters_t));
+            server_param.web_folder = NULL;
+            server_param.path_table = path_item_list;
+            server_param.path_table_nb = 1;
+
+            picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
+            picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
         }
     }
 
@@ -151,12 +164,14 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
     while (ret == 0 && picoquic_get_cnx_state(test_ctx->cnx_client) != picoquic_state_disconnected) {
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
 
-        if (ret == -1) {
+        if (ret != 0) {
+            DBG_PRINTF("Simulation error detected after %d trials\n", nb_trials);
             break;
         }
 
         /* TODO: insert here the logic of web transport scenarios. */
         if (++nb_trials > 100000) {
+            DBG_PRINTF("Simulation not concluded after %d trials\n", nb_trials);
             ret = -1;
             break;
         }
@@ -166,14 +181,27 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
     if (ret == 0) {
         if (test_id == 3 || test_id == 4 ||
             ((baton_ctx.baton_state == wt_baton_state_done || baton_ctx.baton_state == wt_baton_state_closed) &&
-                (baton_ctx.nb_turns >= nb_turns_required || (baton_ctx.nb_turns >= 8 && nb_turns_required > 8)))) {
-            DBG_PRINTF("Baton test succeeds after %d turns", baton_ctx.nb_turns);
+                baton_ctx.nb_turns >= 8 &&
+                baton_ctx.lanes_completed == baton_ctx.nb_lanes &&
+                baton_ctx.nb_datagrams_sent > 0 && baton_ctx.nb_datagrams_received > 0)) {
+            DBG_PRINTF("Baton test succeeds after %d turns, %d datagrams sent, %d received",
+                baton_ctx.nb_turns, baton_ctx.nb_datagrams_sent, baton_ctx.nb_datagrams_received);
         }
         else {
             DBG_PRINTF("Baton test fails after %d turns, state %d",
                 baton_ctx.nb_turns, baton_ctx.baton_state);
             ret = -1;
         }
+        if (ret == 0 && test_id == 5 && baton_ctx.lanes[0].first_baton != 33) {
+            DBG_PRINTF("On URI test, first baton was %d instead of 33",
+                baton_ctx.lanes[0].first_baton);
+            ret = -1;
+        }
+    }
+    /* Verify that settings were correctly received */
+    if (ret == 0 && !h3zero_cb->settings.settings_received) {
+        DBG_PRINTF("Settings not received at t: %llu", simulated_time);
+        ret = -1;
     }
     /* verify that the execution time is as expected */
     if (ret == 0 && completion_target != 0) {
@@ -183,40 +211,64 @@ static int picowt_baton_test_one(picoquic_stream_data_cb_fn server_callback_fn,
         }
     }
 
+    if (h3zero_cb != NULL)
+    {
+        h3zero_callback_delete_context(test_ctx->cnx_client, h3zero_cb);
+    }
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
     }
-
-    wt_baton_ctx_release(NULL, &baton_ctx);
 
     return ret;
 }
 
 int picowt_baton_basic_test()
 {
-    int ret = picowt_baton_test_one(h3zero_server_callback, 1, 7, "/baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(1, "/baton?baton=240", 0, 2000000, ".", ".");
 
     return ret;
 }
 
 int picowt_baton_error_test()
 {
-    int ret = picowt_baton_test_one(h3zero_server_callback, 4, 257, "/baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(4, "/baton?inject=1", 0, 2000000, ".", ".");
 
     return ret;
 }
 
 int picowt_baton_long_test()
 {
-    int ret = picowt_baton_test_one(h3zero_server_callback, 2, 10, "/baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(2, "/baton", 0, 5000000, ".", ".");
 
     return ret;
 }
 
 int picowt_baton_wrong_test()
 {
-    int ret = picowt_baton_test_one(h3zero_server_callback, 3, 7, "/wrong_baton", 0, 2000000, ".", ".");
+    int ret = picowt_baton_test_one(3, "/wrong_baton", 0, 2000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_uri_test()
+{
+    int ret = picowt_baton_test_one(5, "/baton?baton=33", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_multi_test()
+{
+    int ret = picowt_baton_test_one(6, "/baton?baton=240&count=4", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_random_test()
+{
+    int ret = picowt_baton_test_one(7, "/baton?count=4", 0, 5000000, ".", ".");
 
     return ret;
 }

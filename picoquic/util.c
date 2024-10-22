@@ -111,35 +111,71 @@ char* picoquic_strip_endofline(char* buf, size_t bufmax, char const* line)
 }
 
 static FILE* debug_out = NULL;
+void (*debug_callback)(const char *msg, void *arg) = NULL;
+void *debug_callback_argp = NULL;
 static int debug_suspended = 0;
 
 void debug_set_stream(FILE *F)
 {
     debug_out = F;
+    debug_callback = NULL;
+    debug_callback_argp = NULL;
+}
+
+void debug_set_callback(void (*cb)(const char *msg, void *argp), void *argp)
+{
+    debug_callback = cb;
+    debug_callback_argp = argp;
+    debug_out = NULL;
 }
 
 void debug_printf(const char* fmt, ...)
 {
-    if (debug_suspended == 0 && debug_out != NULL) {
-        va_list args;
-        va_start(args, fmt);
-        vfprintf(debug_out, fmt, args);
-        va_end(args);
+    if (debug_suspended == 0 && (debug_out != NULL || debug_callback != NULL)) {
+        if (debug_out) {
+            va_list args;
+            va_start(args, fmt);
+            vfprintf(debug_out, fmt, args);
+            va_end(args);
+        } else {
+            char message[1024];
+            size_t message_length;
+            va_list args;
+            va_start(args, fmt);
+            vsnprintf(message, sizeof(message), fmt, args);
+            va_end(args);
+            message_length = strnlen(message, sizeof(message));
+            if (message_length > 0) {
+                // Strip any trailing newline
+                if (message[message_length - 1] == '\n') {
+                    message[message_length - 1] = '\0';
+                }
+            }
+            debug_callback(message, debug_callback_argp);
+        }
     }
 }
 
 void debug_dump(const void * x, int len)
 {
-    if (debug_suspended == 0 && debug_out != NULL) {
+    if (debug_suspended == 0 && (debug_out != NULL || debug_callback != NULL)) {
+        char msg[64];
+        size_t mlen;
         uint8_t * bytes = (uint8_t *)x;
 
         for (int i = 0; i < len;) {
-            fprintf(debug_out, "%04x:  ", (int)i);
+            snprintf(msg, sizeof(msg), "%04x:  ", (int) i);
+            mlen = strnlen(msg, sizeof(msg));
 
             for (int j = 0; j < 16 && i < len; j++, i++) {
-                fprintf(debug_out, "%02x ", bytes[i]);
+                snprintf(msg + mlen, sizeof(msg) - mlen, "%02x ", bytes[i]);
+                mlen = strnlen(msg, sizeof(msg));
             }
-            fprintf(debug_out, "\n");
+            if (debug_out) {
+                fprintf(debug_out, "%s\n", msg);
+            } else {
+                debug_callback(msg, debug_callback_argp);
+            }
         }
     }
 }
@@ -429,6 +465,48 @@ int picoquic_compare_addr(const struct sockaddr * expected, const struct sockadd
     return ret;
 }
 
+
+int picoquic_compare_ip_addr(const struct sockaddr* expected, const struct sockaddr* actual)
+{
+    int ret = -1;
+
+    if (expected->sa_family == actual->sa_family) {
+        if (expected->sa_family == AF_INET6) {
+            struct sockaddr_in6* ex = (struct sockaddr_in6*)expected;
+            struct sockaddr_in6* ac = (struct sockaddr_in6*)actual;
+
+            ret = memcmp(&ex->sin6_addr, &ac->sin6_addr, 16);
+        }
+        else {
+            struct sockaddr_in* ex = (struct sockaddr_in*)expected;
+            struct sockaddr_in* ac = (struct sockaddr_in*)actual;
+#ifdef _WINDOWS
+            ret = (ex->sin_addr.S_un.S_addr == ac->sin_addr.S_un.S_addr) ? 0 : -1;
+#else
+            ret = (ex->sin_addr.s_addr == ac->sin_addr.s_addr) ? 0 : -1;
+#endif
+        }
+    }
+    return ret;
+}
+
+uint16_t picoquic_get_addr_port(const struct sockaddr* addr)
+{
+    uint16_t port = (addr->sa_family == AF_INET6) ? ((struct sockaddr_in6*)addr)->sin6_port : ((struct sockaddr_in*)addr)->sin_port;
+
+    return port;
+}
+
+void picoquic_set_addr_port(const struct sockaddr* addr, uint16_t port)
+{
+    if (addr->sa_family == AF_INET6) {
+        ((struct sockaddr_in6*)addr)->sin6_port = port;
+    }
+    else {
+        ((struct sockaddr_in*)addr)->sin_port = port;
+    }
+}
+
 int picoquic_addr_length(const struct sockaddr* addr)
 {
     int len = 0;
@@ -497,30 +575,32 @@ int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* i
 }
 
 /* Get text string for address and port */
-char const* picoquic_addr_text(struct sockaddr* addr, char* text, size_t text_size)
+char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t text_size)
 {
     char addr_buffer[128];
     char const* addr_text;
     char const* ret_text = "?:?";
 
-    switch (addr->sa_family) {
-    case AF_INET:
-        addr_text = inet_ntop(AF_INET,
-            (const void*)(&((struct sockaddr_in*)addr)->sin_addr),
-            addr_buffer, sizeof(addr_buffer));
-        if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ntohs(((struct sockaddr_in*) addr)->sin_port)) == 0) {
-            ret_text = text;
+    if (addr != NULL) {
+        switch (addr->sa_family) {
+        case AF_INET:
+            addr_text = inet_ntop(AF_INET,
+                (const void*)(&((struct sockaddr_in*)addr)->sin_addr),
+                addr_buffer, sizeof(addr_buffer));
+            if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ntohs(((struct sockaddr_in*)addr)->sin_port)) == 0) {
+                ret_text = text;
+            }
+            break;
+        case AF_INET6:
+            addr_text = inet_ntop(AF_INET6,
+                (const void*)(&((struct sockaddr_in6*)addr)->sin6_addr),
+                addr_buffer, sizeof(addr_buffer));
+            if (picoquic_sprintf(text, text_size, NULL, "[%s]:%d", addr_text, ntohs(((struct sockaddr_in6*)addr)->sin6_port)) == 0) {
+                ret_text = text;
+            }
+        default:
+            break;
         }
-        break;
-    case AF_INET6:
-        addr_text = inet_ntop(AF_INET6,
-            (const void*)(&((struct sockaddr_in6*)addr)->sin6_addr),
-            addr_buffer, sizeof(addr_buffer));
-        if (picoquic_sprintf(text, text_size, NULL, "[%s]:%d", addr_text, ntohs(((struct sockaddr_in6*) addr)->sin6_port)) == 0) {
-            ret_text = text;
-        }
-    default:
-        break;
     }
 
     return ret_text;
@@ -531,7 +611,7 @@ int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_
 {
     int ret = -1;
     if (addr_family == AF_INET) {
-        ret = picoquic_store_text_addr(stored_addr, "128.0.0.1", port);
+        ret = picoquic_store_text_addr(stored_addr, "127.0.0.1", port);
     }
     else if (addr_family == AF_INET6) {
         ret = picoquic_store_text_addr(stored_addr, "::1", port);
@@ -979,6 +1059,19 @@ int picoquic_create_thread(picoquic_thread_t * thread, picoquic_thread_fn thread
     return ret;
 }
 
+int picoquic_wait_thread(picoquic_thread_t thread)
+{
+    int ret = 0;
+#ifdef _WINDOWS
+    if (WaitForSingleObject(thread, INFINITE) == WAIT_TIMEOUT) {
+        ret = -1;
+    }
+#else
+    ret = pthread_join(thread, NULL);
+#endif
+    return ret;
+}
+
 void picoquic_delete_thread(picoquic_thread_t * thread)
 {
 #ifdef _WINDOWS
@@ -992,10 +1085,15 @@ void picoquic_delete_thread(picoquic_thread_t * thread)
     *thread = NULL;
 #else
     if (pthread_join(*thread, NULL) != 0) {
+# ifdef ANDROID
+        pthread_kill(*thread, SIGTERM);
+# else
         (void)pthread_cancel(*thread);
+# endif
     }
 #endif
 }
+
 
 int picoquic_create_mutex(picoquic_mutex_t * mutex)
 {

@@ -23,6 +23,51 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Utility function to set minimal quic and cnx contexts
+ */
+int picoquic_test_set_minimal_cnx(picoquic_quic_t** quic, picoquic_cnx_t** cnx)
+{
+    *cnx = NULL;
+    *quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+    if (*quic != NULL) {
+        *cnx = picoquic_create_cnx(*quic,
+            picoquic_null_connection_id,
+            picoquic_null_connection_id,
+            NULL, 0,
+            0, PICOQUIC_TEST_SNI, "minimal", 1);
+        if (*cnx == NULL) {
+            picoquic_free(*quic);
+            *quic = NULL;
+        }
+    }
+    return (*quic == NULL || *cnx == NULL);
+}
+
+int picoquic_test_reset_minimal_cnx(picoquic_quic_t* quic, picoquic_cnx_t** cnx)
+{
+    if (*cnx != NULL) {
+        picoquic_delete_cnx(*cnx);
+    }
+    *cnx = picoquic_create_cnx(quic,
+        picoquic_null_connection_id,
+        picoquic_null_connection_id,
+        NULL, 0,
+        0, PICOQUIC_TEST_SNI, "minimal", 1);
+    return (*cnx == NULL) ? -1 : 0;
+}
+
+void picoquic_test_delete_minimal_cnx(picoquic_quic_t** quic, picoquic_cnx_t** cnx)
+{
+    if (*cnx != NULL) {
+        picoquic_delete_cnx(*cnx);
+        *cnx = NULL;
+    }
+    if (*quic != NULL) {
+        picoquic_free(*quic);
+        *quic = NULL;
+    }
+}
 /*
  * Test of the SACK functionality
  */
@@ -97,43 +142,46 @@ int check_ack_ranges(picoquic_sack_list_t* sack_list)
 int sacktest()
 {
     int ret = 0;
-    picoquic_cnx_t cnx;
+    picoquic_cnx_t *cnx;
+    picoquic_quic_t* quic;
     uint64_t current_time = 0;
     uint64_t highest_seen = 0;
     uint64_t highest_seen_time = 0;
     picoquic_packet_context_enum pc = 0;
 
-    memset(&cnx, 0, sizeof(cnx));
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        return -1;
+    }
 
-    picoquic_sack_list_init(&cnx.ack_ctx[pc].sack_list);
+    if (picoquic_create_local_cnxid(cnx, 0, NULL, 0) == NULL) {
+        return -1;
+    }
 
     /* Do a basic test with packet zero */
-    if (picoquic_is_pn_already_received(&cnx, pc,
-        cnx.local_cnxid_first, 0) != 0) {
+    if (picoquic_is_pn_already_received(cnx, pc,
+        cnx->first_local_cnxid_list->local_cnxid_first, 0) != 0) {
         ret = -1;
     }
-    else if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first,
+    else if (picoquic_record_pn_received(cnx, pc, cnx->first_local_cnxid_list->local_cnxid_first,
         0, current_time) != 0) {
         ret = -1;
     }
-    else  if (picoquic_is_pn_already_received(&cnx, pc,
-        cnx.local_cnxid_first, 0) == 0) {
+    else if (picoquic_is_pn_already_received(cnx, pc,
+        cnx->first_local_cnxid_list->local_cnxid_first, 0) == 0) {
         ret = -1;
     }
-    else if (picoquic_sack_list_first(&cnx.ack_ctx[pc].sack_list) != 0 ||
-        picoquic_sack_list_last(&cnx.ack_ctx[pc].sack_list) != 0 ||
-        picoquic_sack_list_first_range(&cnx.ack_ctx[pc].sack_list) != NULL) {
+    else if (picoquic_sack_list_first(&cnx->ack_ctx[pc].sack_list) != 0 ||
+        picoquic_sack_list_last(&cnx->ack_ctx[pc].sack_list) != 0 ||
+        picoquic_sack_list_first_range(&cnx->ack_ctx[pc].sack_list) != NULL) {
         ret = -1;
     }
     else {
         /* reset for the next test */
-        picoquic_sack_list_free(&cnx.ack_ctx[pc].sack_list);
-        memset(&cnx, 0, sizeof(cnx));
-        picoquic_sack_list_init(&cnx.ack_ctx[pc].sack_list);
+        picoquic_test_reset_minimal_cnx(quic, &cnx);
     }
 
     if (ret == 0) {
-        ret = check_ack_ranges(&cnx.ack_ctx[pc].sack_list);
+        ret = check_ack_ranges(&cnx->ack_ctx[pc].sack_list);
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
@@ -144,44 +192,44 @@ int sacktest()
             highest_seen_time = current_time;
         }
 
-        if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[i], current_time) != 0) {
+        if (picoquic_record_pn_received(cnx, pc, cnx->first_local_cnxid_list->local_cnxid_first, test_pn64[i], current_time) != 0) {
             ret = -1;
         }
 
         if (ret == 0) {
-            ret = check_ack_ranges(&cnx.ack_ctx[pc].sack_list);
+            ret = check_ack_ranges(&cnx->ack_ctx[pc].sack_list);
         }
 
         for (size_t j = 0; ret == 0 && j <= i; j++) {
-            if (picoquic_is_pn_already_received(&cnx, pc,
-                cnx.local_cnxid_first, test_pn64[j]) == 0) {
+            if (picoquic_is_pn_already_received(cnx, pc,
+                cnx->first_local_cnxid_list->local_cnxid_first, test_pn64[j]) == 0) {
                 ret = -1;
             }
 
-            if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[j], current_time) != 1) {
+            if (picoquic_record_pn_received(cnx, pc, cnx->first_local_cnxid_list->local_cnxid_first, test_pn64[j], current_time) != 1) {
                 ret = -1;
             }
         }
 
         for (size_t j = i + 1; ret == 0 && j < nb_test_pn64; j++) {
-            if (picoquic_is_pn_already_received(&cnx, pc,
-                cnx.local_cnxid_first, test_pn64[j]) != 0) {
+            if (picoquic_is_pn_already_received(cnx, pc,
+                cnx->first_local_cnxid_list->local_cnxid_first, test_pn64[j]) != 0) {
                 ret = -1;
             }
         }
     }
 
     if (ret == 0) {
-        if (picoquic_sack_list_last(&cnx.ack_ctx[pc].sack_list) != 21 ||
-            picoquic_sack_list_first(&cnx.ack_ctx[pc].sack_list) != 0 ||
-            cnx.ack_ctx[pc].time_stamp_largest_received != highest_seen_time ||
-            picoquic_sack_list_first_range(&cnx.ack_ctx[pc].sack_list) != NULL) {
+        if (picoquic_sack_list_last(&cnx->ack_ctx[pc].sack_list) != 21 ||
+            picoquic_sack_list_first(&cnx->ack_ctx[pc].sack_list) != 0 ||
+            cnx->ack_ctx[pc].time_stamp_largest_received != highest_seen_time ||
+            picoquic_sack_list_first_range(&cnx->ack_ctx[pc].sack_list) != NULL) {
             ret = -1;
         }
     }
 
     /* Free the sack lists*/
-    picoquic_sack_list_free(&cnx.ack_ctx[pc].sack_list);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
 
     return ret;
 }
@@ -312,39 +360,41 @@ static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
 int sendacktest()
 {
     int ret = 0;
-    picoquic_cnx_t cnx;
+    picoquic_quic_t* quic;
+    picoquic_cnx_t * cnx;
     uint64_t current_time;
     uint64_t received_mask = 0;
     uint64_t previous_mask = 0;
     uint8_t bytes[256];
     picoquic_packet_context_enum pc = 0;
 
-    memset(&cnx, 0, sizeof(cnx));
-    picoquic_sack_list_init(&cnx.ack_ctx[pc].sack_list);
-    cnx.sending_ecn_ack = 0; /* don't write an ack_ecn frame */
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        return -1;
+    }
+    cnx->sending_ecn_ack = 0; /* don't write an ack_ecn frame */
     
-    if (check_ack_ranges(&cnx.ack_ctx[pc].sack_list) != 0) {
+    if (check_ack_ranges(&cnx->ack_ctx[pc].sack_list) != 0) {
         ret = -1;
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
         current_time = ((uint64_t)i) * 100;
 
-        if (picoquic_record_pn_received(&cnx, pc, cnx.local_cnxid_first, test_pn64[i], current_time) != 0) {
+        if (picoquic_record_pn_received(cnx, pc, cnx->first_local_cnxid_list->local_cnxid_first, test_pn64[i], current_time) != 0) {
             ret = -1;
         }
 
-        if (check_ack_ranges(&cnx.ack_ctx[pc].sack_list) != 0) {
+        if (check_ack_ranges(&cnx->ack_ctx[pc].sack_list) != 0) {
             ret = -1;
         }
 
         if (ret == 0) {
             int more_data = 0;
-            uint8_t* bytes_next = picoquic_format_ack_frame(&cnx, bytes, bytes + sizeof(bytes), &more_data, 0, pc, 0);
+            uint8_t* bytes_next = picoquic_format_ack_frame(cnx, bytes, bytes + sizeof(bytes), &more_data, 0, pc, 0);
 
             received_mask |= 1ull << (test_pn64[i] & 63);
 
-            if (check_ack_ranges(&cnx.ack_ctx[pc].sack_list) != 0) {
+            if (check_ack_ranges(&cnx->ack_ctx[pc].sack_list) != 0) {
                 ret = -1;
             }
 
@@ -358,8 +408,140 @@ int sendacktest()
         }
     }
 
-    picoquic_sack_list_free(&cnx.ack_ctx[pc].sack_list);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
 
+    return ret;
+}
+
+int sendack_loop_test_one(uint64_t ack_gap, uint64_t ack_delay)
+{
+    int ret = 0;
+    picoquic_cnx_t * cnx;
+    picoquic_quic_t * quic;
+    uint64_t current_time;
+    uint64_t next_ack_time = UINT64_MAX;
+    uint64_t largest_received_number = 0;
+    uint64_t largest_ack_number = 0;
+    uint64_t largest_time_sent = 0;
+    uint8_t bytes[256];
+    picoquic_packet_context_enum pc = 0;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        return -1;
+    }
+
+    if (picoquic_create_local_cnxid(cnx, 0, NULL, 0) == NULL) {
+        return -1;
+    }
+
+    //picoquic_sack_list_init(&cnx->ack_ctx[pc].sack_list);
+    cnx->sending_ecn_ack = 0; /* don't write an ack_ecn frame */
+    cnx->ack_delay_remote = ack_delay;
+    cnx->ack_gap_remote = ack_gap;
+
+    if (check_ack_ranges(&cnx->ack_ctx[pc].sack_list) != 0) {
+        ret = -1;
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
+        int ack_sent = 0;
+        int out_of_order = 0;
+        current_time = ((uint64_t)i) * 1000;
+
+        if (picoquic_record_pn_received(cnx, pc, cnx->first_local_cnxid_list->local_cnxid_first, test_pn64[i], current_time) != 0) {
+            ret = -1;
+        }
+        else {
+            if (largest_received_number + 1 != test_pn64[i]) {
+                out_of_order = 1;
+            }
+            picoquic_set_ack_needed(cnx, current_time, pc, cnx->path[0], out_of_order);
+            if (next_ack_time > current_time + ack_delay) {
+                next_ack_time = current_time + ack_delay;
+            }
+            if (largest_received_number < test_pn64[i]) {
+                largest_received_number = test_pn64[i];
+            }
+
+            if (check_ack_ranges(&cnx->ack_ctx[pc].sack_list) != 0) {
+                ret = -1;
+            }
+        }
+
+        for (int k=0; ret == 0 && k < 5; k++){
+            int more_data = 0;
+            uint8_t* bytes_next = bytes;
+            uint64_t next_wake_time = UINT64_MAX;
+            size_t ack_length = 0;
+
+            current_time = ((uint64_t)i) * 1000 + ((uint64_t)k)*10;
+            
+            if (picoquic_is_ack_needed(cnx, current_time, &next_wake_time, pc, 0)) {
+                bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes + sizeof(bytes), &more_data,
+                    current_time, pc, 0);
+
+                if (bytes_next == NULL) {
+                    /* unexpected! */
+                    ret = -1;
+                }
+                else if (more_data) {
+                    /* unexpected */
+                    ret = -1;
+                }
+                else {
+                    ack_length = bytes_next - bytes;
+                }
+            }
+            
+            if (ret == 0) {
+                if (ack_length == 0) {
+                    if (!ack_sent) {
+                        if (largest_ack_number + ack_gap < largest_received_number) {
+                            DBG_PRINTF("Ack loop (%d,%d), missing ack by number", i, k);
+                            ret = -1;
+                        }
+                        else if (largest_time_sent + ack_delay < largest_time_sent) {
+                            DBG_PRINTF("Ack loop (%d,%d), missing ack by time", i, k);
+                            ret = -1;
+                        }
+                    }
+                }
+                else {
+                    if (ack_sent) {
+                        DBG_PRINTF("Ack loop (%d,%d), duplicate ack", i, k);
+                        ret = -1;
+                    }
+                    else if (largest_ack_number + ack_gap > largest_received_number &&
+                        largest_time_sent + ack_delay > current_time &&
+                        !out_of_order) {
+                        DBG_PRINTF("Ack loop (%d,%d), sent before time or number", i, k);
+                        ret = -1;
+                    } else {
+                        ack_sent = 1;
+                        largest_ack_number = largest_received_number;
+                        largest_time_sent = current_time;
+                    }
+                }
+            }
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int sendack_loop_test()
+{
+    int ret;
+    uint64_t ack_gap[3] = { 0, 2, 10000 };
+    uint64_t ack_delay[3] = { 0, 1000, 25 };
+
+    for (int i = 0; i < 3; i++) {
+        if ((ret = sendack_loop_test_one(ack_gap[i], ack_delay[i])) != 0) {
+            DBG_PRINTF("ack loop test (%" PRIu64", %" PRIu64") fails", ack_gap[i], ack_delay[i]);
+        }
+    }
     return ret;
 }
 
