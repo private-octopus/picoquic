@@ -194,6 +194,25 @@ static const char* config_argv2[] = {
     NULL
 };
 
+static const char * config_two[] = {
+    "--sni", "test.example.com",
+    "--alpn", "test",
+    "--outdir", "/data/w_out",
+    "--root_trust_file", "data/certs/root.pem",
+    "--cipher_suite", "20",
+    "--proposed_version", "ff000020",
+    "--force_zero_share",
+    "--idle_timeout", "1234567",
+    "--no_disk",
+    "--large_client_hello",
+    "--disable_block",
+    "--cnxid_length", "5",
+    "--ticket_file", "/data/tickets.bin",
+    "--token_file", "/data/tokens.bin",
+    "--version_upgrade", "00000002",
+    NULL
+};
+
 int config_test_compare_string(const char* title, const char* expected, const char* actual)
 {
     int ret = 0;
@@ -335,16 +354,75 @@ int config_test_parse_command_line(const picoquic_quic_config_t* expected, const
     return (ret);
 }
 
+
+int config_test_parse_command_line_ex(const picoquic_quic_config_t* expected, const char** argv, int argc)
+{
+    int ret = 0;
+    int opt_ind = 0;
+    picoquic_quic_config_t actual;
+
+    picoquic_config_init(&actual);
+
+    while (opt_ind < argc && ret == 0) {
+        const char* x = argv[opt_ind];
+        const char* optval = NULL;
+
+        if (x == NULL) {
+            /* could not parse to the end! */
+            DBG_PRINTF("Unexpected stop after %d arguments, expected %d", opt_ind, argc);
+            ret = -1;
+            break;
+        }
+        else if (x[0] != '-' || x[1] == 0 || 
+            (x[2] != 0 && x[1] != '-')) {
+            /* could not parse to the end! */
+            DBG_PRINTF("Unexpected argument: %s", x);
+            ret = -1;
+            break;
+        }
+        opt_ind++;
+        if (opt_ind < argc) {
+            optval = argv[opt_ind];
+            if (optval[0] == '-') {
+                optval = NULL;
+            }
+            else {
+                opt_ind++;
+            }
+        }
+        ret = picoquic_config_command_line_ex(x, &opt_ind, argc, argv, optval, &actual);
+        if (ret != 0) {
+            DBG_PRINTF("Could not parse opt %s", x);
+        }
+    }
+
+    if (ret == 0) {
+        ret = config_test_compare(expected, &actual);
+    }
+
+    picoquic_config_clear(&actual);
+
+    return (ret);
+}
+
+
 int config_option_test()
 {
     int ret = config_test_parse_command_line(&param1, config_argv1, (int)(sizeof(config_argv1) / sizeof(char const*)) - 1);
     if (ret != 0) {
         DBG_PRINTF("First config option test returns %d", ret);
     }
-    else {
+    if (ret == 0) {
         ret = config_test_parse_command_line(&param2, config_argv2, (int)(sizeof(config_argv2) / sizeof(char const*)) - 1);
         if (ret != 0) {
             DBG_PRINTF("Second config option test returns %d", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = config_test_parse_command_line_ex(&param2, config_two, (int)(sizeof(config_two) / sizeof(char const*)) - 1);
+        if (ret != 0) {
+            DBG_PRINTF("Two dash config option test returns %d", ret);
         }
     }
 
