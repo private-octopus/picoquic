@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "picoquic_config.h"
@@ -535,7 +536,7 @@ int config_option_test()
         DBG_PRINTF("First config option test returns %d", ret);
     }
     if (ret == 0) {
-        ret = config_test_parse_command_line(&param2, config_argv2, (int)(sizeof(config_argv2) / sizeof(char const*)) - 1);
+        ret = config_parse_command_line_test(&param2, config_argv2, (int)(sizeof(config_argv2) / sizeof(char const*)) - 1);
 
         if (ret != 0) {
             DBG_PRINTF("Second config option test returns %d", ret);
@@ -546,14 +547,15 @@ int config_option_test()
         ret = config_test_parse_command_line_ex(&param2, config_two, (int)(sizeof(config_two) / sizeof(char const*)) - 1);
         if (ret != 0) {
             DBG_PRINTF("Two dash config option test returns %d", ret);
-    }
+        }
 
-    for (size_t i = 0; ret == 0 && i < nb_config_errors; i++) {
-        picoquic_quic_config_t config = { 0 };
-        if (config_parse_command_line(&config, config_errors[i].err_args,
-            config_errors[i].nb_args, 1) == 0) {
-            DBG_PRINTF("Did not detect config error %zu, %s", i, config_errors[i].err_args[0]);
-            ret = -1;
+        for (size_t i = 0; ret == 0 && i < nb_config_errors; i++) {
+            picoquic_quic_config_t config = { 0 };
+            if (config_parse_command_line(&config, config_errors[i].err_args,
+                config_errors[i].nb_args, 1) == 0) {
+                DBG_PRINTF("Did not detect config error %zu, %s", i, config_errors[i].err_args[0]);
+                ret = -1;
+            }
         }
     }
 
