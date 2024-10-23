@@ -229,10 +229,14 @@ static const char * config_two[] = {
     "--no_disk",
     "--large_client_hello",
     "--disable_block",
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+    "--sslkeylog",
+#endif
     "--cnxid_length", "5",
     "--ticket_file", "/data/tickets.bin",
     "--token_file", "/data/tokens.bin",
     "--version_upgrade", "00000002",
+    "--cwin_max", "1000000",
     NULL
 };
 
@@ -548,14 +552,14 @@ int config_option_test()
         if (ret != 0) {
             DBG_PRINTF("Two dash config option test returns %d", ret);
         }
+    }
 
-        for (size_t i = 0; ret == 0 && i < nb_config_errors; i++) {
-            picoquic_quic_config_t config = { 0 };
-            if (config_parse_command_line(&config, config_errors[i].err_args,
-                config_errors[i].nb_args, 1) == 0) {
-                DBG_PRINTF("Did not detect config error %zu, %s", i, config_errors[i].err_args[0]);
-                ret = -1;
-            }
+    for (size_t i = 0; ret == 0 && i < nb_config_errors; i++) {
+        picoquic_quic_config_t config = { 0 };
+        if (config_parse_command_line(&config, config_errors[i].err_args,
+            config_errors[i].nb_args, 1) == 0) {
+            DBG_PRINTF("Did not detect config error %zu, %s", i, config_errors[i].err_args[0]);
+            ret = -1;
         }
     }
 

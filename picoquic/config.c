@@ -609,6 +609,7 @@ int picoquic_config_command_line(int opt, int * p_optind, int argc, char const *
 
     if (option_index == -1) {
         fprintf(stderr, "Unknown option: -%c\n", opt);
+        ret = -1;
     }
     else {
         ret = picoquic_get_command_line_option_value(option_index, opt_string, p_optind,
