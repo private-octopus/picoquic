@@ -4331,6 +4331,23 @@ static int picoquic_check_cc_feedback_timer(picoquic_cnx_t* cnx, uint64_t* next_
     return ret;
 }
 
+int picoquic_handle_app_wake_time(picoquic_cnx_t* cnx, uint64_t* next_wake_time, uint64_t current_time)
+{
+    int ret = 0;
+    while (cnx->app_wake_time != 0 && cnx->app_wake_time <= current_time){
+        cnx->app_wake_time = 0;
+        if (cnx->callback_fn != NULL) {
+            ret = cnx->callback_fn(cnx, current_time, NULL, 0, picoquic_callback_app_wakeup,
+                cnx->callback_ctx, NULL);
+        }
+    }
+    if (cnx->app_wake_time != 0 && cnx->app_wake_time < *next_wake_time) {
+        *next_wake_time = cnx->app_wake_time;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+    }
+    return ret;
+}
+
 /* Prepare next packet to send, or nothing.. */
 int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
@@ -4354,7 +4371,11 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
 
     *send_length = 0;
 
-    ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
+    ret = picoquic_handle_app_wake_time(cnx, &next_wake_time, current_time);
+
+    if (ret == 0) {
+        ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
+    }
 
     if (ret == 0) {
         ret = picoquic_check_cc_feedback_timer(cnx, &next_wake_time, current_time);

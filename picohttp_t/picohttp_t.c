@@ -93,7 +93,9 @@ static const picoquic_test_def_t test_table[] = {
     { "picowt_baton_random", picowt_baton_random_test },
     { "picowt_baton_uri", picowt_baton_uri_test },
     { "picowt_baton_wrong", picowt_baton_wrong_test },
-    { "quicperf_parse", quicperf_parse_test }
+    { "quicperf_parse", quicperf_parse_test },
+    { "quicperf_parse_cmd", quicperf_parse_cmd_test },
+    { "quicperf_parse_rpt", quicperf_parse_rpt_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

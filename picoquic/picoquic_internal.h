@@ -1370,7 +1370,8 @@ typedef struct st_picoquic_cnx_t {
     /* Next time sending data is expected */
     uint64_t next_wake_time;
     picosplay_node_t cnx_wake_node;
-
+    /* Wakeup time requested by the application */
+    uint64_t app_wake_time;
     /* TLS context, TLS Send Buffer, streams, epochs */
     void* tls_ctx;
     uint64_t crypto_epoch_length_max;

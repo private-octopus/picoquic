@@ -223,7 +223,7 @@ command instructs the server to a specific media stream, and is encoded as:
 
 ~~~
 media_stream_command {
-   command_length(i),
+   command_length(8),
    media_stream_id (i),
    priority (8),
    media_type (i),
@@ -248,7 +248,7 @@ by a stream type mark (0x02) followed by a stream header:
 
 ~~~
 media_stream_header {
-   header_length(i),
+   header_length(8),
    media_stream_id (i),
    group_id (i)
 }
@@ -257,7 +257,7 @@ media_stream_header {
 The header is followed by a series of frames:
 ~~~
 media_stream_frame {
-   header_length(i),
+   header_length(8),
    sender_time_stamp(i),
    frame_length(i),
    frame_bytes(..)
@@ -289,7 +289,7 @@ these streams and for each frame sends a report on the server response
 stream:
 ~~~
 media_stream_report {
-   header_length(i),
+   header_length(8),
    media_stream_id (i),
    group_id (i),
    frame_id (i),

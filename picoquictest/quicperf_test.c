@@ -408,3 +408,209 @@ int quicperf_parse_test()
     }
     return ret;
 }
+
+/* Generic function definition for the test parser
+* We start with a set of messages (e.g., commands or responses)
+* encode them as a string of octets, and
+* verify that they can be parsed and decoded
+* correctly.
+ */
+
+typedef size_t (*test_msg_format_fn)(uint8_t* buffer, size_t length, size_t msg_index);
+typedef int (*test_msg_parse_fn)(uint8_t* msg, size_t msg_length, size_t msg_index);
+
+int quicperf_parse_buffer_interval_test(uint8_t* buffer, size_t length, size_t interval, test_msg_parse_fn test_parse)
+{
+    int ret = 0;
+    size_t msg_index = 0;
+    size_t nb_processed = 0;
+    uint8_t msg[256];
+    uint8_t bytes_received = 0;
+    uint8_t msg_length = 0;
+
+    while (ret == 0 && nb_processed < length) {
+        size_t data_read = 0;
+        size_t available = interval;
+        if (nb_processed + interval > length) {
+            available = length - nb_processed;
+        }
+
+        while (ret == 0 && data_read < available) {
+            size_t nb_read = quicperf_accumulate_buffer(buffer + nb_processed + data_read, available - data_read, &msg_length, &bytes_received, msg, sizeof(msg));
+            if (nb_read > available || nb_read == 0) {
+                ret = -1;
+            }
+            else if (msg_length == 0) {
+                ret = -1;
+            }
+            else if (bytes_received > msg_length) {
+                ret = -1;
+            }
+            else {
+                data_read += nb_read;
+                if (bytes_received == msg_length) {
+                    /* Process the message */
+                    ret = test_parse(msg, bytes_received, msg_index);
+                    /* increment the message count. */
+                    msg_index++;
+                    msg_length = 0;
+                    bytes_received = 0;
+                }
+            }
+        }
+        nb_processed += available;
+    }
+    if (ret == 0 && msg_length > 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
+static const size_t test_intervals[] = { 255, 1, 2, 3, 5, 7, 11 };
+static const nb_test_intervals = sizeof(test_intervals) / sizeof(size_t);
+
+static int quicperf_parse_buffer_test(uint8_t* buffer, size_t length, test_msg_parse_fn test_parse)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_test_intervals; i++) {
+        ret = quicperf_parse_buffer_interval_test(buffer, length, test_intervals[i], test_parse);
+    }
+
+    return ret;
+}
+
+int quicperf_parse_msg_test(test_msg_parse_fn test_parse, test_msg_format_fn test_format, int nb_test_msg)
+{
+    int ret = 0;
+    /* Fixed size buffer, more than enough for the test commands. */
+    uint8_t buffer[1024];
+    size_t next_write = 0;
+
+    /* Encode the test commands */
+    for (size_t i = 0; ret == 0 && i < nb_test_msg; i++) {
+        size_t length = test_format(buffer + next_write + 1, sizeof(buffer) - next_write - 1, i);
+        if (length == 0 || length >= 256) {
+            ret = -1;
+        }
+        else {
+            buffer[next_write] = (uint8_t)length;
+            next_write += length + 1;
+        }
+    }
+
+    /* Do a test parsing with various read intervals */
+    if (ret == 0) {
+        ret = quicperf_parse_buffer_test(buffer, next_write, test_parse);
+    }
+    return ret;
+}
+
+/* Test the command format, instantiating
+* the generic functions.
+ */
+
+static const quicperf_media_command_t test_cmd[] = {
+    { 0, 3, 0, 30, 15000, 1000, 0, 0 },
+    { 1, 5, 0, 30, 15000, 1000, 150, 10000 },
+    { 2, 1, 1, 50, 25000, 80, 0, 0 }
+};
+static const nb_test_cmd = sizeof(test_cmd) / sizeof(quicperf_media_command_t);
+
+int quicperf_compare_cmd(const quicperf_media_command_t* cmd1, const quicperf_media_command_t* cmd2)
+{
+    int ret = 0;
+
+    if (cmd1->media_stream_id != cmd2->media_stream_id ||
+        cmd1->priority != cmd2->priority ||
+        cmd1->media_type != cmd2->media_type ||
+        cmd1->frequency != cmd2->frequency ||
+        cmd1->number_of_frames != cmd2->number_of_frames ||
+        cmd1->frame_size != cmd2->frame_size ||
+        cmd1->frames_per_group != cmd2->frames_per_group ||
+        cmd1->first_frame_size != cmd2->first_frame_size) {
+        ret = -1;
+    }
+    return ret;
+}
+
+static int quicperf_parse_cmd_buffer_test(uint8_t* msg, size_t msg_length, size_t msg_index)
+{
+    int ret = 0;
+    quicperf_media_command_t cmd;
+    size_t parsed = quicperf_parse_media_command(msg, msg_length, &cmd);
+
+    if (parsed == SIZE_MAX) {
+        ret = -1;
+    }
+    else {
+        ret = quicperf_compare_cmd(&cmd, &test_cmd[msg_index]);
+    }
+
+    return ret;
+}
+
+static size_t quicperf_format_cmd_test(uint8_t* buffer, size_t length, size_t test_index)
+{
+    return quicperf_format_media_command(buffer, length, &test_cmd[test_index]);
+}
+
+int quicperf_parse_cmd_test()
+{
+    return quicperf_parse_msg_test(quicperf_parse_cmd_buffer_test, quicperf_format_cmd_test, nb_test_cmd);
+}
+
+
+/* Test the report format, instantiating
+* the generic functions.
+ */
+
+static const quicperf_media_report_t test_rpt[] = {
+    { 0, 0, 0, 1000, 2000 },
+    { 1, 0, 0, 1010, 2200 },
+    { 1, 0, 1, 33000, 35200 },
+    { 1, 0, 2, 66010, 68200 }
+};
+static const nb_test_rpt = sizeof(test_rpt) / sizeof(quicperf_media_report_t);
+
+int quicperf_compare_rpt(const quicperf_media_report_t* rpt1, const quicperf_media_report_t* rpt2)
+{
+    int ret = 0;
+
+    if (rpt1->media_stream_id != rpt2->media_stream_id ||
+        rpt1->group_id != rpt2->group_id ||
+        rpt1->frame_id != rpt2->frame_id ||
+        rpt1->client_time_stamp != rpt2->client_time_stamp ||
+        rpt1->server_time_stamp != rpt2->server_time_stamp) {
+        ret = -1;
+    }
+    return ret;
+}
+
+static int quicperf_parse_rpt_buffer_test(uint8_t* msg, size_t msg_length, size_t msg_index)
+{
+    int ret = 0;
+    quicperf_media_report_t rpt;
+    size_t parsed = quicperf_parse_media_report(msg, msg_length, &rpt);
+
+    if (parsed == SIZE_MAX) {
+        ret = -1;
+    }
+    else {
+        ret = quicperf_compare_rpt(&rpt, &test_rpt[msg_index]);
+    }
+
+    return ret;
+}
+
+static size_t quicperf_format_rpt_test(uint8_t* buffer, size_t length, size_t test_index)
+{
+    return quicperf_format_media_report(buffer, length, &test_rpt[test_index]);
+}
+
+int quicperf_parse_rpt_test()
+{
+    return quicperf_parse_msg_test(quicperf_parse_rpt_buffer_test, quicperf_format_rpt_test, nb_test_rpt);
+}
+
+
