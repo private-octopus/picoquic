@@ -270,8 +270,8 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_ack:
         frame_name = "ack";
         break;
-    case picoquic_frame_type_mp_ack:
-        frame_name = "mp_ack";
+    case picoquic_frame_type_path_ack:
+        frame_name = "path_ack";
         break;
     case picoquic_frame_type_path_challenge:
         frame_name = "path_challenge";
@@ -288,8 +288,8 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_ack_ecn:
         frame_name = "ack_ecn";
         break;
-    case picoquic_frame_type_mp_ack_ecn:
-        frame_name = "mp_ack_ecn";
+    case picoquic_frame_type_path_ack_ecn:
+        frame_name = "path_ack_ecn";
         break;
     case picoquic_frame_type_retire_connection_id:
         frame_name = "retire_connection_id";
@@ -313,14 +313,17 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_path_abandon:
         frame_name = "path_abandon";
         break;
-    case picoquic_frame_type_path_standby:
-        frame_name = "path_standby";
+    case picoquic_frame_type_path_backup:
+        frame_name = "path_backup";
         break;
     case picoquic_frame_type_path_available:
         frame_name = "path_available";
         break;
     case picoquic_frame_type_max_path_id:
         frame_name = "max_path_id";
+        break;
+    case picoquic_frame_type_path_blocked:
+        frame_name = "path_blocked";
         break;
     case picoquic_frame_type_bdp:
         frame_name = "bdp_frame";
@@ -1326,17 +1329,13 @@ size_t textlog_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_ma
     const uint8_t* bytes0 = bytes;
     uint64_t path_id;
     uint64_t reason;
-    size_t phrase_length;
-    const uint8_t* phrase;
 
     size_t byte_index = 0;
 
 
     if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &reason)) == NULL ||
-        (bytes = picoquic_frames_varlen_decode(bytes, bytes_end, &phrase_length)) == NULL ||
-        bytes + phrase_length > bytes_end) {
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &reason)) == NULL) {
         fprintf(F, "    Malformed %s frame: ",
             textlog_frame_names(picoquic_frame_type_path_abandon));
         /* log format error */
@@ -1350,15 +1349,9 @@ size_t textlog_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_ma
         byte_index = bytes_max;
     }
     else {
-        phrase = bytes;
-        bytes += phrase_length;
         fprintf(F, "    %s, path_id: %" PRIu64,
             textlog_frame_names(picoquic_frame_type_path_abandon), path_id);
         fprintf(F, ", reason: %" PRIu64, reason);
-        if (phrase_length > 0) {
-            fprintf(F, ": ");
-            textlog_reason_text(F, phrase_length, phrase);
-        }
         fprintf(F, "\n");
         byte_index = (bytes - bytes0);
     }
@@ -1423,6 +1416,37 @@ size_t textlog_max_path_id_frame(FILE* F, const uint8_t* bytes, size_t bytes_max
     else {
         fprintf(F, "    %s, max_path_id: %" PRIu64 "\n",
             textlog_frame_names(picoquic_frame_type_max_path_id),
+            max_path_id);
+        byte_index = (bytes - bytes0);
+    }
+    return byte_index;
+}
+
+size_t textlog_path_blocked_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+{
+
+    const uint8_t* bytes_end = bytes + bytes_max;
+    const uint8_t* bytes0 = bytes;
+    uint64_t frame_id = 0;
+    uint64_t max_path_id;
+    size_t byte_index = 0;
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_end, &frame_id)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &max_path_id)) == NULL) {
+        /* log format error */
+        fprintf(F, "    Malformed %s frame: ", textlog_frame_names(frame_id));
+        /* log format error */
+        for (size_t i = 0; i < bytes_max && i < 8; i++) {
+            fprintf(F, "%02x", bytes0[i]);
+        }
+        if (bytes_max > 8) {
+            fprintf(F, "...");
+        }
+        fprintf(F, "\n");
+        byte_index = bytes_max;
+    }
+    else {
+        fprintf(F, "    %s, max_path_id: %" PRIu64 "\n",
+            textlog_frame_names(picoquic_frame_type_path_blocked),
             max_path_id);
         byte_index = (bytes - bytes0);
     }
@@ -1547,10 +1571,10 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
         case picoquic_frame_type_ack_ecn:
             byte_index += textlog_ack_frame(F, cnx_id64, frame_id, bytes + byte_index, length - byte_index, 1, 0);
             break;
-        case picoquic_frame_type_mp_ack:
+        case picoquic_frame_type_path_ack:
             byte_index += textlog_ack_frame(F, cnx_id64, frame_id, bytes + byte_index, length - byte_index, 0, 1);
             break;
-        case picoquic_frame_type_mp_ack_ecn:
+        case picoquic_frame_type_path_ack_ecn:
             byte_index += textlog_ack_frame(F, cnx_id64, frame_id, bytes + byte_index, length - byte_index, 1, 1);
             break;
         case picoquic_frame_type_retire_connection_id:
@@ -1649,12 +1673,15 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
         case picoquic_frame_type_path_abandon:
             byte_index += textlog_path_abandon_frame(F, bytes + byte_index, length - byte_index);
             break;
-        case picoquic_frame_type_path_standby:
+        case picoquic_frame_type_path_backup:
         case picoquic_frame_type_path_available:
             byte_index += textlog_path_available_or_standby_frame(F, bytes + byte_index, length - byte_index);
             break;
         case picoquic_frame_type_max_path_id:
             byte_index += textlog_max_path_id_frame(F, bytes + byte_index, length - byte_index);
+            break;
+        case picoquic_frame_type_path_blocked:
+            byte_index += textlog_path_blocked_frame(F, bytes + byte_index, length - byte_index);
             break;
         case picoquic_frame_type_bdp:
             byte_index += textlog_bdp_frame(F, bytes + byte_index, length - byte_index);

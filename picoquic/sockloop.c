@@ -80,8 +80,11 @@
 #include <sys/select.h>
 
 #ifndef __APPLE__
+#ifdef __LINUX__
 #include <linux/prctl.h>  /* Definition of PR_* constants */
+#else
 #include <sys/prctl.h>
+#endif
 #endif
 
 #include <pthread.h>

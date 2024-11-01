@@ -772,28 +772,14 @@ void qlog_path_abandon_frame(FILE* f, bytestream* s)
 {
     uint64_t path_id;
     uint64_t reason;
-    size_t phrase_length;
     
     byteread_vint(s, &path_id);
     byteread_vint(s, &reason);
-    byteread_vlen(s, &phrase_length);
     fprintf(f, ", \"path_id\": %"PRIu64, path_id);
     fprintf(f, ", \"reason\": %"PRIu64, reason);
-    if (phrase_length > 0) {
-        fprintf(f, ", \"phrase\": \"");
-        for (uint64_t i = 0; i < phrase_length && s->ptr < s->size; i++) {
-            int c = s->data[s->ptr++];
-
-            if (c < 0x20 || c > 0x7E) {
-                c = '.';
-            }
-            fprintf(f, "%c", c);
-        }
-        fprintf(f, "\"");
-    }
 }
 
-void qlog_path_standby_frame(FILE* f, bytestream* s)
+void qlog_path_backup_frame(FILE* f, bytestream* s)
 {
     uint64_t path_id = 0;
     uint64_t sequence;
@@ -816,6 +802,13 @@ void qlog_path_available_frame(FILE* f, bytestream* s)
 }
 
 void qlog_max_path_id_frame(FILE* f, bytestream* s)
+{
+    uint64_t max_path_id = 0;
+    byteread_vint(s, &max_path_id);
+    fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+}
+
+void qlog_path_blocked_frame(FILE* f, bytestream* s)
 {
     uint64_t max_path_id = 0;
     byteread_vint(s, &max_path_id);
@@ -953,7 +946,7 @@ void qlog_new_connection_id_frame(uint64_t ftype, FILE* f, bytestream* s)
     uint64_t retire_before = 0;
     uint64_t cid_length = 0;
 
-    if (ftype == picoquic_frame_type_mp_new_connection_id) {
+    if (ftype == picoquic_frame_type_path_new_connection_id) {
         uint64_t path_id;
         byteread_vint(s, &path_id);
         fprintf(f, ", \"path_id\": %"PRIu64"", path_id);
@@ -974,7 +967,7 @@ void qlog_retire_connection_id_frame(uint64_t ftype, FILE* f, bytestream* s)
 {
     uint64_t sequence_number = 0;
 
-    if (ftype == picoquic_frame_type_mp_retire_connection_id) {
+    if (ftype == picoquic_frame_type_path_retire_connection_id) {
         uint64_t path_id = 0;
         byteread_vint(s, &path_id);
         fprintf(f, ", \"path_id\": %"PRIu64"", path_id);
@@ -1049,7 +1042,7 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
     uint64_t ack_delay = 0;
     uint64_t num = 0;
     uint64_t path_id = 0;
-    if (ftype == picoquic_frame_type_mp_ack || ftype == picoquic_frame_type_mp_ack_ecn) {
+    if (ftype == picoquic_frame_type_path_ack || ftype == picoquic_frame_type_path_ack_ecn) {
         byteread_vint(s, &path_id);
         fprintf(f, ", \"path_id\": %"PRIu64"", path_id);
     }
@@ -1080,7 +1073,7 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
         largest -= range + 1;
     }
     fprintf(f, "]");
-    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_mp_ack_ecn) {
+    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_path_ack_ecn) {
         char const* ecn_name[3] = { "ect0", "ect1", "ce" };
         for (int ecnx = 0; ecnx < 3; ecnx++) {
             uint64_t ecn_v = 0;
@@ -1232,8 +1225,8 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_ack:
     case picoquic_frame_type_ack_ecn:
-    case picoquic_frame_type_mp_ack:
-    case picoquic_frame_type_mp_ack_ecn:
+    case picoquic_frame_type_path_ack:
+    case picoquic_frame_type_path_ack_ecn:
         qlog_ack_frame(ftype, f, s);
         break;
     case picoquic_frame_type_reset_stream:
@@ -1269,11 +1262,11 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         qlog_streams_blocked_frame(ftype, f, s);
         break;
     case picoquic_frame_type_new_connection_id:
-    case picoquic_frame_type_mp_new_connection_id:
+    case picoquic_frame_type_path_new_connection_id:
         qlog_new_connection_id_frame(ftype, f, s);
         break;
     case picoquic_frame_type_retire_connection_id:
-    case picoquic_frame_type_mp_retire_connection_id:
+    case picoquic_frame_type_path_retire_connection_id:
         qlog_retire_connection_id_frame(ftype, f, s);
         break;
     case picoquic_frame_type_path_challenge:
@@ -1301,8 +1294,8 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     case picoquic_frame_type_path_abandon:
         qlog_path_abandon_frame(f, s);
         break;
-    case picoquic_frame_type_path_standby:
-        qlog_path_standby_frame(f, s);
+    case picoquic_frame_type_path_backup:
+        qlog_path_backup_frame(f, s);
         break;
     case picoquic_frame_type_path_available:
         qlog_path_available_frame(f, s);
@@ -1312,6 +1305,9 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_max_path_id:
         qlog_max_path_id_frame(f, s);
+        break;
+    case picoquic_frame_type_path_blocked:
+        qlog_path_blocked_frame(f, s);
         break;
     case picoquic_frame_type_observed_address_v4:
     case picoquic_frame_type_observed_address_v6:
