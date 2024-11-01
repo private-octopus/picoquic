@@ -141,9 +141,9 @@ typedef enum {
     picoquic_frame_type_streams_blocked_bidir = 0x16,
     picoquic_frame_type_streams_blocked_unidir = 0x17,
     picoquic_frame_type_new_connection_id = 0x18,
-    picoquic_frame_type_mp_new_connection_id = 0x15228c09,
+    picoquic_frame_type_path_new_connection_id = 0x15228c09,
     picoquic_frame_type_retire_connection_id = 0x19,
-    picoquic_frame_type_mp_retire_connection_id = 0x15228c0a,
+    picoquic_frame_type_path_retire_connection_id = 0x15228c0a,
     picoquic_frame_type_path_challenge = 0x1a,
     picoquic_frame_type_path_response = 0x1b,
     picoquic_frame_type_connection_close = 0x1c,
@@ -154,13 +154,14 @@ typedef enum {
     picoquic_frame_type_ack_frequency = 0xAF,
     picoquic_frame_type_immediate_ack = 0x1F,
     picoquic_frame_type_time_stamp = 757,
-    picoquic_frame_type_mp_ack = 0x15228c00,
-    picoquic_frame_type_mp_ack_ecn =  0x15228c01,
+    picoquic_frame_type_path_ack = 0x15228c00,
+    picoquic_frame_type_path_ack_ecn =  0x15228c01,
     picoquic_frame_type_path_abandon =  0x15228c05,
-    picoquic_frame_type_path_standby =  0x15228c07,
+    picoquic_frame_type_path_backup =  0x15228c07,
     picoquic_frame_type_path_available =  0x15228c08,
     picoquic_frame_type_bdp = 0xebd9,
     picoquic_frame_type_max_path_id = 0x15228c0c,
+    picoquic_frame_type_path_blocked = 0x15228c0d,
     picoquic_frame_type_observed_address_v4 = 0x9f81a6,
     picoquic_frame_type_observed_address_v6 = 0x9f81a7
 } picoquic_frame_type_enum_t;
@@ -586,7 +587,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_grease_quic_bit 0x2ab2
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
-#define picoquic_tp_initial_max_path_id  0x0f739bbc1b666d09ull /* per draft quic multipath 09 */
+#define picoquic_tp_initial_max_path_id  0x0f739bbc1b666d11ull /* per draft quic multipath 11 */
 #define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
@@ -1499,6 +1500,7 @@ typedef struct st_picoquic_cnx_t {
     uint64_t max_path_id_local;
     uint64_t max_path_id_acknowledged;
     uint64_t max_path_id_remote;
+    uint64_t path_blocked_acknowledged;
     /* Management of the CNX-ID stash */
     picoquic_remote_cnxid_stash_t * first_remote_cnxid_stash;
     /* management of local CID stash.
@@ -1982,7 +1984,7 @@ picoquic_local_cnxid_list_t* picoquic_find_or_create_local_cnxid_list(picoquic_c
 picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx,
     uint64_t unique_path_id, picoquic_connection_id_t* suggested_value, uint64_t current_time);
 int picoquic_demote_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id,
-    uint64_t reason, char const* phrase, uint64_t current_time);
+    uint64_t reason, uint64_t current_time);
 void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
 void picoquic_delete_local_cnxid_list(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list);
 void picoquic_delete_local_cnxid_lists(picoquic_cnx_t* cnx);
@@ -2022,9 +2024,9 @@ uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, u
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);
 uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, picoquic_path_t* path_x, int* more_data, int * is_pure_ack);
 uint8_t* picoquic_format_path_abandon_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data,
-    uint64_t path_id, uint64_t reason, char const* phrase);
+    uint64_t path_id, uint64_t reason);
 int picoquic_queue_path_abandon_frame(picoquic_cnx_t* cnx,
-    uint64_t unique_path_id, uint64_t reason, char const* phrase);
+    uint64_t unique_path_id, uint64_t reason);
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
     picoquic_stream_data_node_t* received_data,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, int path_is_not_allocated, uint64_t current_time);
