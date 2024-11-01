@@ -233,24 +233,19 @@ static uint8_t test_frame_type_path_abandon_0[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
     0x01, /* Path 0 */
-    0x00, /* No error */
-    0x00 /* No phrase */
+    0x00 /* No error */
 };
 
 static uint8_t test_frame_type_path_abandon_1[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
     0x01,
-    0x11, /* Some new error */
-    0x03, 
-    (uint8_t)'b',
-    (uint8_t)'a',
-    (uint8_t)'d',
+    0x11 /* Some new error */
 };
 
-static uint8_t test_frame_type_path_standby[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_standby >> 24)), (uint8_t)(picoquic_frame_type_path_standby >> 16),
-    (uint8_t)(picoquic_frame_type_path_standby >> 8), (uint8_t)(picoquic_frame_type_path_standby & 0xFF),
+static uint8_t test_frame_type_path_backup[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_backup >> 24)), (uint8_t)(picoquic_frame_type_path_backup >> 16),
+    (uint8_t)(picoquic_frame_type_path_backup >> 8), (uint8_t)(picoquic_frame_type_path_backup & 0xFF),
     0x00, /* Path 0 */
     0x0F, /* Sequence = 0x0F */
 };
@@ -270,11 +265,11 @@ static uint8_t test_frame_type_bdp[] = {
     0x04, 0x0A, 0x0, 0x0, 0x01
 };
 
-static uint8_t test_frame_type_mp_ack[] = {
-    (uint8_t)(0x80|(picoquic_frame_type_mp_ack>>24)),
-    (uint8_t)(picoquic_frame_type_mp_ack>>16),
-    (uint8_t)(picoquic_frame_type_mp_ack>>8),
-    (uint8_t)(picoquic_frame_type_mp_ack),
+static uint8_t test_frame_type_path_ack[] = {
+    (uint8_t)(0x80|(picoquic_frame_type_path_ack>>24)),
+    (uint8_t)(picoquic_frame_type_path_ack>>16),
+    (uint8_t)(picoquic_frame_type_path_ack>>8),
+    (uint8_t)(picoquic_frame_type_path_ack),
     0,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
     0x44, 0,
@@ -284,11 +279,11 @@ static uint8_t test_frame_type_mp_ack[] = {
     5, 12
 };
 
-static uint8_t test_frame_type_mp_ack_ecn[] = {
-    (uint8_t)(0x80|(picoquic_frame_type_mp_ack_ecn>>24)),
-    (uint8_t)(picoquic_frame_type_mp_ack_ecn>>16),
-    (uint8_t)(picoquic_frame_type_mp_ack_ecn>>8),
-    (uint8_t)(picoquic_frame_type_mp_ack_ecn),
+static uint8_t test_frame_type_path_ack_ecn[] = {
+    (uint8_t)(0x80|(picoquic_frame_type_path_ack_ecn>>24)),
+    (uint8_t)(picoquic_frame_type_path_ack_ecn>>16),
+    (uint8_t)(picoquic_frame_type_path_ack_ecn>>8),
+    (uint8_t)(picoquic_frame_type_path_ack_ecn),
     0,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
     0x44, 0,
@@ -302,6 +297,12 @@ static uint8_t test_frame_type_mp_ack_ecn[] = {
 static uint8_t test_frame_type_max_path_id[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_max_path_id >> 24)), (uint8_t)(picoquic_frame_type_max_path_id >> 16),
     (uint8_t)(picoquic_frame_type_max_path_id >> 8), (uint8_t)(picoquic_frame_type_max_path_id & 0xFF),
+    0x11, /* max paths = 17 */
+};
+
+static uint8_t test_frame_type_path_blocked[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_blocked >> 24)), (uint8_t)(picoquic_frame_type_path_blocked >> 16),
+    (uint8_t)(picoquic_frame_type_path_blocked >> 8), (uint8_t)(picoquic_frame_type_path_blocked & 0xFF),
     0x11, /* max paths = 17 */
 };
 
@@ -372,9 +373,10 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3, 0, 0),
     TEST_SKIP_ITEM_MPATH("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3, 0, 0, 1),
     TEST_SKIP_ITEM_MPATH("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0, 1),
-    TEST_SKIP_ITEM_MPATH("path_standby", test_frame_type_path_standby, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM_MPATH("path_backup", test_frame_type_path_backup, 0, 0, 3, 0, 0, 1),
     TEST_SKIP_ITEM_MPATH("path_available", test_frame_type_path_available, 0, 0, 3, 0, 0, 1),
     TEST_SKIP_ITEM_MPATH("max paths", test_frame_type_max_path_id, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM_MPATH("max paths", test_frame_type_path_blocked, 0, 0, 3, 0, 0, 1),
 
     TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3, 0, 0),
 
@@ -559,28 +561,13 @@ static uint8_t test_frame_type_path_abandon_bad_0[] = {
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
     /* Missing path id */
     0x00, /* No error */
-    0x00 /* No phrase */
 };
 
 static uint8_t test_frame_type_path_abandon_bad_1[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)),
-    (uint8_t)(picoquic_frame_type_path_abandon >> 16),
-    (uint8_t)(picoquic_frame_type_path_abandon >> 8), 
-    (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
-    0x01,
-    0x11, /* Some new error */
-    0xff, /* bad length */
-    (uint8_t)'b',
-    (uint8_t)'a',
-    (uint8_t)'d',
-};
-
-static uint8_t test_frame_type_path_abandon_bad_2[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
     0x00,
-    0xFF, /* Bad error  */
-    0x00 /* No phrase */
+    0xFF /* Bad error  */
 };
 
 static uint8_t test_frame_type_path_available_bad[] = {
@@ -648,7 +635,6 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM("stream_hang", test_frame_stream_hang, 1, 0, 3, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0),
     TEST_SKIP_ITEM_MPATH("bad_abandon_0", test_frame_type_path_abandon_bad_0, 0, 1, 3, ERR_F, 1, 1),
     TEST_SKIP_ITEM_MPATH("bad_abandon_1", test_frame_type_path_abandon_bad_1, 0, 0, 3, ERR_F, 1, 1),
-    TEST_SKIP_ITEM_MPATH("bad_abandon_2", test_frame_type_path_abandon_bad_2, 0, 0, 3, ERR_F, 1, 1),
     TEST_SKIP_ITEM_MPATH("bad_path_available", test_frame_type_path_available_bad, 0, 1, 3, ERR_F, 1, 1),
     TEST_SKIP_ITEM_MPATH("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3, ERR_F, 0, 1),
     TEST_SKIP_ITEM_MPATH("bad_bdp_addr", test_frame_type_bdp_bad_addr, 1, 0, 3, ERR_F, 0, 1),
@@ -663,8 +649,8 @@ size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_sk
 * should not be added to the "skip list" 
  */
 test_skip_frames_t test_log_list[] = {
-    TEST_SKIP_ITEM("mp_ack", test_frame_type_mp_ack, 1, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("mp_ack_ecn", test_frame_type_mp_ack_ecn, 1, 0, 3, 0, 0)
+    TEST_SKIP_ITEM("path_ack", test_frame_type_path_ack, 1, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("path_ack_ecn", test_frame_type_path_ack_ecn, 1, 0, 3, 0, 0)
 };
 size_t nb_test_log_list = sizeof(test_log_list) / sizeof(test_skip_frames_t);
 
