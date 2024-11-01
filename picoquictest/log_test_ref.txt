@@ -33,15 +33,16 @@
     immediate_ack
     time_stamp: 1024
     path_abandon, path_id: 1, reason: 0
-    path_abandon, path_id: 1, reason: 17: bad
-    path_standby, path_id: 0, sequence: 15
+    path_abandon, path_id: 1, reason: 17
+    path_backup, path_id: 0, sequence: 15
     path_available, path_id: 0, sequence: 15
     max_path_id, max_path_id: 17
+    path_blocked, max_path_id: 17
     bdp_frame, lifetime: 1, bytes_in_flight: 2, min_rtt: 3, ip: 0a000001
     observed_address_v4, sequence: 1, addr: 1.2.3.4, port: 4660
     observed_address_v6, sequence: 2, addr: 102:304:506:708:90a:b0c:d0e:f00, port: 17767
-    mp_ack (nb=2), path=0, 4328719360-4328719365, 4328719358, 4328719339-4328719351
-    mp_ack_ecn (nb=2), path=0, 4328719360-4328719365, 4328719358, 4328719339-4328719351, ect0=3, ect1=0, ce=1
+    path_ack (nb=2), path=0, 4328719360-4328719365, 4328719358, 4328719339-4328719351
+    path_ack_ecn (nb=2), path=0, 4328719360-4328719365, 4328719358, 4328719339-4328719351, ect0=3, ect1=0, ce=1
     reset_stream 17, Error 0x00000001, Offset 0x3fffffffffffffff.
     reset_stream 4611686018427387903, Error 0x00000001, Offset 0x1.
     Malformed RESET STREAM, requires 12 bytes out of 7
@@ -75,9 +76,8 @@
     ping, 1 bytes
     padding, 1 bytes
     stream 4611684923227504639, offset 4611686018427387903, length 3, fin = 1: ffffff
-    Malformed path_abandon frame: 95228c050000
-    Malformed path_abandon frame: 95228c050111ff62...
-    Malformed path_abandon frame: 95228c0500ff00
+    Malformed path_abandon frame: 95228c0500
+    Malformed path_abandon frame: 95228c0500ff
     Malformed path_available frame: 95228c0800
     Malformed bdp_frame frame: 8000ebd9010204
     Malformed bdp_frame frame: 8000ebd901020405...
