@@ -673,6 +673,24 @@ int multipath_verify_datagram_sent(test_datagram_send_recv_ctx_t* dg_ctx, multip
     return ret;
 }
 
+static int multipath_verify_all_cid_available(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    uint64_t unique_id_max = 0;
+    picoquic_remote_cnxid_stash_t* stash = cnx->first_remote_cnxid_stash;
+
+    while (stash != NULL) {
+        if (stash->unique_path_id > unique_id_max) {
+            unique_id_max = stash->unique_path_id;
+        }
+        stash = stash->next_stash;
+    }
+    if (unique_id_max < cnx->max_path_id_local && unique_id_max < cnx->max_path_id_remote) {
+        ret = -1;
+    }
+    return ret;
+}
+
 int multipath_datagram_send_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     test_datagram_send_recv_ctx_t* dg_ctx, uint64_t* loss_mask, uint64_t* simulated_time)
 {
@@ -812,6 +830,14 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     if (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled) {
         DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
             test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
+        ret = -1;
+    }
+    /* verify that both sides have the same vision of max path id*/
+    if (test_ctx->cnx_client->max_path_id_local != test_ctx->cnx_server->max_path_id_remote ||
+        test_ctx->cnx_client->max_path_id_remote != test_ctx->cnx_server->max_path_id_local) {
+        DBG_PRINTF("No agreement on max path if (c=%u/%u, s=%u/%u)",
+            (uint32_t)test_ctx->cnx_client->max_path_id_local, (uint32_t)test_ctx->cnx_client->max_path_id_remote,
+            (uint32_t)test_ctx->cnx_server->max_path_id_local, (uint32_t)test_ctx->cnx_server->max_path_id_remote);
         ret = -1;
     }
 
@@ -985,6 +1011,15 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     /* Check that the transmission succeeded */
     if (ret == 0) {
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
+    }
+
+    if (ret == 0 && test_id == multipath_test_basic) {
+        if ((ret = multipath_verify_all_cid_available(test_ctx->cnx_client)) != 0) {
+            DBG_PRINTF("Not received all CID from server");
+        }
+        else if ((ret = multipath_verify_all_cid_available(test_ctx->cnx_server)) != 0) {
+            DBG_PRINTF("Not received all CID from client");
+        }
     }
 
     if (ret == 0 && test_id == multipath_test_fail) {
