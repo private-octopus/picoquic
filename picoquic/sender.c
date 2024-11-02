@@ -139,6 +139,12 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
+#if 1
+    if (stream->stream_id == 4) {
+        DBG_PRINTF("%s", "bug");
+    }
+#endif // 1
+
 
     if (ret == 0) {
         if (is_active) {

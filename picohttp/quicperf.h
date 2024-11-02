@@ -61,6 +61,7 @@ typedef struct st_quicperf_stream_desc_t {
     int is_client_media;
 } quicperf_stream_desc_t;
 
+#if 0
 typedef struct st_quicperf_media_command_t {
     uint64_t media_stream_id;
     uint8_t priority;
@@ -79,6 +80,7 @@ typedef struct st_quicperf_media_report_t {
     uint64_t client_time_stamp;
     uint64_t server_time_stamp;
 } quicperf_media_report_t;
+#endif
 
 typedef struct st_quicperf_stream_ctx {
     picosplay_node_t quicperf_stream_node;
@@ -158,11 +160,13 @@ int quicperf_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
+#if 0
 size_t quicperf_parse_media_command(const uint8_t* data, size_t length, quicperf_media_command_t* cmd);
 size_t quicperf_format_media_command(uint8_t* data, size_t length, const quicperf_media_command_t* cmd);
 size_t quicperf_parse_media_report(const uint8_t* data, size_t length, quicperf_media_report_t* rpt);
 size_t quicperf_format_media_report(uint8_t* data, size_t length, const quicperf_media_report_t* rpt);
 size_t quicperf_accumulate_buffer(uint8_t* data, size_t length, uint8_t* msg_length, uint8_t* bytes_received, uint8_t* buffer, size_t buffer_length);
+#endif
 
 #ifdef __cplusplus
 }

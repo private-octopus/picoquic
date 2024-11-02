@@ -27,7 +27,9 @@
 #include <stddef.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
+#include "picoquic_binlog.h"
 #include "picosplay.h"
+#include "picoquictest_internal.h"
 #include "quicperf.h"
 
 #define qpstr_batch "256:12345;"
@@ -409,6 +411,7 @@ int quicperf_parse_test()
     return ret;
 }
 
+#if 0
 /* Generic function definition for the test parser
 * We start with a set of messages (e.g., commands or responses)
 * encode them as a string of octets, and
@@ -613,4 +616,148 @@ int quicperf_parse_rpt_test()
     return quicperf_parse_msg_test(quicperf_parse_rpt_buffer_test, quicperf_format_rpt_test, nb_test_rpt);
 }
 
+#endif
 
+char const* quicperf_test_scenario = "=v1:s30:n4:100;";
+
+int quicperf_e2e_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t time_out;
+    int nb_trials = 0;
+    int was_active = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    quicperf_ctx_t  *quicperf_ctx;
+    int ret = 0;
+    uint64_t completion_target = 5000000;
+    picoquic_connection_id_t initial_cid = { {0xde, 0xc1, 3, 4, 5, 6, 7, 8}, 8 };
+
+
+    quicperf_ctx = quicperf_create_ctx(quicperf_test_scenario);
+    if (quicperf_ctx == NULL) {
+        DBG_PRINTF("Could not get ready to run QUICPERF\n");
+        return -1;
+    }
+    else {
+
+    }
+
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(&test_ctx,
+            PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, "perf", &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+        if (ret == 0) {
+            picoquic_set_binlog(test_ctx->qserver, ".");
+            test_ctx->qserver->use_long_log = 1;
+        }
+
+        if (ret == 0) {
+            picoquic_set_binlog(test_ctx->qclient, ".");
+        }
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_INTERNAL_TEST_VERSION_1);
+    }
+    else if (test_ctx == NULL || test_ctx->cnx_client == NULL || test_ctx->qserver == NULL) {
+        DBG_PRINTF("%s", "Connections where not properly created!\n");
+        ret = -1;
+    }
+
+    /* The default procedure creates connections using the test callback.
+     * We want to replace that by the quicperf callback */
+
+    if (ret == 0) {
+        // picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
+        picoquic_set_default_callback(test_ctx->qserver, quicperf_callback, NULL);
+        picoquic_set_callback(test_ctx->cnx_client, quicperf_callback, quicperf_ctx);
+        if (ret == 0) {
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Simulate the connection from the client side. */
+    time_out = simulated_time + 30000000;
+    while (ret == 0 && picoquic_get_cnx_state(test_ctx->cnx_client) != picoquic_state_disconnected) {
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+
+        if (ret == -1) {
+            break;
+        }
+
+        if (test_ctx->cnx_client->cnx_state == picoquic_state_ready &&
+            picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
+            if (quicperf_ctx->nb_open_streams == 0) {
+                ret = picoquic_close(test_ctx->cnx_client, 0);
+            }
+            else if (simulated_time > quicperf_ctx->last_interaction_time &&
+                simulated_time - quicperf_ctx->last_interaction_time > 10000000ull) {
+                (void)picoquic_close(test_ctx->cnx_client, 0);
+                ret = -1;
+            }
+        }
+        if (++nb_trials > 100000) {
+            ret = -1;
+            break;
+        }
+    }
+
+#if 0
+    /* Verify that the data was properly received. */
+    for (size_t i = 0; ret == 0 && i < nb_scenario; i++) {
+        picoquic_demo_client_stream_ctx_t* stream = callback_ctx.first_stream;
+
+        while (stream != NULL && stream->stream_id != demo_scenario[i].stream_id) {
+            stream = stream->next_stream;
+        }
+
+        if (stream == NULL) {
+            DBG_PRINTF("Scenario stream %d is missing\n", (int)i);
+            ret = -1;
+        }
+        else if (stream->F != NULL) {
+            DBG_PRINTF("Scenario stream %d, file was not closed\n", (int)i);
+            ret = -1;
+        }
+        else if (stream->received_length < demo_length[i]) {
+            DBG_PRINTF("Scenario stream %d, only %d bytes received\n",
+                (int)i, (int)stream->received_length);
+            ret = -1;
+        }
+        else if (stream->post_sent < demo_scenario[i].post_size) {
+            DBG_PRINTF("Scenario stream %d, only %d bytes sent\n",
+                (int)i, (int)stream->post_sent);
+            ret = -1;
+        }
+    }
+#endif
+
+    if (ret == 0 && completion_target != 0) {
+        if (simulated_time > completion_target) {
+            DBG_PRINTF("Test uses %llu microsec instead of %llu", simulated_time, completion_target);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && test_ctx->qclient->nb_data_nodes_allocated > test_ctx->qclient->nb_data_nodes_in_pool) {
+        ret = -1;
+    }
+    else if (ret == 0 && test_ctx->qserver->nb_data_nodes_allocated > test_ctx->qserver->nb_data_nodes_in_pool) {
+        ret = -1;
+    }
+
+    quicperf_delete_ctx(quicperf_ctx);
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
