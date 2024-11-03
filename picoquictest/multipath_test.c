@@ -1019,10 +1019,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
     if (ret == 0 && test_id == multipath_test_basic) {
         if ((ret = multipath_verify_all_cid_available(test_ctx->cnx_client)) != 0) {
-            DBG_PRINTF("Not received all CID from server");
+            DBG_PRINTF("%s", "Not received all CID from server");
         }
         else if ((ret = multipath_verify_all_cid_available(test_ctx->cnx_server)) != 0) {
-            DBG_PRINTF("Not received all CID from client");
+            DBG_PRINTF("%s", "Not received all CID from client");
         }
     }
 
@@ -1079,7 +1079,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
 
-    if (ret == 0 && test_id == multipath_test_nat || test_id == multipath_test_nat_challenge) {
+    if (ret == 0 && (test_id == multipath_test_nat || test_id == multipath_test_nat_challenge)) {
         /* Check that the path 0 has the new address */
         if (test_ctx->cnx_server->nb_paths < 2 ||
             test_ctx->cnx_client->nb_paths < 2 ||
