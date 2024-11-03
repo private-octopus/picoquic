@@ -372,7 +372,7 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
 
     picoquic_init_transport_parameters(test_parameters, 1);
     test_parameters->is_multipath_enabled = 1;
-    test_parameters->initial_max_path_id = 3;
+    test_parameters->initial_max_path_id = 2;
     test_parameters->enable_time_stamp = 3;
 }
 
@@ -434,6 +434,7 @@ typedef enum {
     multipath_test_renew,
     multipath_test_rotation,
     multipath_test_nat,
+    multipath_test_nat_challenge,
     multipath_test_break1,
     multipath_test_break2,
     multipath_test_back1,
@@ -673,6 +674,24 @@ int multipath_verify_datagram_sent(test_datagram_send_recv_ctx_t* dg_ctx, multip
     return ret;
 }
 
+static int multipath_verify_all_cid_available(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    uint64_t unique_id_max = 0;
+    picoquic_remote_cnxid_stash_t* stash = cnx->first_remote_cnxid_stash;
+
+    while (stash != NULL) {
+        if (stash->unique_path_id > unique_id_max) {
+            unique_id_max = stash->unique_path_id;
+        }
+        stash = stash->next_stash;
+    }
+    if (unique_id_max < cnx->max_path_id_local && unique_id_max < cnx->max_path_id_remote) {
+        ret = -1;
+    }
+    return ret;
+}
+
 int multipath_datagram_send_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     test_datagram_send_recv_ctx_t* dg_ctx, uint64_t* loss_mask, uint64_t* simulated_time)
 {
@@ -814,6 +833,14 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
         ret = -1;
     }
+    /* verify that both sides have the same vision of max path id*/
+    if (test_ctx->cnx_client->max_path_id_local != test_ctx->cnx_server->max_path_id_remote ||
+        test_ctx->cnx_client->max_path_id_remote != test_ctx->cnx_server->max_path_id_local) {
+        DBG_PRINTF("No agreement on max path if (c=%u/%u, s=%u/%u)",
+            (uint32_t)test_ctx->cnx_client->max_path_id_local, (uint32_t)test_ctx->cnx_client->max_path_id_remote,
+            (uint32_t)test_ctx->cnx_server->max_path_id_local, (uint32_t)test_ctx->cnx_server->max_path_id_remote);
+        ret = -1;
+    }
 
     /* wait until the client (and thus the server) is ready */
     if (ret == 0) {
@@ -881,7 +908,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
     if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
-        test_id == multipath_test_renew || test_id == multipath_test_nat || 
+        test_id == multipath_test_renew || test_id == multipath_test_nat || test_id == multipath_test_nat_challenge ||
         test_id == multipath_test_break1 || test_id == multipath_test_break2 ||
         test_id == multipath_test_back1 || test_id == multipath_test_standup ||
         test_id == multipath_test_abandon || test_id == multipath_test_tunnel)) {
@@ -903,11 +930,14 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             if (test_id == multipath_test_renew) {
                 ret = picoquic_renew_connection_id(test_ctx->cnx_client, 1);
             }
-            else if (test_id == multipath_test_nat) {
+            else if (test_id == multipath_test_nat || test_id == multipath_test_nat_challenge) {
                 /* Change the client address */
                 test_ctx->client_addr_natted = test_ctx->client_addr;
                 test_ctx->client_addr_natted.sin_port += 7;
                 test_ctx->client_use_nat = 1;
+                if (test_id == multipath_test_nat_challenge) {
+                    test_ctx->cnx_client->path[0]->challenge_required = 1;
+                }
             }
             else if (test_id == multipath_test_abandon) {
                 /* Client abandons the path, causes it to be demoted. Server should follow suit. */
@@ -987,6 +1017,15 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
     }
 
+    if (ret == 0 && test_id == multipath_test_basic) {
+        if ((ret = multipath_verify_all_cid_available(test_ctx->cnx_client)) != 0) {
+            DBG_PRINTF("%s", "Not received all CID from server");
+        }
+        else if ((ret = multipath_verify_all_cid_available(test_ctx->cnx_server)) != 0) {
+            DBG_PRINTF("%s", "Not received all CID from client");
+        }
+    }
+
     if (ret == 0 && test_id == multipath_test_fail) {
         if (test_ctx->cnx_client->nb_paths != 1 ||
             (test_ctx->cnx_server != NULL && test_ctx->cnx_server->nb_paths != 1)) {
@@ -1040,7 +1079,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
 
-    if (ret == 0 && test_id == multipath_test_nat) {
+    if (ret == 0 && (test_id == multipath_test_nat || test_id == multipath_test_nat_challenge)) {
         /* Check that the path 0 has the new address */
         if (test_ctx->cnx_server->nb_paths < 2 ||
             test_ctx->cnx_client->nb_paths < 2 ||
@@ -1233,6 +1272,14 @@ int multipath_nat_test()
 
     return  multipath_test_one(max_completion_microsec, multipath_test_nat);
 }
+
+int multipath_nat_challenge_test()
+{
+    uint64_t max_completion_microsec = 3000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_nat_challenge);
+}
+
 
 /* Test that breaking paths are removed after some time
  */
