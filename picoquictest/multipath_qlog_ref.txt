@@ -30,7 +30,7 @@
     "enable_loss_bit" : 1,
     "min_ack_delay" : 1000,
     "enable_time_stamp" : "03",
-    "initial_max_path_id" : 3}],
+    "initial_max_path_id" : 2}],
 [0, 0, "transport", "parameters_set", {
     "owner": "local",
     "initial_max_stream_data_bidi_local" : 2097152,
@@ -49,7 +49,7 @@
     "enable_loss_bit" : 1,
     "min_ack_delay" : 1000,
     "enable_time_stamp" : "03",
-    "initial_max_path_id" : 3}],
+    "initial_max_path_id" : 2}],
 [0, 0, "transport", "packet_sent", { "packet_type": "initial", "header": { "packet_size": 162, "packet_number": 0, "payload_length": 132, "scid": "0a09080706050403", "dcid": "0908070605040302" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[0, 0]]}, { 
     "frame_type": "crypto", "offset": 0, "length": 123}]}],

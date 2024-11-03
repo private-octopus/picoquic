@@ -447,6 +447,7 @@ int multipath_sat_plus_test();
 int multipath_renew_test();
 int multipath_rotation_test();
 int multipath_nat_test();
+int multipath_nat_challenge_test();
 int multipath_break1_test();
 int multipath_socket_error_test();
 int multipath_abandon_test();

@@ -372,7 +372,7 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
 
     picoquic_init_transport_parameters(test_parameters, 1);
     test_parameters->is_multipath_enabled = 1;
-    test_parameters->initial_max_path_id = 3;
+    test_parameters->initial_max_path_id = 2;
     test_parameters->enable_time_stamp = 3;
 }
 
@@ -434,6 +434,7 @@ typedef enum {
     multipath_test_renew,
     multipath_test_rotation,
     multipath_test_nat,
+    multipath_test_nat_challenge,
     multipath_test_break1,
     multipath_test_break2,
     multipath_test_back1,
@@ -907,7 +908,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
     if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
-        test_id == multipath_test_renew || test_id == multipath_test_nat || 
+        test_id == multipath_test_renew || test_id == multipath_test_nat || test_id == multipath_test_nat_challenge ||
         test_id == multipath_test_break1 || test_id == multipath_test_break2 ||
         test_id == multipath_test_back1 || test_id == multipath_test_standup ||
         test_id == multipath_test_abandon || test_id == multipath_test_tunnel)) {
@@ -929,11 +930,14 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             if (test_id == multipath_test_renew) {
                 ret = picoquic_renew_connection_id(test_ctx->cnx_client, 1);
             }
-            else if (test_id == multipath_test_nat) {
+            else if (test_id == multipath_test_nat || test_id == multipath_test_nat_challenge) {
                 /* Change the client address */
                 test_ctx->client_addr_natted = test_ctx->client_addr;
                 test_ctx->client_addr_natted.sin_port += 7;
                 test_ctx->client_use_nat = 1;
+                if (test_id == multipath_test_nat_challenge) {
+                    test_ctx->cnx_client->path[0]->challenge_required = 1;
+                }
             }
             else if (test_id == multipath_test_abandon) {
                 /* Client abandons the path, causes it to be demoted. Server should follow suit. */
@@ -1075,7 +1079,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
 
-    if (ret == 0 && test_id == multipath_test_nat) {
+    if (ret == 0 && test_id == multipath_test_nat || test_id == multipath_test_nat_challenge) {
         /* Check that the path 0 has the new address */
         if (test_ctx->cnx_server->nb_paths < 2 ||
             test_ctx->cnx_client->nb_paths < 2 ||
@@ -1268,6 +1272,14 @@ int multipath_nat_test()
 
     return  multipath_test_one(max_completion_microsec, multipath_test_nat);
 }
+
+int multipath_nat_challenge_test()
+{
+    uint64_t max_completion_microsec = 3000000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_nat_challenge);
+}
+
 
 /* Test that breaking paths are removed after some time
  */

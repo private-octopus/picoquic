@@ -456,6 +456,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_abandon", multipath_abandon_test },
     { "multipath_back1", multipath_back1_test },
     { "multipath_nat", multipath_nat_test },
+    { "multipath_nat_challenge", multipath_nat_challenge_test },
     { "multipath_perf", multipath_perf_test },
     { "multipath_callback", multipath_callback_test },
     { "multipath_quality", multipath_quality_test },
