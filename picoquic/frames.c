@@ -4593,8 +4593,16 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
         }
         else {
             /* The path challenge will always be accepted if multipath is enabled,
-             * because the path is uniquely identified by the path ID */
-            int is_valid = cnx->is_multipath_enabled;
+             * because the path is uniquely identified by the path ID -- unless the
+             * addresses do not have the expected values, because that would
+             * be the unsupported-for-now multipath migration scenario.
+             */
+            int is_valid = 0;
+#if 0
+            if (cnx->is_multipath_enabled) {
+                is_valid = 1;
+            }
+#endif
             if (!is_valid) {
                 /* If multipath is not enabled, we must verify that the addresses
                  * source (addr_from) matches the peer address if known. */

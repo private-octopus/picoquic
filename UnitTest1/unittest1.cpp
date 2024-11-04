@@ -2547,6 +2547,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_nat_challenge) {
+            int ret = multipath_nat_challenge_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_break1) {
             int ret = multipath_break1_test();
 

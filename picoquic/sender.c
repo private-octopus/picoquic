@@ -2610,8 +2610,8 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
         }
         /* If the number of local lists is lower than the max number of paths,
          * create more. The code assume that path[0] is created during handshake. */
-        while (!no_space_left && cnx->nb_local_cnxid_lists < cnx->local_parameters.initial_max_path_id &&
-            cnx->next_path_id_in_lists < cnx->max_path_id_remote) {
+        while (!no_space_left && cnx->nb_local_cnxid_lists <= cnx->local_parameters.initial_max_path_id &&
+            cnx->next_path_id_in_lists <= cnx->max_path_id_remote) {
             (void) picoquic_find_or_create_local_cnxid_list(cnx, cnx->next_path_id_in_lists, 1);
         }
     }
