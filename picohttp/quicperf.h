@@ -61,26 +61,18 @@ typedef struct st_quicperf_stream_desc_t {
     int is_client_media;
 } quicperf_stream_desc_t;
 
-#if 0
-typedef struct st_quicperf_media_command_t {
-    uint64_t media_stream_id;
-    uint8_t priority;
-    uint64_t media_type;
-    uint64_t frequency;
-    uint64_t number_of_frames;
-    uint64_t frame_size;
-    uint64_t frames_per_group;
-    uint64_t first_frame_size;
-} quicperf_media_command_t;
-
-typedef struct st_quicperf_media_report_t {
-    uint64_t media_stream_id;
-    uint64_t group_id;
-    uint64_t frame_id;
-    uint64_t client_time_stamp;
-    uint64_t server_time_stamp;
-} quicperf_media_report_t;
-#endif
+typedef struct st_quicperf_stream_report_t {
+    uint64_t stream_desc_index;
+    uint64_t nb_frames_expected;
+    uint64_t nb_frames_received;
+    uint64_t sum_delays;
+    uint64_t max_delays;
+    uint64_t min_delays;
+    uint64_t nb_groups_requested;
+    uint64_t next_group_id;
+    uint64_t next_group_start_time;
+    unsigned int is_activated : 1;
+} quicperf_stream_report_t;
 
 typedef struct st_quicperf_stream_ctx {
     picosplay_node_t quicperf_stream_node;
@@ -132,13 +124,11 @@ typedef struct st_quicperf_ctx_t {
     size_t nb_open_streams;
     uint64_t last_interaction_time;
     quicperf_stream_desc_t* scenarios;
+    quicperf_stream_report_t* reports;
     picosplay_tree_t quicperf_stream_tree;
-    /* Buffer for handling the command or response. */
-    uint8_t command_length; /* 0 if not received yet. */
-    uint8_t bytes_received;
-    uint8_t command_bytes[64];
     /* Management of wakeup time */
     uint64_t stream_wakeup_time;
+    uint64_t next_group_start_time;
     /* To do: management of datagrams */
     uint64_t datagram_wakeup_time;
     size_t datagram_size;
@@ -159,14 +149,6 @@ void quicperf_delete_ctx(quicperf_ctx_t* ctx);
 int quicperf_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
-
-#if 0
-size_t quicperf_parse_media_command(const uint8_t* data, size_t length, quicperf_media_command_t* cmd);
-size_t quicperf_format_media_command(uint8_t* data, size_t length, const quicperf_media_command_t* cmd);
-size_t quicperf_parse_media_report(const uint8_t* data, size_t length, quicperf_media_report_t* rpt);
-size_t quicperf_format_media_report(uint8_t* data, size_t length, const quicperf_media_report_t* rpt);
-size_t quicperf_accumulate_buffer(uint8_t* data, size_t length, uint8_t* msg_length, uint8_t* bytes_received, uint8_t* buffer, size_t buffer_length);
-#endif
 
 #ifdef __cplusplus
 }
