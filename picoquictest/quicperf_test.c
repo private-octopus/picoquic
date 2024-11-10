@@ -576,6 +576,21 @@ int quicperf_e2e_test(uint8_t test_id, char const *scenario, uint64_t completion
     return ret;
 }
 
+int quicperf_batch_test()
+{
+    char const* batch_scenario = "=b1:*1:397:1000000;";
+    quicperf_test_target_t batch_target = {
+        0, /* nb_frames_received_min */
+        0, /* nb_frames_received_max */
+        0, /* average_delay_min */
+        0, /* average_delay_max */
+        0, /* max_delay */
+        0, /* min_delay */
+    };
+
+    return quicperf_e2e_test(0xba, batch_scenario, 1200000, 1, &batch_target);
+}
+
 int quicperf_media_test()
 {
     char const* media_scenario = "=v1:s30:n150:2000:G30:I20000;";
