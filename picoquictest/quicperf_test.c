@@ -432,9 +432,6 @@ int quicperf_e2e_test()
         DBG_PRINTF("Could not get ready to run QUICPERF\n");
         return -1;
     }
-    else {
-
-    }
 
     if (ret == 0) {
         ret = tls_api_init_ctx_ex(&test_ctx,
@@ -485,7 +482,8 @@ int quicperf_e2e_test()
         }
 
         if (test_ctx->cnx_client->cnx_state == picoquic_state_ready &&
-            picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
+            picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+            quicperf_ctx->next_group_start_time < simulated_time) {
             if (quicperf_ctx->nb_open_streams == 0) {
                 ret = picoquic_close(test_ctx->cnx_client, 0);
             }

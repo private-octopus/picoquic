@@ -690,6 +690,9 @@ quicperf_stream_ctx_t* quicperf_request_media_stream_from_scenario(picoquic_cnx_
         stream_ctx->is_media = 1;
         stream_ctx->is_datagram = (stream_desc->media_type == quicperf_media_datagram);
 
+#if 1
+        stream_ctx->start_time = desc_start_time;
+#else
         if (stream_ctx->frequency == 0 || stream_desc->group_size == 0 || group_id == 0) {
             stream_ctx->start_time = desc_start_time;
         }
@@ -697,6 +700,7 @@ quicperf_stream_ctx_t* quicperf_request_media_stream_from_scenario(picoquic_cnx_
             /* Add just one group duration, as the start time correspond to previous group */
             stream_ctx->start_time = desc_start_time + (stream_desc->group_size * 1000000) / stream_ctx->frequency;
         }
+#endif
     }
     return stream_ctx;
 }
@@ -723,6 +727,20 @@ int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx
                     }
                     else {
                         stream_ctx = quicperf_request_media_stream_from_scenario(cnx, ctx, &ctx->scenarios[i], rep_number, 0, current_time);
+
+                        if (stream_ctx != NULL && rep_number == 0) {
+                            quicperf_stream_report_t* report = &ctx->reports[i];
+                            report->is_activated = 1;
+                            report->next_group_id = 1;
+                            report->next_group_start_time = current_time;
+                            if (stream_ctx->frequency > 0) {
+                                report->next_group_start_time += (stream_ctx->nb_frames * 1000000) / stream_ctx->frequency;
+                            }
+                            if (report->next_group_start_time < ctx->next_group_start_time) {
+                                ctx->next_group_start_time = report->next_group_start_time;
+                            }
+                            ctx->is_activated = 1;
+                        }
                     }
                     break;
                 case quicperf_media_datagram:
@@ -738,7 +756,7 @@ int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx
                     stream_ctx = NULL;
                     break;
                 }
-                if (stream_ctx == 0) {
+                if (stream_ctx == NULL) {
                     ret = -1;
                 } else {
                     rep_number++;
@@ -748,6 +766,7 @@ int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx
                 }
             } while (ret == 0 && rep_number < ctx->scenarios[i].repeat_count);
         }
+        picoquic_set_app_wake_time(cnx, current_time);
     }
 
     return ret;
@@ -765,16 +784,27 @@ int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx
 * The end of previous streams triggers that activation of batch streams in
 * the "chaining" model. It triggers the marking of those streams as "available".
 */
+void quicperf_activate_next_group( const quicperf_stream_desc_t* stream_desc, quicperf_stream_report_t* report)
+{
+    /* Compute the next group time. */
+    report->next_group_id++;
+    if (stream_desc->group_size < 1 || stream_desc->group_size * report->next_group_id >= stream_desc->nb_frames) {
+        report->is_activated = 0;
+    }
+    if (stream_desc->frequency > 0) {
+        report->next_group_start_time += (stream_desc->group_size * 1000000) / stream_desc->frequency;
+    }
+}
+
 int quicperf_client_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t current_time)
 {
     int ret = 0;
-    int need_timer = 0;
-
 
     ctx->next_group_start_time = UINT64_MAX;
+    ctx->is_activated = 0;
 
     for (uint64_t i = 0; i < ctx->nb_scenarios; i++) {
-        quicperf_stream_desc_t* stream_desc = &ctx->scenarios[i];
+        const quicperf_stream_desc_t* stream_desc = &ctx->scenarios[i];
         if (stream_desc->media_type == quicperf_media_stream) {
             quicperf_stream_report_t* report = &ctx->reports[i];
             while (report->is_activated && current_time >= report->next_group_start_time) {
@@ -794,18 +824,13 @@ int quicperf_client_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
                     }
                 }
 
-                /* Compute the next group time. */
-                report->next_group_id++;
-                if (stream_desc->group_size < 1 || stream_desc->group_size * report->next_group_id >= stream_desc->nb_frames) {
-                    report->is_activated = 0;
-                }
-                if (stream_desc->frequency > 0) {
-                    report->next_group_start_time += (stream_desc->group_size * 1000000) / stream_desc->frequency;
-                    if (report->next_group_start_time < ctx->next_group_start_time) {
-                        ctx->next_group_start_time = report->next_group_start_time;
-                    }
-                }
+                /* Compute the next group time and activate if needed */
+                quicperf_activate_next_group(stream_desc, report);
             }
+            if (report->is_activated && report->next_group_start_time < ctx->next_group_start_time) {
+                ctx->next_group_start_time = report->next_group_start_time;
+            }
+            ctx->is_activated |= report->is_activated;
         }
     }
 
@@ -822,7 +847,7 @@ int quicperf_client_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
 
 
 int quicperf_init_streams_after_completion(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx,
-    size_t stream_desc_index, uint64_t rep_number, uint64_t group_id, uint64_t previous_start_time)
+    size_t stream_desc_index, uint64_t rep_number, uint64_t group_id)
 {
     int ret = 0;
     const quicperf_stream_desc_t* stream_desc = &ctx->scenarios[stream_desc_index];
@@ -830,6 +855,9 @@ int quicperf_init_streams_after_completion(picoquic_cnx_t* cnx, quicperf_ctx_t* 
 
     if (stream_desc->media_type == quicperf_media_stream && stream_desc->group_size > 1 &&
         stream_desc->group_size * (group_id + 1) < stream_desc->nb_frames) {
+#if 1
+        /* Do nothing. The next group will be started in quicperf_client_timer */
+#else
         /* Need to start the next group */
         quicperf_stream_ctx_t* stream_ctx = quicperf_request_media_stream_from_scenario(cnx, ctx, stream_desc, rep_number, group_id + 1, previous_start_time);
         if (stream_ctx == 0) {
@@ -840,6 +868,7 @@ int quicperf_init_streams_after_completion(picoquic_cnx_t* cnx, quicperf_ctx_t* 
             ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
             ctx->nb_open_streams++;
         }
+#endif
     }
     else if (rep_number + 1 >= stream_desc->repeat_count &&
         stream_desc->id[0] != 0) {
@@ -1059,8 +1088,8 @@ int quicperf_process_stream_data(picoquic_cnx_t * cnx, quicperf_ctx_t * ctx, qui
 
             if (stream_ctx->is_closed) {
                 ctx->nb_open_streams--;
-                ret = quicperf_init_streams_after_completion(cnx, ctx, stream_ctx->stream_desc_index, stream_ctx->rep_number, stream_ctx->group_id, stream_ctx->start_time);
-                if (ctx->nb_open_streams == 0) {
+                ret = quicperf_init_streams_after_completion(cnx, ctx, stream_ctx->stream_desc_index, stream_ctx->rep_number, stream_ctx->group_id);
+                if (ctx->nb_open_streams == 0 && !ctx->is_activated) {
                     ret = picoquic_close(cnx, QUICPERF_NO_ERROR);
                 }
                 else if (ret == 0 && ctx->is_client) {

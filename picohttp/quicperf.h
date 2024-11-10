@@ -129,6 +129,7 @@ typedef struct st_quicperf_ctx_t {
     /* Management of wakeup time */
     uint64_t stream_wakeup_time;
     uint64_t next_group_start_time;
+    unsigned int is_activated;
     /* To do: management of datagrams */
     uint64_t datagram_wakeup_time;
     size_t datagram_size;
