@@ -411,9 +411,17 @@ int quicperf_parse_test()
     return ret;
 }
 
-char const* quicperf_test_scenario = "=v1:s30:n150:2000:G30:I20000;";
+typedef struct st_quicperf_test_target_t {
+    uint64_t nb_frames_received_min;
+    uint64_t nb_frames_received_max;
+    uint64_t average_delay_min;
+    uint64_t average_delay_max;
+    uint64_t max_delay;
+    uint64_t min_delay;
+} quicperf_test_target_t;
 
-int quicperf_e2e_test()
+
+int quicperf_e2e_test(uint8_t test_id, char const *scenario, uint64_t completion_target, size_t nb_targets, quicperf_test_target_t * targets)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -423,13 +431,18 @@ int quicperf_e2e_test()
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     quicperf_ctx_t  *quicperf_ctx;
     int ret = 0;
-    uint64_t completion_target = 6000000;
-    picoquic_connection_id_t initial_cid = { {0xde, 0xc1, 3, 4, 5, 6, 7, 8}, 8 };
+    picoquic_connection_id_t initial_cid = { {0x9e, 0x8f, 0, 0, 0, 0, 0, 0}, 8 };
 
+    initial_cid.id[2] = test_id;
 
-    quicperf_ctx = quicperf_create_ctx(quicperf_test_scenario);
+    quicperf_ctx = quicperf_create_ctx(scenario);
     if (quicperf_ctx == NULL) {
-        DBG_PRINTF("%s", "Could not get ready to run QUICPERF\n");
+        DBG_PRINTF("Could not get ready to run QUICPERF(%s)\n", scenario);
+        return -1;
+    }
+
+    if (ret == 0 && quicperf_ctx->nb_scenarios != nb_targets) {
+        DBG_PRINTF("Expected %zu scenario items, got %zu\n", quicperf_ctx->nb_scenarios, nb_targets);
         return -1;
     }
 
@@ -499,35 +512,12 @@ int quicperf_e2e_test()
         }
     }
 
-#if 0
-    /* Verify that the data was properly received. */
-    for (size_t i = 0; ret == 0 && i < nb_scenario; i++) {
-        picoquic_demo_client_stream_ctx_t* stream = callback_ctx.first_stream;
-
-        while (stream != NULL && stream->stream_id != demo_scenario[i].stream_id) {
-            stream = stream->next_stream;
-        }
-
-        if (stream == NULL) {
-            DBG_PRINTF("Scenario stream %d is missing\n", (int)i);
-            ret = -1;
-        }
-        else if (stream->F != NULL) {
-            DBG_PRINTF("Scenario stream %d, file was not closed\n", (int)i);
-            ret = -1;
-        }
-        else if (stream->received_length < demo_length[i]) {
-            DBG_PRINTF("Scenario stream %d, only %d bytes received\n",
-                (int)i, (int)stream->received_length);
-            ret = -1;
-        }
-        else if (stream->post_sent < demo_scenario[i].post_size) {
-            DBG_PRINTF("Scenario stream %d, only %d bytes sent\n",
-                (int)i, (int)stream->post_sent);
-            ret = -1;
-        }
+    if (ret == 0 && test_ctx->qclient->nb_data_nodes_allocated > test_ctx->qclient->nb_data_nodes_in_pool) {
+        ret = -1;
     }
-#endif
+    else if (ret == 0 && test_ctx->qserver->nb_data_nodes_allocated > test_ctx->qserver->nb_data_nodes_in_pool) {
+        ret = -1;
+    }
 
     if (ret == 0 && completion_target != 0) {
         if (simulated_time > completion_target) {
@@ -536,11 +526,44 @@ int quicperf_e2e_test()
         }
     }
 
-    if (ret == 0 && test_ctx->qclient->nb_data_nodes_allocated > test_ctx->qclient->nb_data_nodes_in_pool) {
-        ret = -1;
-    }
-    else if (ret == 0 && test_ctx->qserver->nb_data_nodes_allocated > test_ctx->qserver->nb_data_nodes_in_pool) {
-        ret = -1;
+    for (size_t i = 0; ret == 0 && i < nb_targets; i++) {
+        quicperf_test_target_t* target = &targets[i];
+        quicperf_stream_report_t* report = &quicperf_ctx->reports[i];
+
+        if (target->nb_frames_received_min != 0 &&
+            report->nb_frames_received < target->nb_frames_received_min) {
+            DBG_PRINTF("Scenario %zu, expected at least %" PRIu64 "frames, got % PRIu64", i, target->nb_frames_received_min, report->nb_frames_received);
+            ret = -1;
+        }
+        else if (target->nb_frames_received_max != 0 &&
+            report->nb_frames_received > target->nb_frames_received_max) {
+            DBG_PRINTF("Scenario %zu, expected at most %" PRIu64 "frames, got % PRIu64", i, target->nb_frames_received_max, report->nb_frames_received);
+            ret = -1;
+        }
+        else if (report->nb_frames_received > 0) {
+            uint64_t average_delay = report->sum_delays / report->nb_frames_received;
+
+            if (target->average_delay_min != 0 &&
+                average_delay < target->average_delay_min) {
+                DBG_PRINTF("Scenario %zu, expected average delay >= %" PRIu64 ", got % PRIu64", i, target->average_delay_min, average_delay);
+                ret = -1;
+            }
+            else if (target->average_delay_max != 0 &&
+                average_delay > target->average_delay_max) {
+                DBG_PRINTF("Scenario %zu, expected average delay <= %" PRIu64 ", got % PRIu64", i, target->average_delay_max, average_delay);
+                ret = -1;
+            }
+            else if (target->max_delay != 0 &&
+                report->max_delays > target->max_delay) {
+                DBG_PRINTF("Scenario %zu, expected max delay <= %" PRIu64 ", got % PRIu64", i, target->max_delay, report->max_delays);
+                ret = -1;
+            }
+            else if (target->min_delay != 0 &&
+                report->min_delays < target->min_delay) {
+                DBG_PRINTF("Scenario %zu, expected min delay >= %" PRIu64 ", got % PRIu64", i, target->min_delay, report->min_delays);
+                ret = -1;
+            }
+        }
     }
 
     quicperf_delete_ctx(quicperf_ctx);
@@ -551,4 +574,19 @@ int quicperf_e2e_test()
     }
 
     return ret;
+}
+
+int quicperf_media_test()
+{
+    char const* media_scenario = "=v1:s30:n150:2000:G30:I20000;";
+    quicperf_test_target_t media_target = {
+        150, /* nb_frames_received_min */
+        150, /* nb_frames_received_max */
+        20000, /* average_delay_min */
+        25000, /* average_delay_max */
+        50000, /* max_delay */
+        20000, /* min_delay */
+    };
+
+    return quicperf_e2e_test(0x1a,media_scenario, 6000000, 1, &media_target);
 }

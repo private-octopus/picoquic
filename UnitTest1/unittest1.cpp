@@ -2949,8 +2949,8 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(quicperf_e2e) {
-            int ret = quicperf_e2e_test();
+        TEST_METHOD(quicperf_media) {
+            int ret = quicperf_media_test();
 
             Assert::AreEqual(ret, 0);
         }

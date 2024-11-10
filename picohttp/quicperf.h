@@ -63,7 +63,6 @@ typedef struct st_quicperf_stream_desc_t {
 
 typedef struct st_quicperf_stream_report_t {
     uint64_t stream_desc_index;
-    uint64_t nb_frames_expected;
     uint64_t nb_frames_received;
     uint64_t sum_delays;
     uint64_t max_delays;
