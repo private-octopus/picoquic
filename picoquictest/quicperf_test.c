@@ -429,7 +429,7 @@ int quicperf_e2e_test()
 
     quicperf_ctx = quicperf_create_ctx(quicperf_test_scenario);
     if (quicperf_ctx == NULL) {
-        DBG_PRINTF("Could not get ready to run QUICPERF\n");
+        DBG_PRINTF("%s", "Could not get ready to run QUICPERF\n");
         return -1;
     }
 

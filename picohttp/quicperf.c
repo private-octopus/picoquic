@@ -803,7 +803,7 @@ int quicperf_client_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
     ctx->next_group_start_time = UINT64_MAX;
     ctx->is_activated = 0;
 
-    for (uint64_t i = 0; i < ctx->nb_scenarios; i++) {
+    for (uint64_t i = 0; ret == 0 && i < ctx->nb_scenarios; i++) {
         const quicperf_stream_desc_t* stream_desc = &ctx->scenarios[i];
         if (stream_desc->media_type == quicperf_media_stream) {
             quicperf_stream_report_t* report = &ctx->reports[i];
@@ -811,7 +811,7 @@ int quicperf_client_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
                 if (stream_desc->media_type == quicperf_media_stream && stream_desc->group_size > 1 &&
                     stream_desc->group_size * report->next_group_id < stream_desc->nb_frames) {
                 }
-                for (uint64_t rep_number = 0; rep_number < stream_desc->repeat_count; rep_number++) {
+                for (uint64_t rep_number = 0; ret == 0 && rep_number < stream_desc->repeat_count; rep_number++) {
                     /* Need to start the next group */
                     quicperf_stream_ctx_t* stream_ctx = quicperf_request_media_stream_from_scenario(cnx, ctx, stream_desc, rep_number, report->next_group_id, report->next_group_start_time);
                     if (stream_ctx == 0) {
@@ -823,9 +823,10 @@ int quicperf_client_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
                         ctx->nb_open_streams++;
                     }
                 }
-
-                /* Compute the next group time and activate if needed */
-                quicperf_activate_next_group(stream_desc, report);
+                if (ret == 0) {
+                    /* Compute the next group time and activate if needed */
+                    quicperf_activate_next_group(stream_desc, report);
+                }
             }
             if (report->is_activated && report->next_group_start_time < ctx->next_group_start_time) {
                 ctx->next_group_start_time = report->next_group_start_time;
@@ -834,11 +835,11 @@ int quicperf_client_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
         }
     }
 
-    if (ctx->next_group_start_time != UINT64_MAX) {
+    if (ret == 0 && ctx->next_group_start_time != UINT64_MAX) {
         picoquic_set_app_wake_time(cnx, ctx->next_group_start_time);
     }
 
-    return 0;
+    return ret;
 }
 
 /* Upon stream completion, start the batch streams that have a dependency,
@@ -922,7 +923,7 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
 
     while (byte_index < length) {
         /* Consume the stream until the start of the next frame */
-        uint64_t expected_bytes = (stream_ctx->nb_frames_received == 0) ? stream_ctx->first_frame_size : stream_ctx->frame_size;
+        size_t expected_bytes = (size_t)((stream_ctx->nb_frames_received == 0) ? stream_ctx->first_frame_size : stream_ctx->frame_size);
 
         if (stream_ctx->frames_bytes_received < 8) {
             stream_ctx->frame_start_stamp = (stream_ctx->frame_start_stamp << 8) + bytes[byte_index++];
@@ -930,7 +931,7 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
         }
         else {
             if (stream_ctx->frames_bytes_received < expected_bytes) {
-                size_t available = expected_bytes - stream_ctx->frames_bytes_received;
+                size_t available = expected_bytes - (size_t)stream_ctx->frames_bytes_received;
                 if (available > length - byte_index) {
                     available = length - byte_index;
                 }
@@ -1088,7 +1089,7 @@ int quicperf_process_stream_data(picoquic_cnx_t * cnx, quicperf_ctx_t * ctx, qui
 
             if (stream_ctx->is_closed) {
                 ctx->nb_open_streams--;
-                ret = quicperf_init_streams_after_completion(cnx, ctx, stream_ctx->stream_desc_index, stream_ctx->rep_number, stream_ctx->group_id);
+                ret = quicperf_init_streams_after_completion(cnx, ctx, (size_t)stream_ctx->stream_desc_index, stream_ctx->rep_number, stream_ctx->group_id);
                 if (ctx->nb_open_streams == 0 && !ctx->is_activated) {
                     ret = picoquic_close(cnx, QUICPERF_NO_ERROR);
                 }
@@ -1191,7 +1192,7 @@ int quicperf_prepare_to_send_media(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, qui
 
     if (available + stream_ctx->frame_bytes_sent >= send_limit) {
         /* These will be the last bytes in this frame. */
-        available = send_limit - stream_ctx->frame_bytes_sent;
+        available = (size_t)(send_limit - stream_ctx->frame_bytes_sent);
         stream_ctx->nb_frames_sent++;
 
         if (stream_ctx->nb_frames_sent >= stream_ctx->nb_frames) {
@@ -1259,14 +1260,14 @@ int quicperf_prepare_media_request(picoquic_cnx_t* cnx, quicperf_stream_ctx_t* s
 {
 
     int ret = 0;
-    uint64_t send_limit = 16;
+    size_t send_limit = 16;
     size_t available = length;
     int is_fin = 0;
     uint8_t* buffer;
 
     if (available + stream_ctx->frame_bytes_sent >= send_limit) {
         /* These will be the last bytes in this frame. */
-        available = send_limit - stream_ctx->frame_bytes_sent;
+        available = send_limit - (size_t)stream_ctx->frame_bytes_sent;
         stream_ctx->nb_frames_sent++;
         is_fin = 1;
     }
@@ -1317,9 +1318,9 @@ int quicperf_send_datagram(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
         }
         else {
             if (data_size > 16) {
-                memset(bytes, 0xaa, data_size - 16);
+                memset(bytes, 0xaa, (size_t)data_size - 16);
             }
-            ret = picoquic_queue_datagram_frame(cnx, data_size, buffer);
+            ret = picoquic_queue_datagram_frame(cnx, (size_t) data_size, buffer);
         }
     }
     return ret;
@@ -1334,7 +1335,6 @@ int quicperf_server_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
 {
     /* Naive implementation first. we may need to optimize that later. */
     int ret = 0;
-    int need_wakeup = 0;
 
     if (current_time >= ctx->stream_wakeup_time) {
         uint64_t next_wakeup_time = UINT64_MAX;
@@ -1354,7 +1354,6 @@ int quicperf_server_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
                     }
                     else if (stream_ctx->next_frame_time < ctx->stream_wakeup_time) {
                         next_wakeup_time = stream_ctx->next_frame_time;
-                        need_wakeup = 1;
                     }
                 }
                 else {
