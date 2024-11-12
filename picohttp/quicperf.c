@@ -500,8 +500,13 @@ size_t quicperf_parse_request_header(picoquic_cnx_t * cnx, quicperf_stream_ctx_t
         uint8_t b = bytes[byte_index++];
         if (stream_ctx->nb_post_bytes == 8) {
             stream_ctx->priority = b;
-            if (stream_ctx->priority != 0) {
-                picoquic_set_stream_priority(cnx, stream_ctx->stream_id, stream_ctx->priority);
+            if (!stream_ctx->priority != 0) {
+                if (stream_ctx->is_datagram) {
+                    picoquic_set_datagram_priority(cnx, stream_ctx->priority);
+                }
+                else {
+                    picoquic_set_stream_priority(cnx, stream_ctx->stream_id, stream_ctx->priority);
+                }
             }
         }
         else if (stream_ctx->nb_post_bytes == 9) {
@@ -709,6 +714,7 @@ int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx
 {
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(picoquic_get_quic_ctx(cnx));
+    picoquic_tp_t const* remote_tp = picoquic_get_transport_parameters(cnx, 0);
 
     for (size_t i = 0; ret == 0 && i < ctx->nb_scenarios; i++) {
         if (strcmp(id, ctx->scenarios[i].previous_id) == 0) {
@@ -748,6 +754,11 @@ int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx
                         /* TODO */
                         stream_ctx = NULL;
                     }
+                    else if (ctx->scenarios[i].media_type == quicperf_media_datagram &&
+                        ctx->scenarios[i].frame_size > remote_tp->max_datagram_frame_size) {
+                        DBG_PRINTF("Datagram size %" PRIu64 " > max remote size: %u", ctx->scenarios[i].frame_size, remote_tp->max_datagram_frame_size);
+                        ret = -1;
+                    }
                     else {
                         stream_ctx = quicperf_request_media_stream_from_scenario(cnx, ctx, &ctx->scenarios[i], rep_number, 0, current_time);
                     }
@@ -770,6 +781,119 @@ int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx
     }
 
     return ret;
+}
+
+
+/* Send a datagram
+ */
+int quicperf_send_datagrams(picoquic_cnx_t* cnx, uint64_t current_time, quicperf_stream_ctx_t * stream_ctx)
+{
+    int ret = 0;
+    uint8_t buffer[1024];
+    uint64_t data_size = stream_ctx->frame_size;
+    if (data_size > 1024) {
+        data_size = 1024;
+    }
+
+    while (ret == 0 && current_time >= stream_ctx->next_frame_time && stream_ctx->nb_frames_sent < stream_ctx->nb_frames) {
+        uint8_t* bytes = buffer;
+        uint8_t* bytes_max = bytes + 1024;
+
+        if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, stream_ctx->stream_id)) == NULL ||
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, stream_ctx->nb_frames_sent)) == NULL ||
+            (bytes = picoquic_frames_uint64_encode(bytes, bytes_max, current_time)) == NULL) {
+            ret = -1;
+        }
+        else {
+            size_t encoded = (bytes - buffer);
+            if (bytes < bytes_max && encoded < data_size) {
+                memset(bytes, 0xaa, (size_t)data_size - encoded);
+                encoded = (size_t) data_size;
+            }
+            ret = picoquic_queue_datagram_frame(cnx, encoded, buffer);
+            stream_ctx->nb_frames_sent++;
+            stream_ctx->next_frame_time = stream_ctx->start_time;
+            if (stream_ctx->frequency > 0) {
+                stream_ctx->next_frame_time += (stream_ctx->nb_frames_sent * 1000000) / stream_ctx->frequency;
+            }
+        }
+    }
+
+    return ret;
+}
+
+/* Receive a datagram
+*/
+void quicperf_receive_datagram(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, const uint8_t* bytes, size_t length)
+{
+    int ret = 0;
+    uint64_t frame_id = 0;
+    uint64_t timestamp = 0;
+    const uint8_t* bytes_max = bytes + length;
+    quicperf_stream_ctx_t target_stream_ctx = { 0 };
+    quicperf_stream_ctx_t* stream_ctx = NULL;
+
+    /* decode the datagram header */
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &target_stream_ctx.stream_id)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id)) == NULL ||
+        (bytes = picoquic_frames_uint64_decode(bytes, bytes_max, &timestamp)) == NULL) {
+        ret = -1;
+    }
+
+    /* Find the control stream */
+    if (ret == 0) {
+        /* Find the stream context for the frame id */
+        picosplay_node_t* node = picosplay_find(&ctx->quicperf_stream_tree, &target_stream_ctx);
+        if (node == NULL) {
+            ret = -1;
+        }
+        else {
+            stream_ctx = (quicperf_stream_ctx_t*)quicperf_stream_ctx_value(node);
+
+            if (stream_ctx == NULL || stream_ctx->stream_desc_index >= ctx->nb_scenarios) {
+                /* Do not use an invalid context ID */
+                ret = 1;
+            }
+        }
+    }
+    /* Update the statistics */
+    if (ret == 0) {
+        /* Write media report on reporting file */
+        uint64_t current_time = picoquic_get_quic_time(picoquic_get_quic_ctx(cnx));
+        quicperf_stream_report_t* report = &ctx->reports[stream_ctx->stream_desc_index];
+        uint64_t expected_time = stream_ctx->start_time;
+        uint64_t rtt;
+
+        current_time -= picoquic_get_cnx_start_time(cnx);
+        if (stream_ctx->frequency > 0) {
+            expected_time += frame_id * 1000000 / stream_ctx->frequency;
+        }
+        report->nb_frames_received += 1;
+        if (current_time <= expected_time) {
+            rtt = 0;
+        }
+        else {
+            rtt = current_time - expected_time;
+        }
+        report->sum_delays += rtt;
+        if (report->min_delays == 0 || rtt < report->min_delays) {
+            report->min_delays = rtt;
+        }
+        if (rtt > report->max_delays) {
+            report->max_delays = rtt;
+        }
+
+        if (ctx->report_file != NULL) {
+            if (ctx->scenarios[stream_ctx->stream_desc_index].id[0] != 0) {
+                fprintf(ctx->report_file, "%s,", ctx->scenarios[stream_ctx->stream_desc_index].id);
+            }
+            else {
+                fprintf(ctx->report_file, "#%" PRIu64 ", ", stream_ctx->stream_desc_index);
+            }
+            fprintf(ctx->report_file, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",\n",
+                stream_ctx->rep_number, stream_ctx->group_id, frame_id, timestamp, current_time);
+        }
+    }
 }
 
 /*
@@ -918,7 +1042,6 @@ int quicperf_receive_batch_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicpe
 void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicperf_stream_ctx_t* stream_ctx,
     uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event)
 {
-
     size_t byte_index = 0;
 
     while (byte_index < length) {
@@ -1045,7 +1168,14 @@ int quicperf_receive_data_from_client(picoquic_cnx_t* cnx, quicperf_stream_ctx_t
             stream_ctx->is_media = 0;
             stream_ctx->is_datagram = 0;
         }
-        ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
+        else if (stream_ctx->is_datagram) {
+            uint64_t current_time = picoquic_get_quic_time(picoquic_get_quic_ctx(cnx));
+            ret = quicperf_send_datagrams(cnx, current_time, stream_ctx);
+            picoquic_set_app_wake_time(cnx, current_time);
+        }
+        else {
+            ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
+        }
     }
     return ret;
 }
@@ -1301,31 +1431,6 @@ int quicperf_prepare_to_send(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicperf_
     return ret;
 }
 
-/* Send a datagram
- */
-int quicperf_send_datagram(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t stream_id, uint64_t data_size)
-{
-    int ret = data_size > 1024 || data_size < 16;
-
-    if (ret == 0) {
-        uint8_t buffer[1024];
-        uint8_t * bytes = buffer;
-        uint8_t* bytes_max = bytes + 1024;
-
-        if ((bytes = picoquic_frames_uint64_encode(bytes, bytes_max, stream_id)) == NULL ||
-            (bytes = picoquic_frames_uint64_encode(bytes, bytes_max, current_time)) == NULL) {
-            ret = -1;
-        }
-        else {
-            if (data_size > 16) {
-                memset(bytes, 0xaa, (size_t)data_size - 16);
-            }
-            ret = picoquic_queue_datagram_frame(cnx, (size_t) data_size, buffer);
-        }
-    }
-    return ret;
-}
-
 /* On timer, mark active all the streams that
 * need a time wakeup. Or, reset the stream timer to what is required.
 * This is only needed for the "sleeping" streams, and maybe also for the datagram
@@ -1345,14 +1450,13 @@ int quicperf_server_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
             if (!stream_ctx->is_activated) {
                 if (stream_ctx->is_datagram) {
                     while (stream_ctx->next_frame_time <= current_time && stream_ctx->nb_frames_sent < stream_ctx->nb_frames) {
-                        ret = quicperf_send_datagram(cnx, current_time, stream_ctx->stream_id, stream_ctx->frame_size);
-                        stream_ctx->nb_frames_sent += 1;
-                        stream_ctx->next_frame_time = stream_ctx->start_time + (1000000 * stream_ctx->nb_frames_sent) / stream_ctx->frequency;
+                        ret = quicperf_send_datagrams(cnx, current_time, stream_ctx);
                     }
                     if (stream_ctx->nb_frames_sent >= stream_ctx->nb_frames && current_time >= stream_ctx->next_frame_time) {
-                        /* Activate the stream context will trigger a cloture. */
+                        /* Closing the stream context will trigger a cloture. */
+                        picoquic_add_to_stream(cnx, stream_ctx->stream_id, NULL, 0, 1);
                     }
-                    else if (stream_ctx->next_frame_time < ctx->stream_wakeup_time) {
+                    else if (stream_ctx->next_frame_time < next_wakeup_time) {
                         next_wakeup_time = stream_ctx->next_frame_time;
                     }
                 }
@@ -1430,6 +1534,12 @@ int quicperf_callback(picoquic_cnx_t* cnx,
         else {
             ret = quicperf_prepare_to_send(cnx, ctx, stream_ctx, bytes, length);
         }
+        break;
+    case picoquic_callback_datagram:
+        quicperf_receive_datagram(cnx, ctx, bytes, length);
+        break;
+    case picoquic_callback_prepare_datagram:
+        /* ret = quicperf_prepare_datagram(cnx, ctx, bytes, length); */
         break;
     case picoquic_callback_stream_reset: /* Server reset stream #x */
         picoquic_reset_stream(cnx, stream_id, 0);

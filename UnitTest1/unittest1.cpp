@@ -2955,6 +2955,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_datagram) {
+            int ret = quicperf_datagram_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(quicperf_media) {
             int ret = quicperf_media_test();
 

@@ -4553,7 +4553,9 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         }
     }
 
-    ret = picoquic_program_app_wake_time(cnx, &next_wake_time);
+    if (ret == 0) {
+        ret = picoquic_program_app_wake_time(cnx, &next_wake_time);
+    }
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, next_wake_time);
 

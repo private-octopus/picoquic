@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "picoquic.h"
+#include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "picoquic_binlog.h"
 #include "picosplay.h"
@@ -473,6 +474,8 @@ int quicperf_e2e_test(uint8_t test_id, char const *scenario, uint64_t completion
      * We want to replace that by the quicperf callback */
 
     if (ret == 0) {
+        test_ctx->qserver->default_tp.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+        test_ctx->cnx_client->local_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
         // picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
         picoquic_set_default_callback(test_ctx->qserver, quicperf_callback, NULL);
         picoquic_set_callback(test_ctx->cnx_client, quicperf_callback, quicperf_ctx);
@@ -589,6 +592,21 @@ int quicperf_batch_test()
     };
 
     return quicperf_e2e_test(0xba, batch_scenario, 1200000, 1, &batch_target);
+}
+
+int quicperf_datagram_test()
+{
+    char const* datagram_scenario = "=a1:d50:n250:100;";
+    quicperf_test_target_t datagram_target = {
+        250, /* nb_frames_received_min */
+        250, /* nb_frames_received_max */
+        20000, /* average_delay_min */
+        25000, /* average_delay_max */
+        50000, /* max_delay */
+        20000, /* min_delay */
+    };
+
+    return quicperf_e2e_test(0x1a, datagram_scenario, 6000000, 1, &datagram_target);
 }
 
 int quicperf_media_test()
