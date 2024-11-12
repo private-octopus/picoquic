@@ -526,6 +526,7 @@ int quicperf_parse_test();
 int quicperf_batch_test();
 int quicperf_datagram_test();
 int quicperf_media_test();
+int quicperf_multi_test();
 int cplusplustest();
 
 #ifdef __cplusplus

@@ -2966,6 +2966,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(quicperf_multi) {
+            int ret = quicperf_multi_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 #if 0
         TEST_METHOD(quicperf_parse_cmd) {
             int ret = quicperf_parse_cmd_test();

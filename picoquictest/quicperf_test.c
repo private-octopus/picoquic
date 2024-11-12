@@ -623,3 +623,38 @@ int quicperf_media_test()
 
     return quicperf_e2e_test(0x1a,media_scenario, 6000000, 1, &media_target);
 }
+
+int quicperf_multi_test()
+{
+    char const* multi_scenario = "=a1:d50:p2:S:n250:80; \
+     = vlow: s30 :p4:S:n150 : 3750 : G30 : I37500; \
+     = vmid: s30 :p6:S:n150 : 6250 : G30 : I62500 : D1000;";
+    quicperf_test_target_t multi_target[] = {
+        {
+        250, /* nb_frames_received_min */
+        250, /* nb_frames_received_max */
+        20000, /* average_delay_min */
+        26000, /* average_delay_max */
+        100000, /* max_delay */
+        20000, /* min_delay */
+        },
+        {
+        150, /* nb_frames_received_min */
+        150, /* nb_frames_received_max */
+        20000, /* average_delay_min */
+        40000, /* average_delay_max */
+        66000, /* max_delay */
+        20000, /* min_delay */
+        },
+        {
+        150, /* nb_frames_received_min */
+        150, /* nb_frames_received_max */
+        20000, /* average_delay_min */
+        40000, /* average_delay_max */
+        133000, /* max_delay */
+        20000, /* min_delay */
+        }
+    };
+
+    return quicperf_e2e_test(0x1a, multi_scenario, 6000000, 3, multi_target);
+}
