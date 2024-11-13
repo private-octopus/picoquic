@@ -527,6 +527,7 @@ int quicperf_batch_test();
 int quicperf_datagram_test();
 int quicperf_media_test();
 int quicperf_multi_test();
+int quicperf_overflow_test();
 int cplusplustest();
 
 #ifdef __cplusplus

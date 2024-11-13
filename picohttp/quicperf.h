@@ -30,6 +30,7 @@
 #define QUICPERF_ERROR_INTERNAL_ERROR 2
 #define QUICPERF_ERROR_NOT_ENOUGH_DATA_SENT 3
 #define QUICPERF_ERROR_TOO_MUCH_DATA_SENT 4
+#define QUICPERF_ERROR_DELAY_TOO_HIGH 5
 
 #define QUICPERF_STREAM_ID_INITIAL UINT64_MAX
 
@@ -107,6 +108,8 @@ typedef struct st_quicperf_stream_ctx {
     uint64_t nb_frames_received;
     uint64_t frames_bytes_received;
     uint64_t frame_start_stamp;
+    uint64_t reset_delay;
+    uint64_t reset_time;
     /* Flags */
     unsigned int is_media : 1;
     unsigned int is_datagram : 1;

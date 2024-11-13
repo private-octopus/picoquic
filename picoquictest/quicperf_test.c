@@ -606,7 +606,7 @@ int quicperf_datagram_test()
         20000, /* min_delay */
     };
 
-    return quicperf_e2e_test(0x1a, datagram_scenario, 6000000, 1, &datagram_target);
+    return quicperf_e2e_test(0xda, datagram_scenario, 6000000, 1, &datagram_target);
 }
 
 int quicperf_media_test()
@@ -628,7 +628,7 @@ int quicperf_multi_test()
 {
     char const* multi_scenario = "=a1:d50:p2:S:n250:80; \
      = vlow: s30 :p4:S:n150 : 3750 : G30 : I37500; \
-     = vmid: s30 :p6:S:n150 : 6250 : G30 : I62500 : D1000;";
+     = vmid: s30 :p6:S:n150 : 6250 : G30 : I62500 : D250000;";
     quicperf_test_target_t multi_target[] = {
         {
         250, /* nb_frames_received_min */
@@ -656,5 +656,49 @@ int quicperf_multi_test()
         }
     };
 
-    return quicperf_e2e_test(0x1a, multi_scenario, 6000000, 3, multi_target);
+    return quicperf_e2e_test(0x17, multi_scenario, 6000000, 3, multi_target);
+}
+
+int quicperf_overflow_test()
+{
+    char const* overflow_scenario = "=a1:d50:p2:S:n250:80; \
+     = vlow: s30 :p4:S:n150 : 3750 : G30 : I37500; \
+     = vmid: s30 :p6:S:n150 : 6250 : G30 : I62500 : D300000; \
+     = vhi:*3 : s30 :p8:S: n150 : 12500 : G150 : I125000 : D250000;";
+    quicperf_test_target_t overflow_target[] = {
+        {
+        250, /* nb_frames_received_min */
+        250, /* nb_frames_received_max */
+        20000, /* average_delay_min */
+        120000, /* average_delay_max */
+        150000, /* max_delay */
+        20000, /* min_delay */
+        },
+        {
+        150, /* nb_frames_received_min */
+        150, /* nb_frames_received_max */
+        20000, /* average_delay_min */
+        120000, /* average_delay_max */
+        166000, /* max_delay */
+        20000, /* min_delay */
+        },
+        {
+        150, /* nb_frames_received_min */
+        150, /* nb_frames_received_max */
+        20000, /* average_delay_min */
+        125000, /* average_delay_max */
+        220000, /* max_delay */
+        20000, /* min_delay */
+        },
+        {
+        3, /* nb_frames_received_min */
+        24, /* nb_frames_received_max */
+        20000, /* average_delay_min */
+        650000, /* average_delay_max */
+        750000, /* max_delay */
+        20000, /* min_delay */
+        }
+    };
+
+    return quicperf_e2e_test(0xf1, overflow_scenario, 7000000, 4, overflow_target);
 }
