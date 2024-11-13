@@ -968,20 +968,7 @@ int quicperf_init_streams_after_completion(picoquic_cnx_t* cnx, quicperf_ctx_t* 
 
     if (stream_desc->media_type == quicperf_media_stream && stream_desc->group_size > 1 &&
         stream_desc->group_size * (group_id + 1) < stream_desc->nb_frames) {
-#if 1
         /* Do nothing. The next group will be started in quicperf_client_timer */
-#else
-        /* Need to start the next group */
-        quicperf_stream_ctx_t* stream_ctx = quicperf_request_media_stream_from_scenario(cnx, ctx, stream_desc, rep_number, group_id + 1, previous_start_time);
-        if (stream_ctx == 0) {
-            ret = -1;
-        }
-        else {
-            stream_ctx->stream_desc_index = stream_desc_index;
-            ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
-            ctx->nb_open_streams++;
-        }
-#endif
     }
     else if (rep_number + 1 >= stream_desc->repeat_count &&
         stream_desc->id[0] != 0) {
@@ -996,9 +983,11 @@ void quicperf_terminate_and_delete_stream(picoquic_cnx_t* cnx, quicperf_ctx_t* c
     int ret = 0;
 
     ctx->nb_open_streams--;
-    ret = quicperf_init_streams_after_completion(cnx, ctx, (size_t)stream_ctx->stream_desc_index, stream_ctx->rep_number, stream_ctx->group_id);
+    if (ctx->is_client) {
+        ret = quicperf_init_streams_after_completion(cnx, ctx, (size_t)stream_ctx->stream_desc_index, stream_ctx->rep_number, stream_ctx->group_id);
+    }
     if (ret == 0) {
-        picoquic_reset_stream_ctx(cnx, stream_ctx->stream_id);
+        picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 0, NULL);
         quicperf_delete_stream_node(ctx, stream_ctx);
     }
     if (ctx->is_client && ctx->nb_open_streams == 0 && !ctx->is_activated) {
@@ -1120,10 +1109,11 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
                 stream_ctx->frequency > 0) {
                 stream_ctx->reset_time = stream_ctx->start_time + stream_ctx->reset_delay +
                     (stream_ctx->nb_frames_received * 1000000) / stream_ctx->frequency;
-                if (current_time > stream_ctx->reset_time) {
-                    /* TODO: define application error */
-                    stream_ctx->is_closed = 1;
-                    picoquic_reset_stream(cnx, stream_ctx->stream_id, QUICPERF_ERROR_DELAY_TOO_HIGH);
+                if (current_time > stream_ctx->reset_time && fin_or_event != picoquic_callback_stream_fin) {
+                    if (!stream_ctx->is_stopped) {
+                        picoquic_stop_sending(cnx, stream_ctx->stream_id, QUICPERF_ERROR_DELAY_TOO_HIGH);
+                    }
+                    stream_ctx->is_stopped = 1;
                 }
             }
         }
@@ -1237,18 +1227,7 @@ int quicperf_process_stream_data(picoquic_cnx_t * cnx, quicperf_ctx_t * ctx, qui
             }
 
             if (stream_ctx->is_closed) {
-#if 1
                 quicperf_terminate_and_delete_stream(cnx, ctx, stream_ctx);
-#else
-                ctx->nb_open_streams--;
-                ret = quicperf_init_streams_after_completion(cnx, ctx, (size_t)stream_ctx->stream_desc_index, stream_ctx->rep_number, stream_ctx->group_id);
-                if (ctx->nb_open_streams == 0 && !ctx->is_activated) {
-                    ret = picoquic_close(cnx, QUICPERF_NO_ERROR);
-                }
-                else if (ret == 0 && ctx->is_client) {
-                    quicperf_delete_stream(cnx, ctx, stream_ctx);
-                }
-#endif
             }
         }
         else {
@@ -1367,11 +1346,6 @@ int quicperf_prepare_to_send_media(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, qui
             }
         }
     }
-#if 1
-    else {
-        DBG_PRINTF("%s", "bug");
-    }
-#endif
 
     buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, stream_ctx->is_activated);
     if (buffer != NULL) {
@@ -1533,12 +1507,7 @@ int quicperf_reset_stream(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicperf_str
 {
     int ret = 0;
     if (stream_ctx == NULL) {
-        /* closed too soon */
-        ret = -1;
-    }
-    else if (ctx->is_client && !stream_ctx->is_closed) {
-        /* unexpected */
-        ret = -1;
+        /* Already closed, nothing to do */
     }
     else {
         /* Close the stream context, remove its association with the stream id, do not send any more */
@@ -1546,6 +1515,16 @@ int quicperf_reset_stream(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicperf_str
         quicperf_terminate_and_delete_stream(cnx, ctx, stream_ctx);
     }
     return ret;
+}
+
+int quicperf_stop_sending_stream(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicperf_stream_ctx_t* stream_ctx)
+{
+    if (stream_ctx != NULL) {
+        stream_ctx->is_closed = 1;
+        picoquic_reset_stream(cnx, stream_ctx->stream_id, QUICPERF_ERROR_STOPPED_BY_PEER);
+        quicperf_terminate_and_delete_stream(cnx, ctx, stream_ctx);
+    }
+    return 0;
 }
 
 int quicperf_callback(picoquic_cnx_t* cnx,
@@ -1593,6 +1572,9 @@ int quicperf_callback(picoquic_cnx_t* cnx,
         /* ret = quicperf_prepare_datagram(cnx, ctx, bytes, length); */
         break;
     case picoquic_callback_stream_reset: /* Server reset stream #x */
+        if (stream_ctx == NULL) {
+            stream_ctx = quicperf_find_stream_ctx(ctx, stream_id);
+        }
         ret = quicperf_reset_stream(cnx, ctx, stream_ctx);
         break;
     case picoquic_callback_stop_sending:
@@ -1605,7 +1587,7 @@ int quicperf_callback(picoquic_cnx_t* cnx,
                 ret = -1;
             }
             else {
-                stream_ctx->is_stopped = 1;
+                ret = quicperf_stop_sending_stream(cnx, ctx, stream_ctx);
             }
         }
         break;

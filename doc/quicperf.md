@@ -204,6 +204,10 @@ or a mark/response. The columns in the CSV file are:
 * nb_bytes_recv: number of bytes received, which should be either `post_size` or `mark_size`,
 * is_reset: 1 if the stream was reset at this point, 0 otherwise.
 
+Note that the "client" version of the "client_or_server" flag is not supported
+in Picoquic, and note described in the protocol. It is merely reserved for
+future extension.
+
 ### Extended PERF protocol
 
 The standard Perf protocol uses bidirectional streams in a very simple way: the client
@@ -211,111 +215,59 @@ opens a stream and starts sending data; the server reads the number of required 
 the first 8 bytes of the client stream, and sends that many bytes to the client. We extend
 this protocol by using unidirectional streams and datagrams.
 
-Both the client and the server may start unidirectional streams. The first byte of
-the stream indicates the type of the stream:
+The extended Perf protocol also uses bidirectional streams. The first 16 bytes sent by the
+client encode the type of response expected by the sender. The first 8 bytes use reserved
+values to differentiate these streams from the standard "batch" stream:
 
-* 0x01: client control stream
-* 0x02: data stream, from client or server.
-* 0x03: server report stream
+* The most significant 32 bits contain the value 0xFFFFFFFD to indicate a "media"
+  request, or 0xFFFFFFFE to indicate a datagram request.
+* The lower 32 bits contain the size of the frames.
 
-The client control stream carries a set of commands from the client. Each
-command instructs the server to a specific media stream, and is encoded as:
-
+The complete set of 16 bytes is defined as:
 ~~~
-media_stream_command {
-   command_length(8),
-   media_stream_id (i),
-   priority (8),
-   media_type (i),
-   frequency (i),
-   number_of_frames (i),
-   frame_size (i),
-   frames_per_group (i),
-   first_frame_size (i)
+media request header {
+     media or datagram mark (32),
+     frame size (32),
+     priority (8),
+     frequency (8),
+     number of frames (24),
+     first frame size (24)
 }
 ~~~
-The `media stream id` is a number chosen by the client to uniquely
-identify the media stream. The media type is set to either
-stream (0) or datagram (1). the other parameters are copied from
-the scenario description of the media stream.
-
-In response to these commands, the server initiates either a series of
-unidirectional streams (media type 0) or series of datagrams (media type 1).
-
-A media stream is sent as a series of unidirectional streams.
-The unidirectional streams contain a series of frames. Each stream starts
-by a stream type mark (0x02) followed by a stream header:
-
+Upon receiving a request header, the server will start sending
+frames as specified by the frequency. If the client requested
+datagrams, the server will send datagrams as specified by the
+frequency. The first datagram (frame number 0) will be sent
+immediately. The other datagrams will be sent at:
 ~~~
-media_stream_header {
-   header_length(8),
-   media_stream_id (i),
-   group_id (i)
+datagram_send_time = first_datagram_send_time + frame_number*1_second/frequency
+~~~
+Each datagram will carry a header and a payload, with a combined size
+set to the requested frame size. (The first frame size parameter is
+ignored for datagrams.) The first bytes of the datagram contain a
+header encoded as:
+~~~
+datagram header {
+    request stream ID (i),
+    frame number (i),
+    datagram send time (64)
 }
 ~~~
+The datagram send time is the local time at the server, encoded in microseconds.
+When all datagrams have been sent, the server closes the media request stream.
 
-The header is followed by a series of frames:
+If the client requested a "media" stream, the server will send the requested
+number of frames on the return side of the bilateral stream that carried the
+client request. The first frame contains "first frame size" bytes, while the
+other frames contain "frame size" bytes. The first frame is queued on the
+stream immediately. The next frames will be queued at:
 ~~~
-media_stream_frame {
-   header_length(8),
-   sender_time_stamp(i),
-   frame_length(i),
-   frame_bytes(..)
-}
+frame_send_time = first_frame_send_time + frame_number*1_second/frequency
 ~~~
+The first 8 bytes of each frame carry the `frame_send_time`, set at the
+local time at which the server queued the frame, expressed in microseconds
+and encoded on 64 bits.
 
-Each unidirectional stream sent in response to a command contains the number
-of frames specified by the `group_size` parameter, except for the last stream
-in the series, which will contain exactly the number of frames required
-so the total number sent across all streams for this command equals
-`number_of_frames`. The first frame will have the size specified in the
-`first_frame_size` parameter, the other frames the size specified by the
-`frame_size` parameter. The server generates the frames progressively,
-according to the `frequency` parameter.
-
-Datagram streams are sent as series of datagrams. The content of each
-datagram is set as:
-~~~
-media_datagram_header {
-   media_stream_id (i),
-   group_id (i),
-   frame_id (i),
-   sender_time_stamp (i),
-   datagram_bytes (..)
-}
-~~~
-The client may also send unidirectional streams and datagrams. The server receives
-these streams and for each frame sends a report on the server response
-stream:
-~~~
-media_stream_report {
-   header_length(8),
-   media_stream_id (i),
-   group_id (i),
-   frame_id (i),
-   client_time_stamp (i),
-   server_time_stamp (i)
-}
-~~~
-
-Frames and datagrams carry a `sender_time_stamp`, set at the local time at which
-the server or the client created the frame, expressed in microseconds since
-the beginning of the connection. In server reports, the `client_time_stamp`
-carries a copy of the `sender_time_stamp` in the frame or datagram,
-and the `server_time_stamp` indicates the time at which the frame or
-datagram was received by the server.
-
-The client may issue a `stop sending` request for a specific unidirectional
-stream. Upon receiving the request, the server will reset the stream. The
-server will not send the frames that may remain in the group. It will start
-the next group at the "expected" time, as if all the previous frames had been
-sent.
-
-The client opens exactly one control stream, and closes it when it has no
-more requests to send and no more response to expect. Opening more than
-1 control stream is a protocol error.
-
-The server will open exactly 1 response stream. Opening more than
-1 response stream is a protocol error. The server will close
-that stream when all required reports have been sent and the client has
-closed the control stream.
+The client may issue a `stop sending` request for a specific media request
+stream. Upon receiving the request, the server will reset the stream, without
+sending any additional frame.

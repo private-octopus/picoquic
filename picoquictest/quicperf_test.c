@@ -670,24 +670,24 @@ int quicperf_overflow_test()
         250, /* nb_frames_received_min */
         250, /* nb_frames_received_max */
         20000, /* average_delay_min */
-        120000, /* average_delay_max */
-        150000, /* max_delay */
+        40000, /* average_delay_max */
+        100000, /* max_delay */
         20000, /* min_delay */
         },
         {
         150, /* nb_frames_received_min */
         150, /* nb_frames_received_max */
         20000, /* average_delay_min */
-        120000, /* average_delay_max */
-        166000, /* max_delay */
+        40000, /* average_delay_max */
+        100000, /* max_delay */
         20000, /* min_delay */
         },
         {
         150, /* nb_frames_received_min */
         150, /* nb_frames_received_max */
         20000, /* average_delay_min */
-        125000, /* average_delay_max */
-        220000, /* max_delay */
+        45000, /* average_delay_max */
+        120000, /* max_delay */
         20000, /* min_delay */
         },
         {
@@ -700,5 +700,5 @@ int quicperf_overflow_test()
         }
     };
 
-    return quicperf_e2e_test(0xf1, overflow_scenario, 7000000, 4, overflow_target);
+    return quicperf_e2e_test(0xf1, overflow_scenario, 6000000, 4, overflow_target);
 }
