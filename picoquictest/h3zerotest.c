@@ -1157,10 +1157,28 @@ int h3zero_qpack_fuzz_test()
 {
     uint8_t* bytes = malloc(PICOQUIC_MAX_PACKET_SIZE);
     size_t length = 0;
+    size_t test_length[4] = {1, 2, 3, 10000};
     uint64_t random_context = 0x123456789ABCDEF0;
     int ret = (bytes == NULL) ? -1 : 0;
     int n_good = 0;
     int n_trials = 0;
+
+    for (size_t x = 0; ret == 0 && x < nb_qpack_test_case; x++) {
+        for (length = 0; length < qpack_test_case[x].bytes_length - 1; length++) {
+            h3zero_header_parts_t parts = { 0 };
+            uint8_t* parsed = NULL;
+
+            memcpy(bytes, qpack_test_case[x].bytes, length);
+            if (length < sizeof(bytes)) {
+                memset(bytes + length, 0, sizeof(bytes) - length);
+            }
+
+            parsed = h3zero_parse_qpack_header_frame(bytes, bytes + length, &parts);
+            h3zero_release_header_parts(&parts);
+            n_good += (parsed != NULL) ? 1 : 0;
+            n_trials++;
+        }
+    }
 
     for (int i = 0; ret == 0 && i < 512; i++) {
         size_t x = (size_t)picoquic_test_uniform_random(&random_context, nb_qpack_test_case);
