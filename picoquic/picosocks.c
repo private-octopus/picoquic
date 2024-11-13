@@ -397,7 +397,8 @@ void picoquic_socks_cmsg_parse(
             }
         }
 #ifdef UDP_COALESCED_INFO
-        else if (cmsg->cmsg_level == UDP_COALESCED_INFO) {
+        if (cmsg->cmsg_level == IPPROTO_UDP &&
+            cmsg->cmsg_type == UDP_COALESCED_INFO) {
             if (cmsg->cmsg_len > 0) {
                 if (udp_coalesced_size != NULL) {
                     *udp_coalesced_size = *((DWORD*)WSA_CMSG_DATA(cmsg));
