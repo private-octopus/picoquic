@@ -522,7 +522,12 @@ int picowt_baton_multi_test();
 int picowt_baton_random_test();
 int picowt_baton_wrong_test();
 int picowt_baton_uri_test();
-
+int quicperf_parse_test();
+int quicperf_batch_test();
+int quicperf_datagram_test();
+int quicperf_media_test();
+int quicperf_multi_test();
+int quicperf_overflow_test();
 int cplusplustest();
 
 #ifdef __cplusplus

@@ -520,6 +520,9 @@ int picoquic_packet_loop_wait(picoquic_socket_ctx_t* s_ctx,
         DBG_PRINTF("WSAWaitForMultipleEvents fails, error 0x%x", WSAGetLastError());
         bytes_recv = -1;
     }
+    else if (ret_event == STATUS_TIMEOUT) {
+        bytes_recv = 0;
+    }
     else if (ret_event >= WSA_WAIT_EVENT_0) {
         int event_rank = ret_event - WSA_WAIT_EVENT_0;
 
