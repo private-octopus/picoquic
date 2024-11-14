@@ -154,6 +154,8 @@ int quicperf_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
+int quicperf_print_report(FILE* F, quicperf_ctx_t* quicperf_ctx);
+
 #ifdef __cplusplus
 }
 #endif
