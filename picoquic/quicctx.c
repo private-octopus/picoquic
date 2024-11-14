@@ -4703,6 +4703,15 @@ void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason,
     *remote_application_reason = cnx->remote_application_error;
 }
 
+/* set the app wake up time (or cancel it by setting it to zero) */
+void picoquic_set_app_wake_time(picoquic_cnx_t* cnx, uint64_t app_wake_time)
+{
+    cnx->app_wake_time = app_wake_time;
+    if (cnx->app_wake_time != 0 && cnx->app_wake_time < cnx->next_wake_time) {
+        picoquic_reinsert_by_wake_time(cnx->quic, cnx, app_wake_time);
+    }
+}
+
 /* Setting up version negotiation parameters */
 void picoquic_set_desired_version(picoquic_cnx_t* cnx, uint32_t desired_version)
 {

@@ -2943,6 +2943,42 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_parse) {
+            int ret = quicperf_parse_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_batch) {
+            int ret = quicperf_batch_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_datagram) {
+            int ret = quicperf_datagram_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_media) {
+            int ret = quicperf_media_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_multi) {
+            int ret = quicperf_multi_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_overflow) {
+            int ret = quicperf_overflow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(grease_quic_bit_one_way) {
             int ret = grease_quic_bit_one_way_test();
 
