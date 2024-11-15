@@ -2547,6 +2547,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_nat_challenge) {
+            int ret = multipath_nat_challenge_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_break1) {
             int ret = multipath_break1_test();
 
@@ -2933,6 +2939,42 @@ namespace UnitTest1
 
         TEST_METHOD(picowt_baton_wrong) {
             int ret = picowt_baton_wrong_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_parse) {
+            int ret = quicperf_parse_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_batch) {
+            int ret = quicperf_batch_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_datagram) {
+            int ret = quicperf_datagram_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_media) {
+            int ret = quicperf_media_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_multi) {
+            int ret = quicperf_multi_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_overflow) {
+            int ret = quicperf_overflow_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.26.0"
+#define PICOQUIC_VERSION "1.1.27.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -273,7 +273,8 @@ typedef enum {
     picoquic_callback_path_suspended, /* An available path is suspended */
     picoquic_callback_path_deleted, /* An existing path has been deleted */
     picoquic_callback_path_quality_changed, /* Some path quality parameters have changed */
-    picoquic_callback_path_address_observed /* The peer has reported an address for the path */
+    picoquic_callback_path_address_observed, /* The peer has reported an address for the path */
+    picoquic_callback_app_wakeup /* wakeup timer set by application has expired */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -817,6 +818,9 @@ int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code);
 void picoquic_close_immediate(picoquic_cnx_t* cnx);
 
 void picoquic_delete_cnx(picoquic_cnx_t* cnx);
+
+/* set the app wake up time (or cancel it by setting it to zero) */
+void picoquic_set_app_wake_time(picoquic_cnx_t* cnx, uint64_t app_wake_time);
 
 /* Support for version negotiation:
  * Setting the "desired version" parameter will trigger compatible version

@@ -447,6 +447,7 @@ int multipath_sat_plus_test();
 int multipath_renew_test();
 int multipath_rotation_test();
 int multipath_nat_test();
+int multipath_nat_challenge_test();
 int multipath_break1_test();
 int multipath_socket_error_test();
 int multipath_abandon_test();
@@ -521,7 +522,12 @@ int picowt_baton_multi_test();
 int picowt_baton_random_test();
 int picowt_baton_wrong_test();
 int picowt_baton_uri_test();
-
+int quicperf_parse_test();
+int quicperf_batch_test();
+int quicperf_datagram_test();
+int quicperf_media_test();
+int quicperf_multi_test();
+int quicperf_overflow_test();
 int cplusplustest();
 
 #ifdef __cplusplus

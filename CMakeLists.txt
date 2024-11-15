@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.26.0
+        VERSION 1.1.27.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -209,12 +209,14 @@ set(PICOHTTP_HEADERS
      picohttp/demoserver.h
      picohttp/pico_webtransport.h
      picohttp/picomask.h
+     picohttp/quicperf.c
      picohttp/wt_baton.h)
 
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
     picoquictest/h3zero_stream_test.c
     picoquictest/h3zero_uri_test.c
+    picoquictest/picomask_test.c
     picoquictest/picomask_test.c
     picoquictest/webtransport_test.c)
 

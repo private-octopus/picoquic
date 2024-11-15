@@ -817,7 +817,7 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
 
     if (multipath_option & 1) {
         quic->default_tp.is_multipath_enabled = 1;
-        quic->default_tp.initial_max_path_id = 3;
+        quic->default_tp.initial_max_path_id = 2;
     }
 }
 
@@ -4701,6 +4701,15 @@ void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason,
     *remote_reason = cnx->remote_error;
     *local_application_reason = cnx->application_error;
     *remote_application_reason = cnx->remote_application_error;
+}
+
+/* set the app wake up time (or cancel it by setting it to zero) */
+void picoquic_set_app_wake_time(picoquic_cnx_t* cnx, uint64_t app_wake_time)
+{
+    cnx->app_wake_time = app_wake_time;
+    if (cnx->app_wake_time != 0 && cnx->app_wake_time < cnx->next_wake_time) {
+        picoquic_reinsert_by_wake_time(cnx->quic, cnx, app_wake_time);
+    }
 }
 
 /* Setting up version negotiation parameters */

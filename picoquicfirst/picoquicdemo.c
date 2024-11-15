@@ -931,6 +931,7 @@ int quic_client(const char* ip_address_text, int server_port,
             }
             else if (is_quicperf) {
                 picoquic_set_callback(cnx_client, quicperf_callback, quicperf_ctx);
+                cnx_client->local_parameters.max_datagram_frame_size = 1532;
             }
             else {
                 picoquic_set_callback(cnx_client, picoquic_demo_client_callback, &callback_ctx);
@@ -1136,21 +1137,25 @@ int quic_client(const char* ip_address_text, int server_port,
             }
         }
 
-        if (picoquic_get_data_received(cnx_client) > 0) {
+        if (picoquic_get_data_received(cnx_client) > 0 || is_quicperf) {
             uint64_t start_time = picoquic_get_cnx_start_time(cnx_client);
             uint64_t close_time = picoquic_get_quic_time(qclient);
             double duration_usec = (double)(close_time - start_time);
 
             if (duration_usec > 0) {
-                if (is_quicperf) {
-                    double duration_sec = duration_usec / 1000000.0;
-                    printf("Connection_duration_sec: %f\n", duration_sec);
-                    printf("Nb_transactions: %" PRIu64"\n", quicperf_ctx->nb_streams);
-                    printf("Upload_bytes: %" PRIu64"\n", quicperf_ctx->data_sent);
-                    printf("Download_bytes: %" PRIu64"\n", quicperf_ctx->data_received);
-                    printf("TPS: %f\n", ((double)quicperf_ctx->nb_streams) / duration_sec);
-                    printf("Upload_Mbps: %f\n", ((double)quicperf_ctx->data_sent) * 8.0 / duration_usec);
-                    printf("Download_Mbps: %f\n", ((double)quicperf_ctx->data_received) * 8.0 / duration_usec);
+                if (is_quicperf){
+                    if (picoquic_get_data_received(cnx_client)) {
+                        double duration_sec = duration_usec / 1000000.0;
+                        printf("Connection_duration_sec: %f\n", duration_sec);
+                        printf("Nb_transactions: %" PRIu64"\n", quicperf_ctx->nb_streams);
+                        printf("Upload_bytes: %" PRIu64"\n", quicperf_ctx->data_sent);
+                        printf("Download_bytes: %" PRIu64"\n", quicperf_ctx->data_received);
+                        printf("TPS: %f\n", ((double)quicperf_ctx->nb_streams) / duration_sec);
+                        printf("Upload_Mbps: %f\n", ((double)quicperf_ctx->data_sent) * 8.0 / duration_usec);
+                        printf("Download_Mbps: %f\n", ((double)quicperf_ctx->data_received) * 8.0 / duration_usec);
+                    }
+
+                    (void)quicperf_print_report(stdout, quicperf_ctx);
 
                     picoquic_log_app_message(cnx_client, "Received %" PRIu64 " bytes in %f seconds, %f Mbps.",
                         picoquic_get_data_received(cnx_client), duration_usec, ((double)quicperf_ctx->data_received) * 8.0 / duration_usec);
