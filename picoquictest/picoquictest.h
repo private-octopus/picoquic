@@ -297,6 +297,7 @@ int h3zero_uri_test();
 int h3zero_null_sni_test();
 int h3zero_qpack_fuzz_test();
 int h3zero_stream_test();
+int h3zero_stream_fuzz_test();
 int parse_demo_scenario_test();
 int h3zero_server_test();
 int h09_server_test();
