@@ -1547,7 +1547,7 @@ int h3zero_stream_fuzz_test()
     uint8_t* packet_buffer = malloc(buffer_size);
     int nb_good = 0;
     int nb_bad = 0;
-    int nb_trials = 2048;
+    size_t nb_trials = 2048;
     int errors_found[6] = { 0, 0, 0, 0, 0, 0 };
     char const * errors_names[6] = {
         "error no error",
@@ -1563,14 +1563,14 @@ int h3zero_stream_fuzz_test()
     else {
         uint64_t error_found = 0;
         uint8_t* p = packet_buffer;
-        size_t trial_random_ctx = 0xdeadbeef;
+        uint64_t trial_random_ctx = 0xdeadbeef;
         size_t p_len = 0;
         uint8_t* p_max;
 
         for (size_t trial_rank = 0; ret == 0 && trial_rank < nb_trials; trial_rank++) {
             h3zero_data_stream_state_t stream_state = { 0 };
             for (int i = 0; i < 32; i++) {
-                size_t trial_random = picoquic_test_uniform_random(&trial_random_ctx, SIZE_MAX);
+                size_t trial_random = (size_t)picoquic_test_uniform_random(&trial_random_ctx, SIZE_MAX);
                 size_t available_data;
                 if (trial_rank < 128 && i == 0) {
                     trial_random = trial_rank;
