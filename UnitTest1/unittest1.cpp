@@ -2739,6 +2739,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_stream_fuzz) {
+            int ret = h3zero_stream_fuzz_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(parse_demo_scenario) {
             int ret = parse_demo_scenario_test();
 

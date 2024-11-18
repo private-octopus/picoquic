@@ -679,14 +679,6 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
 					*error_found = H3ZERO_INTERNAL_ERROR;
 					bytes = NULL;
 				}
-				else {
-					stream_state->current_frame = (uint8_t *)malloc((size_t)stream_state->current_frame_length);
-					if (stream_state->current_frame == NULL) {
-						/* error, internal error */
-						*error_found = H3ZERO_INTERNAL_ERROR;
-						bytes = NULL;
-					}
-				}
 			}
 			else if (stream_state->current_frame_type == h3zero_frame_webtransport_stream) {
 				if (stream_state->header_found) {
@@ -727,29 +719,40 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
 			}
 
 			if (stream_state->current_frame_type == h3zero_frame_header) {
-				memcpy(stream_state->current_frame + stream_state->current_frame_read, bytes, available);
-				stream_state->current_frame_read += available;
-				bytes += available;
-
-				if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-					uint8_t* parsed;
-					h3zero_header_parts_t* parts = (stream_state->header_found) ?
-						&stream_state->trailer : &stream_state->header;
-					stream_state->trailer_found = stream_state->header_found;
-					stream_state->header_found = 1;
-					/* parse */
-					parsed = h3zero_parse_qpack_header_frame(stream_state->current_frame,
-						stream_state->current_frame + stream_state->current_frame_length, parts);
-					if (parsed == NULL || (size_t)(parsed - stream_state->current_frame) != stream_state->current_frame_length) {
-						/* protocol error */
-						*error_found = H3ZERO_FRAME_ERROR;
+			    if (stream_state->current_frame == NULL) {
+					if (stream_state->current_frame_length <= 0x10000) {
+						stream_state->current_frame = (uint8_t*)malloc((size_t)stream_state->current_frame_length);
+					}
+					if (stream_state->current_frame == NULL) {
+						*error_found = H3ZERO_INTERNAL_ERROR;
 						bytes = NULL;
 					}
-					/* free resource */
-					stream_state->frame_header_parsed = 0;
-					stream_state->frame_header_read = 0;
-					free(stream_state->current_frame);
-					stream_state->current_frame = NULL;
+				}
+				if (bytes != NULL) {
+					memcpy(stream_state->current_frame + stream_state->current_frame_read, bytes, available);
+					stream_state->current_frame_read += available;
+					bytes += available;
+
+					if (stream_state->current_frame_read >= stream_state->current_frame_length) {
+						uint8_t* parsed;
+						h3zero_header_parts_t* parts = (stream_state->header_found) ?
+							&stream_state->trailer : &stream_state->header;
+						stream_state->trailer_found = stream_state->header_found;
+						stream_state->header_found = 1;
+						/* parse */
+						parsed = h3zero_parse_qpack_header_frame(stream_state->current_frame,
+							stream_state->current_frame + stream_state->current_frame_length, parts);
+						if (parsed == NULL || (size_t)(parsed - stream_state->current_frame) != stream_state->current_frame_length) {
+							/* protocol error */
+							*error_found = H3ZERO_FRAME_ERROR;
+							bytes = NULL;
+						}
+						/* free resource */
+						stream_state->frame_header_parsed = 0;
+						stream_state->frame_header_read = 0;
+						free(stream_state->current_frame);
+						stream_state->current_frame = NULL;
+					}
 				}
 			}
 			else if (stream_state->current_frame_type == h3zero_frame_data) {
