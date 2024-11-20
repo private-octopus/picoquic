@@ -145,7 +145,6 @@
     <ClCompile Include="h3zero_server.c" />
     <ClCompile Include="h3zero_uri.c" />
     <ClCompile Include="quicperf.c" />
-    <ClCompile Include="siduck.c" />
     <ClCompile Include="webtransport.c" />
     <ClCompile Include="wt_baton.c" />
   </ItemGroup>
@@ -157,7 +156,6 @@
     <ClInclude Include="h3zero_uri.h" />
     <ClInclude Include="pico_webtransport.h" />
     <ClInclude Include="quicperf.h" />
-    <ClInclude Include="siduck.h" />
     <ClInclude Include="wincompat.h" />
     <ClInclude Include="wt_baton.h" />
   </ItemGroup>
