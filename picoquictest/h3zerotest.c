@@ -3417,14 +3417,13 @@ int http_corrupt_rdpn_test()
 /* Test the selection of ALPN
  */
 char const* alpn_good_list[] = {
-    "h3-34", "hq-34", "h3-29", "hq-29", "h3", "hq-interop", "siduck", "siduck-00", "perf", NULL };
+    "h3-34", "hq-34", "h3-29", "hq-29", "h3", "hq-interop", "perf", NULL };
 picoquic_alpn_enum alpn_proto_list[] = {
     picoquic_alpn_http_3, picoquic_alpn_http_0_9, picoquic_alpn_http_3, picoquic_alpn_http_0_9,
     picoquic_alpn_http_3, picoquic_alpn_http_0_9,
-    picoquic_alpn_siduck, picoquic_alpn_siduck,
     picoquic_alpn_quicperf };
 char const* alpn_bad_list[] = {
-    "h3-00", "hq", "hq-interop-00", "siduck-99", "", "unknown", NULL };
+    "h3-00", "hq", "hq-interop-00", "", "unknown", NULL };
 
 int demo_alpn_test()
 {

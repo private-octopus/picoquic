@@ -50,8 +50,6 @@ static picoquic_alpn_list_t alpn_list[] = {
     { picoquic_alpn_http_0_9, "hq-28", 5 },
     { picoquic_alpn_http_3, "h3-27", 5 },
     { picoquic_alpn_http_0_9, "hq-27", 5 },
-    { picoquic_alpn_siduck, "siduck", 6 },
-    { picoquic_alpn_siduck, "siduck-00", 9 },
     { picoquic_alpn_quicperf, QUICPERF_ALPN, QUICPERF_ALPN_LEN}
 };
 

@@ -25,8 +25,8 @@ jobs:
 
       - name: Building picoquic
         run: |
-          brew reinstall openssl
           brew install pkg-config
+          brew install openssl
           whereis openssl
           export PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig"
           ./ci/build_picotls.sh
