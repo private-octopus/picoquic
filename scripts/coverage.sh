@@ -13,4 +13,5 @@ make
 ./picohttp_ct -n
 EXCLUDED="-e picoquictest/ -e baton_app/ -e sample/ -e picoquic_t/"
 EXCLUDED="$EXCLUDED -e thread_tester/ -e CMakeFiles/ -e picoquicfirst/ -e picohttp_t"
+EXCLUDED="$EXCLUDED -e picolog/"
 gcovr -r . $EXCLUDED --gcov-ignore-parse-errors --html --html-details -o covr/picoquic-cover.html
