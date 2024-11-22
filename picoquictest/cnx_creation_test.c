@@ -297,8 +297,12 @@ int create_quic_test()
         }
         else
         {
-            if (picoquic_load_token_file(quic, bad_file) != 0 ||
-                picoquic_load_token_file(quic, bad_dir) == 0) {
+            if (picoquic_load_token_file(quic, bad_file) != 0) {
+                DBG_PRINTF("Load token %s fails", bad_file);
+                ret = -1;
+            }
+            else if (picoquic_load_token_file(quic, bad_dir) == 0) {
+                DBG_PRINTF("Load token %s succeeds", bad_dir);
                 ret = -1;
             }
             picoquic_free(quic);

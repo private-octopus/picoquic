@@ -249,7 +249,6 @@ int getter_test()
     if (ret == 0) {
         uint64_t l_timer = 10000000;
         uint64_t r_timer = cnx->path[0]->retransmit_timer;
-        uint64_t d_timer = (3 * cnx->path[0]->retransmit_timer) / 2;
         cnx->idle_timeout = 0;
         cnx->local_parameters.max_idle_timeout = r_timer / 500;
         picoquic_enable_keep_alive(cnx, 0);
