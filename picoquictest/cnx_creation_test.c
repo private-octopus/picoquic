@@ -300,15 +300,15 @@ int create_quic_test()
         }
         else
         {
-
             int rbf = 0;
             int rbd = 0;
             if ((rbf = picoquic_load_token_file(quic, bad_file)) != 0 &&
                 (rbd = picoquic_load_token_file(quic, bad_dir)) == 0) {
                 ret = -1;
             }
-            DBG_PRINTF("Load token %s %s, %s %s",
-                bad_file, (rbf == 0) ? "Succeeds" : "Fails",
+            DBG_PRINTF("Load token %s %s",
+                bad_file, (rbf == 0) ? "Succeeds" : "Fails");
+            DBG_PRINTF("Load token %s %s",
                 bad_dir, (rbd == 0) ? "Succeeds" : "Fails");
             picoquic_free(quic);
             quic = NULL;
