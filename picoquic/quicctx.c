@@ -671,14 +671,19 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         }
 
         if (ret == 0) {
+            size_t max_cnx4 = 0;
             if (max_nb_connections == 0) {
                 max_nb_connections = 1;
             }
 
             quic->tentative_max_number_connections = max_nb_connections;
             quic->max_number_connections = max_nb_connections;
+            max_cnx4 = 4 * (size_t)max_nb_connections;
 
-            if ((quic->table_cnx_by_id = picohash_create_ex((size_t)max_nb_connections * 4,
+
+
+            if (max_cnx4 < (size_t)max_nb_connections ||
+                (quic->table_cnx_by_id = picohash_create_ex((size_t)max_nb_connections * 4,
                 picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item)) == NULL ||
                 (quic->table_cnx_by_net = picohash_create_ex((size_t)max_nb_connections * 4,
                     picoquic_net_id_hash, picoquic_net_id_compare, picoquic_local_netid_to_item)) == NULL ||

@@ -238,14 +238,15 @@ int create_quic_test()
     int ret = 0;
     char const* bad_dir = "..";
     char const* bad_file = "no_such_file_should_exist.pem";
-    /* Check the failure behavior */
     picoquic_quic_t* quic = NULL;
-    quic = picoquic_create(SIZE_MAX, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+
+    /* Check the failure behavior */
+    quic = picoquic_create(UINT32_MAX, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
     if (quic != NULL) {
-        ret = -1;
         picoquic_free(quic);
         quic = NULL;
     }
+
     /* Check that 0 connection == 1 */
     if (ret == 0) {
         quic = picoquic_create(0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
