@@ -1566,6 +1566,9 @@ int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
 /* Register or update default address and reset secret */
 int picoquic_register_net_secret(picoquic_cnx_t* cnx);
 
+/* Registration of initial connection ID and peer IP */
+int picoquic_register_net_icid(picoquic_cnx_t* cnx);
+
 void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id, uint8_t id_length, picoquic_connection_id_t cnx_id_remote);
 
 /* Management of path */

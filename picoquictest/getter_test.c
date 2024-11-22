@@ -57,7 +57,7 @@ int getter_test()
     }
 
     if (ret == 0) {
-        const picoquic_tp_t * tp = picoquic_get_default_tp(test_ctx->qserver);
+        const picoquic_tp_t* tp = picoquic_get_default_tp(test_ctx->qserver);
         if (tp != &test_ctx->qserver->default_tp) {
             ret = -1;
         }
@@ -291,6 +291,91 @@ int getter_test()
                     }
                 }
             }
+        }
+    }
+
+    if (ret == 0 &&
+        (ret = picoquic_adjust_max_connections(test_ctx->qserver, 4)) == 0) {
+        if (test_ctx->qserver->tentative_max_number_connections != 4) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 &&
+        picoquic_current_number_connections(test_ctx->qserver) != 1) {
+        ret = -1;
+    }
+
+    if (ret == 0 &&
+        picoquic_get_default_crypto_epoch_length(test_ctx->qserver) !=
+        test_ctx->qserver->crypto_epoch_length_max) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        picoquic_set_crypto_epoch_length(cnx, 0);
+        if (cnx->crypto_epoch_length_max != PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH ||
+            picoquic_get_crypto_epoch_length(cnx) != PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 &&
+        picoquic_get_local_cid_length(test_ctx->qserver) !=
+        test_ctx->qserver->local_cnxid_length) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        picoquic_connection_id_t cid = { { 1, 2, 3}, 3 };
+        if (picoquic_is_local_cid(test_ctx->qclient, &cid) ||
+            !picoquic_is_local_cid(test_ctx->qclient, &cnx->path[0]->p_local_cnxid->cnx_id)) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        uint32_t max_simul_log = 17;
+        picoquic_set_max_simultaneous_logs(test_ctx->qserver, max_simul_log);
+        if (picoquic_get_max_simultaneous_logs(test_ctx->qserver) != max_simul_log) {
+            ret = -1;
+        }
+    }
+
+
+    if (ret == 0) {
+        uint32_t max_half_open = 17;
+        picoquic_set_max_half_open_retry_threshold(test_ctx->qserver, max_half_open);
+        if (picoquic_get_max_half_open_retry_threshold(test_ctx->qserver) != max_half_open) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && picoquic_register_cnx_id(test_ctx->qclient, cnx, cnx->path[0]->p_local_cnxid) == 0) {
+        /* Should be already registered ! */
+        ret = -1;
+    }
+
+    if (ret == 0){
+        if (cnx->registered_icid_addr.ss_family == 0 &&
+            picoquic_register_net_icid(cnx) != 0) {
+            ret = -1;
+        }
+        else if (picoquic_register_net_icid(cnx) == 0) {
+            /* Should be already registered ! */
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && picoquic_get_quic_ctx(NULL) != NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        uint64_t wake_time = picoquic_get_next_wake_time(test_ctx->qclient, UINT64_MAX);
+
+        if (wake_time > 2 && picoquic_get_earliest_cnx_to_wake(test_ctx->qclient, wake_time / 2) != NULL) {
+            ret = -1;
         }
     }
 
