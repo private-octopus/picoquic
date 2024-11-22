@@ -1014,6 +1014,7 @@ int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx);
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
+int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr);
 
 /* Manage connection IDs*/
 picoquic_connection_id_t picoquic_get_local_cnxid(picoquic_cnx_t* cnx);

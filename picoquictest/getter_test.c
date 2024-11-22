@@ -82,6 +82,15 @@ int getter_test()
     }
 
     if (ret == 0) {
+        ret = picoquic_set_local_addr(test_ctx->cnx_client, (struct sockaddr*) &test_ctx->client_addr);
+        if (ret == 0 && picoquic_set_local_addr(test_ctx->cnx_client, (struct sockaddr*)&test_ctx->client_addr) == 0) {
+            /* Second call should fail because the address is already set */
+            ret = -1;
+        }
+        memset(&test_ctx->cnx_client->path[0]->local_addr, 0, sizeof(struct sockaddr_storage));
+    }
+
+    if (ret == 0) {
         uint8_t mf[] = { picoquic_frame_type_max_streams_bidir, 0x41, 0 };
         cnx = test_ctx->cnx_client;
         if (picoquic_queue_misc_frame(cnx, mf, SIZE_MAX, 0, picoquic_packet_context_initial) == 0) {

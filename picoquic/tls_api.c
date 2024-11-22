@@ -1759,6 +1759,9 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
             quic->tls_master_ctx = ctx;
             picoquic_public_random_seed(quic);
         } else {
+            quic->tls_master_ctx = ctx;
+            picoquic_master_tlscontext_free(quic);
+            quic->tls_master_ctx = NULL;
             free(ctx);
         }
     }
