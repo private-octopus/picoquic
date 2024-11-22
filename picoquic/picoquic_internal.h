@@ -1585,7 +1585,6 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);
 int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* addr_local, const struct sockaddr* addr_peer, int* partial_match);
-int picoquic_find_path_by_cnxid_id(picoquic_cnx_t* cnx, int is_incoming, uint64_t path_id);
 int picoquic_find_path_by_unique_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
@@ -1768,8 +1767,6 @@ int picoquic_parse_header_and_decrypt(
 uint64_t picoquic_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
 
 uint64_t picoquic_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
-
-uint64_t picoquic_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
 
 picoquic_packet_t * picoquic_get_last_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
 

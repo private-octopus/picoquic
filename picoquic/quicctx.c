@@ -1531,12 +1531,6 @@ uint64_t picoquic_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, p
         cnx->pkt_ctx[pc].highest_acknowledged;
 }
 
-uint64_t picoquic_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
-{
-    return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.latest_time_acknowledged :
-        cnx->pkt_ctx[pc].latest_time_acknowledged;
-}
-
 picoquic_packet_t* picoquic_get_last_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
 {
     return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.pending_last :
@@ -1996,31 +1990,6 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
     }
 
     return path_id;
-}
-
-/* Find path by path-ID. This is designed for use with the multipath option
- */
-int picoquic_find_path_by_cnxid_id(picoquic_cnx_t* cnx, int is_incoming, uint64_t path_id)
-{
-    int path_index = -1;
-
-    if (is_incoming) {
-        for (int i = 0; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->p_local_cnxid->sequence == path_id) {
-                path_index = i;
-                break;
-            }
-        }
-    }
-    else {
-        for (int i = 0; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->p_remote_cnxid->sequence == path_id) {
-                path_index = i;
-                break;
-            }
-        }
-    }
-    return path_index;
 }
 
 int picoquic_find_path_by_unique_id(picoquic_cnx_t* cnx, uint64_t unique_path_id)

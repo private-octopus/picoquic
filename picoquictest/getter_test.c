@@ -73,6 +73,15 @@ int getter_test()
     }
 
     if (ret == 0) {
+        int partial_match = 0;
+        int path_id = picoquic_find_path_by_address(test_ctx->cnx_client, NULL,
+            (struct sockaddr*)&test_ctx->cnx_client->path[0]->peer_addr, &partial_match);
+        if (path_id != 0 || partial_match == 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
         uint8_t mf[] = { picoquic_frame_type_max_streams_bidir, 0x41, 0 };
         cnx = test_ctx->cnx_client;
         if (picoquic_queue_misc_frame(cnx, mf, SIZE_MAX, 0, picoquic_packet_context_initial) == 0) {
@@ -375,6 +384,19 @@ int getter_test()
         uint64_t wake_time = picoquic_get_next_wake_time(test_ctx->qclient, UINT64_MAX);
 
         if (wake_time > 2 && picoquic_get_earliest_cnx_to_wake(test_ctx->qclient, wake_time / 2) != NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        int64_t delay = 1000;
+        uint64_t test_time = cnx->next_wake_time - delay;
+        int64_t sooner = delay / 2;
+
+        if (picoquic_get_wake_delay(cnx, test_time, INT64_MAX) != delay) {
+            ret = -1;
+        }
+        else if (picoquic_get_wake_delay(cnx, test_time, sooner) != sooner) {
             ret = -1;
         }
     }
