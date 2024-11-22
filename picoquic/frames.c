@@ -6742,6 +6742,7 @@ int picoquic_decode_closing_frames(picoquic_cnx_t * cnx, uint8_t* bytes, size_t 
 
         if (first_byte == picoquic_frame_type_connection_close || first_byte == picoquic_frame_type_application_close) {
             *closing_received = 1;
+#if 0
             if (cnx->cnx_state <= picoquic_state_disconnecting) {
                 switch (first_byte) {
                 case picoquic_frame_type_connection_close:
@@ -6753,6 +6754,7 @@ int picoquic_decode_closing_frames(picoquic_cnx_t * cnx, uint8_t* bytes, size_t 
                 default: break;
                 }
             }
+#endif
             break;
         } else {
             size_t consumed = 0;

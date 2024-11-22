@@ -156,6 +156,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
     picoquictest/edge_cases.c
+    picoquictest/getter_test.c
     picoquictest/hashtest.c
     picoquictest/high_latency_test.c
     picoquictest/intformattest.c

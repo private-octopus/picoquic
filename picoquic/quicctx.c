@@ -4076,7 +4076,7 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx)
     return cnx->cnx_state;
 }
 
-uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
+int picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
 {
     return (cnx->crypto_context[picoquic_epoch_0rtt].aead_encrypt == NULL) ? 0 : 1;
 }
@@ -4948,21 +4948,6 @@ uint64_t picoquic_get_cwin(picoquic_cnx_t* cnx)
 uint64_t picoquic_get_rtt(picoquic_cnx_t* cnx)
 {
     return cnx->path[0]->smoothed_rtt;
-}
-
-int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr)
-{
-    int ret = 0;
-
-    if (cnx != NULL && cnx->path[0] != NULL && cnx->path[0]->local_addr.ss_family == 0) {
-        picoquic_store_addr(&cnx->path[0]->local_addr, addr);
-        ret = (cnx->path[0]->local_addr.ss_family == 0) ? -1 : 0;
-    }
-    else {
-        ret = -1;
-    }
-
-    return ret;
 }
 
 void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)

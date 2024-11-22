@@ -161,6 +161,7 @@
     <ClCompile Include="datagram_tests.c" />
     <ClCompile Include="delay_tolerant_test.c" />
     <ClCompile Include="edge_cases.c" />
+    <ClCompile Include="getter_test.c" />
     <ClCompile Include="h3zerotest.c" />
     <ClCompile Include="h3zero_stream_test.c" />
     <ClCompile Include="h3zero_uri_test.c" />

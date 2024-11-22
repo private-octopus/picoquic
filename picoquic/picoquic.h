@@ -1011,8 +1011,6 @@ void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
 
-int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr);
-
 /* Manage connection IDs*/
 picoquic_connection_id_t picoquic_get_local_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_remote_cnxid(picoquic_cnx_t* cnx);
@@ -1023,7 +1021,7 @@ picoquic_connection_id_t picoquic_get_logging_cnxid(picoquic_cnx_t* cnx);
 
 /* Manage connections */
 uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t* cnx);
-uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx);
+int picoquic_is_0rtt_available(picoquic_cnx_t* cnx);
 
 int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx);
 
