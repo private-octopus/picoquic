@@ -5559,9 +5559,7 @@ const uint8_t* picoquic_decode_path_available_or_standby_frame(const uint8_t* by
     }
     else {
         /* process the status frame */
-        int path_number = (cnx->is_multipath_enabled)?
-            picoquic_find_path_by_unique_id(cnx, path_id):
-            picoquic_find_path_by_cnxid_id(cnx, 1, path_id);
+        int path_number = picoquic_find_path_by_unique_id(cnx, path_id);
         if (path_number < 0) {
             /* Invalid path ID. Just ignore this frame. Add line in log for debug */
             picoquic_log_app_message(cnx, "Ignore path %s frame with invalid ID: %" PRIu64,
@@ -5598,9 +5596,7 @@ int picoquic_path_available_or_backup_frame_need_repeat(picoquic_cnx_t* cnx, con
     }
     else {
         /* check whether this is the last frame sent on path */
-        int path_number = (cnx->is_multipath_enabled)?
-            picoquic_find_path_by_unique_id(cnx, path_id):
-            picoquic_find_path_by_cnxid_id(cnx, 1, path_id);
+        int path_number = picoquic_find_path_by_unique_id(cnx, path_id);
         if (path_number < 0 ||
             cnx->path[path_number]->status_sequence_sent_last != sequence ||
             cnx->path[path_number]->path_is_demoted) {
@@ -6742,17 +6738,6 @@ int picoquic_decode_closing_frames(picoquic_cnx_t * cnx, uint8_t* bytes, size_t 
 
         if (first_byte == picoquic_frame_type_connection_close || first_byte == picoquic_frame_type_application_close) {
             *closing_received = 1;
-            if (cnx->cnx_state <= picoquic_state_disconnecting) {
-                switch (first_byte) {
-                case picoquic_frame_type_connection_close:
-                    (void) picoquic_decode_connection_close_frame(cnx, bytes + byte_index, bytes + bytes_max);
-                    break;
-                case picoquic_frame_type_application_close:
-                    (void) picoquic_decode_application_close_frame(cnx, bytes + byte_index, bytes + bytes_max);
-                    break;
-                default: break;
-                }
-            }
             break;
         } else {
             size_t consumed = 0;

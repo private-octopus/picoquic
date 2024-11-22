@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.28.1"
+#define PICOQUIC_VERSION "1.1.28.2"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -510,6 +510,10 @@ int picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_conn
 
 /* Get number of open connections */
 uint32_t picoquic_current_number_connections(picoquic_quic_t * quic);
+
+/* Set get the retry threshold -- if passed, new connection will trigger retry */
+void picoquic_set_max_half_open_retry_threshold(picoquic_quic_t* quic, uint32_t max_half_open_before_retry);
+uint32_t picoquic_get_max_half_open_retry_threshold(picoquic_quic_t* quic);
 
 /* Obtain the reasons why a connection was closed */
 void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason,
@@ -1010,7 +1014,6 @@ int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx);
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
-
 int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr);
 
 /* Manage connection IDs*/
@@ -1023,7 +1026,7 @@ picoquic_connection_id_t picoquic_get_logging_cnxid(picoquic_cnx_t* cnx);
 
 /* Manage connections */
 uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t* cnx);
-uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx);
+int picoquic_is_0rtt_available(picoquic_cnx_t* cnx);
 
 int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx);
 

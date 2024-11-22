@@ -1139,7 +1139,6 @@ int h3zero_qpack_fuzz_test()
 {
     uint8_t* bytes = malloc(PICOQUIC_MAX_PACKET_SIZE);
     size_t length = 0;
-    size_t test_length[4] = {1, 2, 3, 10000};
     uint64_t random_context = 0x123456789ABCDEF0;
     int ret = (bytes == NULL) ? -1 : 0;
     int n_good = 0;

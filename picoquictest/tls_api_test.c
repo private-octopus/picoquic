@@ -4260,6 +4260,15 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
             }
         }
 
+        if (ret == 0 && use_badcrypt == 0 && hardreset == 0) {
+            int rtt_is_available = picoquic_is_0rtt_available(test_ctx->cnx_client);
+
+            if ((rtt_is_available && i == 0) ||
+                (!rtt_is_available && i != 0)) {
+                ret = -1;
+            }
+        }
+
         if (ret == 0 && i == 1) {
             /* If resume succeeded, the second connection will have a type "PSK" */
             if (use_badcrypt == 0 && hardreset == 0 && (
