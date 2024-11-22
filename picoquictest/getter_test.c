@@ -57,6 +57,22 @@ int getter_test()
     }
 
     if (ret == 0) {
+        const picoquic_tp_t * tp = picoquic_get_default_tp(test_ctx->qserver);
+        if (tp != &test_ctx->qserver->default_tp) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        uint64_t old_max = test_ctx->qserver->cwin_max;
+        picoquic_set_cwin_max(test_ctx->qserver, 0);
+        if (test_ctx->qserver->cwin_max != UINT64_MAX) {
+            ret = -1;
+        }
+        test_ctx->qserver->cwin_max = old_max;
+    }
+
+    if (ret == 0) {
         uint8_t mf[] = { picoquic_frame_type_max_streams_bidir, 0x41, 0 };
         cnx = test_ctx->cnx_client;
         if (picoquic_queue_misc_frame(cnx, mf, SIZE_MAX, 0, picoquic_packet_context_initial) == 0) {
@@ -277,7 +293,6 @@ int getter_test()
             }
         }
     }
-
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);

@@ -678,60 +678,53 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
             quic->tentative_max_number_connections = max_nb_connections;
             quic->max_number_connections = max_nb_connections;
 
-            quic->table_cnx_by_id = picohash_create_ex((size_t)max_nb_connections * 4,
-                picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item);
-
-            quic->table_cnx_by_net = picohash_create_ex((size_t)max_nb_connections * 4,
-                picoquic_net_id_hash, picoquic_net_id_compare, picoquic_local_netid_to_item);
-
-            quic->table_cnx_by_icid = picohash_create_ex((size_t)max_nb_connections,
-                picoquic_net_icid_hash, picoquic_net_icid_compare, picoquic_net_icid_to_item);
-
-            quic->table_cnx_by_secret = picohash_create_ex((size_t)max_nb_connections * 4,
-                picoquic_net_secret_hash, picoquic_net_secret_compare, picoquic_net_secret_to_item);
-
-            quic->table_issued_tickets = picohash_create_ex((size_t)max_nb_connections,
-                picoquic_issued_ticket_hash, picoquic_issued_ticket_compare, picoquic_issued_ticket_key_to_item);
-
-            picosplay_init_tree(&quic->token_reuse_tree, picoquic_registered_token_compare,
-                picoquic_registered_token_create, picoquic_registered_token_delete, picoquic_registered_token_value);
-
-            if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL ||
-                quic->table_cnx_by_icid == NULL || quic->table_cnx_by_secret == NULL ||
-                quic->table_issued_tickets == NULL) {
+            if ((quic->table_cnx_by_id = picohash_create_ex((size_t)max_nb_connections * 4,
+                picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item)) == NULL ||
+                (quic->table_cnx_by_net = picohash_create_ex((size_t)max_nb_connections * 4,
+                    picoquic_net_id_hash, picoquic_net_id_compare, picoquic_local_netid_to_item)) == NULL ||
+                (quic->table_cnx_by_icid = picohash_create_ex((size_t)max_nb_connections,
+                    picoquic_net_icid_hash, picoquic_net_icid_compare, picoquic_net_icid_to_item)) == NULL ||
+                (quic->table_cnx_by_secret = picohash_create_ex((size_t)max_nb_connections * 4,
+                    picoquic_net_secret_hash, picoquic_net_secret_compare, picoquic_net_secret_to_item)) == NULL ||
+                (quic->table_issued_tickets = picohash_create_ex((size_t)max_nb_connections,
+                    picoquic_issued_ticket_hash, picoquic_issued_ticket_compare, picoquic_issued_ticket_key_to_item)) == NULL) {
                 ret = -1;
                 DBG_PRINTF("%s", "Cannot initialize hash tables\n");
             }
-            else if (picoquic_master_tlscontext(quic, cert_file_name, key_file_name, cert_root_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
-                ret = -1;
-                DBG_PRINTF("%s", "Cannot create TLS context \n");
-            }
             else {
-                /* In the absence of certificate or key, we assume that this is a client only context */
-                quic->enforce_client_only = (cert_file_name == NULL || key_file_name == NULL);
-                /* the random generator was initialized as part of the TLS context.
-                 * Use it to create the seed for generating the per context stateless
-                 * resets and the retry tokens */
+                picosplay_init_tree(&quic->token_reuse_tree, picoquic_registered_token_compare,
+                    picoquic_registered_token_create, picoquic_registered_token_delete, picoquic_registered_token_value);
+                if (picoquic_master_tlscontext(quic, cert_file_name, key_file_name, cert_root_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
+                    ret = -1;
+                    DBG_PRINTF("%s", "Cannot create TLS context \n");
+                }
+                else {
+                    /* In the absence of certificate or key, we assume that this is a client only context */
+                    quic->enforce_client_only = (cert_file_name == NULL || key_file_name == NULL);
+                    /* the random generator was initialized as part of the TLS context.
+                     * Use it to create the seed for generating the per context stateless
+                     * resets and the retry tokens */
 
-                if (!reset_seed)
-                    picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
-                else
-                    memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
+                    if (!reset_seed)
+                        picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
+                    else
+                        memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
 
-                picoquic_crypto_random(quic, quic->retry_seed, sizeof(quic->retry_seed));
+                    picoquic_crypto_random(quic, quic->retry_seed, sizeof(quic->retry_seed));
 
-                /* If there is no root certificate context specified, use a null certifier. */
-                /* Load tickets */
-                if (quic->ticket_file_name != NULL) {
-                    ret = picoquic_load_tickets(quic, ticket_file_name);
+                    /* If there is no root certificate context specified, use a null certifier. */
+                    /* Load tickets */
+                    if (quic->ticket_file_name != NULL) {
+                        ret = picoquic_load_tickets(quic, ticket_file_name);
 
-                    if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
-                        DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
-                        ret = 0;
-                    }
-                    else if (ret != 0) {
-                        DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
-                        ret = 0;
+                        if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
+                            DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
+                            ret = 0;
+                        }
+                        else if (ret != 0) {
+                            DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
+                            ret = 0;
+                        }
                     }
                 }
             }

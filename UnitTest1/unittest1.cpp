@@ -174,9 +174,16 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_cnxcreation)
+        TEST_METHOD(create_cnx)
         {
-            int ret = cnxcreation_test();
+            int ret = create_cnx_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(create_quic)
+        {
+            int ret = create_quic_test();
 
             Assert::AreEqual(ret, 0);
         }
