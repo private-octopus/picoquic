@@ -1732,12 +1732,14 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
             }
         }
 
-        ctx->verify_certificate = picoquic_get_certificate_verifier(cert_root_file_name,
-            &is_cert_store_not_empty, (picoquic_free_verify_certificate_ctx*)
+        if (ret == 0) {
+            ctx->verify_certificate = picoquic_get_certificate_verifier(cert_root_file_name,
+                &is_cert_store_not_empty, (picoquic_free_verify_certificate_ctx*)
                 &quic->free_verify_certificate_callback_fn);
-        quic->is_cert_store_not_empty = is_cert_store_not_empty;
+            quic->is_cert_store_not_empty = is_cert_store_not_empty;
+        }
 
-        if (quic->ticket_file_name != NULL) {
+        if (ret == 0 && quic->ticket_file_name != NULL) {
             save_ticket = (ptls_save_ticket_t*)malloc(sizeof(ptls_save_ticket_t) + sizeof(picoquic_quic_t*));
             if (save_ticket != NULL) {
                 picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)save_ticket) + sizeof(ptls_save_ticket_t));
