@@ -244,7 +244,7 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_skip_frames)
+        TEST_METHOD(skip_frames)
         {
             int ret = skip_frame_test();
 
