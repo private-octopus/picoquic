@@ -300,6 +300,25 @@ static uint8_t test_frame_type_max_path_id[] = {
     0x11, /* max paths = 17 */
 };
 
+static uint8_t test_frame_type_path_new_connection_id[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_new_connection_id >> 24)), (uint8_t)(picoquic_frame_type_path_new_connection_id >> 16),
+    (uint8_t)(picoquic_frame_type_path_new_connection_id >> 8), (uint8_t)(picoquic_frame_type_path_new_connection_id & 0xFF),
+    1,
+    7,
+    0,
+    8,
+    1, 2, 3, 4, 5, 6, 7, 8,
+    0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8,
+    0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF, 0xB0
+};
+
+static uint8_t test_frame_type_path_retire_connection_id[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_retire_connection_id >> 24)), (uint8_t)(picoquic_frame_type_path_retire_connection_id >> 16),
+    (uint8_t)(picoquic_frame_type_path_retire_connection_id >> 8), (uint8_t)(picoquic_frame_type_path_retire_connection_id & 0xFF),
+    0,
+    2
+};
+
 static uint8_t test_frame_type_path_blocked[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_blocked >> 24)), (uint8_t)(picoquic_frame_type_path_blocked >> 16),
     (uint8_t)(picoquic_frame_type_path_blocked >> 8), (uint8_t)(picoquic_frame_type_path_blocked & 0xFF),
@@ -385,8 +404,11 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM_MPATH("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3, 0, 0, 1, 2),
     TEST_SKIP_ITEM_MPATH("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0, 1, 2),
     TEST_SKIP_ITEM_MPATH("path_backup", test_frame_type_path_backup, 0, 0, 3, 0, 0, 1, 2),
+
     TEST_SKIP_ITEM_MPATH("path_available", test_frame_type_path_available, 0, 0, 3, 0, 0, 1, 2),
     TEST_SKIP_ITEM_MPATH("max paths", test_frame_type_max_path_id, 0, 0, 3, 0, 0, 1, 1),
+    TEST_SKIP_ITEM_MPATH("path_new_connection_id", test_frame_type_path_new_connection_id, 0, 0, 3, 0, 0, 1, 5),
+    TEST_SKIP_ITEM_MPATH("path_retire_connection_id", test_frame_type_path_retire_connection_id, 0, 0, 3, 0, 0, 1, 2),
     TEST_SKIP_ITEM_MPATH("paths blocked", test_frame_type_path_blocked, 0, 0, 3, 0, 0, 1, 1),
 
     TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3, 0, 0, 4),

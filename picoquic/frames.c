@@ -455,7 +455,14 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
     const uint8_t* cnxid_bytes = NULL;
     const uint8_t* secret_bytes = NULL;
 
-    bytes = picoquic_parse_new_connection_id_frame(bytes, bytes_max, is_mp, &unique_path_id, &sequence, &retire_before, &cid_length, &cnxid_bytes, &secret_bytes);
+    if (is_mp && !cnx->is_multipath_enabled) {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_new_connection_id);
+        bytes = NULL;
+    }
+    else {
+        bytes = picoquic_parse_new_connection_id_frame(bytes, bytes_max, is_mp, &unique_path_id, &sequence, &retire_before, &cid_length, &cnxid_bytes, &secret_bytes);
+    }
 
     if (bytes == NULL || retire_before > sequence) {
         /* TODO: should be PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION if retire_before > sequence */
@@ -668,7 +675,7 @@ const uint8_t* picoquic_parse_retire_connection_id_frame(const uint8_t* bytes, c
     if (!is_mp) {
         bytes = picoquic_frames_varint_decode(bytes, bytes_max, sequence);
     }
-    else if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, unique_path_id)) == NULL) {
+    else if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, unique_path_id)) != NULL) {
         bytes = picoquic_frames_varint_decode(bytes, bytes_max, sequence);
     }
     return bytes;
@@ -681,7 +688,12 @@ const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, c
     uint64_t sequence;
     uint64_t unique_path_id;
 
-    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
+    if (is_mp && !cnx->is_multipath_enabled) {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_path_retire_connection_id);
+        bytes = NULL;
+    }
+    else if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
         (bytes = picoquic_parse_retire_connection_id_frame(bytes, bytes_max, &unique_path_id, &sequence, is_mp)) == NULL){
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             (is_mp)?picoquic_frame_type_path_retire_connection_id:picoquic_frame_type_retire_connection_id);
