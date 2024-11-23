@@ -723,39 +723,50 @@ static void skip_test_fuzz_packet(uint8_t * target, uint8_t * source, size_t byt
     }
 }
 
+static size_t create_test_varint_frame(uint8_t* buffer, size_t buffer_size, size_t i, int v)
+{
+    const uint8_t* bytes = test_skip_list[i].val;
+    const uint8_t* bytes_max = bytes + test_skip_list[i].len;
+    uint64_t u = 0;
+    size_t skipped = 0;
+    /* skip the type and v-1 integers */
+    for (int n = 0; bytes != NULL && n < v; n++) {
+        bytes = picoquic_frames_varint_skip(bytes, bytes_max);
+    }
+    skipped = bytes - test_skip_list[i].val;
+    memcpy(buffer, test_skip_list[i].val, skipped);
+    if (bytes != NULL) {
+        bytes = picoquic_frames_varint_decode(bytes, bytes_max, &u);
+    }
+    if (bytes != NULL) {
+        buffer[skipped++] = 0xc0 + (uint8_t)(u >> 56);
+        buffer[skipped++] = (uint8_t)(u >> 48);
+        buffer[skipped++] = (uint8_t)(u >> 40);
+        buffer[skipped++] = (uint8_t)(u >> 32);
+        buffer[skipped++] = (uint8_t)(u >> 24);
+        buffer[skipped++] = (uint8_t)(u >> 16);
+        buffer[skipped++] = (uint8_t)(u >> 8);
+        /* Last byte is omitted, to force a decoding error */
+    }
+    else {
+        skipped = 0;
+    }
+
+    return skipped;
+}
+
 int skip_frame_varint_test(uint8_t * buffer, size_t buffer_size)
 {
     int ret = 0;
 
     for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
         for (int v = 1; v <= test_skip_list[i].nb_varints; v++) {
-            const uint8_t* bytes = test_skip_list[i].val;
-            const uint8_t* bytes_max = bytes + test_skip_list[i].len;
-            uint64_t u = 0;
-            size_t skipped = 0;
             size_t consumed = 0;
             int pure_ack = 0;
-            /* skip the type and v-1 integers */
-            for (int n = 0; bytes != NULL && n < v; n++) {
-                bytes = picoquic_frames_varint_skip(bytes, bytes_max);
-            }
-            skipped = bytes - test_skip_list[i].val;
-            memcpy(buffer, test_skip_list[i].val, skipped);
-            if (bytes != NULL) {
-                bytes = picoquic_frames_varint_decode(bytes, bytes_max, &u);
-            }
-            if (bytes != NULL) {
-                buffer[skipped++] = 0xc0 + (uint8_t)(u >> 56);
-                buffer[skipped++] = (uint8_t)(u >> 48);
-                buffer[skipped++] = (uint8_t)(u >> 40);
-                buffer[skipped++] = (uint8_t)(u >> 32);
-                buffer[skipped++] = (uint8_t)(u >> 24);
-                buffer[skipped++] = (uint8_t)(u >> 16);
-                buffer[skipped++] = (uint8_t)(u >> 8);
-                /* Last byte is omitted, to force a decoding error */
-                if (picoquic_skip_frame(buffer, skipped, &consumed, &pure_ack) == 0) {
-                    ret = -1;
-                }
+            size_t len = create_test_varint_frame(buffer, buffer_size, i, v);
+            if (len > 0 &&
+                picoquic_skip_frame(buffer, len, &consumed, &pure_ack) == 0) {
+                ret = -1;
             }
         }
     }
@@ -933,9 +944,29 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         }
 
         picoquic_delete_cnx(cnx);
-
     }
 
+    return ret;
+}
+
+int parse_frame_varint_test(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    uint8_t* buffer, size_t buffer_size)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+        for (int v = 1; v <= test_skip_list[i].nb_varints; v++) {
+            size_t consumed = 0;
+            int ack_needed = 0;
+            uint64_t err = 0;
+            size_t len = create_test_varint_frame(buffer, buffer_size, i, v);
+            if (len > 0 &&
+                parse_test_packet(qclient, saddr, simulated_time, buffer, len,
+                    test_skip_list[i].epoch, &ack_needed, &err, test_skip_list[i].mpath) == 0) {
+                ret = -1;
+            }
+        }
+    }
     return ret;
 }
 
@@ -989,6 +1020,12 @@ int parse_frame_test()
                 ret = -1;
             }
         }
+    }
+
+    /* Decode a series of packets with modified length */
+    if (ret == 0) {
+        ret = parse_frame_varint_test(qclient, (struct sockaddr*)&saddr, simulated_time,
+            buffer, sizeof(buffer));
     }
 
     /* Decode a series of known bad packets */
