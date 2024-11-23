@@ -956,7 +956,6 @@ int parse_frame_varint_test(picoquic_quic_t* qclient, struct sockaddr* saddr, ui
 
     for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
         for (int v = 1; v <= test_skip_list[i].nb_varints; v++) {
-            size_t consumed = 0;
             int ack_needed = 0;
             uint64_t err = 0;
             size_t len = create_test_varint_frame(buffer, buffer_size, i, v);
@@ -969,6 +968,27 @@ int parse_frame_varint_test(picoquic_quic_t* qclient, struct sockaddr* saddr, ui
     }
     return ret;
 }
+
+int parse_frame_not_mpath_test(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    uint8_t* buffer, size_t buffer_size)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+        if (test_skip_list[i].mpath){
+            int ack_needed = 0;
+            uint64_t err = 0;
+            size_t len = test_skip_list[i].len;
+            memcpy(buffer, test_skip_list[i].val, len);
+            if (parse_test_packet(qclient, saddr, simulated_time, buffer, len,
+                test_skip_list[i].epoch, &ack_needed, &err, 0) == 0) {
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}
+
 
 int parse_frame_test()
 {
@@ -1025,6 +1045,12 @@ int parse_frame_test()
     /* Decode a series of packets with modified length */
     if (ret == 0) {
         ret = parse_frame_varint_test(qclient, (struct sockaddr*)&saddr, simulated_time,
+            buffer, sizeof(buffer));
+    }
+
+    /* Decode a series of multipath packets without the multipath option */
+    if (ret == 0) {
+        ret = parse_frame_not_mpath_test(qclient, (struct sockaddr*)&saddr, simulated_time,
             buffer, sizeof(buffer));
     }
 
