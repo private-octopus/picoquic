@@ -1248,7 +1248,6 @@ int frame_repeat_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, 
     uint8_t* bytes, size_t bytes_max, int epoch, uint64_t* err, int mpath)
 {
     int ret = 0;
-    picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
     picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
         picoquic_null_connection_id, picoquic_null_connection_id, saddr,
         simulated_time, 0, "test-sni", "test-alpn", 1);
@@ -1261,7 +1260,6 @@ int frame_repeat_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, 
         int do_not_detect_spurious = 0;
         int is_preemptive_needed = 0;
         int no_need_to_repeat = 0;
-        uint64_t frame_id64 = 0;
         picoquic_packet_type_enum p_type;
 
         switch (epoch) {
@@ -1307,7 +1305,6 @@ int frames_repeat_error_test()
     }
     else {
         for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
-            int ack_needed = 0;
             uint64_t err = 0;
             size_t len = test_skip_list[i].len;
             uint64_t frame_type = 0;
