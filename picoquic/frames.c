@@ -6316,98 +6316,105 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 const uint8_t* bytes0 = bytes;
 
                 if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64)) != NULL) {
-                    switch (frame_id64) {
-                    case picoquic_frame_type_ack_frequency:
-                        bytes = picoquic_decode_ack_frequency_frame(bytes, bytes_max, cnx);
-                        ack_needed = 1;
-                        break;
-                    case picoquic_frame_type_immediate_ack:
-                        bytes = picoquic_decode_immediate_ack_frame(bytes, bytes_max, cnx, path_x, current_time);
-                        ack_needed = 1;
-                        break;
-                    case picoquic_frame_type_time_stamp:
-                        bytes = picoquic_decode_time_stamp_frame(bytes, bytes_max, cnx, &packet_data);
-                        break;
-                    case picoquic_frame_type_path_ack: {
-                        if (epoch == picoquic_epoch_0rtt) {
-                            DBG_PRINTF("Ack frame (0x%x) not expected in 0-RTT packet", first_byte);
-                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
-                            bytes = NULL;
-                            break;
-                        }
-                        bytes = picoquic_decode_ack_frame(cnx, bytes0, bytes_max, current_time, epoch, 0, 1, &packet_data);
-                        break;
-                    }
-                    case picoquic_frame_type_path_ack_ecn: {
-                        if (epoch == picoquic_epoch_0rtt) {
-                            DBG_PRINTF("Ack-ECN frame (0x%x) not expected in 0-RTT packet", first_byte);
-                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
-                            bytes = NULL;
-                            break;
-                        }
-                        bytes = picoquic_decode_ack_frame(cnx, bytes0, bytes_max, current_time, epoch, 1, 1, &packet_data);
-                        break;
-                    }
-                    case picoquic_frame_type_path_abandon:
-                        bytes = picoquic_decode_path_abandon_frame(bytes, bytes_max, cnx, current_time);
-                        ack_needed = 1;
-                        break;
-                    case picoquic_frame_type_path_backup:
-                    case picoquic_frame_type_path_available:
-                        bytes = picoquic_decode_path_available_or_standby_frame(bytes, bytes_max, frame_id64, cnx, current_time);
-                        ack_needed = 1;
-                        break;
-                    case picoquic_frame_type_max_path_id:
-                        bytes = picoquic_decode_max_path_id_frame(bytes, bytes_max, cnx);
-                        ack_needed = 1;
-                        break;
-                    case picoquic_frame_type_path_blocked:
-                        bytes = picoquic_decode_path_blocked_frame(bytes, bytes_max, cnx);
-                        ack_needed = 1;
-                        break;
-                    case picoquic_frame_type_path_new_connection_id:
-                        is_path_probing_frame = 1;
-                        bytes = picoquic_decode_new_connection_id_frame(cnx, bytes0, bytes_max, current_time, 1);
-                        ack_needed = 1;
-                        break;
-                    case picoquic_frame_type_path_retire_connection_id:
-                        bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes0, bytes_max, current_time, path_x, 1);
-                        ack_needed = 1;
-                        break;
-                    case picoquic_frame_type_bdp:
-                        if (cnx->client_mode && epoch != picoquic_epoch_1rtt) {
-                            DBG_PRINTF("BDP frame (0x%x) is expected in 1-RTT packet", first_byte);
-                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
-                            bytes = NULL;
-                            break;
-                        }
-                        if (!cnx->client_mode && epoch != picoquic_epoch_0rtt && epoch != picoquic_epoch_1rtt) {
-                            DBG_PRINTF("BDP frame (0x%x) is expected in 0-RTT packet", first_byte);
-                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
-                            bytes = NULL;
-                            break;
-                        }
-                        if (cnx->client_mode && cnx->local_parameters.enable_bdp_frame == 0) {
-                            DBG_PRINTF("BDP frame (0x%x) not expected", first_byte);
-                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
-                            bytes = NULL;
-                            break;
-                        }
-
-                        bytes = picoquic_decode_bdp_frame(cnx, bytes, bytes_max, current_time, addr_from, path_x);
-                        ack_needed = 1;
-                        break;
-                    case picoquic_frame_type_observed_address_v4:
-                    case picoquic_frame_type_observed_address_v6:
-                        is_path_probing_frame = 1;
-                        ack_needed = 1;
-                        bytes = picoquic_decode_observed_address_frame(cnx, bytes, bytes_max, path_x, frame_id64);
-                        break;
-                    default:
-                        /* Not implemented yet! */
-                        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, frame_id64);
+                    if (epoch == picoquic_epoch_0rtt) {
+                        /* By default, extension frames should not be used in 0rtt */
+                        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
                         bytes = NULL;
-                        break;
+                    }
+                    else {
+                        switch (frame_id64) {
+                        case picoquic_frame_type_ack_frequency:
+                            bytes = picoquic_decode_ack_frequency_frame(bytes, bytes_max, cnx);
+                            ack_needed = 1;
+                            break;
+                        case picoquic_frame_type_immediate_ack:
+                            bytes = picoquic_decode_immediate_ack_frame(bytes, bytes_max, cnx, path_x, current_time);
+                            ack_needed = 1;
+                            break;
+                        case picoquic_frame_type_time_stamp:
+                            bytes = picoquic_decode_time_stamp_frame(bytes, bytes_max, cnx, &packet_data);
+                            break;
+                        case picoquic_frame_type_path_ack: {
+                            if (epoch == picoquic_epoch_0rtt) {
+                                DBG_PRINTF("Ack frame (0x%x) not expected in 0-RTT packet", first_byte);
+                                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+                                bytes = NULL;
+                                break;
+                            }
+                            bytes = picoquic_decode_ack_frame(cnx, bytes0, bytes_max, current_time, epoch, 0, 1, &packet_data);
+                            break;
+                        }
+                        case picoquic_frame_type_path_ack_ecn: {
+                            if (epoch == picoquic_epoch_0rtt) {
+                                DBG_PRINTF("Ack-ECN frame (0x%x) not expected in 0-RTT packet", first_byte);
+                                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+                                bytes = NULL;
+                                break;
+                            }
+                            bytes = picoquic_decode_ack_frame(cnx, bytes0, bytes_max, current_time, epoch, 1, 1, &packet_data);
+                            break;
+                        }
+                        case picoquic_frame_type_path_abandon:
+                            bytes = picoquic_decode_path_abandon_frame(bytes, bytes_max, cnx, current_time);
+                            ack_needed = 1;
+                            break;
+                        case picoquic_frame_type_path_backup:
+                        case picoquic_frame_type_path_available:
+                            bytes = picoquic_decode_path_available_or_standby_frame(bytes, bytes_max, frame_id64, cnx, current_time);
+                            ack_needed = 1;
+                            break;
+                        case picoquic_frame_type_max_path_id:
+                            bytes = picoquic_decode_max_path_id_frame(bytes, bytes_max, cnx);
+                            ack_needed = 1;
+                            break;
+                        case picoquic_frame_type_path_blocked:
+                            bytes = picoquic_decode_path_blocked_frame(bytes, bytes_max, cnx);
+                            ack_needed = 1;
+                            break;
+                        case picoquic_frame_type_path_new_connection_id:
+                            is_path_probing_frame = 1;
+                            bytes = picoquic_decode_new_connection_id_frame(cnx, bytes0, bytes_max, current_time, 1);
+                            ack_needed = 1;
+                            break;
+                        case picoquic_frame_type_path_retire_connection_id:
+                            bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes0, bytes_max, current_time, path_x, 1);
+                            ack_needed = 1;
+                            break;
+                        case picoquic_frame_type_bdp:
+                            if (cnx->client_mode && epoch != picoquic_epoch_1rtt) {
+                                DBG_PRINTF("BDP frame (0x%x) is expected in 1-RTT packet", first_byte);
+                                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+                                bytes = NULL;
+                                break;
+                            }
+                            if (!cnx->client_mode && epoch != picoquic_epoch_0rtt && epoch != picoquic_epoch_1rtt) {
+                                DBG_PRINTF("BDP frame (0x%x) is expected in 0-RTT packet", first_byte);
+                                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+                                bytes = NULL;
+                                break;
+                            }
+                            if (cnx->client_mode && cnx->local_parameters.enable_bdp_frame == 0) {
+                                DBG_PRINTF("BDP frame (0x%x) not expected", first_byte);
+                                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+                                bytes = NULL;
+                                break;
+                            }
+
+                            bytes = picoquic_decode_bdp_frame(cnx, bytes, bytes_max, current_time, addr_from, path_x);
+                            ack_needed = 1;
+                            break;
+                        case picoquic_frame_type_observed_address_v4:
+                        case picoquic_frame_type_observed_address_v6:
+                            is_path_probing_frame = 1;
+                            ack_needed = 1;
+                            bytes = picoquic_decode_observed_address_frame(cnx, bytes, bytes_max, path_x, frame_id64);
+                            break;
+                        default:
+                            /* Not implemented yet! */
+                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, frame_id64);
+                            bytes = NULL;
+                            break;
+                        }
                     }
                 }
                 break;

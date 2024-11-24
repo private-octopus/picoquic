@@ -1007,9 +1007,65 @@ int parse_frame_not_mpath_test(picoquic_quic_t* qclient, struct sockaddr* saddr,
             uint64_t err = 0;
             size_t len = test_skip_list[i].len;
             memcpy(buffer, test_skip_list[i].val, len);
+
             if (parse_test_packet(qclient, saddr, simulated_time, buffer, len,
                 test_skip_list[i].epoch, &ack_needed, &err, 0) == 0) {
                 ret = -1;
+            }
+        }
+    }
+    return ret;
+}
+
+int parse_frame_0rtt_test(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    uint8_t* buffer, size_t buffer_size)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+        uint64_t frame_type = 0;
+        if (picoquic_frames_varint_decode(test_skip_list[i].val, test_skip_list[i].val + test_skip_list[i].len, &frame_type) != NULL) {
+            int ack_needed = 0;
+            uint64_t err = 0;
+            size_t len = test_skip_list[i].len;
+            int l_ret = 0;
+            memcpy(buffer, test_skip_list[i].val, len);
+            l_ret = parse_test_packet(qclient, saddr, simulated_time, buffer, len,
+                picoquic_epoch_0rtt, &ack_needed, &err, test_skip_list[i].mpath);
+            if (frame_type >= picoquic_frame_type_stream_range_min && frame_type <= picoquic_frame_type_stream_range_max) {
+                if (l_ret != 0) {
+                    ret = -1;
+                }
+            } else {
+                switch (frame_type) {
+                case picoquic_frame_type_padding:
+                case picoquic_frame_type_ping:
+                case picoquic_frame_type_reset_stream:
+                case picoquic_frame_type_stop_sending:
+                case picoquic_frame_type_connection_close:
+                case picoquic_frame_type_application_close:
+                case picoquic_frame_type_max_data:
+                case picoquic_frame_type_max_stream_data:
+                case picoquic_frame_type_max_streams_bidir:
+                case picoquic_frame_type_max_streams_unidir:
+                case picoquic_frame_type_data_blocked:
+                case picoquic_frame_type_stream_data_blocked:
+                case picoquic_frame_type_streams_blocked_bidir:
+                case picoquic_frame_type_streams_blocked_unidir:
+                case picoquic_frame_type_new_connection_id:
+                case picoquic_frame_type_path_challenge:
+                case picoquic_frame_type_datagram:
+                case picoquic_frame_type_datagram_l:
+                    if (l_ret != 0) {
+                        ret = -1;
+                    }
+                    break;
+                default:
+                    if (l_ret == 0) {
+                        ret = -1;
+                    }
+                    break;
+                }
             }
         }
     }
@@ -1078,6 +1134,12 @@ int parse_frame_test()
     /* Decode a series of multipath packets without the multipath option */
     if (ret == 0) {
         ret = parse_frame_not_mpath_test(qclient, (struct sockaddr*)&saddr, simulated_time,
+            buffer, sizeof(buffer));
+    }
+
+    /* Verify that 0rtt tests are properly implemented */
+    if (ret == 0) {
+        ret = parse_frame_0rtt_test(qclient, (struct sockaddr*)&saddr, simulated_time,
             buffer, sizeof(buffer));
     }
 
