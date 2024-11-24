@@ -258,6 +258,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(frames_repeat_error)
+        {
+            int ret = frames_repeat_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(test_logger)
         {
             int ret = logger_test();

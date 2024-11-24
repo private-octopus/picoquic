@@ -898,8 +898,48 @@ int skip_frame_test()
     return ret;
 }
 
+void parse_test_packet_cnx_fix(picoquic_cnx_t* cnx, uint64_t simulated_time, int epoch, int mpath)
+{
+    /* Stupid fix to ensure that the NCID decoding test will not protest */
+    cnx->path[0]->p_remote_cnxid->cnx_id.id_len = 8;
+
+    cnx->pkt_ctx[0].send_sequence = 0x0102030406;
+
+    /* create a local cid  which can be retired with a connection_id_retire frame */
+    (void)picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time);
+
+    /* enable time stamp so it can be used in test */
+    cnx->is_time_stamp_enabled = 1;
+
+    /* Set datagram max size to pass verification */
+    cnx->local_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+
+    /* Set min ack delay so there is no issue with ack frequency frame */
+    cnx->is_ack_frequency_negotiated = 1;
+    cnx->remote_parameters.min_ack_delay = 1000;
+
+    /* Set enable_bdp so there is no issue with bdp frame */
+    cnx->local_parameters.enable_bdp_frame = 3;
+
+    /* Enable multipath so the test of multipath frames works. */
+    if (mpath != 0) {
+        cnx->is_multipath_enabled = 1;
+        cnx->max_path_id_local = 5;
+        if (mpath >= 2) {
+            /* Enable the P2P extensions. */
+            cnx->is_address_discovery_provider = 1;
+            cnx->is_address_discovery_receiver = 1;
+        }
+    }
+
+    /* if testing handshake done, set state to ready so frame is ignored. */
+    if (epoch == 3) {
+        cnx->cnx_state = picoquic_state_ready;
+    }
+}
+
 int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
-    uint8_t * buffer, size_t byte_max, int epoch,  int* ack_needed, uint64_t * err, int mpath)
+    uint8_t * buffer, size_t byte_max, int epoch, int* ack_needed, uint64_t * err, int mpath)
 {
     int ret = 0;
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
@@ -915,42 +955,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         ret = -1;
     }
     else {
-        /* Stupid fix to ensure that the NCID decoding test will not protest */
-        cnx->path[0]->p_remote_cnxid->cnx_id.id_len = 8;
-
-        cnx->pkt_ctx[0].send_sequence = 0x0102030406;
-
-        /* create a local cid  which can be retired with a connection_id_retire frame */
-        (void)picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time);
-
-        /* enable time stamp so it can be used in test */
-        cnx->is_time_stamp_enabled = 1;
-
-        /* Set datagram max size to pass verification */
-        cnx->local_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
-
-        /* Set min ack delay so there is no issue with ack frequency frame */
-        cnx->is_ack_frequency_negotiated = 1;
-        cnx->remote_parameters.min_ack_delay = 1000;
-        
-        /* Set enable_bdp so there is no issue with bdp frame */
-        cnx->local_parameters.enable_bdp_frame = 3;
-
-        /* Enable multipath so the test of multipath frames works. */
-        if (mpath != 0) {
-            cnx->is_multipath_enabled = 1;
-            cnx->max_path_id_local = 5;
-            if (mpath >= 2) {
-                /* Enable the P2P extensions. */
-                cnx->is_address_discovery_provider = 1;
-                cnx->is_address_discovery_receiver = 1;
-            }
-        }
-       
-        /* if testing handshake done, set state to ready so frame is ignored. */
-        if (epoch == 3) {
-            cnx->cnx_state = picoquic_state_ready;
-        }
+        parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
 
         ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, NULL, epoch, 
             NULL, NULL, 0, 0, simulated_time);
@@ -1176,6 +1181,111 @@ int parse_frame_test()
 
     return ret;
 }
+
+int frame_repeat_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    uint8_t* bytes, size_t bytes_max, int epoch, uint64_t* err, int mpath)
+{
+    int ret = 0;
+    picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
+    picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id, saddr,
+        simulated_time, 0, "test-sni", "test-alpn", 1);
+
+    if (cnx == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+        ret = -1;
+    }
+    else {
+        int do_not_detect_spurious = 0;
+        int is_preemptive_needed = 0;
+        int no_need_to_repeat = 0;
+        uint64_t frame_id64 = 0;
+        picoquic_packet_type_enum p_type;
+
+        switch (epoch) {
+        case picoquic_epoch_initial:
+            p_type = picoquic_packet_initial;
+            break;
+        case picoquic_epoch_0rtt:
+            p_type = picoquic_packet_0rtt_protected;
+            break;
+        case picoquic_epoch_handshake:
+            p_type = picoquic_packet_handshake;
+            break;
+        default:
+            p_type = picoquic_packet_1rtt_protected;
+            break;
+        }
+
+        parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
+       
+        if (picoquic_check_frame_needs_repeat(cnx, bytes, bytes_max, p_type,
+            &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed) == 0 &&
+            !no_need_to_repeat) {
+            ret = -1;
+        }
+
+        picoquic_delete_cnx(cnx);
+    }
+    return ret;
+}
+
+int frames_repeat_error_test()
+{
+    int ret = 0;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+            int ack_needed = 0;
+            uint64_t err = 0;
+            size_t len = test_skip_list[i].len;
+            uint64_t frame_type = 0;
+            const uint8_t* type_byte = NULL;
+            if ((type_byte = picoquic_frames_varint_decode(test_skip_list[i].val, test_skip_list[i].val + test_skip_list[i].len, &frame_type)) != NULL) {
+                if (len > 1 && !test_skip_list[i].is_pure_ack) {
+                    switch (frame_type) {
+                    case picoquic_frame_type_connection_close:
+                    case picoquic_frame_type_application_close:
+                    case picoquic_frame_type_new_token:
+                    case picoquic_frame_type_path_abandon:
+                    case picoquic_frame_type_bdp:
+                    case picoquic_frame_type_observed_address_v4:
+                    case picoquic_frame_type_observed_address_v6:
+                        break;
+                    default:
+                        memcpy(buffer, test_skip_list[i].val, len - 1);
+                        if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len - 1,
+                            test_skip_list[i].epoch, &err, test_skip_list[i].mpath) != 0) {
+                            if (test_skip_list[i].nb_varints > 0) {
+                                /* Try again with shorter length */
+                                size_t type_len = type_byte - test_skip_list[i].val;
+                                if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, type_len,
+                                    test_skip_list[i].epoch, &err, test_skip_list[i].mpath) != 0) {
+                                    ret = -1;
+                                }
+                            }
+                            else {
+                                ret = -1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        picoquic_free(qclient);
+    }
+    return ret;
+}
+
 
 void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length);
 void picoquic_binlog_frames(FILE* F, uint8_t* bytes, size_t length);

@@ -3336,8 +3336,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     uint64_t reordering_threshold;
 
                     if ((bytes = picoquic_parse_ack_frequency_frame(bytes, bytes + bytes_max,
-                        &seq, &packets, &microsec, &ignore_order, &reordering_threshold)) != NULL &&
-                        seq == cnx->ack_frequency_sequence_local) {
+                        &seq, &packets, &microsec, &ignore_order, &reordering_threshold)) == NULL) {
+                        ret = -1;
+                    } else if (seq == cnx->ack_frequency_sequence_local) {
                         *no_need_to_repeat = 1;
                     }
                     break;
