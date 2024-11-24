@@ -412,9 +412,10 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM_MPATH("paths blocked", test_frame_type_path_blocked, 0, 0, 3, 0, 0, 1, 1),
 
     TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3, 0, 0, 4),
-
     TEST_SKIP_ITEM_MPATH("observed_address_v4", test_frame_observed_address_v4, 0, 0, 3, 0, 0, 2, 1),
-    TEST_SKIP_ITEM_MPATH("observed_address_v6", test_frame_observed_address_v6, 0, 0, 3, 0, 0, 2, 1)
+    TEST_SKIP_ITEM_MPATH("observed_address_v6", test_frame_observed_address_v6, 0, 0, 3, 0, 0, 2, 1),
+    TEST_SKIP_ITEM_MPATH("path_ack", test_frame_type_path_ack, 1, 0, 3, 0, 0, 1, 9),
+    TEST_SKIP_ITEM_MPATH("path_ack_ecn", test_frame_type_path_ack_ecn, 1, 0, 3, 0, 0, 1, 12),
 };
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
@@ -677,16 +678,6 @@ test_skip_frames_t test_frame_error_list[] = {
 
 size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_skip_frames_t);
 
-/* Log list:
-* List of frames that are interesting when testing the log, but
-* should not be added to the "skip list" 
- */
-test_skip_frames_t test_log_list[] = {
-    TEST_SKIP_ITEM_OLD("path_ack", test_frame_type_path_ack, 1, 0, 3, 0, 0),
-    TEST_SKIP_ITEM_OLD("path_ack_ecn", test_frame_type_path_ack_ecn, 1, 0, 3, 0, 0)
-};
-size_t nb_test_log_list = sizeof(test_log_list) / sizeof(test_skip_frames_t);
-
 static size_t format_random_packet(uint8_t * bytes, size_t bytes_max, uint64_t * random_context, int epoch)
 {
     size_t byte_index = 0;
@@ -904,6 +895,7 @@ void parse_test_packet_cnx_fix(picoquic_cnx_t* cnx, uint64_t simulated_time, int
     cnx->path[0]->p_remote_cnxid->cnx_id.id_len = 8;
 
     cnx->pkt_ctx[0].send_sequence = 0x0102030406;
+    cnx->path[0]->pkt_ctx.send_sequence = 0x0102030406;
 
     /* create a local cid  which can be retired with a connection_id_retire frame */
     (void)picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time);
@@ -1467,8 +1459,6 @@ int frames_ackack_error_test()
     else {
         for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
             for (int v = 1; v <= test_skip_list[i].nb_varints; v++) {
-                int ack_needed = 0;
-                uint64_t err = 0;
                 int disconnected = 0;
                 
                 frame_ackack_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, &p, i, v,
@@ -1808,9 +1798,6 @@ int logger_test()
     else {
         for (size_t i = 0; i < nb_test_skip_list; i++) {
             picoquic_textlog_frames(quic->F_log, 0, test_skip_list[i].val, test_skip_list[i].len);
-        }
-        for (size_t i = 0; i < nb_test_log_list; i++) {
-            picoquic_textlog_frames(quic->F_log, 0, test_log_list[i].val, test_log_list[i].len);
         }
         for (size_t i = 0; i < nb_test_frame_error_list; i++) {
             picoquic_textlog_frames(quic->F_log, 0, test_frame_error_list[i].val, test_frame_error_list[i].len);
