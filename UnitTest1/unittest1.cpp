@@ -264,6 +264,14 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(frames_ackack_error)
+        {
+            int ret = frames_ackack_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_logger)
         {
             int ret = logger_test();

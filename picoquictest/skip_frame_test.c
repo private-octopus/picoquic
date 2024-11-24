@@ -1345,6 +1345,144 @@ int frames_repeat_error_test()
     return ret;
 }
 
+/* Use
+* void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p, 
+*    int is_spurious, uint64_t current_time)
+ */
+
+void frame_init_test_packet(picoquic_packet_t* p, picoquic_cnx_t* cnx, int epoch, uint64_t simulated_time)
+{
+    memset(p, 0, sizeof(picoquic_packet_t));
+    /* struct st_picoquic_packet_t* packet_next; */
+    /* struct st_picoquic_packet_t* packet_previous; */
+    p->send_path = cnx->path[0];
+    p->sequence_number = 12345;
+    p->send_time = simulated_time / 2;
+
+    /*
+    uint64_t delivered_prior;
+    uint64_t delivered_time_prior;
+    uint64_t delivered_sent_prior;
+    uint64_t lost_prior;
+    uint64_t inflight_prior;
+    size_t data_repeat_frame;
+    size_t data_repeat_index;
+    */
+
+    /*
+    uint64_t data_repeat_priority;
+    uint64_t data_repeat_stream_id;
+    uint64_t data_repeat_stream_offset;
+    size_t data_repeat_stream_data_length;
+    */
+
+    /*
+    unsigned int is_evaluated : 1;
+    unsigned int is_ack_eliciting : 1;
+    unsigned int is_mtu_probe : 1;
+    unsigned int is_multipath_probe : 1;
+    unsigned int is_ack_trap : 1;
+    unsigned int delivered_app_limited : 1;
+    unsigned int sent_cwin_limited : 1;
+    unsigned int is_preemptive_repeat : 1;
+    unsigned int was_preemptively_repeated : 1;
+    unsigned int is_queued_to_path : 1;
+    unsigned int is_queued_for_retransmit : 1;
+    unsigned int is_queued_for_spurious_detection : 1;
+    unsigned int is_queued_for_data_repeat : 1;
+    */
+    p->checksum_overhead = 16;
+        switch (epoch) {
+        case picoquic_epoch_initial:
+            p->ptype = picoquic_packet_initial;
+            p->pc = picoquic_packet_context_initial;
+            break;
+        case picoquic_epoch_0rtt:
+            p->ptype = picoquic_packet_0rtt_protected;
+            p->pc = picoquic_packet_context_application;
+            break;
+        case picoquic_epoch_handshake:
+            p->ptype = picoquic_packet_handshake;
+            p->pc = picoquic_packet_context_handshake;
+            break;
+        default:
+            p->ptype = picoquic_packet_1rtt_protected;
+            p->pc = picoquic_packet_context_application;
+            break;
+        }
+    if (p->ptype == picoquic_packet_1rtt_protected) {
+        p->offset = 1 + 8 + 4;
+    }
+    else {
+        p->offset = 1 + 1 + 8 + 1 + 8 + 2 + 4;
+    }
+}
+
+int frame_ackack_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    picoquic_packet_t* p, size_t i, int v, int epoch, int mpath, int * disconnected)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id, saddr,
+        simulated_time, 0, "test-sni", "test-alpn", 1);
+
+    if (cnx == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+        ret = -1;
+    }
+    else {
+        int is_spurious = 0;
+        size_t len;
+        picoquic_state_enum previous_state;
+
+        parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
+        frame_init_test_packet(p, cnx, epoch, simulated_time);
+        len = create_test_varint_frame(p->bytes + p->offset, PICOQUIC_MAX_PACKET_SIZE, i, v);
+        p->length = p->offset + len;
+
+        previous_state = cnx->cnx_state;
+        picoquic_process_ack_of_frames(cnx, p, is_spurious, simulated_time);
+        *disconnected = (cnx->cnx_state != previous_state);
+
+        picoquic_delete_cnx(cnx);
+    }
+    return ret;
+}
+
+int frames_ackack_error_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+    picoquic_packet_t p;
+    int nb_trials = 0;
+    int nb_disconnected = 0;
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+            for (int v = 1; v <= test_skip_list[i].nb_varints; v++) {
+                int ack_needed = 0;
+                uint64_t err = 0;
+                int disconnected = 0;
+                
+                frame_ackack_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, &p, i, v,
+                        test_skip_list[i].epoch, test_skip_list[i].mpath, &disconnected);
+                nb_trials++;
+                nb_disconnected += disconnected;
+            }
+        }
+        picoquic_free(qclient);
+    }
+    DBG_PRINTF("%d ackack trials, %d disconnections", nb_trials, nb_disconnected);
+
+    return ret;
+}
 
 void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length);
 void picoquic_binlog_frames(FILE* F, uint8_t* bytes, size_t length);
