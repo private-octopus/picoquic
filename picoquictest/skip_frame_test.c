@@ -1237,7 +1237,7 @@ int parse_frame_test()
 }
 
 int frame_repeat_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
-    uint8_t* bytes, size_t bytes_max, int epoch, uint64_t* err, int mpath)
+    uint8_t* bytes, size_t bytes_max, int epoch, uint64_t* err, int mpath, int expect_error)
 {
     int ret = 0;
     picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
@@ -1252,6 +1252,7 @@ int frame_repeat_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, 
         int do_not_detect_spurious = 0;
         int is_preemptive_needed = 0;
         int no_need_to_repeat = 0;
+        int c_ret = 0;
         picoquic_packet_type_enum p_type;
 
         switch (epoch) {
@@ -1271,9 +1272,15 @@ int frame_repeat_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, 
 
         parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
        
-        if (picoquic_check_frame_needs_repeat(cnx, bytes, bytes_max, p_type,
-            &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed) == 0 &&
+        c_ret = picoquic_check_frame_needs_repeat(cnx, bytes, bytes_max, p_type,
+            &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed);
+        
+        if (expect_error && c_ret == 0 &&
             !no_need_to_repeat) {
+            ret = -1;
+        }
+
+        if (!expect_error && c_ret != 0) {
             ret = -1;
         }
 
@@ -1282,7 +1289,7 @@ int frame_repeat_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, 
     return ret;
 }
 
-int frames_repeat_error_test()
+int frames_repeat_test()
 {
     int ret = 0;
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
@@ -1302,7 +1309,12 @@ int frames_repeat_error_test()
             uint64_t frame_type = 0;
             const uint8_t* type_byte = NULL;
             if ((type_byte = picoquic_frames_varint_decode(test_skip_list[i].val, test_skip_list[i].val + test_skip_list[i].len, &frame_type)) != NULL) {
-                if (len > 1 && !test_skip_list[i].is_pure_ack) {
+                memcpy(buffer, test_skip_list[i].val, len);
+                if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len,
+                    test_skip_list[i].epoch, &err, test_skip_list[i].mpath, 0) != 0) {
+                    ret = -1;
+                }
+                else if (len > 1 && !test_skip_list[i].is_pure_ack) {
                     switch (frame_type) {
                     case picoquic_frame_type_connection_close:
                     case picoquic_frame_type_application_close:
@@ -1313,14 +1325,13 @@ int frames_repeat_error_test()
                     case picoquic_frame_type_observed_address_v6:
                         break;
                     default:
-                        memcpy(buffer, test_skip_list[i].val, len - 1);
                         if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len - 1,
-                            test_skip_list[i].epoch, &err, test_skip_list[i].mpath) != 0) {
+                            test_skip_list[i].epoch, &err, test_skip_list[i].mpath, 1) != 0) {
                             if (test_skip_list[i].nb_varints > 0) {
                                 /* Try again with shorter length */
                                 size_t type_len = type_byte - test_skip_list[i].val;
                                 if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, type_len,
-                                    test_skip_list[i].epoch, &err, test_skip_list[i].mpath) != 0) {
+                                    test_skip_list[i].epoch, &err, test_skip_list[i].mpath, 1) != 0) {
                                     ret = -1;
                                 }
                             }

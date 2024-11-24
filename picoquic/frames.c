@@ -354,7 +354,7 @@ int picoquic_check_reset_stream_needs_repeat(picoquic_cnx_t* cnx, const uint8_t*
     uint64_t stream_id = 0;
     picoquic_stream_head_t* stream;
 
-    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &stream_id)) != NULL) {
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &stream_id)) != NULL) {
         bytes = picoquic_frames_varint_skip(bytes, bytes_max);
         if (bytes != NULL) {
             bytes = picoquic_frames_varint_skip(bytes, bytes_max);
@@ -457,7 +457,7 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
 
     if (is_mp && !cnx->is_multipath_enabled) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
-            picoquic_frame_type_new_connection_id);
+            picoquic_frame_type_path_new_connection_id);
         bytes = NULL;
     }
     else {
@@ -3325,8 +3325,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
         default: {
             uint64_t frame_id64;
             const uint8_t* type_bytes = bytes;
+            const uint8_t* p_bytes_max = bytes + bytes_max;
             *no_need_to_repeat = 0;
-            if ((bytes = picoquic_frames_varint_decode(bytes, bytes + bytes_max, &frame_id64)) != NULL) {
+            if ((bytes = picoquic_frames_varint_decode(bytes, p_bytes_max, &frame_id64)) != NULL) {
                 switch (frame_id64) {
                 case picoquic_frame_type_ack_frequency: {
                     uint64_t seq;
@@ -3335,7 +3336,7 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     uint8_t ignore_order;
                     uint64_t reordering_threshold;
 
-                    if ((bytes = picoquic_parse_ack_frequency_frame(bytes, bytes + bytes_max,
+                    if ((bytes = picoquic_parse_ack_frequency_frame(bytes, p_bytes_max,
                         &seq, &packets, &microsec, &ignore_order, &reordering_threshold)) == NULL) {
                         ret = -1;
                     } else if (seq == cnx->ack_frequency_sequence_local) {
@@ -3358,15 +3359,15 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                 case picoquic_frame_type_path_backup:
                 case picoquic_frame_type_path_available:
                     (void)picoquic_path_available_or_backup_frame_need_repeat(cnx, bytes,
-                        bytes + bytes_max, no_need_to_repeat);
+                        p_bytes_max, no_need_to_repeat);
                     break;
                 case picoquic_frame_type_max_path_id:
                     (void)picoquic_max_path_id_frame_needs_repeat(cnx, bytes,
-                        bytes + bytes_max, no_need_to_repeat);
+                        p_bytes_max, no_need_to_repeat);
                     break;
                 case picoquic_frame_type_path_blocked:
                     (void)picoquic_path_blocked_frame_needs_repeat(cnx, bytes,
-                        bytes + bytes_max, no_need_to_repeat);
+                        p_bytes_max, no_need_to_repeat);
                     break;
                 case picoquic_frame_type_path_new_connection_id:
                     ret = picoquic_check_new_cid_needs_repeat(cnx, type_bytes, bytes_max, 1, no_need_to_repeat);
