@@ -6316,7 +6316,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 const uint8_t* bytes0 = bytes;
 
                 if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64)) != NULL) {
-                    if (epoch == picoquic_epoch_0rtt) {
+                    if (epoch == picoquic_epoch_0rtt &&
+                        frame_id64 != picoquic_frame_type_bdp) {
                         /* By default, extension frames should not be used in 0rtt */
                         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
                         bytes = NULL;
