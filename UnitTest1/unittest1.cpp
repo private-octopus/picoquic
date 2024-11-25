@@ -244,16 +244,37 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_skip_frames)
+        TEST_METHOD(frames_skip)
         {
             int ret = skip_frame_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_parse_frames)
+        TEST_METHOD(frames_parse)
         {
             int ret = parse_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(frames_repeat)
+        {
+            int ret = frames_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(frames_ackack_error)
+        {
+            int ret = frames_ackack_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(frames_format)
+        {
+            int ret = frames_format_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -259,6 +259,7 @@ typedef struct st_test_skip_frames_t {
     uint64_t expected_error;
     int skip_fails;
     int mpath;
+    int nb_varints;
 } test_skip_frames_t;
 
 extern test_skip_frames_t test_skip_list[];
