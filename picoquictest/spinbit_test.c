@@ -59,15 +59,19 @@ int spinbit_test_one(picoquic_spinbit_version_enum spin_policy, picoquic_spinbit
 
     if (ret == 0) {
         /* force spinbit policy as specified, then start */
-        picoquic_set_default_spinbit_policy(test_ctx->qserver, spin_policy_server);
-        picoquic_set_spinbit_policy(test_ctx->cnx_client, spin_policy);
-
+        if (picoquic_set_default_spinbit_policy(test_ctx->qserver, spin_policy_server) != 0 ||
+            picoquic_set_spinbit_policy(test_ctx->cnx_client, spin_policy) != 0)
+        {
+            DBG_PRINTF("Invalid policies: %d, %d\n", spin_policy_server, spin_policy);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
         if (ret != 0)
         {
             DBG_PRINTF("%s", "Could not initialize stream zero for the client\n");
         }
-
     }
 
     if (ret == 0) {
@@ -210,7 +214,12 @@ int spinbit_on_test()
 
 int spinbit_bad_test()
 {
-    return spinbit_test_one(picoquic_spinbit_on, 123456);
+    int ret = 0;
+    if (spinbit_test_one(picoquic_spinbit_on, 123456) == 0 ||
+        spinbit_test_one(123455, picoquic_spinbit_null) == 0) {
+        ret = -1;
+    }
+    return ret;
 }
 
 

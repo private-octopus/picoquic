@@ -798,24 +798,31 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
     quic->padding_multiple_default = padding_multiple;
 }
 
-void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy)
+int picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy)
 {
-    quic->default_spin_policy = default_spinbit_policy;
+    int ret = 0;
+
+    if (default_spinbit_policy <= picoquic_spinbit_on) {
+        quic->default_spin_policy = default_spinbit_policy;
+    }
+    else {
+        ret = -1;
+    }
+    return ret;
 }
 
-void picoquic_set_spinbit_policy(picoquic_cnx_t* cnx, picoquic_spinbit_version_enum spinbit_policy)
+int picoquic_set_spinbit_policy(picoquic_cnx_t* cnx, picoquic_spinbit_version_enum spinbit_policy)
 {
-    if (spinbit_policy == picoquic_spinbit_on) {
-        /* This policy forces using basic all the time! */
-        cnx->spin_policy = picoquic_spinbit_basic;
-    }
-    else if (spinbit_policy < picoquic_spinbit_on) {
+    int ret = 0;
+
+    if (spinbit_policy < picoquic_spinbit_on) {
         cnx->spin_policy = spinbit_policy;
     }
     else
     {
-        cnx->spin_policy = picoquic_spinbit_null;
+        ret = -1;
     }
+    return ret;
 }
 
 void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy)
