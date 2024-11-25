@@ -640,6 +640,7 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
 
 /* Set default spin bit policy for the context */
 void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
+void picoquic_set_spinbit_policy(picoquic_cnx_t* cnx, picoquic_spinbit_version_enum spinbit_policy);
 
 /* Set default loss bit policy for the context */
 void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy);

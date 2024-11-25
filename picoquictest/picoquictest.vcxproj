@@ -188,6 +188,7 @@
     <ClCompile Include="socket_test.c" />
     <ClCompile Include="cplusplus.cpp" />
     <ClCompile Include="sockloop_test.c" />
+    <ClCompile Include="spinbit_test.c" />
     <ClCompile Include="splay_test.c" />
     <ClCompile Include="stream0_frame_test.c" />
     <ClCompile Include="stresstest.c" />

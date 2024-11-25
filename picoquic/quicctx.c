@@ -803,6 +803,21 @@ void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbi
     quic->default_spin_policy = default_spinbit_policy;
 }
 
+void picoquic_set_spinbit_policy(picoquic_cnx_t* cnx, picoquic_spinbit_version_enum spinbit_policy)
+{
+    if (spinbit_policy == picoquic_spinbit_on) {
+        /* This policy forces using basic all the time! */
+        cnx->spin_policy = picoquic_spinbit_basic;
+    }
+    else if (spinbit_policy < picoquic_spinbit_on) {
+        cnx->spin_policy = spinbit_policy;
+    }
+    else
+    {
+        cnx->spin_policy = picoquic_spinbit_null;
+    }
+}
+
 void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy)
 {
     quic->default_lossbit_policy = default_lossbit_policy;
