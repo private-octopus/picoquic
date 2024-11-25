@@ -638,8 +638,14 @@ void picoquic_enforce_client_only(picoquic_quic_t* quic, int do_enforce);
 /* Set default padding policy for the context */
 void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize);
 
-/* Set default spin bit policy for the context */
-void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
+/* Set default spin bit policy for the context
+* return 0 if OK, -1 if the policy was invalid.
+* Note that "picoquic_spinbit_on" is only allowed as a default policy,
+* translating to unconditional setup when connections are created for
+* the context. As a per conection setup, it is invalid.
+ */
+int picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
+int picoquic_set_spinbit_policy(picoquic_cnx_t* cnx, picoquic_spinbit_version_enum spinbit_policy);
 
 /* Set default loss bit policy for the context */
 void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy);

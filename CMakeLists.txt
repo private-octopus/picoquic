@@ -178,6 +178,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/skip_frame_test.c
     picoquictest/socket_test.c
     picoquictest/sockloop_test.c
+    picoquictest/spinbit_test.c
     picoquictest/splay_test.c
     picoquictest/stream0_frame_test.c
     picoquictest/stresstest.c

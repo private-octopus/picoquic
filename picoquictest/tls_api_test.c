@@ -5873,136 +5873,6 @@ int fast_nat_rebinding_test()
 }
 
 /*
- * Spin bit test. Verify that the bit does spin, and that the number
- * of rotations is plausible given the duration and the min delay.
- */
-
-int spin_bit_test()
-{
-    uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0;
-    uint64_t spin_duration = 0;
-    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int spin_count = 0;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
-
-    if (ret != 0)
-    {
-        DBG_PRINTF("%s", "Could not create the QUIC test contexts\n");
-    }
-
-    if (ret == 0) {
-        /* force spinbit policy to basic, then start */
-        test_ctx->cnx_client->spin_policy = picoquic_spinbit_basic;
-
-        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
-        if (ret != 0)
-        {
-            DBG_PRINTF("%s", "Could not initialize stream zero for the client\n");
-        }
-
-    }
-
-    if (ret == 0) {
-        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
-
-        if (ret != 0)
-        {
-            DBG_PRINTF("Connection loop returns error %d\n", ret);
-        }
-    }
-
-    /* Prepare to send data */
-    if (ret == 0) {
-        /* force the server spin bit policy to basic, then init the scenario */
-        test_ctx->cnx_server->spin_policy = picoquic_spinbit_basic;
-
-        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
-
-        if (ret != 0)
-        {
-            DBG_PRINTF("Init send receive scenario returns %d\n", ret);
-        }
-    }
-
-    /* Explore the data sending loop so we can observe the spin bit  */
-    if (ret == 0) {
-        uint64_t spin_begin_time = simulated_time;
-        uint64_t next_time = simulated_time + 10000000;
-        int ret = 0;
-        int nb_trials = 0;
-        int nb_inactive = 0;
-        int max_trials = 100000;
-        int current_spin = test_ctx->cnx_client->path[0]->current_spin;
-
-        test_ctx->c_to_s_link->loss_mask = &loss_mask;
-        test_ctx->s_to_c_link->loss_mask = &loss_mask;
-
-        while (ret == 0 && nb_trials < max_trials && simulated_time < next_time && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
-            int was_active = 0;
-
-            nb_trials++;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
-
-            if (ret < 0)
-            {
-                break;
-            }
-
-            if (test_ctx->cnx_client->path[0]->current_spin != current_spin) {
-                spin_count++;
-                current_spin = test_ctx->cnx_client->path[0]->current_spin;
-            }
-
-            if (was_active) {
-                nb_inactive = 0;
-            }
-            else {
-                nb_inactive++;
-            }
-
-            if (test_ctx->test_finished) {
-                if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                    break;
-                }
-            }
-        }
-
-        spin_duration = simulated_time - spin_begin_time;
-
-        if (ret != 0)
-        {
-            DBG_PRINTF("Data sending loop fails with ret = %d\n", ret);
-        }
-    }
-
-    if (ret == 0) {
-        ret = picoquic_close(test_ctx->cnx_client, 0);
-        if (ret != 0)
-        {
-            DBG_PRINTF("Picoquic close returns %d\n", ret);
-        }
-    }
-
-    if (ret == 0) {
-        if (spin_count < 6) {
-            DBG_PRINTF("Unplausible spin bit: %d rotations, rtt_min = %d, duration = %d\n",
-                spin_count, (int)test_ctx->cnx_client->path[0]->rtt_min, (int)spin_duration);
-            ret = -1;
-        }
-    }
-
-    if (test_ctx != NULL) {
-        tls_api_delete_ctx(test_ctx);
-        test_ctx = NULL;
-    }
-
-    return ret;
-}
-
-/*
  * Test whether the loss bit reporting can be enabled without breaking the connection
  */
 
@@ -8645,8 +8515,8 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog, uint8_t recv_ecn)
         if (keep_binlog) {
             picoquic_set_binlog(test_ctx->qserver, ".");
         }
-        picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_on);
-        picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_on);
+        (void)picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_on);
+        (void)picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_on);
         picoquic_set_default_lossbit_policy(test_ctx->qserver, picoquic_lossbit_send_receive);
         picoquic_set_default_lossbit_policy(test_ctx->qclient, picoquic_lossbit_send_receive);
         test_ctx->qserver->cnx_id_callback_ctx = (void*)&cnxfn_data_server;

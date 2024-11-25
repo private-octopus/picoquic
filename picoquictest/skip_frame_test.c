@@ -2131,7 +2131,7 @@ int binlog_test()
     }
     else {
         picoquic_set_binlog(quic, ".");        
-        picoquic_set_default_spinbit_policy(quic, picoquic_spinbit_null);
+        (void)picoquic_set_default_spinbit_policy(quic, picoquic_spinbit_null);
 
         struct sockaddr_in saddr;
         memset(&saddr, 0, sizeof(struct sockaddr_in));

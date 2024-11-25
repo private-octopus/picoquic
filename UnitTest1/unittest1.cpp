@@ -1398,13 +1398,40 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_spin_bit)
+        TEST_METHOD(spinbit)
         {
-            int ret = spin_bit_test();
+            int ret = spinbit_test();
 
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(spinbit_bad)
+        {
+            int ret = spinbit_bad_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spinbit_null)
+        {
+            int ret = spinbit_null_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spinbit_random)
+        {
+            int ret = spinbit_random_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spinbit_randclient)
+        {
+            int ret = spinbit_randclient_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(loss_bit)
         {
             int ret = loss_bit_test();
