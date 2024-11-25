@@ -1495,27 +1495,6 @@ picoquic_cnx_t * frames_format_test_get_cnx(picoquic_quic_t * qclient, struct so
         DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
     }
     else {
-        int do_not_detect_spurious = 0;
-        int is_preemptive_needed = 0;
-        int no_need_to_repeat = 0;
-        int c_ret = 0;
-        picoquic_packet_type_enum p_type;
-
-        switch (epoch) {
-        case picoquic_epoch_initial:
-            p_type = picoquic_packet_initial;
-            break;
-        case picoquic_epoch_0rtt:
-            p_type = picoquic_packet_0rtt_protected;
-            break;
-        case picoquic_epoch_handshake:
-            p_type = picoquic_packet_handshake;
-            break;
-        default:
-            p_type = picoquic_packet_1rtt_protected;
-            break;
-        }
-
         parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
     }
     return cnx;
@@ -1584,7 +1563,7 @@ int frames_format_test()
     int more_data;
     uint64_t current_time = 0;
     int is_pure_ack = 0;
-    picoquic_stream_head_t* stream;
+    picoquic_stream_head_t* stream = NULL;
     int round;
     uint64_t simulated_time = 0;
     picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
