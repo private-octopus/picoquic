@@ -1485,6 +1485,174 @@ int frames_ackack_error_test()
     return ret;
 }
 
+picoquic_cnx_t * frames_format_test_get_cnx(picoquic_quic_t * qclient, struct sockaddr * saddr, picoquic_epoch_enum epoch, uint64_t simulated_time, int mpath)
+{
+    picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id, saddr,
+        simulated_time, 0, "test-sni", "test-alpn", 1);
+
+    if (cnx == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+    }
+    else {
+        int do_not_detect_spurious = 0;
+        int is_preemptive_needed = 0;
+        int no_need_to_repeat = 0;
+        int c_ret = 0;
+        picoquic_packet_type_enum p_type;
+
+        switch (epoch) {
+        case picoquic_epoch_initial:
+            p_type = picoquic_packet_initial;
+            break;
+        case picoquic_epoch_0rtt:
+            p_type = picoquic_packet_0rtt_protected;
+            break;
+        case picoquic_epoch_handshake:
+            p_type = picoquic_packet_handshake;
+            break;
+        default:
+            p_type = picoquic_packet_1rtt_protected;
+            break;
+        }
+
+        parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
+    }
+    return cnx;
+}
+
+
+#define FRAME_FORMAT_TEST_ONCE(format_func, s_max, ...)                                               \
+    if (ret == 0) {                                                                                   \
+        bytes_max = buffer + s_max;                                                                   \
+        bytes = buffer;                                                                               \
+        more_data = 0;                                                                                \
+        is_pure_ack = 0;                                                                              \
+        bytes = format_func(__VA_ARGS__);                                                             \
+        if (bytes != buffer || !more_data) {                                                          \
+            ret = -1;                                                                                 \
+        }                                                                                             \
+    }
+
+#define FRAME_FORMAT_TEST(format_func, ...)                                                               \
+    if (ret == 0) {                                                                                       \
+        bytes_max = buffer + PICOQUIC_MAX_PACKET_SIZE;                                                    \
+        for (round = 0; round < 2; round++) {                                                             \
+            bytes = buffer;                                                                               \
+            more_data = 0;                                                                                \
+            is_pure_ack = 0;                                                                              \
+            bytes = format_func(__VA_ARGS__);                                                             \
+            if (bytes == NULL || bytes == buffer) {                                                       \
+                break;                                                                                    \
+            }                                                                                             \
+            bytes_max = bytes - 1;                                                                        \
+        }                                                                                                 \
+        if (bytes != buffer || !more_data) {                                                              \
+            ret = -1;                                                                                     \
+        }                                                                                                 \
+    }
+
+/* Declarations of format functions that are not already public. */
+uint8_t* picoquic_format_retire_connection_id_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
+    int is_mp, uint64_t unique_path_id, uint64_t sequence);
+uint8_t* picoquic_format_new_token_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
+    uint8_t* token, size_t token_length);
+uint8_t* picoquic_format_stop_sending_frame(picoquic_stream_head_t* stream,
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_stream_reset_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_data_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_stream_data_blocked_frame(uint8_t* bytes,
+    uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_stream_head_t* stream);
+uint8_t* picoquic_format_stream_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_stream_head_t* stream);
+uint8_t* picoquic_format_datagram_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, size_t length, const uint8_t* src);
+uint8_t* picoquic_format_path_available_or_standby_frame(
+    uint8_t* bytes, const uint8_t* bytes_max, uint64_t frame_type,
+    uint64_t path_id, uint64_t sequence, int * more_data);
+uint8_t* picoquic_format_path_blocked_frame(
+    uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id, int* more_data);
+
+int frames_format_test()
+{
+    int ret = 0;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint8_t data[] = { 0xaa, 0xaa };
+    uint8_t* bytes = NULL;
+    uint8_t* bytes_max;
+    int more_data;
+    uint64_t current_time = 0;
+    int is_pure_ack = 0;
+    picoquic_stream_head_t* stream;
+    int round;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+    uint8_t addr_bytes[4] = { 1, 2, 3, 4 };
+    picoquic_cnx_t* cnx;
+    picoquic_local_cnxid_list_t* local_cnxid_list = NULL;
+    picoquic_local_cnxid_t* l_cid = NULL; 
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        cnx = frames_format_test_get_cnx(qclient, (struct sockaddr *)&saddr, picoquic_epoch_1rtt, simulated_time, 1);
+        if (cnx == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0)  {
+        local_cnxid_list = cnx->first_local_cnxid_list;
+        l_cid = picoquic_create_local_cnxid(cnx, local_cnxid_list->unique_path_id, NULL, current_time);
+        picoquic_add_to_stream(cnx, 0, data, 2, 0);
+        stream = picoquic_find_stream(cnx, 0);
+        if (stream == NULL) {
+            ret = -1;
+        }
+    }
+
+    stream->reset_requested = 1; 
+    FRAME_FORMAT_TEST_ONCE(picoquic_format_stream_reset_frame, 2, cnx, stream, bytes, bytes_max, &more_data, &is_pure_ack);
+    stream->reset_requested = 0;
+    FRAME_FORMAT_TEST(picoquic_format_new_connection_id_frame, cnx, local_cnxid_list, bytes, bytes_max, &more_data, &is_pure_ack, l_cid);
+    FRAME_FORMAT_TEST(picoquic_format_retire_connection_id_frame, bytes, bytes_max, &more_data, &is_pure_ack, 1, 0, 17);
+    FRAME_FORMAT_TEST(picoquic_format_new_token_frame, bytes, bytes_max, &more_data, &is_pure_ack, data, 2);
+    stream->stop_sending_requested = 1;
+    FRAME_FORMAT_TEST_ONCE(picoquic_format_stop_sending_frame, 2, stream, bytes, bytes_max, &more_data, &is_pure_ack);
+    stream->stop_sending_requested = 0;
+    stream->stop_sending_sent = 0;
+    FRAME_FORMAT_TEST_ONCE(picoquic_format_data_blocked_frame, 1, cnx, bytes, bytes_max, &more_data, &is_pure_ack);
+    FRAME_FORMAT_TEST(picoquic_format_stream_data_blocked_frame, bytes, bytes_max, &more_data, &is_pure_ack, stream);
+    stream->stream_data_blocked_sent = 0;
+    FRAME_FORMAT_TEST_ONCE(picoquic_format_stream_blocked_frame, 1, cnx, bytes, bytes_max, &more_data, &is_pure_ack, stream);
+    cnx->stream_blocked_bidir_sent = 0;
+    FRAME_FORMAT_TEST(picoquic_format_connection_close_frame, cnx, bytes, bytes_max, &more_data, &is_pure_ack);
+    FRAME_FORMAT_TEST(picoquic_format_application_close_frame, cnx, bytes, bytes_max, &more_data, &is_pure_ack);
+    FRAME_FORMAT_TEST(picoquic_format_max_stream_data_frame, cnx, stream, bytes, bytes_max, &more_data, &is_pure_ack, 100000000);
+    FRAME_FORMAT_TEST(picoquic_format_path_challenge_frame, bytes, bytes_max, &more_data, &is_pure_ack, 0xaabbccddeeff0011ull);
+    FRAME_FORMAT_TEST(picoquic_format_path_response_frame, bytes, bytes_max, &more_data, &is_pure_ack, 0xaabbccddeeff0011ull);
+    FRAME_FORMAT_TEST(picoquic_format_datagram_frame, bytes, bytes_max, &more_data, &is_pure_ack, 2, data);
+    FRAME_FORMAT_TEST_ONCE(picoquic_format_ack_frequency_frame, 2, cnx, bytes, bytes_max, &more_data);
+    FRAME_FORMAT_TEST(picoquic_format_immediate_ack_frame, bytes, bytes_max, &more_data);
+    FRAME_FORMAT_TEST(picoquic_format_time_stamp_frame, cnx, buffer, bytes_max, &more_data, simulated_time);
+    FRAME_FORMAT_TEST(picoquic_format_path_abandon_frame, bytes, bytes_max, &more_data, 1, 3);
+    FRAME_FORMAT_TEST(picoquic_format_path_available_or_standby_frame, bytes, bytes_max, picoquic_frame_type_path_available, 1, 17, &more_data);
+    FRAME_FORMAT_TEST(picoquic_format_max_path_id_frame, bytes, bytes_max, 123, &more_data);
+    FRAME_FORMAT_TEST(picoquic_format_path_blocked_frame, bytes, bytes_max, 123, &more_data);
+    FRAME_FORMAT_TEST(picoquic_format_observed_address_frame, bytes, bytes_max, picoquic_frame_type_observed_address_v4, 13, addr_bytes, 4433, &more_data);
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+
+    return ret;
+}
+
 void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length);
 void picoquic_binlog_frames(FILE* F, uint8_t* bytes, size_t length);
 

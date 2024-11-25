@@ -272,6 +272,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(frames_format)
+        {
+            int ret = frames_format_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_logger)
         {
             int ret = logger_test();

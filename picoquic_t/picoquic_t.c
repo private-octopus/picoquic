@@ -74,6 +74,7 @@ static const picoquic_test_def_t test_table[] = {
     { "frames_parse", parse_frame_test },
     { "frames_repeat", frames_repeat_test },
     { "frames_ackack_error", frames_ackack_error_test },
+    { "frames_format", frames_format_test },
     { "logger", logger_test },
     { "binlog", binlog_test },
     { "app_message_overflow", app_message_overflow_test },
