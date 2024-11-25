@@ -189,7 +189,7 @@ int spinbit_test_one(picoquic_spinbit_version_enum spin_policy, picoquic_spinbit
 
 int spinbit_test()
 {
-    return spinbit_test_one(picoquic_spinbit_on, picoquic_spinbit_basic);
+    return spinbit_test_one(picoquic_spinbit_basic, picoquic_spinbit_on);
 }
 
 int spinbit_random_test()
