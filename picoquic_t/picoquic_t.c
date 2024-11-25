@@ -239,7 +239,6 @@ static const picoquic_test_def_t test_table[] = {
     { "nat_rebinding_fast", fast_nat_rebinding_test},
     { "spinbit", spinbit_test },
     { "spinbit_bad", spinbit_bad_test },
-    { "spinbit_on", spinbit_on_test },
     { "spinbit_null", spinbit_null_test },
     { "spinbit_randclient", spinbit_randclient_test },
     { "spinbit_random", spinbit_random_test },

@@ -158,7 +158,6 @@ int spinbit_test();
 int spinbit_random_test();
 int spinbit_randclient_test();
 int spinbit_null_test();
-int spinbit_on_test();
 int spinbit_bad_test();
 int loss_bit_test();
 int client_error_test();

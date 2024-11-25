@@ -155,7 +155,7 @@ int spinbit_test_one(picoquic_spinbit_version_enum spin_policy, picoquic_spinbit
 
     if (ret == 0) {
         if (spin_policy == picoquic_spinbit_basic) {
-            if (spin_policy_server == picoquic_spinbit_basic) {
+            if (spin_policy_server == picoquic_spinbit_on) {
                 if (spin_count < 6) {
                     DBG_PRINTF("Unplausible spin bit: %d rotations, rtt_min = %d, duration = %d\n",
                         spin_count, (int)test_ctx->cnx_client->path[0]->rtt_min, (int)spin_duration);
@@ -189,7 +189,7 @@ int spinbit_test_one(picoquic_spinbit_version_enum spin_policy, picoquic_spinbit
 
 int spinbit_test()
 {
-    return spinbit_test_one(picoquic_spinbit_basic, picoquic_spinbit_basic);
+    return spinbit_test_one(picoquic_spinbit_on, picoquic_spinbit_basic);
 }
 
 int spinbit_random_test()
@@ -205,11 +205,6 @@ int spinbit_randclient_test()
 int spinbit_null_test()
 {
     return spinbit_test_one(picoquic_spinbit_basic, picoquic_spinbit_null);
-}
-
-int spinbit_on_test()
-{
-    return spinbit_test_one(picoquic_spinbit_on, picoquic_spinbit_on);
 }
 
 int spinbit_bad_test()

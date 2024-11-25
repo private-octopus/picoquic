@@ -1412,13 +1412,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(spinbit_on)
-        {
-            int ret = spinbit_on_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(spinbit_null)
         {
             int ret = spinbit_null_test();
