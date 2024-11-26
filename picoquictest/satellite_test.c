@@ -218,7 +218,7 @@ int satellite_seeded_test()
 int satellite_seeded_bbr1_test()
 {
     /* Simulate remembering RTT and BW from previous connection */
-    return satellite_test_one(picoquic_bbr1_algorithm, 100000000, 4900000, 250, 3, 0, 0, 0, 1, 0, 0);
+    return satellite_test_one(picoquic_bbr1_algorithm, 100000000, 5300000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
 int satellite_loss_test()
