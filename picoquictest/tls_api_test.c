@@ -12018,4 +12018,58 @@ int keylog_test()
     return ret;
 }
 
-/* Test the */
+/* Test the get hash API */
+
+int get_hash_length_test(char const * alg_name)
+{
+    int ret = 0;
+    size_t sz = picoquic_hash_get_length(alg_name);
+    if (sz == 0 || sz > 1024) {
+        ret = -1;
+    }
+    return ret;
+}
+
+int get_hash_algo_test(char const* alg_name)
+{
+    int ret = 0;
+    uint8_t test[] = { 1, 2, 3, 4 };
+    uint8_t outbuf[1024];
+    uint8_t ref[16];
+    void * h = picoquic_hash_create(alg_name);
+    if (h == NULL) {
+        ret = -1;
+    }
+    else {
+        memset(outbuf, 0, sizeof(outbuf));
+        memset(ref, 0, sizeof(ref));
+        picoquic_hash_update(test, sizeof(test), h);
+        picoquic_hash_finalize(outbuf, h);
+        if (memcmp(outbuf, ref, sizeof(ref)) == 0) {
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
+int get_hash_test()
+{
+    int ret = 0;
+    char const* valid_hash = "sha256";
+    char const* invalid_hash = "no_such_hash_nada_niente";
+
+    picoquic_tls_api_init();
+    if (get_hash_length_test(valid_hash) != 0) {
+        ret = -1;
+    }
+    else if (get_hash_length_test(invalid_hash) == 0) {
+        ret = -1;
+    }
+    else if (get_hash_algo_test(valid_hash) != 0) {
+        ret = -1;
+    }
+    else if (get_hash_algo_test(invalid_hash) == 0) {
+        ret = -1;
+    }
+    return (ret);
+}

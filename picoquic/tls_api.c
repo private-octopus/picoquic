@@ -448,11 +448,6 @@ ptls_hash_algorithm_t* picoquic_get_sha256()
     return picoquic_get_hash_algorithm_by_name("sha256");
 }
 
-void* picoquic_get_sha256_v()
-{
-    return (void*)picoquic_get_sha256();
-}
-
 /* Export hash functions so applications do not need to access picotls.
 * It is not clear that these functions are actually used by applications.
 */

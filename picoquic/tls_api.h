@@ -164,9 +164,7 @@ void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc);
 /* Define hash functions here so applications don't need to directly interface picotls */
 #define PICOQUIC_HASH_SIZE_MAX 64
 void * picoquic_hash_create(char const * algorithm_name);
-#if 0
 size_t picoquic_hash_get_length(char const* algorithm_name);
-#endif
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context);
 void picoquic_hash_finalize(uint8_t* output, void* hash_context);
 

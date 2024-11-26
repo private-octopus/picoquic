@@ -2988,6 +2988,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(get_hash) {
+            int ret = get_hash_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(getter) {
             int ret = getter_test();
 
