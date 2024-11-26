@@ -224,6 +224,15 @@ int wifi_bbr_test()
     return ret;
 }
 
+int wifi_bbr1_test()
+{
+    wifi_test_spec_t spec;
+    wifi_test_set_default_spec(&spec, picoquic_bbr1_algorithm, 2800000);
+    int ret = wifi_test_one(wifi_test_bbr, &spec);
+
+    return ret;
+}
+
 int wifi_cubic_test()
 {
     wifi_test_spec_t spec;
