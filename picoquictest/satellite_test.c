@@ -264,7 +264,7 @@ int satellite_small_up_test()
 int satellite_bbr1_test()
 {
     /* Should be less than 7 sec per draft etosat */
-    return satellite_test_one(picoquic_cubic_algorithm, 100000000, 7000000, 250, 3, 0, 0, 0, 0, 0, 0);
+    return satellite_test_one(picoquic_bbr1_algorithm, 100000000, 7000000, 250, 3, 0, 0, 0, 0, 0, 0);
 }
 
 int satellite_cubic_test()
