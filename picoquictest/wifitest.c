@@ -277,6 +277,20 @@ int wifi_bbr_hard_test()
     return ret;
 }
 
+int wifi_bbr1_hard_test()
+{
+    wifi_test_spec_t spec = {
+        nb_suspension_hard,
+        3000,
+        suspension_hard,
+        picoquic_bbr1_algorithm,
+        4060000,
+        0 };
+    int ret = wifi_test_one(wifi_test_bbr_hard, &spec);
+
+    return ret;
+}
+
 int wifi_cubic_hard_test()
 {
     wifi_test_spec_t spec = {

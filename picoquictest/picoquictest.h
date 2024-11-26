@@ -424,6 +424,7 @@ int wifi_bbr_long_test();
 int wifi_bbr_many_test();
 int wifi_bbr_shadow_test();
 int wifi_bbr1_test();
+int wifi_bbr1_hard_test();
 int wifi_cubic_test();
 int wifi_cubic_hard_test();
 int wifi_cubic_long_test();

@@ -428,6 +428,7 @@ static const picoquic_test_def_t test_table[] = {
     { "wifi_bbr_many", wifi_bbr_many_test },
     { "wifi_bbr_shadow", wifi_bbr_shadow_test },
     { "wifi_bbr1", wifi_bbr1_test },
+    { "wifi_bbr1_hard", wifi_bbr1_hard_test },
     { "wifi_cubic", wifi_cubic_test },
     { "wifi_cubic_hard", wifi_cubic_hard_test },
     { "wifi_cubic_long", wifi_cubic_long_test },
