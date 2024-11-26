@@ -63,7 +63,10 @@ typedef enum {
     wifi_test_cubic_long,
     wifi_test_bbr_long,
     wifi_test_bbr_shadow,
-    wifi_test_bbr_many
+    wifi_test_bbr_many,
+    wifi_test_bbr1,
+    wifi_test_bbr1_hard,
+    wifi_test_bbr1_long
 } wifi_test_enum;
 
 typedef struct st_wifi_test_suspension_t {
@@ -286,7 +289,7 @@ int wifi_bbr1_hard_test()
         picoquic_bbr1_algorithm,
         4060000,
         0 };
-    int ret = wifi_test_one(wifi_test_bbr_hard, &spec);
+    int ret = wifi_test_one(wifi_test_bbr1_hard, &spec);
 
     return ret;
 }
@@ -329,6 +332,20 @@ int wifi_bbr_long_test()
         3400000,
         1 };
     int ret = wifi_test_one(wifi_test_bbr_long, &spec);
+
+    return ret;
+}
+
+int wifi_bbr1_long_test()
+{
+    wifi_test_spec_t spec = {
+        nb_suspension_basic,
+        50000,
+        suspension_basic,
+        picoquic_bbr1_algorithm,
+        3400000,
+        1 };
+    int ret = wifi_test_one(wifi_test_bbr1_long, &spec);
 
     return ret;
 }
