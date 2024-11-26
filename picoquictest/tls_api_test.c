@@ -11968,7 +11968,6 @@ static size_t keylog_file_size(char const* file_name)
 int keylog_test()
 {
     uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0x55, 0x17, 0xe9, 0x10, 0x90, 0x0, 0x0, 0x0}, 8 };
     int ret;
@@ -12018,3 +12017,5 @@ int keylog_test()
     }
     return ret;
 }
+
+/* Test the */
