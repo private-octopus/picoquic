@@ -487,6 +487,7 @@ static const picoquic_test_def_t test_table[] = {
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },
     { "get_hash", get_hash_test },
+    { "get_tls_errors", get_tls_errors_test },
     { "getter", getter_test },
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },

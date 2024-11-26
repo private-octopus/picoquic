@@ -12073,3 +12073,35 @@ int get_hash_test()
     }
     return (ret);
 }
+
+int get_tls_errors_test()
+{
+    int ret = 0;
+    uint8_t data[128];
+    char const* invalid_stuff = "no_such_stuff_nada_niente";
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_connection_id_t initial_cid = { {0x9e, 0x71, 0x5e, 0, 0, 0, 0, 0}, 8 };
+    int invalid_id = 0xFFFE8808;
+
+    ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid, 8, 0, 0, 0);
+
+    memset(data, 0xaa, sizeof(data));
+    if (ret == 0 && picoquic_ecb_create_by_name(0, data, invalid_stuff) != NULL) {
+        ret = -1;
+    }
+    if (ret == 0 && picoquic_get_cipher_suite_by_id_v(invalid_id, 0) != NULL) {
+        ret = -1;
+    }
+    if (ret == 0 && picoquic_set_key_exchange(test_ctx->qserver, invalid_id) == 0) {
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

@@ -412,16 +412,20 @@ static ptls_cipher_algorithm_t* picoquic_get_ecb_cipher_by_id(const char* ecb_ci
 * then derive the ECB function from the selection of the AEAD function.
 * This will obviate the need of providing a specific API.
 */
-void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key)
+
+void* picoquic_ecb_create_by_name(int is_enc, const void* ecb_key, char const* alg_name)
 {
     void* created = NULL;
-    ptls_cipher_algorithm_t* ecb_cipher = picoquic_get_ecb_cipher_by_id("AES128-ECB");
+    ptls_cipher_algorithm_t* ecb_cipher = picoquic_get_ecb_cipher_by_id(alg_name);
 
     if (ecb_cipher != NULL) {
         created = (void*)ptls_cipher_new(ecb_cipher, is_enc, ecb_key);
     }
     
     return created;
+}
+void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key) {
+    return picoquic_ecb_create_by_name(is_enc, ecb_key, "AES128-ECB");
 }
 
 /* Obtain a hash algorithm from the table of supported cipher suites.*/

@@ -2994,6 +2994,11 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(get_tls_errors) {
+            int ret = get_tls_errors_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(getter) {
             int ret = getter_test();
 
