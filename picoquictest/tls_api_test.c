@@ -12094,9 +12094,22 @@ int get_tls_errors_test()
     if (ret == 0 && picoquic_get_cipher_suite_by_id_v(invalid_id, 0) != NULL) {
         ret = -1;
     }
+    if (ret == 0 && picoquic_set_cipher_suite(test_ctx->qserver, invalid_id) == 0) {
+        ret = -1;
+    }
     if (ret == 0 && picoquic_set_key_exchange(test_ctx->qserver, invalid_id) == 0) {
         ret = -1;
     }
+    if (ret == 0 &&
+        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256, 1) == NULL &&
+        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256, 0) == NULL) {
+        ret = -1;
+    }
+    if (ret == 0 &&
+        picoquic_get_cipher_suite_by_id_v(invalid_id, 1) != NULL) {
+        ret = -1;
+    }
+
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
