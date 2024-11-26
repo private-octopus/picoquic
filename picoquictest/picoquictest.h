@@ -281,6 +281,7 @@ int satellite_cubic_loss_test();
 int bdp_basic_test();
 int bdp_reno_test();
 int bdp_cubic_test();
+int bdp_bbr1_test();
 int bdp_rtt_test();
 int bdp_ip_test();
 int bdp_delay_test();

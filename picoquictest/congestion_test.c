@@ -441,6 +441,7 @@ typedef enum {
     bdp_test_option_short,
     bdp_test_option_short_lo,
     bdp_test_option_short_hi,
+    bdp_test_option_bbr1
 } bdp_test_option_enum;
 
 int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
@@ -536,6 +537,9 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                 ccalgo = picoquic_cubic_algorithm;
                 max_completion_time = 10000000;
             }
+            else if (bdp_test_option == bdp_test_option_bbr1) {
+                ccalgo = picoquic_bbr1_algorithm;
+            }
             picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
             picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
             picoquic_set_default_bdp_frame_option(test_ctx->qclient, 1);
@@ -597,7 +601,8 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                         bdp_test_option == bdp_test_option_short ||
                         bdp_test_option == bdp_test_option_short_hi ||
                         bdp_test_option == bdp_test_option_short_lo ||
-                        bdp_test_option == bdp_test_option_cubic) {
+                        bdp_test_option == bdp_test_option_cubic ||
+                        bdp_test_option == bdp_test_option_bbr1) {
                         if (!test_ctx->cnx_server->cwin_notified_from_seed) {
                             DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, cwin not seed on server.\n",
                                 bdp_test_option, i);
@@ -699,6 +704,11 @@ int bdp_cubic_test()
     return bdp_option_test_one(bdp_test_option_cubic);
 }
 #endif
+
+int bdp_bbr1_test()
+{
+    return bdp_option_test_one(bdp_test_option_bbr1);
+}
 
 /*
  * The "blackhole" test simulates a link breakage of 2 seconds, during which all packets
