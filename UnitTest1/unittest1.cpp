@@ -2049,6 +2049,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(bbr1_long)
+        {
+            int ret = bbr1_long_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(l4s_reno)
         {
             int ret = l4s_reno_test();
@@ -2443,6 +2450,25 @@ namespace UnitTest1
 
         TEST_METHOD(wifi_bbr_shadow) {
             int ret = wifi_bbr_shadow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_bbr1)
+        {
+            int ret = wifi_bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_bbr1_hard) {
+            int ret = wifi_bbr1_hard_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wifi_bbr1_long) {
+            int ret = wifi_bbr1_long_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -157,6 +157,7 @@
     <ClCompile Include="cnx_creation_test.c" />
     <ClCompile Include="code_version_test.c" />
     <ClCompile Include="config_test.c" />
+    <ClCompile Include="congestion_test.c" />
     <ClCompile Include="cpu_limited.c" />
     <ClCompile Include="datagram_tests.c" />
     <ClCompile Include="delay_tolerant_test.c" />

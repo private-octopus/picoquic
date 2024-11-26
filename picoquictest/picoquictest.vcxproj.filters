@@ -183,6 +183,9 @@
     <ClCompile Include="spinbit_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="congestion_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">
