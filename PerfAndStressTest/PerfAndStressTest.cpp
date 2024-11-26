@@ -104,6 +104,13 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(satellite_bbr1)
+        {
+            int ret = satellite_bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(satellite_cubic)
         {
             int ret = satellite_cubic_test();
