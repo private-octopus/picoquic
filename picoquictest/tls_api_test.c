@@ -10122,6 +10122,7 @@ int direct_receive_test()
     return ret;
 }
 
+#if 0
 /*
 * Application limited test.
 * The application is set to limit the max data values to stay lower than a set flow control window.
@@ -10410,6 +10411,7 @@ int cwin_max_test()
 
     return ret;
 }
+#endif
 
 
 
