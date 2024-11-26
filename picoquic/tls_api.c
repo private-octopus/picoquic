@@ -2884,6 +2884,8 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
     return ret;
 }
 
+#if 0
+/* Disabling this code for now, as it is not used */
 /*
  * Encryption functions for CID encryption
  */
@@ -2955,6 +2957,7 @@ void picoquic_cid_decrypt_under_mask(void *cid_enc, const picoquic_connection_id
 {
     picoquic_cid_encrypt_under_mask(cid_enc, cid_in, mask, cid_out);
 }
+#endif
 
 /* Retry Packet Protection.
  * This is done by applying AES-GCM128 with a constant key and a NULL nonce,
