@@ -141,8 +141,8 @@ static int congestion_long_test(picoquic_congestion_algorithm_t* ccalgo)
 
     /* Set the congestion algorithm to specified value. Also, request a packet trace */
     if (ret == 0) {
-        picoquic_set_default_congestion_algorithm(test_ctx->qserver, picoquic_bbr_algorithm);
-        picoquic_set_congestion_algorithm(test_ctx->cnx_client, picoquic_bbr_algorithm);
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
 
 
         test_ctx->c_to_s_link->jitter = 0;
