@@ -284,6 +284,7 @@ static const picoquic_test_def_t test_table[] = {
     { "nat_handshake", nat_handshake_test },
     { "key_rotation_vector", key_rotation_vector_test },
     { "key_rotation_stress", key_rotation_stress_test },
+    { "keylog_test", keylog_test },
     { "short_initial_cid", short_initial_cid_test },
     { "stream_id_max", stream_id_max_test },
     { "padding_test", padding_test },
