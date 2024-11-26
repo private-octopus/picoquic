@@ -348,6 +348,7 @@ static const picoquic_test_def_t test_table[] = {
     { "high_latency_probeRTT", high_latency_probeRTT_test },
     { "satellite_basic", satellite_basic_test },
     { "satellite_seeded", satellite_seeded_test },
+    { "satellite_seeded_bbr1", satellite_seeded_bbr1_test },
     { "satellite_loss", satellite_loss_test },
     { "satellite_loss_fc", satellite_loss_fc_test},
     { "satellite_jitter", satellite_jitter_test },

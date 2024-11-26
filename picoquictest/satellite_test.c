@@ -215,6 +215,12 @@ int satellite_seeded_test()
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4900000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
+int satellite_seeded_bbr1_test()
+{
+    /* Simulate remembering RTT and BW from previous connection */
+    return satellite_test_one(picoquic_bbr1_algorithm, 100000000, 4900000, 250, 3, 0, 0, 0, 1, 0, 0);
+}
+
 int satellite_loss_test()
 {
     /* Should be less than 10 sec per draft etosat. */
