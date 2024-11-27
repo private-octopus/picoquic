@@ -12110,7 +12110,9 @@ int get_tls_errors_test()
         ret = -1;
     }
 
-
+    if (ret == 0) {
+        (void)picoquic_enable_custom_verify_certificate(test_ctx->qserver);
+    }
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
