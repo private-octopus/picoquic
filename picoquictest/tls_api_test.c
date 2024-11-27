@@ -12129,6 +12129,19 @@ int get_tls_errors_test()
                 ret = -1;
             }
         }
+        if (ret == 0) {
+            size_t count = 0;
+            ptls_iovec_t* certs = picoquic_get_certs_from_file("some bad file name.not", &count);
+            if (certs != NULL) {
+                ret = -1;
+                for (size_t i = 0; i < count; i++) {
+                    free(certs[i].base);
+                }
+                free(certs);
+            }
+        }
+
+        ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count);
         /* Reinit the TLS API */
         picoquic_tls_api_init();
     }
