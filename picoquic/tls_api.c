@@ -366,7 +366,7 @@ int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
 }
 
 /* Obtain AES128GCM SHA256, AES256GCM_SHA384 or CHACHA20 suite according to current provider */
-ptls_cipher_suite_t* picoquic_get_selected_cipher_suite_by_id(int cipher_suite_id, int use_low_memory)
+ptls_cipher_suite_t* picoquic_get_cipher_suite_by_id(int cipher_suite_id, int use_low_memory)
 {
     ptls_cipher_suite_t* selected_suites[4];
     ptls_cipher_suite_t* cipher;
@@ -377,13 +377,8 @@ ptls_cipher_suite_t* picoquic_get_selected_cipher_suite_by_id(int cipher_suite_i
     else {
         cipher = selected_suites[0];
     }
-    
-    return cipher;
-}
 
-static ptls_cipher_suite_t* picoquic_get_cipher_suite_by_id(int cipher_suite_id, int use_low_memory)
-{
-    return picoquic_get_selected_cipher_suite_by_id(cipher_suite_id, use_low_memory);
+    return cipher;
 }
 
 static ptls_cipher_algorithm_t* picoquic_get_ecb_cipher_by_id(const char* ecb_cipher_name)
@@ -1156,7 +1151,8 @@ uint64_t picoquic_get_simulated_time_cb(ptls_get_time_t* self)
  * Verify certificate
  */
 
-int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
+int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic)
+{
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
 
     ctx->verify_certificate = quic->verify_certificate_callback;
@@ -1837,13 +1833,22 @@ uint64_t picoquic_get_tls_time(picoquic_quic_t* quic)
 int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t current_time)
 {
     int ret = 0;
-    /* allocate a context structure */
-    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)malloc(sizeof(picoquic_tls_ctx_t));
+    /* allocate a context structure, but only if checks are correct */
+    picoquic_tls_ctx_t* ctx = NULL;
+
+    if (!cnx->client_mode && ((ptls_context_t*)quic->tls_master_ctx)->encrypt_ticket == NULL) {
+        /* A server side connection, but no cert/key where given for the master context */
+        ret = PICOQUIC_ERROR_TLS_SERVER_CON_WITHOUT_CERT;
+    }
+    else {
+        ctx = (picoquic_tls_ctx_t*)malloc(sizeof(picoquic_tls_ctx_t));
+        if (ctx == NULL) {
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+    }
 
     /* Create the TLS context */
-    if (ctx == NULL) {
-        ret = -1;
-    } else {
+    if (ctx != NULL) {
         memset(ctx, 0, sizeof(picoquic_tls_ctx_t));
         ctx->ext_data_size = PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE;
         if (!cnx->client_mode && quic->test_large_server_flight) {
@@ -1864,22 +1869,14 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
 
             ctx->tls = ptls_new((ptls_context_t*)quic->tls_master_ctx,
                 (ctx->client_mode) ? 0 : 1);
-            *ptls_get_data_ptr(ctx->tls) = cnx;
-
             if (ctx->tls == NULL) {
-                free(ctx);
+                picoquic_tlscontext_free(ctx);
                 ctx = NULL;
-                ret = -1;
+                ret = PICOQUIC_ERROR_MEMORY;
             }
-            else if (!ctx->client_mode) {
-                /* A server side connection, but no cert/key where given for the master context */
-                if (((ptls_context_t*)quic->tls_master_ctx)->encrypt_ticket == NULL) {
-                    ret = PICOQUIC_ERROR_TLS_SERVER_CON_WITHOUT_CERT;
-                    picoquic_tlscontext_free(ctx);
-                    ctx = NULL;
-                }
-
-                if (ctx != NULL) {
+            else{
+                *ptls_get_data_ptr(ctx->tls) = cnx;
+                if (!ctx->client_mode) {
                     /* The server should never attempt a stateless retry */
                     ctx->handshake_properties.server.enforce_retry = 0;
                     ctx->handshake_properties.server.retry_uses_cookie = 0;
@@ -1890,7 +1887,7 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
             }
         }
     }
-    
+
     if (cnx->tls_ctx != NULL) {
         picoquic_tlscontext_free(cnx->tls_ctx);
     }
