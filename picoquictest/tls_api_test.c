@@ -12109,6 +12109,29 @@ int get_tls_errors_test()
         picoquic_get_cipher_suite_by_id_v(invalid_id, 1) != NULL) {
         ret = -1;
     }
+    if (ret == 0) {
+
+    }
+    if (ret == 0) {
+        /* Unload the TLS API to force internal errors. */
+        picoquic_cnx_t* cnx;
+        picoquic_tls_api_unload();
+
+        cnx = picoquic_create_cnx(test_ctx->qclient, picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&test_ctx->server_addr, simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 0);
+        if (cnx != NULL) {
+            ret = -1;
+            picoquic_delete_cnx(cnx);
+        }
+        if (ret == 0) {
+            if (picoquic_set_private_key_from_file(test_ctx->qclient, "some bad file name.not") == 0) {
+                ret = -1;
+            }
+        }
+        /* Reinit the TLS API */
+        picoquic_tls_api_init();
+    }
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
