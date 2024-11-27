@@ -1150,7 +1150,8 @@ uint64_t picoquic_get_simulated_time_cb(ptls_get_time_t* self)
 /*
  * Verify certificate
  */
-
+#if 0
+/* The custom cert call is not used and not tested, so disabled for now. */
 int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
@@ -1159,7 +1160,7 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic)
     quic->is_cert_store_not_empty = 1;
     return 0;
 }
-
+#endif
 void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic) {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
 
