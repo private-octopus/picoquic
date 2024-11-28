@@ -49,6 +49,7 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_varint_stream", h3zero_varint_stream_test },
     { "h3zero_incoming_unidir", h3zero_incoming_unidir_test },
     { "h3zero_unidir_error", h3zero_unidir_error_test },
+    { "h3zero_setting_error", h3zero_setting_error_test },
     { "qpack_huffman", qpack_huffman_test },
     { "qpack_huffman_base", qpack_huffman_base_test},
     { "h3zero_parse_qpack", h3zero_parse_qpack_test },

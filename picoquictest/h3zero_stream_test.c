@@ -362,9 +362,8 @@ int h3zero_unidir_error_test()
     uint64_t stream_type[5] = { h3zero_stream_type_control, h3zero_stream_type_push,
         h3zero_stream_type_qpack_encoder, h3zero_stream_type_qpack_decoder,
         123456789 };
-    uint64_t frame_type[5] = { h3zero_stream_type_control, h3zero_stream_type_push,
-        h3zero_stream_type_qpack_encoder, h3zero_stream_type_qpack_decoder,
-        123456789 };
+    uint64_t frame_type[5] = { h3zero_frame_settings, h3zero_frame_data, 
+        h3zero_frame_header, h3zero_frame_push_promise, 123456789 };
     uint8_t buffer[256];
     uint8_t* bytes = NULL;
     uint8_t* last_byte = NULL;
@@ -403,6 +402,71 @@ int h3zero_unidir_error_test()
     picoquic_set_callback(cnx, NULL, NULL);
     h3zero_callback_delete_context(cnx, h3_ctx);
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int h3zero_setting_submit(int is_after_settings, uint64_t frame_type, int expect_skip)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx);
+    uint8_t buffer[256];
+    uint8_t* bytes = NULL;
+    uint8_t* last_byte = NULL;
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+    uint64_t error_found = 0;
+    h3zero_stream_ctx_t* stream_ctx;
+
+    if (ret != 0 ||
+        (stream_ctx = h3zero_find_or_create_stream(cnx, 3, h3_ctx, 1, 1)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(buffer, bytes_max, h3zero_stream_type_control)) == NULL ||
+        (is_after_settings &&
+            (bytes = h3zero_test_get_setting_frame(bytes, bytes_max)) == NULL) ||
+        (bytes = h3zero_get_pretend_frame(bytes, bytes_max, frame_type)) == NULL){
+        ret = -1; /* format error */
+    }
+
+    else {
+        last_byte = bytes;
+        bytes = h3zero_test_submit_frame(buffer, last_byte, stream_ctx, h3_ctx, &error_found);
+        if (expect_skip) {
+            if (bytes == NULL || error_found != 0) {
+                ret = -1;
+            }
+        }
+        else {
+            if (bytes != NULL || error_found == 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* clean up everything */
+    picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+
+int h3zero_setting_error_test()
+{
+    uint64_t unexpected_frames[4] = { h3zero_frame_settings, h3zero_frame_data,
+        h3zero_frame_header, h3zero_frame_push_promise };
+
+    /* send a frame that is not a setting frames. This is an error */
+    int ret = h3zero_setting_submit(0, 1234567, 0);
+    /* Add unexpected frame after setting */
+    for (int i = 0; ret == 0 && i < 4; i++) {
+        ret = h3zero_setting_submit(1, unexpected_frames[i], 0);
+    }
+    /* add random frame to settings, after settings received */
+    if (ret == 0) {
+        ret = h3zero_setting_submit(1, 12345678, 1);
+    }
 
     return ret;
 }
