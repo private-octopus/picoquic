@@ -470,3 +470,139 @@ int h3zero_setting_error_test()
 
     return ret;
 }
+
+/* Unit test of data callback.
+* 
+* we want to exercise `h3zero_callback_data` without actually setting up connections.
+* The client will have started a bidir stream context, properly initialized.
+* The test program will simulate arrival of frames in this context, until
+* FIN or Reset of the stream.
+
+int h3zero_callback_data(picoquic_cnx_t* cnx,
+	uint64_t stream_id, uint8_t* bytes, size_t length,
+	picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
+	h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id)
+*
+* The client when sending the command initialized the name of the file
+* in stream_ctx->file_path.
+* After that, the client will receive header frame and data frame,
+* until the FIN.
+ */
+int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
+    h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id);
+
+int h3zero_client_data_set_file_name(h3zero_stream_ctx_t* stream_ctx, char const* path_name)
+{
+    int ret = 0;
+    if ((stream_ctx->f_name = picoquic_string_duplicate(path_name)) == NULL) {
+        ret = -1;
+    }
+    else {
+        /* ensure that no data is present */
+        FILE* F = picoquic_file_open(stream_ctx->f_name, "w");
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            (void)picoquic_file_close(F);
+        }
+    }
+    return ret;
+}
+
+uint8_t* h3zero_client_data_get_response(uint8_t * bytes, uint8_t * bytes_max)
+{
+    bytes = h3zero_create_response_header_frame_ex(bytes, bytes_max,
+        h3zero_content_type_text_html, "test client data");
+    return bytes;
+}
+
+uint8_t* h3zero_client_data_frame(uint8_t* bytes, uint8_t* bytes_max, uint64_t data_length)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, h3zero_frame_data)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, data_length)) != NULL) {
+        if (bytes + data_length > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            memset(bytes, 0xda, data_length);
+            bytes += data_length;
+        }
+    }
+    return bytes;
+}
+
+int h3zero_client_data_test()
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx);
+    uint8_t buffer[1024];
+    uint8_t* bytes = NULL;
+    uint8_t* last_byte = NULL;
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+    uint64_t error_found = 0;
+    uint64_t stream_id = 4;
+    uint64_t fin_stream_id = UINT64_MAX;
+    uint64_t data_length = 128;
+    h3zero_stream_ctx_t* stream_ctx;
+    char const* path_name = "h3zero_test_client_data.html";
+    int expect_error = 0;
+
+    if (ret == 0 && (stream_ctx = h3zero_find_or_create_stream(cnx, 4, h3_ctx, 1, 1)) == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = h3zero_client_data_set_file_name(stream_ctx, path_name);
+    }
+
+    /* Encode type and offset */
+    bytes = buffer;
+    *bytes++ = 0;
+    *bytes++ = 0;
+    
+    /* Encode a stream header */
+    if (ret == 0 &&
+        (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL){
+        ret = -1;
+    }
+    /* encode a random frame */
+    /* Encode a data frame (or 2?)*/
+    if (ret == 0 &&
+        (bytes = h3zero_client_data_frame(buffer, bytes_max, data_length)) == NULL){
+        ret = -1;
+    }
+    /* Encode a stream trailer */
+    /* encode a random frame */
+    /* compute how many bytes are submitted -- less than actual size if error */
+
+    /* submit as incoming data */
+    if (ret == 0) {
+        int data_ret = h3zero_process_h3_client_data(cnx, stream_id, buffer, bytes - buffer, picoquic_callback_stream_fin, h3_ctx,
+            stream_ctx, &fin_stream_id);
+        /* verify that the result is as expected */
+        if (expect_error) {
+            if (data_ret == 0) {
+                ret = -1;
+            }
+        }
+        else {
+            if (data_ret != 0) {
+                ret = -1;
+            }
+            else {
+                /* verify that the file length matches the data length */
+            }
+        }
+    }
+
+    /* clean up everything */
+    picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}

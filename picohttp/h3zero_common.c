@@ -1298,7 +1298,7 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 	h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id)
 {
 	int ret = 0;
-	if (!stream_ctx->is_file_open && ctx->no_disk == 0 && stream_ctx->file_path != NULL) {
+	if (!stream_ctx->is_file_open && ctx->no_disk == 0 && stream_ctx->f_name != NULL) {
 		ret = h3zero_client_open_stream_file(cnx, ctx, stream_ctx);
 	}
 	if (ret == 0 && length > 0) {
