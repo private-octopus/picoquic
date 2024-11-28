@@ -185,7 +185,6 @@ int h3zero_varint_stream_test()
  * The test requires that a valid context is defined:
  * 
  * h3zero_stream_ctx_t: incoming stream context.
- * 
  */
 
 int incoming_unidir_test_fn(picoquic_cnx_t* cnx,
@@ -197,26 +196,33 @@ int incoming_unidir_test_fn(picoquic_cnx_t* cnx,
     return 0;
 }
 
+h3zero_set_test_context(picoquic_quic_t** quic, picoquic_cnx_t** cnx, h3zero_callback_ctx_t** h3_ctx)
+{
+    int ret = picoquic_test_set_minimal_cnx(quic, cnx);
+    
+    if (ret == 0) {
+        *h3_ctx = h3zero_callback_create_context(NULL);
+        if (*h3_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_set_callback(*cnx, h3zero_callback, *h3_ctx);
+        }
+    }
+
+    return ret;
+}
+
 int h3zero_incoming_unidir_test()
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
-    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx);
     uint64_t stream_id = 3;
     h3zero_stream_ctx_t* control_stream_ctx;
     h3zero_stream_ctx_t* stream_ctx = NULL;
-    h3zero_callback_ctx_t* h3_ctx = NULL;
     uint8_t unidir_input[] = { 0x40, 0x54, 0x04, 0xf0 };
-
-    if (ret == 0) {
-        h3_ctx = h3zero_callback_create_context(NULL);
-        if (h3_ctx == NULL) {
-            ret = -1;
-        }
-        else {
-            picoquic_set_callback(cnx, h3zero_callback, h3_ctx);
-        }
-    }
 
     if (ret == 0) {
         control_stream_ctx  = picowt_set_control_stream(cnx, h3_ctx);
@@ -263,6 +269,122 @@ int h3zero_incoming_unidir_test()
             ret = -1;
         }
     }
+    picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/*
+* A fraction of the control stream parsing is covered by normal usage :
+* -receive h3 settings on control stream,
+* -receive web transport control stream.
+* This leaves testing gaps :
+* -Data received on setting streams after the setting frame
+* -Data received on streams that should be ignored.
+* 
+* The interesting stream types are:
+* 
+* h3zero_stream_type_control: settings stream
+* h3zero_stream_type_push (ignored)
+* h3zero_stream_type_qpack_encoder (ignored)
+* h3zero_stream_type_qpack_decoder (ignored)
+* some random type (ignored)
+* 
+* The test data on the streams is made of frames. Supported frame types
+* are:
+* - h3zero_frame_settings
+* - h3zero_frame_data
+* - h3zero_frame_header
+* - h3zero_frame_push_promise
+* - h3zero_frame_webtransport_stream
+*/
+
+uint8_t* h3zero_parse_remote_unidir_stream(
+    uint8_t* bytes, uint8_t* bytes_max,
+    h3zero_stream_ctx_t* stream_ctx,
+    h3zero_callback_ctx_t* ctx,
+    uint64_t* error_found);
+
+uint8_t* h3zero_test_get_setting_frame(uint8_t* bytes, uint8_t* bytes_max)
+{
+    h3zero_settings_t settings = { 0 };
+
+    bytes = h3zero_settings_encode(bytes, bytes_max, &settings);
+
+    return bytes;
+}
+
+uint8_t* h3zero_get_pretend_frame(uint8_t* bytes, uint8_t* bytes_max, uint64_t frame_type)
+{
+    int ret = 0;
+
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, frame_type)) == NULL ||
+        bytes + 2 >= bytes_max) {
+        bytes = NULL;
+    }
+    else {
+        size_t len = bytes_max - bytes - 2;
+        if (len > 16) {
+            len = 16;
+        }
+        *bytes++ = (uint8_t)len;
+        memset(bytes, 0xaa, len);
+        bytes += len;
+    }
+
+    return bytes;
+}
+
+int h3zero_unidir_error_test()
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx);
+    const uint64_t stream_id[5] = { 3, 7, 11, 13, 17 };
+    h3zero_stream_ctx_t * stream_ctx[5] = { NULL, NULL, NULL, NULL, NULL };
+    uint64_t stream_type[5] = { h3zero_stream_type_control, h3zero_stream_type_push,
+        h3zero_stream_type_qpack_encoder, h3zero_stream_type_qpack_decoder,
+        123456789 };
+    uint64_t frame_type[5] = { h3zero_stream_type_control, h3zero_stream_type_push,
+        h3zero_stream_type_qpack_encoder, h3zero_stream_type_qpack_decoder,
+        123456789 };
+    uint8_t buffer[256];
+    uint8_t* bytes = NULL;
+    uint8_t* last_byte = NULL;
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+    uint64_t error_found = 0;
+
+    for (int i = 0; ret == 0 && i < 5; i++) {
+        if ((stream_ctx[i] = h3zero_find_or_create_stream(cnx, stream_id[i], h3_ctx, 1, 1)) == NULL) {
+            ret = -1;
+        }
+        else if ((bytes = picoquic_frames_varint_encode(buffer, bytes_max, stream_type[i])) != NULL) {
+            if (i == 0) {
+                bytes = h3zero_test_get_setting_frame(bytes, bytes_max);
+            }
+            else {
+                bytes = h3zero_get_pretend_frame(bytes, bytes_max, frame_type[i]);
+            }
+        }
+        if (bytes == NULL) {
+            ret = -1;
+        }
+        else {
+            last_byte = bytes;
+            if (h3zero_parse_remote_unidir_stream(buffer, last_byte, stream_ctx[i], h3_ctx, &error_found) != last_byte ||
+                error_found != 0 || !h3_ctx->settings.settings_received) {
+                ret = -1;
+            }
+        }
+    }
+    /* add random frame to settings, after settings received */
+
+    /* receive a settings frame again, after settings received. */
+
+    /* clean up everything */
     picoquic_set_callback(cnx, NULL, NULL);
     h3zero_callback_delete_context(cnx, h3_ctx);
     picoquic_test_delete_minimal_cnx(&quic, &cnx);

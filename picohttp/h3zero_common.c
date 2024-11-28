@@ -254,6 +254,8 @@ void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_callback_ctx
 	}
 }
 
+#if 0
+/* Unused code */
 uint64_t h3zero_parse_stream_prefix(uint8_t* buffer_8, size_t* nb_in_buffer, uint8_t* data, size_t data_length, size_t * nb_read)
 {
 	uint64_t prefix = UINT64_MAX;
@@ -274,6 +276,7 @@ uint64_t h3zero_parse_stream_prefix(uint8_t* buffer_8, size_t* nb_in_buffer, uin
 
 	return prefix;
 }
+#endif
 
 int h3zero_protocol_init(picoquic_cnx_t* cnx)
 {
@@ -475,7 +478,7 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 	return bytes;
 }
 
-uint8_t* h3zero_parse_control_stream_id(
+uint8_t* h3zero_wt_parse_control_stream_id(
 	uint8_t* bytes, uint8_t* bytes_max,
 	h3zero_data_stream_state_t* stream_state,
 	h3zero_stream_ctx_t* stream_ctx,
@@ -525,7 +528,7 @@ uint8_t* h3zero_parse_remote_bidir_stream(
 		}
 	}
 	if (stream_state->stream_type == h3zero_frame_webtransport_stream) {
-		bytes = h3zero_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
+		bytes = h3zero_wt_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
 	}
 	else {
 		/* Not and expected stream */
@@ -567,7 +570,7 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 		bytes = bytes_max;
 		break;
 	case h3zero_stream_type_webtransport: /* unidir stream is used as specified in web transport */
-		bytes = h3zero_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
+		bytes = h3zero_wt_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
 		break;
 	default:
 		/* Per section 6.2 of RFC 9114, unknown stream types are just ignored */
