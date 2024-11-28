@@ -337,14 +337,13 @@ uint8_t* h3zero_get_pretend_frame(uint8_t* bytes, uint8_t* bytes_max, uint64_t f
 
 uint8_t* h3zero_test_submit_frame(uint8_t* bytes, uint8_t* bytes_max, h3zero_stream_ctx_t* stream_ctx, h3zero_callback_ctx_t* h3_ctx, uint64_t* error_found)
 {
-    uint8_t* next_bytes = bytes;
+    uint8_t* next_bytes = NULL;
     for (int i = 0; i < 16 && next_bytes < bytes_max; i++) {
-        bytes = next_bytes;
         next_bytes = (i == 7) ? bytes_max : bytes + 1;
         if (next_bytes > bytes_max) {
             next_bytes = bytes_max;
         }
-        if (h3zero_parse_remote_unidir_stream(bytes, next_bytes, stream_ctx, h3_ctx, error_found) != next_bytes) {
+        if ((bytes = h3zero_parse_remote_unidir_stream(bytes, next_bytes, stream_ctx, h3_ctx, error_found)) != next_bytes) {
             bytes = NULL;
             break;
         }
@@ -389,7 +388,8 @@ int h3zero_unidir_error_test()
         }
         else {
             last_byte = bytes;
-            if (h3zero_test_submit_frame(buffer, last_byte, stream_ctx[i], h3_ctx, &error_found) != last_byte ||
+            bytes = h3zero_test_submit_frame(buffer, last_byte, stream_ctx[i], h3_ctx, &error_found);
+            if (bytes != last_byte ||
                 error_found != 0 || !h3_ctx->settings.settings_received) {
                 ret = -1;
             }
