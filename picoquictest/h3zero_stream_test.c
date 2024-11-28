@@ -196,7 +196,7 @@ int incoming_unidir_test_fn(picoquic_cnx_t* cnx,
     return 0;
 }
 
-h3zero_set_test_context(picoquic_quic_t** quic, picoquic_cnx_t** cnx, h3zero_callback_ctx_t** h3_ctx)
+int h3zero_set_test_context(picoquic_quic_t** quic, picoquic_cnx_t** cnx, h3zero_callback_ctx_t** h3_ctx)
 {
     int ret = picoquic_test_set_minimal_cnx(quic, cnx);
     
@@ -318,8 +318,6 @@ uint8_t* h3zero_test_get_setting_frame(uint8_t* bytes, uint8_t* bytes_max)
 
 uint8_t* h3zero_get_pretend_frame(uint8_t* bytes, uint8_t* bytes_max, uint64_t frame_type)
 {
-    int ret = 0;
-
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, frame_type)) == NULL ||
         bytes + 2 >= bytes_max) {
         bytes = NULL;
