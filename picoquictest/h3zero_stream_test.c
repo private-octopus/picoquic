@@ -623,9 +623,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
     int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx);
     uint8_t buffer[1024];
     uint8_t* bytes = NULL;
-    uint8_t* last_byte = NULL;
     uint8_t* bytes_max = buffer + sizeof(buffer);
-    uint64_t error_found = 0;
     uint64_t stream_id = 4;
     uint64_t fin_stream_id = UINT64_MAX;
     uint64_t data_length = 128;
@@ -719,7 +717,6 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
     return ret;
 }
 
-
 int h3zero_client_data_test()
 {
     client_data_test_spec_t spec = { 0 };
@@ -745,9 +742,38 @@ int h3zero_client_data_test()
 
     if (ret == 0) {
         memset(&spec, 0, sizeof(spec));
+        spec.add_trailer = 1;
+        ret = h3zero_client_data_test_one(&spec);
+    }
+
+    if (ret == 0) {
+        memset(&spec, 0, sizeof(spec));
         spec.expect_error = 1;
         spec.short_length = 1;
         ret = h3zero_client_data_test_one(&spec);
     }
+
+    if (ret == 0) {
+        memset(&spec, 0, sizeof(spec));
+        spec.expect_error = 1;
+        spec.skip_header = 1;
+        ret = h3zero_client_data_test_one(&spec);
+    }
+
+    if (ret == 0) {
+        memset(&spec, 0, sizeof(spec));
+        spec.expect_error = 1;
+        spec.trailer_after_header = 1;
+        ret = h3zero_client_data_test_one(&spec);
+    }
+
+    if (ret == 0) {
+        memset(&spec, 0, sizeof(spec));
+        spec.expect_error = 1;
+        spec.add_trailer = 1;
+        spec.data_after_trailer = 1;
+        ret = h3zero_client_data_test_one(&spec);
+    }
+
     return ret;
 }

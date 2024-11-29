@@ -65,7 +65,7 @@ static void picohttp_clear_stream_ctx(h3zero_stream_ctx_t* stream_ctx)
 		stream_ctx->file_path = NULL;
 	}
 	if (stream_ctx->FC != NULL) {
-		stream_ctx->FC = picoquic_file_close(stream_ctx->F);
+		stream_ctx->FC = picoquic_file_close(stream_ctx->FC);
 	}
 	if (stream_ctx->F != NULL) {
 		stream_ctx->F = picoquic_file_close(stream_ctx->F);
