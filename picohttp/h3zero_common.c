@@ -56,16 +56,12 @@ void * picohttp_stream_node_value(picosplay_node_t * node)
 
 static void picohttp_clear_stream_ctx(h3zero_stream_ctx_t* stream_ctx)
 {
-	if (stream_ctx->f_name != NULL) {
-		free(stream_ctx->f_name);
-		stream_ctx->f_name = NULL;
-	}
 	if (stream_ctx->file_path != NULL) {
 		free(stream_ctx->file_path);
 		stream_ctx->file_path = NULL;
 	}
-	if (stream_ctx->FC != NULL) {
-		stream_ctx->FC = picoquic_file_close(stream_ctx->FC);
+	if (stream_ctx->F != NULL) {
+		stream_ctx->F = picoquic_file_close(stream_ctx->F);
 	}
 	if (stream_ctx->F != NULL) {
 		stream_ctx->F = picoquic_file_close(stream_ctx->F);
@@ -1162,13 +1158,13 @@ int h3zero_client_open_stream_file(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* c
 {
 	int ret = 0;
 
-	if (stream_ctx->FC == NULL && ctx->no_disk == 0) {
+	if (stream_ctx->F == NULL && ctx->no_disk == 0) {
 		int last_err = 0;
-		stream_ctx->FC = picoquic_file_open_ex(stream_ctx->f_name, "wb", &last_err);
-		if (stream_ctx->FC== NULL) {
+		stream_ctx->F = picoquic_file_open_ex(stream_ctx->file_path, "wb", &last_err);
+		if (stream_ctx->F== NULL) {
 			picoquic_log_app_message(cnx,
-				"Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)\n", stream_ctx->f_name, stream_ctx->stream_id, last_err, last_err);
-			DBG_PRINTF("Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)", stream_ctx->f_name, stream_ctx->stream_id, last_err, last_err);
+				"Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)\n", stream_ctx->file_path, stream_ctx->stream_id, last_err, last_err);
+			DBG_PRINTF("Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)", stream_ctx->file_path, stream_ctx->stream_id, last_err, last_err);
 			ret = -1;
 		}
 		else {
@@ -1187,12 +1183,12 @@ int h3zero_client_close_stream(picoquic_cnx_t * cnx,
 	if (stream_ctx != NULL) {
 		picoquic_unlink_app_stream_ctx(cnx, stream_ctx->stream_id);
 
-		if (stream_ctx->f_name != NULL) {
-			free(stream_ctx->f_name);
-			stream_ctx->f_name = NULL;
+		if (stream_ctx->file_path != NULL) {
+			free(stream_ctx->file_path);
+			stream_ctx->file_path = NULL;
 		}
-		if (stream_ctx->FC != NULL) {
-			stream_ctx->FC = picoquic_file_close(stream_ctx->FC);
+		if (stream_ctx->F != NULL) {
+			stream_ctx->F = picoquic_file_close(stream_ctx->F);
 			ctx->nb_open_files--;
 		}
 		stream_ctx->is_open = 0;
@@ -1304,7 +1300,7 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 	h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id)
 {
 	int ret = 0;
-	if (stream_ctx->FC == NULL && ctx->no_disk == 0 && stream_ctx->f_name != NULL) {
+	if (stream_ctx->F == NULL && ctx->no_disk == 0 && stream_ctx->file_path != NULL) {
 		ret = h3zero_client_open_stream_file(cnx, ctx, stream_ctx);
 	}
 	if (ret == 0 && length > 0) {
@@ -1346,7 +1342,7 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 						}
 					}
 					if (ret == 0 && ctx->no_disk == 0) {
-						ret = (fwrite(bytes, 1, available_data, stream_ctx->FC) > 0) ? 0 : -1;
+						ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
 						if (ret != 0) {
 							picoquic_log_app_message(cnx,
 								"Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);

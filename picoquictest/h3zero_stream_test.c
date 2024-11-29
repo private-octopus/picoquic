@@ -510,12 +510,12 @@ typedef struct st_client_data_test_spec {
 int h3zero_client_data_set_file_name(h3zero_stream_ctx_t* stream_ctx, char const* path_name)
 {
     int ret = 0;
-    if ((stream_ctx->f_name = picoquic_string_duplicate(path_name)) == NULL) {
+    if ((stream_ctx->file_path = picoquic_string_duplicate(path_name)) == NULL) {
         ret = -1;
     }
     else {
         /* ensure that no data is present */
-        FILE* F = picoquic_file_open(stream_ctx->f_name, "w");
+        FILE* F = picoquic_file_open(stream_ctx->file_path, "w");
         if (F == NULL) {
             ret = -1;
         }
