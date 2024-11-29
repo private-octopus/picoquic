@@ -552,7 +552,7 @@ uint8_t* h3zero_client_data_get_response(uint8_t * bytes, uint8_t * bytes_max)
     return bytes;
 }
 
-uint8_t* h3zero_client_data_frame(uint8_t* bytes, uint8_t* bytes_max, uint64_t data_length)
+uint8_t* h3zero_client_data_frame(uint8_t* bytes, uint8_t* bytes_max, size_t data_length)
 {
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, h3zero_frame_data)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, data_length)) != NULL) {
@@ -567,9 +567,9 @@ uint8_t* h3zero_client_data_frame(uint8_t* bytes, uint8_t* bytes_max, uint64_t d
     return bytes;
 }
 
-uint8_t* h3zero_client_data_frames(uint8_t* bytes, uint8_t* bytes_max, uint64_t data_length, unsigned int split_data)
+uint8_t* h3zero_client_data_frames(uint8_t* bytes, uint8_t* bytes_max, size_t data_length, unsigned int split_data)
 {
-    uint64_t l1 = (split_data) ? data_length / 2 : 0;
+    size_t l1 = (split_data) ? data_length / 2 : 0;
 
     if (l1 > 0 && (bytes = h3zero_client_data_frame(bytes, bytes_max, l1)) == NULL){
         bytes = NULL;
@@ -626,7 +626,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
     uint8_t* bytes_max = buffer + sizeof(buffer);
     uint64_t stream_id = 4;
     uint64_t fin_stream_id = UINT64_MAX;
-    uint64_t data_length = 128;
+    size_t data_length = 128;
     h3zero_stream_ctx_t* stream_ctx = NULL;
     char const* path_name = "h3zero_test_client_data.html";
 
