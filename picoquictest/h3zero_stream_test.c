@@ -493,6 +493,20 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
     h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id);
 
+typedef struct st_client_data_test_spec {
+    uint64_t stream_type;
+    unsigned int expect_error : 1;
+    unsigned int skip_header : 1;
+    unsigned int trailer_after_header : 1;
+    unsigned int add_trailer : 1;
+    unsigned int data_after_trailer : 1;
+    unsigned int split_data : 1;
+    unsigned int split_submit : 1;
+    unsigned int split_fin : 1;
+    unsigned int short_length : 1;
+
+} client_data_test_spec_t;
+
 int h3zero_client_data_set_file_name(h3zero_stream_ctx_t* stream_ctx, char const* path_name)
 {
     int ret = 0;
@@ -514,8 +528,27 @@ int h3zero_client_data_set_file_name(h3zero_stream_ctx_t* stream_ctx, char const
 
 uint8_t* h3zero_client_data_get_response(uint8_t * bytes, uint8_t * bytes_max)
 {
-    bytes = h3zero_create_response_header_frame_ex(bytes, bytes_max,
-        h3zero_content_type_text_html, "test client data");
+    uint8_t* length_byte = NULL;
+    uint8_t* data_byte = NULL;
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, h3zero_frame_header)) != NULL) {
+        if (bytes + 2 < bytes_max) {
+            length_byte = bytes;
+            bytes += 2;
+            data_byte = bytes;
+        }
+        else {
+            bytes = NULL;
+        }
+    }
+    if (bytes != NULL) {
+        bytes = h3zero_create_response_header_frame_ex(bytes, bytes_max,
+            h3zero_content_type_text_html, "test client data");
+    }
+    if (bytes != NULL) {
+        size_t sz = bytes - data_byte;
+        length_byte[0] = 0x40 + (uint8_t)(sz >> 8);
+        length_byte[1] = (uint8_t)(sz & 0xff);
+    }
     return bytes;
 }
 
@@ -534,7 +567,55 @@ uint8_t* h3zero_client_data_frame(uint8_t* bytes, uint8_t* bytes_max, uint64_t d
     return bytes;
 }
 
-int h3zero_client_data_test()
+uint8_t* h3zero_client_data_frames(uint8_t* bytes, uint8_t* bytes_max, uint64_t data_length, unsigned int split_data)
+{
+    uint64_t l1 = (split_data) ? data_length / 2 : 0;
+
+    if (l1 > 0 && (bytes = h3zero_client_data_frame(bytes, bytes_max, l1)) == NULL){
+        bytes = NULL;
+    }
+    else {
+        bytes = h3zero_client_data_frame(bytes, bytes_max, data_length - l1);
+    }
+    return bytes;
+}
+
+int h3zero_client_data_submit(picoquic_cnx_t * cnx, uint64_t  stream_id, uint8_t* bytes, size_t length, 
+    h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* stream_ctx, uint64_t * finstream_id,
+    client_data_test_spec_t* spec)
+{
+    int ret = 0;
+    size_t chunk = (spec->split_submit) ? 7 : length;
+    size_t submitted = 0;
+    picoquic_call_back_event_t fin_or_event = picoquic_callback_stream_data;
+
+    if (spec->short_length) {
+        length--;
+    }
+
+    while (ret == 0 && submitted < length) {
+        size_t next_chunk = chunk;
+        if (submitted + next_chunk >= length) {
+            next_chunk = length - submitted;
+            if (!spec->split_fin) {
+                fin_or_event = picoquic_callback_stream_fin;
+            }
+        }
+        ret = h3zero_process_h3_client_data(cnx, stream_id, bytes + submitted, next_chunk, fin_or_event, h3_ctx,
+            stream_ctx, finstream_id);
+        submitted += next_chunk;
+    }
+    if (ret == 0 && spec->split_fin) {
+        ret = h3zero_process_h3_client_data(cnx, stream_id, NULL, 0, picoquic_callback_stream_fin, h3_ctx,
+            stream_ctx, finstream_id);
+    }
+    if (cnx->cnx_state != picoquic_state_ready) {
+        ret = -1;
+    }
+    return ret;
+}
+
+int h3zero_client_data_test_one(client_data_test_spec_t * spec)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
@@ -548,43 +629,60 @@ int h3zero_client_data_test()
     uint64_t stream_id = 4;
     uint64_t fin_stream_id = UINT64_MAX;
     uint64_t data_length = 128;
-    h3zero_stream_ctx_t* stream_ctx;
+    h3zero_stream_ctx_t* stream_ctx = NULL;
     char const* path_name = "h3zero_test_client_data.html";
-    int expect_error = 0;
 
     if (ret == 0 && (stream_ctx = h3zero_find_or_create_stream(cnx, 4, h3_ctx, 1, 1)) == NULL) {
         ret = -1;
     }
     else {
+        cnx->cnx_state = picoquic_state_ready;
         ret = h3zero_client_data_set_file_name(stream_ctx, path_name);
+        if (ret == 0) {
+            stream_ctx->is_open = 1;
+        }
     }
 
-    /* Encode type and offset */
+#if 1
     bytes = buffer;
+#else
+    /* Encode type and offset */
+    bytes = picoquic_frames_varint_encode(buffer, bytes_max, spec->stream_type);
     *bytes++ = 0;
-    *bytes++ = 0;
-    
+#endif
+
     /* Encode a stream header */
-    if (ret == 0 &&
+    if (ret == 0 && !spec->skip_header && 
         (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL){
         ret = -1;
     }
-    /* encode a random frame */
+    /* encode a stray trailer */
+    if (ret == 0 && spec->trailer_after_header &&
+        (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL) {
+        ret = -1;
+    }
     /* Encode a data frame (or 2?)*/
     if (ret == 0 &&
-        (bytes = h3zero_client_data_frame(buffer, bytes_max, data_length)) == NULL){
+        (bytes = h3zero_client_data_frames(bytes, bytes_max, data_length, spec->split_data)) == NULL) {
         ret = -1;
     }
     /* Encode a stream trailer */
-    /* encode a random frame */
-    /* compute how many bytes are submitted -- less than actual size if error */
+    if (ret == 0 && spec->add_trailer &&
+        (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL) {
+        ret = -1;
+    }
+
+    /* Encode a data frame after the trailer, causing an error */
+    if (ret == 0 && spec->data_after_trailer &&
+        (bytes = h3zero_client_data_frames(bytes, bytes_max, 15, 0)) == NULL) {
+        ret = -1;
+    }
 
     /* submit as incoming data */
     if (ret == 0) {
-        int data_ret = h3zero_process_h3_client_data(cnx, stream_id, buffer, bytes - buffer, picoquic_callback_stream_fin, h3_ctx,
-            stream_ctx, &fin_stream_id);
+        int data_ret = h3zero_client_data_submit(cnx, stream_id, buffer, bytes - buffer, h3_ctx, stream_ctx, &fin_stream_id, spec);
         /* verify that the result is as expected */
-        if (expect_error) {
+        if (spec->expect_error) {
             if (data_ret == 0) {
                 ret = -1;
             }
@@ -594,7 +692,21 @@ int h3zero_client_data_test()
                 ret = -1;
             }
             else {
-                /* verify that the file length matches the data length */
+                /* verify that the stream is properly removed */
+                FILE* Fbis = picoquic_file_open(path_name, "r");
+                if (Fbis == NULL) {
+                    /* error -- the file remained open! */
+                    ret = -1;
+                }
+                else {
+                    long sz;
+                    fseek(Fbis, 0, SEEK_END);
+                    sz = ftell(Fbis);
+                    (void)picoquic_file_close(Fbis);
+                    if (sz != data_length) {
+                        ret = -1;
+                    }
+                }
             }
         }
     }
@@ -604,5 +716,38 @@ int h3zero_client_data_test()
     h3zero_callback_delete_context(cnx, h3_ctx);
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
 
+    return ret;
+}
+
+
+int h3zero_client_data_test()
+{
+    client_data_test_spec_t spec = { 0 };
+    int ret = h3zero_client_data_test_one(&spec);
+
+    if (ret == 0) {
+        memset(&spec, 0, sizeof(spec));
+        spec.split_data = 1;
+        ret = h3zero_client_data_test_one(&spec);
+    }
+
+    if (ret == 0) {
+        memset(&spec, 0, sizeof(spec));
+        spec.split_fin = 1;
+        ret = h3zero_client_data_test_one(&spec);
+    }
+
+    if (ret == 0) {
+        memset(&spec, 0, sizeof(spec));
+        spec.split_submit = 1;
+        ret = h3zero_client_data_test_one(&spec);
+    }
+
+    if (ret == 0) {
+        memset(&spec, 0, sizeof(spec));
+        spec.expect_error = 1;
+        spec.short_length = 1;
+        ret = h3zero_client_data_test_one(&spec);
+    }
     return ret;
 }

@@ -101,15 +101,15 @@ extern "C" {
         uint64_t echo_length;
         uint64_t echo_sent;
         uint64_t post_received;
-        /* Client state file management */
-        unsigned int is_open : 1;
-        unsigned int is_file_open : 1;
-        unsigned int flow_opened : 1;
+        /* Client state management */
+        unsigned int is_open : 1; /* The client has initiated this stream */
+        unsigned int flow_opened : 1; /* Flow control parameters updated to allow receiving expected data */
         uint64_t received_length;
         uint64_t post_size;
         uint64_t post_sent;
         char* f_name;
-        /* Global state variables */
+        FILE* FC;
+        /* Server state variables */
         uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
         char* file_path;
         FILE* F;
