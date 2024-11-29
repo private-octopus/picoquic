@@ -27,7 +27,7 @@
 #include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include <string.h>
-
+#if 0
 uint8_t* picoquic_transport_param_varint_encode_old(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n64) 
 {
     if (bytes + 2 > bytes_max) {
@@ -52,7 +52,7 @@ uint8_t* picoquic_transport_param_varint_encode_old(uint8_t* bytes, const uint8_
 
     return bytes;
 }
-
+#endif
 uint64_t picoquic_transport_param_varint_decode(picoquic_cnx_t * cnx, uint8_t* bytes, uint64_t extension_length, int* ret) 
 {
     uint64_t n64 = 0;
@@ -64,7 +64,7 @@ uint64_t picoquic_transport_param_varint_decode(picoquic_cnx_t * cnx, uint8_t* b
 
     return n64;
 }
-
+#if 0
 uint8_t* picoquic_transport_param_type_varint_encode_old(uint8_t* bytes, const uint8_t* bytes_max, picoquic_tp_enum tp_type, uint64_t n64)
 {
     if (bytes != NULL && bytes + 2 <= bytes_max) {
@@ -76,6 +76,7 @@ uint8_t* picoquic_transport_param_type_varint_encode_old(uint8_t* bytes, const u
     }
     return bytes;
 }
+#endif
 
 uint8_t* picoquic_transport_param_varint_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n64)
 {
@@ -131,7 +132,7 @@ int picoquic_transport_param_cid_decode(picoquic_cnx_t * cnx, uint8_t* bytes, ui
 
     return ret;
 }
-
+#if 0
 uint8_t* picoquic_encode_transport_param_prefered_address_old(uint8_t* bytes, uint8_t* bytes_max,
     picoquic_tp_prefered_address_t* prefered_address)
 {
@@ -163,7 +164,7 @@ uint8_t* picoquic_encode_transport_param_prefered_address_old(uint8_t* bytes, ui
 
     return bytes;
 }
-
+#endif
 uint8_t * picoquic_encode_transport_param_prefered_address(uint8_t * bytes, uint8_t * bytes_max,
     picoquic_tp_prefered_address_t * prefered_address)
 {
