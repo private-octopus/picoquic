@@ -2898,6 +2898,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(demo_ticket) {
+            int ret = demo_ticket_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(demo_file_sanitize) {
             int ret = demo_file_sanitize_test();
 
