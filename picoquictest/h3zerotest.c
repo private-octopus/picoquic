@@ -3920,7 +3920,6 @@ int demo_ticket_test_one(char const* alpn, uint32_t proposed_version,
     if (ret == 0) {
         size_t consumed = 0;
         picoquic_stored_ticket_t* ticket = NULL;
-        picoquic_stored_ticket_t** pp_first_ticket = &quic->p_first_ticket;
 
         ret = picoquic_deserialize_ticket(&ticket, test_ticket,
             size_of_test_ticket, &consumed);
@@ -3983,9 +3982,6 @@ int demo_ticket_test_one(char const* alpn, uint32_t proposed_version,
 
 int demo_ticket_test()
 {
-    uint32_t proposed_version = 0;
-    char const* alpn = NULL;
-
     int ret = demo_ticket_test_one("picoquic_test", 0x00000001,
         democlient_ticket_sample, sizeof(democlient_ticket_sample),
         NULL, 0, 1);
@@ -3997,9 +3993,21 @@ int demo_ticket_test()
     }
 
     if (ret == 0) {
+        ret = demo_ticket_test_one(NULL, 0x00000000,
+            democlient_ticket_hq, sizeof(democlient_ticket_hq),
+            "hq-interop", 0x0000002, 0);
+    }
+
+    if (ret == 0) {
         ret = demo_ticket_test_one("hq-interop", 0x00000000,
             democlient_ticket_hq, sizeof(democlient_ticket_hq),
             NULL, 0x0000002, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_ticket_test_one("hq-interop", 0x00000000,
+            democlient_ticket_sample, sizeof(democlient_ticket_sample),
+            NULL, 0x0000000, 1);
     }
 
     return ret;
@@ -4009,9 +4017,6 @@ int demo_ticket_test()
 static picoquic_demo_stream_desc_t demo_scenario_error[] = {
     { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, NULL}
 };
-static size_t nb_demo_scenario_error = sizeof(demo_scenario_error) / sizeof(picoquic_demo_stream_desc_t);
-
-
 
 int demo_error_setup(picoquic_quic_t** quic, picoquic_cnx_t** cnx,
     picoquic_demo_callback_ctx_t* callback_ctx, uint64_t* simulated_time,
@@ -4060,7 +4065,6 @@ int demo_error_too_long()
     return ret;
 }
 
-
 int demo_error_repeat()
 {
     int ret;
@@ -4093,12 +4097,63 @@ int demo_error_repeat()
     return ret;
 }
 
+int picoquic_demo_client_open_stream_file(picoquic_cnx_t* cnx, picoquic_demo_callback_ctx_t* ctx, picoquic_demo_client_stream_ctx_t* stream_ctx);
+
+
+int demo_error_sanitize()
+{
+    int ret;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
+    picoquic_demo_stream_desc_t x_sanitize;
+    char* slashed_name = "/a/b/c/d/e";
+
+    memcpy(&x_sanitize, &demo_scenario_error[0], sizeof(picoquic_demo_stream_desc_t));
+    x_sanitize.f_name = slashed_name;
+
+    ret = demo_error_setup(&quic, &cnx, &callback_ctx, &simulated_time,
+        &x_sanitize, 1, "hq-interop", 0, 0);
+    if (callback_ctx.out_dir == NULL) {
+        callback_ctx.out_dir = ".";
+    }
+
+    if (ret == 0) {
+        int ret_start = picoquic_demo_client_start_streams(cnx, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+
+        if (ret_start != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_demo_client_stream_ctx_t* stream_ctx = callback_ctx.first_stream;
+        int ret_stream = picoquic_demo_client_open_stream_file(cnx, &callback_ctx, stream_ctx);
+
+        if (ret_stream == 0) {
+            ret = -1;
+        }
+
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
 int demo_error_test()
 {
     int ret = demo_error_too_long();
 
     if (ret == 0) {
         ret = demo_error_repeat();
+    }
+
+    if (ret == 0) {
+        ret = demo_error_sanitize();
     }
 
     return ret;
