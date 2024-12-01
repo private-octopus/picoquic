@@ -4004,3 +4004,65 @@ int demo_ticket_test()
 
     return ret;
 }
+
+
+static picoquic_demo_stream_desc_t demo_scenario_error[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, NULL}
+};
+static size_t nb_demo_scenario_error = sizeof(demo_scenario_error) / sizeof(picoquic_demo_stream_desc_t);
+
+
+
+int demo_error_setup(picoquic_quic_t** quic, picoquic_cnx_t** cnx,
+    picoquic_demo_callback_ctx_t* callback_ctx, uint64_t* simulated_time,
+    picoquic_demo_stream_desc_t * demo_scenario, size_t nb_scenario,
+    char const * alpn, int no_disk, int delay_fin)
+{
+
+    int ret = picoquic_test_set_minimal_cnx_with_time(quic, cnx, simulated_time);
+    if (ret == 0) {
+        ret = picoquic_demo_client_initialize_context(callback_ctx, demo_scenario, nb_scenario, alpn,
+            no_disk, delay_fin);
+    }
+    return ret;
+}
+
+int demo_error_too_long()
+{
+    int ret;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
+    picoquic_demo_stream_desc_t demo_too_long;
+    char long_buffer[2048];
+
+    memset(long_buffer, '\t', 2047);
+    long_buffer[2047] = 0;
+    memcpy(&demo_too_long, &demo_scenario_error[0], sizeof(picoquic_demo_stream_desc_t));
+    demo_too_long.doc_name = long_buffer;
+
+    ret = demo_error_setup(&quic, &cnx, &callback_ctx, &simulated_time,
+        &demo_too_long, 1, "h3", 0, 0);
+
+    if (ret == 0) {
+        int ret_start = picoquic_demo_client_start_streams(cnx, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+
+        if (ret_start == 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int demo_error_test()
+{
+    int ret = demo_error_too_long();
+
+    return ret;
+}
