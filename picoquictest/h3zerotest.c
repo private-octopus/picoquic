@@ -4099,7 +4099,6 @@ int demo_error_repeat()
 
 int picoquic_demo_client_open_stream_file(picoquic_cnx_t* cnx, picoquic_demo_callback_ctx_t* ctx, picoquic_demo_client_stream_ctx_t* stream_ctx);
 
-
 int demo_error_sanitize()
 {
     int ret;
@@ -4144,6 +4143,50 @@ int demo_error_sanitize()
     return ret;
 }
 
+int demo_error_callback(picoquic_call_back_event_t fin_or_event, uint64_t stream_id, uint8_t * bytes, size_t length,
+    int expect_error)
+{
+    int ret;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
+
+    ret = demo_error_setup(&quic, &cnx, &callback_ctx, &simulated_time,
+        &demo_scenario_error[0], 1, "h3", 0, 0);
+    if (callback_ctx.out_dir == NULL) {
+        callback_ctx.out_dir = ".";
+    }
+
+    if (ret == 0) {
+        int ret_start = picoquic_demo_client_start_streams(cnx, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+
+        if (ret_start != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        int ret_cb = picoquic_demo_client_callback(cnx, stream_id, bytes, length,
+            fin_or_event, &callback_ctx, NULL);
+        if (expect_error) {
+            if (ret_cb == 0) {
+                ret = -1;
+            }
+        }
+        else if (ret_cb != 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+
 int demo_error_test()
 {
     int ret = demo_error_too_long();
@@ -4154,6 +4197,51 @@ int demo_error_test()
 
     if (ret == 0) {
         ret = demo_error_sanitize();
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_stream_reset, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_stop_sending, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_stateless_reset, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_close, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_application_close, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        uint8_t versions[] = {
+            0, 0, 0, 1,
+            0, 0, 0, 2
+        };
+        ret = demo_error_callback(picoquic_callback_version_negotiation, 0, versions,
+            sizeof(versions), 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_stream_gap, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_prepare_to_send, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_path_address_observed, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(1234567, 0, NULL, 0, 0);
     }
 
     return ret;
