@@ -4060,9 +4060,46 @@ int demo_error_too_long()
     return ret;
 }
 
+
+int demo_error_repeat()
+{
+    int ret;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
+    picoquic_demo_stream_desc_t x_repeat;
+    char * slashed_name = "a/../b/c/d/e\\f/xxx";
+
+    memcpy(&x_repeat, &demo_scenario_error[0], sizeof(picoquic_demo_stream_desc_t));
+    x_repeat.doc_name = slashed_name;
+    x_repeat.repeat_count = 2;
+
+    ret = demo_error_setup(&quic, &cnx, &callback_ctx, &simulated_time,
+        &x_repeat, 1, "h3", 0, 0);
+
+    if (ret == 0) {
+        int ret_start = picoquic_demo_client_start_streams(cnx, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+
+        if (ret_start != 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
 int demo_error_test()
 {
     int ret = demo_error_too_long();
+
+    if (ret == 0) {
+        ret = demo_error_repeat();
+    }
 
     return ret;
 }
