@@ -4187,8 +4187,8 @@ int demo_error_callback(picoquic_call_back_event_t fin_or_event, uint64_t stream
     return ret;
 }
 
-/* TODO: variant where several streams are open before calling delete */
-
+void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
+    picoquic_demo_client_stream_ctx_t* stream_ctx);
 int demo_error_double()
 {
     int ret;
@@ -4226,6 +4226,15 @@ int demo_error_double()
             }
         }
 
+        if (ret == 0) {
+            if (callback_ctx.first_stream != NULL &&
+                callback_ctx.first_stream->next_stream != NULL) {
+                picoquic_demo_client_delete_stream_context(&callback_ctx, callback_ctx.first_stream->next_stream);
+            }
+            else {
+                ret = -1;
+            }
+        }
     }
 
     picoquic_demo_client_delete_context(&callback_ctx);

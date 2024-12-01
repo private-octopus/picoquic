@@ -662,7 +662,7 @@ int picoquic_demo_client_initialize_context(
 }
 
 
-static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
+void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
     picoquic_demo_client_stream_ctx_t * stream_ctx)
 {
     int removed_from_context = 0;
