@@ -4015,7 +4015,8 @@ int demo_ticket_test()
 
 
 static picoquic_demo_stream_desc_t demo_scenario_error[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, NULL}
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, NULL},
+    { 0, 4, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/index.html", "_", 0, NULL}
 };
 
 int demo_error_setup(picoquic_quic_t** quic, picoquic_cnx_t** cnx,
@@ -4186,6 +4187,54 @@ int demo_error_callback(picoquic_call_back_event_t fin_or_event, uint64_t stream
     return ret;
 }
 
+/* TODO: variant where several streams are open before calling delete */
+
+int demo_error_double()
+{
+    int ret;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
+    picoquic_demo_stream_desc_t x_double[2];
+
+    memcpy(&x_double, demo_scenario_error, 2*sizeof(picoquic_demo_stream_desc_t));
+    x_double[0].f_name = "test_demo_error1.html";
+    x_double[1].f_name = "test_demo_error2.html";
+
+    ret = demo_error_setup(&quic, &cnx, &callback_ctx, &simulated_time,
+        x_double, 2, "h3", 0, 0);
+
+    if (ret == 0) {
+        int ret_start = picoquic_demo_client_start_streams(cnx, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+
+        if (ret_start != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_demo_client_stream_ctx_t* stream_ctx = callback_ctx.first_stream;
+
+        while (stream_ctx != NULL) {
+            if (picoquic_demo_client_open_stream_file(cnx, &callback_ctx, stream_ctx) != 0) {
+                ret = -1;
+                break;
+            }
+            else {
+                stream_ctx = stream_ctx->next_stream;
+            }
+        }
+
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
 
 int demo_error_test()
 {
@@ -4242,6 +4291,10 @@ int demo_error_test()
 
     if (ret == 0) {
         ret = demo_error_callback(1234567, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_double();
     }
 
     return ret;
