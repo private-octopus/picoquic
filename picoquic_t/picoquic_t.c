@@ -263,6 +263,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cnxid_transmit_r_disable", transmit_cnxid_retire_disable_test },
     { "cnxid_transmit_r_early", transmit_cnxid_retire_early_test },
     { "probe_api", probe_api_test },
+    { "memlog", memlog_test },
     { "migration" , migration_test },
     { "migration_long", migration_test_long },
     { "migration_with_loss", migration_test_loss },

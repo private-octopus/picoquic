@@ -1,6 +1,6 @@
 /*
 * Author: Christian Huitema
-* Copyright (c) 2019, Private Octopus, Inc.
+* Copyright (c) 2024, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -146,8 +146,6 @@ int picolog_basic_test()
     if (cids != NULL) {
         (void)cidset_delete(cids);
     }
-
-#if 0
     /* compare the log file to the expected value */
     if (ret == 0)
     {
@@ -162,7 +160,6 @@ int picolog_basic_test()
             ret = picoquic_test_compare_text_files(SVG_LOG_OUTPUT, svglog_ref);
         }
     }
-#endif
 
     return ret;
 }

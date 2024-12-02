@@ -172,6 +172,7 @@
     <ClCompile Include="l4s_test.c" />
     <ClCompile Include="mbedtls_test.c" />
     <ClCompile Include="mediatest.c" />
+    <ClCompile Include="memlog_test.c" />
     <ClCompile Include="minicrypto_test.c" />
     <ClCompile Include="multipath_test.c" />
     <ClCompile Include="netperf_test.c" />

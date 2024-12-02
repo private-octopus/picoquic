@@ -1562,6 +1562,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(memlog)
+        {
+            int ret= memlog_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(migration)
         {
             int ret = migration_test();

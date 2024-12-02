@@ -164,6 +164,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/l4s_test.c
     picoquictest/mbedtls_test.c
     picoquictest/mediatest.c
+    picoquictest/memlog_test.c
     picoquictest/minicrypto_test.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c

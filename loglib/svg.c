@@ -241,5 +241,9 @@ int svg_convert(const picoquic_connection_id_t * cid, FILE * f_binlog, FILE * f_
         }
     }
 
+    if (svg.f_txtlog != NULL) {
+        svg.f_txtlog = picoquic_file_close(svg.f_txtlog);
+    }
+
     return ret;
 }
