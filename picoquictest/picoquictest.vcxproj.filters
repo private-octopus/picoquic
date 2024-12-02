@@ -186,6 +186,9 @@
     <ClCompile Include="congestion_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="picolog_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

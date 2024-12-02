@@ -48,6 +48,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picolog_basic)
+        {
+            int ret = picolog_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bytestream)
         {
             int ret = bytestream_test();

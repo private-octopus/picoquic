@@ -42,6 +42,7 @@ int util_memcmp_test();
 int util_threading_test();
 int picohash_test();
 int picohash_embedded_test();
+int picolog_basic_test();
 int bytestream_test();
 int create_cnx_test();
 int create_quic_test();
