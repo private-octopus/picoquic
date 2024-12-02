@@ -171,7 +171,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/p2p_test.c
     picoquictest/pacing_test.c
     picoquictest/parseheadertest.c
-    picoquic_test/picolog_test.c
+    picoquictest/picolog_test.c
     picoquictest/picoquic_lb_test.c
     picoquictest/pn2pn64test.c
     picoquictest/quic_tester.c
