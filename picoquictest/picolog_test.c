@@ -39,12 +39,14 @@
 #define PICOLOG_SVG_TEMPLATE "loglib\\template.svg"
 #define SVG_LOG_REF "picoquictest\\svglog_ref.svg"
 #define SVG_LOG_OUTPUT ".\\0102030405060708.svg"
+#define CIDSET_OUTPUT ".\\cidset.txt"
 
 #else
 #define PICOLOG_BIN_INPUT "picoquictest/picolog_test_input.log"
 #define PICOLOG_SVG_TEMPLATE "loglib/template.svg"
 #define SVG_LOG_REF "picoquictest/svglog_ref.svg"
 #define SVG_LOG_OUTPUT "./0102030405060708.svg"
+#define CIDSET_OUTPUT "./cidset.txt"
 
 #endif
 typedef struct app_conversion_context_st
@@ -112,6 +114,16 @@ int picolog_basic_test()
             binlog_list_cids(appctx.f_binlog, cids);
             if (cids->count == 0) {
                 ret = -1;
+            }
+            else {
+                FILE* cid_prints;
+                if ((cid_prints = picoquic_file_open(CIDSET_OUTPUT, "w")) == NULL) {
+                    ret = -1;
+                }
+                else {
+                    cidset_print(cid_prints, cids);
+                    (void)picoquic_file_close(cid_prints);
+                }
             }
         }
     }
