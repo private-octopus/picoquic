@@ -115,16 +115,25 @@ int picolog_basic_test()
             if (cids->count == 0) {
                 ret = -1;
             }
-            else {
-                FILE* cid_prints;
-                if ((cid_prints = picoquic_file_open(CIDSET_OUTPUT, "w")) == NULL) {
-                    ret = -1;
-                }
-                else {
-                    cidset_print(cid_prints, cids);
-                    (void)picoquic_file_close(cid_prints);
-                }
-            }
+        }
+    }
+    
+    if (ret == 0) {
+        FILE* cid_prints;
+        if ((cid_prints = picoquic_file_open(CIDSET_OUTPUT, "w")) == NULL) {
+            ret = -1;
+        }
+        else {
+            cidset_print(cid_prints, cids);
+            (void)picoquic_file_close(cid_prints);
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_connection_id_t cid_test = { {11, 12, 13, 14, 15, 16, 17, 18}, 8 };
+
+        if (cidset_has_cid(cids, &cid_test)) {
+            ret = -1;
         }
     }
 
