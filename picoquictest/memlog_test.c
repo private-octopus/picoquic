@@ -39,6 +39,8 @@
 /* testing the "memory log" function.
  */
 #define MEMLOG_FILE "memlog_file.csv"
+#define MEMLOG_FILE_MP "memlog_file_mp.csv"
+#define MEMLOG_FILE_BAD "no_such_folder/bad\\memlog_file_bad.csv"
 #ifdef _WINDOWS
 #define MEMLOG_TEST_REF "picoquictest\\memlog_test_ref.csv"
 #else
@@ -51,14 +53,13 @@ static test_api_stream_desc_t test_scenario_memlog[] = {
     { 4, 0, 100000, 100000 }
 };
 
-int memlog_test_one()
+int memlog_test_one(int is_multipath, char const * memlog_file_name, int expect_error)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     int nb_inactive = 0;
     int nb_trials = 0;
     int was_active = 0;
-    uint64_t picosec_per_byte = (1000000ull * 8) / 10;
     uint64_t queue_delay_max = 40000;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0x8e, 0x10, 0x97, 0xe5, 0x70, 0, 0, 0}, 8 };
@@ -71,13 +72,26 @@ int memlog_test_one()
 
         if (ret == 0) {
             /* Initialize memory log on client or server */
-            ret = memlog_init(test_ctx->cnx_client, 100, MEMLOG_FILE);
+            ret = memlog_init(test_ctx->cnx_client, 100, memlog_file_name);
         }
+    }
+
+    if (is_multipath) {
+        /* Add negotiation of multipath option */
+        test_ctx->qserver->default_tp.is_multipath_enabled = 1;
+        test_ctx->qclient->default_tp.is_multipath_enabled = 1;
+        test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
     }
 
     if (ret == 0) {
         picoquic_start_client_cnx(test_ctx->cnx_client);
         ret = tls_api_connection_loop(test_ctx, &loss_mask, queue_delay_max, &simulated_time);
+    }
+
+    if (ret == 0 && is_multipath) {
+        if (!test_ctx->cnx_client->is_multipath_enabled) {
+            ret = -1;
+        }
     }
 
     if (ret == 0) {
@@ -87,11 +101,6 @@ int memlog_test_one()
 
     while (ret == 0 && picoquic_get_cnx_state(test_ctx->cnx_client) != picoquic_state_disconnected) {
         /* Progress. */
-#if 1
-        if (nb_trials == 8431) {
-            DBG_PRINTF("%s", "bug");
-        }
-#endif
         if ((ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active)) != 0) {
             break;
         }
@@ -121,7 +130,7 @@ int memlog_test_one()
     }
 
     /* compare the log file to the expected value */
-    if (ret == 0)
+    if (ret == 0 && !is_multipath && !expect_error)
     {
         char memlog_test_ref[512];
 
@@ -132,7 +141,15 @@ int memlog_test_one()
             DBG_PRINTF("%s", "Cannot set the qlog trace test ref file name.\n");
         }
         else {
-            ret = picoquic_test_compare_text_files(MEMLOG_FILE, memlog_test_ref);
+            ret = picoquic_test_compare_text_files(memlog_file_name, memlog_test_ref);
+        }
+    }
+    else if (expect_error) {
+        if (ret == 0) {
+            ret = -1;
+        }
+        else {
+            ret = 0;
         }
     }
 
@@ -141,7 +158,14 @@ int memlog_test_one()
 
 int memlog_test()
 {
-    int ret = memlog_test_one();
+    int ret = memlog_test_one(0, MEMLOG_FILE, 0);
 
+    if (ret == 0) {
+        ret = memlog_test_one(1, MEMLOG_FILE_MP, 0);
+    }
+
+    if (ret == 0) {
+        ret = memlog_test_one(1, MEMLOG_FILE_BAD, 1);
+    }
     return ret;
 }
