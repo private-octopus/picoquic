@@ -3110,6 +3110,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_tp) {
+            int ret = picowt_tp_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(quicperf_parse) {
             int ret = quicperf_parse_test();
 
