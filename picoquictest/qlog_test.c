@@ -169,14 +169,15 @@ int qlog_error_string(FILE* F)
 	bs.data = data;
 	bs.size = sizeof(data) - 1;
 	bs.ptr = 0;
-	memset(bs.data, 'x', sizeof(bs.data) - 1);
-	bs.data[sizeof(bs.data) - 1] = 0;
+	memset(bs.data, 'x', sizeof(data) - 1);
+	bs.data[sizeof(data) - 1] = 0;
 
 	if (qlog_string(F, &bs, 2 * sizeof(data)) == 0) {
 		ret = -1;
 	}
 
 	if (ret == 0) {
+		fprintf(F, "\n");
 		bs.data = char_data;
 		bs.size = sizeof(char_data);
 		bs.ptr = 0;
@@ -186,6 +187,7 @@ int qlog_error_string(FILE* F)
 	}
 
 	if (ret == 0) {
+		fprintf(F, "\n");
 		bs.data = char_data;
 		bs.size = sizeof(char_data);
 		bs.ptr = 0;
@@ -196,13 +198,60 @@ int qlog_error_string(FILE* F)
 	return ret;
 }
 
+static uint8_t qlog_pref_addr[] = {
+	/* IPv4 address */
+	10, 0, 0, 1,
+	/* IPv4 port */
+	1, 4,
+	/* IPv6 address */
+	2, 1, 3, 4, 5, 6, 7, 8,
+	9, 10, 11, 12, 13, 14, 15, 16,
+	/* IPv6 port */
+	2, 8,
+	/* CID len */
+	4,
+	/* CID value */
+	15, 14, 13, 12,
+	/* Reset token */
+	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+	/* 4 extra bytes */
+	16, 17, 18, 19
+};
+void qlog_preferred_address(FILE* f, bytestream* s, uint64_t len);
+
+int qlog_pref_addr_test(FILE* F)
+{
+	int ret = 0;
+	bytestream bs = { 0 };
+	size_t size_before = ftell(F);
+	size_t size_after = 0;
+	
+	bs.data = qlog_pref_addr;
+	bs.size = sizeof(qlog_pref_addr);
+
+	qlog_preferred_address(F, &bs, sizeof(qlog_pref_addr));
+
+	size_after = ftell(F);
+	if (size_after < size_before + 32) {
+		ret = -1;
+	}
+	return ret;
+}
+
 int qlog_error_test()
 {
 	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
 	int ret = (F == NULL) ? -1 : 0;
 
 	if (ret == 0) {
+		fprintf(F, "\n");
 		ret = qlog_error_string(F);
+		fprintf(F, "\n");
+	}
+
+	if (ret == 0) {
+		ret = qlog_pref_addr_test(F);
+		fprintf(F, "\n");
 	}
 
 	if (F != NULL) {
