@@ -62,6 +62,10 @@ int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measur
 
 void picoquic_hystart_increase(picoquic_path_t* path_x, picoquic_min_max_rtt_t* rtt_filter, uint64_t nb_delivered);
 
+void picoquic_cc_increase_cwin_for_long_rtt(picoquic_path_t * path_x);
+
+void picoquic_cc_update_bandwidth(picoquic_path_t* path_x);
+
 /* Many congestion control algorithms run a parallel version of new reno in order
  * to provide a lower bound estimate of either the congestion window or the
  * the minimal bandwidth. This implementation of new reno does not directly

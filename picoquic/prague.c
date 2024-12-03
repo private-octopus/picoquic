@@ -292,12 +292,7 @@ void picoquic_prague_notify(
         case picoquic_congestion_notification_acknowledgement: {
             if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
                 pr_state->ssthresh == UINT64_MAX) {
-                /* RTT measurements will happen after the back is signalled */
-                uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
-                uint64_t min_win = max_win /= 2;
-                if (path_x->cwin < min_win) {
-                    path_x->cwin = min_win;
-                }
+                picoquic_cc_update_bandwidth(path_x);
             }
 
             /* Regardless of the alg state, update alpha */
@@ -369,18 +364,7 @@ void picoquic_prague_notify(
                 pr_state->ssthresh == UINT64_MAX) {
 
                 if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
-                    uint64_t min_win;
-
-                    if (path_x->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
-                        min_win = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)PICOQUIC_TARGET_SATELLITE_RTT / (double)PICOQUIC_TARGET_RENO_RTT);
-                    }
-                    else {
-                        /* Increase initial CWIN for long delay links. */
-                        min_win = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
-                    }
-                    if (min_win > path_x->cwin) {
-                        path_x->cwin = min_win;
-                    }
+                    picoquic_cc_increase_cwin_for_long_rtt(path_x);
                 }
 
                 if (picoquic_hystart_test(&pr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
