@@ -272,6 +272,66 @@ int qlog_pref_vnego_test(FILE* F)
 	return ret;
 }
 
+uint8_t qlog_tp_extension_input[] = {
+	picoquic_tp_ack_delay_exponent, 1, 3,
+	picoquic_tp_server_preferred_address, 45,
+	/* IPv4 address */
+	10, 0, 0, 1,
+	/* IPv4 port */
+	1, 4,
+	/* IPv6 address */
+	2, 1, 3, 4, 5, 6, 7, 8,
+	9, 10, 11, 12, 13, 14, 15, 16,
+	/* IPv6 port */
+	2, 8,
+	/* CID len */
+	4,
+	/* CID value */
+	15, 14, 13, 12,
+	/* Reset token */
+	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+	picoquic_tp_disable_migration, 0,
+	picoquic_tp_retry_connection_id, 5, 10, 11, 12, 13, 14,
+	0x40 + (uint8_t)(picoquic_tp_grease_quic_bit >> 8),
+	(uint8_t)(picoquic_tp_grease_quic_bit & 0xff), 0,
+	picoquic_tp_version_negotiation, 8,
+	0, 0, 0, 2, 0, 0, 0, 1,
+	0x80, 0, (uint8_t)(picoquic_tp_enable_bdp_frame >> 8),
+	(uint8_t)(picoquic_tp_enable_bdp_frame & 0xff), 1, 1,
+	0xc0, 0, 0, 0xab, 0xba, 0xca, 0xda, 0xba, 5,
+	0xab, 0xba, 0xca, 0xda, 0xba
+};
+
+int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length);
+int qlog_tp_extension_test(FILE* F)
+{
+	int ret = 0;
+	bytestream bs = { 0 };
+	size_t size_before = ftell(F);
+	size_t size_after = 0;
+	size_t test_len[5] = {
+		sizeof(qlog_tp_extension_input),
+		2 * sizeof(qlog_tp_extension_input),
+		1,
+		2,
+		sizeof(qlog_tp_extension_input) - 1
+	};
+
+	for (int i = 0; i < 5; i++) {
+		fprintf(F, "\n");
+		bs.data = qlog_tp_extension_input;
+		bs.size = sizeof(qlog_tp_extension_input);
+		bs.ptr = 0;
+		qlog_transport_extensions(F, &bs, test_len[i]);
+	}
+
+	size_after = ftell(F);
+	if (size_after < size_before + 32) {
+		ret = -1;
+	}
+	return ret;
+}
+
 int qlog_error_test()
 {
 	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
@@ -290,6 +350,11 @@ int qlog_error_test()
 
 	if (ret == 0) {
 		ret = qlog_pref_vnego_test(F);
+		fprintf(F, "\n");
+	}
+
+	if (ret == 0) {
+		ret = qlog_tp_extension_test(F);
 		fprintf(F, "\n");
 	}
 
