@@ -215,33 +215,41 @@ void qlog_preferred_address(FILE* f, bytestream* s, uint64_t len)
 void qlog_tp_version_negotiation(FILE* f, bytestream* s, uint64_t len)
 {
     size_t old_size = s->size;
+    size_t ptr_max = s->ptr + len;
 
-    s->size = s->ptr + (size_t)len;
-    fprintf(f, "{ ");
-    if ((len & 3) != 0 || len == 0) {
-        fprintf(f, "\"bad_length\": \"%" PRIu64, len);
-    } else {
-        fprintf(f, "\"chosen\": \"");
-        for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
-            fprintf(f, "%02x", s->data[s->ptr]);
-        }
-        fprintf(f, "\"");
-        if (s->ptr < s->size) {
-            int is_first = 1;
-            fprintf(f, ", \"others\": [");
-            do {
-                fprintf(f, "%s", (is_first)?"\"":", \"");
-                is_first = 0;
-                for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
-                    fprintf(f, "%02x", s->data[s->ptr]);
-                }
-                fprintf(f, "\"");
-            } while (s->ptr < s->size);
-            fprintf(f, "]");
-        }
+    if (ptr_max > s->size) {
+        fprintf(f, ",\n    \"vnego_parameter_length\": %zu", len);
+        fprintf(f, ",\n    \"bytes_available\": %zu" PRIu64, s->size - s->ptr);
     }
-    fprintf(f, "}");
-    s->size = old_size;
+    else {
+        s->size = s->ptr + (size_t)len;
+        fprintf(f, "{ ");
+        if ((len & 3) != 0 || len == 0) {
+            fprintf(f, "\"bad_length\": \"%" PRIu64, len);
+        }
+        else {
+            fprintf(f, "\"chosen\": \"");
+            for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
+                fprintf(f, "%02x", s->data[s->ptr]);
+            }
+            fprintf(f, "\"");
+            if (s->ptr < s->size) {
+                int is_first = 1;
+                fprintf(f, ", \"others\": [");
+                do {
+                    fprintf(f, "%s", (is_first) ? "\"" : ", \"");
+                    is_first = 0;
+                    for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
+                        fprintf(f, "%02x", s->data[s->ptr]);
+                    }
+                    fprintf(f, "\"");
+                } while (s->ptr < s->size);
+                fprintf(f, "]");
+            }
+        }
+        fprintf(f, "}");
+        s->size = old_size;
+    }
 }
 
 
