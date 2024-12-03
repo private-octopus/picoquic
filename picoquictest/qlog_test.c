@@ -62,9 +62,35 @@ int autoqlog_bad_file()
 	return ret;
 }
 
+int autoqlog_no_binlog()
+{
+	picoquic_quic_t* quic = NULL;
+	picoquic_cnx_t* cnx = NULL;
+
+	int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+	if (ret == 0) {
+		picoquic_set_binlog(quic, ".");
+		ret = picoquic_set_qlog(quic, ".");
+	}
+	if (ret == 0) {
+		/* Initialize the client connection */
+		ret = picoquic_start_client_cnx(cnx);
+
+		picoquic_string_free(cnx->binlog_file_name);
+		cnx->binlog_file_name = picoquic_string_duplicate(AUTOQLOG_BAD_QLOG);
+	}
+
+	picoquic_test_delete_minimal_cnx(&quic, &cnx);
+	return ret;
+}
+
 int qlog_auto_test()
 {
 	int ret = autoqlog_bad_file();
+
+	if (ret == 0) {
+		ret = autoqlog_no_binlog();
+	}
 
 	return ret;
 }
