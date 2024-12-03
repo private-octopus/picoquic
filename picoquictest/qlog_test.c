@@ -229,7 +229,41 @@ int qlog_pref_addr_test(FILE* F)
 	bs.data = qlog_pref_addr;
 	bs.size = sizeof(qlog_pref_addr);
 
+	fprintf(F, "\n");
 	qlog_preferred_address(F, &bs, sizeof(qlog_pref_addr));
+
+	size_after = ftell(F);
+	if (size_after < size_before + 32) {
+		ret = -1;
+	}
+	return ret;
+}
+
+static uint8_t qlog_vnego_tp_input[] = {
+	0, 0, 0, 2,
+	0, 0, 0, 1,
+	1, 2, 3, 4,
+	5, 6, 7, 8
+};
+
+void qlog_tp_version_negotiation(FILE* f, bytestream* s, uint64_t len);
+int qlog_pref_vnego_test(FILE* F)
+{
+	int ret = 0;
+	bytestream bs = { 0 };
+	size_t size_before = ftell(F);
+	size_t size_after = 0;
+	size_t test_len[7] = {
+		4, 8, 12, 16, 20, 0, 15
+	};
+
+	for (int i = 0; i < 7; i++) {
+		fprintf(F, "\n");
+		bs.data = qlog_vnego_tp_input;
+		bs.size = sizeof(qlog_vnego_tp_input);
+		bs.ptr = 0;
+		qlog_tp_version_negotiation(F, &bs, test_len[i]);
+	}
 
 	size_after = ftell(F);
 	if (size_after < size_before + 32) {
@@ -251,6 +285,11 @@ int qlog_error_test()
 
 	if (ret == 0) {
 		ret = qlog_pref_addr_test(F);
+		fprintf(F, "\n");
+	}
+
+	if (ret == 0) {
+		ret = qlog_pref_vnego_test(F);
 		fprintf(F, "\n");
 	}
 
