@@ -27,6 +27,8 @@
     <ClCompile Include="autoqlog.c">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="memory_log.c" />
+    <ClCompile Include="memory_log.c">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

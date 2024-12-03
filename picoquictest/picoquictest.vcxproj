@@ -172,6 +172,7 @@
     <ClCompile Include="l4s_test.c" />
     <ClCompile Include="mbedtls_test.c" />
     <ClCompile Include="mediatest.c" />
+    <ClCompile Include="memlog_test.c" />
     <ClCompile Include="minicrypto_test.c" />
     <ClCompile Include="multipath_test.c" />
     <ClCompile Include="netperf_test.c" />
@@ -179,8 +180,10 @@
     <ClCompile Include="p2p_test.c" />
     <ClCompile Include="pacing_test.c" />
     <ClCompile Include="parseheadertest.c" />
+    <ClCompile Include="picolog_test.c" />
     <ClCompile Include="picoquic_lb_test.c" />
     <ClCompile Include="pn2pn64test.c" />
+    <ClCompile Include="qlog_test.c" />
     <ClCompile Include="quicperf_test.c" />
     <ClCompile Include="quic_tester.c" />
     <ClCompile Include="sacktest.c" />

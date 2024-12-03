@@ -48,6 +48,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picolog_basic)
+        {
+            int ret = picolog_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bytestream)
         {
             int ret = bytestream_test();
@@ -1555,6 +1562,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(memlog)
+        {
+            int ret= memlog_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(migration)
         {
             int ret = migration_test();
@@ -1726,6 +1740,20 @@ namespace UnitTest1
         TEST_METHOD(packet_trace)
         {
             int ret = packet_trace_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qlog_auto)
+        {
+            int ret = qlog_auto_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qlog_error)
+        {
+            int ret = qlog_error_test();
 
             Assert::AreEqual(ret, 0);
         }

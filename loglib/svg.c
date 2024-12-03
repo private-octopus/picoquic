@@ -215,10 +215,10 @@ int svg_convert(const picoquic_connection_id_t * cid, FILE * f_binlog, FILE * f_
     svg.start_time = 0;
     svg.packet_count = 0;
 
-    binlog_convert_cb_t ctx;
+    binlog_convert_cb_t ctx = { 0 };
     ctx.connection_start = svg_connection_start;
     ctx.connection_end = svg_connection_end;
-    ctx.param_update = svg_alpn_update;
+    ctx.alpn_update = svg_alpn_update;
     ctx.param_update = svg_param_update;
     ctx.pdu = svg_pdu;
     ctx.packet_start = svg_packet_start;
@@ -239,6 +239,10 @@ int svg_convert(const picoquic_connection_id_t * cid, FILE * f_binlog, FILE * f_
         } else {
             ret = binlog_convert(f_binlog, cid, &ctx);
         }
+    }
+
+    if (svg.f_txtlog != NULL) {
+        svg.f_txtlog = picoquic_file_close(svg.f_txtlog);
     }
 
     return ret;

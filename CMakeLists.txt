@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.28.8
+        VERSION 1.1.28.9
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -164,6 +164,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/l4s_test.c
     picoquictest/mbedtls_test.c
     picoquictest/mediatest.c
+    picoquictest/memlog_test.c
     picoquictest/minicrypto_test.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
@@ -171,8 +172,10 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/p2p_test.c
     picoquictest/pacing_test.c
     picoquictest/parseheadertest.c
+    picoquictest/picolog_test.c
     picoquictest/picoquic_lb_test.c
     picoquictest/pn2pn64test.c
+    picoquictest/qlog_test.c
     picoquictest/quic_tester.c
     picoquictest/sacktest.c
     picoquictest/satellite_test.c

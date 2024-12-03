@@ -231,10 +231,9 @@ void memlog_call_back(picoquic_cnx_t* cnx, picoquic_path_t* path, void* v_memlog
         }
         else
         {
-#ifdef PICOQUIC_MEMORY_LOG
             cnx->memlog_call_back = NULL;
             cnx->memlog_ctx = NULL;
-#endif
+
             /* This is the close callback */
             if (memlog->F != NULL) {
                 memlog_print_header(memlog->F);
@@ -279,10 +278,8 @@ int memlog_init(picoquic_cnx_t* cnx, size_t nb_lines, const char * memlog_file)
             free(memlog);
         }
         else {
-#ifdef PICOQUIC_MEMORY_LOG
             cnx->memlog_call_back = memlog_call_back;
             cnx->memlog_ctx = memlog;
-#endif
         }
     }
     return(ret);
