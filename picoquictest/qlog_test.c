@@ -151,3 +151,62 @@ int qlog_auto_test()
 
 	return ret;
 }
+
+
+#define QLOG_ERROR_FILE "qlog_error_test.txt"
+
+int qlog_string(FILE* f, bytestream* s, uint64_t l);
+int qlog_chars(FILE* f, bytestream* s, uint64_t l);
+
+int qlog_error_string(FILE* F)
+{
+	int ret = 0;
+	bytestream bs = { 0 };
+	uint8_t char_data[] = {
+		'\"', '\\', 0xFF, ' ', 'z', 127
+	};
+	uint8_t data[16];
+	bs.data = data;
+	bs.size = sizeof(data) - 1;
+	bs.ptr = 0;
+	memset(bs.data, 'x', sizeof(bs.data) - 1);
+	bs.data[sizeof(bs.data) - 1] = 0;
+
+	if (qlog_string(F, &bs, 2 * sizeof(data)) == 0) {
+		ret = -1;
+	}
+
+	if (ret == 0) {
+		bs.data = char_data;
+		bs.size = sizeof(char_data);
+		bs.ptr = 0;
+		if (qlog_chars(F, &bs, 2 * bs.size) == 0) {
+			ret = -1;
+		}
+	}
+
+	if (ret == 0) {
+		bs.data = char_data;
+		bs.size = sizeof(char_data);
+		bs.ptr = 0;
+		if (qlog_chars(F, &bs, bs.size) != 0) {
+			ret = -1;
+		}
+	}
+	return ret;
+}
+
+int qlog_error_test()
+{
+	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
+	int ret = (F == NULL) ? -1 : 0;
+
+	if (ret == 0) {
+		ret = qlog_error_string(F);
+	}
+
+	if (F != NULL) {
+		F = picoquic_file_close(F);
+	}
+	return ret;
+}
