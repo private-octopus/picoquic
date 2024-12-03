@@ -108,6 +108,31 @@ int autoqlog_longdir()
 	return ret;
 }
 
+int autoqlog_unique()
+{
+	picoquic_quic_t* quic = NULL;
+	picoquic_cnx_t* cnx = NULL;
+	char long_qlog[512];
+
+	memset(long_qlog, 'x', 511);
+	long_qlog[511] = 0;
+
+	int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+	if (ret == 0) {
+		picoquic_use_unique_log_names(quic, 1);
+		picoquic_set_binlog(quic, ".");
+		ret = picoquic_set_qlog(quic, long_qlog);
+	}
+	if (ret == 0) {
+		binlog_new_connection(cnx);
+		/* Initialize the client connection */
+		ret = picoquic_start_client_cnx(cnx);
+	}
+
+	picoquic_test_delete_minimal_cnx(&quic, &cnx);
+	return ret;
+}
+
 int qlog_auto_test()
 {
 	int ret = autoqlog_bad_file();
@@ -118,6 +143,10 @@ int qlog_auto_test()
 
 	if (ret == 0) {
 		ret = autoqlog_longdir();
+	}
+
+	if (ret == 0) {
+		ret = autoqlog_unique();
 	}
 
 	return ret;
