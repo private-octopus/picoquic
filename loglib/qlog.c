@@ -215,11 +215,11 @@ void qlog_preferred_address(FILE* f, bytestream* s, uint64_t len)
 void qlog_tp_version_negotiation(FILE* f, bytestream* s, uint64_t len)
 {
     size_t old_size = s->size;
-    size_t ptr_max = s->ptr + len;
+    size_t ptr_max = s->ptr + (size_t)len;
 
     if (ptr_max > s->size) {
-        fprintf(f, ",\n    \"vnego_parameter_length\": %zu", len);
-        fprintf(f, ",\n    \"bytes_available\": %zu" PRIu64, s->size - s->ptr);
+        fprintf(f, ",\n    \"vnego_parameter_length\": %zu", (size_t)len);
+        fprintf(f, ",\n    \"bytes_available\": %zu", s->size - s->ptr);
     }
     else {
         s->size = s->ptr + (size_t)len;
