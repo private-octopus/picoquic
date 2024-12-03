@@ -1744,6 +1744,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qlog_auto)
+        {
+            int ret = qlog_auto_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qlog_trace)
         {
             int ret = qlog_trace_test();

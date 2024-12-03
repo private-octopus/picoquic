@@ -231,6 +231,7 @@ int short_initial_cid_test();
 int stream_id_max_test();
 int padding_test();
 int packet_trace_test();
+int qlog_auto_test();
 int qlog_trace_test();
 int qlog_trace_auto_test();
 int qlog_trace_only_test();
