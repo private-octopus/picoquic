@@ -1730,8 +1730,9 @@ void picoquic_protect_packet_header(uint8_t* send_buffer, size_t pn_offset, uint
 size_t picoquic_protect_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, uint8_t* bytes, uint64_t sequence_number, size_t length, size_t header_length, uint8_t* send_buffer, size_t send_buffer_max, void* aead_context, void* pn_enc, picoquic_path_t* path_x, uint64_t current_time);
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
-
+#ifdef LOG_PN_DEC
 void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx); /* For debugging potential PN_ENC corruption */
+#endif
 
 int picoquic_remove_header_protection_inner(uint8_t* bytes, size_t length, uint8_t* decrypted_bytes, picoquic_packet_header* ph, void* pn_enc, unsigned int is_loss_bit_enabled_incoming, uint64_t sack_list_last);
 

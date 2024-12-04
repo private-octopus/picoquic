@@ -535,7 +535,7 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
 
     return pn64;
 }
-
+#ifdef LOG_PN_DEC
 /* Debug code used to test whether the PN decryption works as expected.
  */
 
@@ -567,7 +567,7 @@ void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx)
             demask_bytes[0], demask_bytes[1], demask_bytes[2], demask_bytes[3], demask_bytes[4]);
     }
 }
-
+#endif
 
 /*
  * Remove header protection 
@@ -816,12 +816,13 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             decoded = ph->payload_length + 1;
         }
     }
-
+#ifdef LOG_PN_DEC
     /* Add here a check that the PN key is still valid. */
     if (decoded > ph->payload_length) {
         picoquic_log_pn_dec_trial(cnx);
     }
-    
+#endif
+
     /* by conventions, values larger than input indicate error */
     return decoded;
 }

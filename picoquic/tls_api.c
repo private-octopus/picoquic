@@ -1580,7 +1580,9 @@ void picoquic_apply_rotated_keys(picoquic_cnx_t * cnx, int is_enc)
         cnx->crypto_context_new.aead_encrypt = NULL;
 
         cnx->key_phase_enc ^= 1;
+#ifdef LOG_PN_DEC
         picoquic_log_pn_dec_trial(cnx);
+#endif
     }
     else {
         if (cnx->crypto_context_old.aead_decrypt != NULL) {
