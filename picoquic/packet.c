@@ -779,15 +779,7 @@ int picoquic_parse_header_and_decrypt(
     *new_ctx_created = 0;
 
     if (ret == 0 ) {
-        if (ph->offset + ph->payload_length > PICOQUIC_MAX_PACKET_SIZE) {
-            ret = PICOQUIC_ERROR_PACKET_TOO_LONG;
-            if (*new_ctx_created) {
-                picoquic_delete_cnx(*pcnx);
-                *pcnx = NULL;
-                *new_ctx_created = 0;
-            }
-        }
-        else if (ph->ptype != picoquic_packet_version_negotiation &&
+        if (ph->ptype != picoquic_packet_version_negotiation &&
             ph->ptype != picoquic_packet_retry && ph->ptype != picoquic_packet_error) {
             /* TODO: clarify length, payload length, packet length -- special case of initial packet */
             length = ph->offset + ph->payload_length;
