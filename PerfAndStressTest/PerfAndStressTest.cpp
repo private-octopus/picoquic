@@ -48,6 +48,13 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(satellite_seeded_bbr1)
+        {
+            int ret = satellite_seeded_bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(satellite_loss)
         {
             int ret = satellite_loss_test();
@@ -100,6 +107,13 @@ namespace PerfAndStressTest
         TEST_METHOD(satellite_small_up)
         {
             int ret = satellite_small_up_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(satellite_bbr1)
+        {
+            int ret = satellite_bbr1_test();
 
             Assert::AreEqual(ret, 0);
         }

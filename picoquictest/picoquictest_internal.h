@@ -259,6 +259,7 @@ typedef struct st_test_skip_frames_t {
     uint64_t expected_error;
     int skip_fails;
     int mpath;
+    int nb_varints;
 } test_skip_frames_t;
 
 extern test_skip_frames_t test_skip_list[];
@@ -378,6 +379,7 @@ void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_lo
 uint64_t picoquic_sqrt_for_tests(uint64_t y);
 
 int picoquic_test_set_minimal_cnx(picoquic_quic_t** quic, picoquic_cnx_t** cnx);
+int picoquic_test_set_minimal_cnx_with_time(picoquic_quic_t** quic, picoquic_cnx_t** cnx, uint64_t* simulated_time);
 int picoquic_test_reset_minimal_cnx(picoquic_quic_t* quic, picoquic_cnx_t** cnx);
 void picoquic_test_delete_minimal_cnx(picoquic_quic_t** quic, picoquic_cnx_t** cnx);
 

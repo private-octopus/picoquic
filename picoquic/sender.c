@@ -2593,8 +2593,8 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
             cnx->local_parameters.initial_max_path_id -
             cnx->nb_local_cnxid_lists;
         if (cnx->max_path_id_local < new_max_path_id) {
-            uint8_t * bytes_next = picoquic_format_max_path_id_frame(bytes, bytes_max, new_max_path_id);
-            if (bytes_next == NULL) {
+            uint8_t * bytes_next = picoquic_format_max_path_id_frame(bytes, bytes_max, new_max_path_id, more_data);
+            if (bytes_next == bytes) {
                 no_space_left = 1;
             }
             else {
@@ -2604,8 +2604,8 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
         }
         /* If the number of local lists is lower than the max number of paths,
          * create more. The code assume that path[0] is created during handshake. */
-        while (!no_space_left && cnx->nb_local_cnxid_lists < cnx->local_parameters.initial_max_path_id &&
-            cnx->next_path_id_in_lists < cnx->max_path_id_remote) {
+        while (!no_space_left && cnx->nb_local_cnxid_lists <= cnx->local_parameters.initial_max_path_id &&
+            cnx->next_path_id_in_lists <= cnx->max_path_id_remote) {
             (void) picoquic_find_or_create_local_cnxid_list(cnx, cnx->next_path_id_in_lists, 1);
         }
     }
@@ -4224,7 +4224,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
         /* Set the selected path to available if it was standby. Selecting a standby
          * path means that the available path was of lower quality, the only exception
          * being if the selection was due to a pending challenge. */
-        picoquic_set_path_status(cnx, cnx->path[path_id]->unique_path_id, picoquic_path_status_available);
+        (void)picoquic_set_path_status(cnx, cnx->path[path_id]->unique_path_id, picoquic_path_status_available);
     }
     cnx->path[path_id]->selected++;
     picoquic_set_path_addresses(cnx, path_id, is_nat, p_addr_to, p_addr_from, if_index);
@@ -4331,13 +4331,37 @@ static int picoquic_check_cc_feedback_timer(picoquic_cnx_t* cnx, uint64_t* next_
     return ret;
 }
 
+int picoquic_handle_app_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    int ret = 0;
+    while (cnx->app_wake_time != 0 && cnx->app_wake_time <= current_time){
+        cnx->app_wake_time = 0;
+        if (cnx->callback_fn != NULL) {
+            ret = cnx->callback_fn(cnx, current_time, NULL, 0, picoquic_callback_app_wakeup,
+                cnx->callback_ctx, NULL);
+        }
+    }
+    return ret;
+}
+
+int picoquic_program_app_wake_time(picoquic_cnx_t* cnx, uint64_t* next_wake_time)
+{
+    int ret = 0;
+
+    if (cnx->app_wake_time != 0 && cnx->app_wake_time < *next_wake_time) {
+        *next_wake_time = cnx->app_wake_time;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+    }
+    return ret;
+}
+
 /* Prepare next packet to send, or nothing.. */
 int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage * p_addr_to, struct sockaddr_storage * p_addr_from, int* if_index, size_t* send_msg_size)
 {
 
-    int ret;
+    int ret = 0;
     picoquic_packet_t * packet = NULL;
     uint64_t initial_next_time;
     uint64_t next_wake_time = cnx->latest_receive_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
@@ -4354,7 +4378,11 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
 
     *send_length = 0;
 
-    ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
+    ret = picoquic_handle_app_wake_time(cnx, current_time);
+
+    if (ret == 0) {
+        ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
+    }
 
     if (ret == 0) {
         ret = picoquic_check_cc_feedback_timer(cnx, &next_wake_time, current_time);
@@ -4523,6 +4551,10 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         if (*send_length > 0) {
             cnx->nb_trains_sent++;
         }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_program_app_wake_time(cnx, &next_wake_time);
     }
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, next_wake_time);

@@ -215,6 +215,12 @@ int satellite_seeded_test()
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4900000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
+int satellite_seeded_bbr1_test()
+{
+    /* Simulate remembering RTT and BW from previous connection */
+    return satellite_test_one(picoquic_bbr1_algorithm, 100000000, 5300000, 250, 3, 0, 0, 0, 1, 0, 0);
+}
+
 int satellite_loss_test()
 {
     /* Should be less than 10 sec per draft etosat. */
@@ -258,6 +264,13 @@ int satellite_small_up_test()
 {
     /* Should be less than 420 sec per draft etosat. */
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0, 0, 0, 0, 0);
+}
+
+
+int satellite_bbr1_test()
+{
+    /* Should be less than 7 sec per draft etosat */
+    return satellite_test_one(picoquic_bbr1_algorithm, 100000000, 7000000, 250, 3, 0, 0, 0, 0, 0, 0);
 }
 
 int satellite_cubic_test()

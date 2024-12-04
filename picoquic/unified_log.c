@@ -249,11 +249,9 @@ void picoquic_log_close_connection(picoquic_cnx_t* cnx)
 /* log congestion control parameters */
 void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 {
-#ifdef PICOQUIC_MEMORY_LOG
     if (cnx->memlog_call_back != NULL) {
         cnx->memlog_call_back(cnx, cnx->path[0], cnx->memlog_ctx, 0, current_time);
     }
-#endif
     if (picoquic_cnx_is_still_logging(cnx)) {
         if (cnx->quic->F_log != NULL) {
             cnx->quic->text_log_fns->log_cc_dump(cnx, current_time);

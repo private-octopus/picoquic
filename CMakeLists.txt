@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.26.0
+        VERSION 1.1.28.9
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -149,6 +149,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cleartext_aead_test.c
     picoquictest/code_version_test.c
     picoquictest/config_test.c
+    picoquictest/congestion_test.c
     picoquictest/cnx_creation_test.c
     picoquictest/cnxstress.c
     picoquictest/cplusplus.cpp
@@ -156,12 +157,14 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
     picoquictest/edge_cases.c
+    picoquictest/getter_test.c
     picoquictest/hashtest.c
     picoquictest/high_latency_test.c
     picoquictest/intformattest.c
     picoquictest/l4s_test.c
     picoquictest/mbedtls_test.c
     picoquictest/mediatest.c
+    picoquictest/memlog_test.c
     picoquictest/minicrypto_test.c
     picoquictest/multipath_test.c
     picoquictest/netperf_test.c
@@ -169,14 +172,17 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/p2p_test.c
     picoquictest/pacing_test.c
     picoquictest/parseheadertest.c
+    picoquictest/picolog_test.c
     picoquictest/picoquic_lb_test.c
     picoquictest/pn2pn64test.c
+    picoquictest/qlog_test.c
     picoquictest/quic_tester.c
     picoquictest/sacktest.c
     picoquictest/satellite_test.c
     picoquictest/skip_frame_test.c
     picoquictest/socket_test.c
     picoquictest/sockloop_test.c
+    picoquictest/spinbit_test.c
     picoquictest/splay_test.c
     picoquictest/stream0_frame_test.c
     picoquictest/stresstest.c
@@ -196,7 +202,6 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_server.c
     picohttp/h3zero_uri.c
     picohttp/quicperf.c
-    picohttp/siduck.c
     picohttp/webtransport.c
     picohttp/wt_baton.c)
 
@@ -213,6 +218,7 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
     picoquictest/h3zero_stream_test.c
     picoquictest/h3zero_uri_test.c
+    picoquictest/quicperf_test.c
     picoquictest/webtransport_test.c)
 
 OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)

@@ -50,8 +50,6 @@ static picoquic_alpn_list_t alpn_list[] = {
     { picoquic_alpn_http_0_9, "hq-28", 5 },
     { picoquic_alpn_http_3, "h3-27", 5 },
     { picoquic_alpn_http_0_9, "hq-27", 5 },
-    { picoquic_alpn_siduck, "siduck", 6 },
-    { picoquic_alpn_siduck, "siduck-00", 9 },
     { picoquic_alpn_quicperf, QUICPERF_ALPN, QUICPERF_ALPN_LEN}
 };
 
@@ -664,7 +662,7 @@ int picoquic_demo_client_initialize_context(
 }
 
 
-static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
+void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
     picoquic_demo_client_stream_ctx_t * stream_ctx)
 {
     int removed_from_context = 0;
