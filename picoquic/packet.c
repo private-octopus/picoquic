@@ -54,8 +54,6 @@ picoquic_packet_type_enum picoquic_parse_long_packet_type(uint8_t flags, int ver
         case 3: /* Retry */
             pt = picoquic_packet_retry;
             break;
-        default: /* Not a valid packet type */
-            break;
         }
         break;
     case PICOQUIC_V2_VERSION:
@@ -75,8 +73,6 @@ picoquic_packet_type_enum picoquic_parse_long_packet_type(uint8_t flags, int ver
             break;
         case 0: /* Retry */
             pt = picoquic_packet_retry;
-            break;
-        default: /* Not a valid packet type */
             break;
         }
         break;
@@ -112,7 +108,7 @@ int picoquic_screen_initial_packet(
         ret = PICOQUIC_ERROR_PACKET_HEADER_PARSING;
     }
     else {
-        /* This code assumes that *pcnx is always null when screen initial is called. /
+        /* This code assumes that *pcnx is always null when screen initial is called. */
         /* Verify the AEAD checkum */
         void* aead_ctx = NULL;
         void* pn_dec_ctx = NULL;
@@ -315,12 +311,8 @@ int picoquic_parse_long_packet_header(
                 ph->pc = picoquic_packet_context_initial;
                 ph->epoch = picoquic_epoch_initial;
                 break;
-            default: /* Not a valid packet type */
-                DBG_PRINTF("Packet type is not recognized: v=%08x, p[0]= 0x%02x\n", ph->vn, flags);
-                ph->ptype = picoquic_packet_error;
-                ph->version_index = -1;
-                ph->pc = 0;
-                break;
+            /* No default branch in this statement, because there are only 4 possible types 
+             * parsed in picoquic_parse_long_packet_type */
             }
 
             if (ph->ptype == picoquic_packet_retry) {
@@ -754,16 +746,8 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         /* TODO: get rid of handshake some time after handshake complete */
         /* For all the other epochs, there is a single crypto context and no key rotation */
         if (cnx->crypto_context[ph->epoch].aead_decrypt != NULL) {
-            if (cnx->is_multipath_enabled && ph->ptype == picoquic_packet_1rtt_protected) {
-                decoded = picoquic_aead_decrypt_mp(decoded_bytes + ph->offset, 
-                    bytes + ph->offset, ph->payload_length,
-                    ph->l_cid->path_id, ph->pn64, decoded_bytes, ph->offset,
-                    cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
-            }
-            else {
-                decoded = picoquic_aead_decrypt_generic(decoded_bytes + ph->offset,
-                    bytes + ph->offset, ph->payload_length, ph->pn64, decoded_bytes, ph->offset, cnx->crypto_context[ph->epoch].aead_decrypt);
-            }
+            decoded = picoquic_aead_decrypt_generic(decoded_bytes + ph->offset,
+                bytes + ph->offset, ph->payload_length, ph->pn64, decoded_bytes, ph->offset, cnx->crypto_context[ph->epoch].aead_decrypt);
         }
         else {
             decoded = ph->payload_length + 1;
