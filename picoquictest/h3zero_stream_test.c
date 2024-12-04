@@ -721,6 +721,50 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
     return ret;
 }
 
+
+int h3zero_client_open_stream_file(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx);
+
+int h3zero_error_client_stream_test()
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
+    uint8_t buffer[1024];
+    uint8_t* bytes = NULL;
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+    uint64_t stream_id = 4;
+    uint64_t fin_stream_id = UINT64_MAX;
+    size_t data_length = 128;
+    h3zero_stream_ctx_t* stream_ctx = NULL;
+    char const* path_name = "no_such_path/bad_path\\h3zero_test_client_data.html";
+
+    if (ret == 0 && (stream_ctx = h3zero_find_or_create_stream(cnx, 4, h3_ctx, 1, 1)) == NULL) {
+        ret = -1;
+    }
+    else {
+        cnx->cnx_state = picoquic_state_ready;
+        if ((stream_ctx->file_path = picoquic_string_duplicate(path_name)) == NULL) {
+            ret = -1;
+        } else {
+            stream_ctx->is_open = 1;
+
+            if (h3zero_client_open_stream_file(cnx, h3_ctx, stream_ctx) == 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* clean up everything */
+    picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+
 int h3zero_client_data_test()
 {
     client_data_test_spec_t spec = { 0 };
@@ -779,8 +823,13 @@ int h3zero_client_data_test()
         ret = h3zero_client_data_test_one(&spec);
     }
 
+    if (ret == 0) {
+        ret = h3zero_error_client_stream_test();
+    }
+
     return ret;
 }
+
 
 
 
@@ -882,7 +931,7 @@ int h3zero_capsule_receive_chunks(const uint8_t * capsule_bytes, size_t capsule_
             else {
                 size_t consumed = next_bytes - buffer;
                 bytes_received += consumed;
-                if (consumed < chunk_size && bytes_received < capsule_size ||
+                if ((consumed < chunk_size && bytes_received < capsule_size) ||
                     bytes_received > capsule_size) {
                     ret = -1;
                 }
