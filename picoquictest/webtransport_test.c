@@ -275,7 +275,6 @@ int picowt_baton_random_test()
 
 int picowt_tp_test()
 {
-
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     uint64_t simulated_time = 0;
@@ -322,6 +321,51 @@ int picowt_tp_test()
 
     picoquic_set_callback(cnx, NULL, NULL);
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int h3zero_set_test_context(picoquic_quic_t** quic, picoquic_cnx_t** cnx, h3zero_callback_ctx_t** h3_ctx, uint64_t* simulated_time);
+
+int picowt_drain_test_one(int expect_error)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
+
+    if (ret == 0) {
+        h3zero_stream_ctx_t* control_stream_ctx = picowt_set_control_stream(cnx, h3_ctx);
+
+        if (control_stream_ctx == NULL) {
+            ret = -1;
+        }
+        else if (expect_error) {
+            control_stream_ctx->ps.stream_state.is_fin_sent = 1;
+            if (picowt_send_drain_session_message(cnx, control_stream_ctx) == 0) {
+                ret = -1;
+            }
+        }
+        else {
+            ret = picowt_send_drain_session_message(cnx, control_stream_ctx);
+        }
+    }
+
+
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int picowt_drain_test()
+{
+    int ret = picowt_drain_test_one(0);
+
+    if (ret == 0) {
+        ret = picowt_drain_test_one(1);
+    }
 
     return ret;
 }
