@@ -332,7 +332,7 @@ int util_memcmp_test()
 FILE* get_debug_out();
 int get_debug_suspended();
 
-util_debug_print_test()
+int util_debug_print_test()
 {
     int ret = 0;
     int was_suspened = get_debug_suspended();
