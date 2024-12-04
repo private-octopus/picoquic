@@ -82,6 +82,17 @@ static double cubic_root(double x)
     double y2;
     double y3;
 
+    /* TODO discuss
+     * v = 1
+     *
+     * x = cubic_state->W_max*(1.0 - cubic_state->beta) / cubic_state->C
+     * cubic_state->C = 0.4
+     * (1.0 - cubic_state->beta) = 1 - 7/8 = 1/8
+     *
+     * v > x * 8
+     * 1 > (cubic_state->W_max * (1/8) / 0.4) * 8
+     * cubic_state->W_max < 2/5
+     */
     while (v > x * 8) {
         v /= 8;
         y /= 2;
@@ -113,7 +124,7 @@ static double cubic_W_cubic(
 }
 
 /* On entering congestion avoidance, need to compute the new coefficients
- * of the cubit curve */
+ * of the cubic curve */
 static void cubic_enter_avoidance(
     picoquic_cubic_state_t* cubic_state,
     uint64_t current_time)
@@ -171,6 +182,17 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
             uint64_t win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
             cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
 
+            /* TODO discuss
+             * path_x->W_max is set to path_x->cwin / path_x->send_mtu further above (converts bytes -> window)
+             * cubic_W_cubic() returns a value > path_x->W_max (delta_t_sec should be positive, cubic->C is constant
+             *                                                  positive -> return value should be positive)
+             * win_cubic converts cwin back to bytes
+             *
+             * cubic->W_reno is divided by 2
+             *
+             * Isn't win_cubic always larger than cubic_state->W_reno?
+             * If clause is unnecessary here.
+             */
             /* Pick the largest */
             if ((double)win_cubic > cubic_state->W_reno) {
                 /* if cubic is larger than threshold, switch to cubic mode */
@@ -183,7 +205,7 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
     }
 }
 
-static void do_slow_start(picoquic_cnx_t * cnx, picoquic_path_t* path_x,
+static void cubic_do_slow_start(picoquic_cnx_t * cnx, picoquic_path_t* path_x,
     picoquic_cubic_state_t* cubic_state, uint64_t nb_bytes_acknowledged, uint64_t current_time) {
     if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
         picoquic_hystart_increase(path_x, &cubic_state->rtt_filter, nb_bytes_acknowledged);
@@ -196,7 +218,7 @@ static void do_slow_start(picoquic_cnx_t * cnx, picoquic_path_t* path_x,
     }
 }
 
-static void do_congestion_avoidance(picoquic_cnx_t * cnx, picoquic_path_t* path_x,
+static void cubic_do_congestion_avoidance(picoquic_cnx_t * cnx, picoquic_path_t* path_x,
     picoquic_cubic_state_t* cubic_state, uint64_t nb_bytes_acknowledged, uint64_t current_time) {
     if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
         double W_cubic;
@@ -264,9 +286,12 @@ static void cubic_notify(
                     case picoquic_cubic_alg_slow_start:
                         picoquic_cc_update_bandwidth(path_x);
 
-                        do_slow_start(cnx, path_x, cubic_state, ack_state->nb_bytes_acknowledged,
+                        cubic_do_slow_start(cnx, path_x, cubic_state, ack_state->nb_bytes_acknowledged,
                             current_time);
                         break;
+                    /* TODO discuss
+                     * picoquic_cubic_alg_recovery not entered anyway
+                     */
                     case picoquic_cubic_alg_recovery:
                         /* exit recovery, move to CA or SS, depending on CWIN */
                         cubic_state->alg_state = picoquic_cubic_alg_slow_start;
@@ -277,7 +302,7 @@ static void cubic_notify(
                         }
                         break;
                     case picoquic_cubic_alg_congestion_avoidance:
-                        do_congestion_avoidance(cnx, path_x, cubic_state,
+                        cubic_do_congestion_avoidance(cnx, path_x, cubic_state,
                             ack_state->nb_bytes_acknowledged, current_time);
                         break;
                 }
@@ -371,6 +396,9 @@ static void cubic_notify(
                     }
                 }
                 break;
+            /* TODO discuss
+             * switch coverage non used cases
+             */
             case picoquic_congestion_notification_reset:
                 cubic_reset(cubic_state, path_x, current_time);
                 break;
@@ -439,7 +467,7 @@ static void dcubic_notify(
                 switch (cubic_state->alg_state) {
                     case picoquic_cubic_alg_slow_start:
                         /* Same as Cubic */
-                        do_slow_start(cnx, path_x, cubic_state, ack_state->nb_bytes_acknowledged, current_time);
+                        cubic_do_slow_start(cnx, path_x, cubic_state, ack_state->nb_bytes_acknowledged, current_time);
                         break;
                     case picoquic_cubic_alg_recovery:
                         /* exit recovery, move to CA or SS, depending on CWIN */
@@ -451,7 +479,7 @@ static void dcubic_notify(
                         }
                         break;
                     case picoquic_cubic_alg_congestion_avoidance:
-                        do_congestion_avoidance(cnx, path_x, cubic_state,
+                        cubic_do_congestion_avoidance(cnx, path_x, cubic_state,
                             ack_state->nb_bytes_acknowledged, current_time);
                         break;
                     /*default:
@@ -520,6 +548,9 @@ static void dcubic_notify(
                         break;*/
                 }
                 break;
+            /* TODO discuss
+             * switch coverage non used cases
+             */
             case picoquic_congestion_notification_ecn_ec:
                 /* In contrast to Cubic, do nothing here */
                 break;
@@ -534,6 +565,8 @@ static void dcubic_notify(
                     }
                 }
                 break;
+            /* TODO trigger cubic_reset
+             */
             case picoquic_congestion_notification_reset:
                 cubic_reset(cubic_state, path_x, current_time);
                 break;
