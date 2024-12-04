@@ -38,6 +38,7 @@ extern size_t picoquic_stress_nb_clients; /* number of stress clients, defaults 
 int util_connection_id_print_test();
 int util_connection_id_parse_test();
 int util_sprintf_test();
+int util_uint8_to_str_test();
 int util_memcmp_test();
 int util_threading_test();
 int picohash_test();

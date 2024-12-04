@@ -83,6 +83,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(util_uint8_to_str)
+        {
+            int ret = util_uint8_to_str_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(memcmp)
         {
             int ret = util_memcmp_test();

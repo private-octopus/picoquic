@@ -113,6 +113,36 @@ int util_sprintf_test()
     return ret;
 }
 
+uint8_t util_uint8_to_str_input[] = {
+    'a', 'z', 'A', 'Z', '0', '9', '.', 0xff, 
+};
+
+char util_uint8_to_str_out[] = {
+    'a', 'z', 'A', 'Z', '0', '9', '.', '?', 0
+};
+
+char util_uint8_to_str_out7[] = {
+    'a', 'z', 'A', '.', '.', '.', 0
+};
+
+
+char util_uint8_to_str_out2[] = {
+   '.', 0
+};
+
+int util_uint8_to_str_test()
+{
+    int ret = 0;
+    char text[16];
+
+    if (strcmp(picoquic_uint8_to_str(text, 16, util_uint8_to_str_input, sizeof(util_uint8_to_str_input)), util_uint8_to_str_out) != 0 ||
+        strcmp(picoquic_uint8_to_str(text, 7, util_uint8_to_str_input, sizeof(util_uint8_to_str_input)), util_uint8_to_str_out7) != 0 ||
+        strcmp(picoquic_uint8_to_str(text, 2, util_uint8_to_str_input, sizeof(util_uint8_to_str_input)), util_uint8_to_str_out2) != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
 /* Test the constant time memcmp for correctness and for
  * time constants. The test suite will include two 4MB
  * strings each comprising blocks of 16 bytes.
@@ -396,3 +426,4 @@ int util_threading_test()
 
     return ret;
 }
+
