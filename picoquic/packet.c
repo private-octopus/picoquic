@@ -111,7 +111,8 @@ int picoquic_screen_initial_packet(
         /* Cannot have reserved bit set before negotiation completes */
         ret = PICOQUIC_ERROR_PACKET_HEADER_PARSING;
     }
-    else if (*pcnx == NULL) {
+    else {
+        /* This code assumes that *pcnx is always null when screen initial is called. /
         /* Verify the AEAD checkum */
         void* aead_ctx = NULL;
         void* pn_dec_ctx = NULL;
@@ -193,21 +194,6 @@ int picoquic_screen_initial_packet(
                         (void)picoquic_parse_connection_id(original_cnxid.id, original_cnxid.id_len, &(*pcnx)->original_cnxid);
                     }
                 }
-            }
-        }
-    }
-    else {
-        /* Context already exists. Check that the incoming packet is consistent. */
-        if ((!(*pcnx)->client_mode && picoquic_compare_connection_id(&ph->dest_cnx_id, &(*pcnx)->initial_cnxid) == 0) ||
-            picoquic_compare_connection_id(&ph->dest_cnx_id, &(*pcnx)->path[0]->p_local_cnxid->cnx_id) == 0) {
-            /* Verify that the source CID matches expectation */
-            if (picoquic_is_connection_id_null(&(*pcnx)->path[0]->p_remote_cnxid->cnx_id)) {
-                (*pcnx)->path[0]->p_remote_cnxid->cnx_id = ph->srce_cnx_id;
-            }
-            else if (picoquic_compare_connection_id(&(*pcnx)->path[0]->p_remote_cnxid->cnx_id, &ph->srce_cnx_id) != 0) {
-                DBG_PRINTF("Error wrong srce cnxid (%d), type: %d, epoch: %d, pc: %d, pn: %d\n",
-                    (*pcnx)->client_mode, ph->ptype, ph->epoch, ph->pc, (int)ph->pn);
-                ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
             }
         }
     }
@@ -535,39 +521,6 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
 
     return pn64;
 }
-#ifdef LOG_PN_DEC
-/* Debug code used to test whether the PN decryption works as expected.
- */
-
-void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx)
-{
-    if (cnx->quic->log_pn_dec && (cnx->quic->F_log != NULL || cnx->f_binlog != NULL)){
-        void* pn_dec = cnx->crypto_context[picoquic_epoch_1rtt].pn_dec;
-        void* pn_enc = cnx->crypto_context[picoquic_epoch_1rtt].pn_enc;
-        uint8_t test_iv[32] = {
-            0, 1, 3, 4, 4, 6, 7, 8, 9,
-            0, 1, 3, 4, 4, 6, 7, 8, 9,
-            0, 1, 3, 4, 4, 6, 7, 8, 9,
-            0, 1 };
-        size_t mask_length = 5;
-        uint8_t mask_bytes[5] = { 0, 0, 0, 0, 0 };
-        uint8_t demask_bytes[5] = { 0, 0, 0, 0, 0 };
-
-        if (pn_enc != NULL) {
-            picoquic_pn_encrypt(pn_enc, test_iv, mask_bytes, mask_bytes, mask_length);
-        }
-
-        if (pn_dec != NULL) {
-            picoquic_pn_encrypt(pn_dec, test_iv, demask_bytes, demask_bytes, mask_length);
-        }
-
-        picoquic_log_app_message(cnx, "1RTT PN ENC/DEC, Phi: %d, signature = %02x%02x%02x%02x%02x, %02x%02x%02x%02x%02x",
-            cnx->key_phase_enc,
-            mask_bytes[0], mask_bytes[1], mask_bytes[2], mask_bytes[3], mask_bytes[4],
-            demask_bytes[0], demask_bytes[1], demask_bytes[2], demask_bytes[3], demask_bytes[4]);
-    }
-}
-#endif
 
 /*
  * Remove header protection 
@@ -816,12 +769,6 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             decoded = ph->payload_length + 1;
         }
     }
-#ifdef LOG_PN_DEC
-    /* Add here a check that the PN key is still valid. */
-    if (decoded > ph->payload_length) {
-        picoquic_log_pn_dec_trial(cnx);
-    }
-#endif
 
     /* by conventions, values larger than input indicate error */
     return decoded;

@@ -2758,10 +2758,6 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
             cnx->min_ack_delay_remote = cnx->ack_delay_remote;
         }
     }
-#ifdef LOG_PN_DEC
-    /* Perform a check of the PN decryption key, for sanity */
-    picoquic_log_pn_dec_trial(cnx);
-#endif
 }
 
 uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
