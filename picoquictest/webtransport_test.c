@@ -354,6 +354,7 @@ int picowt_drain_test_one(int expect_error)
 
 
     picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
 
     return ret;
