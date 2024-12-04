@@ -93,15 +93,29 @@ char* picoquic_string_free(char* str)
 }
 
 static FILE* debug_out = NULL;
+#if 0
 void (*debug_callback)(const char *msg, void *arg) = NULL;
 void *debug_callback_argp = NULL;
+#endif
 static int debug_suspended = 0;
 
 void debug_set_stream(FILE *F)
 {
     debug_out = F;
+#if 0
     debug_callback = NULL;
     debug_callback_argp = NULL;
+#endif
+}
+
+FILE* get_debug_out()
+{
+    return debug_out;
+}
+
+int get_debug_suspended()
+{
+    return debug_suspended;
 }
 #if 0
 void debug_set_callback(void (*cb)(const char *msg, void *argp), void *argp)
@@ -114,12 +128,19 @@ void debug_set_callback(void (*cb)(const char *msg, void *argp), void *argp)
 
 void debug_printf(const char* fmt, ...)
 {
+#if 1
+    if (debug_suspended == 0 && debug_out != NULL) {
+#else
     if (debug_suspended == 0 && (debug_out != NULL || debug_callback != NULL)) {
+#endif
         if (debug_out) {
             va_list args;
             va_start(args, fmt);
             vfprintf(debug_out, fmt, args);
             va_end(args);
+#if 1
+        }
+#else
         } else {
             char message[1024];
             size_t message_length;
@@ -136,13 +157,18 @@ void debug_printf(const char* fmt, ...)
             }
             debug_callback(message, debug_callback_argp);
         }
+#endif
     }
 }
 
 #ifdef _DEBUG
 void debug_dump(const void * x, int len)
 {
+#if 1
+    if (debug_suspended == 0 && debug_out != NULL){
+#else
     if (debug_suspended == 0 && (debug_out != NULL || debug_callback != NULL)) {
+#endif
         char msg[64];
         size_t mlen;
         uint8_t * bytes = (uint8_t *)x;
@@ -157,9 +183,13 @@ void debug_dump(const void * x, int len)
             }
             if (debug_out) {
                 fprintf(debug_out, "%s\n", msg);
+#if 1
+            }
+#else
             } else {
                 debug_callback(msg, debug_callback_argp);
             }
+#endif
         }
     }
 }

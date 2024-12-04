@@ -76,9 +76,16 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(sprintf)
+        TEST_METHOD(util_sprintf)
         {
             int ret = util_sprintf_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(util_debug_print)
+        {
+            int ret = util_debug_print_test();
 
             Assert::AreEqual(ret, 0);
         }

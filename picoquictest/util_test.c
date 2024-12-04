@@ -327,6 +327,34 @@ int util_memcmp_test()
     return ret;
 }
 
+
+#define file_test_debug "file_test_debug.txt"
+FILE* get_debug_out();
+int get_debug_suspended();
+
+util_debug_print_test()
+{
+    int ret = 0;
+    int was_suspened = get_debug_suspended();
+    FILE* old_debug_file = get_debug_out();
+    FILE* F = picoquic_file_open(file_test_debug, "w");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        debug_set_stream(F);
+        debug_printf_resume();
+        debug_printf("debug set stream: %d\n", ret);
+        F = picoquic_file_close(F);
+        debug_set_stream(old_debug_file);
+        if (was_suspened) {
+            debug_printf_suspend();
+        }
+    }
+    return ret;
+}
+
 /* Testing the minimal thread support.
  *
  * We create one mutex and one event to synchronize two threads: one as a mutex demo,
