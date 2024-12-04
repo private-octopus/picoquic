@@ -1381,50 +1381,6 @@ int picoquic_incoming_client_initial(
 {
     int ret = 0;
 
-#if 0
-    /* Logic to test the retry token.
-     * the "check token" value may change between the time a previous client connection
-     * attempt triggered a "retry" and the time that retry arrive, so it is not wrong
-     * to receive a retry token even if not required, as long as it decrypts correctly.
-     */
-    if ((*pcnx)->cnx_state == picoquic_state_server_init &&
-        !(*pcnx)->quic->server_busy) {
-        int is_address_blocked = !(*pcnx)->quic->is_port_blocking_disabled && picoquic_check_addr_blocked(addr_from);
-        int is_new_token = 0;
-        int is_wrong_token = 0;
-        if (ph->token_length > 0) {
-            if (picoquic_verify_retry_token((*pcnx)->quic, addr_from, current_time,
-                &is_new_token, &(*pcnx)->original_cnxid, &ph->dest_cnx_id, ph->pn,
-                ph->token_bytes, ph->token_length, new_context_created) != 0) {
-                is_wrong_token = 1;
-            }
-            else {
-                (*pcnx)->initial_validated = 1;
-            }
-        }
-        if (is_wrong_token && !is_new_token) {
-            (void)picoquic_connection_error(*pcnx, PICOQUIC_TRANSPORT_INVALID_TOKEN, 0);
-            ret = PICOQUIC_ERROR_INVALID_TOKEN;
-        }
-        else if (((*pcnx)->quic->check_token || is_address_blocked) && (ph->token_length == 0 || is_wrong_token)){
-            uint8_t token_buffer[256];
-            size_t token_size;
-
-            if (picoquic_prepare_retry_token((*pcnx)->quic, addr_from,
-                current_time + PICOQUIC_TOKEN_DELAY_SHORT, &ph->dest_cnx_id,
-                &(*pcnx)->path[0]->p_local_cnxid->cnx_id, ph->pn,
-                token_buffer, sizeof(token_buffer), &token_size) != 0) {
-                ret = PICOQUIC_ERROR_MEMORY;
-            }
-            else {
-                picoquic_queue_stateless_retry(quic, ph,
-                    addr_from, addr_to, if_index_to, token_buffer, token_size);
-                ret = PICOQUIC_ERROR_RETRY;
-            }
-        }
-    }
-#endif
-
     if (ret == 0) {
         if ((*pcnx)->path[0]->p_local_cnxid->cnx_id.id_len > 0 &&
             picoquic_compare_connection_id(&ph->dest_cnx_id, &(*pcnx)->path[0]->p_local_cnxid->cnx_id) == 0) {
