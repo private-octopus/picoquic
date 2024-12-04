@@ -196,9 +196,9 @@ int incoming_unidir_test_fn(picoquic_cnx_t* cnx,
     return 0;
 }
 
-int h3zero_set_test_context(picoquic_quic_t** quic, picoquic_cnx_t** cnx, h3zero_callback_ctx_t** h3_ctx)
+int h3zero_set_test_context(picoquic_quic_t** quic, picoquic_cnx_t** cnx, h3zero_callback_ctx_t** h3_ctx, uint64_t * simulated_time)
 {
-    int ret = picoquic_test_set_minimal_cnx(quic, cnx);
+    int ret = picoquic_test_set_minimal_cnx_with_time(quic, cnx, simulated_time);
     
     if (ret == 0) {
         *h3_ctx = h3zero_callback_create_context(NULL);
@@ -218,7 +218,8 @@ int h3zero_incoming_unidir_test()
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     h3zero_callback_ctx_t* h3_ctx = NULL;
-    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx);
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
     uint64_t stream_id = 3;
     h3zero_stream_ctx_t* control_stream_ctx;
     h3zero_stream_ctx_t* stream_ctx = NULL;
@@ -356,7 +357,8 @@ int h3zero_unidir_error_test()
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     h3zero_callback_ctx_t* h3_ctx = NULL;
-    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx);
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
     const uint64_t stream_id[5] = { 3, 7, 11, 13, 17 };
     h3zero_stream_ctx_t * stream_ctx[5] = { NULL, NULL, NULL, NULL, NULL };
     uint64_t stream_type[5] = { h3zero_stream_type_control, h3zero_stream_type_push,
@@ -411,7 +413,8 @@ int h3zero_setting_submit(int is_after_settings, uint64_t frame_type, int expect
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     h3zero_callback_ctx_t* h3_ctx = NULL;
-    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx);
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
     uint8_t buffer[256];
     uint8_t* bytes = NULL;
     uint8_t* last_byte = NULL;
@@ -620,7 +623,8 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     h3zero_callback_ctx_t* h3_ctx = NULL;
-    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx);
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
     uint8_t buffer[1024];
     uint8_t* bytes = NULL;
     uint8_t* bytes_max = buffer + sizeof(buffer);
@@ -773,6 +777,145 @@ int h3zero_client_data_test()
         spec.add_trailer = 1;
         spec.data_after_trailer = 1;
         ret = h3zero_client_data_test_one(&spec);
+    }
+
+    return ret;
+}
+
+
+
+/* Tests of the datagram and capsule protocol */
+
+typedef struct st_test_datagram_ctx_t {
+    int nb_datagrams_received;
+} test_datagram_ctx_t;
+
+
+int h3zero_test_datagram_cb(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length,
+    picohttp_call_back_event_t wt_event,
+    struct st_h3zero_stream_ctx_t* stream_ctx,
+    void* path_app_ctx)
+{
+    int ret = 0;
+    switch (wt_event) {
+    case picohttp_callback_connecting:
+        break;
+    case picohttp_callback_connect:
+        break;
+    case picohttp_callback_connect_refused:
+        break;
+    case picohttp_callback_connect_accepted:
+        break;
+    case picohttp_callback_post_fin:
+    case picohttp_callback_post_data:
+        break;
+    case picohttp_callback_provide_data: /* Stack is ready to send chunk of response */
+        /* We assume that the required stream headers have already been pushed,
+        * and that the stream context is already set. Just send the data.
+        */
+        break;
+    case picohttp_callback_post_datagram:
+    {
+        test_datagram_ctx_t* dg_ctx = (test_datagram_ctx_t*)path_app_ctx;
+        if (dg_ctx != NULL) {
+            dg_ctx->nb_datagrams_received += 1;
+        }
+        break;
+    }
+    case picohttp_callback_provide_datagram: /* Stack is ready to send a datagram */
+        break;
+    case picohttp_callback_reset: /* Stream has been abandoned. */
+        break;
+    case picohttp_callback_free: /* Used during clean up the stream. Only cause the freeing of memory. */
+        /* Free the memory attached to the stream */
+        break;
+    case picohttp_callback_deregister:
+        break;
+    default:
+        /* protocol error */
+        ret = -1;
+        break;
+    }
+    return ret;
+}
+
+uint8_t capsule_datagram[] = {
+    0, /* Datagram capsule type = 0 */
+    5, /* length = 5 */
+    1, 2, 3, 4, 5
+};
+
+int h3zero_capsule_receive_chunks(const uint8_t * capsule_bytes, size_t capsule_size, size_t chunk_size, int is_stored)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    uint64_t simulated_time = 0;
+    h3zero_capsule_t capsule = { 0 };
+    test_datagram_ctx_t dg_ctx = { 0 };
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
+
+    if (ret == 0 && chunk_size > PICOQUIC_MAX_PACKET_SIZE) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = h3zero_declare_stream_prefix(h3_ctx, 4, h3zero_test_datagram_cb, &dg_ctx);
+    }
+
+    if (ret == 0) {
+        /* simulate arrival of a capsule */
+        size_t bytes_received = 0;
+
+        capsule.is_stored = is_stored;
+
+        while (ret == 0 && bytes_received < capsule_size) {
+            size_t this_chunk = (bytes_received + chunk_size > capsule_size) ? capsule_size - bytes_received : chunk_size;
+            uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+            const uint8_t* next_bytes;
+            memset(buffer, 0xff, sizeof(buffer));
+            memcpy(buffer, capsule_bytes + bytes_received, this_chunk);
+            if ((next_bytes = h3zero_accumulate_capsule(buffer, buffer + chunk_size, &capsule)) == NULL) {
+                ret = -1;
+            }
+            else {
+                size_t consumed = next_bytes - buffer;
+                bytes_received += consumed;
+                if (consumed < chunk_size && bytes_received < capsule_size ||
+                    bytes_received > capsule_size) {
+                    ret = -1;
+                }
+            }
+        }
+
+        if (ret == 0 && (!capsule.is_length_known || !capsule.is_stored)){
+            ret = -1;
+        }
+    }
+
+    if (capsule.capsule_buffer != NULL) {
+        free(capsule.capsule_buffer);
+        capsule.capsule_buffer = NULL;
+    }
+
+    picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int h3zero_capsule_test()
+{
+    int ret = 0;
+    size_t test_chunk[3] = { sizeof(capsule_datagram), sizeof(capsule_datagram) - 1, 1 };
+
+    for (int i = 0; ret == 0 && i < 3; i++) {
+        ret = h3zero_capsule_receive_chunks(capsule_datagram, sizeof(capsule_datagram), test_chunk[i], i == 0);
+        if (ret != 0) {
+            DBG_PRINTF("Capsule receive chunk=%zu/%zu fails", test_chunk[i], sizeof(capsule_datagram));
+        }
     }
 
     return ret;

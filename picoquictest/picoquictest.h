@@ -306,6 +306,7 @@ int h3zero_varint_stream_test();
 int h3zero_incoming_unidir_test();
 int h3zero_unidir_error_test();
 int h3zero_setting_error_test();
+int h3zero_capsule_test();
 int h3zero_client_data_test();
 int qpack_huffman_test();
 int qpack_huffman_base_test();
