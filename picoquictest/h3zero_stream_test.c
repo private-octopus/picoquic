@@ -731,12 +731,6 @@ int h3zero_error_client_stream_test()
     h3zero_callback_ctx_t* h3_ctx = NULL;
     uint64_t simulated_time = 0;
     int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
-    uint8_t buffer[1024];
-    uint8_t* bytes = NULL;
-    uint8_t* bytes_max = buffer + sizeof(buffer);
-    uint64_t stream_id = 4;
-    uint64_t fin_stream_id = UINT64_MAX;
-    size_t data_length = 128;
     h3zero_stream_ctx_t* stream_ctx = NULL;
     char const* path_name = "no_such_path/bad_path\\h3zero_test_client_data.html";
 
