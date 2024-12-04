@@ -92,24 +92,6 @@ char* picoquic_string_free(char* str)
     return NULL;
 }
 
-char* picoquic_strip_endofline(char* buf, size_t bufmax, char const* line)
-{
-    for (size_t i = 0; i < bufmax; i++) {
-        int c = line[i];
-
-        if (c == 0 || c == '\r' || c == '\n') {
-            buf[i] = 0;
-            break;
-        }
-        else {
-            buf[i] = (char) c;
-        }
-    }
-
-    buf[bufmax - 1] = 0;
-    return buf;
-}
-
 static FILE* debug_out = NULL;
 void (*debug_callback)(const char *msg, void *arg) = NULL;
 void *debug_callback_argp = NULL;
@@ -121,13 +103,14 @@ void debug_set_stream(FILE *F)
     debug_callback = NULL;
     debug_callback_argp = NULL;
 }
-
+#if 0
 void debug_set_callback(void (*cb)(const char *msg, void *argp), void *argp)
 {
     debug_callback = cb;
     debug_callback_argp = argp;
     debug_out = NULL;
 }
+#endif
 
 void debug_printf(const char* fmt, ...)
 {
@@ -156,6 +139,7 @@ void debug_printf(const char* fmt, ...)
     }
 }
 
+#ifdef _DEBUG
 void debug_dump(const void * x, int len)
 {
     if (debug_suspended == 0 && (debug_out != NULL || debug_callback != NULL)) {
@@ -179,6 +163,7 @@ void debug_dump(const void * x, int len)
         }
     }
 }
+#endif
 
 void debug_printf_push_stream(FILE* f)
 {
@@ -303,17 +288,6 @@ uint8_t picoquic_parse_connection_id_hexa(char const * hex_input, size_t input_l
     return (cnx_id->id_len);
 }
 
-uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t srce_len)
-{
-    uint8_t ret;
-
-    ret = (dest_len < 4) ? 0 : (dest_len - 3);
-    ret <<= 4;
-    ret |= (srce_len < 4) ? 0 : (srce_len - 3);
-
-    return ret;
-}
-
 uint8_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id)
 {
     uint8_t copied = cnx_id.id_len;
@@ -404,18 +378,6 @@ uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id)
     return val64;
 }
 
-void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t val64)
-{
-    for (int i = 7; i >= 0; i--) {
-        cnx_id->id[i] = (uint8_t)(val64 & 0xFF);
-        val64 >>= 8;
-    }
-    for (size_t i = 8; i < sizeof(cnx_id->id); i++) {
-        cnx_id->id[i] = 0;
-    }
-    cnx_id->id_len = 8;
-}
-
 uint64_t picoquic_hash_addr(const struct sockaddr* addr)
 {
     uint64_t h;
@@ -433,7 +395,7 @@ uint64_t picoquic_hash_addr(const struct sockaddr* addr)
 
     return h;
 }
-
+#if 0
 int picoquic_compare_addr(const struct sockaddr * expected, const struct sockaddr * actual)
 {
     int ret = -1;
@@ -464,7 +426,7 @@ int picoquic_compare_addr(const struct sockaddr * expected, const struct sockadd
 
     return ret;
 }
-
+#endif
 
 int picoquic_compare_ip_addr(const struct sockaddr* expected, const struct sockaddr* actual)
 {
@@ -495,6 +457,16 @@ uint16_t picoquic_get_addr_port(const struct sockaddr* addr)
     uint16_t port = (addr->sa_family == AF_INET6) ? ((struct sockaddr_in6*)addr)->sin6_port : ((struct sockaddr_in*)addr)->sin_port;
 
     return port;
+}
+
+int picoquic_compare_addr(const struct sockaddr* expected, const struct sockaddr* actual)
+{
+    int ret = picoquic_compare_ip_addr(expected, actual);
+    if (ret == 0 &&
+        picoquic_get_addr_port(expected) != picoquic_get_addr_port(actual)) {
+        ret = -1;
+    }
+    return ret;
 }
 
 void picoquic_set_addr_port(const struct sockaddr* addr, uint16_t port)
@@ -830,6 +802,7 @@ const uint8_t* picoquic_frames_cid_decode(const uint8_t* bytes, const uint8_t* b
     return bytes;
 }
 
+#if 0
 /* Predict length of a varint encoding */
 size_t picoquic_frames_varint_encode_length(uint64_t n64)
 {
@@ -849,6 +822,7 @@ size_t picoquic_frames_varint_encode_length(uint64_t n64)
 
     return len;
 }
+#endif
 
 /* Encoding functions of the form uint8_t * picoquic_frame_XXX_encode(uint8_t * bytes, uint8_t * bytes-max, ...)
  */

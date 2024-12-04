@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.28.10
+        VERSION 1.1.28.11
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
