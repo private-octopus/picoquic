@@ -2812,6 +2812,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_capsule) {
+            int ret = h3zero_capsule_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_client_data) {
             int ret = h3zero_client_data_test();
 
@@ -3106,6 +3112,18 @@ namespace UnitTest1
 
         TEST_METHOD(picowt_baton_wrong) {
             int ret = picowt_baton_wrong_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_drain) {
+            int ret = picowt_drain_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_tp) {
+            int ret = picowt_tp_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -196,37 +196,19 @@ int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_add
 
     /* use the generic H3 callback */
     /* Set the client callback context */
-    if (*p_h3_ctx == NULL) {
-        *p_h3_ctx = h3zero_callback_create_context(NULL);
-    }
-    if (*p_h3_ctx == NULL) {
+    if ((*p_h3_ctx == NULL && (*p_h3_ctx = h3zero_callback_create_context(NULL)) == NULL) ||
+        (*p_cnx == NULL && ((*p_cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)server_address, current_time, 0, sni, "h3", 1)) == NULL)) ||
+        ((*p_stream_ctx = picowt_set_control_stream(*p_cnx, *p_h3_ctx)) == NULL)) {
         ret = 1;
     }
     else
     {
-        /* Create a client connection */
-        if (*p_cnx == NULL) {
-            *p_cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
-                (struct sockaddr*)server_address, current_time, 0, sni, "h3", 1);
-        }
-        if (*p_cnx == NULL) {
-            fprintf(stderr, "Could not create connection context\n");
-            ret = -1;
-        }
-        else {
-            picowt_set_transport_parameters(*p_cnx);
-            picoquic_set_callback(*p_cnx, h3zero_callback, *p_h3_ctx);
-            *p_stream_ctx = picowt_set_control_stream(*p_cnx, *p_h3_ctx);
-
-            if (*p_stream_ctx == NULL) {
-                ret = -1;
-            }
-            else {
-                /* Perform the initialization, settings and QPACK streams
-                 */
-                ret = h3zero_protocol_init(*p_cnx);
-            }
-        }
+        picowt_set_transport_parameters(*p_cnx);
+        picoquic_set_callback(*p_cnx, h3zero_callback, *p_h3_ctx);
+        /* Perform the initialization, settings and QPACK streams
+         */
+        ret = h3zero_protocol_init(*p_cnx);
     }
     return ret;
 }

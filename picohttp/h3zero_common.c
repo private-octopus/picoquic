@@ -2021,40 +2021,30 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 		}
 		length_of_type = VARINT_LEN_T(capsule->header_buffer, size_t);
 
-		if (length_of_type + 1 > H3ZERO_CAPSULE_HEADER_SIZE_MAX) {
-			bytes = NULL;
+		while (capsule->header_read < length_of_type && bytes < bytes_max) {
+			capsule->header_buffer[capsule->header_read++] = *bytes++;
 		}
-		else {
-			while (capsule->header_read < length_of_type && bytes < bytes_max) {
+		if (capsule->header_read >= length_of_type) {
+			(void)picoquic_frames_varint_decode(capsule->header_buffer, capsule->header_buffer + length_of_type,
+				&capsule->capsule_type);
+
+			while (capsule->header_read < length_of_type + 1 && bytes < bytes_max) {
 				capsule->header_buffer[capsule->header_read++] = *bytes++;
 			}
-			if (capsule->header_read >= length_of_type) {
-				(void)picoquic_frames_varint_decode(capsule->header_buffer, capsule->header_buffer + length_of_type,
-					&capsule->capsule_type);
 
-				while (capsule->header_read < length_of_type + 1 && bytes < bytes_max) {
+			if (capsule->header_read >= length_of_type + 1) {
+				/* No change in state, wait for more bytes */
+				length_of_length = VARINT_LEN_T((capsule->header_buffer + length_of_type), size_t);
+
+				capsule->header_length = length_of_type + length_of_length;
+				while (capsule->header_read < capsule->header_length && bytes < bytes_max) {
 					capsule->header_buffer[capsule->header_read++] = *bytes++;
 				}
-
-				if (capsule->header_read >= length_of_type + 1) {
-					/* No change in state, wait for more bytes */
-					length_of_length = VARINT_LEN_T((capsule->header_buffer + length_of_type), size_t);
-
-					capsule->header_length = length_of_type + length_of_length;
-					if (capsule->header_length > H3ZERO_CAPSULE_HEADER_SIZE_MAX) {
-						bytes = NULL;
-					}
-					else {
-						while (capsule->header_read < capsule->header_length && bytes < bytes_max) {
-							capsule->header_buffer[capsule->header_read++] = *bytes++;
-						}
-						if (capsule->header_read >= capsule->header_length) {
-							(void)picoquic_frames_varlen_decode(capsule->header_buffer + length_of_type,
-								capsule->header_buffer + length_of_type + length_of_length,
-								&capsule->capsule_length);
-							capsule->is_length_known = 1;
-						}
-					}
+				if (capsule->header_read >= capsule->header_length) {
+					(void)picoquic_frames_varlen_decode(capsule->header_buffer + length_of_type,
+						capsule->header_buffer + length_of_type + length_of_length,
+						&capsule->capsule_length);
+					capsule->is_length_known = 1;
 				}
 			}
 		}
