@@ -2027,7 +2027,7 @@ void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
 void BBRUpdateStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
 {
     if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-        picoquic_hystart_increase(path_x, &bbr_state->rtt_filter, rs->newly_acked);
+        path_x->cwin += picoquic_hystart_increase(path_x, rs->newly_acked);
     }
 
     uint64_t max_win = path_x->peak_bandwidth_estimate * bbr_state->min_rtt / 1000000;

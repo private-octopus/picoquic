@@ -1177,7 +1177,7 @@ static void picoquic_bbr1_notify(
                     bbr1_state->rt_prop_stamp = current_time;
                 }
                 if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                    picoquic_hystart_increase(path_x, &bbr1_state->rtt_filter, bbr1_state->bytes_delivered);
+                    path_x->cwin += picoquic_hystart_increase(path_x, bbr1_state->bytes_delivered);
                 }
                 bbr1_state->bytes_delivered = 0;
 

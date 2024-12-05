@@ -166,7 +166,6 @@ static void picoquic_prague_reset_l3s(picoquic_cnx_t* cnx, picoquic_prague_state
 
 static void picoquic_prague_reset(picoquic_cnx_t * cnx, picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
 {
-    
     picoquic_prague_init_reno(pr_state, path_x);
     picoquic_prague_reset_l3s(cnx, pr_state, path_x);
 }
@@ -300,17 +299,8 @@ void picoquic_prague_notify(
             /* Increae or reduce the congestion window based on alpha */
             switch (pr_state->alg_state) {
             case picoquic_prague_alg_slow_start:
-                if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
-                    path_x->cwin += (ack_state->nb_bytes_acknowledged * (1024 - pr_state->alpha)) / 1024;
-                }
-                else {
-                    uint64_t delta = ack_state->nb_bytes_acknowledged;
-                    delta *= path_x->smoothed_rtt;
-                    delta *= (1024 - pr_state->alpha);
-                    delta /= PICOQUIC_TARGET_RENO_RTT;
-                    delta /= 1024;
-                    path_x->cwin += delta;
-                }
+                path_x->cwin += picoquic_hystart_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
+
                 /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                 if (path_x->cwin >= pr_state->ssthresh) {
                     pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;

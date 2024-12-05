@@ -208,7 +208,7 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
 static void cubic_do_slow_start(picoquic_cnx_t * cnx, picoquic_path_t* path_x,
     picoquic_cubic_state_t* cubic_state, uint64_t nb_bytes_acknowledged, uint64_t current_time) {
     if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-        picoquic_hystart_increase(path_x, &cubic_state->rtt_filter, nb_bytes_acknowledged);
+        path_x->cwin += picoquic_hystart_increase_ex(path_x, nb_bytes_acknowledged, 0);
         /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
         if (path_x->cwin >= cubic_state->ssthresh) {
             cubic_state->W_reno = ((double)path_x->cwin) / 2.0;

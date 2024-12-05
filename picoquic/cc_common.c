@@ -24,6 +24,33 @@
 #include <string.h>
 #include "cc_common.h"
 
+/*
+ * HyStart++
+ */
+
+/* TODO not used yet. */
+/* It is RECOMMENDED that a HyStart++ implementation use the following constants: */
+/* MIN_RTT_THRESH = 4 msec
+ * MAX_RTT_THRESH = 16 msec
+ * MIN_RTT_DIVISOR = 8
+ * N_RTT_SAMPLE = 8
+ * CSS_GROWTH_DIVISOR = 4
+ * CSS_ROUNDS = 5
+ * L = infinity if paced, L = 8 if non-paced
+ */
+/* Take a look at the draft for more information. */
+#define PICOQUIC_HYSTART_PP_MIN_RTT_THRESH 4000 /* msec */
+#define PICOQUIC_HYSTART_PP_MAX_RTT_THRESH 16000 /* msec */
+#define PICOQUIC_HYSTART_PP_MIN_RTT_DIVISOR 8
+#define PICOQUIC_HYSTART_PP_N_RTT_SAMPLE 8
+#define PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR 4
+#define PICOQUIC_HYSTART_PP_CSS_ROUNDS 5
+/* Since picoquic is alway paced, L is set to infinity (UINT64_MAX).
+ * Because L is only used to limit the increase function, we don't need it at all. For more information, take a look at
+ * the picoquic_hystart_pp_increase() function.
+ */
+/* #define PICOQUIC_HYSTART_PP_L UINT64_MAX */ /* infinity if paced, L = 8 if non-paced */
+
 uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
     uint64_t sequence_number;
@@ -189,9 +216,36 @@ int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measur
     return ret;
 }
 
-void picoquic_hystart_increase(picoquic_path_t * path_x, picoquic_min_max_rtt_t* rtt_filter, uint64_t nb_delivered)
+uint64_t picoquic_hystart_increase(picoquic_path_t * path_x, uint64_t nb_delivered) {
+    return nb_delivered;
+}
+
+uint64_t picoquic_hystart_increase_ex(picoquic_path_t * path_x, uint64_t nb_delivered, int is_css)
 {
-    path_x->cwin += nb_delivered;
+    if (is_css) { /* in consecutive Slow Start */
+        return nb_delivered / PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR;
+    } else { /* original Slow Start */
+        return picoquic_hystart_increase(path_x, nb_delivered);
+    }
+}
+
+uint64_t picoquic_hystart_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int is_css, uint64_t prague_alpha) {
+    /* TODO replace nb_delivered with picoquic_hystart_increase_ex(path_x, nb_delivered, is_css)? */
+    if (prague_alpha != 0) { /* monitoring of ECN */
+        if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
+            return (nb_delivered * (1024 - prague_alpha)) / 1024;
+        }
+        else {
+            uint64_t delta = nb_delivered;
+            delta *= path_x->smoothed_rtt;
+            delta *= (1024 - prague_alpha);
+            delta /= PICOQUIC_TARGET_RENO_RTT;
+            delta /= 1024;
+            return delta;
+        }
+    } else {
+        return picoquic_hystart_increase_ex(path_x, nb_delivered, is_css);
+    }
 }
 
 void picoquic_cc_update_bandwidth(picoquic_path_t* path_x) {
