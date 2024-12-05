@@ -205,21 +205,8 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
     }
 }
 
-static void cubic_do_slow_start(picoquic_cnx_t * cnx, picoquic_path_t* path_x,
-    picoquic_cubic_state_t* cubic_state, uint64_t nb_bytes_acknowledged, uint64_t current_time) {
-    if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-        path_x->cwin += picoquic_hystart_increase_ex(path_x, nb_bytes_acknowledged, 0);
-        /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
-        if (path_x->cwin >= cubic_state->ssthresh) {
-            cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
-            path_x->is_ssthresh_initialized = 1;
-            cubic_enter_avoidance(cubic_state, current_time);
-        }
-    }
-}
-
-static void cubic_do_congestion_avoidance(picoquic_cnx_t * cnx, picoquic_path_t* path_x,
-    picoquic_cubic_state_t* cubic_state, uint64_t nb_bytes_acknowledged, uint64_t current_time) {
+static void cubic_increase_congestion_avoidance(picoquic_path_t* path_x, picoquic_cubic_state_t* cubic_state,
+    uint64_t nb_bytes_acknowledged, uint64_t current_time) {
     if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
         double W_cubic;
         uint64_t win_cubic;
@@ -286,8 +273,16 @@ static void cubic_notify(
                     case picoquic_cubic_alg_slow_start:
                         picoquic_cc_update_bandwidth(path_x);
 
-                        cubic_do_slow_start(cnx, path_x, cubic_state, ack_state->nb_bytes_acknowledged,
-                            current_time);
+                        if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
+                            path_x->cwin += picoquic_hystart_increase_ex(path_x, ack_state->nb_bytes_acknowledged, 0);
+
+                            /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+                            if (path_x->cwin >= cubic_state->ssthresh) {
+                                cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
+                                path_x->is_ssthresh_initialized = 1;
+                                cubic_enter_avoidance(cubic_state, current_time);
+                            }
+                        }
                         break;
                     /* TODO discuss
                      * picoquic_cubic_alg_recovery not entered anyway
@@ -302,8 +297,8 @@ static void cubic_notify(
                         }
                         break;
                     case picoquic_cubic_alg_congestion_avoidance:
-                        cubic_do_congestion_avoidance(cnx, path_x, cubic_state,
-                            ack_state->nb_bytes_acknowledged, current_time);
+                        cubic_increase_congestion_avoidance(path_x, cubic_state, ack_state->nb_bytes_acknowledged,
+                                                            current_time);
                         break;
                 }
                 break;
@@ -467,7 +462,15 @@ static void dcubic_notify(
                 switch (cubic_state->alg_state) {
                     case picoquic_cubic_alg_slow_start:
                         /* Same as Cubic */
-                        cubic_do_slow_start(cnx, path_x, cubic_state, ack_state->nb_bytes_acknowledged, current_time);
+                        if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
+                            path_x->cwin += picoquic_hystart_increase_ex(path_x, ack_state->nb_bytes_acknowledged, 0);
+                            /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+                            if (path_x->cwin >= cubic_state->ssthresh) {
+                                cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
+                                path_x->is_ssthresh_initialized = 1;
+                                cubic_enter_avoidance(cubic_state, current_time);
+                            }
+                        }
                         break;
                     case picoquic_cubic_alg_recovery:
                         /* exit recovery, move to CA or SS, depending on CWIN */
@@ -479,8 +482,8 @@ static void dcubic_notify(
                         }
                         break;
                     case picoquic_cubic_alg_congestion_avoidance:
-                        cubic_do_congestion_avoidance(cnx, path_x, cubic_state,
-                            ack_state->nb_bytes_acknowledged, current_time);
+                        cubic_increase_congestion_avoidance(path_x, cubic_state, ack_state->nb_bytes_acknowledged,
+                                                            current_time);
                         break;
                     /*default:
                         break;*/

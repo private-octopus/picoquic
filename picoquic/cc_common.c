@@ -220,17 +220,17 @@ uint64_t picoquic_hystart_increase(picoquic_path_t * path_x, uint64_t nb_deliver
     return nb_delivered;
 }
 
-uint64_t picoquic_hystart_increase_ex(picoquic_path_t * path_x, uint64_t nb_delivered, int is_css)
+uint64_t picoquic_hystart_increase_ex(picoquic_path_t * path_x, uint64_t nb_delivered, int in_css)
 {
-    if (is_css) { /* in consecutive Slow Start */
+    if (in_css) { /* in consecutive Slow Start */
         return nb_delivered / PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR;
     } else { /* original Slow Start */
         return picoquic_hystart_increase(path_x, nb_delivered);
     }
 }
 
-uint64_t picoquic_hystart_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int is_css, uint64_t prague_alpha) {
-    /* TODO replace nb_delivered with picoquic_hystart_increase_ex(path_x, nb_delivered, is_css)? */
+uint64_t picoquic_hystart_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha) {
+    /* TODO replace nb_delivered with picoquic_hystart_increase_ex(path_x, nb_delivered, is_css) for hystart++ support? */
     if (prague_alpha != 0) { /* monitoring of ECN */
         if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
             return (nb_delivered * (1024 - prague_alpha)) / 1024;
@@ -244,7 +244,7 @@ uint64_t picoquic_hystart_increase_ex2(picoquic_path_t* path_x, uint64_t nb_deli
             return delta;
         }
     } else {
-        return picoquic_hystart_increase_ex(path_x, nb_delivered, is_css);
+        return picoquic_hystart_increase_ex(path_x, nb_delivered, in_css);
     }
 }
 

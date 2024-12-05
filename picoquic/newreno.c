@@ -106,8 +106,7 @@ void picoquic_newreno_sim_notify(
                 nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
             }
             break;
-        case picoquic_newreno_alg_congestion_avoidance:
-        default: {
+        case picoquic_newreno_alg_congestion_avoidance: {
             uint64_t complete_delta = ack_state->nb_bytes_acknowledged * path_x->send_mtu + nr_state->residual_ack;
             nr_state->residual_ack = complete_delta % nr_state->cwin;
             nr_state->cwin += complete_delta / nr_state->cwin;
@@ -232,9 +231,19 @@ static void picoquic_newreno_notify(
             }
             break;
         case picoquic_congestion_notification_seed_cwin:
+            picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
+            path_x->cwin = nr_state->nrss.cwin;
+            break;
         case picoquic_congestion_notification_ecn_ec:
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
+            /* TODO fix test cases first. */
+            /*if (picoquic_hystart_loss_test(&nr_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) {
+                /* exit slow start. #1#
+                picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
+                path_x->cwin = nr_state->nrss.cwin;
+            }*/
+
             picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
             path_x->cwin = nr_state->nrss.cwin;
             break;

@@ -60,12 +60,11 @@ int picoquic_hystart_loss_volume_test(picoquic_min_max_rtt_t* rtt_track, picoqui
 
 int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t packet_time, uint64_t current_time, int is_one_way_delay_enabled);
 
-/* TODO replace with _ex function later. */
 uint64_t picoquic_hystart_increase(picoquic_path_t* path_x, uint64_t nb_delivered);
 
-uint64_t picoquic_hystart_increase_ex(picoquic_path_t* path_x, uint64_t nb_delivered, int is_css);
+uint64_t picoquic_hystart_increase_ex(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css);
 
-uint64_t picoquic_hystart_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int is_css, uint64_t prague_alpha);
+uint64_t picoquic_hystart_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha);
 
 /*
  * Increases window dependent on bandwidth estimation.
