@@ -308,11 +308,12 @@ int picoquic_parse_long_packet_header(
                 ph->epoch = picoquic_epoch_handshake;
                 break;
             case picoquic_packet_retry: /* Retry */
+            default:
+                /* No default branch in this statement, because there are only 4 possible types
+                 * parsed in picoquic_parse_long_packet_type */
                 ph->pc = picoquic_packet_context_initial;
                 ph->epoch = picoquic_epoch_initial;
                 break;
-            /* No default branch in this statement, because there are only 4 possible types 
-             * parsed in picoquic_parse_long_packet_type */
             }
 
             if (ph->ptype == picoquic_packet_retry) {
