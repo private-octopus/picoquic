@@ -299,11 +299,14 @@ void picoquic_prague_notify(
             /* Increae or reduce the congestion window based on alpha */
             switch (pr_state->alg_state) {
             case picoquic_prague_alg_slow_start:
-                path_x->cwin += picoquic_hystart_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
+                /* TODO l4s_prague test fails. Have to increase max_completion time about 100 ms */
+                if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
+                    path_x->cwin += picoquic_hystart_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
 
-                /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
-                if (path_x->cwin >= pr_state->ssthresh) {
-                    pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
+                    /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+                    if (path_x->cwin >= pr_state->ssthresh) {
+                        pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
+                    }
                 }
                 break;
             case picoquic_prague_alg_congestion_avoidance:
