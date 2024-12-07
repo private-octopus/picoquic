@@ -10,9 +10,6 @@
     <ClCompile Include="h3zero.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="siduck.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="quicperf.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -49,9 +46,6 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="wincompat.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="siduck.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="pico_webtransport.h">

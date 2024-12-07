@@ -146,7 +146,6 @@
     <ClCompile Include="h3zero_uri.c" />
     <ClCompile Include="picomask.c" />
     <ClCompile Include="quicperf.c" />
-    <ClCompile Include="siduck.c" />
     <ClCompile Include="webtransport.c" />
     <ClCompile Include="wt_baton.c" />
   </ItemGroup>
@@ -159,7 +158,6 @@
     <ClInclude Include="picomask.h" />
     <ClInclude Include="pico_webtransport.h" />
     <ClInclude Include="quicperf.h" />
-    <ClInclude Include="siduck.h" />
     <ClInclude Include="wincompat.h" />
     <ClInclude Include="wt_baton.h" />
   </ItemGroup>

@@ -101,20 +101,20 @@ extern "C" {
         uint64_t echo_length;
         uint64_t echo_sent;
         uint64_t post_received;
-        /* Client state file management */
-        unsigned int is_open : 1;
-        unsigned int is_file_open : 1;
-        unsigned int flow_opened : 1;
+        picohttp_post_data_cb_fn path_callback;
+        void* path_callback_ctx;
+        uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
+        /* Client state management */
+        unsigned int is_open : 1; /* The client has initiated this stream */
+        unsigned int flow_opened : 1; /* Flow control parameters updated to allow receiving expected data */
         uint64_t received_length;
         uint64_t post_size;
         uint64_t post_sent;
-        char* f_name;
-        /* Global state variables */
-        uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
+        //char* f_name;
+        //FILE* FC;
+        /* File state variables, used by both cclient and server */
         char* file_path;
         FILE* F;
-        picohttp_post_data_cb_fn path_callback;
-        void* path_callback_ctx;
     } h3zero_stream_ctx_t;
 
     /* Parsing of a data stream. This is implemented as a filter, with a set of states:

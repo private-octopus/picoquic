@@ -63,6 +63,9 @@ static void picohttp_clear_stream_ctx(h3zero_stream_ctx_t* stream_ctx)
 	if (stream_ctx->F != NULL) {
 		stream_ctx->F = picoquic_file_close(stream_ctx->F);
 	}
+	if (stream_ctx->F != NULL) {
+		stream_ctx->F = picoquic_file_close(stream_ctx->F);
+	}
 
 	if (stream_ctx->path_callback != NULL) {
 		(void)stream_ctx->path_callback(stream_ctx->cnx, NULL, 0, picohttp_callback_free, stream_ctx, stream_ctx->path_callback_ctx);
@@ -254,6 +257,8 @@ void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_callback_ctx
 	}
 }
 
+#if 0
+/* Unused code */
 uint64_t h3zero_parse_stream_prefix(uint8_t* buffer_8, size_t* nb_in_buffer, uint8_t* data, size_t data_length, size_t * nb_read)
 {
 	uint64_t prefix = UINT64_MAX;
@@ -274,6 +279,7 @@ uint64_t h3zero_parse_stream_prefix(uint8_t* buffer_8, size_t* nb_in_buffer, uin
 
 	return prefix;
 }
+#endif
 
 int h3zero_protocol_init(picoquic_cnx_t* cnx)
 {
@@ -475,7 +481,7 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 	return bytes;
 }
 
-uint8_t* h3zero_parse_control_stream_id(
+uint8_t* h3zero_wt_parse_control_stream_id(
 	uint8_t* bytes, uint8_t* bytes_max,
 	h3zero_data_stream_state_t* stream_state,
 	h3zero_stream_ctx_t* stream_ctx,
@@ -525,7 +531,7 @@ uint8_t* h3zero_parse_remote_bidir_stream(
 		}
 	}
 	if (stream_state->stream_type == h3zero_frame_webtransport_stream) {
-		bytes = h3zero_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
+		bytes = h3zero_wt_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
 	}
 	else {
 		/* Not and expected stream */
@@ -567,7 +573,7 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 		bytes = bytes_max;
 		break;
 	case h3zero_stream_type_webtransport: /* unidir stream is used as specified in web transport */
-		bytes = h3zero_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
+		bytes = h3zero_wt_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
 		break;
 	default:
 		/* Per section 6.2 of RFC 9114, unknown stream types are just ignored */
@@ -1152,17 +1158,16 @@ int h3zero_client_open_stream_file(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* c
 {
 	int ret = 0;
 
-	if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
+	if (stream_ctx->F == NULL && ctx->no_disk == 0) {
 		int last_err = 0;
-		stream_ctx->F = picoquic_file_open_ex(stream_ctx->f_name, "wb", &last_err);
-		if (stream_ctx->F == NULL) {
+		stream_ctx->F = picoquic_file_open_ex(stream_ctx->file_path, "wb", &last_err);
+		if (stream_ctx->F== NULL) {
 			picoquic_log_app_message(cnx,
-				"Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)\n", stream_ctx->f_name, stream_ctx->stream_id, last_err, last_err);
-			DBG_PRINTF("Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)", stream_ctx->f_name, stream_ctx->stream_id, last_err, last_err);
+				"Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)\n", stream_ctx->file_path, stream_ctx->stream_id, last_err, last_err);
+			DBG_PRINTF("Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)", stream_ctx->file_path, stream_ctx->stream_id, last_err, last_err);
 			ret = -1;
 		}
 		else {
-			stream_ctx->is_file_open = 1;
 			ctx->nb_open_files++;
 		}
 	}
@@ -1175,16 +1180,16 @@ int h3zero_client_close_stream(picoquic_cnx_t * cnx,
 	h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx)
 {
 	int ret = 0;
-	if (stream_ctx != NULL && stream_ctx->is_open) {
+	if (stream_ctx != NULL) {
 		picoquic_unlink_app_stream_ctx(cnx, stream_ctx->stream_id);
-		if (stream_ctx->f_name != NULL) {
-			free(stream_ctx->f_name);
-			stream_ctx->f_name = NULL;
+
+		if (stream_ctx->file_path != NULL) {
+			free(stream_ctx->file_path);
+			stream_ctx->file_path = NULL;
 		}
-		stream_ctx->F = picoquic_file_close(stream_ctx->F);
-		if (stream_ctx->is_file_open) {
+		if (stream_ctx->F != NULL) {
+			stream_ctx->F = picoquic_file_close(stream_ctx->F);
 			ctx->nb_open_files--;
-			stream_ctx->is_file_open = 0;
 		}
 		stream_ctx->is_open = 0;
 		ctx->nb_open_streams--; 
@@ -1295,7 +1300,7 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 	h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id)
 {
 	int ret = 0;
-	if (!stream_ctx->is_file_open && ctx->no_disk == 0 && stream_ctx->file_path != NULL) {
+	if (stream_ctx->F == NULL && ctx->no_disk == 0 && stream_ctx->file_path != NULL) {
 		ret = h3zero_client_open_stream_file(cnx, ctx, stream_ctx);
 	}
 	if (ret == 0 && length > 0) {
@@ -1355,7 +1360,12 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 			stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
 		}
 		else {
-			if (h3zero_client_close_stream(cnx, ctx, stream_ctx)) {
+			if (stream_ctx->ps.stream_state.current_frame_read < stream_ctx->ps.stream_state.current_frame_length) {
+				ret = picoquic_close(cnx, H3ZERO_FRAME_ERROR);
+				picoquic_log_app_message(cnx,
+					"Stream %" PRIu64 " closed when a frame is not complete, error 0x%x", stream_id, H3ZERO_FRAME_ERROR);
+			}
+			else if (h3zero_client_close_stream(cnx, ctx, stream_ctx)) {
 				*fin_stream_id = stream_id;
 				if (stream_id <= 64 && !ctx->no_print) {
 					fprintf(stdout, "Stream %" PRIu64 " ended after %" PRIu64 " bytes\n",
@@ -2011,40 +2021,30 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 		}
 		length_of_type = VARINT_LEN_T(capsule->header_buffer, size_t);
 
-		if (length_of_type + 1 > H3ZERO_CAPSULE_HEADER_SIZE_MAX) {
-			bytes = NULL;
+		while (capsule->header_read < length_of_type && bytes < bytes_max) {
+			capsule->header_buffer[capsule->header_read++] = *bytes++;
 		}
-		else {
-			while (capsule->header_read < length_of_type && bytes < bytes_max) {
+		if (capsule->header_read >= length_of_type) {
+			(void)picoquic_frames_varint_decode(capsule->header_buffer, capsule->header_buffer + length_of_type,
+				&capsule->capsule_type);
+
+			while (capsule->header_read < length_of_type + 1 && bytes < bytes_max) {
 				capsule->header_buffer[capsule->header_read++] = *bytes++;
 			}
-			if (capsule->header_read >= length_of_type) {
-				(void)picoquic_frames_varint_decode(capsule->header_buffer, capsule->header_buffer + length_of_type,
-					&capsule->capsule_type);
 
-				while (capsule->header_read < length_of_type + 1 && bytes < bytes_max) {
+			if (capsule->header_read >= length_of_type + 1) {
+				/* No change in state, wait for more bytes */
+				length_of_length = VARINT_LEN_T((capsule->header_buffer + length_of_type), size_t);
+
+				capsule->header_length = length_of_type + length_of_length;
+				while (capsule->header_read < capsule->header_length && bytes < bytes_max) {
 					capsule->header_buffer[capsule->header_read++] = *bytes++;
 				}
-
-				if (capsule->header_read >= length_of_type + 1) {
-					/* No change in state, wait for more bytes */
-					length_of_length = VARINT_LEN_T((capsule->header_buffer + length_of_type), size_t);
-
-					capsule->header_length = length_of_type + length_of_length;
-					if (capsule->header_length > H3ZERO_CAPSULE_HEADER_SIZE_MAX) {
-						bytes = NULL;
-					}
-					else {
-						while (capsule->header_read < capsule->header_length && bytes < bytes_max) {
-							capsule->header_buffer[capsule->header_read++] = *bytes++;
-						}
-						if (capsule->header_read >= capsule->header_length) {
-							(void)picoquic_frames_varlen_decode(capsule->header_buffer + length_of_type,
-								capsule->header_buffer + length_of_type + length_of_length,
-								&capsule->capsule_length);
-							capsule->is_length_known = 1;
-						}
-					}
+				if (capsule->header_read >= capsule->header_length) {
+					(void)picoquic_frames_varlen_decode(capsule->header_buffer + length_of_type,
+						capsule->header_buffer + length_of_type + length_of_length,
+						&capsule->capsule_length);
+					capsule->is_length_known = 1;
 				}
 			}
 		}

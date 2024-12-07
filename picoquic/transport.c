@@ -28,31 +28,6 @@
 #include "tls_api.h"
 #include <string.h>
 
-uint8_t* picoquic_transport_param_varint_encode_old(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n64) 
-{
-    if (bytes + 2 > bytes_max) {
-        bytes = NULL;
-    }
-    else {
-        uint8_t * byte_l;
-        size_t l;
-
-        *bytes++ = 0;
-        byte_l = bytes;
-        *bytes++ = 0;
-        l = picoquic_varint_encode(bytes, bytes_max - bytes, n64);
-        if (l == 0) {
-            bytes = NULL;
-        }
-        else {
-            *byte_l = (uint8_t) l;
-            bytes += l;
-        }
-    }
-
-    return bytes;
-}
-
 uint64_t picoquic_transport_param_varint_decode(picoquic_cnx_t * cnx, uint8_t* bytes, uint64_t extension_length, int* ret) 
 {
     uint64_t n64 = 0;
@@ -63,18 +38,6 @@ uint64_t picoquic_transport_param_varint_decode(picoquic_cnx_t * cnx, uint8_t* b
     }
 
     return n64;
-}
-
-uint8_t* picoquic_transport_param_type_varint_encode_old(uint8_t* bytes, const uint8_t* bytes_max, picoquic_tp_enum tp_type, uint64_t n64)
-{
-    if (bytes != NULL && bytes + 2 <= bytes_max) {
-        picoformat_16(bytes, (uint16_t)tp_type);
-        bytes = picoquic_transport_param_varint_encode_old(bytes + 2, bytes_max, n64);
-    }
-    else {
-        bytes = NULL;
-    }
-    return bytes;
 }
 
 uint8_t* picoquic_transport_param_varint_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n64)
@@ -130,38 +93,6 @@ int picoquic_transport_param_cid_decode(picoquic_cnx_t * cnx, uint8_t* bytes, ui
     }
 
     return ret;
-}
-
-uint8_t* picoquic_encode_transport_param_prefered_address_old(uint8_t* bytes, uint8_t* bytes_max,
-    picoquic_tp_prefered_address_t* prefered_address)
-{
-    /* first compute the length */
-    uint16_t coded_length = 4u + 2u + 16u + 2u + 1u + prefered_address->connection_id.id_len + 16u;
-
-    if (bytes == NULL || bytes + coded_length > bytes_max) {
-        bytes = NULL;
-    }
-    else {
-        picoformat_16(bytes, picoquic_tp_server_preferred_address);
-        bytes += 2;
-        picoformat_16(bytes, coded_length);
-        bytes += 2;
-        memcpy(bytes, prefered_address->ipv4Address, 4);
-        bytes += 4;
-        picoformat_16(bytes, prefered_address->ipv4Port);
-        bytes += 2;
-        memcpy(bytes, prefered_address->ipv6Address, 16);
-        bytes += 16;
-        picoformat_16(bytes, prefered_address->ipv4Port);
-        bytes += 2;
-        *bytes++ = prefered_address->connection_id.id_len;
-        bytes += picoquic_format_connection_id(bytes, bytes_max - bytes,
-            prefered_address->connection_id);
-        memcpy(bytes, prefered_address->statelessResetToken, 16);
-        bytes += 16;
-    }
-
-    return bytes;
 }
 
 uint8_t * picoquic_encode_transport_param_prefered_address(uint8_t * bytes, uint8_t * bytes_max,

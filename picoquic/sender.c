@@ -2593,8 +2593,8 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
             cnx->local_parameters.initial_max_path_id -
             cnx->nb_local_cnxid_lists;
         if (cnx->max_path_id_local < new_max_path_id) {
-            uint8_t * bytes_next = picoquic_format_max_path_id_frame(bytes, bytes_max, new_max_path_id);
-            if (bytes_next == NULL) {
+            uint8_t * bytes_next = picoquic_format_max_path_id_frame(bytes, bytes_max, new_max_path_id, more_data);
+            if (bytes_next == bytes) {
                 no_space_left = 1;
             }
             else {
@@ -2758,9 +2758,6 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
             cnx->min_ack_delay_remote = cnx->ack_delay_remote;
         }
     }
-
-    /* Perform a check of the PN decryption key, for sanity */
-    picoquic_log_pn_dec_trial(cnx);
 }
 
 uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
@@ -4224,7 +4221,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
         /* Set the selected path to available if it was standby. Selecting a standby
          * path means that the available path was of lower quality, the only exception
          * being if the selection was due to a pending challenge. */
-        picoquic_set_path_status(cnx, cnx->path[path_id]->unique_path_id, picoquic_path_status_available);
+        (void)picoquic_set_path_status(cnx, cnx->path[path_id]->unique_path_id, picoquic_path_status_available);
     }
     cnx->path[path_id]->selected++;
     picoquic_set_path_addresses(cnx, path_id, is_nat, p_addr_to, p_addr_from, if_index);

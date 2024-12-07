@@ -671,67 +671,65 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         }
 
         if (ret == 0) {
+            size_t max_cnx4 = 0;
             if (max_nb_connections == 0) {
                 max_nb_connections = 1;
             }
 
             quic->tentative_max_number_connections = max_nb_connections;
             quic->max_number_connections = max_nb_connections;
+            max_cnx4 = 4 * (size_t)max_nb_connections;
 
-            quic->table_cnx_by_id = picohash_create_ex((size_t)max_nb_connections * 4,
-                picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item);
 
-            quic->table_cnx_by_net = picohash_create_ex((size_t)max_nb_connections * 4,
-                picoquic_net_id_hash, picoquic_net_id_compare, picoquic_local_netid_to_item);
 
-            quic->table_cnx_by_icid = picohash_create_ex((size_t)max_nb_connections,
-                picoquic_net_icid_hash, picoquic_net_icid_compare, picoquic_net_icid_to_item);
-
-            quic->table_cnx_by_secret = picohash_create_ex((size_t)max_nb_connections * 4,
-                picoquic_net_secret_hash, picoquic_net_secret_compare, picoquic_net_secret_to_item);
-
-            quic->table_issued_tickets = picohash_create_ex((size_t)max_nb_connections,
-                picoquic_issued_ticket_hash, picoquic_issued_ticket_compare, picoquic_issued_ticket_key_to_item);
-
-            picosplay_init_tree(&quic->token_reuse_tree, picoquic_registered_token_compare,
-                picoquic_registered_token_create, picoquic_registered_token_delete, picoquic_registered_token_value);
-
-            if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL ||
-                quic->table_cnx_by_icid == NULL || quic->table_cnx_by_secret == NULL ||
-                quic->table_issued_tickets == NULL) {
+            if (max_cnx4 < (size_t)max_nb_connections ||
+                (quic->table_cnx_by_id = picohash_create_ex((size_t)max_nb_connections * 4,
+                picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item)) == NULL ||
+                (quic->table_cnx_by_net = picohash_create_ex((size_t)max_nb_connections * 4,
+                    picoquic_net_id_hash, picoquic_net_id_compare, picoquic_local_netid_to_item)) == NULL ||
+                (quic->table_cnx_by_icid = picohash_create_ex((size_t)max_nb_connections,
+                    picoquic_net_icid_hash, picoquic_net_icid_compare, picoquic_net_icid_to_item)) == NULL ||
+                (quic->table_cnx_by_secret = picohash_create_ex((size_t)max_nb_connections * 4,
+                    picoquic_net_secret_hash, picoquic_net_secret_compare, picoquic_net_secret_to_item)) == NULL ||
+                (quic->table_issued_tickets = picohash_create_ex((size_t)max_nb_connections,
+                    picoquic_issued_ticket_hash, picoquic_issued_ticket_compare, picoquic_issued_ticket_key_to_item)) == NULL) {
                 ret = -1;
                 DBG_PRINTF("%s", "Cannot initialize hash tables\n");
             }
-            else if (picoquic_master_tlscontext(quic, cert_file_name, key_file_name, cert_root_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
-                ret = -1;
-                DBG_PRINTF("%s", "Cannot create TLS context \n");
-            }
             else {
-                /* In the absence of certificate or key, we assume that this is a client only context */
-                quic->enforce_client_only = (cert_file_name == NULL || key_file_name == NULL);
-                /* the random generator was initialized as part of the TLS context.
-                 * Use it to create the seed for generating the per context stateless
-                 * resets and the retry tokens */
+                picosplay_init_tree(&quic->token_reuse_tree, picoquic_registered_token_compare,
+                    picoquic_registered_token_create, picoquic_registered_token_delete, picoquic_registered_token_value);
+                if (picoquic_master_tlscontext(quic, cert_file_name, key_file_name, cert_root_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
+                    ret = -1;
+                    DBG_PRINTF("%s", "Cannot create TLS context \n");
+                }
+                else {
+                    /* In the absence of certificate or key, we assume that this is a client only context */
+                    quic->enforce_client_only = (cert_file_name == NULL || key_file_name == NULL);
+                    /* the random generator was initialized as part of the TLS context.
+                     * Use it to create the seed for generating the per context stateless
+                     * resets and the retry tokens */
 
-                if (!reset_seed)
-                    picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
-                else
-                    memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
+                    if (!reset_seed)
+                        picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
+                    else
+                        memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
 
-                picoquic_crypto_random(quic, quic->retry_seed, sizeof(quic->retry_seed));
+                    picoquic_crypto_random(quic, quic->retry_seed, sizeof(quic->retry_seed));
 
-                /* If there is no root certificate context specified, use a null certifier. */
-                /* Load tickets */
-                if (quic->ticket_file_name != NULL) {
-                    ret = picoquic_load_tickets(quic, ticket_file_name);
+                    /* If there is no root certificate context specified, use a null certifier. */
+                    /* Load tickets */
+                    if (quic->ticket_file_name != NULL) {
+                        ret = picoquic_load_tickets(quic, ticket_file_name);
 
-                    if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
-                        DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
-                        ret = 0;
-                    }
-                    else if (ret != 0) {
-                        DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
-                        ret = 0;
+                        if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
+                            DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
+                            ret = 0;
+                        }
+                        else if (ret != 0) {
+                            DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
+                            ret = 0;
+                        }
                     }
                 }
             }
@@ -800,9 +798,31 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
     quic->padding_multiple_default = padding_multiple;
 }
 
-void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy)
+int picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy)
 {
-    quic->default_spin_policy = default_spinbit_policy;
+    int ret = 0;
+
+    if (default_spinbit_policy <= picoquic_spinbit_on) {
+        quic->default_spin_policy = default_spinbit_policy;
+    }
+    else {
+        ret = -1;
+    }
+    return ret;
+}
+
+int picoquic_set_spinbit_policy(picoquic_cnx_t* cnx, picoquic_spinbit_version_enum spinbit_policy)
+{
+    int ret = 0;
+
+    if (spinbit_policy < picoquic_spinbit_on) {
+        cnx->spin_policy = spinbit_policy;
+    }
+    else
+    {
+        ret = -1;
+    }
+    return ret;
 }
 
 void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy)
@@ -1533,12 +1553,6 @@ uint64_t picoquic_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, p
         cnx->pkt_ctx[pc].highest_acknowledged;
 }
 
-uint64_t picoquic_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
-{
-    return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.latest_time_acknowledged :
-        cnx->pkt_ctx[pc].latest_time_acknowledged;
-}
-
 picoquic_packet_t* picoquic_get_last_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc)
 {
     return (cnx->is_multipath_enabled && pc == picoquic_packet_context_application) ? path_x->pkt_ctx.pending_last :
@@ -1998,31 +2012,6 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
     }
 
     return path_id;
-}
-
-/* Find path by path-ID. This is designed for use with the multipath option
- */
-int picoquic_find_path_by_cnxid_id(picoquic_cnx_t* cnx, int is_incoming, uint64_t path_id)
-{
-    int path_index = -1;
-
-    if (is_incoming) {
-        for (int i = 0; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->p_local_cnxid->sequence == path_id) {
-                path_index = i;
-                break;
-            }
-        }
-    }
-    else {
-        for (int i = 0; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->p_remote_cnxid->sequence == path_id) {
-                path_index = i;
-                break;
-            }
-        }
-    }
-    return path_index;
 }
 
 int picoquic_find_path_by_unique_id(picoquic_cnx_t* cnx, uint64_t unique_path_id)
@@ -4076,7 +4065,7 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx)
     return cnx->cnx_state;
 }
 
-uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
+int picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
 {
     return (cnx->crypto_context[picoquic_epoch_0rtt].aead_encrypt == NULL) ? 0 : 1;
 }
@@ -4593,11 +4582,9 @@ void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx)
 void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
     if (cnx != NULL) {
-#ifdef PICOQUIC_MEMORY_LOG
         if (cnx->memlog_call_back != NULL) {
             cnx->memlog_call_back(cnx, NULL, cnx->memlog_ctx, 1, 0);
         }
-#endif
         if (cnx->quic->perflog_fn != NULL) {
             (void)(cnx->quic->perflog_fn)(cnx->quic, cnx, 0);
         }

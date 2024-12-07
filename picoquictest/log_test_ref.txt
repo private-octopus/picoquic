@@ -14,7 +14,7 @@
     stream_data_blocked: 65536.
     streams_blocked_bidir: 256
     streams_blocked_unidir: 512
-    new_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf
+    retire_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf
     stop_sending: Stream 17 (0x11), Error 0x17.
     path_challenge: 0102030405060708
     path_response: 0102030405060708
@@ -37,6 +37,8 @@
     path_backup, path_id: 0, sequence: 15
     path_available, path_id: 0, sequence: 15
     max_path_id, max_path_id: 17
+    path_retire_connection_id[1, 7]: 0x0102030405060708, a1a2a3a4a5a6a7a8a9aaabacadaeafb0
+    path_retire_connection_id[0, 2]
     path_blocked, max_path_id: 17
     bdp_frame, lifetime: 1, bytes_in_flight: 2, min_rtt: 3, ip: 0a000001
     observed_address_v4, sequence: 1, addr: 1.2.3.4, port: 4660
@@ -55,9 +57,9 @@
     max_streams_bidir: max rank 4611686018427387903.
     max_streams_unidir: max rank 4611686018427387903.
     Malformed NEW CONNECTION ID, requires 83 bytes out of 28
-    new_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf, retire before: -1
-    new_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf, retire before: 8
-    new_connection_id[7]: 0x, 01020304050607080900010203040506
+    retire_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf, retire before: 4611686018427387903
+    retire_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf, retire before: 8
+    retire_connection_id[7]: 0x, 01020304050607080900010203040506
     new_token[8]: 0x090001a0a1a2a3a4
     Unknown frame, type: 631678888 (0xa5a6a7a8a9aaabac... + 3 bytes)
     stop_sending: Stream 19 (0x13), Error 0x17.

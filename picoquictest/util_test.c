@@ -113,6 +113,36 @@ int util_sprintf_test()
     return ret;
 }
 
+uint8_t util_uint8_to_str_input[] = {
+    'a', 'z', 'A', 'Z', '0', '9', '.', 0xff, 
+};
+
+char util_uint8_to_str_out[] = {
+    'a', 'z', 'A', 'Z', '0', '9', '.', '?', 0
+};
+
+char util_uint8_to_str_out7[] = {
+    'a', 'z', 'A', '.', '.', '.', 0
+};
+
+
+char util_uint8_to_str_out2[] = {
+   '.', 0
+};
+
+int util_uint8_to_str_test()
+{
+    int ret = 0;
+    char text[16];
+
+    if (strcmp(picoquic_uint8_to_str(text, 16, util_uint8_to_str_input, sizeof(util_uint8_to_str_input)), util_uint8_to_str_out) != 0 ||
+        strcmp(picoquic_uint8_to_str(text, 7, util_uint8_to_str_input, sizeof(util_uint8_to_str_input)), util_uint8_to_str_out7) != 0 ||
+        strcmp(picoquic_uint8_to_str(text, 2, util_uint8_to_str_input, sizeof(util_uint8_to_str_input)), util_uint8_to_str_out2) != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
 /* Test the constant time memcmp for correctness and for
  * time constants. The test suite will include two 4MB
  * strings each comprising blocks of 16 bytes.
@@ -297,6 +327,34 @@ int util_memcmp_test()
     return ret;
 }
 
+
+#define file_test_debug "file_test_debug.txt"
+FILE* get_debug_out();
+int get_debug_suspended();
+
+int util_debug_print_test()
+{
+    int ret = 0;
+    int was_suspened = get_debug_suspended();
+    FILE* old_debug_file = get_debug_out();
+    FILE* F = picoquic_file_open(file_test_debug, "w");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        debug_set_stream(F);
+        debug_printf_resume();
+        debug_printf("debug set stream: %d\n", ret);
+        F = picoquic_file_close(F);
+        debug_set_stream(old_debug_file);
+        if (was_suspened) {
+            debug_printf_suspend();
+        }
+    }
+    return ret;
+}
+
 /* Testing the minimal thread support.
  *
  * We create one mutex and one event to synchronize two threads: one as a mutex demo,
@@ -396,3 +454,4 @@ int util_threading_test()
 
     return ret;
 }
+

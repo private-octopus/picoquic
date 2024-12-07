@@ -157,10 +157,12 @@
     <ClCompile Include="cnx_creation_test.c" />
     <ClCompile Include="code_version_test.c" />
     <ClCompile Include="config_test.c" />
+    <ClCompile Include="congestion_test.c" />
     <ClCompile Include="cpu_limited.c" />
     <ClCompile Include="datagram_tests.c" />
     <ClCompile Include="delay_tolerant_test.c" />
     <ClCompile Include="edge_cases.c" />
+    <ClCompile Include="getter_test.c" />
     <ClCompile Include="h3zerotest.c" />
     <ClCompile Include="h3zero_stream_test.c" />
     <ClCompile Include="h3zero_uri_test.c" />
@@ -170,6 +172,7 @@
     <ClCompile Include="l4s_test.c" />
     <ClCompile Include="mbedtls_test.c" />
     <ClCompile Include="mediatest.c" />
+    <ClCompile Include="memlog_test.c" />
     <ClCompile Include="minicrypto_test.c" />
     <ClCompile Include="multipath_test.c" />
     <ClCompile Include="netperf_test.c" />
@@ -177,9 +180,11 @@
     <ClCompile Include="p2p_test.c" />
     <ClCompile Include="pacing_test.c" />
     <ClCompile Include="parseheadertest.c" />
+    <ClCompile Include="picolog_test.c" />
     <ClCompile Include="picomask_test.c" />
     <ClCompile Include="picoquic_lb_test.c" />
     <ClCompile Include="pn2pn64test.c" />
+    <ClCompile Include="qlog_test.c" />
     <ClCompile Include="quicperf_test.c" />
     <ClCompile Include="quic_tester.c" />
     <ClCompile Include="sacktest.c" />
@@ -188,6 +193,7 @@
     <ClCompile Include="socket_test.c" />
     <ClCompile Include="cplusplus.cpp" />
     <ClCompile Include="sockloop_test.c" />
+    <ClCompile Include="spinbit_test.c" />
     <ClCompile Include="splay_test.c" />
     <ClCompile Include="stream0_frame_test.c" />
     <ClCompile Include="stresstest.c" />

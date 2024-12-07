@@ -655,7 +655,6 @@ typedef struct st_picoquic_quic_t {
     unsigned int use_unique_log_names : 1; /* Add 64 bit random number to log names for uniqueness */
     unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
     unsigned int one_way_grease_quic_bit : 1; /* Grease of QUIC bit, but do not announce support */
-    unsigned int log_pn_dec : 1; /* Log key hashes on key changes to debug crypto */
     unsigned int random_initial : 2; /* Randomize the initial PN number */
     unsigned int packet_train_mode : 1; /* Tune pacing for sending packet trains */
     unsigned int use_constant_challenges : 1; /* Use predictable challenges when producing constant logs. */
@@ -1529,10 +1528,8 @@ typedef struct st_picoquic_cnx_t {
     uint16_t log_unique;
     FILE* f_binlog;
     char* binlog_file_name;
-#ifdef PICOQUIC_MEMORY_LOG
     void (*memlog_call_back)(picoquic_cnx_t* cnx, picoquic_path_t* path, void* v_memlog, int op_code, uint64_t current_time);
     void *memlog_ctx;
-#endif
 } picoquic_cnx_t;
 
 typedef struct st_picoquic_packet_data_t {
@@ -1566,6 +1563,9 @@ int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
 /* Register or update default address and reset secret */
 int picoquic_register_net_secret(picoquic_cnx_t* cnx);
 
+/* Registration of initial connection ID and peer IP */
+int picoquic_register_net_icid(picoquic_cnx_t* cnx);
+
 void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id, uint8_t id_length, picoquic_connection_id_t cnx_id_remote);
 
 /* Management of path */
@@ -1582,7 +1582,6 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);
 int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* addr_local, const struct sockaddr* addr_peer, int* partial_match);
-int picoquic_find_path_by_cnxid_id(picoquic_cnx_t* cnx, int is_incoming, uint64_t path_id);
 int picoquic_find_path_by_unique_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
@@ -1731,8 +1730,6 @@ size_t picoquic_protect_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum pt
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
-void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx); /* For debugging potential PN_ENC corruption */
-
 int picoquic_remove_header_protection_inner(uint8_t* bytes, size_t length, uint8_t* decrypted_bytes, picoquic_packet_header* ph, void* pn_enc, unsigned int is_loss_bit_enabled_incoming, uint64_t sack_list_last);
 
 size_t picoquic_pad_to_target_length(uint8_t* bytes, size_t length, size_t target);
@@ -1765,8 +1762,6 @@ int picoquic_parse_header_and_decrypt(
 uint64_t picoquic_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
 
 uint64_t picoquic_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
-
-uint64_t picoquic_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
 
 picoquic_packet_t * picoquic_get_last_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_context_enum pc);
 
@@ -1996,14 +1991,13 @@ uint8_t* picoquic_format_path_challenge_frame(uint8_t* bytes, uint8_t* bytes_max
 uint8_t* picoquic_format_path_response_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t challenge);
 int picoquic_should_repeat_path_response_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_max);
 uint8_t* picoquic_format_new_connection_id_frame(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_local_cnxid_t* l_cid);
-uint8_t* picoquic_format_max_path_id_frame(uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id);
+uint8_t* picoquic_format_max_path_id_frame(uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id, int * more_data);
 uint8_t* picoquic_format_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t unique_path_id, uint64_t sequence);
 int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length);
 uint8_t* picoquic_format_one_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_stream_head_t* stream);
 uint8_t* picoquic_format_first_misc_or_dg_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
     picoquic_misc_frame_header_t* misc_frame, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last);
-uint8_t* picoquic_format_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 picoquic_misc_frame_header_t* picoquic_find_first_misc_frame(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc);
 uint8_t* picoquic_format_misc_frames_in_context(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, picoquic_packet_context_enum pc);
@@ -2020,7 +2014,7 @@ uint8_t* picoquic_decode_datagram_frame_header(uint8_t* bytes, const uint8_t* by
 const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const uint8_t* bytes_max, 
     uint64_t* seq, uint64_t* packets, uint64_t* microsec, uint8_t * ignore_order, uint64_t *reordering_threshold);
 uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data);
-uint8_t* picoquic_format_immediate_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max);
+uint8_t* picoquic_format_immediate_ack_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data);
 uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time);
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);
 uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, picoquic_path_t* path_x, int* more_data, int * is_pure_ack);
@@ -2035,7 +2029,7 @@ const uint8_t* picoquic_parse_observed_address_frame(const uint8_t* bytes, const
     uint64_t ftype, uint64_t* sequence, const uint8_t** addr, uint16_t* port);
 uint8_t* picoquic_format_observed_address_frame(
     uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype,
-    uint64_t sequence_number, uint8_t* addr, uint16_t port);
+    uint64_t sequence_number, uint8_t* addr, uint16_t port, int * more_data);
 uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* bytes_max,
     picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time,
     int* more_data, int* is_pure_ack);

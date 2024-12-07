@@ -1502,7 +1502,6 @@ int initial_pto_srv_test()
     int has_initial;
     int has_handshake;
     uint64_t simulated_time = 0;
-    uint64_t simulated_rtt = 20000;
     picoquic_connection_id_t initial_cid = { { 0x94, 0x01, 0x85, 0, 0, 0, 0, 0}, 8 };
 
     /* Create a client. */

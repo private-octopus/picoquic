@@ -25,11 +25,11 @@
 
 /* Utility function to set minimal quic and cnx contexts
  */
-int picoquic_test_set_minimal_cnx(picoquic_quic_t** quic, picoquic_cnx_t** cnx)
+int picoquic_test_set_minimal_cnx_with_time(picoquic_quic_t** quic, picoquic_cnx_t** cnx, uint64_t * simulated_time)
 {
     *cnx = NULL;
     *quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+        NULL, NULL, NULL, NULL, 0, simulated_time, NULL, NULL, 0);
     if (*quic != NULL) {
         *cnx = picoquic_create_cnx(*quic,
             picoquic_null_connection_id,
@@ -42,6 +42,11 @@ int picoquic_test_set_minimal_cnx(picoquic_quic_t** quic, picoquic_cnx_t** cnx)
         }
     }
     return (*quic == NULL || *cnx == NULL);
+}
+
+int picoquic_test_set_minimal_cnx(picoquic_quic_t** quic, picoquic_cnx_t** cnx)
+{
+    return picoquic_test_set_minimal_cnx_with_time(quic, cnx, NULL);
 }
 
 int picoquic_test_reset_minimal_cnx(picoquic_quic_t* quic, picoquic_cnx_t** cnx)

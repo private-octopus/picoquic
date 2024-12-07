@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.28.0"
+#define PICOQUIC_VERSION "1.1.29.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -511,6 +511,10 @@ int picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_conn
 /* Get number of open connections */
 uint32_t picoquic_current_number_connections(picoquic_quic_t * quic);
 
+/* Set get the retry threshold -- if passed, new connection will trigger retry */
+void picoquic_set_max_half_open_retry_threshold(picoquic_quic_t* quic, uint32_t max_half_open_before_retry);
+uint32_t picoquic_get_max_half_open_retry_threshold(picoquic_quic_t* quic);
+
 /* Obtain the reasons why a connection was closed */
 void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason,
     uint64_t* remote_reason, uint64_t* local_application_reason,
@@ -634,8 +638,14 @@ void picoquic_enforce_client_only(picoquic_quic_t* quic, int do_enforce);
 /* Set default padding policy for the context */
 void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize);
 
-/* Set default spin bit policy for the context */
-void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
+/* Set default spin bit policy for the context
+* return 0 if OK, -1 if the policy was invalid.
+* Note that "picoquic_spinbit_on" is only allowed as a default policy,
+* translating to unconditional setup when connections are created for
+* the context. As a per conection setup, it is invalid.
+ */
+int picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
+int picoquic_set_spinbit_policy(picoquic_cnx_t* cnx, picoquic_spinbit_version_enum spinbit_policy);
 
 /* Set default loss bit policy for the context */
 void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy);
@@ -1010,7 +1020,6 @@ int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx);
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
-
 int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr);
 
 /* Manage connection IDs*/
@@ -1023,7 +1032,7 @@ picoquic_connection_id_t picoquic_get_logging_cnxid(picoquic_cnx_t* cnx);
 
 /* Manage connections */
 uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t* cnx);
-uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx);
+int picoquic_is_0rtt_available(picoquic_cnx_t* cnx);
 
 int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx);
 
@@ -1643,7 +1652,6 @@ typedef enum {
     picoquic_alpn_undef = 0,
     picoquic_alpn_http_0_9,
     picoquic_alpn_http_3,
-    picoquic_alpn_siduck,
     picoquic_alpn_quicperf
 } picoquic_alpn_enum;
 

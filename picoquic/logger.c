@@ -322,6 +322,12 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_max_path_id:
         frame_name = "max_path_id";
         break;
+    case picoquic_frame_type_path_new_connection_id:
+        frame_name = "path_new_connection_id";
+        break;
+    case picoquic_frame_type_path_retire_connection_id:
+        frame_name = "path_retire_connection_id";
+        break;
     case picoquic_frame_type_path_blocked:
         frame_name = "path_blocked";
         break;
@@ -1028,16 +1034,26 @@ size_t textlog_streams_blocked_frame(FILE* F, const uint8_t* bytes, size_t bytes
     return byte_index;
 }
 
-size_t textlog_new_connection_id_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+size_t textlog_new_connection_id_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, int is_mpath)
 {
-    size_t byte_index = 1;
+    size_t byte_index;
     size_t min_size = 2u + 16u;
     uint64_t sequence;
     uint64_t retire_before = 0;
+    uint64_t path_id = 0;
     picoquic_connection_id_t new_cnx_id = picoquic_null_connection_id;
     uint8_t l_cid = 0;
     size_t l_seq = 0;
     size_t l_ret = 1;
+    size_t l_path_id = 0;
+
+    byte_index = picoquic_varint_skip(bytes);
+
+    if (is_mpath) {
+        l_path_id = picoquic_varint_decode(&bytes[byte_index], bytes_max, &path_id);
+        min_size += l_path_id;
+        byte_index += l_path_id;
+    }
 
     l_seq = picoquic_varint_decode(&bytes[byte_index], bytes_max, &sequence);
     min_size += l_seq;
@@ -1053,14 +1069,23 @@ size_t textlog_new_connection_id_frame(FILE* F, const uint8_t* bytes, size_t byt
     min_size += l_cid;
 
     if (l_seq == 0 || l_ret == 0 ||  min_size > bytes_max) {
-        fprintf(F, "    Malformed NEW CONNECTION ID, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
+        fprintf(F, "    Malformed %sNEW CONNECTION ID, requires %d bytes out of %d\n", 
+            (is_mpath)?"PATH ":"",
+            (int)min_size, (int)bytes_max);
         byte_index = bytes_max;
     }
     else {
         byte_index += picoquic_parse_connection_id(bytes + byte_index, l_cid, &new_cnx_id);
-        fprintf(F, "    %s[%d]: 0x", 
-            textlog_frame_names(picoquic_frame_type_new_connection_id),
-            (int)sequence);
+
+        if (is_mpath) {
+        fprintf(F, "    %s[%"PRIu64", %"PRIu64"]: 0x",
+            textlog_frame_names(picoquic_frame_type_path_retire_connection_id),
+            path_id, sequence);
+    }
+        else {
+            fprintf(F, "    %s[%"PRIu64"]: 0x",
+                textlog_frame_names(picoquic_frame_type_retire_connection_id), sequence);
+        }
         for (int x = 0; x < new_cnx_id.id_len; x++) {
             fprintf(F, "%02x", new_cnx_id.id[x]);
         }
@@ -1069,7 +1094,7 @@ size_t textlog_new_connection_id_frame(FILE* F, const uint8_t* bytes, size_t byt
             fprintf(F, "%02x", bytes[byte_index++]);
         }
         if (retire_before != 0) {
-            fprintf(F, ", retire before: %d", (int)retire_before);
+            fprintf(F, ", retire before: %" PRIu64, retire_before);
         }
         fprintf(F, "\n");
     }
@@ -1077,25 +1102,37 @@ size_t textlog_new_connection_id_frame(FILE* F, const uint8_t* bytes, size_t byt
     return byte_index;
 }
 
-size_t textlog_retire_connection_id_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+size_t textlog_retire_connection_id_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, int is_mpath)
 {
-    size_t byte_index = 1;
+    size_t byte_index;
     uint64_t sequence = 0;
+    uint64_t path_id = 0;
     size_t l_seq = 0;
+    size_t l_path_id = 0;
 
+    byte_index = picoquic_varint_skip(bytes);
 
+    if (is_mpath) {
+        l_path_id = picoquic_varint_decode(bytes + byte_index, bytes_max, &path_id);
+        byte_index += l_path_id;
+    }
     if (bytes_max > byte_index) {
         l_seq = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &sequence);
         byte_index += l_seq;
     }
 
     if (l_seq == 0 || byte_index > bytes_max) {
-        fprintf(F, "    Malformed RETIRE CONNECTION ID, requires %d bytes out of %d\n", (int)(byte_index + ((l_seq == 0)?1:0)), (int)bytes_max);
+        fprintf(F, "    Malformed %sRETIRE CONNECTION ID, requires %d bytes out of %d\n",
+            (is_mpath) ? "PATH " : "", (int)(byte_index + ((l_seq == 0)?1:0)), (int)bytes_max);
         byte_index = bytes_max;
     }
-    else {
-        fprintf(F, "    %s[%d]\n", 
-            textlog_frame_names(picoquic_frame_type_retire_connection_id), (int)sequence);
+    else if (is_mpath) {
+        fprintf(F, "    %s[%"PRIu64", %"PRIu64"]\n",
+            textlog_frame_names(picoquic_frame_type_path_retire_connection_id), 
+            path_id, sequence);
+    } else {
+        fprintf(F, "    %s[%"PRIu64"]\n",
+            textlog_frame_names(picoquic_frame_type_retire_connection_id), sequence);
     }
 
     return byte_index;
@@ -1578,7 +1615,10 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
             byte_index += textlog_ack_frame(F, cnx_id64, frame_id, bytes + byte_index, length - byte_index, 1, 1);
             break;
         case picoquic_frame_type_retire_connection_id:
-            byte_index += textlog_retire_connection_id_frame(F, bytes + byte_index, length - byte_index);
+            byte_index += textlog_retire_connection_id_frame(F, bytes + byte_index, length - byte_index, 0);
+            break;
+        case picoquic_frame_type_path_retire_connection_id:
+            byte_index += textlog_retire_connection_id_frame(F, bytes + byte_index, length - byte_index, 1);
             break;
         case picoquic_frame_type_padding:
         case picoquic_frame_type_ping: {
@@ -1632,7 +1672,10 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
                 length - byte_index, frame_id);
             break;
         case picoquic_frame_type_new_connection_id: /* NEW_CONNECTION_ID */
-            byte_index += textlog_new_connection_id_frame(F, bytes + byte_index, length - byte_index);
+            byte_index += textlog_new_connection_id_frame(F, bytes + byte_index, length - byte_index, 0);
+            break;
+        case picoquic_frame_type_path_new_connection_id: /* NEW_CONNECTION_ID */
+            byte_index += textlog_new_connection_id_frame(F, bytes + byte_index, length - byte_index, 1);
             break;
         case picoquic_frame_type_stop_sending: /* STOP_SENDING */
             byte_index += textlog_stop_sending_frame(F, bytes + byte_index,
