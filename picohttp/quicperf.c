@@ -31,22 +31,6 @@
 
 /* management of scenarios by the quicperf client 
 * scenario = stream_choice |  stream_choice ';' *scenario
-
-id = alphanumeric-string
-
-stream_choice = [ '=' id ':' ]['*' repeat_count ':'] { stream_description | media_stream | datagram_stream }
-
-stream_description = [ stream_number ':'] post_size ':' response_size
-
-
-media_stream = stream_media_description | datagram_media_description
-
-stream_media_description = 's' media_description
-
-datagram_media_description = 'd' media_description
-
-media_description = priority ':' frequency ':' post_size ':' response_size
-                    [ ':' nb_frames ':'  marks_size ':' mark_response_size ':' reset_delay ]
  */
 
 size_t quicperf_parse_nb_stream(char const* text) {
