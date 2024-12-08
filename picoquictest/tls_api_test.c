@@ -9404,7 +9404,11 @@ int preferred_address_test_one(int migration_disabled, int cid_zero)
     /* Create an alternate IP address, and use it as preferred address */
     server_parameters.prefered_address.is_defined = 1;
     memcpy(server_parameters.prefered_address.ipv4Address, &server_preferred.sin_addr, 4);
+#if 1
+    server_parameters.prefered_address.ipv4Port = server_preferred.sin_port;
+#else
     server_parameters.prefered_address.ipv4Port = ntohs(server_preferred.sin_port);
+#endif
     server_parameters.migration_disabled = migration_disabled;
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1,
