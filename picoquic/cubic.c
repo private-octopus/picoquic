@@ -248,14 +248,16 @@ static void cubic_notify(
                         picoquic_cc_update_bandwidth(path_x);
 
                         if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                            path_x->cwin += picoquic_hystart_increase_ex(path_x, ack_state->nb_bytes_acknowledged, 0);
+                            //if (path_x->bytes_in_transit > path_x->cwin) {
+                                path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged, 0);
 
-                            /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
-                            if (path_x->cwin >= cubic_state->ssthresh) {
-                                cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
-                                path_x->is_ssthresh_initialized = 1;
-                                cubic_enter_avoidance(cubic_state, current_time);
-                            }
+                                /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+                                if (path_x->cwin >= cubic_state->ssthresh) {
+                                    cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
+                                    path_x->is_ssthresh_initialized = 1;
+                                    cubic_enter_avoidance(cubic_state, current_time);
+                                }
+                            //}
                         }
                         break;
                     /* TODO discuss
@@ -305,7 +307,7 @@ static void cubic_notify(
                          * Cubic will only back off after repeated losses, not just after a single loss.
                          */
                         if ((notification == picoquic_congestion_notification_ecn_ec ||
-                            picoquic_hystart_loss_test(&cubic_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) &&
+                            picoquic_cc_hystart_loss_test(&cubic_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) &&
                             (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
                                 cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x))) {
                             path_x->is_ssthresh_initialized = 1;
@@ -319,7 +321,7 @@ static void cubic_notify(
                          */
                         if (ack_state->lost_packet_number >= cubic_state->recovery_sequence &&
                             (notification == picoquic_congestion_notification_ecn_ec ||
-                                picoquic_hystart_loss_test(&cubic_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD))) {
+                                picoquic_cc_hystart_loss_test(&cubic_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD))) {
                             /* Re-enter recovery */
                             cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                         }
@@ -334,7 +336,7 @@ static void cubic_notify(
                 if (cubic_state->alg_state == picoquic_cubic_alg_slow_start) {
                     /* Using RTT increases as signal to get out of initial slow start */
                     if (cubic_state->ssthresh == UINT64_MAX &&
-                        picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                        picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                             cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                         /* RTT increased too much, get out of slow start! */
                         if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT){
@@ -462,7 +464,7 @@ static void dcubic_notify(
                 switch (cubic_state->alg_state) {
                     case picoquic_cubic_alg_slow_start:
                         /* In contrast to Cubic, only exit on high losses */
-                        if (picoquic_hystart_loss_test(&cubic_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) {
+                        if (picoquic_cc_hystart_loss_test(&cubic_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) {
                             dcubic_exit_slow_start(cnx, path_x, notification, cubic_state, current_time);
                         }
                         break;
@@ -470,7 +472,7 @@ static void dcubic_notify(
                         break;
                     case picoquic_cubic_alg_congestion_avoidance:
                         /* In contrast to Cubic, only exit on high losses */
-                        if (picoquic_hystart_loss_test(&cubic_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD) &&
+                        if (picoquic_cc_hystart_loss_test(&cubic_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD) &&
                             ack_state->lost_packet_number > cubic_state->recovery_sequence) {
                             /* re-enter recovery */
                             cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
@@ -491,7 +493,7 @@ static void dcubic_notify(
                         /* Using RTT increases as congestion signal. This is used
                          * for getting out of slow start, but also for ending a cycle
                          * during congestion avoidance */
-                        if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                        if (picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                             cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                             dcubic_exit_slow_start(cnx, path_x, notification, cubic_state, current_time);
                         }
@@ -503,7 +505,7 @@ static void dcubic_notify(
                         }
                     /* continue */
                     case picoquic_cubic_alg_congestion_avoidance:
-                        if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                        if (picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                                 cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                             if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
                                 cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {

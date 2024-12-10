@@ -296,12 +296,13 @@ void picoquic_prague_notify(
 
             /* Regardless of the alg state, update alpha */
             picoquic_prague_update_alpha(cnx, path_x, pr_state, ack_state->nb_bytes_acknowledged, current_time);
+
             /* Increae or reduce the congestion window based on alpha */
             switch (pr_state->alg_state) {
             case picoquic_prague_alg_slow_start:
                 /* TODO l4s_prague test fails. Have to increase max_completion time about 100 ms */
                 if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                    path_x->cwin += picoquic_hystart_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
+                    path_x->cwin += picoquic_cc_slow_start_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
 
                     /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                     if (path_x->cwin >= pr_state->ssthresh) {
@@ -360,7 +361,7 @@ void picoquic_prague_notify(
                     picoquic_cc_increase_cwin_for_long_rtt(path_x);
                 }
 
-                if (picoquic_hystart_test(&pr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                if (picoquic_cc_hystart_test(&pr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                     cnx->path[0]->pacing.packet_time_microsec, current_time,
                     cnx->is_time_stamp_enabled)) {
                     /* RTT increased too much, get out of slow start! */

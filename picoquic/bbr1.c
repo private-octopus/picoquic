@@ -1138,7 +1138,7 @@ static void picoquic_bbr1_notify(
         case picoquic_congestion_notification_timeout:
             /* Non standard code to react to high rate of packet loss, or timeout loss */
             if (ack_state->lost_packet_number >= bbr1_state->congestion_sequence &&
-                picoquic_hystart_loss_test(&bbr1_state->rtt_filter, notification, ack_state->lost_packet_number, 0.20)) {
+                picoquic_cc_hystart_loss_test(&bbr1_state->rtt_filter, notification, ack_state->lost_packet_number, 0.20)) {
                 picoquic_bbr1_notify_congestion(bbr1_state, cnx, path_x, current_time,
                     (notification == picoquic_congestion_notification_timeout) ? 1 : 0);
             }
@@ -1160,7 +1160,7 @@ static void picoquic_bbr1_notify(
             }
 
             if (bbr1_state->state == picoquic_bbr1_alg_startup_long_rtt) {
-                if (picoquic_hystart_test(&bbr1_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                if (picoquic_cc_hystart_test(&bbr1_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                     cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     BBR1ExitStartupLongRtt(bbr1_state, path_x, current_time);
                 }
@@ -1177,7 +1177,7 @@ static void picoquic_bbr1_notify(
                     bbr1_state->rt_prop_stamp = current_time;
                 }
                 if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                    path_x->cwin += picoquic_hystart_increase(path_x, bbr1_state->bytes_delivered);
+                    path_x->cwin += picoquic_cc_slow_start_increase(path_x, bbr1_state->bytes_delivered);
                 }
                 bbr1_state->bytes_delivered = 0;
 

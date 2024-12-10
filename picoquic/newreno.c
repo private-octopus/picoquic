@@ -262,7 +262,7 @@ static void picoquic_newreno_notify(
                     nr_state->nrss.cwin = path_x->cwin;
                 }
 
-                if (picoquic_hystart_test(&nr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                if (picoquic_cc_hystart_test(&nr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                     cnx->path[0]->pacing.packet_time_microsec, current_time,
                     cnx->is_time_stamp_enabled)) {
                     /* RTT increased too much, get out of slow start! */

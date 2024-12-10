@@ -91,7 +91,7 @@ uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* pat
 }
 
 
-void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t * rtt_track, uint64_t rtt)
+void picoquic_cc_filter_rtt_min_max(picoquic_min_max_rtt_t * rtt_track, uint64_t rtt)
 {
     int x = rtt_track->sample_current;
     int x_max;
@@ -119,7 +119,7 @@ void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t * rtt_track, uint64_t rt
     }
 }
 
-int picoquic_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event,
+int picoquic_cc_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event,
     uint64_t lost_packet_number, double error_rate_max)
 {
     int ret = 0;
@@ -152,7 +152,7 @@ int picoquic_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_conge
     return ret;
 }
 
-int picoquic_hystart_loss_volume_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event,  uint64_t nb_bytes_newly_acked, uint64_t nb_bytes_newly_lost)
+int picoquic_cc_hystart_loss_volume_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event,  uint64_t nb_bytes_newly_acked, uint64_t nb_bytes_newly_lost)
 {
     int ret = 0;
 
@@ -181,12 +181,12 @@ int picoquic_hystart_loss_volume_test(picoquic_min_max_rtt_t* rtt_track, picoqui
     return ret;
 }
 
-int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t packet_time, uint64_t current_time, int is_one_way_delay_enabled)
+int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t packet_time, uint64_t current_time, int is_one_way_delay_enabled)
 {
     int ret = 0;
 
     if(current_time > rtt_track->last_rtt_sample_time + 1000) {
-        picoquic_filter_rtt_min_max(rtt_track, rtt_measurement);
+        picoquic_cc_filter_rtt_min_max(rtt_track, rtt_measurement);
         rtt_track->last_rtt_sample_time = current_time;
 
         if (rtt_track->is_init) {
@@ -216,20 +216,20 @@ int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measur
     return ret;
 }
 
-uint64_t picoquic_hystart_increase(picoquic_path_t * path_x, uint64_t nb_delivered) {
+uint64_t picoquic_cc_slow_start_increase(picoquic_path_t * path_x, uint64_t nb_delivered) {
     return nb_delivered;
 }
 
-uint64_t picoquic_hystart_increase_ex(picoquic_path_t * path_x, uint64_t nb_delivered, int in_css)
+uint64_t picoquic_cc_slow_start_increase_ex(picoquic_path_t * path_x, uint64_t nb_delivered, int in_css)
 {
     if (in_css) { /* in consecutive Slow Start */
         return nb_delivered / PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR;
     } else { /* original Slow Start */
-        return picoquic_hystart_increase(path_x, nb_delivered);
+        return picoquic_cc_slow_start_increase(path_x, nb_delivered);
     }
 }
 
-uint64_t picoquic_hystart_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha) {
+uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha) {
     /* TODO replace nb_delivered with picoquic_hystart_increase_ex(path_x, nb_delivered, is_css) for hystart++ support? */
     if (prague_alpha != 0) { /* monitoring of ECN */
         if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
@@ -244,7 +244,7 @@ uint64_t picoquic_hystart_increase_ex2(picoquic_path_t* path_x, uint64_t nb_deli
             return delta;
         }
     } else {
-        return picoquic_hystart_increase_ex(path_x, nb_delivered, in_css);
+        return picoquic_cc_slow_start_increase_ex(path_x, nb_delivered, in_css);
     }
 }
 
