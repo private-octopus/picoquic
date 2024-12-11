@@ -172,7 +172,7 @@ disk when all connections are complete.
 To produce the performance logs with `picoquicdemo`, use the argument `-F` as in:
 ```
 .\picoquicdemo -k key.pem -c cert.pem -p 4433 -F server_log.csv
-.\picoquicdemo -q client_log.csv -a perf test.privateoctopus.com 4433 "*1:0:-:397:5000000;"
+.\picoquicdemo -q client_log.csv -a perf test.privateoctopus.com 4433 "*1:397:5000000;"
 ```
 The performance logs are formatted as CSV file, with the following columns:
 
