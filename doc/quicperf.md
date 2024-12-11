@@ -126,12 +126,12 @@ datagram_scenario = "=a1:d50:n250:100;"
 media_scenario = "=v1:s30:n150:2000:G30:I20000;"
 multimedia_scenario = "=a1:d50:p2:S:n250:80; \
      = vlow: s30 :p4:S:n150 : 3750 : G30 : I37500; \
-     = vmid: s30 :p6:S:n150 : 6250 : G30 : I62500 : D250000;";
-     = vhi: s30 :p8:S: n150 : 12500 : G150 : I125000 : D250000;";
+     = vmid: s30 :p6:S:n150 : 6250 : G30 : I62500 : D250000; \
+     = vhi: s30 :p8:S: n150 : 12500 : G150 : I125000 : D250000;"
 parallel_multimedia_scenario= "=a1:d50:p2:S:n250:80; \
      = vlow:*3:s30 :p4:S:n150 : 3750 : G30 : I37500; \
      = vmid:*3:s30 :p6:S:n150 : 6250 : G30 : I62500 : D300000; \
-     = vhi:*3 : s30 :p8:S: n150 : 12500 : G150 : I125000 : D250000;";
+     = vhi:*3 : s30 :p8:S: n150 : 12500 : G150 : I125000 : D250000;"
 ~~~
 
 To run the "perf" protocol and run a basic test scenario, do:
@@ -172,7 +172,7 @@ disk when all connections are complete.
 To produce the performance logs with `picoquicdemo`, use the argument `-F` as in:
 ```
 .\picoquicdemo -k key.pem -c cert.pem -p 4433 -F server_log.csv
-.\picoquicdemo -q client_log.csv -a perf test.privateoctopus.com 4433 "*1:0:-:397:5000000;"
+.\picoquicdemo -q client_log.csv -a perf test.privateoctopus.com 4433 "*1:397:5000000;"
 ```
 The performance logs are formatted as CSV file, with the following columns:
 
