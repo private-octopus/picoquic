@@ -1125,7 +1125,7 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
 #else
             test_ctx->client_addr.sin_addr.s_addr = htonl(0x0A000002);
 #endif
-            test_ctx->client_addr.sin_port = htons(1234);
+            test_ctx->client_addr.sin_port = 1234;
 
             memset(&test_ctx->server_addr, 0, sizeof(struct sockaddr_in));
             test_ctx->server_addr.sin_family = AF_INET;
@@ -1134,7 +1134,7 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
 #else
             test_ctx->server_addr.sin_addr.s_addr = htonl(0x0A000001);
 #endif
-            test_ctx->server_addr.sin_port = htons(4321);
+            test_ctx->server_addr.sin_port = 4321;
 
             /* Test the creation of the client and server contexts */
             test_ctx->qclient = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL, test_api_callback,
@@ -9404,11 +9404,7 @@ int preferred_address_test_one(int migration_disabled, int cid_zero)
     /* Create an alternate IP address, and use it as preferred address */
     server_parameters.prefered_address.is_defined = 1;
     memcpy(server_parameters.prefered_address.ipv4Address, &server_preferred.sin_addr, 4);
-#if 1
     server_parameters.prefered_address.ipv4Port = server_preferred.sin_port;
-#else
-    server_parameters.prefered_address.ipv4Port = ntohs(server_preferred.sin_port);
-#endif
     server_parameters.migration_disabled = migration_disabled;
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1,

@@ -1269,11 +1269,11 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
     if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1) {
         /* Valid IPv4 address */
         ipv4_dest->sin_family = AF_INET;
-        ipv4_dest->sin_port = htons((unsigned short)server_port);
+        ipv4_dest->sin_port = (unsigned short)server_port;
     } else if (inet_pton(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1) {
         /* Valid IPv6 address */
         ipv6_dest->sin6_family = AF_INET6;
-        ipv6_dest->sin6_port = htons((unsigned short)server_port);
+        ipv6_dest->sin6_port = (unsigned short)server_port;
     } else {
         /* Server is described by name. Do a lookup for the IP address,
         * and then use the name as SNI parameter */
@@ -1299,7 +1299,7 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
             switch (result->ai_family) {
             case AF_INET:
                 ipv4_dest->sin_family = AF_INET;
-                ipv4_dest->sin_port = htons((unsigned short)server_port);
+                ipv4_dest->sin_port = (unsigned short)server_port;
 #ifdef _WINDOWS
                 ipv4_dest->sin_addr.S_un.S_addr = ((struct sockaddr_in*)result->ai_addr)->sin_addr.S_un.S_addr;
 #else
@@ -1308,7 +1308,7 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
                 break;
             case AF_INET6:
                 ipv6_dest->sin6_family = AF_INET6;
-                ipv6_dest->sin6_port = htons((unsigned short)server_port);
+                ipv6_dest->sin6_port = (unsigned short)server_port;
                 memcpy(&ipv6_dest->sin6_addr,
                     &((struct sockaddr_in6*)result->ai_addr)->sin6_addr,
                     sizeof(ipv6_dest->sin6_addr));

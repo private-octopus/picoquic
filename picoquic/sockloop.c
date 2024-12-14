@@ -430,36 +430,42 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
 int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int socket_buffer_size, int extra_socket_required,
     int do_not_use_gso, picoquic_socket_ctx_t* s_ctx)
 {
-    int nb_sockets = 0;
-
     /* Compute how many sockets are necessary, and set the intial value of AF and port per socket */
-    for (int iteration = 0; iteration < 1 + (extra_socket_required); iteration++) {
-        uint16_t current_port = (iteration == 0) ? local_port : 0;
-        if (local_af == AF_UNSPEC) {
-            s_ctx[nb_sockets].af = AF_INET;
-            s_ctx[nb_sockets].port = current_port;
-            nb_sockets++;
-            s_ctx[nb_sockets].af = AF_INET6;
-            s_ctx[nb_sockets].port = current_port;
-            nb_sockets++;
-        }
-        else {
-            s_ctx[nb_sockets].af = local_af;
-            s_ctx[nb_sockets].port = current_port;
-            nb_sockets++;
-        }
-    }
-    for (int i = 0; i < nb_sockets; i++) {
-        if (picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, &s_ctx[i]) != 0) {
-            DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", s_ctx[i].af, s_ctx[i].port);
-            for (int j = 0; j < i; j++) {
-                picoquic_packet_loop_close_socket(&s_ctx[j]);
-            }
-            nb_sockets = 0;
-            break;
-        }
-    }
+    int nb_sockets = 0;
+    int af[2];
+    int nb_af;
+    uint16_t current_port = local_port;
+    int sock_ret = 0;
 
+    if (local_af == 0) {
+        nb_af = 2;
+        af[0] = AF_INET;
+        af[1] = AF_INET6;
+    }
+    else {
+        nb_af = 1;
+        af[0] = local_af;
+    }
+    for (int iteration = 0; sock_ret == 0 && iteration < 1 + (extra_socket_required); iteration++) {
+        for (int i_af = 0; sock_ret == 0 && i_af < nb_af; i_af++) {
+            s_ctx[nb_sockets].af = af[i_af];
+            s_ctx[nb_sockets].port = current_port;
+            if ((sock_ret = picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, &s_ctx[nb_sockets])) == 0) {
+                if (current_port == 0) {
+                    current_port = s_ctx[nb_sockets].port;
+                }
+                nb_sockets++;
+            }
+        }
+        current_port = 0;
+    }
+    if (sock_ret != 0) {
+        DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", s_ctx[nb_sockets].af, s_ctx[nb_sockets].port);
+        for (int j = 0; j < nb_sockets; j++) {
+            picoquic_packet_loop_close_socket(&s_ctx[j]);
+        }
+        nb_sockets = 0;
+    }
     return nb_sockets;
 }
 
@@ -763,7 +769,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             ret = loop_callback(quic, picoquic_packet_loop_port_update, loop_callback_ctx, &l_addr);
         }
         if (ret == 0 && options.provide_alt_port) {
-            uint16_t alt_port = ntohs(s_ctx[1].port);
+            int alt_sock = (nb_sockets > 2 && param->local_af == 0) ? 2 : 1;
+            uint16_t alt_port = s_ctx[alt_sock].port;
             ret = loop_callback(quic, picoquic_packet_loop_alt_port, loop_callback_ctx, &alt_port);
         }
     }
@@ -864,6 +871,14 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             size_t nb_packets_sent = 0;
 
             if (bytes_recv > 0) {
+                if (addr_from.ss_family == AF_INET) {
+                    ((struct sockaddr_in*)&addr_from)->sin_port = ntohs(((struct sockaddr_in*)&addr_from)->sin_port);
+                    ((struct sockaddr_in*)&addr_to)->sin_port = ntohs(((struct sockaddr_in*)&addr_to)->sin_port);
+                }
+                else {
+                    ((struct sockaddr_in6*)&addr_from)->sin6_port = ntohs(((struct sockaddr_in6*)&addr_from)->sin6_port);
+                    ((struct sockaddr_in6*)&addr_to)->sin6_port = ntohs(((struct sockaddr_in6*)&addr_to)->sin6_port);
+                }
 #ifdef _WINDOWS
                 size_t recv_bytes = 0;
                 while (recv_bytes < (size_t)bytes_recv && ret == 0) {
@@ -967,8 +982,12 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     for (int i = 0; i < nb_sockets_available; i++) {
                         if (s_ctx[i].af == peer_addr.ss_family) {
                             send_socket = s_ctx[i].fd;
-                            if (send_port != 0 && htons(s_ctx[i].port) == send_port)
+                            if (send_port == 0 && !param->prefer_extra_socket) {
                                 break;
+                            }
+                            if (s_ctx[i].port == send_port) {
+                                break;
+                            }
                         }
                     }
 
@@ -976,18 +995,28 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                         sock_ret = -1;
                         sock_err = -1;
                     }
-                    else if (param->simulate_eio && send_length > PICOQUIC_MAX_PACKET_SIZE) {
-                        /* Test hook, simulating a driver that does not support GSO */
-                        sock_ret = -1;
-                        sock_err = EIO;
-                        param->simulate_eio = 0;
+                    else
+                    {
+                        if (peer_addr.ss_family == AF_INET) {
+                            ((struct sockaddr_in*)&peer_addr)->sin_port = htons(((struct sockaddr_in*)&peer_addr)->sin_port);
+                            ((struct sockaddr_in*)&local_addr)->sin_port = htons(((struct sockaddr_in*)&local_addr)->sin_port);
+                        }
+                        else {
+                            ((struct sockaddr_in6*)&peer_addr)->sin6_port = htons(((struct sockaddr_in6*)&peer_addr)->sin6_port);
+                            ((struct sockaddr_in6*)&local_addr)->sin6_port = htons(((struct sockaddr_in6*)&local_addr)->sin6_port);
+                        }
+                        if (param->simulate_eio && send_length > PICOQUIC_MAX_PACKET_SIZE) {
+                            /* Test hook, simulating a driver that does not support GSO */
+                            sock_ret = -1;
+                            sock_err = EIO;
+                            param->simulate_eio = 0;
+                        }
+                        else {
+                            sock_ret = picoquic_sendmsg(send_socket,
+                                (struct sockaddr*)&peer_addr, (struct sockaddr*)&local_addr, if_index,
+                                (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
+                        }
                     }
-                    else {
-                        sock_ret = picoquic_sendmsg(send_socket,
-                            (struct sockaddr*)&peer_addr, (struct sockaddr*)&local_addr, if_index,
-                            (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
-                    }
-
                     if (sock_ret <= 0) {
                         /* TODO: add a test in which the socket fails. */
                         if (last_cnx == NULL) {

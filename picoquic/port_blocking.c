@@ -154,7 +154,7 @@ int picoquic_check_addr_blocked(const struct sockaddr* addr_from)
         /* configure an IPv6 sockaddr */
         port = ((struct sockaddr_in6*)addr_from)->sin6_port;
     }
-    return picoquic_check_port_blocked(ntohs(port));
+    return picoquic_check_port_blocked(port);
 }
 
 void picoquic_disable_port_blocking(picoquic_quic_t * quic, int is_port_blocking_disabled)

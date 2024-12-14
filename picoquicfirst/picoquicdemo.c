@@ -486,15 +486,17 @@ static int simulate_migration(client_loop_cb_t* cb_ctx)
 {
     int ret = 0;
     struct sockaddr_storage addr_from = { 0 };
-
+    char text1[128];
+    fprintf(stdout, "Simulating migration to port %u (local address is %s)\n", cb_ctx->alt_port, 
+        picoquic_addr_text((struct sockaddr*)&cb_ctx->client_address, text1, sizeof(text1)));
     picoquic_store_addr(&addr_from,
         (struct sockaddr*)&cb_ctx->cnx_client->path[0]->local_addr);
     if (addr_from.ss_family == AF_INET6) {
-        ((struct sockaddr_in6*)&addr_from)->sin6_port = htons(cb_ctx->alt_port);
-    } else {
-        ((struct sockaddr_in*)&addr_from)->sin_port = htons(cb_ctx->alt_port);
+        ((struct sockaddr_in6*)&addr_from)->sin6_port = cb_ctx->alt_port;
     }
-
+    else {
+        ((struct sockaddr_in*)&addr_from)->sin_port = cb_ctx->alt_port;
+    }
     ret = picoquic_probe_new_path(cb_ctx->cnx_client,
         (struct sockaddr*)&cb_ctx->server_address,
         (struct sockaddr*)&addr_from,
@@ -675,6 +677,12 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                     switch (cb_ctx->force_migration) {
                     case 1:
                         fprintf(stdout, "Switch to new port. Will test NAT rebinding support.\n");
+                        if (cb_ctx->cnx_client->path[0]->local_addr.ss_family == AF_INET) {
+                            ((struct sockaddr_in*)&cb_ctx->cnx_client->path[0]->local_addr)->sin_port = cb_ctx->local_port;
+                        }
+                        else {
+                            ((struct sockaddr_in6*)&cb_ctx->cnx_client->path[0]->local_addr)->sin6_port = cb_ctx->local_port;
+                        }
                         ret = PICOQUIC_NO_ERROR_SIMULATE_NAT;
                         break;
                     case 2:
@@ -984,6 +992,7 @@ int quic_client(const char* ip_address_text, int server_port,
         if (force_migration == 1 || force_migration == 3 || config->multipath_alt_config != NULL) {
             param.local_port = (uint16_t)picoquic_uniform_random(30000) + 20000;
             param.extra_socket_required = 1;
+            param.prefer_extra_socket = (force_migration == 1);
         }
         loop_cb.local_port = param.local_port;
 

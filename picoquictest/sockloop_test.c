@@ -60,6 +60,7 @@ typedef struct st_sockloop_test_spec_t {
     int simulate_eio;
     int double_bind;
     int extra_socket_required;
+    int prefer_extra_socket;
     int force_migration;
 } sockloop_test_spec_t;
 
@@ -78,6 +79,7 @@ typedef struct st_sockloop_test_cb_t {
     struct sockaddr_storage client_alt_address[PICOQUIC_NB_PATH_TARGET];
     int client_alt_if[PICOQUIC_NB_PATH_TARGET];
     int nb_alt_paths;
+    uint16_t alt_port;
     picoquic_connection_id_t server_cid_before_migration;
     picoquic_connection_id_t client_cid_before_migration;
     picoquic_packet_loop_param_t* param;
@@ -139,6 +141,9 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
             picoquic_packet_loop_options_t* options = (picoquic_packet_loop_options_t*)callback_arg;
             if (cb_ctx->test_id > 1) {
                 options->do_time_check = 1;
+                if (cb_ctx->param->extra_socket_required) {
+                    options->provide_alt_port = 1;
+                }
             }
             DBG_PRINTF("%s", "Waiting for packets.\n");
             break;
@@ -175,23 +180,35 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                 /* Handle migration tests */
                 if (cb_ctx->force_migration){
                     if (!cb_ctx->migration_started &&
-                        cnx_client->first_remote_cnxid_stash->cnxid_stash_first != NULL) {
-                        if (sockloop_test_verify_extra_socket(cnx_client, (struct sockaddr*)&cb_ctx->server_address) != 0) {
-                            ret = -1;
-                        }
-                        else if (cb_ctx->force_migration == 3){
+                        cnx_client->first_remote_cnxid_stash->cnxid_stash_first != NULL &&
+                        cb_ctx->alt_port != 0 &&
+                        cb_ctx->client_address.ss_family != AF_UNSPEC) {
+                        memcpy(&cb_ctx->client_alt_address[0], &cb_ctx->client_address, sizeof(cb_ctx->client_address));
+                        if (cb_ctx->force_migration == 3){
+                            if (cb_ctx->client_alt_address[0].ss_family == AF_INET6) {
+                                ((struct sockaddr_in6*)&cb_ctx->client_alt_address[0])->sin6_port = cb_ctx->alt_port;
+                            }
+                            else {
+                                ((struct sockaddr_in*)&cb_ctx->client_alt_address[0])->sin_port = cb_ctx->alt_port;
+                            }
                             cb_ctx->migration_started = 1;
-                            ret = picoquic_probe_new_path(cnx_client, (struct sockaddr*)&cb_ctx->server_address,
+                            ret = picoquic_probe_new_path(cnx_client,
                                 (struct sockaddr*)&cb_ctx->server_address,
+                                (struct sockaddr*)&cb_ctx->client_alt_address[0],
                                 picoquic_get_quic_time(cb_ctx->test_ctx->qserver));
                         }
                         else if (cb_ctx->force_migration == 1) {
+                            /* We set on the "prefer extra socket" flag in sockloop, which mapped the default
+                            * client port to the "extra socket". Setting the return code to
+                            * PICOQUIC_NO_ERROR_SIMULATE_NAT will cause the sockloop code to discard the
+                            * socket.
+                            */
                             cb_ctx->migration_started = 1;
                             if (cnx_client->path[0]->local_addr.ss_family == AF_INET6) {
-                                ((struct sockaddr_in6*)&cnx_client->path[0]->local_addr)->sin6_port = htons(cb_ctx->param->local_port);
+                                ((struct sockaddr_in6*)&cnx_client->path[0]->local_addr)->sin6_port = cb_ctx->param->local_port;
                             }
                             else {
-                                ((struct sockaddr_in*)&cnx_client->path[0]->local_addr)->sin_port = htons(cb_ctx->param->local_port);
+                                ((struct sockaddr_in*)&cnx_client->path[0]->local_addr)->sin_port = cb_ctx->param->local_port;
                             }
                             ret = PICOQUIC_NO_ERROR_SIMULATE_NAT;
                         }
@@ -238,7 +255,25 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
             DBG_PRINTF("Starting the client connection, returns: %d", ret);
             break;
         }
+        case picoquic_packet_loop_alt_port:
+            /* set the client alt address */
+            cb_ctx->alt_port = *((uint16_t*)callback_arg);
+            if (cb_ctx->force_migration && cb_ctx->force_migration == 1 &&
+                cb_ctx->test_ctx->cnx_client != NULL &&
+                cb_ctx->test_ctx->cnx_client->path[0]->local_addr.ss_family == AF_UNSPEC) {
+                memcpy(&cb_ctx->test_ctx->cnx_client->path[0]->local_addr,
+                    &cb_ctx->test_ctx->cnx_client->path[0]->peer_addr,
+                    sizeof(struct sockaddr_storage));
 
+                if (cnx_client->path[0]->local_addr.ss_family == AF_INET6) {
+                    ((struct sockaddr_in6*)&cnx_client->path[0]->local_addr)->sin6_port = cb_ctx->alt_port;
+                }
+                else {
+                    ((struct sockaddr_in*)&cnx_client->path[0]->local_addr)->sin_port = cb_ctx->alt_port;
+                }
+
+            }
+            break;
         default:
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
             break;
@@ -323,7 +358,7 @@ int sockloop_test_addr_config(struct sockaddr_storage* addr,
         /* set server IPv6 to loopback */
         struct sockaddr_in6* sa6 = (struct sockaddr_in6*)addr;
         ((uint8_t*)(&sa6->sin6_addr))[15] = 1;
-        sa6->sin6_port = htons(port);
+        sa6->sin6_port = port;
         sa6->sin6_family = AF_INET6;
     }
     else if (af == AF_INET) {
@@ -331,7 +366,7 @@ int sockloop_test_addr_config(struct sockaddr_storage* addr,
         struct sockaddr_in* sa4 = (struct sockaddr_in*)addr;
         ((uint8_t*)(&sa4->sin_addr))[0] = 127;
         ((uint8_t*)(&sa4->sin_addr))[3] = 1;
-        sa4->sin_port = htons(port);
+        sa4->sin_port = port;
         sa4->sin_family = AF_INET;
     }
     else {
@@ -388,17 +423,15 @@ int sockloop_test_verify_migration(sockloop_test_cb_t * loop_cb, picoquic_cnx_t*
                 &loop_cb->client_cid_before_migration);
 
             if (loop_cb->force_migration == 1 || loop_cb->force_migration == 3) {
-                if (source_addr_cmp == 0) {
+                if (source_addr_cmp == 0){
                     DBG_PRINTF("%s", "Client source address did not change");
                     ret = -1;
                 }
-            }
-            if (loop_cb->force_migration == 3) {
-                if (dest_cid_cmp == 0) {
+                if (loop_cb->force_migration == 3 && dest_cid_cmp == 0) {
                     DBG_PRINTF("%s", "Remode CID did not change");
                     ret = -1;
                 }
-                if (source_cid_cmp == 0) {
+                if (loop_cb->force_migration == 3 && source_cid_cmp == 0) {
                     DBG_PRINTF("%s", "Local CID did not change");
                     ret = -1;
                 }
@@ -488,6 +521,8 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
             param.do_not_use_gso = spec->do_not_use_gso;
             param.simulate_eio = spec->simulate_eio;
             param.extra_socket_required = spec->extra_socket_required;
+            param.prefer_extra_socket = spec->prefer_extra_socket;
+            
 
             loop_cb.force_migration = spec->force_migration;
             loop_cb.param = &param;
@@ -666,6 +701,7 @@ int sockloop_nat_test()
     spec.scenario = sockloop_test_scenario_1M;
     spec.scenario_size = sizeof(sockloop_test_scenario_1M);
     spec.extra_socket_required = 1;
+    spec.prefer_extra_socket = 1;
     spec.force_migration = 1;
 
     return(sockloop_test_one(&spec));
