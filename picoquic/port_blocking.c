@@ -132,10 +132,9 @@ const size_t nb_picoquic_blocked_port_list = sizeof(picoquic_blocked_port_list) 
 int picoquic_check_port_blocked(uint16_t port)
 {
     int ret = 0;
-    uint16_t h_port = ntohs(port);
 
-    for (size_t i = 0; i < nb_picoquic_blocked_port_list && h_port <= picoquic_blocked_port_list[i]; i++) {
-        if (h_port == picoquic_blocked_port_list[i]){
+    for (size_t i = 0; i < nb_picoquic_blocked_port_list && port <= picoquic_blocked_port_list[i]; i++) {
+        if (port == picoquic_blocked_port_list[i]){
             ret = 1;
             break;
         }
@@ -146,14 +145,16 @@ int picoquic_check_port_blocked(uint16_t port)
 
 int picoquic_check_addr_blocked(const struct sockaddr* addr_from)
 {
+    /* The sockaddr is always in network order. We must translate to
+     * host order before performaing the check */
     uint16_t port = UINT16_MAX;
 
     if (addr_from->sa_family == AF_INET) {
-        port = ((struct sockaddr_in*)addr_from)->sin_port;
+        port = ntohs(((struct sockaddr_in*)addr_from)->sin_port);
     }
     else if (addr_from->sa_family == AF_INET6) {
         /* configure an IPv6 sockaddr */
-        port = ((struct sockaddr_in6*)addr_from)->sin6_port;
+        port = ntohs(((struct sockaddr_in6*)addr_from)->sin6_port);
     }
     return picoquic_check_port_blocked(port);
 }
