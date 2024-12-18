@@ -1245,12 +1245,12 @@ size_t quicperf_prepare_time_stamp(quicperf_stream_ctx_t* stream_ctx, uint8_t * 
     size_t byte_index = 0;
     if (stream_ctx->frame_bytes_sent < 8) {
         uint8_t time_stamp[8];
-        (void)picoquic_frames_uint64_encode(buffer, buffer + 8, stream_ctx->frame_start_stamp);
-
-        while (stream_ctx->frame_bytes_sent < 8 && byte_index < available) {
-            buffer[byte_index] = time_stamp[stream_ctx->frame_bytes_sent];
-            stream_ctx->frame_bytes_sent++;
-            byte_index++;
+        if (picoquic_frames_uint64_encode(buffer, buffer + 8, stream_ctx->frame_start_stamp) != NULL) {
+            while (stream_ctx->frame_bytes_sent < 8 && byte_index < available) {
+                buffer[byte_index] = time_stamp[stream_ctx->frame_bytes_sent];
+                stream_ctx->frame_bytes_sent++;
+                byte_index++;
+            }
         }
     }
     return byte_index;
