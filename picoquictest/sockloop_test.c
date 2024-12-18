@@ -186,10 +186,10 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                         memcpy(&cb_ctx->client_alt_address[0], &cb_ctx->client_address, sizeof(cb_ctx->client_address));
                         if (cb_ctx->force_migration == 3){
                             if (cb_ctx->client_alt_address[0].ss_family == AF_INET6) {
-                                ((struct sockaddr_in6*)&cb_ctx->client_alt_address[0])->sin6_port = cb_ctx->alt_port;
+                                ((struct sockaddr_in6*)&cb_ctx->client_alt_address[0])->sin6_port = htons(cb_ctx->alt_port);
                             }
                             else {
-                                ((struct sockaddr_in*)&cb_ctx->client_alt_address[0])->sin_port = cb_ctx->alt_port;
+                                ((struct sockaddr_in*)&cb_ctx->client_alt_address[0])->sin_port = htons(cb_ctx->alt_port);
                             }
                             cb_ctx->migration_started = 1;
                             ret = picoquic_probe_new_path(cnx_client,
@@ -205,10 +205,10 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                             */
                             cb_ctx->migration_started = 1;
                             if (cnx_client->path[0]->local_addr.ss_family == AF_INET6) {
-                                ((struct sockaddr_in6*)&cnx_client->path[0]->local_addr)->sin6_port = cb_ctx->param->local_port;
+                                ((struct sockaddr_in6*)&cnx_client->path[0]->local_addr)->sin6_port = htons(cb_ctx->param->local_port);
                             }
                             else {
-                                ((struct sockaddr_in*)&cnx_client->path[0]->local_addr)->sin_port = cb_ctx->param->local_port;
+                                ((struct sockaddr_in*)&cnx_client->path[0]->local_addr)->sin_port = htons(cb_ctx->param->local_port);
                             }
                             ret = PICOQUIC_NO_ERROR_SIMULATE_NAT;
                         }
@@ -358,7 +358,7 @@ int sockloop_test_addr_config(struct sockaddr_storage* addr,
         /* set server IPv6 to loopback */
         struct sockaddr_in6* sa6 = (struct sockaddr_in6*)addr;
         ((uint8_t*)(&sa6->sin6_addr))[15] = 1;
-        sa6->sin6_port = port;
+        sa6->sin6_port = htons(port);
         sa6->sin6_family = AF_INET6;
     }
     else if (af == AF_INET) {
@@ -366,7 +366,7 @@ int sockloop_test_addr_config(struct sockaddr_storage* addr,
         struct sockaddr_in* sa4 = (struct sockaddr_in*)addr;
         ((uint8_t*)(&sa4->sin_addr))[0] = 127;
         ((uint8_t*)(&sa4->sin_addr))[3] = 1;
-        sa4->sin_port = port;
+        sa4->sin_port = htons(port);
         sa4->sin_family = AF_INET;
     }
     else {
