@@ -280,8 +280,10 @@ int picomask_test_step(picoquic_picomask_test_ctx_t* pt_ctx, int* is_active)
     int arrival_index = -1;
     uint64_t next_departure_time = UINT64_MAX;
     int departure_index = -1;
+#if 0
     int need_frame_departure = 0;
     uint64_t next_frame_time = UINT64_MAX;
+#endif
     uint64_t next_time = UINT64_MAX;
 
     /* Check earliest packet arrival */

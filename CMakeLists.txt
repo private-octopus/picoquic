@@ -222,7 +222,7 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zero_stream_test.c
     picoquictest/h3zero_uri_test.c
     picoquictest/picomask_test.c
-    picoquictest/picomask_test.c
+    picoquictest/quicperf_test.c
     picoquictest/webtransport_test.c)
 
 OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
