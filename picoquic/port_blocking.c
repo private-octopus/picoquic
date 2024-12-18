@@ -132,9 +132,10 @@ const size_t nb_picoquic_blocked_port_list = sizeof(picoquic_blocked_port_list) 
 int picoquic_check_port_blocked(uint16_t port)
 {
     int ret = 0;
+    uint16_t h_port = ntohs(port);
 
-    for (size_t i = 0; i < nb_picoquic_blocked_port_list && port <= picoquic_blocked_port_list[i]; i++) {
-        if (port == picoquic_blocked_port_list[i]){
+    for (size_t i = 0; i < nb_picoquic_blocked_port_list && h_port <= picoquic_blocked_port_list[i]; i++) {
+        if (h_port == picoquic_blocked_port_list[i]){
             ret = 1;
             break;
         }

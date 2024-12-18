@@ -45,13 +45,6 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
     }
     memcpy(&server_addr_n, server_addr, (server_addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
 
-    if (server_addr->sa_family == AF_INET) {
-        ((struct sockaddr_in*)&server_addr_n)->sin_port = htons(((struct sockaddr_in*)server_addr)->sin_port);
-    }
-    else {
-        ((struct sockaddr_in6*)&server_addr_n)->sin6_port = htons(((struct sockaddr_in6*)server_addr)->sin6_port);
-    }
-
     /* send from client to sever address */
     
     bytes_sent = sendto(fd, (const char*)&message, sizeof(message), 0, (struct sockaddr*)&server_addr_n, server_address_length);
