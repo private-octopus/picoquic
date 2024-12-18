@@ -64,7 +64,7 @@ static picoquic_quic_config_t param1 = {
     1, /* int dest_if; */
     1536, /* int mtu_max; */
     -1, /* int cnx_id_length; */
-    0, /* int idle_timeout */
+    PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000, /* int idle_timeout */
     655360, /* Socket buffer size */
     "cubic", /* const picoquic_congestion_algorithm_t* cc_algorithm; */
     "0N8C-000123", /* char const* cnx_id_cbdata; */

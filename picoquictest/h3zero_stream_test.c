@@ -644,14 +644,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
             stream_ctx->is_open = 1;
         }
     }
-
-#if 1
     bytes = buffer;
-#else
-    /* Encode type and offset */
-    bytes = picoquic_frames_varint_encode(buffer, bytes_max, spec->stream_type);
-    *bytes++ = 0;
-#endif
 
     /* Encode a stream header */
     if (ret == 0 && !spec->skip_header && 

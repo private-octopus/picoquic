@@ -118,7 +118,7 @@ static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
 
         fprintf(f, "\"ip_v4\": \"%d.%d.%d.%d\", \"port_v4\":%d",
             addr[0], addr[1], addr[2], addr[3],
-            ntohs(s4->sin_port));
+            s4->sin_port);
     }
     else {
         struct sockaddr_in6* s6 = (struct sockaddr_in6*)addr_peer;
@@ -137,7 +137,7 @@ static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
                 fprintf(f, "%x", addr[(2 * i) + 1]);
             }
         }
-        fprintf(f, "\", \"port_v6\" :%d", ntohs(s6->sin6_port));
+        fprintf(f, "\", \"port_v6\" :%d", s6->sin6_port);
     }
 }
 

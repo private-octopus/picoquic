@@ -2073,13 +2073,13 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
                     /* configure an IPv4 sockaddr */
                     struct sockaddr_in* d4 = (struct sockaddr_in*) & dest_addr;
                     d4->sin_family = AF_INET;
-                    d4->sin_port = htons(cnx->local_parameters.prefered_address.ipv4Port);
+                    d4->sin_port = cnx->local_parameters.prefered_address.ipv4Port;
                     memcpy(&d4->sin_addr, cnx->local_parameters.prefered_address.ipv4Address, 4);
                 } else if (addr_to->sa_family == AF_INET6){
                     /* configure an IPv6 sockaddr */
                     struct sockaddr_in6* d6 = (struct sockaddr_in6*) & dest_addr;
                     d6->sin6_family = AF_INET6;
-                    d6->sin6_port = htons(cnx->local_parameters.prefered_address.ipv6Port);
+                    d6->sin6_port = cnx->local_parameters.prefered_address.ipv6Port;
                     memcpy(&d6->sin6_addr, cnx->local_parameters.prefered_address.ipv6Address, 16);
                 }
                 if (picoquic_compare_addr(addr_to, (struct sockaddr*) & dest_addr) == 0) {

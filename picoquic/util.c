@@ -562,12 +562,12 @@ int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* i
     if (inet_pton(AF_INET, ip_address_text, &ipv4_addr->sin_addr) == 1) {
         /* Valid IPv4 address */
         ipv4_addr->sin_family = AF_INET;
-        ipv4_addr->sin_port = htons((unsigned short)port);
+        ipv4_addr->sin_port = (unsigned short)port;
     }
     else if (inet_pton(AF_INET6, ip_address_text, &ipv6_addr->sin6_addr) == 1) {
         /* Valid IPv6 address */
         ipv6_addr->sin6_family = AF_INET6;
-        ipv6_addr->sin6_port = htons((unsigned short)port);
+        ipv6_addr->sin6_port = port;
     }
     else {
         ret = -1;
@@ -589,7 +589,7 @@ char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t t
             addr_text = inet_ntop(AF_INET,
                 (const void*)(&((struct sockaddr_in*)addr)->sin_addr),
                 addr_buffer, sizeof(addr_buffer));
-            if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ntohs(((struct sockaddr_in*)addr)->sin_port)) == 0) {
+            if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ((struct sockaddr_in*)addr)->sin_port) == 0) {
                 ret_text = text;
             }
             break;
