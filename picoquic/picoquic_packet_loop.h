@@ -38,7 +38,8 @@ extern "C" {
 typedef struct st_picoquic_socket_ctx_t {
     SOCKET_TYPE fd;
     int af;
-    uint16_t port;
+    uint16_t port; /* Port number to which the socket is bound */
+    uint16_t n_port; /* value of the port number in network order htons(port) */
 
     /* Flags */
     unsigned int is_started : 1;
@@ -131,6 +132,7 @@ typedef struct st_picoquic_packet_loop_param_t {
     int socket_buffer_size;
     int do_not_use_gso;
     int extra_socket_required;
+    int prefer_extra_socket;
     int simulate_eio;
     size_t send_length_max;
 } picoquic_packet_loop_param_t;

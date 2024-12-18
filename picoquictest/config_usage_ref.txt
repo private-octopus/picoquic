@@ -28,7 +28,7 @@ Picoquic options:
   -t file         root trust file
   -z              Set TLS zero share behavior on client, to force HRR
   -I length       Length of CNX_ID used by the client, default=8
-  -d ms           Duration of idle timeout in milliseconds
+  -d ms           Duration of idle timeout in milliseconds (Default 30,000ms)
   -D              no disk: do not save received files on disk
   -Q              send a large client hello in order to test post quantum readiness
   -T file         File storing the session tickets

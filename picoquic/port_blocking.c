@@ -145,16 +145,18 @@ int picoquic_check_port_blocked(uint16_t port)
 
 int picoquic_check_addr_blocked(const struct sockaddr* addr_from)
 {
+    /* The sockaddr is always in network order. We must translate to
+     * host order before performaing the check */
     uint16_t port = UINT16_MAX;
 
     if (addr_from->sa_family == AF_INET) {
-        port = ((struct sockaddr_in*)addr_from)->sin_port;
+        port = ntohs(((struct sockaddr_in*)addr_from)->sin_port);
     }
     else if (addr_from->sa_family == AF_INET6) {
         /* configure an IPv6 sockaddr */
-        port = ((struct sockaddr_in6*)addr_from)->sin6_port;
+        port = ntohs(((struct sockaddr_in6*)addr_from)->sin6_port);
     }
-    return picoquic_check_port_blocked(ntohs(port));
+    return picoquic_check_port_blocked(port);
 }
 
 void picoquic_disable_port_blocking(picoquic_quic_t * quic, int is_port_blocking_disabled)

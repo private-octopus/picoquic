@@ -2003,14 +2003,6 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
         }
     }
 
-    if (path_id == -1) {
-        char text1[128];
-        char text2[128];
-        DBG_PRINTF("Could not find path by addr, local: %s, peer: %s", 
-            picoquic_addr_text(addr_local, text1, sizeof(text1)),
-            picoquic_addr_text(addr_peer, text2, sizeof(text2)));
-    }
-
     return path_id;
 }
 
