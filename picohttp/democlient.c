@@ -336,12 +336,15 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         }
 
         if (!ctx->no_print) {
+            char text[128];
             if (ret != 0) {
                 fprintf(stdout, "Cannot send %s command for stream(%" PRIu64 "): %s\n",
-                    (post_size == 0) ? "GET" : "POST", stream_ctx->stream_id, path);
+                    (post_size == 0) ? "GET" : "POST", stream_ctx->stream_id, 
+                    picoquic_uint8_to_str(text, sizeof(text), path, path_len));
             }
             else if (nb_repeat == 0) {
-                fprintf(stdout, "Opening stream %d to %s %s\n", (int)stream_ctx->stream_id, (post_size == 0) ? "GET" : "POST", path);
+                fprintf(stdout, "Opening stream %d to %s %s\n", (int)stream_ctx->stream_id, (post_size == 0) ? "GET" : "POST", 
+                    picoquic_uint8_to_str(text, sizeof(text), path, path_len));
             }
         }
     }
