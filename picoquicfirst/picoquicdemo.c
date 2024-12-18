@@ -492,10 +492,10 @@ static int simulate_migration(client_loop_cb_t* cb_ctx)
     picoquic_store_addr(&addr_from,
         (struct sockaddr*)&cb_ctx->cnx_client->path[0]->local_addr);
     if (addr_from.ss_family == AF_INET6) {
-        ((struct sockaddr_in6*)&addr_from)->sin6_port = cb_ctx->alt_port;
+        ((struct sockaddr_in6*)&addr_from)->sin6_port = htons(cb_ctx->alt_port);
     }
     else {
-        ((struct sockaddr_in*)&addr_from)->sin_port = cb_ctx->alt_port;
+        ((struct sockaddr_in*)&addr_from)->sin_port = htons(cb_ctx->alt_port);
     }
     ret = picoquic_probe_new_path(cb_ctx->cnx_client,
         (struct sockaddr*)&cb_ctx->server_address,

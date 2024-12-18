@@ -856,7 +856,7 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * path will be demoted after a short delay. 
  * 
  * Like all user-level networking API, the "probe new path" API assumes that the
- * port numbers in the address fields are expressed in "host" format.
+ * port numbers in the socket addresses structures are expressed in network order.
  * 
  * Path event callbacks can be enabled by calling "picoquic_enable_path_callbacks".
  * This can be set as the default for new connections by calling
@@ -921,7 +921,8 @@ int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoq
 /* The get path addr API provides the IP addresses used by a specific path.
 * The "local" argument determines whether the APi returns the local address
 * (local == 1), the address of the peer (local == 2) or the address observed by the peer (local == 3).
-* The port value in the returned addresses is always in "host" format.
+* Like all user-level networking API, the "picoquic_get_path_addr" API assumes that the
+* port numbers in the socket addresses structures are expressed in network order.
 */
 int picoquic_get_path_addr(picoquic_cnx_t* cnx, uint64_t unique_path_id, int local, struct sockaddr_storage* addr);
 
@@ -1021,7 +1022,8 @@ void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required)
 int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx);
 
 /* Manage addresses
-* The port value in the set or returned addresses is always in "host" format.
+* The port value in the set or returned socket addresses structures are
+* always expressed in network order.
  */
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
@@ -1069,7 +1071,7 @@ int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, size_t length, const uint
  * Quic context. The API handles the decryption of the packets
  * and their processing in the context of connections.
  * 
-* The port value in the socket addresses is always in "host" format.
+ * The port numbers in the socket addresses structures are expressed in network order.
  */
 
 int picoquic_incoming_packet(
@@ -1099,7 +1101,7 @@ int picoquic_incoming_packet_ex(
  * The API "picoquic_prepare_packet" does the same but for just one
  * connection at a time.
  * 
-* The port value in the returned addresses is always in "host" format.
+* The port numbers in the socket addresses structures are expressed in network order.
  */
 
 int picoquic_prepare_next_packet_ex(picoquic_quic_t* quic, 
@@ -1137,7 +1139,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
  * suggested by the stack. The socket_err parameter may be used by the stack for logging
  * purposes.
  * 
-* The port value in the returned addresses is always in "host" format.
+ * The port numbers in the socket addresses structures are expressed in network order.
  */
 void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx,
      uint64_t current_time, struct sockaddr* addr_peer, struct sockaddr* addr_local, int if_index, int socket_err);

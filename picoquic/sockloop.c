@@ -450,9 +450,11 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int soc
         for (int i_af = 0; sock_ret == 0 && i_af < nb_af; i_af++) {
             s_ctx[nb_sockets].af = af[i_af];
             s_ctx[nb_sockets].port = current_port;
+            s_ctx[nb_sockets].n_port = htons(current_port);
             if ((sock_ret = picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, &s_ctx[nb_sockets])) == 0) {
                 if (current_port == 0) {
                     current_port = s_ctx[nb_sockets].port;
+                    s_ctx[nb_sockets].n_port = htons(current_port);
                 }
                 nb_sockets++;
             }
@@ -552,10 +554,10 @@ int picoquic_packet_loop_wait(picoquic_socket_ctx_t* s_ctx,
                     picoquic_store_addr(addr_from, (struct sockaddr*)&s_ctx[*socket_rank].addr_from);
                     /* Document incoming port */
                     if (addr_dest->ss_family == AF_INET6) {
-                        ((struct sockaddr_in6*)addr_dest)->sin6_port = htons(s_ctx[*socket_rank].port);
+                        ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[*socket_rank].n_port;
                     }
                     else if (addr_dest->ss_family == AF_INET) {
-                        ((struct sockaddr_in*)addr_dest)->sin_port = htons(s_ctx[*socket_rank].port);
+                        ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[*socket_rank].n_port;
                     }
                 }
             }
@@ -660,10 +662,10 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
                     else {
                         /* Document incoming port */
                         if (addr_dest->ss_family == AF_INET6) {
-                            ((struct sockaddr_in6*)addr_dest)->sin6_port = htons(s_ctx[i].port);
+                            ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[i].n_port;
                         }
                         else if (addr_dest->ss_family == AF_INET) {
-                            ((struct sockaddr_in*)addr_dest)->sin_port = htons(s_ctx[i].port);
+                            ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
                         }
                         break;
                     }
@@ -871,14 +873,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             size_t nb_packets_sent = 0;
 
             if (bytes_recv > 0) {
-                if (addr_from.ss_family == AF_INET) {
-                    ((struct sockaddr_in*)&addr_from)->sin_port = ntohs(((struct sockaddr_in*)&addr_from)->sin_port);
-                    ((struct sockaddr_in*)&addr_to)->sin_port = ntohs(((struct sockaddr_in*)&addr_to)->sin_port);
-                }
-                else {
-                    ((struct sockaddr_in6*)&addr_from)->sin6_port = ntohs(((struct sockaddr_in6*)&addr_from)->sin6_port);
-                    ((struct sockaddr_in6*)&addr_to)->sin6_port = ntohs(((struct sockaddr_in6*)&addr_to)->sin6_port);
-                }
 #ifdef _WINDOWS
                 size_t recv_bytes = 0;
                 while (recv_bytes < (size_t)bytes_recv && ret == 0) {
@@ -985,7 +979,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                             if (send_port == 0 && !param->prefer_extra_socket) {
                                 break;
                             }
-                            if (s_ctx[i].port == send_port) {
+                            if (s_ctx[i].n_port == send_port) {
                                 break;
                             }
                         }
@@ -997,14 +991,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     }
                     else
                     {
-                        if (peer_addr.ss_family == AF_INET) {
-                            ((struct sockaddr_in*)&peer_addr)->sin_port = htons(((struct sockaddr_in*)&peer_addr)->sin_port);
-                            ((struct sockaddr_in*)&local_addr)->sin_port = htons(((struct sockaddr_in*)&local_addr)->sin_port);
-                        }
-                        else {
-                            ((struct sockaddr_in6*)&peer_addr)->sin6_port = htons(((struct sockaddr_in6*)&peer_addr)->sin6_port);
-                            ((struct sockaddr_in6*)&local_addr)->sin6_port = htons(((struct sockaddr_in6*)&local_addr)->sin6_port);
-                        }
+
                         if (param->simulate_eio && send_length > PICOQUIC_MAX_PACKET_SIZE) {
                             /* Test hook, simulating a driver that does not support GSO */
                             sock_ret = -1;
