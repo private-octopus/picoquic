@@ -22,6 +22,8 @@
 #ifndef H3ZERO_URL_TEMPLATE_H
 #define H3ZERO_URL_TEMPLATE_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -32,9 +34,6 @@ typedef struct st_h3zero_url_expression_param_t {
     char const* instance;
     size_t instance_length;
 } h3zero_url_expression_param_t;
-
-int h3zero_expand_template_expression(char* buffer, size_t buffer_size, size_t* write_index, 
-    const char* template, size_t* parse_index, const h3zero_url_expression_param_t* params, size_t nb_params);
 
 int h3zero_expand_template(char* buffer, size_t buffer_size, size_t* write_index, const char* url_template, const h3zero_url_expression_param_t* params, size_t nb_params);
 #ifdef __cplusplus

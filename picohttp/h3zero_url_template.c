@@ -52,14 +52,6 @@
 *     varchar       =  ALPHA / DIGIT / "_" / pct-encoded
 */
 
-typedef enum {
-    modality_none,
-    modality_middle,
-    modality_prefix,
-    modality_suffix,
-    modality_form
-} modality_enum;
-
 static int parse_modality(const char* expression, size_t* parse_index, char* modality)
 {
     int ret = 0;
@@ -290,7 +282,8 @@ static int h3zero_expand_expression_variable(char* buffer, size_t buffer_size, s
 /* h3zero_expand_expression:
  * assume that the initial "{" is already parsed. 
  */
-int h3zero_expand_template_expression(char* buffer, size_t buffer_size, size_t * write_index, const char* expression, size_t* parse_index, const h3zero_url_expression_param_t* params, size_t nb_params)
+static int h3zero_expand_template_expression(char* buffer, size_t buffer_size, size_t * write_index, const char* expression, size_t* parse_index,
+    const h3zero_url_expression_param_t* params, size_t nb_params)
 {
     int ret;
     char modality;
