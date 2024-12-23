@@ -245,6 +245,11 @@ extern "C" {
     void h3zero_receive_datagram_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, h3zero_capsule_t* capsule, h3zero_callback_ctx_t* h3_ctx);
     uint8_t* h3zero_provide_datagram_buffer(void* context, size_t length, int ready_to_send);
 
+    int h3zero_queue_connect_header_frame(
+        picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
+        char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
+        char const* origin, char const* ua_string);
+
     int h3zero_callback(picoquic_cnx_t* cnx,
         uint64_t stream_id, uint8_t* bytes, size_t length,
         picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);

@@ -25,8 +25,13 @@
 #include "picohash.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
-#include "picoquic_internal.h"
+#include "h3zero.h"
+#include "h3zero_common.h"
+//#include "picoquic_internal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 /*
 * Context is split between two levels:
 * - The global context of the picomask service, which
@@ -58,7 +63,7 @@ typedef struct st_picomask_h3_ctx_t {
     picoquic_cnx_t* cnx;
 } picomask_h3_ctx_t;
 
-typedef struct st_picomask_cnx_ctx_t {
+typedef struct st_picomask_udp_ctx_t {
     picohash_item hash_item;
     uint64_t picomask_number;
     picoquic_cnx_t* cnx;
@@ -67,10 +72,27 @@ typedef struct st_picomask_cnx_ctx_t {
     /* Management of capsule protocol on control stream */
     /* Management of datagram queue -- incoming packets
      * that have to be processed locally */
+#if 0
     picoquic_packet_t* outgoing_first;
     picoquic_packet_t* outgoing_last;
-} picomask_cnx_ctx_t;
+#endif
+} picomask_udp_ctx_t;
 
+int picomask_ctx_init(picomask_ctx_t* ctx, size_t max_nb_udp);
+void picomask_ctx_release(picomask_ctx_t* ctx);
 
+int picomask_callback(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length,
+    picohttp_call_back_event_t wt_event,
+    struct st_h3zero_stream_ctx_t* stream_ctx,
+    void* path_app_ctx);
+
+int picomask_connect(picoquic_cnx_t* cnx, picomask_ctx_t* picomask_ctx,
+    const char* authority, char const* template, struct sockaddr* addr,
+    h3zero_callback_ctx_t* h3_ctx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* PICOMASK_H */

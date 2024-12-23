@@ -203,6 +203,7 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_uri.c
     picohttp/picomask.c
     picohttp/quicperf.c
+    picohttp/h3zero_url_template.c
     picohttp/webtransport.c
     picohttp/wt_baton.c)
 

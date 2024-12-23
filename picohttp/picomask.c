@@ -104,7 +104,7 @@ int picomask_callback(picoquic_cnx_t* cnx,
     struct st_h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx);
 
-/* Context retrieval functions */
+/* UDP context retrieval functions */
 static uint64_t table_udp_hash(const void * key)
 {
     /* the key is a unique 64 bit number, so we keep this simple. */
@@ -119,33 +119,33 @@ static int table_udp_compare(const void* key1, const void* key2)
 
 static picohash_item * table_udp_to_item(const void* key)
 {
-    picomask_cnx_ctx_t* cnx_ctx = (picomask_cnx_ctx_t*)key;
-    return &cnx_ctx->hash_item;
+    picomask_udp_ctx_t* udp_ctx = (picomask_udp_ctx_t*)key;
+    return &udp_ctx->hash_item;
 }
 
-picomask_cnx_ctx_t* picomask_cnx_ctx_by_number(picomask_ctx_t* ctx, uint64_t picomask_number)
+picomask_udp_ctx_t* picomask_udp_ctx_by_number(picomask_ctx_t* ctx, uint64_t picomask_number)
 {
-    picomask_cnx_ctx_t* cnx_ctx = NULL;
+    picomask_udp_ctx_t* udp_ctx = NULL;
     picohash_item* item;
-    picomask_cnx_ctx_t key = { 0 };
+    picomask_udp_ctx_t key = { 0 };
     key.picomask_number = picomask_number;
     key.hash_item.key = (void*)&key.picomask_number;
     item = picohash_retrieve(ctx->table_udp_ctx, &key);
 
     if (item != NULL) {
-        cnx_ctx = (picomask_cnx_ctx_t*)(((uint8_t*)(item)-
-            offsetof(struct st_picomask_cnx_ctx_t, hash_item)));
+        udp_ctx = (picomask_udp_ctx_t*)(((uint8_t*)(item)-
+            offsetof(struct st_picomask_udp_ctx_t, hash_item)));
     }
-    return cnx_ctx;
+    return udp_ctx;
 }
 
 /* Init the global context */
 
-int picomask_ctx_init(picomask_ctx_t* ctx, size_t max_nb_connections)
+int picomask_ctx_init(picomask_ctx_t* ctx, size_t max_nb_udp)
 {
     int ret = 0;
 
-    if ((ctx->table_udp_ctx = picohash_create_ex(max_nb_connections,
+    if ((ctx->table_udp_ctx = picohash_create_ex(max_nb_udp,
         table_udp_hash, table_udp_compare, table_udp_to_item)) == NULL) {
         ret = -1;
     }
@@ -155,25 +155,38 @@ int picomask_ctx_init(picomask_ctx_t* ctx, size_t max_nb_connections)
 
 void picomask_ctx_release(picomask_ctx_t* ctx)
 {
-    /* Delete all the existing contexts, by walking through
-    * the table */
-    /* then delete the table itself. */
-    picohash_delete(ctx->table_udp_ctx, 0);
+    if (ctx->table_udp_ctx != NULL) {
+        /* Delete all the existing contexts, by walking through
+        * the table */
+        /* then delete the table itself. */
+        picohash_delete(ctx->table_udp_ctx, 0);
+        ctx->table_udp_ctx = NULL;
+    }
 }
-
 
 /* Create the picomask context per udp connect */
-picomask_cnx_ctx_t* picomask_cnx_ctx_create(picomask_ctx_t* picomask_ctx)
+picomask_udp_ctx_t* picomask_udp_ctx_create(picomask_ctx_t* picomask_ctx)
 {
-    picomask_cnx_ctx_t* cnx_ctx = (picomask_cnx_ctx_t*)malloc(sizeof(picomask_cnx_ctx_t));
-    if (cnx_ctx != NULL) {
-        memset(cnx_ctx, 0, sizeof(picomask_cnx_ctx_t));
-        cnx_ctx->picomask_number = picomask_ctx->picomask_number_next++;
+    picomask_udp_ctx_t* udp_ctx = (picomask_udp_ctx_t*)malloc(sizeof(picomask_udp_ctx_t));
+    if (udp_ctx != NULL) {
+        memset(udp_ctx, 0, sizeof(picomask_udp_ctx_t));
+        udp_ctx->picomask_number = picomask_ctx->picomask_number_next++;
         /* register in table of contexts */
-        picohash_insert(picomask_ctx->table_udp_ctx, cnx_ctx);
+        picohash_insert(picomask_ctx->table_udp_ctx, udp_ctx);
     }
-    return cnx_ctx;
+    return udp_ctx;
 }
+
+/* Delete the picomask context per udp connect */
+picomask_udp_ctx_t* picomask_udp_ctx_delete(picomask_ctx_t* picomask_ctx, picomask_udp_ctx_t* udp_ctx)
+{
+    if (udp_ctx != NULL) {
+        /* TODO: verify that the whole record is deleted */
+        picohash_delete_item(picomask_ctx->table_udp_ctx, &udp_ctx->hash_item, 1);
+    }
+    return udp_ctx;
+}
+
 #if 0
 /* Update context when sending a connect request */
 int picomask_connecting(picoquic_cnx_t* cnx,
@@ -214,6 +227,91 @@ int picomask_accept(picoquic_cnx_t* cnx,
 }
 #endif
 
+/* Set app stream context. Todo: this is similar to code used in web transport.
+* Function should be moved to h3 common.
+ */
+h3zero_stream_ctx_t* picomask_set_control_stream(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx)
+{
+    uint64_t stream_id = picoquic_get_next_local_stream_id(cnx, 0);
+    h3zero_stream_ctx_t* stream_ctx = h3zero_find_or_create_stream(
+        cnx, stream_id, h3_ctx, 1, 1);
+    if (stream_ctx != NULL) {
+        /* Associate the stream with a per_stream context */
+        if (picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx) != 0) {
+            DBG_PRINTF("Could not set context for stream %"PRIu64, stream_id);
+            h3zero_delete_stream(cnx, h3_ctx, stream_ctx);
+            stream_ctx = NULL;
+        }
+    }
+    return stream_ctx;
+}
+
+/* Connect is called when the path registers to use the tunnel service.
+* The call should document the masque context of the service, and
+* also the inner connection and inner path id.
+*/
+int picomask_connect(picoquic_cnx_t* cnx, picomask_ctx_t* picomask_ctx,
+    const char* authority, char const* template, struct sockaddr* addr,
+    h3zero_callback_ctx_t* h3_ctx)
+{
+    int ret = 0;
+    h3zero_stream_ctx_t* stream_ctx = picomask_set_control_stream(cnx, h3_ctx);
+    picomask_udp_ctx_t* udp_ctx = NULL;
+    char path[128] = { 'p', 'a', 't', 'h', 0 };
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(template);
+    UNREFERENCED_PARAMETER(addr);
+#endif
+    if (stream_ctx == NULL) {
+        ret = -1;
+    }
+    /* Create the connection context for the UDP connect */
+    else if ((udp_ctx = picomask_udp_ctx_create(picomask_ctx)) == NULL) {
+        DBG_PRINTF("Could not create UDP Connect context for stream %"PRIu64, stream_ctx->stream_id);
+        ret = -1;
+    }
+    /* Register for the prefix in the H3 context. */
+    else if ((ret = h3zero_declare_stream_prefix(h3_ctx, stream_ctx->stream_id,
+        picomask_callback, udp_ctx)) != 0) {
+        /* This can only happen if the stream prefix is already declared */
+        DBG_PRINTF("Duplicate stream prefix %"PRIu64, stream_ctx->stream_id);
+        ret = -1;
+    }
+    /* Finalize the context */
+    else {
+        /* WT_CONNECT finalizes the context with a call to the connecting event.
+        * But we do not have any sub protocol, so we can do that here.
+         */
+        udp_ctx->cnx = cnx;
+        udp_ctx->stream_id = stream_ctx->stream_id;
+        /* to do: set target_addr from path */
+        /* Then, queue the UDP_CONNECT frame. */
+        if (ret == 0) {
+            ret = h3zero_queue_connect_header_frame(cnx, stream_ctx, authority, (const uint8_t*)path, strlen(path), "webtransport", NULL,
+                H3ZERO_USER_AGENT_STRING);
+
+            if (ret != 0) {
+                /* remove the stream prefix */
+                h3zero_delete_stream_prefix(cnx, h3_ctx, stream_ctx->stream_id);
+            }
+        }
+    }
+
+    if (ret != 0) {
+        /* clean up the partially created contexts */
+        if (udp_ctx != NULL) {
+            /* delete that */
+            picomask_udp_ctx_delete(picomask_ctx, udp_ctx);
+        }
+        if (stream_ctx != NULL) {
+            h3zero_delete_stream(cnx, h3_ctx, stream_ctx);
+        }
+    }
+    return ret;
+}
+
+
+
 /* Prepare datagram. This is the call from the inner connection,
 * stating that a datagram can now be sent. The masque context
 * pick the UDP connect context with the smallest wakeup time,
@@ -230,6 +328,11 @@ int picomask_callback(picoquic_cnx_t* cnx,
     void* path_app_ctx)
 {
     int ret = 0;
+    UNREFERENCED_PARAMETER(path_app_ctx);
+    UNREFERENCED_PARAMETER(length);
+    UNREFERENCED_PARAMETER(bytes);
+    UNREFERENCED_PARAMETER(cnx);
+
     DBG_PRINTF("picomask_callback: %d, %" PRIi64 "\n", (int)wt_event, (stream_ctx == NULL)?(int64_t)-1:(int64_t)stream_ctx->stream_id);
     switch (wt_event) {
     case picohttp_callback_connect:
@@ -288,65 +391,6 @@ int picomask_callback(picoquic_cnx_t* cnx,
         /* protocol error */
         ret = -1;
         break;
-    }
-    return ret;
-}
-
-/* Connect is called when the path registers to use the tunnel service.
-* The call should document the masque context of the service, and
-* also the inner connection and inner path id.
-*/
-int picomask_connect(picoquic_cnx_t* cnx, picomask_ctx_t* picomask_ctx, 
-    char const * server_path, 
-    h3zero_callback_ctx_t* h3_ctx)
-{
-    int ret = 0;
-    uint64_t stream_id = picoquic_get_next_local_stream_id(cnx, 0);
-    h3zero_stream_ctx_t* stream_ctx = NULL;
-    picomask_cnx_ctx_t* cnx_ctx = NULL;
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(server_path);
-#endif
-    /* Create an H3 stream context */
-    if ((stream_ctx = h3zero_find_or_create_stream(
-        cnx, stream_id, h3_ctx, 1, 1)) == NULL) {
-        ret = -1;
-    }
-    /* Associate the stream with a per_stream context */
-    else if ((ret = picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx)) != 0) {
-        DBG_PRINTF("Could not set context for stream %"PRIu64, stream_id);
-        stream_ctx = NULL;
-    }
-    /* Create the connection context for the UDP connect */
-    else if ((cnx_ctx = picomask_cnx_ctx_create(picomask_ctx)) == NULL) {
-        DBG_PRINTF("Could not create UDP Connect context for stream %"PRIu64, stream_id);
-        ret = -1;
-    }
-    /* Register for the prefix in the H3 context. */
-    else if ((ret = h3zero_declare_stream_prefix(h3_ctx, stream_ctx->stream_id,
-        picomask_callback, cnx_ctx))!=0){
-        DBG_PRINTF("Could not declare prefix stream %"PRIu64, stream_id);
-        /* clean up? */
-    }
-    /* Finalize the context */
-    else {
-        /* WT_CONNECT finalizes the context with a call to the connecting event.
-        * But we do not have any sub protocol, so we can do that here.
-         */
-        cnx_ctx->cnx = cnx;
-        cnx_ctx->stream_id = stream_id;
-        /* to do: set target_addr from path */
-        /* Then, queue the UDP_CONNECT frame. */
-    }
-
-    if (ret != 0) {
-        /* clean up the partially created contexts */
-        if (cnx_ctx != NULL) {
-            /* delete that */
-        }
-        if (stream_ctx != NULL) {
-            h3zero_delete_stream(cnx, h3_ctx, stream_ctx);
-        }
     }
     return ret;
 }

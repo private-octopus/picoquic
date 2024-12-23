@@ -26,14 +26,33 @@
 #include "h3zero_common.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
+#include "h3zero_url_template.h"
+
+
+picohttp_server_path_item_t picomask_path_item_list[1] =
+{
+    {
+        "/udp",
+        4,
+        picomask_callback,
+        NULL
+    },
+};
 
 typedef struct st_picomask_test_ctx_t {
     uint64_t simulated_time;
+    char const* alpn;
+    char const* target_sni;
+    char const* proxy_sni;
+    char const* path;
     /* Three quic nodes: client(0), proxy(1), target(2) */
     picoquic_quic_t* quic[3];
     struct sockaddr_storage addr[3];
     picohttp_server_parameters_t server_context;
     picohttp_server_parameters_t target_context;
+    picomask_ctx_t client_app_ctx;
+    picomask_ctx_t* proxy_app_ctx;
+    picoquic_cnx_t* cnx_to_proxy;
     /* Four links: server->client[0], client->server[1], server->target[2], target->server[3],
      */
     picoquictest_sim_link_t* link[4];
@@ -45,116 +64,6 @@ typedef struct st_picomask_test_ctx_t {
     uint8_t recv_ecn_server;
 } picoquic_picomask_test_ctx_t;
 
-/*
-* Delete the configuration
-*/
-void picomask_test_delete(picoquic_picomask_test_ctx_t* pt_ctx)
-{
-    for (int i = 0; i < 3; i++) {
-        if (pt_ctx->quic[i] != NULL) {
-            picoquic_free(pt_ctx->quic[i]);
-            pt_ctx->quic[i] = NULL;
-        }
-    }
-
-    for (int i = 0; i < 4; i++) {
-        if (pt_ctx->link[i] != NULL) {
-            picoquictest_sim_link_delete(pt_ctx->link[i]);
-            pt_ctx->link[i] = NULL;
-        }
-    }
-}
-/*
-* test configuration.
-* 
-* Build a test network with three nodes: client, proxy, target.
-*/
-picoquic_picomask_test_ctx_t * picomask_test_config()
-{
-    int ret = 0;
-    char test_server_cert_file[512];
-    char test_server_key_file[512];
-    char test_server_cert_store_file[512];
-    picoquic_picomask_test_ctx_t* pt_ctx = NULL;
-
-    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
-        PICOQUIC_TEST_FILE_SERVER_CERT);
-
-    if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
-            PICOQUIC_TEST_FILE_SERVER_KEY);
-    }
-
-    if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir,
-            PICOQUIC_TEST_FILE_CERT_STORE);
-    }
-
-    if (ret == 0) {
-        pt_ctx = (picoquic_picomask_test_ctx_t*)malloc(sizeof(picoquic_picomask_test_ctx_t));
-        if (pt_ctx == NULL) {
-            ret = -1;
-        }
-        else {
-            memset(pt_ctx, 0, sizeof(picoquic_picomask_test_ctx_t));
-        }
-    }
-
-    if (ret == 0) {
-        /* Set addresses */
-        for (int i = 0; i < 3; i++) {
-            unsigned long h = 0xa0000001;
-            struct sockaddr_in* a = (struct sockaddr_in*)&pt_ctx->addr[i];
-            a->sin_family = AF_INET;
-#ifdef _WINDOWS
-            a->sin_addr.S_un.S_addr = htonl(h + i);
-#else
-
-            a->sin_addr.s_addr = htonl(h + i);
-#endif
-            a->sin_port = htons(1234);
-        }
-        /* Create client context */
-        pt_ctx->quic[0] = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL,
-            h3zero_callback,
-            /* TODO: default client callback context */ NULL,
-            NULL, NULL, NULL, pt_ctx->simulated_time,
-            &pt_ctx->simulated_time,
-            /* TODO -- should we store tickets? */NULL,
-            NULL, 0);
-        /* Create server context */
-        pt_ctx->quic[1] = picoquic_create(8, test_server_key_file, test_server_cert_file, NULL, "h3",
-            h3zero_callback,
-            &pt_ctx->server_context,
-            NULL, NULL, NULL, pt_ctx->simulated_time,
-            &pt_ctx->simulated_time,
-            /* TODO -- should we store tickets? */NULL,
-            NULL, 0);
-        /* Create target context */
-        pt_ctx->quic[2] = picoquic_create(8, test_server_key_file, test_server_cert_file, NULL, "h3",
-            h3zero_callback,
-            &pt_ctx->target_context,
-            NULL, NULL, NULL, pt_ctx->simulated_time,
-            &pt_ctx->simulated_time,
-            /* TODO -- should we store tickets? */NULL,
-            NULL, 0);
-        if (pt_ctx->quic[0] == NULL || pt_ctx->quic[1] == NULL || pt_ctx->quic[1] == NULL) {
-            ret = -1;
-        }
-        /* Create links */
-        for (int i = 0; ret == 9 && i < 4; i++) {
-            if ((pt_ctx->link[i] = picoquictest_sim_link_create(0.01, 10000, NULL, 0, pt_ctx->simulated_time)) == NULL) {
-                ret = -1;
-            }
-        }
-    }
-
-    if (ret < 0 && pt_ctx != NULL) {
-
-    }
-   
-    return pt_ctx;
-}
 
 /* Process arrival of a packet from a link */
 int picomask_test_packet_arrival(picoquic_picomask_test_ctx_t* pt_ctx, int link_id, int * is_active)
@@ -336,6 +245,243 @@ int picomask_test_step(picoquic_picomask_test_ctx_t* pt_ctx, int* is_active)
     return ret;
 }
 
+
+
+/* Connection loop. Run the simulation loop step by step until
+ * the connection is ready. */
+
+typedef int(*picomask_loop_test)(picoquic_picomask_test_ctx_t* pt_ctx);
+
+int picomask_proxy_ready(picoquic_picomask_test_ctx_t* pt_ctx)
+{
+    int ret = 0;
+
+    if (pt_ctx->cnx_to_proxy == NULL ||
+        picoquic_get_cnx_state(pt_ctx->cnx_to_proxy) >= picoquic_state_ready) {
+        ret = 1;
+    }
+    return ret;
+}
+
+
+int picomask_proxy_broken(picoquic_picomask_test_ctx_t* pt_ctx)
+{
+    int ret = 0;
+
+    if (pt_ctx->cnx_to_proxy == NULL ||
+        picoquic_get_cnx_state(pt_ctx->cnx_to_proxy) > picoquic_state_ready) {
+        ret = 1;
+    }
+    return ret;
+}
+
+
+int picomask_test_loop(picoquic_picomask_test_ctx_t* pt_ctx, picomask_loop_test loop_test_fn)
+{
+    int ret = 0;
+    int nb_trials_max = 1024;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+    int is_complete = 0;
+
+    while (ret == 0 && nb_trials < nb_trials_max && nb_inactive < 128) {
+        int is_active = 0;
+        nb_trials++;
+
+        ret = picomask_test_step(pt_ctx, &is_active);
+
+        if (loop_test_fn(pt_ctx)) {
+            is_complete = 1;
+            break;
+        }
+
+        if (is_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+    }
+
+    if (!is_complete) {
+        ret = -1;
+    }
+
+    return ret;
+}
+/*
+* Delete the configuration
+*/
+void picomask_test_delete(picoquic_picomask_test_ctx_t* pt_ctx)
+{
+    picomask_ctx_release(&pt_ctx->client_app_ctx);
+
+    for (int i = 0; i < 3; i++) {
+        if (pt_ctx->quic[i] != NULL) {
+            picoquic_free(pt_ctx->quic[i]);
+            pt_ctx->quic[i] = NULL;
+        }
+    }
+
+    for (int i = 0; i < 4; i++) {
+        if (pt_ctx->link[i] != NULL) {
+            picoquictest_sim_link_delete(pt_ctx->link[i]);
+            pt_ctx->link[i] = NULL;
+        }
+    }
+
+    free(pt_ctx);
+}
+
+/*
+* test configuration.
+*
+* Build a test network with three nodes: client, proxy, target.
+* - the client quic context is at quic[0]
+* - the proxy context is at quic[1]
+* - the target context is at quic [2]
+* We also create 4 links:
+* - link[0]: from client to proxy
+* - link[1]: from proxy to client
+* - link[2]: from target to proxy
+* - link[3]: from proxy to target
+*/
+picoquic_picomask_test_ctx_t* picomask_test_config()
+{
+    int ret = 0;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    picoquic_picomask_test_ctx_t* pt_ctx = NULL;
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret == 0) {
+        pt_ctx = (picoquic_picomask_test_ctx_t*)malloc(sizeof(picoquic_picomask_test_ctx_t));
+        if (pt_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            memset(pt_ctx, 0, sizeof(picoquic_picomask_test_ctx_t));
+
+            pt_ctx->alpn = "h3";
+            pt_ctx->target_sni = PICOQUIC_TEST_SNI;
+            pt_ctx->proxy_sni = PICOQUIC_TEST_SNI;
+            pt_ctx->path = "path";
+
+            pt_ctx->server_context.web_folder = NULL;
+            pt_ctx->server_context.path_table = picomask_path_item_list;
+            pt_ctx->server_context.path_table_nb = 1;
+
+            pt_ctx->target_context.web_folder = ".";
+            pt_ctx->target_context.path_table = NULL;
+            pt_ctx->target_context.path_table_nb = 0;
+        }
+    }
+
+    if (ret == 0) {
+        /* Set addresses */
+        for (int i = 0; i < 3; i++) {
+            unsigned long h = 0xa0000001;
+            struct sockaddr_in* a = (struct sockaddr_in*)&pt_ctx->addr[i];
+            a->sin_family = AF_INET;
+#ifdef _WINDOWS
+            a->sin_addr.S_un.S_addr = htonl(h + i);
+#else
+
+            a->sin_addr.s_addr = htonl(h + i);
+#endif
+            a->sin_port = htons(1234);
+        }
+        /* Create client context */
+        pt_ctx->quic[0] = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL,
+            h3zero_callback,
+            /* TODO: default client callback context */ NULL,
+            NULL, NULL, NULL, pt_ctx->simulated_time,
+            &pt_ctx->simulated_time,
+            /* TODO -- should we store tickets? */NULL,
+            NULL, 0);
+        /* Create server context */
+        pt_ctx->quic[1] = picoquic_create(8, test_server_cert_file, test_server_key_file, NULL, "h3",
+            h3zero_callback,
+            &pt_ctx->server_context,
+            NULL, NULL, NULL, pt_ctx->simulated_time,
+            &pt_ctx->simulated_time,
+            /* TODO -- should we store tickets? */NULL,
+            NULL, 0);
+        /* Create target context */
+        pt_ctx->quic[2] = picoquic_create(8, test_server_cert_file, test_server_key_file, NULL, "h3",
+            h3zero_callback,
+            &pt_ctx->target_context,
+            NULL, NULL, NULL, pt_ctx->simulated_time,
+            &pt_ctx->simulated_time,
+            /* TODO -- should we store tickets? */NULL,
+            NULL, 0);
+        if (pt_ctx->quic[0] == NULL || pt_ctx->quic[1] == NULL || pt_ctx->quic[1] == NULL) {
+            ret = -1;
+        }
+        else {
+            /* initialise client app context */
+            ret = picomask_ctx_init(&pt_ctx->client_app_ctx, 8);
+        }
+        /* Create links */
+        for (int i = 0; ret == 0 && i < 4; i++) {
+            if ((pt_ctx->link[i] = picoquictest_sim_link_create(0.01, 10000, NULL, 0, pt_ctx->simulated_time)) == NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (ret < 0 && pt_ctx != NULL) {
+        picomask_test_delete(pt_ctx);
+        pt_ctx = NULL;
+    }
+
+    return pt_ctx;
+}
+
+/* Create a client connection to a specified address */
+int picomask_test_cnx_create(picoquic_picomask_test_ctx_t* pt_ctx)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    h3zero_stream_ctx_t** p_stream_ctx = NULL;
+
+    /* use the generic H3 callback */
+    /* Set the client callback context */
+    if ((h3_ctx = h3zero_callback_create_context(NULL)) == NULL ||
+        (cnx = picoquic_create_cnx(pt_ctx->quic[0], picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&pt_ctx->addr[1], pt_ctx->simulated_time, 0, pt_ctx->proxy_sni, pt_ctx->alpn, 1)) == NULL) {
+        ret = -1;
+    }
+    else
+    {
+        pt_ctx->cnx_to_proxy = cnx;
+        /* TODO: Set transport parameters? */
+        picoquic_set_callback(cnx, h3zero_callback, h3_ctx);
+        /* Perform the initialization, settings and QPACK streams
+         */
+        ret = h3zero_protocol_init(cnx);
+
+        if (ret == 0){
+            /* TODO: missing authority and template!*/
+            ret = picomask_connect(cnx, &pt_ctx->client_app_ctx, NULL, NULL, (struct sockaddr*)&pt_ctx->addr[2], h3_ctx);
+        }
+    }
+    return ret;
+}
 /* 
 * First test: verify that the UDP Connect context can be established.
 */
@@ -348,8 +494,23 @@ int picomask_udp_test()
         ret = -1;
     }
     else {
-        /* Create a client connection to the server */
-        /* On that connection, create a UDP connect context */
+        /* Create a client connection to the server, and a UDP context */
+        ret = picomask_test_cnx_create(pt_ctx);
+    }
+
+    if (ret == 0) {
+        /* Establish the QUIC connection between client and proxy */
+        picoquic_start_client_cnx(pt_ctx->cnx_to_proxy);
+        ret = picomask_test_loop(pt_ctx, picomask_proxy_ready);
+    }
+
+    if (ret == 0) {
+        /* Establish the control stream */
+        ret = picomask_test_loop(pt_ctx, picomask_proxy_broken);
+    }
+
+    if (pt_ctx != NULL){
+        /* Clear the context */
         picomask_test_delete(pt_ctx);
     }
     return ret;
