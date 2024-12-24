@@ -178,7 +178,8 @@ template_test_var_t tt_vars[] = {
     { "empty", {"", NULL}},
     { "undef", {NULL}},
     { "x", { "1024", NULL}},
-    { "y", { "768", NULL}}
+    { "y", { "768", NULL}},
+    { "ip6", { "2001:234::42", NULL }}
 };
 
 typedef struct st_expansion_test_case_t {
@@ -210,7 +211,8 @@ template_test_case_t template_test_cases[] = {
     {"{var:3}", "val"},
     {"{var:30}", "value"},
     {"{list}", "red,green,blue"},
-    {"{list*}", "red,green,blue"}
+    {"{list*}", "red,green,blue"},
+    {"{ip6}", "2001%3A234%3A%3A42"}
 };
 
 template_test_case_t template_error_cases[] = {
@@ -332,7 +334,7 @@ int h3zero_url_template_test()
     size_t nb_params = template_test_get_params(tt_vars,
         sizeof(tt_vars) / sizeof(template_test_var_t),
         params, 32);
-    if (nb_params != 18) {
+    if (nb_params != 19) {
         ret = -1;
     }
 

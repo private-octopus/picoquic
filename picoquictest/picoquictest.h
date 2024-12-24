@@ -549,6 +549,7 @@ int h09_multi_file_preemptive_test();
 int h3zero_settings_test();
 int h3zero_get_content_type_by_path_test();
 int picomask_udp_test();
+int picomask_udp_path_test();
 int picowt_baton_basic_test();
 int picowt_baton_error_test();
 int picowt_baton_long_test();

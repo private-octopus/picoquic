@@ -91,6 +91,8 @@ int picomask_connect(picoquic_cnx_t* cnx, picomask_ctx_t* picomask_ctx,
     const char* authority, char const* template, struct sockaddr* addr,
     h3zero_callback_ctx_t* h3_ctx);
 
+int picomask_expand_udp_path(char* text, size_t text_size, size_t* text_length, char const* path_template, struct sockaddr* addr);
+
 #ifdef __cplusplus
 }
 #endif

@@ -164,10 +164,10 @@ static int h3zero_expand_text(char* buffer, size_t buffer_size, size_t* write_in
             char c1 = '0' + ((c >> 4) & 0xf);
             char c2 = '0' + (c & 0xf);
             if (c1 > '9') {
-                c1 += 'A' - '9';
+                c1 += 'A' - '9' - 1;
             }
             if (c2 > '9') {
-                c2 += 'A' - '9';
+                c2 += 'A' - '9' - 1;
             }
 
             buffer[*write_index] = '%';

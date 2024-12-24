@@ -26,6 +26,7 @@
 #include "h3zero_common.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
+#include "picosocks.h"
 #include "h3zero_url_template.h"
 
 
@@ -512,6 +513,47 @@ int picomask_udp_test()
     if (pt_ctx != NULL){
         /* Clear the context */
         picomask_test_delete(pt_ctx);
+    }
+    return ret;
+}
+
+/* Test the formatting of the UDP path 
+ */
+typedef struct st_udp_path_test_t {
+    char const* ip_address_text;
+    uint16_t server_port;
+    char const* path_template;
+    char const* path_expansion;
+} udp_path_test_t;
+
+udp_path_test_t path_tests[] = {
+    { "10.0.0.1", 443,
+    "/.well-known/masque/udp/{target_host}/{target_port}/",
+    "/.well-known/masque/udp/10.0.0.1/443/" },
+    { "10.0.0.1", 4443,
+    "/masque?h={target_host}&p={target_port}",
+    "/masque?h=10.0.0.1&p=4443" },
+    { "2001:db8::42", 443,
+    "/masque{?target_host,target_port}",
+    "/masque?target_host=2001%3Adb8%3A%3A42&target_port=443" }
+};
+
+int picomask_udp_path_test()
+{
+    int ret = 0;
+    char text[256];
+    size_t text_length;
+
+    for (size_t i = 0; i < sizeof(path_tests) / sizeof(udp_path_test_t); i++) {
+        struct sockaddr_storage server_address = { 0 };
+        int is_name = 0;
+        if ((ret = picoquic_get_server_address(path_tests[i].ip_address_text, path_tests[i].server_port, &server_address, &is_name)) == 0 && 
+            (ret = picomask_expand_udp_path(text, sizeof(text), &text_length, path_tests[i].path_template,(struct sockaddr*)&server_address)) == 0){
+            if (text_length != strlen(path_tests[i].path_expansion) ||
+                memcmp(text, path_tests[i].path_expansion, text_length) != 0) {
+                ret = -1;
+            }
+        }
     }
     return ret;
 }

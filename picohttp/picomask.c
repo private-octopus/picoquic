@@ -97,6 +97,8 @@
 #include "h3zero.h"
 #include "h3zero_common.h"
 #include "string.h"
+#include "picoquic_utils.h"
+#include "h3zero_url_template.h"
 
 int picomask_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
@@ -244,6 +246,40 @@ h3zero_stream_ctx_t* picomask_set_control_stream(picoquic_cnx_t* cnx, h3zero_cal
         }
     }
     return stream_ctx;
+}
+
+/* Expand the "path" component to include the IP address and port
+* of the target, as expressed in a sockaddr, with port in network order.
+ */
+int picomask_expand_udp_path(char* text, size_t text_size, size_t* text_length, char const* path_template, struct sockaddr* addr)
+{
+    int ret = 0;
+    h3zero_url_expression_param_t params[2] = { 0 };
+    char addr_text[64];
+    char port_text[8];
+    size_t port_text_len;
+    uint8_t * ip_addr;
+    uint8_t ip_addr_len;
+    uint16_t port = ntohs(picoquic_get_addr_port(addr));
+    picoquic_get_ip_addr(addr, &ip_addr, &ip_addr_len);
+
+    /* Convert address component to text */
+    if (picoquic_sprintf(port_text, sizeof(port_text), &port_text_len, "%d", port) != 0 ||
+        inet_ntop(addr->sa_family, ip_addr, addr_text, sizeof(addr_text)) == NULL) {
+        ret = -1;
+    }
+    else {
+        params[0].variable = "target_host";
+        params[0].variable_length = 11;
+        params[0].instance = addr_text;
+        params[0].instance_length = strlen(addr_text);
+        params[1].variable = "target_port";
+        params[1].variable_length = 11;
+        params[1].instance = port_text;
+        params[1].instance_length = port_text_len;
+        ret = h3zero_expand_template(text, text_size, text_length, path_template, params, 2);
+    }
+    return ret;
 }
 
 /* Connect is called when the path registers to use the tunnel service.
