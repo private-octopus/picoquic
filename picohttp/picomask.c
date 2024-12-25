@@ -98,7 +98,9 @@
 #include "h3zero_common.h"
 #include "string.h"
 #include "picoquic_utils.h"
+#include "picosocks.h"
 #include "h3zero_url_template.h"
+#include "h3zero_uri.h"
 
 int picomask_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
@@ -200,34 +202,82 @@ int picomask_connecting(picoquic_cnx_t* cnx,
 
     return 0;
 }
+#endif
+int picomask_udp_path_params(uint8_t* path, size_t path_length, struct sockaddr_storage* addr)
+{
+
+    int ret = 0;
+    size_t query_offset = h3zero_query_offset(path, path_length);
+    if (query_offset >= path_length) {
+        ret = -1;
+    } else {
+        const uint8_t* queries = path + query_offset;
+        size_t queries_length = path_length - query_offset;
+        char ip_address_text[256];
+        size_t ip_address_length =0;
+        uint64_t server_port = 0;
+
+        if (h3zero_query_parameter_string(queries, queries_length, "h", 1, (uint8_t *)ip_address_text, sizeof(ip_address_text), &ip_address_length) != 0 ||
+            h3zero_query_parameter_number(queries, queries_length, "p", 1, &server_port, 0) != 0 ||
+            server_port == 0 ||
+            server_port > 0xffff ||
+            ip_address_length >= sizeof(ip_address_text)) {
+            ret = -1;
+        }
+        else if (picoquic_check_port_blocked((uint16_t)server_port)) {
+            ret = -1;
+        }
+        else {
+            ip_address_text[ip_address_length] = 0;
+            ret = picoquic_get_server_address(ip_address_text, (uint16_t)server_port, addr, NULL);
+            /* TODO: 
+            * Verify that the path is OK: the UDP proxy disallows UDP proxying requests
+            * to vulnerable targets, such as the UDP proxy's own addresses and localhost,
+            * link-local, multicast, and broadcast addresses */
+        }
+    }
+
+    return ret;
+}
 
 /* Accept an incoming connection */
 int picomask_accept(picoquic_cnx_t* cnx,
     uint8_t* path, size_t path_length,
-    struct st_h3zero_stream_ctx_t* stream_ctx,
-    void* path_app_ctx)
+    h3zero_stream_ctx_t* stream_ctx,
+    void* v_path_app_ctx)
 {
     int ret = 0;
+    picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)v_path_app_ctx;
+    picomask_udp_ctx_t* udp_ctx = picomask_udp_ctx_create(picomask_ctx);
 
-    /* Find the target's IP address and port number from the path */
-
-    /* Verify that the path is OK: the UDP proxy disallows UDP proxying requests
-    * to vulnerable targets, such as the UDP proxy's own addresses and localhost,
-    * link-local, multicast, and broadcast addresses */
-
+    if (udp_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Find the target's IP address and port number from the path */
+        ret = picomask_udp_path_params(path, path_length, &udp_ctx->target_addr);
+    }
     /* If doing just connect UDP, by opposition to QUIC proxy, accept
     * only one connection for a given IP+port. If doing QUIC proxy,
     * manage the registered CID for the long header packets.
     */
+    if (ret == 0) {
+        /* Finish initializing the UDP context and link to the stream context */
+        stream_ctx->path_callback_ctx = udp_ctx;
 
-    /* create a per connection context, indexed by stream ID and
-    * some unique identifier of the connection.
-    */
+        udp_ctx->cnx = cnx;
+        udp_ctx->stream_id = stream_ctx->stream_id;
+    }
+    else {
+        if (udp_ctx != NULL) {
+            picomask_udp_ctx_delete(picomask_ctx, udp_ctx);
+        }
+    }
 
     /* if all is well, */
     return ret;
 }
-#endif
+
 
 /* Set app stream context. Todo: this is similar to code used in web transport.
 * Function should be moved to h3 common.
@@ -287,17 +337,13 @@ int picomask_expand_udp_path(char* text, size_t text_size, size_t* text_length, 
 * also the inner connection and inner path id.
 */
 int picomask_connect(picoquic_cnx_t* cnx, picomask_ctx_t* picomask_ctx,
-    const char* authority, char const* template, struct sockaddr* addr,
+    const char* authority, char const* path,
     h3zero_callback_ctx_t* h3_ctx)
 {
     int ret = 0;
     h3zero_stream_ctx_t* stream_ctx = picomask_set_control_stream(cnx, h3_ctx);
     picomask_udp_ctx_t* udp_ctx = NULL;
-    char path[128] = { 'p', 'a', 't', 'h', 0 };
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(template);
-    UNREFERENCED_PARAMETER(addr);
-#endif
+
     if (stream_ctx == NULL) {
         ret = -1;
     }
@@ -320,6 +366,9 @@ int picomask_connect(picoquic_cnx_t* cnx, picomask_ctx_t* picomask_ctx,
          */
         udp_ctx->cnx = cnx;
         udp_ctx->stream_id = stream_ctx->stream_id;
+        stream_ctx->is_open = 1;
+        stream_ctx->path_callback = picomask_callback;
+        stream_ctx->path_callback_ctx = (void*)udp_ctx;
         /* to do: set target_addr from path */
         /* Then, queue the UDP_CONNECT frame. */
         if (ret == 0) {
@@ -364,10 +413,6 @@ int picomask_callback(picoquic_cnx_t* cnx,
     void* path_app_ctx)
 {
     int ret = 0;
-    UNREFERENCED_PARAMETER(path_app_ctx);
-    UNREFERENCED_PARAMETER(length);
-    UNREFERENCED_PARAMETER(bytes);
-    UNREFERENCED_PARAMETER(cnx);
 
     DBG_PRINTF("picomask_callback: %d, %" PRIi64 "\n", (int)wt_event, (stream_ctx == NULL)?(int64_t)-1:(int64_t)stream_ctx->stream_id);
     switch (wt_event) {
@@ -375,7 +420,7 @@ int picomask_callback(picoquic_cnx_t* cnx,
         /* A connect has been received on this stream, and could be accepted.
         * The path app context should point to the global masque context.
         */
-        /* ret = picomask_accept(cnx, bytes, length, stream_ctx, path_app_ctx); */
+        ret = picomask_accept(cnx, bytes, length, stream_ctx, path_app_ctx);
         break;
     case picohttp_callback_connect_refused:
         /* The response from the server has arrived and it is negative. The 

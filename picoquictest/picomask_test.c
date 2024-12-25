@@ -29,23 +29,13 @@
 #include "picosocks.h"
 #include "h3zero_url_template.h"
 
-
-picohttp_server_path_item_t picomask_path_item_list[1] =
-{
-    {
-        "/udp",
-        4,
-        picomask_callback,
-        NULL
-    },
-};
-
 typedef struct st_picomask_test_ctx_t {
     uint64_t simulated_time;
     char const* alpn;
     char const* target_sni;
     char const* proxy_sni;
     char const* path;
+    char const* path_template;
     /* Three quic nodes: client(0), proxy(1), target(2) */
     picoquic_quic_t* quic[3];
     struct sockaddr_storage addr[3];
@@ -63,11 +53,11 @@ typedef struct st_picomask_test_ctx_t {
     uint8_t packet_ecn_default;
     uint8_t recv_ecn_client;
     uint8_t recv_ecn_server;
-} picoquic_picomask_test_ctx_t;
+} picomask_test_ctx_t;
 
 
 /* Process arrival of a packet from a link */
-int picomask_test_packet_arrival(picoquic_picomask_test_ctx_t* pt_ctx, int link_id, int * is_active)
+int picomask_test_packet_arrival(picomask_test_ctx_t* pt_ctx, int link_id, int * is_active)
 {
     int ret = 0;
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_dequeue(pt_ctx->link[link_id], pt_ctx->simulated_time);
@@ -113,7 +103,7 @@ int picomask_test_packet_arrival(picoquic_picomask_test_ctx_t* pt_ctx, int link_
 }
 
 /* Packet departure from selected node */
-int picomask_test_packet_departure(picoquic_picomask_test_ctx_t* pt_ctx, int node_id,
+int picomask_test_packet_departure(picomask_test_ctx_t* pt_ctx, int node_id,
     int* is_active)
 {
     int ret = 0;
@@ -183,7 +173,7 @@ int picomask_test_packet_departure(picoquic_picomask_test_ctx_t* pt_ctx, int nod
 
 /* step by step simulation
  */
-int picomask_test_step(picoquic_picomask_test_ctx_t* pt_ctx, int* is_active)
+int picomask_test_step(picomask_test_ctx_t* pt_ctx, int* is_active)
 {
     int ret = 0;
     uint64_t next_arrival_time = UINT64_MAX;
@@ -251,9 +241,9 @@ int picomask_test_step(picoquic_picomask_test_ctx_t* pt_ctx, int* is_active)
 /* Connection loop. Run the simulation loop step by step until
  * the connection is ready. */
 
-typedef int(*picomask_loop_test)(picoquic_picomask_test_ctx_t* pt_ctx);
+typedef int(*picomask_loop_test)(picomask_test_ctx_t* pt_ctx);
 
-int picomask_proxy_ready(picoquic_picomask_test_ctx_t* pt_ctx)
+int picomask_proxy_ready(picomask_test_ctx_t* pt_ctx)
 {
     int ret = 0;
 
@@ -264,8 +254,7 @@ int picomask_proxy_ready(picoquic_picomask_test_ctx_t* pt_ctx)
     return ret;
 }
 
-
-int picomask_proxy_broken(picoquic_picomask_test_ctx_t* pt_ctx)
+int picomask_proxy_broken(picomask_test_ctx_t* pt_ctx)
 {
     int ret = 0;
 
@@ -276,8 +265,20 @@ int picomask_proxy_broken(picoquic_picomask_test_ctx_t* pt_ctx)
     return ret;
 }
 
+int picomask_proxy_available(picomask_test_ctx_t* pt_ctx)
+{
+    int ret = 0;
 
-int picomask_test_loop(picoquic_picomask_test_ctx_t* pt_ctx, picomask_loop_test loop_test_fn)
+    if (picomask_proxy_broken(pt_ctx)){
+        ret = 1;
+    }
+    else {
+        /* find the client side stream context, verify that it is upgraded */
+    }
+    return ret;
+}
+
+int picomask_test_loop(picomask_test_ctx_t* pt_ctx, picomask_loop_test loop_test_fn)
 {
     int ret = 0;
     int nb_trials_max = 1024;
@@ -313,7 +314,7 @@ int picomask_test_loop(picoquic_picomask_test_ctx_t* pt_ctx, picomask_loop_test 
 /*
 * Delete the configuration
 */
-void picomask_test_delete(picoquic_picomask_test_ctx_t* pt_ctx)
+void picomask_test_delete(picomask_test_ctx_t* pt_ctx)
 {
     picomask_ctx_release(&pt_ctx->client_app_ctx);
 
@@ -347,13 +348,46 @@ void picomask_test_delete(picoquic_picomask_test_ctx_t* pt_ctx)
 * - link[2]: from target to proxy
 * - link[3]: from proxy to target
 */
-picoquic_picomask_test_ctx_t* picomask_test_config()
+
+int picomask_test_set_server_ctx(picomask_test_ctx_t* pt_ctx)
+{
+    int ret = 0;
+    picohttp_server_path_item_t* path_item = (picohttp_server_path_item_t*)malloc(sizeof(picohttp_server_path_item_t));
+    picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)malloc(sizeof(picomask_ctx_t));
+
+    path_item = (picohttp_server_path_item_t*)malloc(sizeof(picohttp_server_path_item_t));
+    if (path_item == NULL || picomask_ctx == NULL ||
+        picomask_ctx_init(picomask_ctx, 4) != 0){
+        ret = -1;
+        if (path_item != NULL) {
+            free(path_item);
+            path_item = NULL;
+        }
+        if (picomask_ctx != NULL) {
+            free(picomask_ctx);
+            picomask_ctx = NULL;
+        }
+    } else {
+        path_item->path = pt_ctx->path;
+        path_item->path_length = strlen(pt_ctx->path);
+        path_item->path_callback = picomask_callback;
+        path_item->path_app_ctx = (void*)picomask_ctx;
+
+        pt_ctx->server_context.path_table = path_item;
+        pt_ctx->server_context.path_table_nb = 1;
+        pt_ctx->server_context.web_folder = NULL;
+    }
+
+    return ret;
+}
+
+picomask_test_ctx_t* picomask_test_config()
 {
     int ret = 0;
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
-    picoquic_picomask_test_ctx_t* pt_ctx = NULL;
+    picomask_test_ctx_t* pt_ctx = NULL;
 
     ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
         PICOQUIC_TEST_FILE_SERVER_CERT);
@@ -369,25 +403,24 @@ picoquic_picomask_test_ctx_t* picomask_test_config()
     }
 
     if (ret == 0) {
-        pt_ctx = (picoquic_picomask_test_ctx_t*)malloc(sizeof(picoquic_picomask_test_ctx_t));
+        pt_ctx = (picomask_test_ctx_t*)malloc(sizeof(picomask_test_ctx_t));
         if (pt_ctx == NULL) {
             ret = -1;
         }
         else {
-            memset(pt_ctx, 0, sizeof(picoquic_picomask_test_ctx_t));
+            memset(pt_ctx, 0, sizeof(picomask_test_ctx_t));
 
             pt_ctx->alpn = "h3";
             pt_ctx->target_sni = PICOQUIC_TEST_SNI;
             pt_ctx->proxy_sni = PICOQUIC_TEST_SNI;
-            pt_ctx->path = "path";
-
-            pt_ctx->server_context.web_folder = NULL;
-            pt_ctx->server_context.path_table = picomask_path_item_list;
-            pt_ctx->server_context.path_table_nb = 1;
+            pt_ctx->path = "/masque/udp";
+            pt_ctx->path_template = "/masque/udp?h={target_host}&p={target_port}";
 
             pt_ctx->target_context.web_folder = ".";
             pt_ctx->target_context.path_table = NULL;
             pt_ctx->target_context.path_table_nb = 0;
+
+            ret = picomask_test_set_server_ctx(pt_ctx);
         }
     }
 
@@ -453,12 +486,13 @@ picoquic_picomask_test_ctx_t* picomask_test_config()
 }
 
 /* Create a client connection to a specified address */
-int picomask_test_cnx_create(picoquic_picomask_test_ctx_t* pt_ctx)
+int picomask_test_cnx_create(picomask_test_ctx_t* pt_ctx)
 {
     int ret = 0;
     picoquic_cnx_t* cnx = NULL;
     h3zero_callback_ctx_t* h3_ctx = NULL;
     h3zero_stream_ctx_t** p_stream_ctx = NULL;
+    char path[256];
 
     /* use the generic H3 callback */
     /* Set the client callback context */
@@ -476,9 +510,14 @@ int picomask_test_cnx_create(picoquic_picomask_test_ctx_t* pt_ctx)
          */
         ret = h3zero_protocol_init(cnx);
 
+        if (ret == 0) {
+            size_t path_length;
+            ret = picomask_expand_udp_path(path, sizeof(path), &path_length, pt_ctx->path_template, (struct sockaddr*)&pt_ctx->addr[2]);
+        }
+
         if (ret == 0){
             /* TODO: missing authority and template!*/
-            ret = picomask_connect(cnx, &pt_ctx->client_app_ctx, NULL, NULL, (struct sockaddr*)&pt_ctx->addr[2], h3_ctx);
+            ret = picomask_connect(cnx, &pt_ctx->client_app_ctx, NULL, path, h3_ctx);
         }
     }
     return ret;
@@ -489,7 +528,7 @@ int picomask_test_cnx_create(picoquic_picomask_test_ctx_t* pt_ctx)
 int picomask_udp_test()
 {
     int ret = 0;
-    picoquic_picomask_test_ctx_t* pt_ctx = picomask_test_config();
+    picomask_test_ctx_t* pt_ctx = picomask_test_config();
 
     if (pt_ctx == NULL) {
         ret = -1;
@@ -507,8 +546,10 @@ int picomask_udp_test()
 
     if (ret == 0) {
         /* Establish the control stream */
-        ret = picomask_test_loop(pt_ctx, picomask_proxy_broken);
+        ret = picomask_test_loop(pt_ctx, picomask_proxy_available);
     }
+
+    /* TODO: start a connection to the target */
 
     if (pt_ctx != NULL){
         /* Clear the context */

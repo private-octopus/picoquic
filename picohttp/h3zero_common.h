@@ -59,7 +59,7 @@ extern "C" {
     /* Define the table of special-purpose paths used for POST, REST, or connect queries */
     /* TODO: is there a need for path context? */
     typedef struct st_picohttp_server_path_item_t {
-        char* path;
+        const char* path;
         size_t path_length;
         picohttp_post_data_cb_fn path_callback;
         void* path_app_ctx;
