@@ -725,6 +725,13 @@ typedef struct st_picoquic_quic_t {
     uint64_t rtt_update_delta;
     uint64_t pacing_rate_update_delta;
 
+    /* Proxying APIs */
+    picoquic_proxy_intercept_fn proxy_intercept_fn;
+    picoquic_proxy_forwarding_fn proxy_forwarding_fn;
+    picoquic_proxy_proxying_fn proxy_proxying_fn;
+    picoquic_proxying_free_fn proxy_free_fn;
+    void* proxy_ctx;
+
     /* Logging APIS */
     void* F_log;
     char* binlog_dir;

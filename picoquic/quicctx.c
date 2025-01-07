@@ -939,12 +939,16 @@ void picoquic_set_default_bdp_frame_option(picoquic_quic_t* quic, int bdp_option
 void picoquic_free(picoquic_quic_t* quic)
 {
     if (quic != NULL) {
-
         /* delete all the connection contexts -- do this before any other
          * action, as deleting connections may add packets to queues or
          * change connection lists */
         while (quic->cnx_list != NULL) {
             picoquic_delete_cnx(quic->cnx_list);
+        }
+
+        /* Delete the proxying context if any */
+        if (quic->proxy_free_fn != NULL) {
+            quic->proxy_free_fn(quic->proxy_ctx);
         }
 
         /* Delete TLS and AEAD cntexts */
@@ -5025,6 +5029,18 @@ void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authen
 void picoquic_enforce_client_only(picoquic_quic_t* quic, int do_enforce)
 {
     quic->enforce_client_only = (do_enforce)?1:0;
+}
+
+/* Set proxying functions
+ */
+void picoquic_set_proxying(picoquic_quic_t * quic, picoquic_proxy_intercept_fn intercept_fn, picoquic_proxy_forwarding_fn forwarding_fn,
+    picoquic_proxy_proxying_fn proxying_fn, picoquic_proxying_free_fn proxy_free_fn, void* proxy_ctx)
+{
+    quic->proxy_intercept_fn = intercept_fn;
+    quic->proxy_forwarding_fn = forwarding_fn;
+    quic->proxy_proxying_fn = proxying_fn;
+    quic->proxy_free_fn = proxy_free_fn;
+    quic->proxy_ctx = proxy_ctx;
 }
 
 /* Supported version upgrade.

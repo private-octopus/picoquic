@@ -1146,6 +1146,47 @@ void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx,
 void picoquic_notify_destination_unreachable_by_cnxid(picoquic_quic_t* quic, picoquic_connection_id_t * cnxid,
     uint64_t current_time, struct sockaddr* addr_peer, struct sockaddr* addr_local, int if_index, int socket_err);
 
+/* Support for Masque and similar tunneling protocols:
+* 
+* On the client side, the interception API is used to capture packets sent to a masque
+* proxy. These packets will then be forwarded as QUIC datagrams
+* on the connection to the proxy, or as obfuscated datagrams if the proxying is
+* QUIC aware. The intercept function returns 1 if the packet was intercepted,
+* 0 if it wasn't.
+*
+* On the proxy side, packets may be received as datagrams on a Masque connection.
+* These packets will be submitted for transmission on the socket through the
+* forwarding API. Datagrams received through the normal "incoming" function may
+* be recognized as directed to proxy clients, and will be submitted through
+* the "proxying" function.
+*
+* If the Masque version is "QUIC Aware", both clients and servers will receive
+* "obfuscated datagrams", which need to be differentiated from datagrams sent to local
+* connections. These datagrams will be submitted through the proxying function.
+* Proxy functions on the client or on the server will prepare datagrams bound for third
+* parties, and send them through the "forwarding" API.
+*/
+
+typedef int (*picoquic_proxy_intercept_fn)(void* proxy_ctx, uint64_t current_time,
+    uint8_t* send_buffer, size_t send_length, size_t send_msg_size,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int if_index);
+
+typedef void (*picoquic_proxy_forwarding_fn)(void* proxy_ctx,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index,
+    picoquic_cnx_t** p_last_cnx, size_t* send_msg_size);
+
+typedef void (*picoquic_proxy_proxying_fn)(
+    void* proxy_ctx, uint8_t* bytes, size_t length,
+    struct sockaddr* addr_from, struct sockaddr* addr_to, int if_index_to,
+    unsigned char received_ecn, uint64_t current_time);
+
+typedef void(*picoquic_proxying_free_fn)(void* proxy_ctx);
+
+void picoquic_set_proxying(picoquic_quic_t * quic,
+    picoquic_proxy_intercept_fn intercept_fn, picoquic_proxy_forwarding_fn forwarding_fn, 
+    picoquic_proxy_proxying_fn proxying_fn, picoquic_proxying_free_fn proxy_free_fn, void* proxy_ctx);
+
 /* Handling of out of sequence stream data delivery.
  *
  * For applications like video communication, it is important to process stream data

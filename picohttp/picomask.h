@@ -47,15 +47,30 @@ extern "C" {
 /* We need to reserve an interface ID that does not collude with
 * values likely used by the operating system. This excludes
 * small numbers, and special numbers like 0 or -1. We pick
-* a random 31 bit numbers, derived from the SHA1 hash of
+* a random 31 bit number, derived from the SHA1 hash of
 * "Picomask UDP interface":
 * 2798c62715dd8ce6e2c6dd92a37a8276f16c029e
 */
 #define picomask_interface_id 0x2798c627
 
+typedef struct st_picomask_packet_t {
+    struct st_picomask_packet_t* next_packet;
+    uint64_t arrival_time;
+    size_t length;
+    struct sockaddr_storage addr_from;
+    struct sockaddr_storage addr_to;
+    uint8_t ecn_mark;
+    uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
+} picomask_packet_t;
+
 typedef struct st_picomask_ctx_t {
     picohash_table* table_udp_ctx;
     uint64_t picomask_number_next;
+    picomask_packet_t* intercepted_first; /* queue of packets waitting to be sent to peer */
+    picomask_packet_t* intercepted_last;
+    picomask_packet_t* forwarding_first; /* queue of packets waiting to be sent to network */
+    picomask_packet_t* forwarding_last;
+    picomask_packet_t* packet_heap;
 } picomask_ctx_t;
 
 typedef struct st_picomask_h3_ctx_t {
@@ -69,13 +84,12 @@ typedef struct st_picomask_udp_ctx_t {
     picoquic_cnx_t* cnx;
     uint64_t stream_id;
     struct sockaddr_storage target_addr;
+    struct sockaddr_storage local_addr;
     /* Management of capsule protocol on control stream */
     /* Management of datagram queue -- incoming packets
      * that have to be processed locally */
-#if 0
-    picoquic_packet_t* outgoing_first;
-    picoquic_packet_t* outgoing_last;
-#endif
+    picomask_packet_t* outgoing_first;
+    picomask_packet_t* outgoing_last;
 } picomask_udp_ctx_t;
 
 int picomask_ctx_init(picomask_ctx_t* ctx, size_t max_nb_udp);

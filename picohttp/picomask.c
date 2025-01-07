@@ -205,7 +205,6 @@ int picomask_connecting(picoquic_cnx_t* cnx,
 #endif
 int picomask_udp_path_params(uint8_t* path, size_t path_length, struct sockaddr_storage* addr)
 {
-
     int ret = 0;
     size_t query_offset = h3zero_query_offset(path, path_length);
     if (query_offset >= path_length) {
@@ -395,12 +394,240 @@ int picomask_connect(picoquic_cnx_t* cnx, picomask_ctx_t* picomask_ctx,
     return ret;
 }
 
+/* Get an empty packet */
+picomask_packet_t* picomask_get_packet(picomask_ctx_t* picomask_ctx)
+{
+    picomask_packet_t* packet = picomask_ctx->packet_heap;
 
+    if (packet != NULL) {
+        picomask_ctx->packet_heap = packet->next_packet;
+    }
+    else {
+        packet = (picomask_packet_t*)malloc(sizeof(picomask_packet_t));
 
-/* Prepare datagram. This is the call from the inner connection,
-* stating that a datagram can now be sent. The masque context
-* pick the UDP connect context with the smallest wakeup time,
+        if (packet != NULL) {
+            memset(packet, 0, sizeof(picomask_packet_t));
+        }
+    }
+    return packet;
+}
+
+void picomask_recycle_packet(picomask_ctx_t* picomask_ctx, picomask_packet_t* packet)
+{
+    packet->next_packet = picomask_ctx->packet_heap;
+    picomask_ctx->packet_heap = packet;
+}
+
+/* add packet to queue in picomask context */
+int picomask_add_to_queue(picomask_ctx_t* picomask_ctx, picomask_packet_t** pp_last_packet,
+    uint8_t* bytes, size_t length, struct sockaddr* addr_from, struct sockaddr* addr_to,
+    uint8_t ecn_recv, uint64_t current_time)
+{
+    int ret = 0;
+    picomask_packet_t* packet;
+
+    if ((packet = picomask_get_packet(picomask_ctx)) == NULL) {
+        ret = -1;
+    } else {
+        picoquic_store_addr(&packet->addr_from, addr_from);
+        picoquic_store_addr(&packet->addr_to, addr_to);
+        memcpy(packet->bytes, bytes, length);
+        packet->length = length;
+        packet->ecn_mark = ecn_recv;
+        packet->next_packet = NULL;
+        packet->arrival_time = current_time;
+        if (*pp_last_packet != NULL) {
+            (*pp_last_packet)->next_packet = packet;
+        }
+        *pp_last_packet = packet;
+    }
+    return ret;
+}
+
+/* Receive datagram.
+* The datagram contains an encapsulated QUIC packet, in which the quarter stream ID 
+* points at the stream context. The behavior is different on client and server.
+* On client, the datagram is submitted to the QUIC context using the "incoming" API.
+* On server, the datagram is queued to the "forwarded" queue, to be sent on the
+* external path on the next call when picomask_forwarding is called.
+* 
+* The stream context points to the stream ID, and to the per application and
+* per stream data, which contains the IP address.
  */
+int picomask_receive_datagram(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length, h3zero_stream_ctx_t* stream_ctx, picomask_ctx_t* picomask_ctx)
+{
+    int ret = 0;
+    /* Find the context from h3zero */
+    picomask_udp_ctx_t* udp_ctx = (picomask_udp_ctx_t*)stream_ctx->path_callback_ctx;
+    picoquic_quic_t* quic = picoquic_get_quic_ctx(cnx);
+    uint64_t current_time = picoquic_get_quic_time(quic);
+
+    if (picoquic_is_client(cnx)) {
+        ret = picoquic_incoming_packet_ex(quic, bytes, length,
+            (struct sockaddr*)&udp_ctx->local_addr, (struct sockaddr*)&udp_ctx->target_addr,
+            picomask_interface_id, 0, NULL, current_time);
+    }
+    else {
+        ret = picomask_add_to_queue(picomask_ctx, &picomask_ctx->forwarding_last,
+            bytes, length, (struct sockaddr*)&udp_ctx->target_addr, (struct sockaddr*)&udp_ctx->local_addr,
+            0, current_time);
+    }
+    return ret;
+}
+
+/* Prepare datagram. 
+* Take the next packet in the "intercept" queue and copy it to the content of the
+* datagram. 
+* (Consider changing the name of the intercept queue, since on the server it
+* includes packets received from the targets.)
+* 
+ */
+int picomask_provide_datagram(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length, h3zero_stream_ctx_t* stream_ctx, picomask_ctx_t* picomask_ctx)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = picoquic_get_quic_ctx(cnx);
+    uint64_t current_time = picoquic_get_quic_time(quic);
+
+    bytes; 
+    length;
+    stream_ctx;
+    picomask_ctx;
+    current_time;
+
+    /* Get a packet from the "intercept" queue, if the corresponding contact is ready.
+    * if not, leave it in queue, keep track of "previous" packet 
+    */
+
+    /* if OK, dequeue the selected packet */
+
+    /* copy packet content in datagram buffer */
+
+    /* recycle the packet */
+
+    return ret;
+}
+
+
+/*
+* Implementation of the picoquic "proxy intercept" API.
+* This will be called when the picoquic stack has prepared a packet.
+* The first step is to decide whether the packet shall be proxied.
+* If the packet shall be proxied, a copy shall be added to
+* the proxy context.
+*/
+
+int picomask_intercept(void* proxy_ctx, uint64_t current_time,
+    uint8_t* send_buffer, size_t send_length, size_t send_msg_size,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int if_index)
+{
+    int ret = 0;
+    picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)proxy_ctx;
+    picomask_ctx;
+    current_time;
+    send_buffer;
+    send_length;
+    send_msg_size;
+    p_addr_to;
+    p_addr_from;
+    if_index;
+
+#if 0
+    if (if_index == picomask_interface_id) {
+        /* TODO: queue packet to destination */
+        /* TODO: Check whether we have a context for the destination */
+        int address_known = 0; /* TODO: enable lookup of known addresses */
+        if (!address_known) {
+            /* TODO: start a proxy request */
+        }
+        ret = 1;
+    }
+#endif
+    return ret;
+}
+
+/*
+* Implementation of the picoquic "proxy forwarding" API.
+* This is an opportunity to prepare outgoing datagrams, which will
+* be sent through the UDP sockets.
+*
+* For the basic UDP proxying, this code is only used on the proxy,
+* not on the client.
+* 
+* If we support UDP GSO, this can be a loop:
+* - get a first acceptable packet
+* - copy all similar packets, as long as they are full length
+ */
+void picomask_forwarding(void* proxy_ctx,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index,
+    picoquic_cnx_t** p_last_cnx, size_t* send_msg_size)
+{
+    proxy_ctx;
+    current_time;
+    send_buffer;
+    send_buffer_max;
+    send_length;
+    p_addr_to;
+    p_addr_from;
+    if_index;
+    p_last_cnx;
+    send_msg_size;
+
+    /* 
+    /* Get a packet from the "forwarding" queue, if the corresponding contact is ready.
+    * if not, leave it in queue, keep track of "previous" packet 
+    */
+
+    /* if OK, dequeue the selected packet */
+
+    /* copy packet content in datagram buffer */
+
+    /* recycle the packet */
+}
+
+/*
+* Implementation of the picoquic "proxying" API.
+* This is an opportunity to capture incoming datagrams
+* that should be managed by the proxy.
+*
+* In the UDP case, this is tested by comparing the peer address
+* and port to the IP addresses registered for proxying.
+ */
+int picomask_proxying(
+    void* proxy_ctx, uint8_t* bytes, size_t length,
+    struct sockaddr* addr_from, struct sockaddr* addr_to, int if_index_to,
+    unsigned char received_ecn, uint64_t current_time)
+{
+    proxy_ctx;
+    bytes;
+    length;
+    addr_from;
+    addr_to;
+    if_index_to;
+    received_ecn;
+    current_time;
+    /* Map the addr_from to a connection context */
+    /* In UDP mode, if no matching context, drop */
+    /* In QUIC aware mode, map CID to connection context.
+    * If no connection context, this is a new connection. 
+    * By default, pass to local QUIC context (i.e., no not map)
+    * If server mapping, execute logic (SNI, maybe) to find the right context.
+    * 
+    * If connection and path context, check mapping between CID and source
+    * address. If different address, consider migration and NAT traversal logic.
+    */
+    return -1;
+}
+
+/* Freeing of the proxy context.
+ *
+* typedef void(*picoquic_proxying_free_fn)(void* proxy_ctx);
+*
+* TODO: compare that to the current release code.
+*/
+
 
 /* picomask callback. This will be called from the web server
 * when the path points to a picomask callback.
@@ -409,10 +636,11 @@ int picomask_connect(picoquic_cnx_t* cnx, picomask_ctx_t* picomask_ctx,
 int picomask_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
     picohttp_call_back_event_t wt_event,
-    struct st_h3zero_stream_ctx_t* stream_ctx,
+    h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
     int ret = 0;
+    picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)path_app_ctx;
 
     DBG_PRINTF("picomask_callback: %d, %" PRIi64 "\n", (int)wt_event, (stream_ctx == NULL)?(int64_t)-1:(int64_t)stream_ctx->stream_id);
     switch (wt_event) {
@@ -447,12 +675,12 @@ int picomask_callback(picoquic_cnx_t* cnx,
     case picohttp_callback_post_datagram:
         /* Stack received a datagram. Submit as "incoming" packet on the
         * select connection and path */
-        /* ret = picomask_receive_datagram(cnx, bytes, length, stream_ctx, path_app_ctx); */
+        ret = picomask_receive_datagram(cnx, bytes, length, stream_ctx, picomask_ctx);
         break;
     case picohttp_callback_provide_datagram: 
         /* callback to provide data. This will translate to a "prepare data" call
         * on the next available connection context and path context */
-        /* ret = picomask_provide_datagram(cnx, bytes, length, stream_ctx, path_app_ctx); */
+        ret = picomask_provide_datagram(cnx, bytes, length, stream_ctx, picomask_ctx);
         break;
     case picohttp_callback_reset: 
         /* Control stream has been abandoned. Abandon the whole connection. */
@@ -476,19 +704,10 @@ int picomask_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-/* Calls from the inner connection:
-* state when a path is ready to send data. This is a combination of
-* having data to send, and not being limited by CC and pacing.
-* 
-* Should document the "next time" for the path. Then, the
-* masque context will translate that into a "ready to send"
-* signal for the inner connection. 
+
+/* Init of the proxy context.
+* Allocate the memory, and then 
  */
-
-/* Mapping a path to a proxy, on the client?
-* 
-*/
-
 
 /* Creation of an outer connection.
  * On client, this is done explicitly: create a connection to
