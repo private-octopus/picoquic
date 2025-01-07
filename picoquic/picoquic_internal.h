@@ -612,6 +612,7 @@ typedef struct st_picoquic_quic_t {
     uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE];
     uint8_t retry_seed[PICOQUIC_RETRY_SECRET_SIZE];
     uint64_t* p_simulated_time;
+    uint8_t hash_seed[8];
     char const* ticket_file_name;
     char const* token_file_name;
     picoquic_stored_ticket_t * p_first_ticket;
