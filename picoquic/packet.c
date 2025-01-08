@@ -90,7 +90,7 @@ int picoquic_screen_initial_packet(
     picoquic_packet_header* ph,
     uint64_t current_time,
     picoquic_cnx_t** pcnx,
-    int * new_ctx_created)
+    int* new_ctx_created)
 {
     int ret = 0;
 
@@ -106,6 +106,15 @@ int picoquic_screen_initial_packet(
     else if (ph->has_reserved_bit_set) {
         /* Cannot have reserved bit set before negotiation completes */
         ret = PICOQUIC_ERROR_PACKET_HEADER_PARSING;
+    }
+    else if (quic->enforce_client_only) {
+        /* Cannot create a client connection if the context is client only */
+        ret = PICOQUIC_ERROR_SERVER_BUSY;
+    }
+    else if (quic->server_busy ||
+        quic->current_number_connections >= quic->tentative_max_number_connections) {
+        /* Cannot create a client connection now, send immediate close. */
+        ret = PICOQUIC_ERROR_SERVER_BUSY;
     }
     else {
         /* This code assumes that *pcnx is always null when screen initial is called. */
@@ -143,52 +152,42 @@ int picoquic_screen_initial_packet(
         }
 
         if (ret == 0) {
-            if (quic->enforce_client_only) {
-                /* Cannot create a client connection if the context is client only */
-                ret = PICOQUIC_ERROR_SERVER_BUSY;
-            }
-            else if (quic->server_busy) {
-                /* Cannot create a client connection now, send immediate close. */
-                ret = PICOQUIC_ERROR_SERVER_BUSY;
-            }
-            else {
-                int is_address_blocked = !quic->is_port_blocking_disabled && picoquic_check_addr_blocked(addr_from);
-                int is_new_token = 0;
-                int has_good_token = 0;
-                int has_bad_token = 0;
-                picoquic_connection_id_t original_cnxid = { 0 };
-                if (ph->token_length > 0) {
-                    /* If a token is present, verify it. */
-                    if (picoquic_verify_retry_token(quic, addr_from, current_time,
-                        &is_new_token, &original_cnxid, &ph->dest_cnx_id, (uint32_t)dph.pn64,
-                        ph->token_bytes, ph->token_length, 1) == 0) {
-                        has_good_token = 1;
-                    }
-                    else {
-                        has_bad_token = 1;
-                    }
-                }
-
-                if (has_bad_token && !is_new_token) {
-                    /* sending a bad retry token is fatal, sending an old new token is not */
-                    ret = PICOQUIC_ERROR_INVALID_TOKEN;
-                }
-                else if (!has_good_token && (quic->force_check_token || quic->max_half_open_before_retry <= quic->current_number_half_open || is_address_blocked)) {
-                    /* tokens are required before accepting new connections, so ask to queue a retry packet. */
-                    ret = PICOQUIC_ERROR_RETRY_NEEDED;
+            int is_address_blocked = !quic->is_port_blocking_disabled && picoquic_check_addr_blocked(addr_from);
+            int is_new_token = 0;
+            int has_good_token = 0;
+            int has_bad_token = 0;
+            picoquic_connection_id_t original_cnxid = { 0 };
+            if (ph->token_length > 0) {
+                /* If a token is present, verify it. */
+                if (picoquic_verify_retry_token(quic, addr_from, current_time,
+                    &is_new_token, &original_cnxid, &ph->dest_cnx_id, (uint32_t)dph.pn64,
+                    ph->token_bytes, ph->token_length, 1) == 0) {
+                    has_good_token = 1;
                 }
                 else {
-                    /* All clear */
-                    /* Check: what do do with odcid? */
-                    *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
-                    if (*pcnx == NULL) {
-                        /* Could not allocate the context */
-                        ret = PICOQUIC_ERROR_MEMORY;
-                    }
-                    else if (has_good_token) {
-                        (*pcnx)->initial_validated = 1;
-                        (void)picoquic_parse_connection_id(original_cnxid.id, original_cnxid.id_len, &(*pcnx)->original_cnxid);
-                    }
+                    has_bad_token = 1;
+                }
+            }
+
+            if (has_bad_token && !is_new_token) {
+                /* sending a bad retry token is fatal, sending an old new token is not */
+                ret = PICOQUIC_ERROR_INVALID_TOKEN;
+            }
+            else if (!has_good_token && (quic->force_check_token || quic->max_half_open_before_retry <= quic->current_number_half_open || is_address_blocked)) {
+                /* tokens are required before accepting new connections, so ask to queue a retry packet. */
+                ret = PICOQUIC_ERROR_RETRY_NEEDED;
+            }
+            else {
+                /* All clear */
+                /* Check: what do do with odcid? */
+                *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
+                if (*pcnx == NULL) {
+                    /* Could not allocate the context */
+                    ret = PICOQUIC_ERROR_MEMORY;
+                }
+                else if (has_good_token) {
+                    (*pcnx)->initial_validated = 1;
+                    (void)picoquic_parse_connection_id(original_cnxid.id, original_cnxid.id_len, &(*pcnx)->original_cnxid);
                 }
             }
         }
