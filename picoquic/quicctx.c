@@ -307,10 +307,17 @@ static int picoquic_net_id_compare(const void* key1, const void* key2)
 
 static uint64_t picoquic_net_icid_hash(const void* key)
 {
+    /* The ICID is controlled by the peer. We mix a random seed in the
+     * hash to avoid possible shenanigans. */
     const picoquic_cnx_t* cnx = (const picoquic_cnx_t*)key;
+    picoquic_connection_id_t cid = cnx->initial_cnxid;
+
+    for (int i = 0; i < 8; i++) {
+        cid.id[i] ^= cnx->quic->hash_seed[i];
+    }
 
     return picohash_hash_mix(picoquic_hash_addr((struct sockaddr*) & cnx->registered_icid_addr), 
-        picoquic_connection_id_hash(&cnx->initial_cnxid));
+        picoquic_connection_id_hash(&cid));
 }
 
 static int picoquic_net_icid_compare(const void* key1, const void* key2)
@@ -716,6 +723,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
                         memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
 
                     picoquic_crypto_random(quic, quic->retry_seed, sizeof(quic->retry_seed));
+                    picoquic_crypto_random(quic, quic->hash_seed, sizeof(quic->hash_seed));
 
                     /* If there is no root certificate context specified, use a null certifier. */
                     /* Load tickets */
@@ -4759,6 +4767,7 @@ picoquic_cnx_t* picoquic_cnx_by_icid(picoquic_quic_t* quic, picoquic_connection_
 
     picoquic_store_addr(&dummy_cnx.registered_icid_addr, addr);
     dummy_cnx.initial_cnxid = *icid;
+    dummy_cnx.quic = quic;
 
     item = picohash_retrieve(quic->table_cnx_by_icid, &dummy_cnx);
 

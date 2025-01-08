@@ -1375,7 +1375,7 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
  * of the stream to NULL */
 int picoquic_discard_stream(picoquic_cnx_t* cnx, uint64_t stream_id, uint16_t local_stream_error);
 
-/* The function picoquic_set_datagram_ready indicates to the stack
+/* The function picoquic_mark_datagram_ready indicates to the stack
  * whether the application is ready to send datagrams. 
  * 
  * When running in a multipath environment, some applications may want to

@@ -281,7 +281,7 @@ in an error `PICOQUIC_ERROR_DATAGRAM_TOO_LONG`.
 With the just in time API, the application:
 
 - indicates its readiness to send datagrams marks a stream as `active` using
-  the API `picoquic_set_datagram_ready`.
+  the API `picoquic_mark_datagram_ready`.
 
 - receives the callback `picoquic_callback_prepare_datagram` when the stack is ready
 to send datagrams in a packet.
