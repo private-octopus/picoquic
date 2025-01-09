@@ -70,10 +70,13 @@ uint64_t picoquic_cc_slow_start_increase_ex(picoquic_path_t* path_x, uint64_t nb
 uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha);
 
 /*
- * Increases window dependent on bandwidth estimation.
+ * Increase cwin based on bandwidth estimation.
  */
 uint64_t picoquic_cc_bandwidth_estimation(picoquic_path_t* path_x);
 
+/*
+ * Increase cwin for long RTT connections.
+ */
 uint64_t picoquic_cc_increase_cwin_for_long_rtt(picoquic_path_t * path_x);
 
 /* Many congestion control algorithms run a parallel version of new reno in order

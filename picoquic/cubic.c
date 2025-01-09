@@ -242,9 +242,11 @@ static void cubic_notify(
 
     if (cubic_state != NULL) {
         switch (notification) {
+            /* RTT measurements will happen before acknowledgement is signalled */
             case picoquic_congestion_notification_acknowledgement:
                 switch (cubic_state->alg_state) {
                     case picoquic_cubic_alg_slow_start:
+                        /* Increase cwin based on bandwidth estimation. */
                         path_x->cwin = picoquic_cc_bandwidth_estimation(path_x);
 
                         if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
@@ -333,12 +335,15 @@ static void cubic_notify(
                 cubic_correct_spurious(path_x, cubic_state, current_time);
                 break;
             case picoquic_congestion_notification_rtt_measurement:
-                if (cubic_state->alg_state == picoquic_cubic_alg_slow_start) {
+                if (cubic_state->alg_state == picoquic_cubic_alg_slow_start &&
+                    cubic_state->ssthresh == UINT64_MAX) {
+
+                    /* HyStart. */
                     /* Using RTT increases as signal to get out of initial slow start */
-                    if (cubic_state->ssthresh == UINT64_MAX &&
-                        picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                    if (picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                             cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                         /* RTT increased too much, get out of slow start! */
+
                         if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT){
                             double correction;
                             if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_SATELLITE_RTT) {
@@ -370,8 +375,6 @@ static void cubic_notify(
                     }
                 }
                 break;
-            case picoquic_congestion_notification_cwin_blocked:
-                break;
             case picoquic_congestion_notification_seed_cwin:
                 if (cubic_state->alg_state == picoquic_cubic_alg_slow_start) {
                     if (cubic_state->ssthresh == UINT64_MAX) {
@@ -393,7 +396,6 @@ static void cubic_notify(
             case picoquic_congestion_notification_reset:
                 cubic_reset(cubic_state, path_x, current_time);
                 break;
-            case picoquic_congestion_notification_lost_feedback:
             default:
                 break;
 

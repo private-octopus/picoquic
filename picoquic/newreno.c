@@ -72,14 +72,13 @@ static void picoquic_newreno_sim_enter_recovery(
 
 /* Update cwin per signaled bandwidth
  */
-static void picoquic_newreno_sim_seed_cwin(picoquic_newreno_sim_state_t* nr_state,
-    picoquic_path_t* path_x, uint64_t bytes_in_flight)
+static void picoquic_newreno_sim_seed_cwin(picoquic_newreno_sim_state_t* nr_state, uint64_t seed_cwin)
 {
     if (nr_state->alg_state == picoquic_newreno_alg_slow_start &&
         nr_state->ssthresh == UINT64_MAX) {
-        if (bytes_in_flight > nr_state->cwin) {
-            nr_state->cwin = bytes_in_flight;
-            nr_state->ssthresh = bytes_in_flight;
+        if (seed_cwin > nr_state->cwin) {
+            nr_state->cwin = seed_cwin;
+            nr_state->ssthresh = seed_cwin;
             nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
         }
     }
@@ -100,7 +99,14 @@ void picoquic_newreno_sim_notify(
     case picoquic_congestion_notification_acknowledgement: {
         switch (nr_state->alg_state) {
         case picoquic_newreno_alg_slow_start:
+            /* TODO discuss app limited for pure reno too? */
+            /* following tests will fail:
+             * memlog keylog_test packet_trace ready_to_send ready_to_skip ready_to_zfin ready_to_zero pacing_update
+             * quality_update multipath_callback multipath_quality multipath_stream_af
+             */
             nr_state->cwin += ack_state->nb_bytes_acknowledged;
+            /* nr_state->cwin += picoquic_cc_slow_start_increase(path_x, ack_state->nb_bytes_acknowledged); */
+
             /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
             if (nr_state->cwin >= nr_state->ssthresh) {
                 nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
@@ -155,7 +161,7 @@ void picoquic_newreno_sim_notify(
         picoquic_newreno_sim_reset(nr_state);
         break;
     case picoquic_congestion_notification_seed_cwin:
-        picoquic_newreno_sim_seed_cwin(nr_state, path_x, ack_state->nb_bytes_acknowledged);
+        picoquic_newreno_sim_seed_cwin(nr_state, ack_state->nb_bytes_acknowledged);
         break;
     default:
         /* ignore */
@@ -216,12 +222,12 @@ static void picoquic_newreno_notify(
 
     if (nr_state != NULL) {
         switch (notification) {
+        /* RTT measurements will happen before acknowledgement is signalled */
         case picoquic_congestion_notification_acknowledgement:
             if (nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
                 nr_state->nrss.ssthresh == UINT64_MAX) {
-                /* RTT measurements will happen before acknowledgement is signalled */
+                /* Increase cwin based on bandwidth estimation. */
                 path_x->cwin = picoquic_cc_bandwidth_estimation(path_x);
-                /* TODO return min_win instead of set it inside the function? */
                 nr_state->nrss.cwin = path_x->cwin;
             }
 
@@ -253,7 +259,6 @@ static void picoquic_newreno_notify(
             path_x->is_ssthresh_initialized = 1;
             break;
         case picoquic_congestion_notification_rtt_measurement:
-            /* Using RTT increases as signal to get out of initial slow start */
             if (nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
                 nr_state->nrss.ssthresh == UINT64_MAX){
 
@@ -262,9 +267,10 @@ static void picoquic_newreno_notify(
                     nr_state->nrss.cwin = path_x->cwin;
                 }
 
+                /* HyStart. */
+                /* Using RTT increases as signal to get out of initial slow start */
                 if (picoquic_cc_hystart_test(&nr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
-                    cnx->path[0]->pacing.packet_time_microsec, current_time,
-                    cnx->is_time_stamp_enabled)) {
+                    cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     /* RTT increased too much, get out of slow start! */
                     nr_state->nrss.ssthresh = nr_state->nrss.cwin;
                     nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
@@ -272,8 +278,6 @@ static void picoquic_newreno_notify(
                     path_x->is_ssthresh_initialized = 1;
                 }
             }
-            break;
-        case picoquic_congestion_notification_cwin_blocked:
             break;
         case picoquic_congestion_notification_reset:
             picoquic_newreno_reset(nr_state, path_x);

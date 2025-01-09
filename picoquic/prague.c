@@ -288,9 +288,11 @@ void picoquic_prague_notify(
 
     if (pr_state != NULL) {
         switch (notification) {
+        /* RTT measurements will happen before acknowledgement is signalled */
         case picoquic_congestion_notification_acknowledgement: {
             if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
                 pr_state->ssthresh == UINT64_MAX) {
+                /* Increase cwin based on bandwidth estimation. */
                 path_x->cwin = picoquic_cc_bandwidth_estimation(path_x);
             }
 
@@ -353,7 +355,6 @@ void picoquic_prague_notify(
             }
             break;
         case picoquic_congestion_notification_rtt_measurement:
-            /* Using RTT increases as signal to get out of initial slow start */
             if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
                 pr_state->ssthresh == UINT64_MAX) {
 
@@ -361,6 +362,8 @@ void picoquic_prague_notify(
                     path_x->cwin = picoquic_cc_increase_cwin_for_long_rtt(path_x);
                 }
 
+                /* HyStart. */
+                /* Using RTT increases as signal to get out of initial slow start */
                 if (picoquic_cc_hystart_test(&pr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                     cnx->path[0]->pacing.packet_time_microsec, current_time,
                     cnx->is_time_stamp_enabled)) {
@@ -374,7 +377,6 @@ void picoquic_prague_notify(
         case picoquic_congestion_notification_reset:
             picoquic_prague_reset(cnx, pr_state, path_x);
             break;
-        case picoquic_congestion_notification_cwin_blocked:
         default:
             /* ignore */
             break;
