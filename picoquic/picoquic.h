@@ -1363,8 +1363,8 @@ int picoquic_mark_datagram_ready_path(picoquic_cnx_t* cnx, uint64_t unique_path_
  * number of bytes at the provided address, and provide a return code 0 from
  * the callback in case of success, or non zero in case of error.
  * 
- * There are two variants of "picoquic_callback_prepare_datagram", the old one
- * and the new one, "picoquic_callback_prepare_datagram_ex", which adds
+ * There are two variants of "picoquic_provide_datagram_buffer", the old one
+ * and the new one, "picoquic_provide_datagram_buffer_ex", which adds
  * an "is_active" parameter. This parameter helps handling some cases:
  * 
  * - if the application marked the context ready by mistake, it 
