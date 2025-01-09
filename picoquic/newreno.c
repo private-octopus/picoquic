@@ -220,7 +220,7 @@ static void picoquic_newreno_notify(
             if (nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
                 nr_state->nrss.ssthresh == UINT64_MAX) {
                 /* RTT measurements will happen before acknowledgement is signalled */
-                picoquic_cc_update_bandwidth(path_x);
+                path_x->cwin = picoquic_cc_bandwidth_estimation(path_x);
                 /* TODO return min_win instead of set it inside the function? */
                 nr_state->nrss.cwin = path_x->cwin;
             }
@@ -239,7 +239,7 @@ static void picoquic_newreno_notify(
         case picoquic_congestion_notification_timeout:
             /* TODO fix test cases first. */
             /*if (picoquic_hystart_loss_test(&nr_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) {
-                /* exit slow start. #1#
+                exit slow start.
                 picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
                 path_x->cwin = nr_state->nrss.cwin;
             }*/
@@ -258,7 +258,7 @@ static void picoquic_newreno_notify(
                 nr_state->nrss.ssthresh == UINT64_MAX){
 
                 if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
-                    picoquic_cc_increase_cwin_for_long_rtt(path_x);
+                    path_x->cwin = picoquic_cc_increase_cwin_for_long_rtt(path_x);
                     nr_state->nrss.cwin = path_x->cwin;
                 }
 

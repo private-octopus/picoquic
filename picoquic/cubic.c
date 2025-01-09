@@ -245,7 +245,7 @@ static void cubic_notify(
             case picoquic_congestion_notification_acknowledgement:
                 switch (cubic_state->alg_state) {
                     case picoquic_cubic_alg_slow_start:
-                        picoquic_cc_update_bandwidth(path_x);
+                        path_x->cwin = picoquic_cc_bandwidth_estimation(path_x);
 
                         if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                             //if (path_x->bytes_in_transit > path_x->cwin) {
@@ -453,12 +453,6 @@ static void dcubic_notify(
     path_x->is_cc_data_updated = 1;
     if (cubic_state != NULL) {
         switch (notification) {
-            case picoquic_congestion_notification_acknowledgement:
-            case picoquic_congestion_notification_seed_cwin:
-            case picoquic_congestion_notification_reset:
-                /* TODO avoid calc pacing rate twice. */
-                cubic_notify(cnx, path_x, notification, ack_state, current_time);
-                break;
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
                 switch (cubic_state->alg_state) {
@@ -478,8 +472,6 @@ static void dcubic_notify(
                             cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                         }
                         break;
-                    /*default:
-                        break;*/
                 }
                 break;
             case picoquic_congestion_notification_rtt_measurement:
@@ -487,7 +479,7 @@ static void dcubic_notify(
                     case picoquic_cubic_alg_slow_start:
                         /* if in slow start, increase the window for long delay RTT */
                         if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT && cubic_state->ssthresh == UINT64_MAX) {
-                            picoquic_cc_increase_cwin_for_long_rtt(path_x);
+                            path_x->cwin = picoquic_cc_increase_cwin_for_long_rtt(path_x);
                         }
 
                         /* Using RTT increases as congestion signal. This is used
@@ -501,9 +493,9 @@ static void dcubic_notify(
                     case picoquic_cubic_alg_recovery:
                         /* if in slow start, increase the window for long delay RTT */
                         if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT && cubic_state->ssthresh == UINT64_MAX) {
-                            picoquic_cc_increase_cwin_for_long_rtt(path_x);
+                            path_x->cwin = picoquic_cc_increase_cwin_for_long_rtt(path_x);
                         }
-                    /* continue */
+                        /* continue */
                     case picoquic_cubic_alg_congestion_avoidance:
                         if (picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                                 cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
@@ -514,16 +506,18 @@ static void dcubic_notify(
                                 }
                         }
                         break;
-                    /*default:
-                        break;*/
                 }
                 break;
             case picoquic_congestion_notification_spurious_repeat:
                 /* In contrast to Cubic, do nothing here */
+                break;
             case picoquic_congestion_notification_ecn_ec:
                 /* In contrast to Cubic, do nothing here */
-            default:
                 break;
+            default:
+                cubic_notify(cnx, path_x, notification, ack_state, current_time);
+                /* return immediately to avoid calculation of pacing rate twice. */
+                return;
         }
 
         /* Compute pacing data */

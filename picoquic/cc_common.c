@@ -61,6 +61,7 @@ uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* p
     else {
        sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
     }
+
     return sequence_number;
 }
 
@@ -74,6 +75,7 @@ uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x
     else {
         highest_acknowledged = cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged;
     }
+
     return highest_acknowledged;
 }
 
@@ -87,6 +89,7 @@ uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* pat
     else {
         latest_time_acknowledged = cnx->pkt_ctx[picoquic_packet_context_application].latest_time_acknowledged;
     }
+
     return latest_time_acknowledged;
 }
 
@@ -95,7 +98,6 @@ void picoquic_cc_filter_rtt_min_max(picoquic_min_max_rtt_t * rtt_track, uint64_t
 {
     int x = rtt_track->sample_current;
     int x_max;
-
 
     rtt_track->samples[x] = rtt;
 
@@ -217,47 +219,65 @@ int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_mea
 }
 
 uint64_t picoquic_cc_slow_start_increase(picoquic_path_t * path_x, uint64_t nb_delivered) {
+    /* App limited. */
+    if (!path_x->cnx->cwin_blocked) {
+        return 0;
+    }
+
     return nb_delivered;
 }
 
 uint64_t picoquic_cc_slow_start_increase_ex(picoquic_path_t * path_x, uint64_t nb_delivered, int in_css)
 {
-    if (in_css) { /* in consecutive Slow Start */
-        return nb_delivered / PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR;
-    } else { /* original Slow Start */
-        return picoquic_cc_slow_start_increase(path_x, nb_delivered);
+    if (in_css) {
+        /* In consecutive Slow Start. */
+        return picoquic_cc_slow_start_increase(path_x, nb_delivered / PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR);
     }
+
+    /* Fallback to traditional Slow Start. */
+    return picoquic_cc_slow_start_increase(path_x, nb_delivered); /* nb_delivered; */
 }
 
 uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha) {
-    /* TODO replace nb_delivered with picoquic_hystart_increase_ex(path_x, nb_delivered, is_css) for hystart++ support? */
     if (prague_alpha != 0) { /* monitoring of ECN */
+        uint64_t delta = nb_delivered;
+
+        /* Calculate delta based on prague_ahpha. */
         if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
-            return (nb_delivered * (1024 - prague_alpha)) / 1024;
-        }
-        else {
-            uint64_t delta = nb_delivered;
+            /* smoothed_rtt <= 100ms */
+            delta *= (1024 - prague_alpha);
+            delta /= 1024;
+        } else {
             delta *= path_x->smoothed_rtt;
             delta *= (1024 - prague_alpha);
             delta /= PICOQUIC_TARGET_RENO_RTT;
             delta /= 1024;
-            return delta;
         }
-    } else {
-        return picoquic_cc_slow_start_increase_ex(path_x, nb_delivered, in_css);
+
+        return picoquic_cc_slow_start_increase_ex(path_x, delta, in_css);
     }
+
+    /* Fallback to HyStart++ Consecutive Slow Start. */
+    return picoquic_cc_slow_start_increase_ex(path_x, nb_delivered, in_css);
 }
 
-void picoquic_cc_update_bandwidth(picoquic_path_t* path_x) {
-    /* RTT measurements will happen after the bandwidth is estimated */
+/* Increase cwin based on bandwidth estimation. */
+uint64_t picoquic_cc_bandwidth_estimation(picoquic_path_t* path_x) {
+    /* RTT measurements will happen after the bandwidth is estimated. */
     uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
     uint64_t min_win = max_win / 2;
-    if (path_x->cwin < min_win) {
-        path_x->cwin = min_win;
+
+    /* Return increased cwin, if larger than current cwin. */
+    if (min_win > path_x->cwin) {
+        return min_win;
     }
+
+    /* Otherwise, return current cwin. */
+    return path_x->cwin;
 }
 
-void picoquic_cc_increase_cwin_for_long_rtt(picoquic_path_t * path_x) {
+/* Increase cwin for long RTT connections. */
+uint64_t picoquic_cc_increase_cwin_for_long_rtt(picoquic_path_t * path_x) {
     uint64_t min_cwnd;
 
     if (path_x->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
@@ -267,12 +287,15 @@ void picoquic_cc_increase_cwin_for_long_rtt(picoquic_path_t * path_x) {
         min_cwnd = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
     }
 
+    /* Return increased cwin, if larger than current cwin. */
     if (min_cwnd > path_x->cwin) {
-        path_x->cwin = min_cwnd;
+        return min_cwnd;
     }
+
+    /* Otherwise, return current cwin. */
+    return path_x->cwin;
 }
 
-/* TODO check picoquic_cc_increase_cwin_for_long_rtt vs picoquic_cc_increased_window */
 uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_window)
 {
     uint64_t new_window;
@@ -282,7 +305,7 @@ uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_win
     else {
         double w = (double)previous_window;
         w /= (double)PICOQUIC_TARGET_RENO_RTT;
-        w *= (cnx->path[0]->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT)? PICOQUIC_TARGET_SATELLITE_RTT: cnx->path[0]->rtt_min;
+        w *= (cnx->path[0]->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) ? PICOQUIC_TARGET_SATELLITE_RTT : (double)cnx->path[0]->rtt_min;
         new_window = (uint64_t)w;
     }
     return new_window;

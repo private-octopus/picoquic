@@ -72,9 +72,9 @@ uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t n
 /*
  * Increases window dependent on bandwidth estimation.
  */
-void picoquic_cc_update_bandwidth(picoquic_path_t* path_x);
+uint64_t picoquic_cc_bandwidth_estimation(picoquic_path_t* path_x);
 
-void picoquic_cc_increase_cwin_for_long_rtt(picoquic_path_t * path_x);
+uint64_t picoquic_cc_increase_cwin_for_long_rtt(picoquic_path_t * path_x);
 
 /* Many congestion control algorithms run a parallel version of new reno in order
  * to provide a lower bound estimate of either the congestion window or the
