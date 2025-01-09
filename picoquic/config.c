@@ -82,7 +82,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_ROOT_TRUST_FILE, 't', "root_trust_file", 1, "file", "root trust file" },
     { picoquic_option_FORCE_ZERO_SHARE, 'z', "force_zero_share", 0, "", "Set TLS zero share behavior on client, to force HRR" },
     { picoquic_option_CNXID_LENGTH, 'I', "cnxid_length", 1, "length", "Length of CNX_ID used by the client, default=8" },
-    { picoquic_option_Idle_Timeout, 'd', "idle_timeout", 1, "ms", "Duration of idle timeout in milliseconds" },
+    { picoquic_option_Idle_Timeout, 'd', "idle_timeout", 1, "ms", "Duration of idle timeout in milliseconds (Default 30,000ms)" },
     { picoquic_option_NO_DISK, 'D', "no_disk", 0, "", "no disk: do not save received files on disk" },
     { picoquic_option_LARGE_CLIENT_HELLO, 'Q', "large_client_hello", 0, "",
     "send a large client hello in order to test post quantum readiness" },
@@ -896,6 +896,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     config->nb_connections = 256;
     config->initial_random = 3;
     config->cwin_max = UINT64_MAX;
+    config->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000;
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)
