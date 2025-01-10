@@ -351,26 +351,26 @@ target_include_directories(picohttp-core
         picoquic)
 set_picoquic_compile_settings(picohttp-core)
 
-add_executable(picoquicdemo
-    picoquicfirst/picoquicdemo.c
-    picoquicfirst/getopt.c)
-idf_build_executable(picoquicdemo)
-target_link_libraries(picoquicdemo
-    PRIVATE
-        ${PTLS_LIBRARIES}
-        ${OPENSSL_LIBRARIES}
-        ${MBEDTLS_LIBRARIES}
-        picoquic-log
-        picoquic-core
-        picohttp-core)
-target_include_directories(picoquicdemo PRIVATE picohttp)
-set_picoquic_compile_settings(picoquicdemo)
+#add_executable(picoquicdemo
+#    picoquicfirst/picoquicdemo.c
+#    picoquicfirst/getopt.c)
+#idf_build_executable(picoquicdemo)
+#target_link_libraries(picoquicdemo
+#    PRIVATE
+#        ${PTLS_LIBRARIES}
+#        ${OPENSSL_LIBRARIES}
+#        ${MBEDTLS_LIBRARIES}
+#        picoquic-log
+#        picoquic-core
+#        picohttp-core)
+#target_include_directories(picoquicdemo PRIVATE picohttp)
+#set_picoquic_compile_settings(picoquicdemo)
 
-add_executable(picolog_t picolog/picolog.c)
-idf_build_executable(picolog_t)
-target_link_libraries(picolog_t PRIVATE picoquic-log picoquic-core)
-target_include_directories(picolog_t PRIVATE loglib)
-set_picoquic_compile_settings(picolog_t)
+#add_executable(picolog_t picolog/picolog.c)
+#idf_build_executable(picolog_t)
+#target_link_libraries(picolog_t PRIVATE picoquic-log picoquic-core)
+#target_include_directories(picolog_t PRIVATE loglib)
+#set_picoquic_compile_settings(picolog_t)
 
 include(CTest)
 
@@ -436,7 +436,7 @@ add_custom_target(
     ${CLANG_FORMAT_SOURCE_FILES})
 
 # Specify Install targets
-install(TARGETS picoquicdemo picolog_t picoquic-core picoquic-log picohttp-core
+install(TARGETS picoquic-core picoquic-log
         RUNTIME DESTINATION bin
         BUNDLE DESTINATION bin
         FRAMEWORK DESTINATION lib
