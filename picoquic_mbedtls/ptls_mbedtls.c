@@ -757,8 +757,9 @@ ptls_cipher_suite_t ptls_mbedtls_aes256gcmsha384 = {
 .id = PTLS_CIPHER_SUITE_AES_256_GCM_SHA384,
 .name = PTLS_CIPHER_SUITE_NAME_AES_256_GCM_SHA384,
 .aead = &ptls_mbedtls_aes256gcm,
-.hash = &ptls_mbedtls_sha384};
+.hash = &ptls_mbedtls_sha384}
 
+#if defined(MBEDTLS_CHACHA20_C)
 static int ptls_mbedtls_aead_setup_chacha20poly1305(ptls_aead_context_t* _ctx, int is_enc, const void* key_bytes, const void* iv)
 {
     return ptls_mbedtls_aead_setup_crypto(_ctx, is_enc, key_bytes, iv, PSA_ALG_CHACHA20_POLY1305, 256, PSA_KEY_TYPE_CHACHA20);
@@ -784,6 +785,7 @@ ptls_cipher_suite_t ptls_mbedtls_chacha20poly1305sha256 = {.id = PTLS_CIPHER_SUI
 .name = PTLS_CIPHER_SUITE_NAME_CHACHA20_POLY1305_SHA256,
 .aead = &ptls_mbedtls_chacha20poly1305,
 .hash = &ptls_mbedtls_sha256};
+#endif
 
 /* Key exchange algorithms.
  * The Picotls framework defines these algorithms as ptls_key_exchange_algorithm_t,

@@ -134,15 +134,20 @@ extern ptls_cipher_algorithm_t ptls_mbedtls_aes128ecb;
 extern ptls_cipher_algorithm_t ptls_mbedtls_aes256ecb;
 extern ptls_cipher_algorithm_t ptls_mbedtls_aes128ctr;
 extern ptls_cipher_algorithm_t ptls_mbedtls_aes256ctr;
+#ifdef MBEDTLS_CHACHA20_C
 extern ptls_cipher_algorithm_t ptls_mbedtls_chacha20;
-
+#endif
 extern ptls_aead_algorithm_t ptls_mbedtls_aes128gcm;
 extern ptls_aead_algorithm_t ptls_mbedtls_aes256gcm;
+#if defined(MBEDTLS_CHACHA20_C)
 extern ptls_aead_algorithm_t ptls_mbedtls_chacha20poly1305;
+#endif
 
 extern ptls_cipher_suite_t ptls_mbedtls_aes128gcmsha256;
 extern ptls_cipher_suite_t ptls_mbedtls_aes256gcmsha384;
+#if defined(MBEDTLS_CHACHA20_C)
 extern ptls_cipher_suite_t ptls_mbedtls_chacha20poly1305sha256;
+#endif
 
 extern ptls_key_exchange_algorithm_t ptls_mbedtls_secp256r1;
 extern ptls_key_exchange_algorithm_t ptls_mbedtls_x25519;
@@ -159,19 +164,23 @@ static int test_key_exchange(ptls_key_exchange_algorithm_t* client, ptls_key_exc
 
 int mbedtls_crypto_test()
 {
-    ptls_cipher_algorithm_t* cipher_test[5] = {
+    ptls_cipher_algorithm_t* cipher_test[] = {
         &ptls_mbedtls_aes128ecb,
         &ptls_mbedtls_aes128ctr,
         &ptls_mbedtls_aes256ecb,
         &ptls_mbedtls_aes256ctr,
+#if defined(MBEDTLS_CHACHA20_C)
         &ptls_mbedtls_chacha20
+#endif
     };
     ptls_cipher_algorithm_t* cipher_ref[5] = {
         &ptls_minicrypto_aes128ecb,
         &ptls_minicrypto_aes128ctr,
         &ptls_minicrypto_aes256ecb,
         &ptls_minicrypto_aes256ctr,
+#if defined(MBEDTLS_CHACHA20_C)
         &ptls_minicrypto_chacha20
+#endif
     };
     int ret = 0;
 
@@ -1202,12 +1211,14 @@ int mbedtls_configure_test()
     int cipher_suite_match_low = 0;
     int cipher_suite_match_high = 0;
     int key_exchange_max = 0;
-    ptls_cipher_suite_t* targets[3] = {
+    ptls_cipher_suite_t* targets[] = {
         &ptls_mbedtls_aes128gcmsha256,
         &ptls_mbedtls_aes256gcmsha384,
+#if defined(MBEDTLS_CHACHA20_C)
         &ptls_mbedtls_chacha20poly1305sha256
+#endif
     };
-    ptls_key_exchange_algorithm_t* exchange[3] = {
+    ptls_key_exchange_algorithm_t* exchange[] = {
         &ptls_mbedtls_secp256r1, &ptls_mbedtls_x25519 };
 
     /* Cleanup previous initiation of the TLS API and do it cleanly. */
@@ -1215,7 +1226,7 @@ int mbedtls_configure_test()
         TLS_API_INIT_FLAGS_NO_FUSION);
     /* Verify that the negotiated parameters have the expected value */
     for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX; i++) {
-        for (int j = 0; j < 3; j++) {
+        for (int j = 0; j < sizeof(targets)/sizeof(ptls_cipher_suite_t*); j++) {
             if (targets[j] == picoquic_cipher_suites[i].high_memory_suite) {
                 cipher_suite_match_high |= (1 << j);
             }
