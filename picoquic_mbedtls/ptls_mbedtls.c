@@ -365,7 +365,7 @@ ptls_cipher_algorithm_t ptls_mbedtls_aes256ctr = {
     sizeof(struct st_ptls_mbedtls_cipher_context_t),
     ptls_mbedtls_cipher_setup_aes256_ctr};
 
-
+#ifdef MBEDTLS_CHACHA20_C
 #if 0
 /*
  * Implementation of CHACHA20 using the PSA API.
@@ -438,6 +438,7 @@ static int ptls_mbedtls_cipher_setup_crypto_chacha20(ptls_cipher_context_t *_ctx
 ptls_cipher_algorithm_t ptls_mbedtls_chacha20 = {
     "CHACHA20", PTLS_CHACHA20_KEY_SIZE, 1 /* block size */, PTLS_CHACHA20_IV_SIZE, sizeof(struct st_ptls_mbedtls_chacha20_context_t),
     ptls_mbedtls_cipher_setup_crypto_chacha20};
+#endif
 #endif
 
 /* Definitions of AEAD algorithms.
