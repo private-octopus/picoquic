@@ -365,7 +365,7 @@ int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, con
 }
 
 /* Hash connection ids for picohash_table's */
-uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid)
+uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid, const uint8_t * hash_seed)
 {
     uint64_t val64 = 0;
     size_t i = 0;
@@ -408,21 +408,31 @@ uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id)
     return val64;
 }
 
-uint64_t picoquic_hash_addr(const struct sockaddr* addr)
+/* Hash function for addresses. */
+
+size_t picoquic_hash_addr_bytes(const struct sockaddr* addr, uint8_t* bytes)
 {
-    uint64_t h;
-
+    size_t l = 0;
     if (addr->sa_family == AF_INET) {
-        struct sockaddr_in* a4 = (struct sockaddr_in*)addr;
-        h = picohash_bytes((uint8_t*)&a4->sin_addr , 4);
-        h += 128ull * a4->sin_port;
+        memcpy(bytes, &((struct sockaddr_in*)addr)->sin_addr, 4);
+        l += 4;
+        memcpy(bytes + l, &((struct sockaddr_in*)addr)->sin_port, 2);
+        l += 2;
     }
-    else {
-        struct sockaddr_in6* a6 = (struct sockaddr_in6*)addr;
-        h = picohash_bytes((uint8_t*)& a6->sin6_addr, 16);
-        h += 128ull * a6->sin6_port;
+    else if (addr->sa_family == AF_INET6) {
+        memcpy(bytes, &((struct sockaddr_in6*)addr)->sin6_addr, 16);
+        l += 16;
+        memcpy(bytes + l, &((struct sockaddr_in6*)addr)->sin6_port, 2);
+        l += 2;
     }
+    return l;
+}
 
+uint64_t picoquic_hash_addr(const struct sockaddr* addr, const uint8_t* hash_seed)
+{
+    uint8_t bytes[18];
+    size_t l = picoquic_hash_addr_bytes(addr, bytes);
+    uint64_t h = picohash_bytes(bytes, (uint32_t)l, hash_seed);
     return h;
 }
 #if 0

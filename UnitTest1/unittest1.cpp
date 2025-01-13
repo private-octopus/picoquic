@@ -48,6 +48,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picohash_bytes)
+        {
+            int ret = picohash_bytes_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(siphash)
+        {
+            int ret = siphash_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picolog_basic)
         {
             int ret = picolog_basic_test();

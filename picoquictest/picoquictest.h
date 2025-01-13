@@ -43,6 +43,8 @@ int util_uint8_to_str_test();
 int util_memcmp_test();
 int util_threading_test();
 int picohash_test();
+int picohash_bytes_test();
+int siphash_test();
 int picohash_embedded_test();
 int picolog_basic_test();
 int bytestream_test();

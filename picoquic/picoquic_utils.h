@@ -90,9 +90,10 @@ uint8_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic
 uint8_t picoquic_parse_connection_id(const uint8_t* bytes, uint8_t len, picoquic_connection_id_t *cnx_id);
 int picoquic_is_connection_id_null(const picoquic_connection_id_t * cnx_id);
 int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, const picoquic_connection_id_t * cnx_id2);
-uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid);
+uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid, const uint8_t * hash_seed);
 uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id);
-uint64_t picoquic_hash_addr(const struct sockaddr* addr);
+size_t picoquic_hash_addr_bytes(const struct sockaddr* addr, uint8_t* bytes);
+uint64_t picoquic_hash_addr(const struct sockaddr* addr, const uint8_t* hash_seed);
 size_t picoquic_parse_hexa(char const* hex_input, size_t input_length, uint8_t* bin_output, size_t output_max);
 uint8_t picoquic_parse_connection_id_hexa(char const * hex_input, size_t input_length, picoquic_connection_id_t * cnx_id);
 int picoquic_print_connection_id_hexa(char* buf, size_t buf_len, const picoquic_connection_id_t* cnxid);

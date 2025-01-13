@@ -52,6 +52,8 @@ static const picoquic_test_def_t test_table[] = {
     { "threading", util_threading_test },
     { "picohash", picohash_test },
     { "picohash_embedded", picohash_embedded_test },
+    { "picohash_bytes", picohash_bytes_test },
+    { "siphash", siphash_test },
     { "picolog_basic", picolog_basic_test },
     { "bytestream", bytestream_test },
     { "sockloop_basic", sockloop_basic_test },

@@ -175,6 +175,7 @@
     <ClCompile Include="sender.c" />
     <ClCompile Include="bbr.c" />
     <ClCompile Include="sim_link.c" />
+    <ClCompile Include="siphash.c" />
     <ClCompile Include="sockloop.c" />
     <ClCompile Include="spinbit.c" />
     <ClCompile Include="ticket_store.c" />

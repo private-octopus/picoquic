@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.29.1
+        VERSION 1.1.30.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -105,6 +105,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sacks.c
     picoquic/sender.c
     picoquic/sim_link.c
+    picoquic/siphash.c
     picoquic/sockloop.c
     picoquic/spinbit.c
     picoquic/ticket_store.c
@@ -124,7 +125,8 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_logger.h
      picoquic/picoquic_binlog.h
      picoquic/picoquic_config.h
-     picoquic/picoquic_lb.h)
+     picoquic/picoquic_lb.h
+     picoquic/siphash.h)
 
 set(LOGLIB_LIBRARY_FILES
     loglib/autoqlog.c
