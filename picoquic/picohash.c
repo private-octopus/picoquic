@@ -193,8 +193,8 @@ uint64_t picohash_bytes(const uint8_t* bytes, size_t length, const uint8_t* hash
     for (uint32_t i = 0; i < length; i++) {
         hash ^= bytes[i];
         hash ^= hash_seed[i & 15];
+        hash ^= (hash << 8);
         hash += (hash >> rotate);
-        hash ^= (hash << 15);
         rotate = (int)(hash & 31) + 11;
     }
     hash ^= (hash >> rotate);
