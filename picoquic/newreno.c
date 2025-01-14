@@ -126,6 +126,7 @@ void picoquic_newreno_sim_notify(
     case picoquic_congestion_notification_timeout:
         /* if the loss happened in this period, enter recovery */
         if (nr_state->recovery_sequence <= ack_state->lost_packet_number) {
+        /* if (nr_state->recovery_sequence <= ack_state->lost_packet_number) { */
             picoquic_newreno_sim_enter_recovery(nr_state, cnx, path_x, notification, current_time);
         }
         break;
@@ -245,14 +246,13 @@ static void picoquic_newreno_notify(
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
             /* TODO fix test cases first. */
-            /*if (picoquic_hystart_loss_test(&nr_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) {
-                exit slow start.
+            /* packet_trace qlog_trace qlog_trace_auto qlog_trace_only qlog_trace_ecn l4s_reno pacing_update
+             * quality_update app_limited_reno multipath_callback multipath_quality  */
+            /* if (picoquic_cc_hystart_loss_test(&nr_state->rtt_filter, notification, ack_state->lost_packet_number,
+                PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) { */
                 picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
                 path_x->cwin = nr_state->nrss.cwin;
-            }*/
-
-            picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
-            path_x->cwin = nr_state->nrss.cwin;
+            /* } */
             break;
         case picoquic_congestion_notification_spurious_repeat:
             picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);

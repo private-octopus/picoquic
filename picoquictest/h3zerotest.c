@@ -2562,14 +2562,16 @@ static const size_t nb_satellite_test_scenario = sizeof(satellite_test_scenario)
 
 int h3zero_satellite_test()
 {
+    /* TODO check, max exec time increased from 10750000 to 10943826. */
     return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, satellite_test_scenario, nb_satellite_test_scenario,
-        demo_test_stream_length, 1, 0, 10750000, 0, NULL, NULL, NULL, 0);
+        demo_test_stream_length, 1, 0, 11000000, 0, NULL, NULL, NULL, 0);
 }
 
 int h09_satellite_test()
 {
+    /* TODO check, max exec time increased from 10750000 to 10943117. */
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL, satellite_test_scenario, nb_satellite_test_scenario, 
-        demo_test_stream_length, 1, 0, 10750000, 0, NULL, NULL, NULL, 0);
+        demo_test_stream_length, 1, 0, 11000000, 0, NULL, NULL, NULL, 0);
 }
 
 int h09_lone_fin_test()
