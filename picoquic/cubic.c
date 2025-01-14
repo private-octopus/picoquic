@@ -25,8 +25,8 @@
 #include "cc_common.h"
 
 #define PICOQUIC_CUBIC_C 0.4
-#define PICOQUIC_CUBIC_BETA 7.0 / 8.0
-#define PICOQUIC_CUBIC_BETA_LOSS 3.0 / 4.0
+#define PICOQUIC_CUBIC_BETA_ECN (7.0 / 8.0)
+#define PICOQUIC_CUBIC_BETA (3.0 / 4.0)
 
 typedef enum {
     picoquic_cubic_alg_slow_start = 0,
@@ -129,7 +129,7 @@ static void cubic_enter_avoidance(
     picoquic_cubic_state_t* cubic_state,
     uint64_t current_time)
 {
-    cubic_state->K = cubic_root(cubic_state->W_max*(1.0 - PICOQUIC_CUBIC_BETA) / PICOQUIC_CUBIC_C);
+    cubic_state->K = cubic_root(cubic_state->W_max*(1.0 - PICOQUIC_CUBIC_BETA_ECN) / PICOQUIC_CUBIC_C);
     cubic_state->alg_state = picoquic_cubic_alg_congestion_avoidance;
     cubic_state->start_of_epoch = current_time;
     cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
@@ -149,13 +149,13 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
     /* Apply fast convergence */
     if (cubic_state->W_max < cubic_state->W_last_max) {
         cubic_state->W_last_max = cubic_state->W_max;
-        cubic_state->W_max = cubic_state->W_max * PICOQUIC_CUBIC_BETA;
+        cubic_state->W_max = cubic_state->W_max * PICOQUIC_CUBIC_BETA_ECN;
     }
     else {
         cubic_state->W_last_max = cubic_state->W_max;
     }
     /* Compute the new ssthresh */
-    cubic_state->ssthresh = (uint64_t)(cubic_state->W_max * PICOQUIC_CUBIC_BETA * (double)path_x->send_mtu);
+    cubic_state->ssthresh = (uint64_t)(cubic_state->W_max * PICOQUIC_CUBIC_BETA_ECN * (double)path_x->send_mtu);
     if (cubic_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
         /* If things are that bad, fall back to slow start */
 
@@ -484,6 +484,7 @@ static void dcubic_notify(
                             path_x->cwin = picoquic_cc_increase_cwin_for_long_rtt(path_x);
                         }
 
+                        /* HyStart. */
                         /* Using RTT increases as congestion signal. This is used
                          * for getting out of slow start, but also for ending a cycle
                          * during congestion avoidance */
@@ -499,13 +500,16 @@ static void dcubic_notify(
                         }
                         /* continue */
                     case picoquic_cubic_alg_congestion_avoidance:
+                        /* Using RTT increases as congestion signal. This is used
+                         * for getting out of slow start, but also for ending a cycle
+                         * during congestion avoidance */
                         if (picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
                                 cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                             if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
                                 cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x)) {
                                 /* re-enter recovery */
                                 cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
-                                }
+                            }
                         }
                         break;
                 }

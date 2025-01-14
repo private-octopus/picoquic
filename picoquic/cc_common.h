@@ -31,6 +31,33 @@ extern "C" {
 #define PICOQUIC_SMOOTHED_LOSS_FACTOR (1.0/16.0)
 #define PICOQUIC_SMOOTHED_LOSS_THRESHOLD (0.15)
 
+/*
+ * HyStart++
+ */
+
+/* TODO HyStart++ isn't implemented yet! */
+/* It is RECOMMENDED that a HyStart++ implementation use the following constants: */
+/* MIN_RTT_THRESH = 4 msec
+ * MAX_RTT_THRESH = 16 msec
+ * MIN_RTT_DIVISOR = 8
+ * N_RTT_SAMPLE = 8
+ * CSS_GROWTH_DIVISOR = 4
+ * CSS_ROUNDS = 5
+ * L = infinity if paced, L = 8 if non-paced
+ */
+/* Take a look at the draft for more information. */
+#define PICOQUIC_HYSTART_PP_MIN_RTT_THRESH 4000 /* msec */
+#define PICOQUIC_HYSTART_PP_MAX_RTT_THRESH 16000 /* msec */
+#define PICOQUIC_HYSTART_PP_MIN_RTT_DIVISOR 8
+#define PICOQUIC_HYSTART_PP_N_RTT_SAMPLE 8
+#define PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR 4
+#define PICOQUIC_HYSTART_PP_CSS_ROUNDS 5
+/* Since picoquic is always paced, L is set to infinity (UINT64_MAX).
+ * Because L is only used to limit the increase function, we don't need it at all. For more information, take a look at
+ * the picoquic_hystart_pp_increase() function.
+ */
+/* #define PICOQUIC_HYSTART_PP_L UINT64_MAX */ /* infinity if paced, L = 8 if non-paced */
+
 typedef struct st_picoquic_min_max_rtt_t {
     uint64_t last_rtt_sample_time;
     uint64_t rtt_filtered_min;

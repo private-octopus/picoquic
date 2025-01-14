@@ -24,33 +24,6 @@
 #include <string.h>
 #include "cc_common.h"
 
-/*
- * HyStart++
- */
-
-/* TODO not used yet. */
-/* It is RECOMMENDED that a HyStart++ implementation use the following constants: */
-/* MIN_RTT_THRESH = 4 msec
- * MAX_RTT_THRESH = 16 msec
- * MIN_RTT_DIVISOR = 8
- * N_RTT_SAMPLE = 8
- * CSS_GROWTH_DIVISOR = 4
- * CSS_ROUNDS = 5
- * L = infinity if paced, L = 8 if non-paced
- */
-/* Take a look at the draft for more information. */
-#define PICOQUIC_HYSTART_PP_MIN_RTT_THRESH 4000 /* msec */
-#define PICOQUIC_HYSTART_PP_MAX_RTT_THRESH 16000 /* msec */
-#define PICOQUIC_HYSTART_PP_MIN_RTT_DIVISOR 8
-#define PICOQUIC_HYSTART_PP_N_RTT_SAMPLE 8
-#define PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR 4
-#define PICOQUIC_HYSTART_PP_CSS_ROUNDS 5
-/* Since picoquic is alway paced, L is set to infinity (UINT64_MAX).
- * Because L is only used to limit the increase function, we don't need it at all. For more information, take a look at
- * the picoquic_hystart_pp_increase() function.
- */
-/* #define PICOQUIC_HYSTART_PP_L UINT64_MAX */ /* infinity if paced, L = 8 if non-paced */
-
 uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
     uint64_t sequence_number;
@@ -220,6 +193,11 @@ int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_mea
 
 uint64_t picoquic_cc_slow_start_increase(picoquic_path_t * path_x, uint64_t nb_delivered) {
     /* App limited. */
+    /* TODO discuss
+     * path_x->cwin < path_x->bytes_in_transit returns false in cc code
+     * path_x->cnx->cwin_blocked is set to true
+     * (path_x->cwin < path_x->bytes_in_transit) != path_x->cnx->cwin_blocked?
+     */
     if (!path_x->cnx->cwin_blocked) {
         return 0;
     }

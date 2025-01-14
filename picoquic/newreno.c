@@ -232,6 +232,7 @@ static void picoquic_newreno_notify(
             }
 
             if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
+                /* TODO app limited. */
                 picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
                 path_x->cwin = nr_state->nrss.cwin;
             }
@@ -262,6 +263,7 @@ static void picoquic_newreno_notify(
             if (nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
                 nr_state->nrss.ssthresh == UINT64_MAX){
 
+                /* if in slow start, increase the window for long delay RTT */
                 if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
                     path_x->cwin = picoquic_cc_increase_cwin_for_long_rtt(path_x);
                     nr_state->nrss.cwin = path_x->cwin;
