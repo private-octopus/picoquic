@@ -282,6 +282,8 @@ static picohash_item * picoquic_local_cnxid_to_item(const void* key)
 static uint64_t picoquic_net_id_hash(const void* key, const uint8_t* hash_seed)
 {
     const picoquic_path_t* path_x = (const picoquic_path_t*)key;
+    
+    /* Using siphash, because secret and IP address are chosen by third parties*/
     return picoquic_hash_addr((struct sockaddr*) & path_x->registered_peer_addr, hash_seed);
 }
 
@@ -309,7 +311,8 @@ static uint64_t picoquic_net_icid_hash(const void* key, const uint8_t* hash_seed
     size_t l = picoquic_hash_addr_bytes((struct sockaddr*)&cnx->registered_icid_addr, bytes);
     memcpy(bytes + l, cnx->initial_cnxid.id, cnx->initial_cnxid.id_len);
     l += cnx->initial_cnxid.id_len;
-    h = picohash_bytes(bytes, (uint32_t)l, hash_seed);
+    /* Using siphash, because CNX ID and IP address are chosen by third parties*/
+    h = picohash_siphash(bytes, (uint32_t)l, hash_seed);
     return h;
 }
 
@@ -340,7 +343,8 @@ static uint64_t picoquic_net_secret_hash(const void* key, const uint8_t* hash_se
     size_t l = picoquic_hash_addr_bytes((struct sockaddr*)&cnx->registered_secret_addr, bytes);
     memcpy(bytes + l, cnx->registered_reset_secret, PICOQUIC_RESET_SECRET_SIZE);
     l += PICOQUIC_RESET_SECRET_SIZE;
-    h = picohash_bytes(bytes, (uint32_t)l, hash_seed);
+    /* Using siphash, because secret and IP address are chosen by third parties*/
+    h = picohash_siphash(bytes, (uint32_t)l, hash_seed);
     return h;
 }
 

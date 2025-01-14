@@ -23,6 +23,7 @@
  * Basic hash implementation, like we have seen tons off already.
  */
 #include "picohash.h"
+#include "siphash.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -176,19 +177,43 @@ void picohash_delete(picohash_table* hash_table, int delete_key_too)
     free(hash_table);
 }
 
-#include <stdio.h>
-
-uint64_t picohash_bytes(const uint8_t* bytes, uint32_t length, const uint8_t* hash_seed)
+uint64_t picohash_bytes(const uint8_t* bytes, size_t length, const uint8_t* hash_seed)
 {
-    uint64_t hash = 0x25d479d8f6e8def7ull; /* Initiate with first bytes of PI */
+    uint64_t hash =
+        ((uint64_t)hash_seed[8]) +
+        (((uint64_t)hash_seed[9]) << 8) +
+        (((uint64_t)hash_seed[10]) << 16) +
+        (((uint64_t)hash_seed[11]) << 24) +
+        (((uint64_t)hash_seed[12]) << 32) +
+        (((uint64_t)hash_seed[13]) << 40) +
+        (((uint64_t)hash_seed[14]) << 48) +
+        (((uint64_t)hash_seed[15]) << 56);
+    int rotate = 11;
 
     for (uint32_t i = 0; i < length; i++) {
-        int rotate = (hash_seed[i & 15] & 31) + 13;
-        hash += (hash >> rotate);
         hash ^= bytes[i];
         hash ^= hash_seed[i & 15];
-        hash ^= ((hash << 31) ^ (hash >> 17));
+        hash += (hash >> rotate);
+        hash ^= (hash << 15);
+        rotate = (int)(hash & 31) + 11;
     }
+    hash ^= (hash >> rotate);
     return hash;
 }
 
+uint64_t picohash_siphash(const uint8_t* bytes, size_t length, const uint8_t* hash_seed)
+{
+    uint8_t sip_out[8];
+    uint64_t hash;
+    (void)siphash(bytes, length, hash_seed, sip_out, 8);
+    hash =
+        (uint64_t)sip_out[0] +
+        (((uint64_t)sip_out[1]) << 8) +
+        (((uint64_t)sip_out[2]) << 16) +
+        (((uint64_t)sip_out[3]) << 24) +
+        (((uint64_t)sip_out[4]) << 32) +
+        (((uint64_t)sip_out[5]) << 40) +
+        (((uint64_t)sip_out[6]) << 48) +
+        (((uint64_t)sip_out[7]) << 56);
+    return hash;
+}

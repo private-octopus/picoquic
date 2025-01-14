@@ -70,7 +70,9 @@ void picohash_delete_key(picohash_table* hash_table, void* key, int delete_key_t
 
 void picohash_delete(picohash_table* hash_table, int delete_key_too);
 
-uint64_t picohash_bytes(const uint8_t* key, uint32_t length, const uint8_t* hash_seed);
+uint64_t picohash_bytes(const uint8_t* key, size_t length, const uint8_t* hash_seed);
+
+uint64_t picohash_siphash(const uint8_t* bytes, size_t length, const uint8_t* hash_seed);
 
 #ifdef __cplusplus
 }

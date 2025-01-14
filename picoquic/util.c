@@ -432,7 +432,9 @@ uint64_t picoquic_hash_addr(const struct sockaddr* addr, const uint8_t* hash_see
 {
     uint8_t bytes[18];
     size_t l = picoquic_hash_addr_bytes(addr, bytes);
-    uint64_t h = picohash_bytes(bytes, (uint32_t)l, hash_seed);
+
+    /* Using siphash, because secret and IP address are chosen by third parties*/
+    uint64_t h = picohash_siphash(bytes, (uint32_t)l, hash_seed);
     return h;
 }
 #if 0

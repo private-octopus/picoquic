@@ -21,6 +21,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #ifdef _WINDOWS
 #include <malloc.h>
 #endif
@@ -225,18 +226,18 @@ int picohash_bytes_test()
     int ret = 0;
     size_t test_lengths[12] = { 1, 3, 7, 8, 12, 16, 17, 31, 127, 257, 515, 1024 };
     uint64_t href[12] = {
-        0x37123de71961bf68,
-        0x5d162573aac6c6dd,
-        0xf4bf76a59f4b1f6c,
-        0xba2ddad4a019fb75,
-        0xb853aa3d392912dc,
-        0xdfced79f97377c86,
-        0x9519a480fe7d7355,
-        0x45c2f124bbb2945c,
-        0x52360a8f840ff895,
-        0x91010a2ff18acce8,
-        0x67870e8e28f784bf,
-        0x8bf35ec0fe7139a6
+        0x10a01187347ea5e8,
+        0xd49699541445384f,
+        0x15ab0cecb2b1907c,
+        0x93dcad7590964b11,
+        0x6b929cf5efe34bad,
+        0x3501af284a8b1fa9,
+        0xe2958a7eb8132a2b,
+        0x4bfb209022fc54ae,
+        0x9ad6d55d8a550376,
+        0x8f149c422ceb6fbb,
+        0xa25f36fcc3839c69,
+        0x4acf6be40f5bb2c9
     };
 
     hash_test_init(test, sizeof(test), k, sizeof(k));
@@ -246,7 +247,7 @@ int picohash_bytes_test()
         uint64_t h = picohash_bytes(test, (uint32_t)test_lengths[i], k);
         if (h != href[i]) {
             DBG_PRINTF("H[%zu] = %" PRIx64 " instead of %"PRIx64, i, h, href[i]);
-#if COMPUTING_REFERENCE_BASIC_VALUE
+#ifdef COMPUTING_REFERENCE_BASIC_VALUE
             href[i] = h;
 #else
             ret = -1;
@@ -259,27 +260,10 @@ int picohash_bytes_test()
 
 /* Test of the siphash function
  */
-int siphash(const void* in, const size_t inlen, const void* k, uint8_t* out,
-    const size_t outlen);
-
-static uint64_t low_endian_64(uint8_t* b)
-{
-    uint64_t x =
-        (uint64_t)b[0] + \
-        (((uint64_t)b[1]) << 8) + \
-        (((uint64_t)b[2]) << 16) + \
-        (((uint64_t)b[3]) << 24) + \
-        (((uint64_t)b[4]) << 32) + \
-        (((uint64_t)b[5]) << 40) + \
-        (((uint64_t)b[6]) << 48) + \
-        (((uint64_t)b[7]) << 56);
-    return x;
-}
 
 int siphash_test()
 {
     uint8_t test[1024];
-    uint8_t sip_out[8];
     uint8_t k[16];
     size_t test_lengths[12] = { 1, 3, 7, 8, 12, 16, 17, 31, 127, 257, 515, 1024 };
     uint64_t href[12] = {
@@ -296,26 +280,20 @@ int siphash_test()
         0xd04ee1d420e9bc22,
         0x0a7ad6655680779e
     };
-    int ret;
+    int ret = 0;
+
     hash_test_init(test, sizeof(test), k, sizeof(k));
     /* Compute or check the reference siphash value */
     for (size_t i = 0; i < sizeof(test_lengths) / sizeof(size_t); i++) {
-        if ((ret = siphash(test, test_lengths[i], k, sip_out, 8)) != 0) {
-            DBG_PRINTF("Siphash l=%zu returns %d", test_lengths[i], ret);
-            break;
-        }
-        else
-        {
-            uint64_t h = low_endian_64(sip_out);
-            if (h != href[i]) {
-                DBG_PRINTF("H[%zu] = %" PRIu64 "instead of %"PRIu64, i, h, href[i]);
-#if COMPUTING_REFERENCE_SIPASH_VALUE
-                href[i] = h;
+        uint64_t h = picohash_siphash(test, test_lengths[i], k);
+        if (h != href[i]) {
+            DBG_PRINTF("H[%zu] = %" PRIu64 "instead of %"PRIu64, i, h, href[i]);
+#ifdef COMPUTING_REFERENCE_SIPASH_VALUE
+            href[i] = h;
 #else
-                ret = -1;
-                break;
+            ret = -1;
+            break;
 #endif
-            }
         }
     }
 #ifdef COMPARING_TIMES
@@ -330,7 +308,7 @@ int siphash_test()
         size_t n = 0;
 
         for (size_t i = 0; i + lt < sizeof(test); i++) {
-            (void)siphash(test, lt, k, (uint8_t*)&h, 8);
+            h = picohash_siphash(test, lt, k);
             siphash_sum += h;
             n++;
         }
