@@ -367,15 +367,21 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
     s_ctx->fd = socket(s_ctx->af, SOCK_DGRAM, IPPROTO_UDP);
 #endif
 
-    if (s_ctx->fd == INVALID_SOCKET ||
-        /* TODO: set option IPv6 only */
-        picoquic_socket_set_ecn_options(s_ctx->fd, s_ctx->af, &recv_set, &send_set) != 0 ||
-        picoquic_socket_set_pkt_info(s_ctx->fd, s_ctx->af) != 0 ||
-        picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0 ||
-        picoquic_get_local_address(s_ctx->fd, &local_address) != 0 ||
-        picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
+    if (s_ctx->fd == INVALID_SOCKET) {
+        DBG_PRINTF("1.Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
+        ret = -1;
+    //} else if (picoquic_socket_set_pkt_info(s_ctx->fd, s_ctx->af) != 0) {
+    //    DBG_PRINTF("2.Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
+    //    ret = -1;
+    }else if (picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0) {
+        DBG_PRINTF("3.Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
+        ret = -1;
+    } else if (picoquic_get_local_address(s_ctx->fd, &local_address) != 0) {
+        DBG_PRINTF("4.Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
+        ret = -1;
+    } else if (picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
     {
-        DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
+        DBG_PRINTF("5.Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
         ret = -1;
     }
     else {
@@ -782,13 +788,19 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         param->local_af, param->socket_buffer_size,
         param->extra_socket_required, param->do_not_use_gso, s_ctx)) <= 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+        DBG_PRINTF("%s", "Thread cannot run:picoquic_packet_loop_open_sockets error ");
     }
     else if (loop_callback != NULL) {
         struct sockaddr_storage l_addr;
         ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx, &options);
+        if (ret != 0)
+            DBG_PRINTF("%s", "Thread cannot run:.loopcallback error ");
 
         if (picoquic_store_loopback_addr(&l_addr, s_ctx[0].af, s_ctx[0].port) == 0) {
             ret = loop_callback(quic, picoquic_packet_loop_port_update, loop_callback_ctx, &l_addr);
+            if (ret != 0)
+                DBG_PRINTF("%s", "Thread cannot run:store loopcallback error ");
+
         }
         if (ret == 0 && options.provide_alt_port) {
             int alt_sock = (nb_sockets > 2 && param->local_af == 0) ? 2 : 1;
@@ -806,6 +818,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         }
         send_buffer = malloc(send_buffer_size);
         if (send_buffer == NULL) {
+            DBG_PRINTF("Thread cannot run, Malloc Error <%d>", send_buffer_size);
+            DBG_PRINTF("%s", "Thread cannot run:. malloc error");
             ret = -1;
         }
     }
