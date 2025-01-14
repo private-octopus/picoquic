@@ -411,7 +411,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
 
             s_ctx->port = ntohs(((struct sockaddr_in*)&local_address)->sin_port);
         }
-
+#if 0
         if (socket_buffer_size > 0) {
             socklen_t opt_len;
             int opt_ret;
@@ -443,6 +443,8 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
                 ret = -1;
             }
         }
+#endif
+
 #ifdef _WINDOWS
         if (ret == 0) {
             ret = picoquic_packet_set_windows_socket(send_coalesced, recv_coalesced, s_ctx);
