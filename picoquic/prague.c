@@ -293,7 +293,7 @@ void picoquic_prague_notify(
             if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
                 pr_state->ssthresh == UINT64_MAX) {
                 /* Increase cwin based on bandwidth estimation. */
-                path_x->cwin = picoquic_cc_update_cwin_bandwidth_estimation(path_x);
+                path_x->cwin = picoquic_cc_bandwidth_estimation(path_x);
             }
 
             /* Regardless of the alg state, update alpha */
@@ -360,7 +360,7 @@ void picoquic_prague_notify(
                 pr_state->ssthresh == UINT64_MAX) {
 
                 if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
-                    path_x->cwin = picoquic_cc_update_cwin_for_long_rtt(path_x);
+                    path_x->cwin = picoquic_cc_increase_cwin_for_long_rtt(path_x);
                 }
 
                 /* HyStart. */
