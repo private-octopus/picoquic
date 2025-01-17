@@ -89,6 +89,7 @@ int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_mea
 
 /*
  * Slow Start
+ * Returns number of bytes CWIN should be increased.
  */
 uint64_t picoquic_cc_slow_start_increase(picoquic_path_t* path_x, uint64_t nb_delivered);
 
@@ -97,14 +98,14 @@ uint64_t picoquic_cc_slow_start_increase_ex(picoquic_path_t* path_x, uint64_t nb
 uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha);
 
 /*
- * Increase cwin based on bandwidth estimation.
+ * Returns CWIN based on bandwidth estimation if larger than current CWIN. Otherwise, returns current CWIN.
  */
-uint64_t picoquic_cc_bandwidth_estimation(picoquic_path_t* path_x);
+uint64_t picoquic_cc_update_target_cwin_estimation(picoquic_path_t* path_x);
 
 /*
- * Increase cwin for long RTT connections.
+ * Returns CWIN for long RTT connections if larger than current CWIN. Otherwise, returns current CWIN.
  */
-uint64_t picoquic_cc_increase_cwin_for_long_rtt(picoquic_path_t * path_x);
+uint64_t picoquic_cc_update_cwin_for_long_rtt(picoquic_path_t * path_x);
 
 /* Many congestion control algorithms run a parallel version of new reno in order
  * to provide a lower bound estimate of either the congestion window or the

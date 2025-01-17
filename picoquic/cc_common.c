@@ -239,7 +239,7 @@ uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t n
     return picoquic_cc_slow_start_increase_ex(path_x, nb_delivered, in_css);
 }
 
-uint64_t picoquic_cc_bandwidth_estimation(picoquic_path_t* path_x) {
+uint64_t picoquic_cc_update_target_cwin_estimation(picoquic_path_t* path_x) {
     /* RTT measurements will happen after the bandwidth is estimated. */
     uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
     uint64_t min_win = max_win / 2;
@@ -253,7 +253,7 @@ uint64_t picoquic_cc_bandwidth_estimation(picoquic_path_t* path_x) {
     return path_x->cwin;
 }
 
-uint64_t picoquic_cc_increase_cwin_for_long_rtt(picoquic_path_t * path_x) {
+uint64_t picoquic_cc_update_cwin_for_long_rtt(picoquic_path_t * path_x) {
     uint64_t min_cwnd;
 
     if (path_x->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {

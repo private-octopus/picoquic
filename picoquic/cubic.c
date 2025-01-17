@@ -82,7 +82,7 @@ static double cubic_root(double x)
     double y2;
     double y3;
 
-    /* TODO discuss
+    /*
      * v = 1
      *
      * x = (cubic_state->W_max * (1.0 - PICOQUIC_CUBIC_BETA)) / PICOQUIC_CUBIC_C
@@ -247,7 +247,7 @@ static void cubic_notify(
                 switch (cubic_state->alg_state) {
                     case picoquic_cubic_alg_slow_start:
                         /* Increase cwin based on bandwidth estimation. */
-                        path_x->cwin = picoquic_cc_bandwidth_estimation(path_x);
+                        path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
 
                         if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                             //if (path_x->bytes_in_transit > path_x->cwin) {
@@ -390,7 +390,7 @@ static void cubic_notify(
                     }
                 }
                 break;
-            /* TODO discuss
+            /*
              * cover cubic_reset().
              */
             case picoquic_congestion_notification_reset:
@@ -481,7 +481,7 @@ static void dcubic_notify(
                     case picoquic_cubic_alg_slow_start:
                         /* if in slow start, increase the window for long delay RTT */
                         if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT && cubic_state->ssthresh == UINT64_MAX) {
-                            path_x->cwin = picoquic_cc_increase_cwin_for_long_rtt(path_x);
+                            path_x->cwin = picoquic_cc_update_cwin_for_long_rtt(path_x);
                         }
 
                         /* HyStart. */
@@ -496,7 +496,7 @@ static void dcubic_notify(
                     case picoquic_cubic_alg_recovery:
                         /* if in slow start, increase the window for long delay RTT */
                         if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT && cubic_state->ssthresh == UINT64_MAX) {
-                            path_x->cwin = picoquic_cc_increase_cwin_for_long_rtt(path_x);
+                            path_x->cwin = picoquic_cc_update_cwin_for_long_rtt(path_x);
                         }
                         /* continue */
                     case picoquic_cubic_alg_congestion_avoidance:
