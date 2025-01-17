@@ -139,6 +139,20 @@ namespace PerfAndStressTest
             Assert::AreEqual(ret, 0);
         }
 
+	    TEST_METHOD(satellite_dcubic_seed)
+        {
+            int ret = satellite_dcubic_seeded_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+	    TEST_METHOD(satellite_prague_seed)
+        {
+            int ret = satellite_prague_seeded_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bdp_basic)
         {
             int ret = bdp_basic_test();

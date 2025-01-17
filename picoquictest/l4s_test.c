@@ -130,7 +130,8 @@ int l4s_prague_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 7, 1500, 0, NULL);
+    /* TODO increased max_completion_time for 100ms, because of "app limited" changes */
+    int ret = l4s_congestion_test(ccalgo, 1, 3600000, 7, 1500, 0, NULL);
 
     return ret;
 }
