@@ -145,6 +145,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_frequency_test.c
     picoquictest/app_limited.c
     picoquictest/bytestream_test.c
+    picoquictest/cc_compete_test.c
     picoquictest/cert_verify_test.c
     picoquictest/cleartext_aead_test.c
     picoquictest/code_version_test.c

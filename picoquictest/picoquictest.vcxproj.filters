@@ -195,6 +195,9 @@
     <ClCompile Include="qlog_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="cc_compete_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">
