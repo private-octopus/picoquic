@@ -182,25 +182,13 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
             uint64_t win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
             cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
 
-            /* TODO discuss
-             * path_x->W_max is set to path_x->cwin / path_x->send_mtu further above (converts bytes -> window)
-             * cubic_W_cubic() returns a value > path_x->W_max (delta_t_sec should be positive, cubic->C is constant
-             *                                                  positive -> return value should be positive)
-             * win_cubic converts cwin back to bytes
-             *
-             * cubic->W_reno is divided by 2
-             *
-             * Isn't win_cubic always larger than cubic_state->W_reno?
-             * If clause is unnecessary here.
-             */
-            /* Pick the largest */
-            if ((double)win_cubic > cubic_state->W_reno) {
-                /* if cubic is larger than threshold, switch to cubic mode */
-                path_x->cwin = win_cubic;
-            }
-            else {
-                path_x->cwin = (uint64_t)cubic_state->W_reno;
-            }
+            /* The formulas that compute "W_cubic" at the beginning of congestion avoidance
+            * guarantee that "w_cubic" is larger than "w_reno" even if "fast convergence"
+            * is applied as long as "beta_cubic" is greater than
+            * (-1 + sqrt(1+4))/2, about 0.618033988749895.
+            * Since beta_cubic is set to 3/4, we do not need to compare "w_cubic" and
+            * "w_reno" to pick the largest. */
+            path_x->cwin = win_cubic;
         }
     }
 }
