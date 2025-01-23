@@ -370,6 +370,8 @@ static const picoquic_test_def_t test_table[] = {
     { "satellite_cubic", satellite_cubic_test },
     { "satellite_cubic_seeded", satellite_cubic_seeded_test },
     { "satellite_cubic_loss", satellite_cubic_loss_test },
+    { "satellite_dcubic_seeded", satellite_dcubic_seeded_test },
+    { "satellite_prague_seeded", satellite_prague_seeded_test },
     { "bdp_basic", bdp_basic_test },
     { "bdp_delay", bdp_delay_test },
     { "bdp_ip", bdp_ip_test },

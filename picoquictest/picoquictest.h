@@ -288,6 +288,8 @@ int satellite_bbr1_test();
 int satellite_cubic_test();
 int satellite_cubic_seeded_test();
 int satellite_cubic_loss_test();
+int satellite_dcubic_seeded_test();
+int satellite_prague_seeded_test();
 int bdp_basic_test();
 int bdp_reno_test();
 int bdp_cubic_test();
