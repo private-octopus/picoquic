@@ -1575,6 +1575,7 @@ int crypto_hs_offset_test_one(picoquic_packet_context_enum pc)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    //size_t length = 0;
     uint64_t simulated_time = 0;
     picoquic_connection_id_t initial_cid = { { 0xC0, 0xFF, 0x5E, 0x40, 0, 0, 0, 0}, 8 };
     uint8_t bad_crypto_hs[] = { picoquic_frame_type_crypto_hs, 0x80, 0x01, 0, 0, 4, 1, 2, 3, 4 };
