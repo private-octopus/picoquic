@@ -74,7 +74,7 @@
 *  - after the loop:
 *     - verify that the client scenario was executed properly.
 * 
-* Can we use "qperf" as the protocol? It is designed for exactly that purpose...
+* We use "qperf" as the protocol, as it is designed for exactly that purpose...
 */
 #define MAX_CC_COMPETE_CLIENTS 5
 #define QUIC_PERF_ALPN "perf"
@@ -164,13 +164,13 @@ int cc_compete_create_client_ctx(cc_compete_ctx_t* cc_ctx, cc_compete_test_spec_
 {
     int ret = 0;
     cc_compete_client_t* client_ctx = (cc_compete_client_t*)malloc(sizeof(cc_compete_client_t));
-    picoquic_congestion_algorithm_t* cc_algo = NULL;
-    char const* scenario_text = NULL;
 
     if (client_ctx == NULL){
         ret = -1;
     }
     else {
+        char const* scenario_text = NULL;
+
         memset(client_ctx, 0, sizeof(cc_compete_client_t));
         cc_ctx->client_ctx[client_id] = client_ctx;
         if (client_id == 0) {
@@ -363,7 +363,6 @@ int cc_compete_incoming_packet(cc_compete_ctx_t* cc_ctx, int link_id)
 int cc_compete_prepare_packet(cc_compete_ctx_t* cc_ctx, int node_id, int *is_active)
 {
     int ret = 0;
-    int if_index = 0;
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
     if (packet == NULL) {
         ret = -1;
@@ -425,7 +424,7 @@ int cc_compete_simulation_step(cc_compete_ctx_t* cc_ctx, int * is_active)
     int link_id_next = -1;
     int node_id_next = -1;
     int cnx_id_next = -1;
-    uint64_t t_next_action = UINT_MAX;
+    uint64_t t_next_action = UINT64_MAX;
     enum {
         no_action,
         link_departure,

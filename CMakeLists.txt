@@ -416,6 +416,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
         PUBLIC
             ${PTLS_INCLUDE_DIRS}
             picoquic
+            picohttp
             picoquictest)
     set_picoquic_compile_settings(picoquic-test)
 
