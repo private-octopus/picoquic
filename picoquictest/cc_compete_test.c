@@ -223,7 +223,7 @@ void cc_compete_delete_ctx(cc_compete_ctx_t* cc_ctx)
      * connection contexts */
     for (int i = 0; i < CC_COMPETE_NB_NODES; i++) {
         if (cc_ctx->q_ctx[i] != NULL) {
-            picoquic_free(cc_ctx->q_ctx[0]);
+            picoquic_free(cc_ctx->q_ctx[i]);
             cc_ctx->q_ctx[i] = NULL;
         }
     }
@@ -234,6 +234,8 @@ void cc_compete_delete_ctx(cc_compete_ctx_t* cc_ctx)
             cc_ctx->link[i] = NULL;
         }
     }
+    /* and then free the context itself */
+    free(cc_ctx);
 }
 
 cc_compete_ctx_t* cc_compete_create_ctx(cc_compete_test_spec_t* spec)
@@ -355,7 +357,7 @@ int cc_compete_incoming_packet(cc_compete_ctx_t* cc_ctx, int link_id)
         ret = picoquic_incoming_packet_ex(cc_ctx->q_ctx[node_id], packet->bytes, packet->length,
             (struct sockaddr*)&packet->addr_from, (struct sockaddr*)&packet->addr_to, 0,
             packet->ecn_mark, &first_cnx, cc_ctx->simulated_time);
-
+        free(packet);
     }
     return ret;
 }
