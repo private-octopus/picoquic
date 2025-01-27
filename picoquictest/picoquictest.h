@@ -273,6 +273,7 @@ int cubic_test();
 int cubic_jitter_test();
 int cc_compete_cubic1_test();
 int cc_compete_cubic2_test();
+int cc_compete_prague1_test();
 int satellite_basic_test();
 int satellite_seeded_test();
 int satellite_seeded_bbr1_test();

@@ -109,7 +109,8 @@ static const picoquic_test_def_t test_table[] = {
     { "quicperf_multi", quicperf_multi_test },
     { "quicperf_overflow", quicperf_overflow_test },
     { "cc_compete_cubic1", cc_compete_cubic1_test },
-    { "cc_compete_cubic2", cc_compete_cubic2_test }
+    { "cc_compete_cubic2", cc_compete_cubic2_test },
+    { "cc_compete_prague1", cc_compete_prague1_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

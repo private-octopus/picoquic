@@ -33,6 +33,8 @@
 #include "picoquic_binlog.h"
 #include "picoquic_logger.h"
 #include "qlog.h"
+#include "autoqlog.h"
+#include "picosocks.h"
 
 /* Congestion compete test.
 * These tests measure what happens when multiple connections fight for the same
@@ -86,6 +88,7 @@ typedef struct st_cc_compete_client_t {
     picoquic_cnx_t* cnx;
     picoquic_congestion_algorithm_t* cc_algo;
     quicperf_ctx_t *quicperf_ctx;
+    picoquic_connection_id_t icid;
 } cc_compete_client_t;
 
 typedef struct st_cc_compete_ctx_t {
@@ -96,6 +99,7 @@ typedef struct st_cc_compete_ctx_t {
     int nb_connections;
     uint64_t next_cnx_start_time;
     cc_compete_client_t* client_ctx[MAX_CC_COMPETE_CLIENTS];
+    uint8_t packet_ecn_default;
 } cc_compete_ctx_t;
 
 typedef struct st_cc_compete_test_spec_t {
@@ -107,6 +111,13 @@ typedef struct st_cc_compete_test_spec_t {
     picoquic_congestion_algorithm_t* main_cc_algo;
     picoquic_congestion_algorithm_t* background_cc_algo;
     int nb_connections;
+    double data_rate_in_gbps; /* datarate, server to clients, defaults to 10 mbps */
+    uint64_t latency; /* one way latency, microseconds, both directions */
+    uint64_t jitter; /* delay jitter, microseconds, both directions */
+    uint64_t queue_delay_max; /* if specified, specify the max buffer queuing for the link, in microseconds */
+    uint64_t l4s_max; /* if specified, specify the max buffer queuing for the link, in microseconds */
+    picoquic_connection_id_t icid; /* if specified, set the ICID of connections. Last byte will be overwriten by connection number */
+    char const* qlog_dir; /* if specified, set the qlog directory, and request qlog traces. */
 } cc_compete_test_spec_t;
 
 /* The cc_compete server is a quicperf server. However, we want to intercept
@@ -173,11 +184,22 @@ int cc_compete_create_client_ctx(cc_compete_ctx_t* cc_ctx, cc_compete_test_spec_
 
         memset(client_ctx, 0, sizeof(cc_compete_client_t));
         cc_ctx->client_ctx[client_id] = client_ctx;
+
+        if (spec->icid.id_len > 0) {
+            int cid_bin = client_id;
+            int cid_index = spec->icid.id_len - 1;
+            client_ctx->icid = spec->icid;
+            while (cid_bin > 0 && cid_index  >= 0) {
+                client_ctx->icid.id[cid_index] = (uint8_t)client_id;
+                cid_bin >>= 8;
+                cid_index--;
+            }
+        }
+
         if (client_id == 0) {
             client_ctx->start_time = spec->main_start_time;
             client_ctx->cc_algo = spec->main_cc_algo;
             scenario_text = spec->main_scenario_text;
-
         }
         else {
             client_ctx->start_time = spec->background_start_time;
@@ -208,6 +230,28 @@ void cc_compete_delete_client_ctx(cc_compete_ctx_t* cc_ctx, int client_id)
         free(client_ctx);
         cc_ctx->client_ctx[client_id] = NULL;
     }
+}
+
+int cc_compete_create_link(cc_compete_ctx_t* cc_ctx, cc_compete_test_spec_t* spec, int link_id)
+{
+    int ret = 0;
+    double data_rate = spec->data_rate_in_gbps;
+    uint64_t latency = spec->latency;
+    if (data_rate == 0) {
+        data_rate = 0.01; /* default to 10mbps */
+    }
+    if (latency == 0) {
+        latency = 10000; /* default to 10ms */
+    }
+
+    if ((cc_ctx->link[link_id] = picoquictest_sim_link_create(data_rate, latency, NULL,
+        spec->queue_delay_max, cc_ctx->simulated_time)) == NULL) {
+        ret = -1;
+    }
+    else {
+        cc_ctx->link[link_id]->l4s_max = spec->l4s_max;
+    }
+    return ret;
 }
 
 void cc_compete_delete_ctx(cc_compete_ctx_t* cc_ctx)
@@ -314,11 +358,17 @@ cc_compete_ctx_t* cc_compete_create_ctx(cc_compete_test_spec_t* spec)
         else {
             picoquic_set_default_pmtud_policy(cc_ctx->q_ctx[1], picoquic_pmtud_delayed);
         }
-        /* Create the required links */
-        for (int i = 0; i < CC_COMPETE_NB_LINKS; i++){
-            if ((cc_ctx->link[i] = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0)) == NULL) {
-                ret = -1;
+        if (spec->qlog_dir != NULL) {
+            for (int i = 0; ret == 0 && i < 2; i++) {
+                ret = picoquic_set_qlog(cc_ctx->q_ctx[i], spec->qlog_dir);
             }
+        }
+        /* Create the required links */
+        for (int i = 0; ret == 0 && i < CC_COMPETE_NB_LINKS; i++){
+            ret = cc_compete_create_link(cc_ctx, spec, i);
+        }
+        if (spec->l4s_max > 0) {
+            cc_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_1;
         }
         /* Create the client contexts */
         if (spec->nb_connections > MAX_CC_COMPETE_CLIENTS) {
@@ -387,6 +437,7 @@ int cc_compete_prepare_packet(cc_compete_ctx_t* cc_ctx, int node_id, int *is_act
             if (packet->addr_from.ss_family == 0) {
                 picoquic_store_addr(&packet->addr_from, (struct sockaddr*)&cc_ctx->addr[node_id]);
             }
+            packet->ecn_mark = cc_ctx->packet_ecn_default;
             picoquictest_sim_link_submit(cc_ctx->link[link_id], packet, cc_ctx->simulated_time);
             *is_active = 1;
         }
@@ -403,7 +454,7 @@ int cc_compete_start_connection(cc_compete_ctx_t* cc_ctx, int cnx_id)
     int ret = 0;
     /* Create a client connection */
     cc_ctx->client_ctx[cnx_id]->cnx = picoquic_create_cnx(
-        cc_ctx->q_ctx[1], picoquic_null_connection_id, picoquic_null_connection_id,
+        cc_ctx->q_ctx[1], cc_ctx->client_ctx[cnx_id]->icid, picoquic_null_connection_id,
         (struct sockaddr*)&cc_ctx->addr[0], cc_ctx->simulated_time,
         0, PICOQUIC_TEST_SNI, QUIC_PERF_ALPN, 1);
 
@@ -578,6 +629,7 @@ int cc_compete_cubic1_test()
 int cc_compete_cubic2_test()
 {
     cc_compete_test_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xcb, 0xcb, 0, 0, 0, 0}, 8 };
     spec.main_cc_algo = picoquic_cubic_algorithm;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
@@ -585,7 +637,28 @@ int cc_compete_cubic2_test()
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 2;
-    spec.main_target_time = 7000000;
+    spec.main_target_time = 8500000;
+    spec.queue_delay_max = 40000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+
+    return cc_compete_simulation(&spec);
+}
+
+int cc_compete_prague1_test()
+{
+    cc_compete_test_spec_t spec = { 0 };
+    spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.background_cc_algo = picoquic_prague_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 1;
+    spec.main_target_time = 1500000;
+    spec.data_rate_in_gbps = 0.05;
+    spec.latency = 25000;
+    spec.l4s_max = 15000;
 
     return cc_compete_simulation(&spec);
 }
