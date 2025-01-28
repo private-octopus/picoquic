@@ -183,6 +183,7 @@
     <ClCompile Include="parseheadertest.c" />
     <ClCompile Include="picolog_test.c" />
     <ClCompile Include="picoquic_lb_test.c" />
+    <ClCompile Include="picoquic_ns.c" />
     <ClCompile Include="pn2pn64test.c" />
     <ClCompile Include="qlog_test.c" />
     <ClCompile Include="quicperf_test.c" />
@@ -208,6 +209,7 @@
   <ItemGroup>
     <ClInclude Include="picoquictest.h" />
     <ClInclude Include="picoquictest_internal.h" />
+    <ClInclude Include="picoquic_ns.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
