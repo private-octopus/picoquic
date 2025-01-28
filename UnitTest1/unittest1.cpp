@@ -2007,13 +2007,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(cc_compete_cubic1)
-        {
-            int ret = cc_compete_cubic1_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(cc_compete_cubic2)
         {
             int ret = cc_compete_cubic2_test();
@@ -2021,12 +2014,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(cc_compete_prague1)
+        TEST_METHOD(cc_compete_prague2)
         {
-            int ret = cc_compete_prague1_test();
+            int ret = cc_compete_prague2_test();
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(cc_compete_d_cubic)
+        {
+            int ret = cc_compete_d_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(fastcc)
         {
             int ret = fastcc_test();

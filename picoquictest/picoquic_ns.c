@@ -345,6 +345,7 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec)
         if (spec->qlog_dir != NULL) {
             for (int i = 0; ret == 0 && i < 2; i++) {
                 ret = picoquic_set_qlog(cc_ctx->q_ctx[i], spec->qlog_dir);
+                picoquic_set_log_level(cc_ctx->q_ctx[i], 1);
             }
         }
         /* Create the required links */

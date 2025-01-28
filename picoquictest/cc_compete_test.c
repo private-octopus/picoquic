@@ -54,18 +54,6 @@
 char const* cc_compete_batch_scenario_4M = "=b1:*1:397:4000000;";
 char const* cc_compete_batch_scenario_10M = "=b1:*1:397:10000000;";
 
-int cc_compete_cubic1_test()
-{
-    picoquic_ns_spec_t spec = { 0 };
-    spec.main_cc_algo = picoquic_cubic_algorithm;
-    spec.main_start_time = 0;
-    spec.main_scenario_text = cc_compete_batch_scenario_4M;
-    spec.nb_connections = 1;
-    spec.main_target_time = 3500000;
-
-    return picoquic_ns(&spec);
-}
-
 int cc_compete_cubic2_test()
 {
     picoquic_ns_spec_t spec = { 0 };
@@ -85,20 +73,52 @@ int cc_compete_cubic2_test()
     return picoquic_ns(&spec);
 }
 
-int cc_compete_prague1_test()
+int cc_compete_prague2_test()
 {
     picoquic_ns_spec_t spec = { 0 };
-    spec.main_cc_algo = picoquic_cubic_algorithm;
+    picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xa9, 0xa9, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_prague_algorithm;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
     spec.background_cc_algo = picoquic_prague_algorithm;
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
-    spec.nb_connections = 1;
-    spec.main_target_time = 1500000;
+    spec.nb_connections = 2;
+    spec.main_target_time = 1600000;
     spec.data_rate_in_gbps = 0.05;
     spec.latency = 25000;
     spec.l4s_max = 15000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+
+    return picoquic_ns(&spec);
+}
+
+/* The current version of the "compete_d_cubic" test shows how the throughput
+* of the connection managed with "dcubic" collapses when competing with
+* a standard cubic connection. This is expected: dcubic backs off as soon
+* as the delay increases, cubic does not. The logs show that the background
+* connections gets the most bandwidth until it has finished sending the
+* 10MB requested in the scenario, and the the main connection picks up
+* slowly after that.
+ */
+
+int cc_compete_d_cubic_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xdc, 0xcb, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_dcubic_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 2;
+    spec.main_target_time = 10000000;
+    spec.data_rate_in_gbps = 0.02;
+    spec.latency = 40000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
 
     return picoquic_ns(&spec);
 }
