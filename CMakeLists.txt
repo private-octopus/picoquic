@@ -145,6 +145,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_frequency_test.c
     picoquictest/app_limited.c
     picoquictest/bytestream_test.c
+    picoquictest/cc_compete_test.c
     picoquictest/cert_verify_test.c
     picoquictest/cleartext_aead_test.c
     picoquictest/code_version_test.c
@@ -174,6 +175,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/parseheadertest.c
     picoquictest/picolog_test.c
     picoquictest/picoquic_lb_test.c
+    picoquictest/picoquic_ns.c
     picoquictest/pn2pn64test.c
     picoquictest/qlog_test.c
     picoquictest/quic_tester.c
@@ -420,6 +422,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
         PUBLIC
             ${PTLS_INCLUDE_DIRS}
             picoquic
+            picohttp
             picoquictest)
     set_picoquic_compile_settings(picoquic-test)
 
