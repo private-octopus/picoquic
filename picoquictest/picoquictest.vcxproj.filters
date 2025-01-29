@@ -195,12 +195,21 @@
     <ClCompile Include="qlog_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="cc_compete_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="picoquic_ns.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picoquictest_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picoquic_ns.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
