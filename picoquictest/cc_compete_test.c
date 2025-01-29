@@ -34,7 +34,7 @@
 * as "background".
 *
 * We are not aiming for an exact sharing between the competing connections, but we
-* would like to verify that "nobody starves". The "main" connection should not
+* would like to verify that "nobody starves". The "main" connection should
 * get a reasonable share of the bandwidth, say at least 25%, and it should also
 * not get an excessive share, say no more than 80%. (Of course these numbers
 * should not be hardcoded.)
