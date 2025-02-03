@@ -56,7 +56,7 @@
 0102030405060708:         Extension type: 1 (idle_timeout), length 1, 1e
 0102030405060708:         Extension type: 3 (max_packet_size), length 2, 45c8
 0102030405060708:         Extension type: 15 (hcid), length 8, 0203040506070809
-0102030405060708:         Extension type: 1113404765106498833 (initial_max_path_id), length 1, 04
+0102030405060708:         Extension type: 1113404765106498828 (initial_max_path_id), length 1, 04
 
 0102030405060708:     Extension list (36 bytes):
 0102030405060708:         Extension type: 1 (idle_timeout), length 2, 400a
