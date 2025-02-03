@@ -39,7 +39,8 @@
     max_path_id, max_path_id: 17
     path_retire_connection_id[1, 7]: 0x0102030405060708, a1a2a3a4a5a6a7a8a9aaabacadaeafb0
     path_retire_connection_id[0, 2]
-    path_blocked, max_path_id: 17
+    paths_blocked, max_path_id: 17
+    path_cid_blocked, path_id: 7
     bdp_frame, lifetime: 1, bytes_in_flight: 2, min_rtt: 3, ip: 0a000001
     observed_address_v4, sequence: 1, addr: 1.2.3.4, port: 4660
     observed_address_v6, sequence: 2, addr: 102:304:506:708:90a:b0c:d0e:f00, port: 17767

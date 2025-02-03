@@ -161,7 +161,8 @@ typedef enum {
     picoquic_frame_type_path_available =  0x15228c08,
     picoquic_frame_type_bdp = 0xebd9,
     picoquic_frame_type_max_path_id = 0x15228c0c,
-    picoquic_frame_type_path_blocked = 0x15228c0d,
+    picoquic_frame_type_paths_blocked = 0x15228c0d,
+    picoquic_frame_type_path_cid_blocked = 0x15228c0e,
     picoquic_frame_type_observed_address_v4 = 0x9f81a6,
     picoquic_frame_type_observed_address_v6 = 0x9f81a7
 } picoquic_frame_type_enum_t;
@@ -587,7 +588,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_grease_quic_bit 0x2ab2
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
-#define picoquic_tp_initial_max_path_id  0x0f739bbc1b666d11ull /* per draft quic multipath 11 */
+#define picoquic_tp_initial_max_path_id  0x0f739bbc1b666d0cull /* per draft quic multipath 12 */ 
 #define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
@@ -1125,6 +1126,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_lost_feedback_notified : 1; /* Lost feedback has been notified */
     unsigned int is_cca_probing_up : 1; /* congestion control algorithm is seeking more bandwidth */
     unsigned int rtt_is_initialized : 1; /* RTT was measured at least once. */
+    unsigned int sending_path_cid_blocked_frame : 1; /* Sending a path CID blocked, not acked yet. */
     
     /* Management of retransmissions in a path.
      * The "path_packet" variables are used for the RACK algorithm, per path, to avoid
@@ -1508,7 +1510,7 @@ typedef struct st_picoquic_cnx_t {
     uint64_t max_path_id_local;
     uint64_t max_path_id_acknowledged;
     uint64_t max_path_id_remote;
-    uint64_t path_blocked_acknowledged;
+    uint64_t paths_blocked_acknowledged;
     /* Management of the CNX-ID stash */
     picoquic_remote_cnxid_stash_t * first_remote_cnxid_stash;
     /* management of local CID stash.
