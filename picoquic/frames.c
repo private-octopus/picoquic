@@ -42,9 +42,13 @@ int picoquic_max_path_id_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* 
     const uint8_t* bytes_max, int* no_need_to_repeat);
 int picoquic_process_ack_of_max_path_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
         size_t bytes_max, size_t* consumed);
-int picoquic_path_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+int picoquic_paths_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     const uint8_t* bytes_max, int* no_need_to_repeat);
-int picoquic_process_ack_of_path_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+int picoquic_process_ack_of_paths_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, size_t* consumed);
+int picoquic_path_cid_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat);
+int picoquic_process_ack_of_path_cid_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, size_t* consumed);
 int picoquic_process_ack_of_observed_address_frame(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const uint8_t* bytes,
     size_t bytes_max, uint64_t ftype, size_t* consumed);
@@ -3365,8 +3369,12 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     (void)picoquic_max_path_id_frame_needs_repeat(cnx, bytes,
                         p_bytes_max, no_need_to_repeat);
                     break;
-                case picoquic_frame_type_path_blocked:
-                    (void)picoquic_path_blocked_frame_needs_repeat(cnx, bytes,
+                case picoquic_frame_type_paths_blocked:
+                    (void)picoquic_paths_blocked_frame_needs_repeat(cnx, bytes,
+                        p_bytes_max, no_need_to_repeat);
+                    break;
+                case picoquic_frame_type_path_cid_blocked:
+                    (void)picoquic_path_cid_blocked_frame_needs_repeat(cnx, bytes,
                         p_bytes_max, no_need_to_repeat);
                     break;
                 case picoquic_frame_type_path_new_connection_id:
@@ -3517,8 +3525,12 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
             ret = picoquic_process_ack_of_max_path_id_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
             break;
-        case picoquic_frame_type_path_blocked:
-            ret = picoquic_process_ack_of_path_blocked_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+        case picoquic_frame_type_paths_blocked:
+            ret = picoquic_process_ack_of_paths_blocked_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+            byte_index += frame_length;
+            break;
+        case picoquic_frame_type_path_cid_blocked:
+            ret = picoquic_process_ack_of_path_cid_blocked_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
             break;
         case picoquic_frame_type_observed_address_v4:
@@ -5740,13 +5752,13 @@ int picoquic_process_ack_of_max_path_id_frame(picoquic_cnx_t* cnx, const uint8_t
     return ret;
 }
 
-/* PATH BLOCKED frame */
-uint8_t* picoquic_format_path_blocked_frame(
+/* PATHS BLOCKED frame */
+uint8_t* picoquic_format_paths_blocked_frame(
     uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id, int * more_data)
 {
     /* This code assumes that the frame type is already skipped */
     uint8_t* bytes0 = bytes;
-    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_path_blocked)) == NULL ||
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_paths_blocked)) == NULL ||
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, max_path_id)) == NULL){
         bytes = bytes0;
         *more_data = 1;
@@ -5754,7 +5766,7 @@ uint8_t* picoquic_format_path_blocked_frame(
     return bytes;
 }
 
-int picoquic_queue_path_blocked_frame(
+int picoquic_queue_paths_blocked_frame(
     picoquic_cnx_t* cnx)
 {
     /* Call to format will always succeed */
@@ -5762,7 +5774,7 @@ int picoquic_queue_path_blocked_frame(
     uint8_t frame_buffer[256];
     int is_pure_ack = 0;
     int more_data = 0;
-    uint8_t* bytes_next = picoquic_format_path_blocked_frame(
+    uint8_t* bytes_next = picoquic_format_paths_blocked_frame(
         frame_buffer, frame_buffer + sizeof(frame_buffer), cnx->max_path_id_remote, & more_data);
     size_t consumed = bytes_next - frame_buffer;
     ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed, is_pure_ack,
@@ -5770,21 +5782,21 @@ int picoquic_queue_path_blocked_frame(
     return ret;
 }
 
-const uint8_t* picoquic_skip_path_blocked_frame(const uint8_t* bytes, const uint8_t* bytes_max)
+const uint8_t* picoquic_skip_paths_blocked_frame(const uint8_t* bytes, const uint8_t* bytes_max)
 {
     /* This code assumes that the frame type is already skipped */
     bytes = picoquic_frames_varint_skip(bytes, bytes_max);
     return bytes;
 }
 
-const uint8_t* picoquic_parse_path_blocked_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+const uint8_t* picoquic_parse_paths_blocked_frame(const uint8_t* bytes, const uint8_t* bytes_max,
     uint64_t* max_path_id)
 {
     bytes = picoquic_frames_varint_decode(bytes, bytes_max, max_path_id);
     return bytes;
 }
 
-const uint8_t* picoquic_decode_path_blocked_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+const uint8_t* picoquic_decode_paths_blocked_frame(const uint8_t* bytes, const uint8_t* bytes_max,
     picoquic_cnx_t* cnx)
 {
     uint64_t max_path_id;
@@ -5794,17 +5806,17 @@ const uint8_t* picoquic_decode_path_blocked_frame(const uint8_t* bytes, const ui
     if (!cnx->is_multipath_enabled) {
         /* Frame is unexpected */
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-            picoquic_frame_type_path_blocked, "multipath extension not negotiated");
+            picoquic_frame_type_paths_blocked, "multipath extension not negotiated");
     }
-    else if ((bytes = picoquic_parse_path_blocked_frame(bytes, bytes_max, &max_path_id)) == NULL) {
+    else if ((bytes = picoquic_parse_paths_blocked_frame(bytes, bytes_max, &max_path_id)) == NULL) {
         /* Bad frame encoding */
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-            picoquic_frame_type_path_blocked, "bad path blocked frame");
+            picoquic_frame_type_paths_blocked, "bad path blocked frame");
     }
     return bytes;
 }
 
-int picoquic_path_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+int picoquic_paths_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
     const uint8_t* bytes_max, int* no_need_to_repeat)
 {
     int ret = 0;
@@ -5812,14 +5824,14 @@ int picoquic_path_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t*
 
     *no_need_to_repeat = 0;
 
-    if ((bytes = picoquic_parse_path_blocked_frame(bytes, bytes_max, &max_path_id)) == NULL) {
+    if ((bytes = picoquic_parse_paths_blocked_frame(bytes, bytes_max, &max_path_id)) == NULL) {
         /* Malformed frame, do not retransmit */
         *no_need_to_repeat = 1;
     }
     else {
         /* check whether this is the last frame sent, and whether we already
          * have received an ack */
-        if (max_path_id <= cnx->max_path_id_remote || max_path_id <= cnx->path_blocked_acknowledged) {
+        if (max_path_id <= cnx->max_path_id_remote || max_path_id <= cnx->paths_blocked_acknowledged) {
             *no_need_to_repeat = 1;
         }
     }
@@ -5827,17 +5839,138 @@ int picoquic_path_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t*
 }
 
 
-int picoquic_process_ack_of_path_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+int picoquic_process_ack_of_paths_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
     uint64_t max_path_id = 0;
 
-    const uint8_t* bytes_next = picoquic_parse_path_blocked_frame(bytes, bytes + bytes_max, &max_path_id);
+    const uint8_t* bytes_next = picoquic_parse_paths_blocked_frame(bytes, bytes + bytes_max, &max_path_id);
 
     if (bytes_next != NULL) {
-        if (cnx->path_blocked_acknowledged < max_path_id) {
-            cnx->path_blocked_acknowledged = max_path_id;
+        if (cnx->paths_blocked_acknowledged < max_path_id) {
+            cnx->paths_blocked_acknowledged = max_path_id;
+        }
+        *consumed = bytes_next - bytes;
+    }
+    else {
+        /* Internal error -- cannot parse the stored packet */
+        *consumed = bytes_max;
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* PATH CID BLOCKED frame */
+uint8_t* picoquic_format_path_cid_blocked_frame(
+    uint8_t* bytes, const uint8_t* bytes_max, uint64_t path_id, int* more_data)
+{
+    /* This code assumes that the frame type is already skipped */
+    uint8_t* bytes0 = bytes;
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_path_cid_blocked)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, path_id)) == NULL) {
+        bytes = bytes0;
+        *more_data = 1;
+    }
+    return bytes;
+}
+
+int picoquic_queue_path_cid_blocked_frame(
+    picoquic_path_t * path_x)
+{
+    /* Call to format will always succeed */
+    int ret = 0;
+    uint8_t frame_buffer[256];
+    int is_pure_ack = 0;
+    int more_data = 0;
+    uint8_t* bytes_next = picoquic_format_path_cid_blocked_frame(
+        frame_buffer, frame_buffer + sizeof(frame_buffer), path_x->unique_path_id, &more_data);
+    size_t consumed = bytes_next - frame_buffer;
+    ret = picoquic_queue_misc_frame(path_x->cnx, frame_buffer, consumed, is_pure_ack,
+        picoquic_packet_context_application);
+    if (ret == 0) {
+        path_x->sending_path_cid_blocked_frame = 1;
+    }
+    return ret;
+}
+
+const uint8_t* picoquic_skip_path_cid_blocked_frame(const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    /* This code assumes that the frame type is already skipped */
+    bytes = picoquic_frames_varint_skip(bytes, bytes_max);
+    return bytes;
+}
+
+const uint8_t* picoquic_parse_path_cid_blocked_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t* max_path_id)
+{
+    bytes = picoquic_frames_varint_decode(bytes, bytes_max, max_path_id);
+    return bytes;
+}
+
+const uint8_t* picoquic_decode_path_cid_blocked_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+    picoquic_cnx_t* cnx)
+{
+    uint64_t path_id;
+
+    /* This code assumes that the frame type is already skipped */
+
+    if (!cnx->is_multipath_enabled) {
+        /* Frame is unexpected */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_frame_type_path_cid_blocked, "multipath extension not negotiated");
+    }
+    else if ((bytes = picoquic_parse_path_cid_blocked_frame(bytes, bytes_max, &path_id)) == NULL) {
+        /* Bad frame encoding */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_frame_type_path_cid_blocked, "bad path blocked frame");
+    }
+    return bytes;
+}
+
+int picoquic_path_cid_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat)
+{
+    int ret = 0;
+    uint64_t unique_path_id = 0;
+
+    *no_need_to_repeat = 0;
+
+    if ((bytes = picoquic_parse_path_cid_blocked_frame(bytes, bytes_max, &unique_path_id)) == NULL) {
+        /* Malformed frame, do not retransmit */
+        *no_need_to_repeat = 1;
+    }
+    else {
+        /* check whether this is the last frame sent, and whether we already
+         * have received an ack */
+        int path_index = picoquic_find_path_by_unique_id(cnx, unique_path_id);
+        if (path_index < 0) {
+            /* The path does not exist any more */
+            *no_need_to_repeat = 1;
+        }
+        else if (!cnx->path[path_index]->sending_path_cid_blocked_frame) {
+            /* the blocked frame was already acknowledged */
+            *no_need_to_repeat = 1;
+        }
+    }
+    return ret;
+}
+
+int picoquic_process_ack_of_path_cid_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, size_t* consumed)
+{
+    int ret = 0;
+    uint64_t unique_path_id = 0;
+
+    const uint8_t* bytes_next = picoquic_parse_path_cid_blocked_frame(bytes, bytes + bytes_max, &unique_path_id);
+
+    if (bytes_next != NULL) {
+        /* Find the path context for the path ID */
+        int path_index = picoquic_find_path_by_unique_id(cnx, unique_path_id);
+        if (path_index >= 0) {
+            /* path is still valid. Notice that there is no need for repeating this frame. */
+            cnx->path[path_index]->sending_path_cid_blocked_frame = 0;
         }
         *consumed = bytes_next - bytes;
     }
@@ -6371,8 +6504,12 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             bytes = picoquic_decode_max_path_id_frame(bytes, bytes_max, cnx);
                             ack_needed = 1;
                             break;
-                        case picoquic_frame_type_path_blocked:
-                            bytes = picoquic_decode_path_blocked_frame(bytes, bytes_max, cnx);
+                        case picoquic_frame_type_paths_blocked:
+                            bytes = picoquic_decode_paths_blocked_frame(bytes, bytes_max, cnx);
+                            ack_needed = 1;
+                            break;
+                        case picoquic_frame_type_path_cid_blocked:
+                            bytes = picoquic_decode_path_cid_blocked_frame(bytes, bytes_max, cnx);
                             ack_needed = 1;
                             break;
                         case picoquic_frame_type_path_new_connection_id:
@@ -6715,8 +6852,12 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
                     bytes = picoquic_skip_max_path_id_frame(bytes, bytes_max);
                     *pure_ack = 0;
                     break;
-                case picoquic_frame_type_path_blocked:
-                    bytes = picoquic_skip_path_blocked_frame(bytes, bytes_max);
+                case picoquic_frame_type_paths_blocked:
+                    bytes = picoquic_skip_paths_blocked_frame(bytes, bytes_max);
+                    *pure_ack = 0;
+                    break;
+                case picoquic_frame_type_path_cid_blocked:
+                    bytes = picoquic_skip_paths_blocked_frame(bytes, bytes_max);
                     *pure_ack = 0;
                     break;
                 case picoquic_frame_type_bdp:

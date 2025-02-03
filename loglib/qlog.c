@@ -823,11 +823,18 @@ void qlog_max_path_id_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
 }
 
-void qlog_path_blocked_frame(FILE* f, bytestream* s)
+void qlog_paths_blocked_frame(FILE* f, bytestream* s)
 {
     uint64_t max_path_id = 0;
     byteread_vint(s, &max_path_id);
     fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+}
+
+void qlog_path_cid_blocked_frame(FILE* f, bytestream* s)
+{
+    uint64_t path_id = 0;
+    byteread_vint(s, &path_id);
+    fprintf(f, ", \"path_id\": %"PRIu64, path_id);
 }
 
 void qlog_reset_stream_frame(FILE* f, bytestream* s)
@@ -1321,8 +1328,11 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     case picoquic_frame_type_max_path_id:
         qlog_max_path_id_frame(f, s);
         break;
-    case picoquic_frame_type_path_blocked:
-        qlog_path_blocked_frame(f, s);
+    case picoquic_frame_type_paths_blocked:
+        qlog_paths_blocked_frame(f, s);
+        break;
+    case picoquic_frame_type_path_cid_blocked:
+        qlog_path_cid_blocked_frame(f, s);
         break;
     case picoquic_frame_type_observed_address_v4:
     case picoquic_frame_type_observed_address_v6:
