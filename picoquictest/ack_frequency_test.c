@@ -198,7 +198,7 @@ int ackfrq_short_test()
     spec.max_ack_delay_remote = 1000;
     spec.max_ack_gap_remote = 32;
     spec.min_ack_delay_remote = 1000;
-    spec.target_interval = 1500;
+    spec.target_interval = 1000;
 
     return ackfrq_test_one(&spec);
 }

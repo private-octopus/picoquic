@@ -344,13 +344,21 @@ static void cubic_notify(
                             uint64_t delta_window = path_x->cwin - base_window;
                             path_x->cwin -= (delta_window / 2);
                         }
+#if 1
+                        else {
+                            /* In the general case, compensate for the growth of the window after the acknowledged packet was sent. */
+                            path_x->cwin /= 2;
+                        }
+#endif
 
                         cubic_state->ssthresh = path_x->cwin;
                         cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
                         cubic_state->W_last_max = cubic_state->W_max;
                         cubic_state->W_reno = ((double)path_x->cwin);
                         path_x->is_ssthresh_initialized = 1;
-                        cubic_enter_avoidance(cubic_state, current_time);
+                        /* enter recovery to ignore the losses expected if the window grew
+                        * too large after the acknowleded packet was sent. */
+                        cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                         /* apply a correction to enter the test phase immediately */
                         uint64_t K_micro = (uint64_t)(cubic_state->K * 1000000.0);
                         if (K_micro > current_time) {
