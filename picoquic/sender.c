@@ -4635,56 +4635,79 @@ int picoquic_prepare_next_packet_ex(picoquic_quic_t* quic,
             }
         }
         picoquic_delete_stateless_packet(sp);
+        /* Discuss: should stateless retry or version negotiation packets
+         * escape proxying?
+         */
     }
-    else {
-        picoquic_cnx_t* cnx = picoquic_get_earliest_cnx_to_wake(quic, current_time);
+    else
+    {
+        /* To manage proxies, we have to intercept the packets that would be sent to the
+         * proxy address, so we create a loop */
+        while (ret == 0) {
+            picoquic_cnx_t* cnx = picoquic_get_earliest_cnx_to_wake(quic, current_time);
 
-        if (cnx == NULL) {
-            *send_length = 0;
-        }
-        else {
-            ret = picoquic_prepare_packet_ex(cnx, current_time, send_buffer, send_buffer_max, send_length, p_addr_to, p_addr_from, 
-                if_index, send_msg_size);
-            if (log_cid != NULL) {
-                *log_cid = cnx->initial_cnxid;
-            }
-
-            if (ret == PICOQUIC_ERROR_DISCONNECTED) {
-                ret = 0;
-
-                picoquic_log_app_message(cnx, "Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d, dg-coal: %f",
-                    (int)cnx->nb_retransmission_total, (int)cnx->nb_spurious,
-                    (int)cnx->path[0]->max_reorder_gap, (int)cnx->path[0]->max_spurious_rtt,
-                    (cnx->nb_trains_sent > 0) ? ((double)cnx->nb_packets_sent / (double)cnx->nb_trains_sent) : 0.0);
-
-                if (quic->F_log != NULL) {
-                    fflush(quic->F_log);
-                }
-
-                if (cnx->f_binlog != NULL) {
-                    fflush(cnx->f_binlog);
-                }
-
-                if (cnx->client_mode) {
-                    /* Do not unilaterally delete the connection context, as it was set by the application */
-                    picoquic_reinsert_by_wake_time(cnx->quic, cnx, UINT64_MAX);
-                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                }
-                else {
-                    picoquic_delete_cnx(cnx);
-                }
+            if (cnx == NULL) {
+                *send_length = 0;
             }
             else {
-                if (*if_index == -1) {
-                    *if_index = picoquic_get_local_if_index(cnx);
+                ret = picoquic_prepare_packet_ex(cnx, current_time, send_buffer, send_buffer_max, send_length, p_addr_to, p_addr_from,
+                    if_index, send_msg_size);
+                if (log_cid != NULL) {
+                    *log_cid = cnx->initial_cnxid;
                 }
-                if (p_last_cnx) {
-                    *p_last_cnx = cnx;
+
+                if (ret == PICOQUIC_ERROR_DISCONNECTED) {
+                    ret = 0;
+
+                    picoquic_log_app_message(cnx, "Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d, dg-coal: %f",
+                        (int)cnx->nb_retransmission_total, (int)cnx->nb_spurious,
+                        (int)cnx->path[0]->max_reorder_gap, (int)cnx->path[0]->max_spurious_rtt,
+                        (cnx->nb_trains_sent > 0) ? ((double)cnx->nb_packets_sent / (double)cnx->nb_trains_sent) : 0.0);
+
+                    if (quic->F_log != NULL) {
+                        fflush(quic->F_log);
+                    }
+
+                    if (cnx->f_binlog != NULL) {
+                        fflush(cnx->f_binlog);
+                    }
+
+                    if (cnx->client_mode) {
+                        /* Do not unilaterally delete the connection context, as it was set by the application */
+                        picoquic_reinsert_by_wake_time(cnx->quic, cnx, UINT64_MAX);
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                    }
+                    else {
+                        picoquic_delete_cnx(cnx);
+                    }
+                    /* exit the loop after the first error? or continue? */
+                    break;
+                }
+                else if (quic->proxy_intercept_fn != NULL && *send_length > 0 &&
+                    quic->proxy_intercept_fn(quic->proxy_ctx, current_time, send_buffer, *send_length,
+                        (send_msg_size == NULL) ? 0 : *send_msg_size, p_addr_to, p_addr_from, *if_index)) {
+                    /* If the packet is intercepted, reset the send length and try to prepare
+                    * more packets. The proxy intercepting the packet will forward a copy to the
+                    * destination. */;
+                    *send_length = 0;
+                    if (send_msg_size != NULL) {
+                        *send_msg_size = 0;
+                    }
+                    memset(p_addr_to, 0, sizeof(struct sockaddr_storage));
+                    memset(p_addr_to, 0, sizeof(struct sockaddr_storage));
+                    *if_index = 0;
+                    /* Loop will continue here, for preparing the next packet */
+                    continue;
+                }
+                else {
+                    if (p_last_cnx) {
+                        *p_last_cnx = cnx;
+                    }
+                    break;
                 }
             }
         }
     }
-
     return ret;
 }
 
