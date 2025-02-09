@@ -142,7 +142,15 @@ void picoquic_config_usage_file(FILE* F);
 void picoquic_config_usage();
 int picoquic_config_set_option(picoquic_quic_config_t* config, picoquic_option_enum_t option_num, const char* opt_val);
 
+/* picoquic_config_command_line:
+* parse options, with the restriction that all options must be identified by a single character, as in '-x'
+ */
 int picoquic_config_command_line(int opt, int* p_optind, int argc, char const** argv, char const* optarg, picoquic_quic_config_t* config);
+/* picoquic_config_command_line:
+* parse options, allowing both single character options (e.g. -X)
+* and named option (e.g. --disable_block)
+ */
+int picoquic_config_command_line_ex(char const* opt_string, int* p_optind, int argc, char const** argv, char const* optarg, picoquic_quic_config_t* config);
 
 #if 0
 /* It does not seem anyone uses this, and it is not tested */

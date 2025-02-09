@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<svg width="600" height="20000" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <style>
+    .seq_in { font: 10px sans-serif; fill: blue; }
+    .seq_out { font: 10px sans-serif; fill: light-blue; }
+    .time { font: 10px sans-serif; fill: green; }
+    .arw { font: 10px sans-serif; }
+    .frm { font: 10px sans-serif; fill: teal }
+    .chs { font: 10px sans-serif; fill: red }
+  </style>
+  <rect x="0" y="0" width="600" height="20000" fill="white" stroke-width="4" stroke="pink" />
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10" fill="none" stroke="black" />
+    </marker>
+    <g id="packet-out">
+      <line x1="0" y1="0" x2="500" y2="0" stroke="#000" stroke-width="1" marker-end="url(#arrow)" />
+    </g>
+    <g id="packet-in">
+      <line x1="500" y1="0" x2="0" y2="0" stroke="#000" stroke-width="1" marker-end="url(#arrow)" />
+    </g>
+  </defs>
+  <use x="50" y="32" xlink:href="#packet-in" />
+  <text x="46" y="40" text-anchor="end" class="time">11.0 ms</text>
+  <text x="554" y="28" text-anchor="start" class="seq_in">0</text>
+  <text x="520" y="30" text-anchor="start" class="arw">1252 b</text>
+  <text x="520" y="30" text-anchor="end" class="frm" xml:space="preserve">initial </text>
+  <text x="520" y="42" text-anchor="end" class="frm" xml:space="preserve"> crypto  padding </text>
+  <use x="50" y="64" xlink:href="#packet-out" />
+  <text x="46" y="72" text-anchor="end" class="time">11.0 ms</text>
+  <text x="46" y="60" text-anchor="end" class="seq_out">0</text>
+  <text x="80" y="62" text-anchor="end" class="arw">162 b</text>
+  <text x="80" y="62" text-anchor="start" class="frm" xml:space="preserve"> initial</text>
+  <text x="80" y="74" text-anchor="start" class="frm" xml:space="preserve"> ack  crypto </text>
+  <use x="50" y="96" xlink:href="#packet-out" />
+  <text x="46" y="104" text-anchor="end" class="time">11.0 ms</text>
+  <text x="46" y="92" text-anchor="end" class="seq_out">0</text>
+  <text x="80" y="94" text-anchor="end" class="arw">1058 b</text>
+  <text x="80" y="94" text-anchor="start" class="frm" xml:space="preserve"> handshake</text>
+  <text x="80" y="106" text-anchor="start" class="frm" xml:space="preserve"> crypto </text>
+  <use x="50" y="128" xlink:href="#packet-out" />
+  <text x="46" y="136" text-anchor="end" class="time">11.0 ms</text>
+  <text x="46" y="124" text-anchor="end" class="seq_out">1</text>
+  <text x="80" y="126" text-anchor="end" class="arw">272 b</text>
+  <text x="80" y="126" text-anchor="start" class="frm" xml:space="preserve"> handshake</text>
+  <text x="80" y="138" text-anchor="start" class="frm" xml:space="preserve"> crypto </text>
+  <use x="50" y="160" xlink:href="#packet-out" />
+  <text x="46" y="168" text-anchor="end" class="time">11.0 ms</text>
+  <text x="46" y="156" text-anchor="end" class="seq_out">0</text>
+  <text x="80" y="158" text-anchor="end" class="arw">206 b</text>
+  <text x="80" y="158" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="170" text-anchor="start" class="frm" xml:space="preserve"> new_connection_id  new_connection_id  new_connection_id  new_connection_id  new_connection_id  new_connection_id  new_connection_id </text>
+  <use x="50" y="192" xlink:href="#packet-out" />
+  <text x="46" y="200" text-anchor="end" class="time">11.0 ms</text>
+  <text x="46" y="188" text-anchor="end" class="seq_out">1</text>
+  <text x="80" y="190" text-anchor="end" class="arw">1424 b</text>
+  <text x="80" y="190" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="202" text-anchor="start" class="frm" xml:space="preserve"> ping  padding </text>
+  <use x="50" y="224" xlink:href="#packet-in" />
+  <text x="46" y="232" text-anchor="end" class="time">32.0 ms</text>
+  <text x="554" y="220" text-anchor="start" class="seq_in">0</text>
+  <text x="520" y="222" text-anchor="start" class="arw">50 b</text>
+  <text x="520" y="222" text-anchor="end" class="frm" xml:space="preserve">handshake </text>
+  <text x="520" y="234" text-anchor="end" class="frm" xml:space="preserve"> ack </text>
+  <use x="50" y="256" xlink:href="#packet-in" />
+  <text x="46" y="264" text-anchor="end" class="time">32.6 ms</text>
+  <text x="554" y="252" text-anchor="start" class="seq_in">1</text>
+  <text x="520" y="254" text-anchor="start" class="arw">89 b</text>
+  <text x="520" y="254" text-anchor="end" class="frm" xml:space="preserve">handshake </text>
+  <text x="520" y="266" text-anchor="end" class="frm" xml:space="preserve"> ack  crypto </text>
+  <use x="50" y="288" xlink:href="#packet-in" />
+  <text x="46" y="296" text-anchor="end" class="time">32.6 ms</text>
+  <text x="554" y="284" text-anchor="start" class="seq_in">0</text>
+  <text x="520" y="286" text-anchor="start" class="arw">222 b</text>
+  <text x="520" y="286" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="298" text-anchor="end" class="frm" xml:space="preserve"> new_connection_id  new_connection_id  new_connection_id  new_connection_id  new_connection_id  new_connection_id  new_connection_id </text>
+  <use x="50" y="320" xlink:href="#packet-out" />
+  <text x="46" y="328" text-anchor="end" class="time">32.6 ms</text>
+  <text x="46" y="316" text-anchor="end" class="seq_out">2</text>
+  <text x="80" y="318" text-anchor="end" class="arw">39 b</text>
+  <text x="80" y="318" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="330" text-anchor="start" class="frm" xml:space="preserve"> ack_frequency  handshake_done  padding </text>
+  <use x="50" y="352" xlink:href="#packet-in" />
+  <text x="46" y="360" text-anchor="end" class="time">33.3 ms</text>
+  <text x="554" y="348" text-anchor="start" class="seq_in">1</text>
+  <text x="520" y="350" text-anchor="start" class="arw">822 b</text>
+  <text x="520" y="350" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="362" text-anchor="end" class="frm" xml:space="preserve"> stream[4]  stream[8] </text>
+  <use x="50" y="384" xlink:href="#packet-out" />
+  <text x="46" y="392" text-anchor="end" class="time">33.3 ms</text>
+  <text x="46" y="380" text-anchor="end" class="seq_out">3</text>
+  <text x="80" y="382" text-anchor="end" class="arw">1236 b</text>
+  <text x="80" y="382" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="394" text-anchor="start" class="frm" xml:space="preserve"> ack  stream[4] </text>
+  <use x="50" y="416" xlink:href="#packet-out" />
+  <text x="46" y="424" text-anchor="end" class="time">33.3 ms</text>
+  <text x="46" y="412" text-anchor="end" class="seq_out">4</text>
+  <text x="80" y="414" text-anchor="end" class="arw">1236 b</text>
+  <text x="80" y="414" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="426" text-anchor="start" class="frm" xml:space="preserve"> stream[4]  stream[8] </text>
+  <use x="50" y="448" xlink:href="#packet-out" />
+  <text x="46" y="456" text-anchor="end" class="time">33.3 ms</text>
+  <text x="46" y="444" text-anchor="end" class="seq_out">5</text>
+  <text x="80" y="446" text-anchor="end" class="arw">1236 b</text>
+  <text x="80" y="446" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="458" text-anchor="start" class="frm" xml:space="preserve"> stream[8] </text>
+  <use x="50" y="480" xlink:href="#packet-in" />
+  <text x="46" y="488" text-anchor="end" class="time">34.4 ms</text>
+  <text x="554" y="476" text-anchor="start" class="seq_in">2</text>
+  <text x="520" y="478" text-anchor="start" class="arw">1440 b</text>
+  <text x="520" y="478" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="490" text-anchor="end" class="frm" xml:space="preserve"> ping  padding </text>
+  <use x="50" y="512" xlink:href="#packet-out" />
+  <text x="46" y="520" text-anchor="end" class="time">34.5 ms</text>
+  <text x="46" y="508" text-anchor="end" class="seq_out">6</text>
+  <text x="80" y="510" text-anchor="end" class="arw">1236 b</text>
+  <text x="80" y="510" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="522" text-anchor="start" class="frm" xml:space="preserve"> stream[8] </text>
+  <use x="50" y="544" xlink:href="#packet-in" />
+  <text x="46" y="552" text-anchor="end" class="time">34.6 ms</text>
+  <text x="554" y="540" text-anchor="start" class="seq_in">4</text>
+  <text x="520" y="542" text-anchor="start" class="arw">55 b</text>
+  <text x="520" y="542" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="554" text-anchor="end" class="frm" xml:space="preserve"> ack  padding </text>
+  <use x="50" y="576" xlink:href="#packet-out" />
+  <text x="46" y="584" text-anchor="end" class="time">36.1 ms</text>
+  <text x="46" y="572" text-anchor="end" class="seq_out">7</text>
+  <text x="80" y="574" text-anchor="end" class="arw">1424 b</text>
+  <text x="80" y="574" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="586" text-anchor="start" class="frm" xml:space="preserve"> ack  stream[8] </text>
+  <use x="50" y="608" xlink:href="#packet-out" />
+  <text x="46" y="616" text-anchor="end" class="time">37.7 ms</text>
+  <text x="46" y="604" text-anchor="end" class="seq_out">8</text>
+  <text x="80" y="606" text-anchor="end" class="arw">1424 b</text>
+  <text x="80" y="606" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="618" text-anchor="start" class="frm" xml:space="preserve"> stream[8] </text>
+  <use x="50" y="640" xlink:href="#packet-out" />
+  <text x="46" y="648" text-anchor="end" class="time">39.3 ms</text>
+  <text x="46" y="636" text-anchor="end" class="seq_out">9</text>
+  <text x="80" y="638" text-anchor="end" class="arw">1424 b</text>
+  <text x="80" y="638" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="650" text-anchor="start" class="frm" xml:space="preserve"> stream[8] </text>
+  <use x="50" y="672" xlink:href="#packet-out" />
+  <text x="46" y="680" text-anchor="end" class="time">40.9 ms</text>
+  <text x="46" y="668" text-anchor="end" class="seq_out">10</text>
+  <text x="80" y="670" text-anchor="end" class="arw">1424 b</text>
+  <text x="80" y="670" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="682" text-anchor="start" class="frm" xml:space="preserve"> stream[8] </text>
+  <use x="50" y="704" xlink:href="#packet-out" />
+  <text x="46" y="712" text-anchor="end" class="time">42.5 ms</text>
+  <text x="46" y="700" text-anchor="end" class="seq_out">11</text>
+  <text x="80" y="702" text-anchor="end" class="arw">1424 b</text>
+  <text x="80" y="702" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="714" text-anchor="start" class="frm" xml:space="preserve"> stream[8] </text>
+  <use x="50" y="736" xlink:href="#packet-out" />
+  <text x="46" y="744" text-anchor="end" class="time">44.1 ms</text>
+  <text x="46" y="732" text-anchor="end" class="seq_out">12</text>
+  <text x="80" y="734" text-anchor="end" class="arw">1093 b</text>
+  <text x="80" y="734" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="746" text-anchor="start" class="frm" xml:space="preserve"> stream[8] </text>
+  <use x="50" y="768" xlink:href="#packet-in" />
+  <text x="46" y="776" text-anchor="end" class="time">52.7 ms</text>
+  <text x="554" y="764" text-anchor="start" class="seq_in">5</text>
+  <text x="520" y="766" text-anchor="start" class="arw">55 b</text>
+  <text x="520" y="766" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="778" text-anchor="end" class="frm" xml:space="preserve"> ack_frequency  padding </text>
+  <use x="50" y="800" xlink:href="#packet-in" />
+  <text x="46" y="808" text-anchor="end" class="time">56.3 ms</text>
+  <text x="554" y="796" text-anchor="start" class="seq_in">7</text>
+  <text x="520" y="798" text-anchor="start" class="arw">55 b</text>
+  <text x="520" y="798" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="810" text-anchor="end" class="frm" xml:space="preserve"> ack  padding </text>
+  <use x="50" y="832" xlink:href="#packet-out" />
+  <text x="46" y="840" text-anchor="end" class="time">56.3 ms</text>
+  <text x="46" y="828" text-anchor="end" class="seq_out">13</text>
+  <text x="80" y="830" text-anchor="end" class="arw">39 b</text>
+  <text x="80" y="830" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="842" text-anchor="start" class="frm" xml:space="preserve"> ack  padding </text>
+  <use x="50" y="864" xlink:href="#packet-in" />
+  <text x="46" y="872" text-anchor="end" class="time">59.6 ms</text>
+  <text x="554" y="860" text-anchor="start" class="seq_in">8</text>
+  <text x="520" y="862" text-anchor="start" class="arw">55 b</text>
+  <text x="520" y="862" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="874" text-anchor="end" class="frm" xml:space="preserve"> ack  padding </text>
+  <use x="50" y="896" xlink:href="#packet-in" />
+  <text x="46" y="904" text-anchor="end" class="time">62.1 ms</text>
+  <text x="554" y="892" text-anchor="start" class="seq_in">9</text>
+  <text x="520" y="894" text-anchor="start" class="arw">55 b</text>
+  <text x="520" y="894" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="906" text-anchor="end" class="frm" xml:space="preserve"> ack  padding </text>
+  <use x="50" y="928" xlink:href="#packet-out" />
+  <text x="46" y="936" text-anchor="end" class="time">62.1 ms</text>
+  <text x="46" y="924" text-anchor="end" class="seq_out">14</text>
+  <text x="80" y="926" text-anchor="end" class="arw">1418 b</text>
+  <text x="80" y="926" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="938" text-anchor="start" class="frm" xml:space="preserve"> stream[8] </text>
+  <use x="50" y="960" xlink:href="#packet-in" />
+  <text x="46" y="968" text-anchor="end" class="time">65.1 ms</text>
+  <text x="554" y="956" text-anchor="start" class="seq_in">10</text>
+  <text x="520" y="958" text-anchor="start" class="arw">55 b</text>
+  <text x="520" y="958" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="970" text-anchor="end" class="frm" xml:space="preserve"> ack  padding </text>
+  <use x="50" y="992" xlink:href="#packet-out" />
+  <text x="46" y="1000" text-anchor="end" class="time">65.1 ms</text>
+  <text x="46" y="988" text-anchor="end" class="seq_out">15</text>
+  <text x="80" y="990" text-anchor="end" class="arw">1424 b</text>
+  <text x="80" y="990" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="1002" text-anchor="start" class="frm" xml:space="preserve"> stream[8] </text>
+  <use x="50" y="1024" xlink:href="#packet-in" />
+  <text x="46" y="1032" text-anchor="end" class="time">83.3 ms</text>
+  <text x="554" y="1020" text-anchor="start" class="seq_in">11</text>
+  <text x="520" y="1022" text-anchor="start" class="arw">55 b</text>
+  <text x="520" y="1022" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="1034" text-anchor="end" class="frm" xml:space="preserve"> ack  padding </text>
+  <use x="50" y="1056" xlink:href="#packet-in" />
+  <text x="46" y="1064" text-anchor="end" class="time">91.5 ms</text>
+  <text x="554" y="1052" text-anchor="start" class="seq_in">12</text>
+  <text x="520" y="1054" text-anchor="start" class="arw">55 b</text>
+  <text x="520" y="1054" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="1066" text-anchor="end" class="frm" xml:space="preserve"> ack  padding </text>
+  <use x="50" y="1088" xlink:href="#packet-in" />
+  <text x="46" y="1096" text-anchor="end" class="time">101.5 ms</text>
+  <text x="554" y="1084" text-anchor="start" class="seq_in">13</text>
+  <text x="520" y="1086" text-anchor="start" class="arw">35 b</text>
+  <text x="520" y="1086" text-anchor="end" class="frm" xml:space="preserve">1RTT </text>
+  <text x="520" y="1098" text-anchor="end" class="frm" xml:space="preserve"> ack  connection_close </text>
+  <use x="50" y="1120" xlink:href="#packet-out" />
+  <text x="46" y="1128" text-anchor="end" class="time">101.5 ms</text>
+  <text x="46" y="1116" text-anchor="end" class="seq_out">16</text>
+  <text x="80" y="1118" text-anchor="end" class="arw">15 b</text>
+  <text x="80" y="1118" text-anchor="start" class="frm" xml:space="preserve"> 1RTT</text>
+  <text x="80" y="1130" text-anchor="start" class="frm" xml:space="preserve"> connection_close </text>
+</svg>

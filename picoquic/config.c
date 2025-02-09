@@ -82,7 +82,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_ROOT_TRUST_FILE, 't', "root_trust_file", 1, "file", "root trust file" },
     { picoquic_option_FORCE_ZERO_SHARE, 'z', "force_zero_share", 0, "", "Set TLS zero share behavior on client, to force HRR" },
     { picoquic_option_CNXID_LENGTH, 'I', "cnxid_length", 1, "length", "Length of CNX_ID used by the client, default=8" },
-    { picoquic_option_Idle_Timeout, 'd', "idle_timeout", 1, "ms", "Duration of idle timeout in milliseconds" },
+    { picoquic_option_Idle_Timeout, 'd', "idle_timeout", 1, "ms", "Duration of idle timeout in milliseconds (Default 30,000ms)" },
     { picoquic_option_NO_DISK, 'D', "no_disk", 0, "", "no disk: do not save received files on disk" },
     { picoquic_option_LARGE_CLIENT_HELLO, 'Q', "large_client_hello", 0, "",
     "send a large client hello in order to test post quantum readiness" },
@@ -529,36 +529,76 @@ int picoquic_config_set_option(picoquic_quic_config_t* config, picoquic_option_e
     return ret;
 }
 
-int picoquic_config_command_line(int opt, int * p_optind, int argc, char const ** argv, char const* optarg, picoquic_quic_config_t * config)
+int picoquic_config_get_option_char_index(int opt)
 {
-    int ret = 0;
     int option_index = -1;
-    option_param_t params[5];
-    int nb_params = 0;
 
-    /* Get the parameters */
     for (size_t i = 0; i < option_table_size; i++) {
         if (option_table[i].option_letter == opt) {
             option_index = (int)i;
             break;
         }
     }
+    return option_index;
+}
 
-    if (option_index == -1 || option_table[option_index].nb_params_required > 1) {
-        /* No options have more than one parameter */
-        fprintf(stderr, "Unknown or incorrect option: -%c\n", opt);
-        ret = -1;
+int picoquic_config_get_option_name_index(char const * s, size_t l)
+{
+    int option_index = -1;
+
+    for (size_t i = 0; i < option_table_size; i++) {
+        if (strncmp(s, option_table[i].option_name, l) == 0) {
+            option_index = (int)i;
+            break;
+        }
     }
-    else {
-        if (option_table[option_index].nb_params_required > 0) {
-            params[0].param = optarg;
-            if (optarg == NULL){
-                fprintf(stderr, "option -%c requires %d arguments\n", opt, option_table[option_index].nb_params_required);
-                ret = -1;
-            }
-            else {
-                params[0].length = strlen(optarg);
-                nb_params++;
+    return option_index;
+}
+
+int picoquic_config_get_command_line_option_index(char const* opt_string)
+{
+    int option_index = -1;
+
+    if (opt_string[0] == '-' && opt_string[1] != 0) {
+        if (opt_string[2] == 0) {
+            option_index = picoquic_config_get_option_char_index(opt_string[1]);
+        }
+        else if (opt_string[1] == '-' && opt_string[2] != 0) {
+            char const* opt_name = opt_string + 2;
+            option_index = picoquic_config_get_option_name_index(opt_name, strlen(opt_name));
+        }
+    }
+    return option_index;
+}
+
+int picoquic_get_command_line_option_value(int option_index, char const * opt_string, int* p_optind, const char** argv,
+    int argc, char const* optarg, picoquic_quic_config_t* config)
+{
+    int ret = 0;
+    option_param_t params[5];
+    int nb_params = 0;
+
+    if (option_table[option_index].nb_params_required > 0) {
+        params[0].param = optarg;
+        if (optarg == NULL) {
+            fprintf(stderr, "option %s requires %d arguments\n", opt_string, option_table[option_index].nb_params_required);
+            ret = -1;
+        }
+        else {
+            params[0].length = strlen(optarg);
+            nb_params++;
+            while (nb_params < option_table[option_index].nb_params_required) {
+                if (*p_optind + 1 > argc) {
+                    fprintf(stderr, "option %s requires %d arguments\n", opt_string, option_table[option_index].nb_params_required);
+                    ret = -1;
+                    break;
+                }
+                else {
+                    params[nb_params].param = argv[*p_optind];
+                    params[nb_params].length = (int)strlen(argv[*p_optind]);
+                    nb_params++;
+                    *p_optind += 1;
+                }
             }
         }
     }
@@ -567,6 +607,43 @@ int picoquic_config_command_line(int opt, int * p_optind, int argc, char const *
         ret = config_set_option(&option_table[option_index], params, nb_params, config);
     }
 
+    return ret;
+}
+
+int picoquic_config_command_line(int opt, int * p_optind, int argc, char const ** argv, char const* optarg, picoquic_quic_config_t * config)
+{
+    int ret = 0;
+    int option_index = -1;
+    char opt_string[3] = { '-', 0, 0 };
+
+    opt_string[1] = (char)opt;
+    option_index = picoquic_config_get_option_char_index(opt);
+
+    if (option_index == -1) {
+        fprintf(stderr, "Unknown option: -%c\n", opt);
+        ret = -1;
+    }
+    else {
+        ret = picoquic_get_command_line_option_value(option_index, opt_string, p_optind,
+            argv, argc, optarg, config);
+    }
+    return ret;
+}
+
+int picoquic_config_command_line_ex(char const * opt_string, int* p_optind, int argc, char const** argv, char const* optarg, picoquic_quic_config_t* config)
+{
+    int ret = 0;
+    int option_index = -1;
+
+    option_index = picoquic_config_get_command_line_option_index(opt_string);
+
+    if (option_index == -1) {
+        fprintf(stderr, "Unknown option: %s\n", opt_string);
+    }
+    else {
+        ret = picoquic_get_command_line_option_value(option_index, opt_string, p_optind,
+            argv, argc, optarg, config);
+    }
     return ret;
 }
 
@@ -649,7 +726,6 @@ int picoquic_config_file(char const* file_name, picoquic_quic_config_t* config)
 
     return ret;
 }
-
 #endif
 
 /* Create a QUIC Context based on configuration data.
@@ -833,6 +909,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     config->initial_random = 3;
     config->cwin_min = PICOQUIC_CWIN_MINIMUM;
     config->cwin_max = UINT64_MAX;
+    config->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000;
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)

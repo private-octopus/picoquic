@@ -73,7 +73,9 @@ The API enables applications to:
 # Networking API
 
 The networking API enables processes to submit incoming packets to a QUIC context,
-and to poll a QUIC context for new packets to send. A typical process using
+and to poll a QUIC context for new packets to send. There could be multiple
+implementations of that API. Most applications will provide an interface to
+classic UPD sockets. A typical process using
 picoquic will be organized around the networking API:
 
 1. Create a QUIC context
@@ -90,6 +92,17 @@ picoquic will be organized around the networking API:
 5. Exit the loop when the client connections are finished, or on a server if the
    server process needs to close.
 6. Close the QUIC context
+
+The defaut "socket loop"{{socket_loop.md}} provides an implementation of
+this logic. Applications may opt to use that, but may also develop their own
+code, for example because they implement multiple protocols and need to manage
+multiple sockets, or because they want to integrate with a specific
+event handling library like `libevent`, or maybe because they want to
+use high performance API like 'iouring' or 'DPDK'. The Picoquic test code
+uses that API to send messages through a simple simulator instead of
+actual sockets.
+
+The networking API is detailed in the next sections.
 
 ## Polling API
 

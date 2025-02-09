@@ -47,7 +47,7 @@
 #define TEST_CNX_COUNT 7
 #define TEST_CNX_ID(x) {{ x, x, x, x, x, x, x, x, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} , 8 }
 
-int cnxcreation_test()
+int create_cnx_test()
 {
     int ret = 0;
     picoquic_quic_t* quic = NULL;
@@ -227,6 +227,106 @@ int cnxcreation_test()
         /* delete QUIC context. */
         if (quic != NULL) {
             picoquic_free(quic);
+        }
+    }
+
+    return ret;
+}
+
+int create_quic_test()
+{
+    int ret = 0;
+    char const* bad_dir = "..";
+    char const* bad_file = "no_such_file_should_exist.pem";
+    picoquic_quic_t* quic = NULL;
+
+    /* Check that 0 connection == 1 */
+    if (ret == 0) {
+        quic = picoquic_create(0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+        if (quic == NULL || quic->max_number_connections != 1) {
+            ret = -1;
+        }
+        picoquic_free(quic);
+        quic = NULL;
+    }
+
+    /* Check that bad context, bad key or bad store crashes connection */
+    if (ret == 0) {
+        char test_server_cert_file[512];
+        char test_server_key_file[512];
+
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_CERT);
+
+        if (ret == 0) {
+            ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+                PICOQUIC_TEST_FILE_SERVER_KEY);
+        }
+
+        if (ret == 0) {
+            if ((quic = picoquic_create(8, bad_file, test_server_key_file, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0)) != NULL ||
+                (quic = picoquic_create(8, test_server_cert_file, bad_file, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0)) != NULL) {
+                ret = -1;
+                picoquic_free(quic);
+                quic = NULL;
+            }
+        }
+    }
+
+    /* Check that bad ticket store does not crash a client connection */
+    if (ret == 0) {
+        if ((quic = picoquic_create(0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, bad_file, NULL, 0)) == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_free(quic);
+            if ((quic = picoquic_create(0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, bad_dir, NULL, 0)) == NULL) {
+                ret = -1;
+            }
+            else {
+                picoquic_free(quic);
+                quic = NULL;
+            }
+        }
+    }
+
+    /* Check loading of token file (always work) and not a valid file name (always fail).
+    * However, this test is not very portable, because reading a bad directory only
+    * fails on Windows.
+     */
+    if (ret == 0) {
+        if ((quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0)) == NULL) {
+            ret = -1;
+        }
+        else
+        {
+            int rbf = 0;
+            int rbd = 0;
+            if ((rbf = picoquic_load_token_file(quic, bad_file)) != 0 &&
+                (rbd = picoquic_load_token_file(quic, bad_dir)) == 0) {
+                ret = -1;
+            }
+            DBG_PRINTF("Load token %s %s",
+                bad_file, (rbf == 0) ? "Succeeds" : "Fails");
+            DBG_PRINTF("Load token %s %s",
+                bad_dir, (rbd == 0) ? "Succeeds" : "Fails");
+            picoquic_free(quic);
+            quic = NULL;
+        }
+    }
+
+    /* Check that loading a NULL TP loads the default */
+    if (ret == 0) {
+        if ((quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0)) == NULL) {
+            ret = -1;
+        }
+        else
+        {
+            if (picoquic_set_default_tp(quic, NULL) != 0) {
+                ret = -1;
+            }
+            picoquic_free(quic);
+            quic = NULL;
         }
     }
 

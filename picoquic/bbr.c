@@ -103,9 +103,6 @@ typedef enum {
 /* Constants in BBRv3 */
 #define BBRPacingMarginPercent 1 /* discount factor of 1% used to scale BBR.bw to produce BBR.pacing_rate */
 
-
-
-
 #define BBRLossThresh 0.2 /* maximum tolerated packet loss (default: 20%) */
 #define BBRBeta 0.7 /* Multiplicative decrease on packet loss (default: 0.7) */
 #define BBRHeadroom 0.15 /* Realive amount of headroom left for other flows. (default: 0.15). (Erroneously set to 0.85 in draft-bbr-02) */
@@ -945,7 +942,7 @@ static void  BBRUpdateCongestionSignals(picoquic_bbr_state_t* bbr_state, picoqui
     if (rs->newly_lost > 0) {
         bbr_state->loss_in_round = 1;
     }
-#ifdef RTTJitterBuffer
+#ifdef RTTJitterBufferAdapt
     if (IsRTTTooHigh(bbr_state)) {
         bbr_state->rtt_too_high_in_round = 1;
     }
@@ -955,7 +952,7 @@ static void  BBRUpdateCongestionSignals(picoquic_bbr_state_t* bbr_state, picoqui
     }
     BBRAdaptLowerBoundsFromCongestion(bbr_state, path_x);
     bbr_state->loss_in_round = 0;
-#ifdef RTTJitterBuffer
+#ifdef RTTJitterBufferAdapt
     bbr_state->rtt_too_high_in_round = 0;
 #endif
 }
@@ -1244,9 +1241,9 @@ static void BBRUpdateMinRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
         bbr_state->min_rtt_stamp = bbr_state->probe_rtt_min_stamp;
     }
 
-    if (bbr_state->rtt_short_term_min > bbr_state->min_rtt)
+    if (bbr_state->rtt_short_term_min > bbr_state->min_rtt && bbr_state->min_rtt > PICOQUIC_MINRTT_THRESHOLD)
     {
-        uint64_t delta_max = bbr_state->min_rtt / 4;
+        uint64_t delta_max = PICOQUIC_MINRTT_MARGIN + bbr_state->min_rtt / 4;
         if (bbr_state->rtt_short_term_min > bbr_state->min_rtt + delta_max) {
             bbr_state->nb_rtt_excess++;
         }
@@ -1779,8 +1776,10 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
 
     case picoquic_bbr_alg_probe_bw_up:
         if (BBRHasElapsedInPhase(bbr_state, bbr_state->min_rtt, current_time) &&
-            ((BBRExpTest(bbr_state, do_exit_probeBW_up_on_delay) && bbr_state->nb_rtt_excess > 0) ||
-            path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw))) {
+            bbr_state->min_rtt > PICOQUIC_MINRTT_THRESHOLD &&
+            BBRExpTest(bbr_state, do_exit_probeBW_up_on_delay) &&
+            (bbr_state->nb_rtt_excess > 0 ||
+                path_x->bytes_in_transit > BBRInflightWithBw(bbr_state, path_x, 1.25, bbr_state->max_bw))) {
             BBRStartProbeBW_DOWN(bbr_state, path_x, current_time);
         }
         break;
@@ -1919,7 +1918,7 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
         BBRCheckStartupFullBandwidth(bbr_state, rs);
         BBRCheckStartupHighLoss(bbr_state, path_x, rs);
 #ifdef RTTJitterBufferStartup
-        if (IsRTTTooHigh(bbr_state) && BBRExpTest(bbr_state, do_early_exit)) {
+        if (bbr_state->min_rtt > PICOQUIC_MINRTT_THRESHOLD && IsRTTTooHigh(bbr_state)) {
             bbr_state->filled_pipe = 1;
         }
 #endif
@@ -2009,7 +2008,7 @@ void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
         return;
     }
 
-    if (picoquic_hystart_test(&bbr_state->rtt_filter, rs->rtt_sample,
+    if (picoquic_cc_hystart_test(&bbr_state->rtt_filter, rs->rtt_sample,
         path_x->pacing.packet_time_microsec, current_time, 0)) {
         BBRExitStartupLongRtt(bbr_state, path_x, current_time);
     }
@@ -2017,7 +2016,7 @@ void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
         BBRExitStartupLongRtt(bbr_state, path_x, current_time);
     }
     else {
-        int excessive_loss = picoquic_hystart_loss_volume_test(&bbr_state->rtt_filter, picoquic_congestion_notification_repeat,
+        int excessive_loss = picoquic_cc_hystart_loss_volume_test(&bbr_state->rtt_filter, picoquic_congestion_notification_repeat,
             rs->newly_acked, rs->newly_lost);
         if (excessive_loss) {
             BBRExitStartupLongRtt(bbr_state, path_x, current_time);
@@ -2028,7 +2027,7 @@ void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
 void BBRUpdateStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
 {
     if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-        picoquic_hystart_increase(path_x, &bbr_state->rtt_filter, rs->newly_acked);
+        path_x->cwin += picoquic_cc_slow_start_increase(path_x, rs->newly_acked);
     }
 
     uint64_t max_win = path_x->peak_bandwidth_estimate * bbr_state->min_rtt / 1000000;

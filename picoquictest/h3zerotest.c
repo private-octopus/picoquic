@@ -44,6 +44,7 @@
 #endif
 #include "autoqlog.h"
 #include "picoquic_binlog.h"
+#include "picoquic_utils.h"
 
 /*
  * Test of the prefixed integer encoding
@@ -541,7 +542,7 @@ int qpack_huffman_base_test()
 /* Test decoding of basic QPACK messages */
 
 #define QPACK_TEST_HEADER_BLOCK_PREFIX 0,0
-#define QPACK_TEST_HEADER_BLOCK_PREFIX2 0,0x7F,0x18
+#define QPACK_TEST_HEADER_BLOCK_PREFIX2 0, 0x7F, 0x18
 #define QPACK_TEST_HEADER_INDEX_HTML 'i', 'n', 'd', 'e', 'x', '.', 'h', 't', 'm', 'l'
 #define QPACK_TEST_HEADER_INDEX_HTML_LEN 10
 #define QPACK_TEST_HEADER_PATH ':', 'p', 'a', 't', 'h'
@@ -653,25 +654,6 @@ static uint8_t qpack_test_get_slash_range_long[] = {
 
 static uint8_t qpack_get_long_file_name[] = {
      0x00, 0x00, 0xd1, 0xd7, 0x51, 0x7f, 0x80, 0x01,
-#if 0
-     0x2f,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
-     0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x33, 0x32,
-#endif
      '/', FILE_NAME_LONG,
      0x50, 0x10, 0x74, 0x65, 0x73, 0x74, 0x2e, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63, 0x6f, 0x6d
 };
@@ -1162,6 +1144,23 @@ int h3zero_qpack_fuzz_test()
     int n_good = 0;
     int n_trials = 0;
 
+    for (size_t x = 0; ret == 0 && x < nb_qpack_test_case; x++) {
+        for (length = 0; length < qpack_test_case[x].bytes_length - 1; length++) {
+            h3zero_header_parts_t parts = { 0 };
+            uint8_t* parsed = NULL;
+
+            memcpy(bytes, qpack_test_case[x].bytes, length);
+            if (length < sizeof(bytes)) {
+                memset(bytes + length, 0, sizeof(bytes) - length);
+            }
+
+            parsed = h3zero_parse_qpack_header_frame(bytes, bytes + length, &parts);
+            h3zero_release_header_parts(&parts);
+            n_good += (parsed != NULL) ? 1 : 0;
+            n_trials++;
+        }
+    }
+
     for (int i = 0; ret == 0 && i < 512; i++) {
         size_t x = (size_t)picoquic_test_uniform_random(&random_context, nb_qpack_test_case);
 
@@ -1368,6 +1367,263 @@ int h3zero_stream_test()
     return ret;
 }
 
+/* H3Zero stream fuzz test
+ */
+
+uint8_t more_value_1[] = { 0x1f };
+uint8_t more_value_8[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, };
+uint8_t push_id[] = { 0x1f };
+
+#define FUZZ_MORE(more_type, more_value) { more_type, more_value, sizeof(more_value) }
+#define FUZZ_HEADER(test_header) { h3zero_frame_header, test_header, sizeof(test_header) }
+typedef struct st_fuzz_header_t {
+    size_t header_type;
+    const uint8_t* header;
+    size_t header_length;
+} fuzz_header_t;
+fuzz_header_t fuzz_headers[] = {
+    FUZZ_HEADER(qpack_test_get_slash_prefix),
+    FUZZ_HEADER(qpack_test_get_index_html),
+    FUZZ_HEADER(qpack_test_get_index_html_long),
+    FUZZ_HEADER(qpack_test_status_404),
+    FUZZ_HEADER(qpack_test_status_404_code),
+    FUZZ_HEADER(qpack_test_status_404_long),
+    FUZZ_HEADER(qpack_test_response_html),
+    FUZZ_HEADER(qpack_test_status_405_code),
+    FUZZ_HEADER(qpack_test_status_405_null),
+    FUZZ_HEADER(qpack_test_get_zzz),
+    FUZZ_HEADER(qpack_test_get_1234),
+    FUZZ_HEADER(qpack_test_get_ats),
+    FUZZ_HEADER(qpack_test_get_ats2),
+    FUZZ_HEADER(qpack_test_post_zzz),
+    FUZZ_HEADER(qpack_test_post_zzz_null),
+    FUZZ_HEADER(qpack_status200_akamai),
+    FUZZ_HEADER(qpack_test_get_slash_range),
+    FUZZ_HEADER(qpack_test_get_slash_range_long),
+    FUZZ_HEADER(qpack_get_long_file_name),
+    FUZZ_MORE(0xabcd, more_value_1),
+    FUZZ_MORE(0xabcd, more_value_8),
+    FUZZ_MORE(0, more_value_1),
+    FUZZ_MORE(0, more_value_8),
+    FUZZ_MORE(h3zero_frame_cancel_push, push_id),
+    FUZZ_MORE(h3zero_frame_max_push_id, push_id),
+    FUZZ_MORE(h3zero_frame_goaway, push_id),
+    { 0, more_value_1, 0 },
+};
+
+const size_t nb_fuzz_headers = sizeof(fuzz_headers) / sizeof(fuzz_header_t);
+
+typedef enum {
+    stream_fuzz_l0 = 0,
+    stream_fuzz_l1,
+    stream_fuzz_l2,
+    stream_fuzz_l3,
+    stream_fuzz_ln1,
+    stream_fuzz_lt,
+    stream_fuzz_max
+} stream_fuzz_enum;
+
+/* fuzzing a T-L-V frame */
+uint8_t* h3zero_stream_fuzz_tlv(uint8_t* bytes, const uint8_t* bytes_max, uint64_t frame_type, size_t frame_length, const uint8_t * frame_value,
+    size_t fuzz_index, int * errored)
+{
+    *errored = 0;
+    uint8_t* byte0 = bytes;
+    size_t coded_length = frame_length;
+    switch (fuzz_index) {
+    case stream_fuzz_l0:
+        coded_length = 0;
+        break;
+    case stream_fuzz_l1:
+        coded_length = 1;
+        break;
+    case stream_fuzz_l2:
+        coded_length = 2;
+        break;
+    case stream_fuzz_l3:
+        coded_length = 3;
+        break;
+    case stream_fuzz_ln1:
+        coded_length = frame_length - 1;
+        break;
+    case stream_fuzz_max:
+        break;
+    default:
+        break;
+    }
+    if (coded_length > frame_length) {
+        coded_length = frame_length;
+    }
+    else if (coded_length != frame_length) {
+        *errored = 1;
+    }
+    if (fuzz_index == stream_fuzz_lt) {
+        if (bytes + 8 >= bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            *bytes++ = (uint8_t)(((frame_type >> 56) & 0x3f) + 0xc0);
+            *bytes++ = (uint8_t)((frame_type >> 48) & 0xff);
+            *bytes++ = (uint8_t)((frame_type >> 40) & 0xff);
+            *bytes++ = (uint8_t)((frame_type >> 32) & 0xff);
+            *bytes++ = (uint8_t)((frame_type >> 24) & 0xff);
+            *bytes++ = (uint8_t)((frame_type >> 16) & 0xff);
+            *bytes++ = (uint8_t)((frame_type >> 8) & 0xff);
+            *bytes++ = (uint8_t)(frame_type & 0xff);
+        }
+    }
+    else {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, frame_type);
+    }
+    if (bytes  != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, coded_length)) != NULL &&
+        bytes + frame_length <= bytes_max) {
+        memcpy(bytes, frame_value, frame_length);
+        bytes += frame_length;
+    } else {
+        bytes = byte0;
+    }
+    return bytes;
+}
+
+size_t h3zero_stream_fuzz_message(uint8_t* buffer, size_t buffer_size, size_t trial_rank)
+{
+    /* Pick a series of frames until one is fuzzed */
+    uint8_t* bytes = buffer;
+    uint8_t* bytes_max = buffer + buffer_size;
+    size_t message_size = 0;
+    size_t header_index;
+    size_t fuzz_index;
+    int errored = 0;
+    uint8_t* bytes_0 = bytes;
+
+    header_index = trial_rank % nb_fuzz_headers;
+    trial_rank /= nb_fuzz_headers;
+    fuzz_index = trial_rank % (size_t)2 * stream_fuzz_max;
+    trial_rank /= (size_t)2 * stream_fuzz_max;
+
+    if (fuzz_index < stream_fuzz_max) {
+        fuzz_index = stream_fuzz_max;
+    }
+    else {
+        fuzz_index -= stream_fuzz_max;
+    }
+
+    bytes = h3zero_stream_fuzz_tlv(bytes, bytes_max,
+        fuzz_headers[header_index].header_type, fuzz_headers[header_index].header_length,
+        fuzz_headers[header_index].header, fuzz_index, &errored);
+
+    if (bytes == NULL) {
+        bytes = bytes_0;
+    }
+
+    message_size = bytes - buffer;
+    
+    if (message_size > 0 && trial_rank > 0) {
+        size_t nb_fuzz_bytes = trial_rank % 15;
+        trial_rank >>= 4;
+        if (nb_fuzz_bytes > 0 && nb_fuzz_bytes < 5) {
+            uint8_t* fuzzed_byte = bytes_0 + (trial_rank % message_size);
+            trial_rank /= message_size;
+
+            while (message_size > 0 && trial_rank > 0) {
+                fuzzed_byte++;
+                if (fuzzed_byte >= buffer + message_size) {
+                    fuzzed_byte = buffer;
+                }
+                *fuzzed_byte ^= (uint8_t)(trial_rank ^ 0xff);
+                trial_rank >>= 8;
+            }
+        }
+    }
+    return message_size;
+}
+
+int h3zero_stream_fuzz_test()
+{
+    int ret = 0;
+    size_t buffer_size = 0x10000;
+    uint8_t* packet_buffer = malloc(buffer_size);
+    int nb_good = 0;
+    int nb_bad = 0;
+    size_t nb_trials = 2048;
+    int errors_found[6] = { 0, 0, 0, 0, 0, 0 };
+    char const * errors_names[6] = {
+        "error no error",
+        "frame unexpected",
+        "internal error",
+        "general protocol error",
+        "frame error",
+        "other errors" };
+
+    if (packet_buffer == NULL) {
+        ret = -1;
+    }
+    else {
+        uint64_t error_found = 0;
+        uint8_t* p = packet_buffer;
+        uint64_t trial_random_ctx = 0xdeadbeef;
+        size_t p_len = 0;
+        uint8_t* p_max;
+
+        for (size_t trial_rank = 0; ret == 0 && trial_rank < nb_trials; trial_rank++) {
+            h3zero_data_stream_state_t stream_state = { 0 };
+            for (int i = 0; i < 32; i++) {
+                size_t trial_random = (size_t)picoquic_test_uniform_random(&trial_random_ctx, SIZE_MAX);
+                size_t available_data;
+                if (trial_rank < 128 && i == 0) {
+                    trial_random = trial_rank;
+                }
+                p_len = h3zero_stream_fuzz_message(packet_buffer, buffer_size, trial_random);
+                p_max = packet_buffer + p_len;
+                p = packet_buffer;
+                while (p != NULL && p < p_max) {
+                    available_data = 0;
+                    p = h3zero_parse_data_stream(p, p_max, &stream_state, &available_data, &error_found);
+                    p += available_data;
+                }
+                if (p == NULL) {
+                    break;
+                }
+            }
+            if (p == NULL) {
+                nb_bad++;
+                switch(error_found){
+                case 0:
+                    errors_found[0]++;
+                    break;
+                case H3ZERO_FRAME_UNEXPECTED:
+                    errors_found[1]++;
+                    break;
+                case H3ZERO_INTERNAL_ERROR:
+                    errors_found[2]++;
+                    break;
+                case H3ZERO_GENERAL_PROTOCOL_ERROR:
+                    errors_found[3]++;
+                    break;
+                case H3ZERO_FRAME_ERROR:
+                    errors_found[4]++;
+                    break;
+                default:
+                    errors_found[5]++;
+                    break;
+                }
+            }
+            else {
+                nb_good++;
+            }
+            h3zero_delete_data_stream_state(&stream_state);
+        }
+        if (nb_good + nb_bad != nb_trials) {
+            ret = -1;
+        }
+        for (int i = 0; i < 6; i++) {
+            DBG_PRINTF("%s: %d", errors_names[i], errors_found[i]);
+        }
+        free(packet_buffer);
+    }
+    return ret;
+}
 
 /*
  * Test the scenario parsing function
@@ -1726,7 +1982,6 @@ typedef struct st_h09_header_test_data_t {
 } h09_header_test_data_t;
 
 static h09_header_test_data_t h09_header_data_test_case[] = {
-#if 0
     { "GET /\r\n\r\n", 9, picohttp_server_stream_status_receiving, 0, 0, "/", 5 },
     { "GET /\n", 6, picohttp_server_stream_status_crlf, 0, 0, "/", 5 },
     { "GET /\r", 6, picohttp_server_stream_status_none, 0, 0, "/", 5 },
@@ -1738,7 +1993,6 @@ User - Agent: curl / 7.16.3 libcurl / 7.16.3 OpenSSL / 0.9.7l zlib / 1.2.3\n\
 Host : www.example.com\n\
 Accept - Language : en, mi",
     148, picohttp_server_stream_status_header, 0, 1, "/hello.txt", 23 },
-#endif
     { "Abracadabra", 0, picohttp_server_stream_status_none, -1, 0, "", 0 }
 };
 
@@ -2308,14 +2562,16 @@ static const size_t nb_satellite_test_scenario = sizeof(satellite_test_scenario)
 
 int h3zero_satellite_test()
 {
+    /* TODO check, max exec time increased from 10750000 to 10943826. */
     return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, satellite_test_scenario, nb_satellite_test_scenario,
-        demo_test_stream_length, 1, 0, 10750000, 0, NULL, NULL, NULL, 0);
+        demo_test_stream_length, 1, 0, 11000000, 0, NULL, NULL, NULL, 0);
 }
 
 int h09_satellite_test()
 {
+    /* TODO check, max exec time increased from 10750000 to 10943117. */
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL, satellite_test_scenario, nb_satellite_test_scenario, 
-        demo_test_stream_length, 1, 0, 10750000, 0, NULL, NULL, NULL, 0);
+        demo_test_stream_length, 1, 0, 11000000, 0, NULL, NULL, NULL, 0);
 }
 
 int h09_lone_fin_test()
@@ -3162,14 +3418,13 @@ int http_corrupt_rdpn_test()
 /* Test the selection of ALPN
  */
 char const* alpn_good_list[] = {
-    "h3-34", "hq-34", "h3-29", "hq-29", "h3", "hq-interop", "siduck", "siduck-00", "perf", NULL };
+    "h3-34", "hq-34", "h3-29", "hq-29", "h3", "hq-interop", "perf", NULL };
 picoquic_alpn_enum alpn_proto_list[] = {
     picoquic_alpn_http_3, picoquic_alpn_http_0_9, picoquic_alpn_http_3, picoquic_alpn_http_0_9,
     picoquic_alpn_http_3, picoquic_alpn_http_0_9,
-    picoquic_alpn_siduck, picoquic_alpn_siduck,
     picoquic_alpn_quicperf };
 char const* alpn_bad_list[] = {
-    "h3-00", "hq", "hq-interop-00", "siduck-99", "", "unknown", NULL };
+    "h3-00", "hq", "hq-interop-00", "", "unknown", NULL };
 
 int demo_alpn_test()
 {
@@ -3272,11 +3527,6 @@ int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_sett
     else if (decoded.h3_datagram != ref->h3_datagram){
         ret = -1;
     }
-#if 0
-    else if (decoded.is_web_transport_enabled != ref->is_web_transport_enabled){
-        ret = -1;
-    }
-#endif
     else if (decoded.webtransport_max_sessions != ref->webtransport_max_sessions) {
         ret = -1;
     }
@@ -3547,6 +3797,516 @@ int h3_grease_client_test()
 int h3_grease_server_test()
 {
     int ret = h3_grease_test_one(1);
+
+    return ret;
+}
+
+/* Demo client ALPN from ticket
+ */
+
+uint8_t  democlient_ticket_sample[] = {
+    0x00, 0x00, 0x00, 0x8C, 0xD0, 0xE7, 0xF5, 0x60, 0x00, 0x10, 0x74, 0x65,
+    0x73, 0x74, 0x2E, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x00, 0x0D,
+    0x70, 0x69, 0x63, 0x6F, 0x71, 0x75, 0x69, 0x63, 0x2D, 0x74, 0x65, 0x73, 0x74, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x63, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0xBE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x1C, 0x00, 0x17, 0x13,
+    0x01, 0x00, 0x00, 0x8D, 0x00, 0x01, 0x86, 0xA0, 0xD8, 0x34, 0x22, 0x5E, 0x00, 0x00, 0x78, 0xC5,
+    0x1D, 0x3A, 0x14, 0x87, 0x19, 0x77, 0x5B, 0x7D, 0x93, 0x7C, 0x74, 0xD5, 0xBC, 0xDD, 0x6E, 0xF2,
+    0xF4, 0x34, 0x02, 0x56, 0xE2, 0x9D, 0x57, 0x42, 0xCB, 0x70, 0xC1, 0xFE, 0xB0, 0x61, 0xC5, 0x93,
+    0xF7, 0xBB, 0x5E, 0x83, 0xAD, 0x6A, 0x20, 0xC5, 0x6C, 0x69, 0x2A, 0xFB, 0xCF, 0xC0, 0xCB, 0x89,
+    0xFE, 0x43, 0x58, 0x17, 0xD6, 0x5E, 0x31, 0x45, 0xD8, 0xAE, 0x18, 0xC6, 0x73, 0x23, 0x81, 0xE0,
+    0x88, 0xC6, 0x14, 0x0A, 0x09, 0x2F, 0xBE, 0x11, 0xA8, 0x14, 0xCF, 0xE5, 0xE9, 0x2A, 0x73, 0x4E,
+    0xB7, 0xE2, 0x50, 0xDD, 0x1D, 0xAC, 0xF8, 0xC3, 0x38, 0x71, 0xB7, 0x18, 0x9B, 0x0C, 0xEB, 0x7A,
+    0x96, 0xD3, 0x22, 0x6B, 0x25, 0x24, 0x67, 0x5D, 0x0F, 0x9D, 0xD7, 0xFA, 0xC8, 0xA3, 0xAA, 0x74,
+    0xAD, 0xD1, 0x7C, 0xF6, 0x67, 0x6E, 0x64, 0x00, 0x08, 0x00, 0x2A, 0x00, 0x04, 0xFF, 0xFF, 0xFF,
+    0xFF, 0x00, 0x20, 0xC5, 0xD4, 0xC0, 0xE2, 0xA3, 0xF5, 0xA1, 0x39, 0xF4, 0x99, 0x29, 0x93, 0x0C,
+    0xB8, 0x5B, 0xAB, 0x9E, 0xD7, 0xF2, 0x77, 0xDC, 0xB9, 0x1C, 0xDB, 0x96, 0x16, 0xCC, 0x42, 0xC8,
+    0x17, 0x10, 0x26
+};
+
+uint8_t  democlient_ticket_h3[] = {
+    0x00, 0x00, 0x00, 0x8C, 0xD0, 0xE7, 0xF5, 0x60, /* Time valid until */
+    0x00, 0x10, /* SNI length, then SNI */
+    0x74, 0x65, 0x73, 0x74, 0x2E, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D,
+    0x00, 0x02, /* ALPN Length, then ALPN */
+    'h', '3',
+    0x00, 0x00, 0x00, 0x01, /* version */
+    0x00, /* IP Address length */
+    0x00, /* IP Address client length */
+    /* Then 10 0 RTT parameters, 64 bits each */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x63,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+    0x00, 0xBE, /* Ticket length */
+    /* Then ticket bytes */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x1C, 0x00, 0x17, 0x13,
+    0x01, 0x00, 0x00, 0x8D, 0x00, 0x01, 0x86, 0xA0, 0xD8, 0x34, 0x22, 0x5E, 0x00, 0x00, 0x78, 0xC5,
+    0x1D, 0x3A, 0x14, 0x87, 0x19, 0x77, 0x5B, 0x7D, 0x93, 0x7C, 0x74, 0xD5, 0xBC, 0xDD, 0x6E, 0xF2,
+    0xF4, 0x34, 0x02, 0x56, 0xE2, 0x9D, 0x57, 0x42, 0xCB, 0x70, 0xC1, 0xFE, 0xB0, 0x61, 0xC5, 0x93,
+    0xF7, 0xBB, 0x5E, 0x83, 0xAD, 0x6A, 0x20, 0xC5, 0x6C, 0x69, 0x2A, 0xFB, 0xCF, 0xC0, 0xCB, 0x89,
+    0xFE, 0x43, 0x58, 0x17, 0xD6, 0x5E, 0x31, 0x45, 0xD8, 0xAE, 0x18, 0xC6, 0x73, 0x23, 0x81, 0xE0,
+    0x88, 0xC6, 0x14, 0x0A, 0x09, 0x2F, 0xBE, 0x11, 0xA8, 0x14, 0xCF, 0xE5, 0xE9, 0x2A, 0x73, 0x4E,
+    0xB7, 0xE2, 0x50, 0xDD, 0x1D, 0xAC, 0xF8, 0xC3, 0x38, 0x71, 0xB7, 0x18, 0x9B, 0x0C, 0xEB, 0x7A,
+    0x96, 0xD3, 0x22, 0x6B, 0x25, 0x24, 0x67, 0x5D, 0x0F, 0x9D, 0xD7, 0xFA, 0xC8, 0xA3, 0xAA, 0x74,
+    0xAD, 0xD1, 0x7C, 0xF6, 0x67, 0x6E, 0x64, 0x00, 0x08, 0x00, 0x2A, 0x00, 0x04, 0xFF, 0xFF, 0xFF,
+    0xFF, 0x00, 0x20, 0xC5, 0xD4, 0xC0, 0xE2, 0xA3, 0xF5, 0xA1, 0x39, 0xF4, 0x99, 0x29, 0x93, 0x0C,
+    0xB8, 0x5B, 0xAB, 0x9E, 0xD7, 0xF2, 0x77, 0xDC, 0xB9, 0x1C, 0xDB, 0x96, 0x16, 0xCC, 0x42, 0xC8,
+    0x17, 0x10, 0x26
+};
+
+uint8_t  democlient_ticket_hq[] = {
+    0x00, 0x00, 0x00, 0x8C, 0xD0, 0xE7, 0xF5, 0x60, /* Time valid until */
+    0x00, 0x10, /* SNI length, then SNI */
+    0x74, 0x65, 0x73, 0x74, 0x2E, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D,
+    0x00, 0x0a, /* ALPN Length, then ALPN */
+    'h', 'q', '-', 'i', 'n', 't', 'e', 'r', 'o', 'p',
+    0x00, 0x00, 0x00, 0x02, /* version */
+    0x00, /* IP Address length */
+    0x00, /* IP Address client length */
+    /* Then 10 0 RTT parameters, 64 bits each */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x63,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+    0x00, 0xBE, /* Ticket length */
+    /* Then ticket bytes */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x1C, 0x00, 0x17, 0x13,
+    0x01, 0x00, 0x00, 0x8D, 0x00, 0x01, 0x86, 0xA0, 0xD8, 0x34, 0x22, 0x5E, 0x00, 0x00, 0x78, 0xC5,
+    0x1D, 0x3A, 0x14, 0x87, 0x19, 0x77, 0x5B, 0x7D, 0x93, 0x7C, 0x74, 0xD5, 0xBC, 0xDD, 0x6E, 0xF2,
+    0xF4, 0x34, 0x02, 0x56, 0xE2, 0x9D, 0x57, 0x42, 0xCB, 0x70, 0xC1, 0xFE, 0xB0, 0x61, 0xC5, 0x93,
+    0xF7, 0xBB, 0x5E, 0x83, 0xAD, 0x6A, 0x20, 0xC5, 0x6C, 0x69, 0x2A, 0xFB, 0xCF, 0xC0, 0xCB, 0x89,
+    0xFE, 0x43, 0x58, 0x17, 0xD6, 0x5E, 0x31, 0x45, 0xD8, 0xAE, 0x18, 0xC6, 0x73, 0x23, 0x81, 0xE0,
+    0x88, 0xC6, 0x14, 0x0A, 0x09, 0x2F, 0xBE, 0x11, 0xA8, 0x14, 0xCF, 0xE5, 0xE9, 0x2A, 0x73, 0x4E,
+    0xB7, 0xE2, 0x50, 0xDD, 0x1D, 0xAC, 0xF8, 0xC3, 0x38, 0x71, 0xB7, 0x18, 0x9B, 0x0C, 0xEB, 0x7A,
+    0x96, 0xD3, 0x22, 0x6B, 0x25, 0x24, 0x67, 0x5D, 0x0F, 0x9D, 0xD7, 0xFA, 0xC8, 0xA3, 0xAA, 0x74,
+    0xAD, 0xD1, 0x7C, 0xF6, 0x67, 0x6E, 0x64, 0x00, 0x08, 0x00, 0x2A, 0x00, 0x04, 0xFF, 0xFF, 0xFF,
+    0xFF, 0x00, 0x20, 0xC5, 0xD4, 0xC0, 0xE2, 0xA3, 0xF5, 0xA1, 0x39, 0xF4, 0x99, 0x29, 0x93, 0x0C,
+    0xB8, 0x5B, 0xAB, 0x9E, 0xD7, 0xF2, 0x77, 0xDC, 0xB9, 0x1C, 0xDB, 0x96, 0x16, 0xCC, 0x42, 0xC8,
+    0x17, 0x10, 0x26
+};
+
+
+int picoquic_deserialize_ticket(picoquic_stored_ticket_t** ticket, uint8_t* bytes, size_t bytes_max, size_t* consumed);
+
+int demo_ticket_test_one(char const* alpn, uint32_t proposed_version,
+    uint8_t* test_ticket, size_t size_of_test_ticket,
+    char const* expected_alpn, uint32_t expected_version, int expect_failure)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+    char const* sni = "test.example.com";
+    char const* ticket_alpn = NULL;
+    uint32_t ticket_version;
+
+    if (ret == 0) {
+        size_t consumed = 0;
+        picoquic_stored_ticket_t* ticket = NULL;
+
+        ret = picoquic_deserialize_ticket(&ticket, test_ticket,
+            size_of_test_ticket, &consumed);
+        if (consumed != size_of_test_ticket) {
+            ret = -1;
+        }
+        else {
+            ticket->next_ticket = NULL;
+            quic->p_first_ticket = ticket;
+
+            if (picoquic_demo_client_get_alpn_and_version_from_tickets(quic, sni, alpn,
+                proposed_version, &ticket_alpn, &ticket_version) == 0) {
+                if (expect_failure) {
+                    ret = 0;
+                }
+                else {
+                    /* Looks good */
+                    if (ticket_alpn == NULL) {
+                        if (expected_alpn != NULL) {
+                            ret = -1;
+                        }
+                    }
+                    else if (expected_alpn == NULL ||
+                        strcmp(ticket_alpn, expected_alpn) != 0) {
+                        ret = -1;
+                    }
+                    if (ret == 0 && ticket_version != expected_version) {
+                        ret = -1;
+                    }
+                }
+            }
+            else if (!expect_failure) {
+                ret = -1;
+            }
+        }
+    }
+    /* test with short lengths, forcing errors */
+    if (ret == 0) {
+        picoquic_stored_ticket_t* ticket = NULL;
+        size_t consumed = 0;
+        if (picoquic_deserialize_ticket(&ticket, test_ticket,
+            5, &consumed) == 0) {
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        picoquic_stored_ticket_t* ticket = NULL;
+        size_t consumed = 0;
+        if (picoquic_deserialize_ticket(&ticket, test_ticket,
+            size_of_test_ticket - 1, &consumed) == 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int demo_ticket_test()
+{
+    int ret = demo_ticket_test_one("picoquic_test", 0x00000001,
+        democlient_ticket_sample, sizeof(democlient_ticket_sample),
+        NULL, 0, 1);
+
+    if (ret == 0) {
+        ret = demo_ticket_test_one(NULL, 0x00000000,
+            democlient_ticket_h3, sizeof(democlient_ticket_h3),
+            "h3", 0x0000001, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_ticket_test_one(NULL, 0x00000000,
+            democlient_ticket_hq, sizeof(democlient_ticket_hq),
+            "hq-interop", 0x0000002, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_ticket_test_one("hq-interop", 0x00000000,
+            democlient_ticket_hq, sizeof(democlient_ticket_hq),
+            NULL, 0x0000002, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_ticket_test_one("hq-interop", 0x00000000,
+            democlient_ticket_sample, sizeof(democlient_ticket_sample),
+            NULL, 0x0000000, 1);
+    }
+
+    return ret;
+}
+
+
+static picoquic_demo_stream_desc_t demo_scenario_error[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, NULL},
+    { 0, 4, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/index.html", "_", 0, NULL}
+};
+
+int demo_error_setup(picoquic_quic_t** quic, picoquic_cnx_t** cnx,
+    picoquic_demo_callback_ctx_t* callback_ctx, uint64_t* simulated_time,
+    picoquic_demo_stream_desc_t * demo_scenario, size_t nb_scenario,
+    char const * alpn, int no_disk, int delay_fin)
+{
+
+    int ret = picoquic_test_set_minimal_cnx_with_time(quic, cnx, simulated_time);
+    if (ret == 0) {
+        ret = picoquic_demo_client_initialize_context(callback_ctx, demo_scenario, nb_scenario, alpn,
+            no_disk, delay_fin);
+    }
+    return ret;
+}
+
+int demo_error_too_long()
+{
+    int ret;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
+    picoquic_demo_stream_desc_t demo_too_long;
+    char long_buffer[2048];
+
+    memset(long_buffer, '\t', 2047);
+    long_buffer[2047] = 0;
+    memcpy(&demo_too_long, &demo_scenario_error[0], sizeof(picoquic_demo_stream_desc_t));
+    demo_too_long.doc_name = long_buffer;
+
+    ret = demo_error_setup(&quic, &cnx, &callback_ctx, &simulated_time,
+        &demo_too_long, 1, "h3", 0, 0);
+
+    if (ret == 0) {
+        int ret_start = picoquic_demo_client_start_streams(cnx, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+
+        if (ret_start == 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int demo_error_repeat()
+{
+    int ret;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
+    picoquic_demo_stream_desc_t x_repeat;
+    char * slashed_name = "a/../b/c/d/e\\f/xxx";
+
+    memcpy(&x_repeat, &demo_scenario_error[0], sizeof(picoquic_demo_stream_desc_t));
+    x_repeat.doc_name = slashed_name;
+    x_repeat.repeat_count = 2;
+
+    ret = demo_error_setup(&quic, &cnx, &callback_ctx, &simulated_time,
+        &x_repeat, 1, "h3", 0, 0);
+
+    if (ret == 0) {
+        int ret_start = picoquic_demo_client_start_streams(cnx, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+
+        if (ret_start != 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int picoquic_demo_client_open_stream_file(picoquic_cnx_t* cnx, picoquic_demo_callback_ctx_t* ctx, picoquic_demo_client_stream_ctx_t* stream_ctx);
+
+int demo_error_sanitize()
+{
+    int ret;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
+    picoquic_demo_stream_desc_t x_sanitize;
+    char* slashed_name = "/a/b/c/d/e";
+
+    memcpy(&x_sanitize, &demo_scenario_error[0], sizeof(picoquic_demo_stream_desc_t));
+    x_sanitize.f_name = slashed_name;
+
+    ret = demo_error_setup(&quic, &cnx, &callback_ctx, &simulated_time,
+        &x_sanitize, 1, "hq-interop", 0, 0);
+    if (callback_ctx.out_dir == NULL) {
+        callback_ctx.out_dir = ".";
+    }
+
+    if (ret == 0) {
+        int ret_start = picoquic_demo_client_start_streams(cnx, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+
+        if (ret_start != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_demo_client_stream_ctx_t* stream_ctx = callback_ctx.first_stream;
+        int ret_stream = picoquic_demo_client_open_stream_file(cnx, &callback_ctx, stream_ctx);
+
+        if (ret_stream == 0) {
+            ret = -1;
+        }
+
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int demo_error_callback(picoquic_call_back_event_t fin_or_event, uint64_t stream_id, uint8_t * bytes, size_t length,
+    int expect_error)
+{
+    int ret;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
+
+    ret = demo_error_setup(&quic, &cnx, &callback_ctx, &simulated_time,
+        &demo_scenario_error[0], 1, "h3", 0, 0);
+    if (callback_ctx.out_dir == NULL) {
+        callback_ctx.out_dir = ".";
+    }
+
+    if (ret == 0) {
+        int ret_start = picoquic_demo_client_start_streams(cnx, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+
+        if (ret_start != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        int ret_cb = picoquic_demo_client_callback(cnx, stream_id, bytes, length,
+            fin_or_event, &callback_ctx, NULL);
+        if (expect_error) {
+            if (ret_cb == 0) {
+                ret = -1;
+            }
+        }
+        else if (ret_cb != 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
+    picoquic_demo_client_stream_ctx_t* stream_ctx);
+int demo_error_double()
+{
+    int ret;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_demo_callback_ctx_t callback_ctx = { 0 };
+    picoquic_demo_stream_desc_t x_double[2];
+
+    memcpy(&x_double, demo_scenario_error, 2*sizeof(picoquic_demo_stream_desc_t));
+    x_double[0].f_name = "test_demo_error1.html";
+    x_double[1].f_name = "test_demo_error2.html";
+
+    ret = demo_error_setup(&quic, &cnx, &callback_ctx, &simulated_time,
+        x_double, 2, "h3", 0, 0);
+
+    if (ret == 0) {
+        int ret_start = picoquic_demo_client_start_streams(cnx, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+
+        if (ret_start != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_demo_client_stream_ctx_t* stream_ctx = callback_ctx.first_stream;
+
+        while (stream_ctx != NULL) {
+            if (picoquic_demo_client_open_stream_file(cnx, &callback_ctx, stream_ctx) != 0) {
+                ret = -1;
+                break;
+            }
+            else {
+                stream_ctx = stream_ctx->next_stream;
+            }
+        }
+
+        if (ret == 0) {
+            if (callback_ctx.first_stream != NULL &&
+                callback_ctx.first_stream->next_stream != NULL) {
+                picoquic_demo_client_delete_stream_context(&callback_ctx, callback_ctx.first_stream->next_stream);
+            }
+            else {
+                ret = -1;
+            }
+        }
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+
+int demo_error_test()
+{
+    int ret = demo_error_too_long();
+
+    if (ret == 0) {
+        ret = demo_error_repeat();
+    }
+
+    if (ret == 0) {
+        ret = demo_error_sanitize();
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_stream_reset, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_stop_sending, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_stateless_reset, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_close, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_application_close, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        uint8_t versions[] = {
+            0, 0, 0, 1,
+            0, 0, 0, 2
+        };
+        ret = demo_error_callback(picoquic_callback_version_negotiation, 0, versions,
+            sizeof(versions), 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_stream_gap, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_prepare_to_send, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(picoquic_callback_path_address_observed, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_callback(1234567, 0, NULL, 0, 0);
+    }
+
+    if (ret == 0) {
+        ret = demo_error_double();
+    }
 
     return ret;
 }

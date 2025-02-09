@@ -50,8 +50,6 @@ static picoquic_alpn_list_t alpn_list[] = {
     { picoquic_alpn_http_0_9, "hq-28", 5 },
     { picoquic_alpn_http_3, "h3-27", 5 },
     { picoquic_alpn_http_0_9, "hq-27", 5 },
-    { picoquic_alpn_siduck, "siduck", 6 },
-    { picoquic_alpn_siduck, "siduck-00", 9 },
     { picoquic_alpn_quicperf, QUICPERF_ALPN, QUICPERF_ALPN_LEN}
 };
 
@@ -338,12 +336,15 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         }
 
         if (!ctx->no_print) {
+            char text[128];
             if (ret != 0) {
                 fprintf(stdout, "Cannot send %s command for stream(%" PRIu64 "): %s\n",
-                    (post_size == 0) ? "GET" : "POST", stream_ctx->stream_id, path);
+                    (post_size == 0) ? "GET" : "POST", stream_ctx->stream_id, 
+                    picoquic_uint8_to_str(text, sizeof(text), path, path_len));
             }
             else if (nb_repeat == 0) {
-                fprintf(stdout, "Opening stream %d to %s %s\n", (int)stream_ctx->stream_id, (post_size == 0) ? "GET" : "POST", path);
+                fprintf(stdout, "Opening stream %d to %s %s\n", (int)stream_ctx->stream_id, (post_size == 0) ? "GET" : "POST", 
+                    picoquic_uint8_to_str(text, sizeof(text), path, path_len));
             }
         }
     }
@@ -664,7 +665,7 @@ int picoquic_demo_client_initialize_context(
 }
 
 
-static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
+void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
     picoquic_demo_client_stream_ctx_t * stream_ctx)
 {
     int removed_from_context = 0;
