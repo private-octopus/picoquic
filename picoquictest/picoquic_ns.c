@@ -456,6 +456,98 @@ int picoquic_ns_start_connection(picoquic_ns_ctx_t* cc_ctx, int cnx_id)
     return ret;
 }
 
+/* Simulate a variation in the state of a link. 
+* The variation can be either a change in latency or delay, or a change in throughput.
+* 
+* When the variation happens, we want to recompute the delay and delivery time of
+* the packets that are queued on the link, but we have a bit of a gray area for packets
+* whose transmission has started already.
+* 
+* If the link is suspended, the latency becomes infinite. This means all
+* packets not sent yet will be queued "forever".
+* If the link is resumed, all the old packets are requeued at the new
+* throughput and latency.
+* 
+* If the link is not fully blocked, we may have a little complication for handling
+* the packets in transit. The simplest solution may be to just requeue every
+* packet with the new parameter, but this does not account for packets
+* that are "already sent". the modified rules would be:
+* 
+* - Consider all non delivered packets.
+* - if the old arrival time is sooner than suspension plus
+*   old latency, and also sooner than the new time, consider
+*   that the packet is "in the air".
+*   Leave it as is and do not increment the queue.
+* - else, consider we are in requeing mode. Reset the arrival
+*   time of this packet and all packets that follows.
+* 
+* The point of the these rule is to guarantee a complete ordering
+* of delivery times.
+*/
+void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, uint64_t latency, double gbps)
+{
+
+
+}
+
+/*
+* Simulate a brief suspension of transmission on a link, similar to what
+* happens when a Wi-Fi transmission gets suspended while scanning other
+* radio channels. The existing packets are queued for delivery at the end of the interval.
+*/
+
+void picoquic_ns_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_end_of_interval, int simulate_receive)
+{
+    picoquictest_sim_packet_t* packet;
+    picoquictest_sim_packet_t* first_old;
+
+    if (simulate_receive) {
+        /* specify the resume time */
+        link->resume_time = time_end_of_interval;
+        /* packets scheduled to arrive before the end of the interval are rescheduled to
+         * that end of interval time.
+         */
+        packet = link->first_packet;
+        while (packet != NULL && packet->arrival_time < time_end_of_interval) {
+            packet->arrival_time = time_end_of_interval;
+            packet = packet->next_packet;
+        }
+    }
+    else {
+        /* Reset the queue delay to the end of interval */
+        link->queue_time = time_end_of_interval;
+        /* stash the old queue, and reset the queue pointers */
+        first_old = link->first_packet;
+        link->first_packet = NULL;
+        link->last_packet = NULL;
+        /* resubmit all packets at the end of interval time */
+        packet = first_old;
+        while (packet != NULL) {
+            picoquictest_sim_packet_t* next_packet = packet->next_packet;
+            packet->next_packet = NULL;
+            picoquictest_sim_link_submit(link, packet, time_end_of_interval);
+            packet = next_packet;
+        }
+    }
+}
+
+
+uint64_t picoquic_ns_vary_link(picoquic_ns_ctx_t* cc_ctx, uint64_t transition_time, test_vary_link_spec_t* link_state)
+{
+    const uint64_t ten_twelve = 1000000000000ull;
+    uint64_t picoseq_per_byte_up = (ten_twelve * 8) / link_state->bits_per_second_up;
+    uint64_t picoseq_per_byte_down = (ten_twelve * 8) / link_state->bits_per_second_down;
+    cc_ctx->link[0]->microsec_latency = link_state->microsec_latency;
+    cc_ctx->link[0]->picosec_per_byte = picoseq_per_byte_up;
+    cc_ctx->link[1]->microsec_latency = link_state->microsec_latency;
+    cc_ctx->link[1]->picosec_per_byte = picoseq_per_byte_down;
+
+    return transition_time + link_state->duration;
+}
+
+/* One simulation step
+ */
+
 int picoquic_ns_step(picoquic_ns_ctx_t* cc_ctx, int* is_active)
 {
     int ret = 0;
