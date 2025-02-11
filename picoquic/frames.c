@@ -1640,7 +1640,11 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
         }
     }
 
-    if (stream->reset_requested && !stream->reset_sent) {
+    if (stream->reset_sent) {
+        /* No data will be sent after a reset */
+        return bytes;
+    }
+    else if (stream->reset_requested && !stream->reset_sent) {
         return picoquic_format_stream_reset_frame(cnx, stream, bytes, bytes_max, more_data, is_pure_ack);
     }
 
@@ -1716,9 +1720,9 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                             stream_data_context.app_buffer < bytes0 ||
                             stream_data_context.app_buffer >= bytes_max) {
                             long long delta_buf = (long long)(stream_data_context.app_buffer - bytes);
-                            DBG_PRINTF("Stream data buffer corruption, delta = %lld\n", delta_buf);
-                            *ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-                            /* CHECK: SHOULD bytes BE NULL ? */
+                            picoquic_log_app_message(cnx, "Stream data buffer corruption, delta = %lld\n", delta_buf);
+                            *ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0,
+                                "Stream data buffer corruption");
                         }
                     }
 
