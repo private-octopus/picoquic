@@ -104,6 +104,12 @@ extern "C" {
 #define PICOQUIC_ERROR_PATH_ID_INVALID (PICOQUIC_ERROR_CLASS + 60)
 #define PICOQUIC_ERROR_RETRY_NEEDED (PICOQUIC_ERROR_CLASS + 61)
 #define PICOQUIC_ERROR_SERVER_BUSY (PICOQUIC_ERROR_CLASS + 62)
+#define PICOQUIC_ERROR_PATH_DUPLICATE (PICOQUIC_ERROR_CLASS + 63)
+#define PICOQUIC_ERROR_PATH_ID_BLOCKED (PICOQUIC_ERROR_CLASS + 64)
+#define PICOQUIC_ERROR_PATH_CID_BLOCKED (PICOQUIC_ERROR_CLASS + 65)
+#define PICOQUIC_ERROR_PATH_ADDRESS_FAMILY (PICOQUIC_ERROR_CLASS + 66)
+#define PICOQUIC_ERROR_PATH_NOT_READY (PICOQUIC_ERROR_CLASS + 67)
+#define PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED (PICOQUIC_ERROR_CLASS + 68)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -274,7 +280,8 @@ typedef enum {
     picoquic_callback_path_deleted, /* An existing path has been deleted */
     picoquic_callback_path_quality_changed, /* Some path quality parameters have changed */
     picoquic_callback_path_address_observed, /* The peer has reported an address for the path */
-    picoquic_callback_app_wakeup /* wakeup timer set by application has expired */
+    picoquic_callback_app_wakeup, /* wakeup timer set by application has expired */
+    picoquic_callback_next_path_allowed /* There are enough path_id and connection ID available for the next path */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -858,6 +865,47 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * Like all user-level networking API, the "probe new path" API assumes that the
  * port numbers in the socket addresses structures are expressed in network order.
  * 
+ * If an error occurs during a call to picoquic_probe_new_path_ex,
+ * the function returns an error code describing the issue:
+ * 
+ *   PICOQUIC_ERROR_PATH_DUPLICATE: there is already an existing path with
+ *   the same 4 tuple. This error only happens if the multipath extensions
+ *   are not negotiated, because the multipath extensions allow creation of
+ *   multiple paths with the same 4 tuple.
+ * 
+ *   PICOQUIC_ERROR_PATH_ID_BLOCKED: when using the multipath extension,
+ *   the peers manage a max_path_id value. The code cannot create a new path
+ *   if the path_id would exceed the limit negotiated with the peer. Applications
+ *   encountering that error code should wait until the peer has increased the limit.
+ *   They may want to signal the issue to the peer by queuing a PATHS_BLOCKED frame.
+ * 
+ *   PICOQUIC_ERROR_PATH_CID_BLOCKED: when using the multipath extension,
+ *   the peers use NEW_PATH_CONNECTION_ID frame to provide CIDs associated with each
+ *   valid path_id. The error occurs when the peer has not yet provided CIDs for the
+ *   next path_id. Applications encountering the error should wait until the peer
+ *   provides CID for the path. They may want to signal the issue to the peer by
+ *   queuing a PATH_CIDS_BLOCKED frame.
+ * 
+ *   PICOQUIC_ERROR_PATH_ADDRESS_FAMILY: API error. The application is trying
+ *   to use a four tuple with different address family for source and destination.
+ * 
+ *   PICOQUIC_ERROR_PATH_NOT_READY: API error. The application is trying to create
+ *   paths before the connection handshake is complete. The application should wait
+ *   until it is notified that the connection is ready.
+ * 
+ *   PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED: The application is trying to create more
+ *   simultaneous paths than allowed. It will need to close one of the existing paths
+ *   before creating a new one.
+ * 
+ * The errors PICOQUIC_ERROR_PATH_ID_BLOCKED, PICOQUIC_ERROR_PATH_CID_BLOCKED.
+ * PICOQUIC_ERROR_PATH_NOT_READY and PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED are transient.
+ * The application can use the `picoquic_check_new_path_allowed` API to check whether
+ * a new path may be created. This function will return 1 if the path creation
+ * can be attempted immediately, 0 otherwise. If the return code is 0, the stack
+ * will issue a callback `picoquic_callback_next_path_ready` when the transient
+ * issues are resolved and `picoquic_probe_new_path_ex` could be called
+ * again.
+ * 
  * Path event callbacks can be enabled by calling "picoquic_enable_path_callbacks".
  * This can be set as the default for new connections by calling
  * "picoquic_enable_path_callbacks_default". If enabled, the folling events
@@ -893,10 +941,9 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * maintain path data in an app specific context, it will use a call to
  * "picoquic_set_app_path_ctx" to document it. The path created during
  * the connection setup has the unique_path_id 0.
- 
- * 
+ *
  * If an error occurs, such as reference to an obsolete unique path id,
- * all the functions return -1.
+ * all the path management functions return -1.
  * 
  * The call to "refresh the connection ID" will trigger a renewal of the connection
  * ID used for sending packets on that path. This API is mostly used in test
@@ -918,6 +965,8 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
+int picoquic_subscribe_new_path_allowed(picoquic_cnx_t* cnx, int* is_already_allowed);
+
 /* The get path addr API provides the IP addresses used by a specific path.
 * The "local" argument determines whether the APi returns the local address
 * (local == 1), the address of the peer (local == 2) or the address observed by the peer (local == 3).
