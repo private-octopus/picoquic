@@ -114,11 +114,157 @@ int cc_compete_d_cubic_test()
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 2;
-    spec.main_target_time = 10000000;
+    spec.main_target_time = 3500000;
     spec.data_rate_in_gbps = 0.02;
     spec.latency = 40000;
     spec.icid = icid;
     spec.qlog_dir = ".";
+
+    return picoquic_ns(&spec);
+}
+
+/* Check that the picoquic_ns simulations can correctly test asymmetric paths.
+ */
+int cc_ns_asym_test()
+ {
+     picoquic_ns_spec_t spec = { 0 };
+     picoquic_connection_id_t icid = { { 0xcc, 0xa5, 0xcb, 0, 0, 0, 0, 0}, 8 };
+     spec.main_cc_algo = picoquic_cubic_algorithm;
+     spec.main_start_time = 0;
+     spec.main_scenario_text = cc_compete_batch_scenario_4M;
+     spec.background_cc_algo = picoquic_cubic_algorithm;
+     spec.background_start_time = 0;
+     spec.background_scenario_text = cc_compete_batch_scenario_10M;
+     spec.nb_connections = 1;
+     spec.data_rate_in_gbps = 0.01;
+     spec.data_rate_up_in_gbps = 0.001;
+     spec.latency = 300000;
+     spec.main_target_time = 7000000;
+     spec.queue_delay_max = 600000;
+     spec.icid = icid;
+     spec.qlog_dir = ".";
+
+     return picoquic_ns(&spec);
+ }
+
+/* Check that the picoquic_ns simulations can correctly test the black hole scenario.
+ */
+int cc_ns_blackhole_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xb1, 0xcb, 0, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 1;
+    spec.data_rate_in_gbps = 0.01;
+    spec.latency = 40000;
+    spec.main_target_time = 6000000;
+    spec.queue_delay_max = 80000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+    spec.link_scenario = link_scenario_black_hole;
+
+    return picoquic_ns(&spec);
+}
+
+/* Check that the picoquic_ns simulations can correctly test the drop_and_back scenario.
+ */
+int cc_ns_drop_and_back_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xdb, 0xcb, 0, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 1;
+    spec.data_rate_in_gbps = 0.01;
+    spec.latency = 40000;
+    spec.main_target_time = 5000000;
+    spec.queue_delay_max = 80000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+    spec.link_scenario = link_scenario_drop_and_back;
+
+    return picoquic_ns(&spec);
+}
+
+/* Check that the picoquic_ns simulations can correctly test the low_and_up scenario.
+ */
+int cc_ns_low_and_up_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0x1a, 0xcb, 0, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 1;
+    spec.data_rate_in_gbps = 0.01;
+    spec.latency = 40000;
+    spec.main_target_time = 5000000;
+    spec.queue_delay_max = 80000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+    spec.link_scenario = link_scenario_low_and_up;
+
+    return picoquic_ns(&spec);
+}
+
+
+/* Check that the picoquic_ns simulations can correctly test the low_and_up scenario.
+ */
+int cc_ns_wifi_fade_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xff, 0xbb, 0, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_bbr_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.background_cc_algo = picoquic_bbr_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 1;
+    spec.data_rate_in_gbps = 0.01;
+    spec.latency = 5000;
+    spec.main_target_time = 7000000;
+    spec.queue_delay_max = 15000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+    spec.link_scenario = link_scenario_wifi_fade;
+
+    return picoquic_ns(&spec);
+}
+
+
+/* Check that the picoquic_ns simulations can correctly test the low_and_up scenario.
+ */
+int cc_ns_wifi_suspension_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xf5, 0xbb, 0, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_bbr_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.background_cc_algo = picoquic_bbr_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 1;
+    spec.data_rate_in_gbps = 0.01;
+    spec.latency = 5000;
+    spec.main_target_time = 4000000;
+    spec.queue_delay_max = 15000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+    spec.link_scenario = link_scenario_wifi_suspension;
 
     return picoquic_ns(&spec);
 }
