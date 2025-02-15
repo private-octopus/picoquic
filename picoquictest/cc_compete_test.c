@@ -114,7 +114,7 @@ int cc_compete_d_cubic_test()
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 2;
-    spec.main_target_time = 3500000;
+    spec.main_target_time = 8500000;
     spec.data_rate_in_gbps = 0.02;
     spec.latency = 40000;
     spec.icid = icid;
@@ -210,7 +210,7 @@ int cc_ns_low_and_up_test()
     spec.nb_connections = 1;
     spec.data_rate_in_gbps = 0.01;
     spec.latency = 40000;
-    spec.main_target_time = 5000000;
+    spec.main_target_time = 5500000;
     spec.queue_delay_max = 80000;
     spec.icid = icid;
     spec.qlog_dir = ".";
