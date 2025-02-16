@@ -1793,10 +1793,14 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
         }
     }
 
-    while (cnx->nb_paths > path_index_good) {
-        int d_path = cnx->nb_paths - 1;
-        picoquic_dereference_stashed_cnxid(cnx, cnx->path[d_path], 0);
-        picoquic_delete_path(cnx, d_path);
+    if (cnx->nb_paths > path_index_good) {
+        do {
+            int d_path = cnx->nb_paths - 1;
+            picoquic_dereference_stashed_cnxid(cnx, cnx->path[d_path], 0);
+            picoquic_delete_path(cnx, d_path);
+        }  while (cnx->nb_paths > path_index_good);
+        /* If paths have been deleted, it may become possible to create new ones. */
+        picoquic_test_and_signal_new_path_allowed(cnx);
     }
 
     /* TODO: what if there are no paths left? */
@@ -2094,52 +2098,164 @@ int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_index)
     return ret;
 }
 
-/* Create a new path in order to trigger a migration */
-int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
-    const struct sockaddr* addr_local, int if_index, uint64_t current_time, int to_preferred_address)
+/* Check whether the connection state, number of paths, path ID and
+* available CID will allow creation of a new path
+*/
+int picoquic_check_new_path_allowed(picoquic_cnx_t* cnx, int to_preferred_address)
 {
     int ret = 0;
-    int partial_match_path = -1;
-    int path_id = -1;
 
-    if ((cnx->remote_parameters.migration_disabled && !to_preferred_address ) ||
+    if ((cnx->remote_parameters.migration_disabled && !to_preferred_address) ||
         cnx->local_parameters.migration_disabled) {
         /* Do not create new paths if migration is disabled */
-        ret = PICOQUIC_ERROR_MIGRATION_DISABLED;
         DBG_PRINTF("Tried to create probe with migration disabled = %d", cnx->remote_parameters.migration_disabled);
+        ret = PICOQUIC_ERROR_MIGRATION_DISABLED;
     }
-    else if ((path_id = picoquic_find_path_by_address(cnx, addr_local, addr_peer, &partial_match_path)) >= 0) {
-        /* This path already exists. Will not create it, but will restore it in working order if disabled. */
-        ret = -1;
-    }
-    else if (partial_match_path >= 0 && addr_peer->sa_family == 0) {
-        /* This path already exists. Will not create it, but will restore it in working order if disabled. */
-        ret = -1;
-    }
-    else if (cnx->first_remote_cnxid_stash->cnxid_stash_first == NULL) {
-        /* No CNXID available yet. */
-        ret = -1;
+    else if (cnx->cnx_state < picoquic_state_client_almost_ready) {
+        ret = PICOQUIC_ERROR_PATH_NOT_READY;
     }
     else if (cnx->nb_paths >= PICOQUIC_NB_PATH_TARGET) {
         /* Too many paths created already */
-        ret = -1;
+        ret = PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED;
     }
-    else if (picoquic_create_path(cnx, current_time, addr_local, addr_peer, UINT64_MAX) > 0) {
-        path_id = cnx->nb_paths - 1;
-        ret = picoquic_assign_peer_cnxid_to_path(cnx, path_id);
+    else {
+        /* testing availability of connection ID is sufficient.
+         * If multipath is enabled, connection IDs will
+         * only be received if both peers have negotiated a sufficient path ID.
+         * In any case, connection IDs can only be received if the connection
+         * is almost ready.
+         */
+        uint64_t unique_path_id = 0;
+        if (cnx->is_multipath_enabled) {
+            unique_path_id = cnx->unique_path_id_next;
+        }
+        if (picoquic_obtain_stashed_cnxid(cnx, unique_path_id) == NULL) {
+            if (cnx->unique_path_id_next > cnx->max_path_id_remote) {
+                ret = PICOQUIC_ERROR_PATH_ID_BLOCKED;
+            }
+            else
+            {
+                ret = PICOQUIC_ERROR_PATH_CID_BLOCKED;
+            }
+        }
+    }
+    return ret;
+}
 
-        if (ret != 0) {
-            /* delete the path that was just created! */
-            picoquic_dereference_stashed_cnxid(cnx, cnx->path[path_id], 0);
-            picoquic_delete_path(cnx, path_id);
+int picoquic_subscribe_new_path_allowed(picoquic_cnx_t* cnx, int * is_already_allowed)
+{
+    int ret = picoquic_check_new_path_allowed(cnx, 0);
+
+    *is_already_allowed = 0;
+    if (ret == 0) {
+        /* is allowed. Just say so -- get return code. */
+        *is_already_allowed = 1;
+        cnx->is_subscribed_to_path_allowed = 0;
+        cnx->is_notified_that_path_is_allowed = 0;
+    }
+    else if (ret == PICOQUIC_ERROR_PATH_NOT_READY ||
+        ret == PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED ||
+        ret == PICOQUIC_ERROR_PATH_ID_BLOCKED ||
+        ret == PICOQUIC_ERROR_PATH_CID_BLOCKED) {
+        /* transient error. Subscribe to the event and return 0 */
+        cnx->is_subscribed_to_path_allowed = 1;
+        cnx->is_notified_that_path_is_allowed = 0;
+        ret = 0;
+    }
+    return ret;
+}
+
+/* Internal only API, notify that next path is now allowed. */
+void picoquic_test_and_signal_new_path_allowed(picoquic_cnx_t* cnx)
+{
+    if (cnx->is_subscribed_to_path_allowed &&
+        !cnx->is_notified_that_path_is_allowed)
+    {
+        if (picoquic_check_new_path_allowed(cnx, 0) == 0) {
+            cnx->is_notified_that_path_is_allowed = 1;
+            if (cnx->callback_fn != NULL) {
+                (void)cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_next_path_allowed, cnx->callback_ctx, NULL);
+            }
+        }
+    }
+}
+
+/* Create a new path in order to trigger a migration, or just a parallel
+* path if multipath is enabled.
+ */
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, int if_index, uint64_t current_time, int to_preferred_address)
+{
+    int partial_match_path = -1;
+    int path_id = -1;
+
+    int ret = picoquic_check_new_path_allowed(cnx, to_preferred_address);
+
+
+    if (ret == 0) {
+        /* verify that the peer and local addresses are correctly set */
+        if (addr_peer == NULL || addr_peer->sa_family == 0) {
+            if (addr_local == NULL || addr_local->sa_family == 0) {
+                ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            }
+            else {
+                /* Find the peer address from existing paths */
+                for (int i = 0; i < cnx->nb_paths; i++) {
+                    if (cnx->path[i]->peer_addr.ss_family == addr_local->sa_family) {
+                        addr_peer = (struct sockaddr*)&cnx->path[i]->peer_addr;
+                        break;
+                    }
+                }
+                if (addr_peer == NULL || addr_peer->sa_family == 0) {
+                    ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+                }
+            }
+        }
+        else if (addr_local == NULL || addr_local->sa_family == 0) {
+            /* Find the local address from existing paths */
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                if (cnx->path[i]->local_addr.ss_family == addr_peer->sa_family) {
+                    addr_local = (struct sockaddr*)&cnx->path[i]->local_addr;
+                    break;
+                }
+            }
+            if (addr_peer == NULL) {
+                ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            }
+        }
+        else if (addr_peer->sa_family != addr_local->sa_family) {
+            ret = PICOQUIC_ERROR_PATH_ADDRESS_FAMILY;
+        }
+    }
+
+    if (ret == 0 && !cnx->is_multipath_enabled) {
+        if ((path_id = picoquic_find_path_by_address(cnx, addr_local, addr_peer, &partial_match_path)) >= 0) {
+            /* This path already exists. Will not create it, but will restore it in working order if disabled. */
+            ret = PICOQUIC_ERROR_PATH_DUPLICATE;
+        }
+    }
+
+    if (ret == 0){
+        if (picoquic_create_path(cnx, current_time, addr_local, addr_peer, UINT64_MAX) > 0) {
+            path_id = cnx->nb_paths - 1;
+            ret = picoquic_assign_peer_cnxid_to_path(cnx, path_id);
+
+            if (ret != 0) {
+                /* delete the path that was just created! */
+                picoquic_dereference_stashed_cnxid(cnx, cnx->path[path_id], 0);
+                picoquic_delete_path(cnx, path_id);
+            }
+            else {
+                cnx->path[path_id]->path_is_published = 1;
+                picoquic_register_path(cnx, cnx->path[path_id]);
+                picoquic_set_path_challenge(cnx, path_id, current_time);
+                cnx->path[path_id]->path_is_preferred_path = to_preferred_address;
+                cnx->path[path_id]->is_nat_challenge = 0;
+                cnx->path[path_id]->if_index_dest = if_index;
+            }
         }
         else {
-            cnx->path[path_id]->path_is_published = 1;
-            picoquic_register_path(cnx, cnx->path[path_id]);
-            picoquic_set_path_challenge(cnx, path_id, current_time);
-            cnx->path[path_id]->path_is_preferred_path = to_preferred_address;
-            cnx->path[path_id]->is_nat_challenge = 0;
-            cnx->path[path_id]->if_index_dest = if_index;
+            ret = PICOQUIC_ERROR_MEMORY;
         }
     }
 

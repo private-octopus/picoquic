@@ -1313,6 +1313,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_forced_probe_up_required : 1; /* application wants "probe up" if CC requests it */
     unsigned int is_address_discovery_provider : 1; /* send the address discovery extension */
     unsigned int is_address_discovery_receiver : 1; /* receive the address discovery extension */
+    unsigned int is_subscribed_to_path_allowed : 1; /* application wants to be advised if it is now possible to create a path */
+    unsigned int is_notified_that_path_is_allowed : 1; /* application wants to be advised if it is now possible to create a path */
     
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
@@ -2043,6 +2045,8 @@ const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint
 const uint8_t* picoquic_skip_path_available_or_standby_frame(const uint8_t* bytes, const uint8_t* bytes_max);
 int picoquic_queue_path_available_or_standby_frame(
     picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_path_status_enum status);
+/* Internal only API, notify that next path is now allowed. */
+void picoquic_test_and_signal_new_path_allowed(picoquic_cnx_t* cnx);
 
 int picoquic_decode_closing_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, int* closing_received);
 
