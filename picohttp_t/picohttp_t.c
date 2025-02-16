@@ -116,7 +116,8 @@ static const picoquic_test_def_t test_table[] = {
     { "cc_ns_drop_and_back", cc_ns_drop_and_back_test },
     { "cc_ns_low_and_up", cc_ns_low_and_up_test },
     { "cc_ns_wifi_fade", cc_ns_wifi_fade_test },
-    { "cc_ns_wifi_suspension", cc_ns_wifi_suspension_test }
+    { "cc_ns_wifi_suspension", cc_ns_wifi_suspension_test },
+    { "cc_ns_varylink", cc_ns_varylink_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

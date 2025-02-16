@@ -219,7 +219,6 @@ int cc_ns_low_and_up_test()
     return picoquic_ns(&spec);
 }
 
-
 /* Check that the picoquic_ns simulations can correctly test the low_and_up scenario.
  */
 int cc_ns_wifi_fade_test()
@@ -265,6 +264,41 @@ int cc_ns_wifi_suspension_test()
     spec.icid = icid;
     spec.qlog_dir = ".";
     spec.link_scenario = link_scenario_wifi_suspension;
+
+    return picoquic_ns(&spec);
+}
+
+
+/* Check that the picoquic_ns simulations can correctly test the low_and_up scenario.
+* The simple scenario merely duplicates the "wifi fade" scenario, the only difference
+* being that the "varylink" structure is user specified.
+*/
+picoquic_ns_link_spec_t cc_varylink_test_spec[] = {
+    { 1000000,  0.01,  0.01, 5000, 0, 15000, 0 },
+    { 2000000,  0.001,  0.001, 5000, 0, 15000, 0 },
+    { UINT64_MAX,  0.01,  0.01, 5000, 0, 15000, 0 }
+};
+
+int cc_ns_varylink_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0x11, 0xbb, 0, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_bbr_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.background_cc_algo = picoquic_bbr_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 1;
+    spec.data_rate_in_gbps = 0.01;
+    spec.latency = 5000;
+    spec.main_target_time = 7000000;
+    spec.queue_delay_max = 15000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+    spec.link_scenario = link_scenario_none;
+    spec.vary_link_nb = sizeof(cc_varylink_test_spec) / sizeof(picoquic_ns_link_spec_t);
+    spec.vary_link_spec = cc_varylink_test_spec;
 
     return picoquic_ns(&spec);
 }

@@ -62,11 +62,17 @@
 * default callback function for the server context. When a new connection
 * arrives, the server uses the "cc_compete" context to find the matching
 * client connection, discover the desired congestion algorithm, and
-* program it in the server side connection context
+* program it in the server side connection context.
 * 
 * The main advantages of this simulation are:
 * - Running the actual picoquic code.
 * - Operating in "virtual time", much faster than "real time".
+* 
+* We can simulate a link with a capacity and a latency varies over time. The
+* API provides two ways to do that:
+* 
+* - either pick one of the predefines variation scenarios, such as `blackhole`
+* - or provide an array of 
 * 
 * There are limits to this setup:
 * - we set a maximum number of nodes, links, connections. This is not strictly
@@ -100,17 +106,6 @@ typedef struct st_picoquic_ns_client_t {
     picoquic_connection_id_t icid;
 } picoquic_ns_client_t;
 
-typedef struct st_picoquic_ns_link_spec_t {
-    uint64_t duration;
-    double data_rate_in_gbps_up; /* datarate, server to clients, defaults to 10 mbps */
-    double data_rate_in_gbps_down; /* datarate, server to clients, defaults to 10 mbps */
-    uint64_t latency; /* one way latency, microseconds, both directions */
-    uint64_t jitter; /* delay jitter, microseconds, both directions */
-    uint64_t queue_delay_max; /* if specified, specify the max buffer queuing for the link, in microseconds */
-    uint64_t l4s_max; /* if specified, specify the max buffer queuing for the link, in microseconds */
-} picoquic_ns_link_spec_t;
-
-
 typedef struct st_picoquic_ns_ctx_t {
     picoquic_quic_t* q_ctx[PICOQUIC_NS_NB_NODES];
     struct sockaddr_in addr[PICOQUIC_NS_NB_NODES];
@@ -118,6 +113,7 @@ typedef struct st_picoquic_ns_ctx_t {
     uint64_t simulated_time;
     int nb_connections;
     picoquic_ns_link_spec_t* vary_link_spec;
+    int vary_link_is_user_provided;
     size_t vary_link_nb;
     uint64_t next_vary_link_time;
     size_t vary_link_index;
@@ -267,58 +263,65 @@ int picoquic_ns_create_default_link_spec(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_
 
 int picoquic_ns_create_link_spec(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t* spec)
 {
-    int ret;
+    int ret = 0;
 
-    switch (spec->link_scenario) {
-    case link_scenario_none:
-        ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 1);
-        break;
-    case link_scenario_black_hole:
-        if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 3)) == 0) {
-            cc_ctx->vary_link_spec[0].duration = 2000000;
-            cc_ctx->vary_link_spec[1].duration = 2000000;
-            cc_ctx->vary_link_spec[2].duration = UINT64_MAX;
-            cc_ctx->vary_link_spec[1].data_rate_in_gbps_down = 0;
-            cc_ctx->vary_link_spec[1].data_rate_in_gbps_up = 0;
+    if (spec->vary_link_nb > 0) {
+        cc_ctx->vary_link_is_user_provided = 1;
+        cc_ctx->vary_link_nb = spec->vary_link_nb;
+        cc_ctx->vary_link_spec = spec->vary_link_spec;
+    }
+    else {
+        switch (spec->link_scenario) {
+        case link_scenario_none:
+            ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 1);
+            break;
+        case link_scenario_black_hole:
+            if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 3)) == 0) {
+                cc_ctx->vary_link_spec[0].duration = 2000000;
+                cc_ctx->vary_link_spec[1].duration = 2000000;
+                cc_ctx->vary_link_spec[2].duration = UINT64_MAX;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down = 0;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up = 0;
+            }
+            break;
+        case link_scenario_drop_and_back:
+            if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 3)) == 0) {
+                cc_ctx->vary_link_spec[0].duration = 1500000;
+                cc_ctx->vary_link_spec[1].duration = 2000000;
+                cc_ctx->vary_link_spec[2].duration = UINT64_MAX;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down *= 0.5;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up *= 0.5;
+            }
+            break;
+        case link_scenario_low_and_up:
+            if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 2)) == 0) {
+                cc_ctx->vary_link_spec[0].duration = 2500000;
+                cc_ctx->vary_link_spec[0].data_rate_in_gbps_down *= 0.5;
+                cc_ctx->vary_link_spec[0].data_rate_in_gbps_up *= 0.5;
+                cc_ctx->vary_link_spec[1].duration = UINT64_MAX;
+            }
+            break;
+        case link_scenario_wifi_fade:
+            if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 3)) == 0) {
+                cc_ctx->vary_link_spec[0].duration = 1000000;
+                cc_ctx->vary_link_spec[1].duration = 2000000;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down *= 0.1;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up *= 0.1;
+                cc_ctx->vary_link_spec[2].duration = UINT64_MAX;
+            }
+            break;
+        case link_scenario_wifi_suspension:
+            if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 2)) == 0) {
+                cc_ctx->vary_link_spec[0].duration = 1800000;
+                cc_ctx->vary_link_spec[1].duration = 200000;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down = 0;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up = 0;
+            }
+            break;
+        default:
+            ret = -1;
+            break;
         }
-        break;
-    case link_scenario_drop_and_back:
-        if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 3)) == 0) {
-            cc_ctx->vary_link_spec[0].duration = 1500000;
-            cc_ctx->vary_link_spec[1].duration = 2000000;
-            cc_ctx->vary_link_spec[2].duration = UINT64_MAX;
-            cc_ctx->vary_link_spec[1].data_rate_in_gbps_down *= 0.5;
-            cc_ctx->vary_link_spec[1].data_rate_in_gbps_up *= 0.5;
-        }
-        break;
-    case link_scenario_low_and_up:
-        if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 2)) == 0) {
-            cc_ctx->vary_link_spec[0].duration = 2500000;
-            cc_ctx->vary_link_spec[0].data_rate_in_gbps_down *= 0.5;
-            cc_ctx->vary_link_spec[0].data_rate_in_gbps_up *= 0.5;
-            cc_ctx->vary_link_spec[1].duration = UINT64_MAX;
-        }
-        break;
-    case link_scenario_wifi_fade:
-        if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 3)) == 0) {
-            cc_ctx->vary_link_spec[0].duration = 1000000;
-            cc_ctx->vary_link_spec[1].duration = 2000000;
-            cc_ctx->vary_link_spec[1].data_rate_in_gbps_down *= 0.1;
-            cc_ctx->vary_link_spec[1].data_rate_in_gbps_up *= 0.1;
-            cc_ctx->vary_link_spec[2].duration = UINT64_MAX;
-        }
-        break;
-    case link_scenario_wifi_suspension:
-        if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 2)) == 0) {
-            cc_ctx->vary_link_spec[0].duration = 1800000;
-            cc_ctx->vary_link_spec[1].duration = 200000;
-            cc_ctx->vary_link_spec[1].data_rate_in_gbps_down = 0;
-            cc_ctx->vary_link_spec[1].data_rate_in_gbps_up = 0;
-        }
-        break;
-    default:
-        ret = -1;
-        break;
     }
     return ret;
 }
@@ -357,7 +360,8 @@ int picoquic_ns_create_links(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t* spec
         }
     }
 
-    /* program the first transition if needed -- but this should be automatic */
+    /* The simulation will automatically execute the transition to
+     * the first "vary_link_spec" value. */
 
     return ret;
 }
@@ -389,8 +393,11 @@ void picoquic_ns_delete_ctx(picoquic_ns_ctx_t* cc_ctx)
 
     /* delete the link specifications */
     if (cc_ctx->vary_link_spec != NULL) {
-        free(cc_ctx->vary_link_spec);
+        if (!cc_ctx->vary_link_is_user_provided) {
+            free(cc_ctx->vary_link_spec);
+        }
         cc_ctx->vary_link_spec = NULL;
+        cc_ctx->vary_link_nb = 0;
     }
     /* and then free the context itself */
     free(cc_ctx);
