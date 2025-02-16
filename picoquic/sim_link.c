@@ -159,6 +159,18 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
     if (transmit_time <= 0)
         transmit_time = 1;
 
+    if (link->is_suspended) {
+        packet->arrival_time = UINT64_MAX;
+        if (link->last_packet == NULL) {
+            link->first_packet = packet;
+        }
+        else {
+            link->last_packet->next_packet = packet;
+        }
+        link->last_packet = packet;
+        return;
+    }
+    
     if (link->bucket_increase_per_microsec > 0) {
         /* Simulate a rate limiter based on classic leaky bucket algorithm */
         uint64_t delta_microsec = current_time - link->bucket_arrival_last;

@@ -62,11 +62,17 @@
 * default callback function for the server context. When a new connection
 * arrives, the server uses the "cc_compete" context to find the matching
 * client connection, discover the desired congestion algorithm, and
-* program it in the server side connection context
+* program it in the server side connection context.
 * 
 * The main advantages of this simulation are:
 * - Running the actual picoquic code.
 * - Operating in "virtual time", much faster than "real time".
+* 
+* We can simulate a link with a capacity and a latency varies over time. The
+* API provides two ways to do that:
+* 
+* - either pick one of the predefines variation scenarios, such as `blackhole`
+* - or provide an array of 
 * 
 * There are limits to this setup:
 * - we set a maximum number of nodes, links, connections. This is not strictly
@@ -106,6 +112,11 @@ typedef struct st_picoquic_ns_ctx_t {
     picoquictest_sim_link_t* link[PICOQUIC_NS_NB_LINKS];
     uint64_t simulated_time;
     int nb_connections;
+    picoquic_ns_link_spec_t* vary_link_spec;
+    int vary_link_is_user_provided;
+    size_t vary_link_nb;
+    uint64_t next_vary_link_time;
+    size_t vary_link_index;
     uint64_t next_cnx_start_time;
     picoquic_ns_client_t* client_ctx[PICOQUIC_NS_MAX_CLIENTS];
     uint8_t packet_ecn_default;
@@ -216,25 +227,142 @@ void picoquic_ns_delete_client_ctx(picoquic_ns_ctx_t* cc_ctx, int client_id)
     }
 }
 
-int picoquic_ns_create_link(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t* spec, int link_id)
+/* Get picoquic_ns_link_spec_t array from parameters and model spec.
+*/
+int picoquic_ns_create_default_link_spec(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t* spec, size_t nb_specs)
 {
     int ret = 0;
-    double data_rate = spec->data_rate_in_gbps;
-    uint64_t latency = spec->latency;
+    cc_ctx->vary_link_spec = (picoquic_ns_link_spec_t*)malloc(nb_specs * sizeof(picoquic_ns_link_spec_t));
+    if (cc_ctx->vary_link_spec == NULL) {
+        ret = -1;
+    }
+    else {
+        memset(cc_ctx->vary_link_spec, 0, nb_specs * sizeof(picoquic_ns_link_spec_t));
+        cc_ctx->vary_link_nb = nb_specs;
+        for (size_t i = 0; i < nb_specs; i++) {
+            if (spec->data_rate_in_gbps == 0) {
+                cc_ctx->vary_link_spec[i].data_rate_in_gbps_down = 0.01;
+            }
+            else {
+                cc_ctx->vary_link_spec[i].data_rate_in_gbps_down = spec->data_rate_in_gbps;
+            }
+            if (spec->data_rate_up_in_gbps == 0) {
+                cc_ctx->vary_link_spec[i].data_rate_in_gbps_up = cc_ctx->vary_link_spec[i].data_rate_in_gbps_down;
+            }
+            else {
+                cc_ctx->vary_link_spec[i].data_rate_in_gbps_up = spec->data_rate_up_in_gbps;
+            }
+            cc_ctx->vary_link_spec[i].latency = spec->latency;
+            cc_ctx->vary_link_spec[i].jitter = spec->jitter;
+            cc_ctx->vary_link_spec[i].queue_delay_max = spec->queue_delay_max;
+            cc_ctx->vary_link_spec[i].l4s_max = spec->l4s_max;
+        }
+    }
+    return ret;
+}
+
+int picoquic_ns_create_link_spec(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t* spec)
+{
+    int ret = 0;
+
+    if (spec->vary_link_nb > 0) {
+        cc_ctx->vary_link_is_user_provided = 1;
+        cc_ctx->vary_link_nb = spec->vary_link_nb;
+        cc_ctx->vary_link_spec = spec->vary_link_spec;
+    }
+    else {
+        switch (spec->link_scenario) {
+        case link_scenario_none:
+            ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 1);
+            break;
+        case link_scenario_black_hole:
+            if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 3)) == 0) {
+                cc_ctx->vary_link_spec[0].duration = 2000000;
+                cc_ctx->vary_link_spec[1].duration = 2000000;
+                cc_ctx->vary_link_spec[2].duration = UINT64_MAX;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down = 0;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up = 0;
+            }
+            break;
+        case link_scenario_drop_and_back:
+            if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 3)) == 0) {
+                cc_ctx->vary_link_spec[0].duration = 1500000;
+                cc_ctx->vary_link_spec[1].duration = 2000000;
+                cc_ctx->vary_link_spec[2].duration = UINT64_MAX;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down *= 0.5;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up *= 0.5;
+            }
+            break;
+        case link_scenario_low_and_up:
+            if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 2)) == 0) {
+                cc_ctx->vary_link_spec[0].duration = 2500000;
+                cc_ctx->vary_link_spec[0].data_rate_in_gbps_down *= 0.5;
+                cc_ctx->vary_link_spec[0].data_rate_in_gbps_up *= 0.5;
+                cc_ctx->vary_link_spec[1].duration = UINT64_MAX;
+            }
+            break;
+        case link_scenario_wifi_fade:
+            if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 3)) == 0) {
+                cc_ctx->vary_link_spec[0].duration = 1000000;
+                cc_ctx->vary_link_spec[1].duration = 2000000;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down *= 0.1;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up *= 0.1;
+                cc_ctx->vary_link_spec[2].duration = UINT64_MAX;
+            }
+            break;
+        case link_scenario_wifi_suspension:
+            if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 2)) == 0) {
+                cc_ctx->vary_link_spec[0].duration = 1800000;
+                cc_ctx->vary_link_spec[1].duration = 200000;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down = 0;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up = 0;
+            }
+            break;
+        default:
+            ret = -1;
+            break;
+        }
+    }
+    return ret;
+}
+
+int picoquic_ns_create_link(picoquic_ns_ctx_t* cc_ctx, int link_id)
+{
+    int ret = 0;
+    picoquic_ns_link_spec_t* link_spec = &cc_ctx->vary_link_spec[0];
+    double data_rate = (link_id == 0) ? link_spec->data_rate_in_gbps_up : link_spec->data_rate_in_gbps_down;
+    uint64_t latency = link_spec->latency;
     if (data_rate == 0) {
         data_rate = 0.01; /* default to 10mbps */
     }
     if (latency == 0) {
         latency = 10000; /* default to 10ms */
     }
-
     if ((cc_ctx->link[link_id] = picoquictest_sim_link_create(data_rate, latency, NULL,
-        spec->queue_delay_max, cc_ctx->simulated_time)) == NULL) {
+        link_spec->queue_delay_max, cc_ctx->simulated_time)) == NULL) {
         ret = -1;
     }
     else {
-        cc_ctx->link[link_id]->l4s_max = spec->l4s_max;
+        cc_ctx->link[link_id]->l4s_max = link_spec->l4s_max;
     }
+    return ret;
+}
+
+int picoquic_ns_create_links(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t* spec)
+{
+    /* first step is to create the scenarios */
+    int ret = picoquic_ns_create_link_spec(cc_ctx, spec);
+
+    /* next create the link with parameters of the first scenario */
+    if (ret == 0) {
+        for (int i = 0; ret == 0 && i < PICOQUIC_NS_NB_LINKS; i++) {
+            ret = picoquic_ns_create_link(cc_ctx, i);
+        }
+    }
+
+    /* The simulation will automatically execute the transition to
+     * the first "vary_link_spec" value. */
+
     return ret;
 }
 
@@ -261,6 +389,15 @@ void picoquic_ns_delete_ctx(picoquic_ns_ctx_t* cc_ctx)
             picoquictest_sim_link_delete(cc_ctx->link[i]);
             cc_ctx->link[i] = NULL;
         }
+    }
+
+    /* delete the link specifications */
+    if (cc_ctx->vary_link_spec != NULL) {
+        if (!cc_ctx->vary_link_is_user_provided) {
+            free(cc_ctx->vary_link_spec);
+        }
+        cc_ctx->vary_link_spec = NULL;
+        cc_ctx->vary_link_nb = 0;
     }
     /* and then free the context itself */
     free(cc_ctx);
@@ -349,8 +486,8 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec)
             }
         }
         /* Create the required links */
-        for (int i = 0; ret == 0 && i < PICOQUIC_NS_NB_LINKS; i++) {
-            ret = picoquic_ns_create_link(cc_ctx, spec, i);
+        if (ret == 0){
+            ret = picoquic_ns_create_links(cc_ctx, spec);
         }
         if (spec->l4s_max > 0) {
             cc_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_1;
@@ -456,6 +593,110 @@ int picoquic_ns_start_connection(picoquic_ns_ctx_t* cc_ctx, int cnx_id)
     return ret;
 }
 
+/* Simulate a variation in the state of a link. 
+* The variation can be either a change in latency or delay, or a change in throughput.
+* 
+* When the variation happens, we want to recompute the delay and delivery time of
+* the packets that are queued on the link, but we have a bit of a gray area for packets
+* whose transmission has started already.
+* 
+* If the link is suspended, the latency becomes infinite. This means all
+* packets not sent yet will be queued "forever".
+* If the link is resumed, all the old packets are requeued at the new
+* throughput and latency.
+* 
+* If the link is not fully blocked, we may have a little complication for handling
+* the packets in transit. The simplest solution may be to just requeue every
+* packet with the new parameter, but this does not account for packets
+* that are "already sent". the modified rules would be:
+* 
+* - Consider all non delivered packets.
+* - if the old arrival time is sooner than suspension plus
+*   old latency, and also sooner than the new time, consider
+*   that the packet is "in the air".
+*   Leave it as is and do not increment the queue.
+* - else, consider we are in requeing mode. Reset the arrival
+*   time of this packet and all packets that follows.
+* 
+* The point of the these rule is to guarantee a complete ordering
+* of delivery times.
+*/
+void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_in_gps, picoquic_ns_link_spec_t* vary_link_spec, uint64_t current_time)
+{
+    double pico_d = (data_rate_in_gps <= 0) ? 0 : (8000.0 / data_rate_in_gps);
+
+    picoquictest_sim_packet_t* packet = link->first_packet;
+    picoquictest_sim_packet_t* previous_packet = NULL;
+    uint64_t latency_horizon = current_time + link->microsec_latency;
+
+    /* Skip the packets that are "in transit" */
+    while (packet != NULL && packet->arrival_time <= latency_horizon) {
+        previous_packet = packet;
+        packet = packet->next_packet;
+    }
+    /* Close the queue */
+    if (previous_packet == NULL) {
+        link->first_packet = NULL;
+        link->last_packet = NULL;
+    }
+    else {
+        previous_packet->next_packet = NULL;
+        link->last_packet = previous_packet;
+    }
+    /* Requeue the other packets:
+    /* reset the queue time to current_time, i.e., after packets in transit are delivered.*/
+    link->queue_time = current_time;
+    /* reset the leaky bucket, so it starts working from the current time. */
+    link->bucket_arrival_last = current_time;
+    link->bucket_current = (double)link->bucket_max;
+    /* reset the value of the link parameters */
+    pico_d *= (1.024 * 1.024); /* account for binary units */
+    link->next_send_time = current_time;
+    link->queue_time = current_time;
+    link->picosec_per_byte = (uint64_t)pico_d;
+    link->microsec_latency = vary_link_spec->latency;
+    link->jitter = vary_link_spec->jitter;
+    link->queue_delay_max = vary_link_spec->queue_delay_max;
+    link->l4s_max = vary_link_spec->l4s_max;
+    link->is_suspended = (data_rate_in_gps <= 0);
+
+    /* Reschedule the next packets */
+    while (packet != NULL) {
+        picoquictest_sim_packet_t* next_packet = packet->next_packet;
+        picoquictest_sim_link_submit(link, packet, current_time);
+        packet = next_packet;
+    }
+}
+
+/* If it is time for link state transition, apply the requested link changes,
+* compute the next transition time, rotate the index in the link spec list.
+*/
+
+void picoquic_ns_vary_link(picoquic_ns_ctx_t* cc_ctx)
+{
+    picoquic_ns_link_spec_t* vary_link_spec = &cc_ctx->vary_link_spec[cc_ctx->vary_link_index];
+
+    picoquic_ns_simlink_reset(cc_ctx->link[0], vary_link_spec->data_rate_in_gbps_up, vary_link_spec, cc_ctx->simulated_time);
+    picoquic_ns_simlink_reset(cc_ctx->link[1], vary_link_spec->data_rate_in_gbps_down, vary_link_spec, cc_ctx->simulated_time);
+
+    if (cc_ctx->vary_link_nb < 2) {
+        cc_ctx->next_vary_link_time = UINT64_MAX;
+    }
+    else {
+        if ((cc_ctx->next_vary_link_time = cc_ctx->simulated_time + vary_link_spec->duration) < cc_ctx->simulated_time) {
+            /* manage potential integer overflow. */
+            cc_ctx->next_vary_link_time = UINT64_MAX;
+        }
+        cc_ctx->vary_link_index++;
+        if (cc_ctx->vary_link_index >= cc_ctx->vary_link_nb) {
+            cc_ctx->vary_link_index = 0;
+        }
+    }
+}
+
+/* One simulation step -- TODO: add link variability.
+ */
+
 int picoquic_ns_step(picoquic_ns_ctx_t* cc_ctx, int* is_active)
 {
     int ret = 0;
@@ -465,10 +706,18 @@ int picoquic_ns_step(picoquic_ns_ctx_t* cc_ctx, int* is_active)
     uint64_t t_next_action = UINT64_MAX;
     enum {
         no_action,
+        link_transition,
         link_departure,
         prepare_packet,
         start_connection
     } next_action = no_action;
+
+    /* check whether there is a link state change */
+    if (cc_ctx->next_vary_link_time < t_next_action) {
+        t_next_action = cc_ctx->next_vary_link_time;
+        next_action = link_transition;
+    }
+
     /* Check whether there is something to receive */
     for (int i = 0; i < PICOQUIC_NS_NB_LINKS; i++) {
         if (cc_ctx->link[i]->first_packet != NULL) {
@@ -498,7 +747,7 @@ int picoquic_ns_step(picoquic_ns_ctx_t* cc_ctx, int* is_active)
         for (int i = 0; i < cc_ctx->nb_connections; i++) {
             if (cc_ctx->client_ctx[i]->cnx == NULL &&
                 cc_ctx->client_ctx[i]->start_time < t_next_action) {
-                t_next_action = cc_ctx->client_ctx[i]->start_time;
+                t_next_action = cc_ctx->client_ctx[i]->start_time; 
                 cnx_id_next = i;
                 next_action = start_connection;
             }
@@ -510,6 +759,9 @@ int picoquic_ns_step(picoquic_ns_ctx_t* cc_ctx, int* is_active)
     }
 
     switch (next_action) {
+    case link_transition:
+        picoquic_ns_vary_link(cc_ctx);
+        break;
     case link_departure:
         ret = picoquic_ns_incoming_packet(cc_ctx, link_id_next);
         *is_active = 1;
