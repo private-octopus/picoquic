@@ -38,7 +38,7 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
 ```
 
 The loop will execute,
-calling the Picoquic Netowrking API functions `picoquic_prepare_next_packet_ex`
+calling the Picoquic Networking API functions `picoquic_prepare_next_packet_ex`
 to ask the stack whether packets are ready to be sent and
 `picoquic_incoming_packet_ex` when packets are received from the network.
 
@@ -101,8 +101,8 @@ It exposes a series of callback events:
   it wants to be called for a time check before the loops waits for timers or incoming packets.
 * `picoquic_packet_loop_after_receive`: Called after packets have been received, enabling the application
   to perform picoquic API calls triggered by the received data.
-* `picoquic_packet_loop_after_send`: Called after packets have been received, enabling the application
-  to perform picoquic API calls triggered by the received data.
+* `picoquic_packet_loop_after_send`: Called after packets have been sent, enabling the application
+  to perform picoquic API calls triggered by the sent data.
 * `picoquic_packet_loop_port_update`: Provides a "loopback" socket address corresponding to the main
   socket. Can be used to learn the port number associated with that socket.
 * `picoquic_packet_loop_time_check`: Called before the packet loop starts waiting for a new packet or a

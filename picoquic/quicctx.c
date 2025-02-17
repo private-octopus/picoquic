@@ -1431,7 +1431,7 @@ int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
      * future, which implies the time in microseconds is less than 2^62.
      * The delay MAX is lower than INT64_MAX, i.e., 2^63.
      * The next wake time is often set to UINT64_MAX, and might sometime
-     * me just under that value, so we make sure to avoid integer
+     * be just under that value, so we make sure to avoid integer
      * overflow in the computation.
      */
     uint64_t next_wake_time = picoquic_get_next_wake_time(quic, current_time);
