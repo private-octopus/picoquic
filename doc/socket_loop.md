@@ -101,8 +101,8 @@ It exposes a series of callback events:
   it wants to be called for a time check before the loops waits for timers or incoming packets.
 * `picoquic_packet_loop_after_receive`: Called after packets have been received, enabling the application
   to perform picoquic API calls triggered by the received data.
-* `picoquic_packet_loop_after_send`: Called after packets have been received, enabling the application
-  to perform picoquic API calls triggered by the received data.
+* `picoquic_packet_loop_after_send`: Called after packets have been sent, enabling the application
+  to perform picoquic API calls triggered by the sent data.
 * `picoquic_packet_loop_port_update`: Provides a "loopback" socket address corresponding to the main
   socket. Can be used to learn the port number associated with that socket.
 * `picoquic_packet_loop_time_check`: Called before the packet loop starts waiting for a new packet or a
