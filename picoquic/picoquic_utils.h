@@ -297,6 +297,8 @@ typedef struct st_picoquictest_sim_link_t {
     /* Variable for multipath simulation */
     int is_switched_off;
     int is_unreachable;
+    /* variable for simulating suspension */
+    int is_suspended;
 } picoquictest_sim_link_t;
 
 picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
