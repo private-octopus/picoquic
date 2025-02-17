@@ -29,9 +29,9 @@
 #include "picoquictest_internal.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:H:h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:H:h";
 #endif
 int config_option_letters_test()
 {
@@ -75,6 +75,7 @@ static picoquic_quic_config_t param1 = {
     1,
     UINT64_MAX, /* Do not limit CWIN */
     3, /* Address discovery mode = 3 (cli param -J 2)*/
+    1,
     /* Common flags */
     1, /* unsigned int initial_random : 1; */
     1, /* unsigned int use_long_log : 1; */
@@ -162,6 +163,7 @@ static picoquic_quic_config_t param2 = {
     0,
     1000000, /* Limit CWIN to 1 million bytes */
     0, /* Do not enable address discovery */
+    2,
     /* Common flags */
     3, /* unsigned int initial_random : 1; */
     0, /* unsigned int use_long_log : 1; */
@@ -214,6 +216,7 @@ static const char* config_argv2[] = {
     "-N", "/data/tokens.bin",
     "-U", "00000002",
     "-W", "1000000",
+    "-H", "2",
     NULL
 };
 
@@ -237,6 +240,7 @@ static const char * config_two[] = {
     "--token_file", "/data/tokens.bin",
     "--version_upgrade", "00000002",
     "--cwin_max", "1000000",
+    "--hystart", "2",
     NULL
 };
 
@@ -278,6 +282,9 @@ static config_error_test_t config_errors[] = {
     { 2, { "-U", "XY000002" }},
     { 2, { "-W", "cwin" }},
     { 2, { "-d", "idle" }},
+    {2, {"-H", "4"}},
+    {2, {"-H", "-1"}},
+    {2, {"-H", "hystart++"}},
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
     { 1, {"-8"}},
 #endif

@@ -74,6 +74,7 @@ typedef enum {
     picoquic_option_CWIN_MAX,
     picoquic_option_SSLKEYLOG,
     picoquic_option_AddressDiscovery,
+    picoquic_option_HYSTART,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -102,6 +103,7 @@ typedef struct st_picoquic_quic_config_t {
     int bdp_frame_option;
     uint64_t cwin_max;
     int address_discovery_mode;
+    int hystart_algorithm; /* 0 = disabled, 1 = HyStart (default), 2 = HyStart++. */
     /* TODO: control other extensions, e.g. time stamp, ack delay */
     /* Common flags */
     unsigned int initial_random;

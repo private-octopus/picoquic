@@ -117,6 +117,10 @@ int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
 #ifdef _WINDOWS
 #define PICOQUIC_FILE_SEPARATOR "\\"
 #ifdef _WINDOWS64

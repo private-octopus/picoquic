@@ -191,7 +191,8 @@ typedef enum {
 } picoquic_packet_context_enum;
 
 
-/* PMTUD 
+/*
+ * PMTUD
  */
 
 typedef enum {
@@ -200,6 +201,7 @@ typedef enum {
     picoquic_pmtud_delayed = 2, /* only do pmtud if lots of data has to be sent */
     picoquic_pmtud_blocked = 3 /* never do pmtud */
 } picoquic_pmtud_policy_enum;
+
 /*
 * Quic spin bit variants
 */
@@ -220,6 +222,16 @@ typedef enum {
     picoquic_lossbit_send_only = 1, /* Able to send the loss bit, but not receive it */
     picoquic_lossbit_send_receive = 2, /* Able to send or receive the loss bits */
 } picoquic_lossbit_version_enum;
+
+/*
+* HyStart algorithm variants
+*/
+
+typedef enum {
+    picoquic_hystart_disabled = 0, /* HyStart disabled. */
+    picoquic_hystart_hystart = 1, /* HyStart enabled. */
+    picoquic_hystart_hystart_pp = 2, /* HyStart++ enabled. */
+} picoquic_hystart_algorithm_enum;
 
 /*
 * Path statuses
@@ -423,6 +435,13 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...);
  * 1: log all packets
  * 0: only log the first 100 packets for each connection. */
 void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
+
+/* Set default HyStart algorithm.
+ * 0: disabled
+ * 1: HyStart (default)
+ * 2: HyStart++ (CUBIC and Prague support)
+ * TODO disabled & update description if more CC algos are supported. */
+void picoquic_set_default_hystart_algorithm(picoquic_quic_t* quic, int hystart_algorithm);
 
 /* By default, the binary log and qlog files are named from the Initial CID
  * chosen by the client. For example, if the initial CID is set

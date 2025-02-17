@@ -45,9 +45,12 @@ typedef struct st_picoquic_cubic_state_t {
     double W_reno;
     uint64_t ssthresh;
     picoquic_min_max_rtt_t rtt_filter;
+
+    /* HyStart++ */
+    picoquic_hystart_pp_state_t hystart_pp_state;
 } picoquic_cubic_state_t;
 
-static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_path_t* path_x, uint64_t current_time) {
+static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time) {
     memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
     memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
     cubic_state->alg_state = picoquic_cubic_alg_slow_start;
@@ -59,6 +62,13 @@ static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_path_t* pa
     cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
     cubic_state->recovery_sequence = 0;
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
+
+    /* HyStart++ */
+    memset(&cubic_state->hystart_pp_state, 0, sizeof(picoquic_hystart_pp_state_t));
+    if (IS_HYSTART_PP_ENABLED(cnx)) {
+        picoquic_hystart_pp_reset(&cubic_state->hystart_pp_state);
+        picoquic_hystart_pp_start_new_round(&cubic_state->hystart_pp_state, cnx, path_x);
+    }
 }
 
 static void cubic_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t current_time)
@@ -70,7 +80,7 @@ static void cubic_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t c
 #endif
     path_x->congestion_alg_state = (void*)cubic_state;
     if (cubic_state != NULL) {
-        cubic_reset(cubic_state, path_x, current_time);
+        cubic_reset(cubic_state, cnx, path_x, current_time);
     }
 }
 
@@ -238,16 +248,17 @@ static void cubic_notify(
                         path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
 
                         if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                            //if (path_x->bytes_in_transit > path_x->cwin) {
-                                path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged, 0);
+                            /* cubic_state->hystart_pp_state.css_baseline_min_rtt == UINT64_MAX -> in SS
+                             * cubic_state->hystart_pp_state.css_baseline_min_rtt < UINT64_MAX -> in CSS */
+                            path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged,
+                            (IS_HYSTART_PP_ENABLED(cnx)) ? IS_IN_CSS(cubic_state->hystart_pp_state) : 0);
 
-                                /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
-                                if (path_x->cwin >= cubic_state->ssthresh) {
-                                    cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
-                                    path_x->is_ssthresh_initialized = 1;
-                                    cubic_enter_avoidance(cubic_state, current_time);
-                                }
-                            //}
+                            /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+                            if (path_x->cwin >= cubic_state->ssthresh) {
+                                cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
+                                path_x->is_ssthresh_initialized = 1;
+                                cubic_enter_avoidance(cubic_state, current_time);
+                            }
                         }
                         break;
                     /* TODO discuss
@@ -326,48 +337,87 @@ static void cubic_notify(
                 if (cubic_state->alg_state == picoquic_cubic_alg_slow_start &&
                     cubic_state->ssthresh == UINT64_MAX) {
 
-                    /* HyStart. */
-                    /* Using RTT increases as signal to get out of initial slow start */
-                    if (picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
-                            cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
-                        /* RTT increased too much, get out of slow start! */
+                    switch (cnx->hystart_alg) {
+                        case PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART:
+                            /* HyStart. */
+                            /* Using RTT increases as signal to get out of initial slow start */
+                            if (picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                                    cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
+                                /* RTT increased too much, get out of slow start! */
 
-                        if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT){
-                            double correction;
-                            if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_SATELLITE_RTT) {
-                                correction = (double)PICOQUIC_TARGET_SATELLITE_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
-                            }
-                            else {
-                                correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
-                            }
-                            uint64_t base_window = (uint64_t)(correction * (double)path_x->cwin);
-                            uint64_t delta_window = path_x->cwin - base_window;
-                            path_x->cwin -= (delta_window / 2);
-                        }
+                                if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT){
+                                    double correction;
+                                    if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_SATELLITE_RTT) {
+                                        correction = (double)PICOQUIC_TARGET_SATELLITE_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
+                                    }
+                                    else {
+                                        correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
+                                    }
+                                    uint64_t base_window = (uint64_t)(correction * (double)path_x->cwin);
+                                    uint64_t delta_window = path_x->cwin - base_window;
+                                    path_x->cwin -= (delta_window / 2);
+                                }
 #if 1
-                        else {
-                            /* In the general case, compensate for the growth of the window after the acknowledged packet was sent. */
-                            path_x->cwin /= 2;
-                        }
+                                else {
+                                    /* In the general case, compensate for the growth of the window after the acknowledged packet was sent. */
+                                    path_x->cwin /= 2;
+                                }
 #endif
 
-                        cubic_state->ssthresh = path_x->cwin;
-                        cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
-                        cubic_state->W_last_max = cubic_state->W_max;
-                        cubic_state->W_reno = ((double)path_x->cwin);
-                        path_x->is_ssthresh_initialized = 1;
-                        /* enter recovery to ignore the losses expected if the window grew
-                        * too large after the acknowleded packet was sent. */
-                        cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
-                        /* apply a correction to enter the test phase immediately */
-                        uint64_t K_micro = (uint64_t)(cubic_state->K * 1000000.0);
-                        if (K_micro > current_time) {
-                            cubic_state->K = ((double)current_time) / 1000000.0;
-                            cubic_state->start_of_epoch = 0;
-                        }
-                        else {
-                            cubic_state->start_of_epoch = current_time - K_micro;
-                        }
+                                cubic_state->ssthresh = path_x->cwin;
+                                cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
+                                cubic_state->W_last_max = cubic_state->W_max;
+                                cubic_state->W_reno = ((double)path_x->cwin);
+                                path_x->is_ssthresh_initialized = 1;
+                                /* enter recovery to ignore the losses expected if the window grew
+                                * too large after the acknowleded packet was sent. */
+                                cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
+                                /* apply a correction to enter the test phase immediately */
+                                uint64_t K_micro = (uint64_t)(cubic_state->K * 1000000.0);
+                                if (K_micro > current_time) {
+                                    cubic_state->K = ((double)current_time) / 1000000.0;
+                                    cubic_state->start_of_epoch = 0;
+                                }
+                                else {
+                                    cubic_state->start_of_epoch = current_time - K_micro;
+                                }
+                            }
+                            break;
+                        case PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART_PP:
+                            /* HyStart++. */
+                            /* Keep track of the minimum RTT seen so far. */
+                            picoquic_hystart_pp_keep_track(&cubic_state->hystart_pp_state, ack_state->rtt_measurement);
+
+                            /* Switch between SS and CSS. */
+                            picoquic_hystart_pp_test(&cubic_state->hystart_pp_state);
+
+                            /* Check if we reached the end of the round. */
+                            /* HyStart++ measures rounds using sequence numbers, as follows:
+                             * - When windowEnd is ACKed, the current round ends and windowEnd is set to SND.NXT.
+                             */
+                            if (picoquic_cc_get_ack_number(cnx, path_x) != UINT64_MAX && picoquic_cc_get_ack_number(cnx, path_x) >= cubic_state->hystart_pp_state.current_round.window_end) {
+                                /* Round has ended. */
+                                if (IS_IN_CSS(cubic_state->hystart_pp_state)) {
+                                    /* In CSS increase CSS round counter. */
+                                    cubic_state->hystart_pp_state.css_round_count++;
+
+                                    /* Enter CA if css round counter > max css rounds. */
+                                    if (cubic_state->hystart_pp_state.css_round_count >= PICOQUIC_HYSTART_PP_CSS_ROUNDS) {
+                                        cubic_state->ssthresh = path_x->cwin;
+                                        cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
+                                        cubic_state->W_last_max = cubic_state->W_max;
+                                        cubic_state->W_reno = ((double)path_x->cwin);
+                                        path_x->is_ssthresh_initialized = 1;
+                                        cubic_enter_avoidance(cubic_state, current_time);
+                                    }
+                                }
+
+                                /* Start new round. */
+                                picoquic_hystart_pp_start_new_round(&cubic_state->hystart_pp_state, cnx, path_x);
+                            }
+                            break;
+                        default:
+                            break;
                     }
                 }
                 break;
@@ -390,7 +440,7 @@ static void cubic_notify(
              * cover cubic_reset().
              */
             case picoquic_congestion_notification_reset:
-                cubic_reset(cubic_state, path_x, current_time);
+                cubic_reset(cubic_state, cnx, path_x, current_time);
                 break;
             default:
                 break;
@@ -480,14 +530,59 @@ static void dcubic_notify(
                             path_x->cwin = picoquic_cc_update_cwin_for_long_rtt(path_x);
                         }
 
-                        /* HyStart. */
-                        /* Using RTT increases as congestion signal. This is used
-                         * for getting out of slow start, but also for ending a cycle
-                         * during congestion avoidance */
-                        if (picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
-                            cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
-                            dcubic_exit_slow_start(cnx, path_x, notification, cubic_state, current_time);
+                        switch (cnx->hystart_alg) {
+                            case PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART:
+                                /* HyStart. */
+                                /* Using RTT increases as congestion signal. This is used
+                                 * for getting out of slow start, but also for ending a cycle
+                                 * during congestion avoidance */
+                                if (picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                                    cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
+                                    dcubic_exit_slow_start(cnx, path_x, notification, cubic_state, current_time);
+                                }
+                                break;
+                            case PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART_PP:
+                                /* HyStart++. */
+                                /* Using RTT increases as congestion signal. This is used
+                                 * for getting out of slow start, but also for ending a cycle
+                                 * during congestion avoidance */
+
+                                /* Keep track of the minimum RTT seen so far. */
+                                picoquic_hystart_pp_keep_track(&cubic_state->hystart_pp_state, ack_state->rtt_measurement);
+
+                                /* Switch between SS and CSS. */
+                                picoquic_hystart_pp_test(&cubic_state->hystart_pp_state);
+
+                                /* Check if we reached the end of the round. */
+                                /* HyStart++ measures rounds using sequence numbers, as follows:
+                                 * - When windowEnd is ACKed, the current round ends and windowEnd is set to SND.NXT.
+                                 */
+                                if (picoquic_cc_get_ack_number(cnx, path_x) != UINT64_MAX && picoquic_cc_get_ack_number(cnx, path_x) >= cubic_state->hystart_pp_state.current_round.window_end) {
+                                    /* Round has ended. */
+
+                                    if (cubic_state->hystart_pp_state.css_baseline_min_rtt != UINT64_MAX) {
+                                        /* In CSS increase CSS round counter. */
+                                        cubic_state->hystart_pp_state.css_round_count++;
+
+                                        /* Enter CA if css round counter > max css rounds. */
+                                        if (cubic_state->hystart_pp_state.css_round_count >= PICOQUIC_HYSTART_PP_CSS_ROUNDS) {
+                                            cubic_state->ssthresh = path_x->cwin;
+                                            cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
+                                            cubic_state->W_last_max = cubic_state->W_max;
+                                            cubic_state->W_reno = ((double)path_x->cwin);
+                                            path_x->is_ssthresh_initialized = 1;
+                                            dcubic_exit_slow_start(cnx, path_x, notification, cubic_state, current_time);
+                                        }
+                                    }
+
+                                    /* Start new round. */
+                                    picoquic_hystart_pp_start_new_round(&cubic_state->hystart_pp_state, cnx, path_x);
+                                }
+                                break;
+                            default:
+                                break;
                         }
+
                         break;
                     case picoquic_cubic_alg_recovery:
                         /* if in slow start, increase the window for long delay RTT */
