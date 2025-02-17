@@ -38,7 +38,7 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
 ```
 
 The loop will execute,
-calling the Picoquic Netowrking API functions `picoquic_prepare_next_packet_ex`
+calling the Picoquic Networking API functions `picoquic_prepare_next_packet_ex`
 to ask the stack whether packets are ready to be sent and
 `picoquic_incoming_packet_ex` when packets are received from the network.
 
