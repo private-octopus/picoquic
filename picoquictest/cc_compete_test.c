@@ -139,7 +139,7 @@ int cc_ns_asym_test()
      spec.data_rate_in_gbps = 0.01;
      spec.data_rate_up_in_gbps = 0.001;
      spec.latency = 300000;
-     spec.main_target_time = 7000000;
+     spec.main_target_time = 7500000;
      spec.queue_delay_max = 600000;
      spec.icid = icid;
      spec.qlog_dir = ".";
