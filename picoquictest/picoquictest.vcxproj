@@ -169,6 +169,7 @@
     <ClCompile Include="h3zero_uri_test.c" />
     <ClCompile Include="hashtest.c" />
     <ClCompile Include="high_latency_test.c" />
+    <ClInclude Include="hystart_test.c" />
     <ClCompile Include="intformattest.c" />
     <ClCompile Include="l4s_test.c" />
     <ClCompile Include="mbedtls_test.c" />

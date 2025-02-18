@@ -105,6 +105,9 @@
     <ClCompile Include="high_latency_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="hystart_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="edge_cases.c">
       <Filter>Source Files</Filter>
     </ClCompile>

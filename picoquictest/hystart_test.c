@@ -26,16 +26,9 @@
 #ifdef _WINDOWS
 #include "wincompat.h"
 #endif
-#include <picotls.h>
 #include <stddef.h>
-#include <stdlib.h>
-#include <string.h>
 #include "picoquic_binlog.h"
-#include "csv.h"
-#include "qlog.h"
 #include "autoqlog.h"
-#include "picoquic_logger.h"
-#include "performance_log.h"
 #include "picoquictest.h"
 
 static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hystart_algorithm_enum hystart_algo, size_t data_size, uint64_t max_completion_time,
@@ -84,7 +77,7 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
         test_ctx->immediate_exit = 1;
 
         /* set the binary log on the client side */
-        picoquic_set_qlog(test_ctx->qclient, ".");
+        picoquic_set_binlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
         /* Since the client connection was created before the binlog was set, force log of connection header */
         binlog_new_connection(test_ctx->cnx_client);
