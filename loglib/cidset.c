@@ -24,10 +24,10 @@
 #include "picoquic_utils.h"
 
 /* Hash and compare for CNX hash tables */
-static uint64_t picoquic_cid_hash(const void* key)
+static uint64_t picoquic_cid_hash(const void* key, const uint8_t * hash_seed)
 {
     const picoquic_connection_id_t* cid = (const picoquic_connection_id_t*)key;
-    return picoquic_connection_id_hash(cid);
+    return picoquic_connection_id_hash(cid, hash_seed);
 }
 
 static int picoquic_cid_compare(const void* key0, const void* key1)
