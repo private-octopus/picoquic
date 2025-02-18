@@ -403,12 +403,14 @@ typedef struct st_client_loop_cb_t {
     int zero_rtt_available;
     int is_quicperf;
     int socket_buffer_size;
+    int multipath_initiated;
     int multipath_probe_done;
     char const* saved_alpn;
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
     struct sockaddr_storage client_alt_address[PICOQUIC_NB_PATH_TARGET];
     int client_alt_if[PICOQUIC_NB_PATH_TARGET];
+    int client_alt_state[PICOQUIC_NB_PATH_TARGET];
     int nb_alt_paths;
     uint16_t local_port;
     uint16_t alt_port;
@@ -505,6 +507,91 @@ static int simulate_migration(client_loop_cb_t* cb_ctx)
     return ret;
 }
 
+int client_create_additional_path(picoquic_cnx_t* cnx, client_loop_cb_t* cb_ctx)
+{
+    /* Create the required additional paths.
+    * In some cases, we just want to test the software from a computer that is not actually
+    * multihomed. In that case, the client_alt_address is set to ::0 (IPv6 null address),
+    * and the callback will return "PICOQUIC_NO_ERROR_SIMULATE_MIGRATION", which
+    * causes the socket code to create an additional socket, and issue a
+    * picoquic_probe_new_path request for the corresponding address.
+    */
+    int ret = 0;
+    struct sockaddr_in6 addr_zero6 = { 0 };
+    struct sockaddr_in addr_zero4 = { 0 };
+    struct sockaddr_storage simulate_addr = { 0 };
+    struct sockaddr* addr_from = NULL;
+    int need_to_wait = 0;
+
+    addr_zero6.sin6_family = AF_INET6;
+    addr_zero4.sin_family = AF_INET;
+
+
+    for (int i = 0; i < cb_ctx->nb_alt_paths; i++) {
+        if (cb_ctx->client_alt_state[i] != 0) {
+            continue;
+        }
+        if (i == 0 && (
+            picoquic_compare_addr((struct sockaddr*)&addr_zero6, (struct sockaddr*)&cb_ctx->client_alt_address[i]) == 0 ||
+            picoquic_compare_addr((struct sockaddr*)&addr_zero4, (struct sockaddr*)&cb_ctx->client_alt_address[i]) == 0)) {
+            picoquic_log_app_message(cb_ctx->cnx_client, "%s\n", "Will try to simulate new path");
+            picoquic_store_addr(&simulate_addr,
+                (struct sockaddr*)&cb_ctx->cnx_client->path[0]->local_addr);
+            if (simulate_addr.ss_family == AF_INET6) {
+                ((struct sockaddr_in6*)&simulate_addr)->sin6_port = htons(cb_ctx->alt_port);
+            }
+            else {
+                ((struct sockaddr_in*)&simulate_addr)->sin_port = htons(cb_ctx->alt_port);
+            }
+            addr_from = (struct sockaddr*)&simulate_addr;
+        }
+        else
+        {
+            addr_from = (struct sockaddr*)&cb_ctx->client_alt_address[i];
+        }
+
+        cb_ctx->client_alt_state[i] = 1; /* Unless we detect a transient error, mark this path as tried */
+        if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr*)&cb_ctx->server_address,
+            addr_from, cb_ctx->client_alt_if[i], picoquic_get_quic_time(picoquic_get_quic_ctx(cnx)), 0)) != 0) {
+            /* Check whether the code returned a transient error */
+            if (ret == PICOQUIC_ERROR_PATH_ID_BLOCKED ||
+                ret == PICOQUIC_ERROR_PATH_CID_BLOCKED ||
+                ret == PICOQUIC_ERROR_PATH_NOT_READY) {
+                cb_ctx->client_alt_state[i] = 0; /* oops, not ready yet, need to keep looping */
+                need_to_wait = 1;
+                ret = 0;
+            }
+            else {
+                picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d", ret);
+            }
+        }
+        else {
+            picoquic_log_app_message(cb_ctx->cnx_client, "New path added, total path available %d", cb_ctx->cnx_client->nb_paths);
+        }
+    }
+    if (!need_to_wait) {
+        cb_ctx->multipath_probe_done = 1;
+    }
+
+    return ret;
+}
+
+void client_handle_path_allowed(picoquic_cnx_t* cnx, void* v_cb_ctx)
+{
+    int ret = 0;
+    int is_already_allowed = 0;
+    
+    while ((ret = client_create_additional_path(cnx, (client_loop_cb_t*)v_cb_ctx)) != 0 &&
+        (ret == PICOQUIC_ERROR_PATH_ID_BLOCKED ||
+            ret == PICOQUIC_ERROR_PATH_CID_BLOCKED ||
+            ret == PICOQUIC_ERROR_PATH_NOT_READY) &&
+        picoquic_subscribe_new_path_allowed(cnx, &is_already_allowed) == 0) {
+        if (!is_already_allowed) {
+            break;
+        }
+    }
+}
+
 int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
     void* callback_ctx, void * callback_arg)
 {
@@ -568,71 +655,15 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             }
             else if (ret == 0 && (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready ||
                 picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
-                int simulate_multipath = 0;
-
-                if (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready && cb_ctx->multipath_probe_done == 0) {
-                    /* Create the required additional paths. 
-                     * In some cases, we just want to test the software from a computer that is not actually
-                     * multihomed. In that case, the client_alt_address is set to ::0 (IPv6 null address),
-                     * and the callback will return "PICOQUIC_NO_ERROR_SIMULATE_MIGRATION", which
-                     * causes the socket code to create an additional socket, and issue a 
-                     * picoquic_probe_new_path request for the corresponding address.
-                     */
-                    int remote_cid_ready = (picoquic_obtain_stashed_cnxid(cb_ctx->cnx_client, 1) != NULL);
-                    if (remote_cid_ready) {
-                        struct sockaddr_in6 addr_zero6 = { 0 };
-                        struct sockaddr_in addr_zero4 = { 0 };
-                        struct sockaddr_storage path0_addr = { 0 };
-                        addr_zero6.sin6_family = AF_INET6;
-                        addr_zero4.sin_family = AF_INET;
-
-                        if (picoquic_get_path_addr(cb_ctx->cnx_client, 0, 1, &path0_addr) != 0) {
-                            /* This should never happen, as path[0] is always defined before the first migration. */
-                            picoquic_log_app_message(cb_ctx->cnx_client, "Cannot use multipath. Cannot get address of path 0");
-                        }
-
-                        for (int i = 0; i < cb_ctx->nb_alt_paths; i++) {
-                            if (picoquic_compare_addr((struct sockaddr*)&addr_zero6, (struct sockaddr*)&cb_ctx->client_alt_address[i]) == 0 ||
-                                picoquic_compare_addr((struct sockaddr*)&addr_zero4, (struct sockaddr*)&cb_ctx->client_alt_address[i]) == 0) {
-                                simulate_multipath = 1;
-                                picoquic_log_app_message(cb_ctx->cnx_client, "%s\n", "Will try to simulate new path");
-                            }
-                            else if (cb_ctx->client_alt_address[i].ss_family != path0_addr.ss_family) {
-                                picoquic_log_app_message(cb_ctx->cnx_client, "Cannot add new path, wrong address family, %d vs. %d\n", 
-                                    cb_ctx->client_alt_address[i].ss_family, path0_addr.ss_family);
-                            } else {
-#if 0
-                                /* The configuration code sets the port number in "client_alt_address" to zero,
-                                * but it should be set to the actual value because of the "matching address"
-                                * test when processing path challenges. The actual value is the same as
-                                * used in the default path. */
-                                if (cb_ctx->client_alt_address[i].ss_family == AF_INET6) {
-                                    ((struct sockaddr_in6*)&cb_ctx->client_alt_address[i])->sin6_port =
-                                        ((struct sockaddr_in6*)&path0_addr)->sin6_port;
-                                }
-                                else {
-                                    ((struct sockaddr_in*)&cb_ctx->client_alt_address[i])->sin_port =
-                                        ((struct sockaddr_in*)&path0_addr)->sin_port;
-                                }
-#endif
-                                if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr*)&cb_ctx->server_address,
-                                    (struct sockaddr*)&cb_ctx->client_alt_address[i], cb_ctx->client_alt_if[i], picoquic_get_quic_time(quic), 0)) != 0) {
-                                    picoquic_log_app_message(cb_ctx->cnx_client, "Probe new path failed with exit code %d", ret);
-                                }
-                                else {
-                                    picoquic_log_app_message(cb_ctx->cnx_client, "New path added, total path available %d", cb_ctx->cnx_client->nb_paths);
-                                }
-                            }
-                        }
-
-                        cb_ctx->multipath_probe_done = 1;
-
-                        if (simulate_multipath) {
-                            ret = simulate_migration(cb_ctx);
+                if (cb_ctx->multipath_initiated == 0) {
+                    int is_already_allowed = 0;
+                    cb_ctx->multipath_initiated = 1;
+                    if (ret = picoquic_subscribe_new_path_allowed(cb_ctx->cnx_client, &is_already_allowed) == 0) {
+                        if (is_already_allowed) {
+                            ret = client_create_additional_path(cb_ctx->cnx_client, cb_ctx);
                         }
                     }
                 }
-
                 /* Track the migration to server preferred address */
                 if (cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined && !cb_ctx->migration_to_preferred_finished) {
                     if (picoquic_compare_addr(

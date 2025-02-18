@@ -498,10 +498,13 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
         else {
             uint64_t transport_error = picoquic_add_remote_cnxid_to_stash(cnx, remote_cnxid_stash, retire_before,
                 sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
-            if (transport_error == 0 && remote_cnxid_stash->retire_cnxid_before < retire_before) {
-                /* retire the now deprecated CIDs */
-                remote_cnxid_stash->retire_cnxid_before = retire_before;
-                transport_error = picoquic_remove_not_before_cid(cnx, unique_path_id, retire_before, current_time);
+            if (transport_error == 0) {
+                picoquic_test_and_signal_new_path_allowed(cnx);
+                if (remote_cnxid_stash->retire_cnxid_before < retire_before) {
+                    /* retire the now deprecated CIDs */
+                    remote_cnxid_stash->retire_cnxid_before = retire_before;
+                    transport_error = picoquic_remove_not_before_cid(cnx, unique_path_id, retire_before, current_time);
+                }
             }
             if (transport_error != 0) {
                 picoquic_connection_error(cnx, transport_error,

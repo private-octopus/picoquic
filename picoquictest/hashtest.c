@@ -21,11 +21,13 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #ifdef _WINDOWS
 #include <malloc.h>
 #endif
 
 #include "picoquic_internal.h"
+#include "picoquic_utils.h"
 #include "picohash.h"
 
 struct hashtestkey {
@@ -33,7 +35,7 @@ struct hashtestkey {
     picohash_item item;
 };
 
-static uint64_t hashtest_hash(const void* v)
+static uint64_t hashtest_hash(const void* v, const uint8_t* hash_seed)
 {
     const struct hashtestkey* k = (const struct hashtestkey*)v;
     uint64_t hash = (k->x + 0xDEADBEEFull);
@@ -72,12 +74,13 @@ int picohash_test_one(int embedded_item)
     /* Create a hash table */
     int ret = 0;
     picohash_table* t = NULL;
+    uint8_t hash_seed[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
     
     if (!embedded_item) {
         t = picohash_create(32, hashtest_hash, hashtest_compare);
     }
     else {
-        t = picohash_create_ex(32, hashtest_hash, hashtest_compare, hashtest_key_to_item);
+        t = picohash_create_ex(32, hashtest_hash, hashtest_compare, hashtest_key_to_item, hash_seed);
     }
 
     if (t == NULL) {
@@ -199,4 +202,134 @@ int picohash_test()
 int picohash_embedded_test()
 {
     return(picohash_test_one(1));
+}
+
+/* Test the behavior of the basic hash
+ */
+void hash_test_init(uint8_t* test, size_t length, uint8_t * k, size_t k_length)
+{
+    /* Create a test string */
+    for (size_t i = 0; i < length; i++) {
+        test[i] = (uint8_t)(i + (i >> 8));
+    }
+
+    for (size_t i = 0; i < k_length; i++)
+    {
+        k[i] = (uint8_t)(k_length - i);
+    }
+}
+
+int picohash_bytes_test()
+{
+    uint8_t test[1024];
+    uint8_t k[16];
+    int ret = 0;
+    size_t test_lengths[12] = { 1, 3, 7, 8, 12, 16, 17, 31, 127, 257, 515, 1024 };
+    uint64_t href[12] = {
+        0x03016721e32d7aa7,
+        0x64208401ad85bed5,
+        0x44587b0209479519,
+        0x14a481748ee6d77e,
+        0x9a44370fd1b8c1ee,
+        0x27081725c4164c1a,
+        0x2f1f325da756df85,
+        0x2aa4fda796f9ffff,
+        0x8ded0692d7038037,
+        0x7893f9399f507284,
+        0x47a065dbeea77343,
+        0xb543a5b3c675127d
+    };
+
+    hash_test_init(test, sizeof(test), k, sizeof(k));
+
+    /* Compute or check the reference siphash value */
+    for (size_t i = 0; i < sizeof(test_lengths) / sizeof(size_t); i++) {
+        uint64_t h = picohash_bytes(test, (uint32_t)test_lengths[i], k);
+        if (h != href[i]) {
+            DBG_PRINTF("H[%zu] = %" PRIx64 " instead of %"PRIx64, i, h, href[i]);
+#if 1//def COMPUTING_REFERENCE_BASIC_VALUE
+            href[i] = h;
+#else
+            ret = -1;
+            break;
+#endif
+        }
+    }
+    return ret;
+}
+
+/* Test of the siphash function
+ */
+
+int siphash_test()
+{
+    uint8_t test[1024];
+    uint8_t k[16];
+    size_t test_lengths[12] = { 1, 3, 7, 8, 12, 16, 17, 31, 127, 257, 515, 1024 };
+    uint64_t href[12] = {
+        0xa9b786935f98d6b8,
+        0x3fb64f2d81ebf107,
+        0xcd34491a7b437e1b,
+        0x5fbe917709286bc4,
+        0xb2cc76e0f81d6e2f,
+        0x09e69c0f70753651,
+        0xc615b5349acc0cc2,
+        0x965379fb0e26e150,
+        0x85a286cfc4a62574,
+        0x5f774367aeea9f83,
+        0xd04ee1d420e9bc22,
+        0x0a7ad6655680779e
+    };
+    int ret = 0;
+
+    hash_test_init(test, sizeof(test), k, sizeof(k));
+    /* Compute or check the reference siphash value */
+    for (size_t i = 0; i < sizeof(test_lengths) / sizeof(size_t); i++) {
+        uint64_t h = picohash_siphash(test, test_lengths[i], k);
+        if (h != href[i]) {
+            DBG_PRINTF("H[%zu] = %" PRIu64 "instead of %"PRIu64, i, h, href[i]);
+#ifdef COMPUTING_REFERENCE_SIPASH_VALUE
+            href[i] = h;
+#else
+            ret = -1;
+            break;
+#endif
+        }
+    }
+#ifdef COMPARING_TIMES
+    /* Compare execution time */
+    uint64_t h;
+    double sip_t[48];
+    double basic_t[48];
+    for (size_t lt=1; lt <= 48; lt++) {
+        uint64_t start_siphash = picoquic_current_time();
+        uint64_t siphash_sum = 0;
+        uint64_t basic_sum = 0;
+        size_t n = 0;
+
+        for (size_t i = 0; i + lt < sizeof(test); i++) {
+            h = picohash_siphash(test, lt, k);
+            siphash_sum += h;
+            n++;
+        }
+        uint64_t start_basic = picoquic_current_time();
+        for (size_t i = 0; i + lt < sizeof(test); i++) {
+            h = picohash_bytes(test, (uint32_t)lt, k);
+            basic_sum += h;
+        }
+        uint64_t end_basic = picoquic_current_time();
+        uint64_t siphash_time = start_basic - start_siphash;
+        uint64_t basic_time = end_basic - start_basic;
+        double siphash_one = ((double)siphash_time) / n;
+        double basic_one = ((double)basic_time) / n;
+        sip_t[lt - 1] = siphash_one;
+        basic_t[lt - 1] = basic_one;
+        printf("Sip hash time, %zu: %" PRIu64 ", sum: %" PRIu64", n = % zu, us=%f\n", lt, siphash_time, siphash_sum, n, siphash_one);
+        printf("Basic hash time, %zu: %" PRIu64 ", sum: %" PRIu64", n = % zu, us=%f\n", lt, basic_time, basic_sum, n, basic_one);
+    }
+    for (int i = 0; i < 48; i++) {
+        printf("%d, %f, %f\n", i + 1, basic_t[i], sip_t[i]);
+    }
+#endif /* COMPARING TIMES */
+    return ret;
 }

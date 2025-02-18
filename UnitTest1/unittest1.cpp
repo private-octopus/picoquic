@@ -48,6 +48,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picohash_bytes)
+        {
+            int ret = picohash_bytes_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(siphash)
+        {
+            int ret = siphash_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picolog_basic)
         {
             int ret = picolog_basic_test();
@@ -2024,6 +2038,55 @@ namespace UnitTest1
         TEST_METHOD(cc_compete_d_cubic)
         {
             int ret = cc_compete_d_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_asym)
+        {
+            int ret = cc_ns_asym_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_blackhole)
+        {
+            int ret = cc_ns_blackhole_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_drop_and_back)
+        {
+            int ret = cc_ns_drop_and_back_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_low_and_up)
+        {
+            int ret = cc_ns_low_and_up_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_wifi_fade)
+        {
+            int ret = cc_ns_wifi_fade_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_wifi_suspension)
+        {
+            int ret = cc_ns_wifi_suspension_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_varylink)
+        {
+            int ret = cc_ns_varylink_test();
 
             Assert::AreEqual(ret, 0);
         }
