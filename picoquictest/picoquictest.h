@@ -577,6 +577,9 @@ int quicperf_media_test();
 int quicperf_multi_test();
 int quicperf_overflow_test();
 int cplusplustest();
+int slow_start_example_test();
+int hystart_example_test();
+int hystart_pp_example_test();
 
 #ifdef __cplusplus
 }
