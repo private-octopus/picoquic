@@ -258,10 +258,10 @@ typedef struct st_picoquic_net_secret_key_t {
 } picoquic_net_secret_key_t;
 
 /* Hash and compare for CNX hash tables */
-static uint64_t picoquic_local_cnxid_hash(const void* key)
+static uint64_t picoquic_local_cnxid_hash(const void* key, const uint8_t * hash_seed)
 {
     const picoquic_local_cnxid_t* l_cid = (const picoquic_local_cnxid_t*)key;
-    return picoquic_connection_id_hash(&l_cid->cnx_id);
+    return picoquic_connection_id_hash(&l_cid->cnx_id, hash_seed);
 }
 
 static int picoquic_local_cnxid_compare(const void* key1, const void* key2)
@@ -279,12 +279,12 @@ static picohash_item * picoquic_local_cnxid_to_item(const void* key)
     return &l_cid->hash_item;
 }
 
-static uint64_t picoquic_net_id_hash(const void* key)
+static uint64_t picoquic_net_id_hash(const void* key, const uint8_t* hash_seed)
 {
     const picoquic_path_t* path_x = (const picoquic_path_t*)key;
-
-    // return picohash_bytes((uint8_t*)&net->saddr, sizeof(net->saddr));
-    return picoquic_hash_addr((struct sockaddr*) & path_x->registered_peer_addr);
+    
+    /* Using siphash, because secret and IP address are chosen by third parties*/
+    return picoquic_hash_addr((struct sockaddr*) & path_x->registered_peer_addr, hash_seed);
 }
 
 static picohash_item * picoquic_local_netid_to_item(const void* key)
@@ -303,21 +303,17 @@ static int picoquic_net_id_compare(const void* key1, const void* key2)
     return picoquic_compare_addr((struct sockaddr*) & path_x1->registered_peer_addr, (struct sockaddr*) & path_x2->registered_peer_addr);
 }
 
-
-
-static uint64_t picoquic_net_icid_hash(const void* key)
+static uint64_t picoquic_net_icid_hash(const void* key, const uint8_t* hash_seed)
 {
-    /* The ICID is controlled by the peer. We mix a random seed in the
-     * hash to avoid possible shenanigans. */
+    uint64_t h;
+    uint8_t bytes[18 + PICOQUIC_CONNECTION_ID_MAX_SIZE];
     const picoquic_cnx_t* cnx = (const picoquic_cnx_t*)key;
-    picoquic_connection_id_t cid = cnx->initial_cnxid;
-
-    for (int i = 0; i < 8; i++) {
-        cid.id[i] ^= cnx->quic->hash_seed[i];
-    }
-
-    return picohash_hash_mix(picoquic_hash_addr((struct sockaddr*) & cnx->registered_icid_addr), 
-        picoquic_connection_id_hash(&cid));
+    size_t l = picoquic_hash_addr_bytes((struct sockaddr*)&cnx->registered_icid_addr, bytes);
+    memcpy(bytes + l, cnx->initial_cnxid.id, cnx->initial_cnxid.id_len);
+    l += cnx->initial_cnxid.id_len;
+    /* Using siphash, because CNX ID and IP address are chosen by third parties*/
+    h = picohash_siphash(bytes, (uint32_t)l, hash_seed);
+    return h;
 }
 
 static int picoquic_net_icid_compare(const void* key1, const void* key2)
@@ -339,12 +335,17 @@ static picohash_item * picoquic_net_icid_to_item(const void* key)
     return &cnx->registered_icid_item;
 }
 
-static uint64_t picoquic_net_secret_hash(const void* key)
+static uint64_t picoquic_net_secret_hash(const void* key, const uint8_t* hash_seed)
 {
+    uint64_t h;
+    uint8_t bytes[18 + PICOQUIC_RESET_SECRET_SIZE];
     const picoquic_cnx_t* cnx = (const picoquic_cnx_t*)key;
-
-    return picohash_hash_mix(picoquic_hash_addr((struct sockaddr*) & cnx->registered_secret_addr), 
-        picohash_bytes(cnx->registered_reset_secret, PICOQUIC_RESET_SECRET_SIZE));
+    size_t l = picoquic_hash_addr_bytes((struct sockaddr*)&cnx->registered_secret_addr, bytes);
+    memcpy(bytes + l, cnx->registered_reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+    l += PICOQUIC_RESET_SECRET_SIZE;
+    /* Using siphash, because secret and IP address are chosen by third parties*/
+    h = picohash_siphash(bytes, (uint32_t)l, hash_seed);
+    return h;
 }
 
 static int picoquic_net_secret_compare(const void* key1, const void* key2)
@@ -391,7 +392,7 @@ picoquic_packet_context_enum picoquic_context_from_epoch(int epoch)
  * to the number of connections.
  */
 
-static uint64_t picoquic_issued_ticket_hash(const void* key)
+static uint64_t picoquic_issued_ticket_hash(const void* key, const uint8_t* hash_seed)
 {
     const picoquic_issued_ticket_t* ticket_key = (const picoquic_issued_ticket_t*)key;
 
@@ -692,15 +693,15 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
 
             if (max_cnx4 < (size_t)max_nb_connections ||
                 (quic->table_cnx_by_id = picohash_create_ex((size_t)max_nb_connections * 4,
-                picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item)) == NULL ||
+                picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item, quic->hash_seed)) == NULL ||
                 (quic->table_cnx_by_net = picohash_create_ex((size_t)max_nb_connections * 4,
-                    picoquic_net_id_hash, picoquic_net_id_compare, picoquic_local_netid_to_item)) == NULL ||
+                    picoquic_net_id_hash, picoquic_net_id_compare, picoquic_local_netid_to_item, quic->hash_seed)) == NULL ||
                 (quic->table_cnx_by_icid = picohash_create_ex((size_t)max_nb_connections,
-                    picoquic_net_icid_hash, picoquic_net_icid_compare, picoquic_net_icid_to_item)) == NULL ||
+                    picoquic_net_icid_hash, picoquic_net_icid_compare, picoquic_net_icid_to_item, quic->hash_seed)) == NULL ||
                 (quic->table_cnx_by_secret = picohash_create_ex((size_t)max_nb_connections * 4,
-                    picoquic_net_secret_hash, picoquic_net_secret_compare, picoquic_net_secret_to_item)) == NULL ||
+                    picoquic_net_secret_hash, picoquic_net_secret_compare, picoquic_net_secret_to_item, quic->hash_seed)) == NULL ||
                 (quic->table_issued_tickets = picohash_create_ex((size_t)max_nb_connections,
-                    picoquic_issued_ticket_hash, picoquic_issued_ticket_compare, picoquic_issued_ticket_key_to_item)) == NULL) {
+                    picoquic_issued_ticket_hash, picoquic_issued_ticket_compare, picoquic_issued_ticket_key_to_item, quic->hash_seed)) == NULL) {
                 ret = -1;
                 DBG_PRINTF("%s", "Cannot initialize hash tables\n");
             }
@@ -1025,7 +1026,7 @@ void picoquic_free(picoquic_quic_t* quic)
         }
 
         if (quic->table_cnx_by_secret != NULL) {
-            picohash_delete(quic->table_cnx_by_secret, 1);
+            picohash_delete(quic->table_cnx_by_secret, 0);
         }
 
         if (quic->verify_certificate_callback != NULL) {
@@ -1164,6 +1165,7 @@ void picoquic_unregister_net_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
             picohash_delete_item(cnx->quic->table_cnx_by_net, item, 0);
         }
         memset(&path_x->registered_peer_addr, 0, sizeof(struct sockaddr_storage));
+        memset(&path_x->net_id_hash_item, 0, sizeof(path_x->net_id_hash_item));
     }
 }
 
@@ -1432,7 +1434,7 @@ int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
      * future, which implies the time in microseconds is less than 2^62.
      * The delay MAX is lower than INT64_MAX, i.e., 2^63.
      * The next wake time is often set to UINT64_MAX, and might sometime
-     * me just under that value, so we make sure to avoid integer
+     * be just under that value, so we make sure to avoid integer
      * overflow in the computation.
      */
     uint64_t next_wake_time = picoquic_get_next_wake_time(quic, current_time);
@@ -4788,6 +4790,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         picoquic_delete_remote_cnxid_stashes(cnx);
 
         picoquic_unregister_net_icid(cnx);
+        picoquic_unregister_net_secret(cnx);
 
         free(cnx);
     }
