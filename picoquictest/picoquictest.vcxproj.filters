@@ -105,9 +105,6 @@
     <ClCompile Include="high_latency_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="hystart_test.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="edge_cases.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -202,6 +199,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="picoquic_ns.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="hystart_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

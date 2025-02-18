@@ -36,8 +36,6 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
 {
     uint64_t simulated_time = 0;
     uint64_t picoseq_per_byte = (1000000ull * 8) / datarate;
-    picoquic_tp_t client_parameters;
-    picoquic_tp_t server_parameters;
     picoquic_connection_id_t initial_cid = { {0x55, 0x45, 0, 0, 0, 0, 0, 0}, 8 };
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = 0;
