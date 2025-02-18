@@ -117,7 +117,7 @@ extern "C" {
 #define PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART 1
 #define PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART_PP 2
 
-#define PICOQUIC_DEFAULT_HYSTART_ALGORITHM 1
+#define PICOQUIC_DEFAULT_HYSTART_ALGORITHM PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART
 
 #define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
 #define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
@@ -649,7 +649,7 @@ typedef struct st_picoquic_quic_t {
     uint64_t stateless_reset_next_time; /* Next time Stateless Reset or VN packet can be sent */
     uint64_t stateless_reset_min_interval; /* Enforced interval between two stateless reset packets */
     uint64_t cwin_max; /* max value of cwin per connection */
-    uint8_t default_hystart_alg; /* 0 = disabled, 1 = HyStart, 2 = HyStart++. */
+    uint32_t default_hystart_alg; /* 0 = disabled, 1 = HyStart, 2 = HyStart++. */
     /* Flags */
     unsigned int check_token : 1;
     unsigned int force_check_token : 1;

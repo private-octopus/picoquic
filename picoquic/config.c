@@ -909,7 +909,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     config->initial_random = 3;
     config->cwin_max = UINT64_MAX;
     config->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000;
-    config->hystart_algorithm = 1; /* Set HyStart as default HyStart algorithm. */
+    config->hystart_algorithm = PICOQUIC_DEFAULT_HYSTART_ALGORITHM; /* Set HyStart as default HyStart algorithm. */
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)

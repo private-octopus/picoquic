@@ -4306,11 +4306,6 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level)
     quic->use_long_log = (log_level > 0) ? 1 : 0;
 }
 
-void picoquic_set_default_hystart_algorithm(picoquic_quic_t* quic, int hystart_algorithm)
-{
-    quic->default_hystart_alg = hystart_algorithm;
-}
-
 void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_names)
 {
     quic->use_unique_log_names = use_unique_log_names;
@@ -5001,6 +4996,16 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
             }
         }
     }
+}
+
+void picoquic_set_default_hystart_algorithm(picoquic_quic_t* quic, int hystart_algorithm)
+{
+    quic->default_hystart_alg = hystart_algorithm;
+}
+
+void picoquic_set_hystart_algorithm(picoquic_cnx_t* cnx, int hystart_algorithm)
+{
+    cnx->hystart_alg = hystart_algorithm;
 }
 
 void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt)

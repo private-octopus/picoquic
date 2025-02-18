@@ -436,13 +436,6 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...);
  * 0: only log the first 100 packets for each connection. */
 void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
 
-/* Set default HyStart algorithm.
- * 0: disabled
- * 1: HyStart (default)
- * 2: HyStart++ (CUBIC and Prague support)
- * TODO disabled & update description if more CC algos are supported. */
-void picoquic_set_default_hystart_algorithm(picoquic_quic_t* quic, int hystart_algorithm);
-
 /* By default, the binary log and qlog files are named from the Initial CID
  * chosen by the client. For example, if the initial CID is set
  * to { 0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04, 0x05 } the
@@ -1599,6 +1592,16 @@ void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_c
 void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
+
+/* Set default HyStart algorithm.
+ * 0: disabled
+ * 1: HyStart (default)
+ * 2: HyStart++ (CUBIC support)
+ * TODO disabled & update description if more CC algos are supported. */
+
+void picoquic_set_default_hystart_algorithm(picoquic_quic_t* quic, int hystart_algorithm);
+
+void picoquic_set_hystart_algorithm(picoquic_cnx_t* cnx, int hystart_algorithm);
 
 /* Special code for Wi-Fi network. These networks are subject to occasional
  * "suspension", for power saving reasons. If the suspension is too long,
