@@ -102,6 +102,7 @@ typedef struct st_picoquic_ns_client_t {
     uint64_t start_time;
     picoquic_cnx_t* cnx;
     picoquic_congestion_algorithm_t* cc_algo;
+    int hystart_algo;
     quicperf_ctx_t* quicperf_ctx;
     picoquic_connection_id_t icid;
 } picoquic_ns_client_t;
@@ -144,6 +145,7 @@ int picoquic_ns_server_callback(picoquic_cnx_t* cnx,
                 picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id,
                     &cc_ctx->client_ctx[i]->cnx->path[0]->p_local_cnxid->cnx_id) == 0) {
                 picoquic_set_congestion_algorithm(cnx, cc_ctx->client_ctx[i]->cc_algo);
+                picoquic_set_hystart_algorithm(cnx, cc_ctx->client_ctx[i]->hystart_algo);
                 ret = 0;
             }
         }
@@ -194,11 +196,13 @@ int picoquic_ns_create_client_ctx(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t*
         if (client_id == 0) {
             client_ctx->start_time = spec->main_start_time;
             client_ctx->cc_algo = spec->main_cc_algo;
+            client_ctx->hystart_algo = spec->main_hystart_algo;
             scenario_text = spec->main_scenario_text;
         }
         else {
             client_ctx->start_time = spec->background_start_time;
             client_ctx->cc_algo = spec->background_cc_algo;
+            client_ctx->hystart_algo = spec->background_hystart_algo;
             scenario_text = spec->background_scenario_text;
         }
         if ((client_ctx->quicperf_ctx = quicperf_create_ctx(scenario_text)) == NULL) {
@@ -485,6 +489,10 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec)
                 picoquic_set_log_level(cc_ctx->q_ctx[i], 1);
             }
         }
+        /* Set HyStart algorithm. */
+        for (int i = 0; ret == 0 && i < 2; i++) {
+            picoquic_set_default_hystart_algorithm(cc_ctx->q_ctx[i], spec->main_hystart_algo);
+        }
         /* Create the required links */
         if (ret == 0){
             ret = picoquic_ns_create_links(cc_ctx, spec);
@@ -585,6 +593,7 @@ int picoquic_ns_start_connection(picoquic_ns_ctx_t* cc_ctx, int cnx_id)
     }
     else {
         picoquic_set_congestion_algorithm(cc_ctx->client_ctx[cnx_id]->cnx, cc_ctx->client_ctx[cnx_id]->cc_algo);
+        picoquic_set_hystart_algorithm(cc_ctx->client_ctx[cnx_id]->cnx, cc_ctx->client_ctx[cnx_id]->hystart_algo);
         picoquic_set_callback(cc_ctx->client_ctx[cnx_id]->cnx, quicperf_callback,
             cc_ctx->client_ctx[cnx_id]->quicperf_ctx);
         cc_ctx->client_ctx[cnx_id]->cnx->local_parameters.max_datagram_frame_size = 1532;
@@ -644,7 +653,7 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
         link->last_packet = previous_packet;
     }
     /* Requeue the other packets:
-    /* reset the queue time to current_time, i.e., after packets in transit are delivered.*/
+     * reset the queue time to current_time, i.e., after packets in transit are delivered.*/
     link->queue_time = current_time;
     /* reset the leaky bucket, so it starts working from the current time. */
     link->bucket_arrival_last = current_time;

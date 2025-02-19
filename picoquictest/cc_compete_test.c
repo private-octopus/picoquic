@@ -59,9 +59,32 @@ int cc_compete_cubic2_test()
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xcb, 0xcb, 0, 0, 0, 0}, 8 };
     spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_hystart_algo = 1;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
     spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_hystart_algo = 1;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 2;
+    spec.main_target_time = 8500000;
+    spec.queue_delay_max = 40000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+
+    return picoquic_ns(&spec);
+}
+
+int cc_compete_cubic2_hystart_pp_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xcb, 0xcb, 0x02, 0x01, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_hystart_algo = 2; /* HyStart++. */
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_hystart_algo = 1; /* HyStart. */
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 2;
@@ -78,9 +101,11 @@ int cc_compete_prague2_test()
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xa9, 0xa9, 0, 0, 0, 0}, 8 };
     spec.main_cc_algo = picoquic_prague_algorithm;
+    spec.main_hystart_algo = 1;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
     spec.background_cc_algo = picoquic_prague_algorithm;
+    spec.background_hystart_algo = 1;
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 2;
@@ -108,9 +133,11 @@ int cc_compete_d_cubic_test()
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xdc, 0xcb, 0, 0, 0, 0}, 8 };
     spec.main_cc_algo = picoquic_dcubic_algorithm;
+    spec.main_hystart_algo = 1;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
     spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_hystart_algo = 1;
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 2;
@@ -126,13 +153,15 @@ int cc_compete_d_cubic_test()
 /* Check that the picoquic_ns simulations can correctly test asymmetric paths.
  */
 int cc_ns_asym_test()
- {
+{
      picoquic_ns_spec_t spec = { 0 };
      picoquic_connection_id_t icid = { { 0xcc, 0xa5, 0xcb, 0, 0, 0, 0, 0}, 8 };
      spec.main_cc_algo = picoquic_cubic_algorithm;
+     spec.main_hystart_algo = 1;
      spec.main_start_time = 0;
      spec.main_scenario_text = cc_compete_batch_scenario_4M;
      spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_hystart_algo = 1;
      spec.background_start_time = 0;
      spec.background_scenario_text = cc_compete_batch_scenario_10M;
      spec.nb_connections = 1;
@@ -144,8 +173,8 @@ int cc_ns_asym_test()
      spec.icid = icid;
      spec.qlog_dir = ".";
 
-     return picoquic_ns(&spec);
- }
+    return picoquic_ns(&spec);
+}
 
 /* Check that the picoquic_ns simulations can correctly test the black hole scenario.
  */
@@ -154,9 +183,11 @@ int cc_ns_blackhole_test()
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xb1, 0xcb, 0, 0, 0, 0, 0}, 8 };
     spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_hystart_algo = 1;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
     spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_hystart_algo = 1;
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 1;
@@ -178,9 +209,11 @@ int cc_ns_drop_and_back_test()
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xdb, 0xcb, 0, 0, 0, 0, 0}, 8 };
     spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_hystart_algo = 1;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
     spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_hystart_algo = 1;
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 1;
@@ -202,9 +235,11 @@ int cc_ns_low_and_up_test()
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0x1a, 0xcb, 0, 0, 0, 0, 0}, 8 };
     spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_hystart_algo = 1;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
     spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_hystart_algo = 1;
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 1;
@@ -226,9 +261,11 @@ int cc_ns_wifi_fade_test()
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xff, 0xbb, 0, 0, 0, 0, 0}, 8 };
     spec.main_cc_algo = picoquic_bbr_algorithm;
+    spec.main_hystart_algo = 1;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
     spec.background_cc_algo = picoquic_bbr_algorithm;
+    spec.background_hystart_algo = 1;
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 1;
@@ -251,9 +288,11 @@ int cc_ns_wifi_suspension_test()
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xf5, 0xbb, 0, 0, 0, 0, 0}, 8 };
     spec.main_cc_algo = picoquic_bbr_algorithm;
+    spec.main_hystart_algo = 1;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
     spec.background_cc_algo = picoquic_bbr_algorithm;
+    spec.background_hystart_algo = 1;
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 1;
@@ -284,9 +323,11 @@ int cc_ns_varylink_test()
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0x11, 0xbb, 0, 0, 0, 0, 0}, 8 };
     spec.main_cc_algo = picoquic_bbr_algorithm;
+    spec.main_hystart_algo = 1;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
     spec.background_cc_algo = picoquic_bbr_algorithm;
+    spec.background_hystart_algo = 1;
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 1;
