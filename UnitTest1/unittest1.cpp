@@ -3300,7 +3300,7 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(hystart_pp_example_test) {
+        TEST_METHOD(hystart_pp_example) {
             int ret = hystart_pp_example_test();
 
             Assert::AreEqual(ret, 0);
