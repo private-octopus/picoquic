@@ -113,11 +113,7 @@ extern "C" {
 #define PICOQUIC_CC_ALGO_NUMBER_PRAGUE 6
 #define PICOQUIC_CC_ALGO_NUMBER_BBR1 7
 
-#define PICOQUIC_HYSTART_ALGO_NUMBER_DISABLED 0
-#define PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART 1
-#define PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART_PP 2
-
-#define PICOQUIC_DEFAULT_HYSTART_ALGORITHM PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART
+#define PICOQUIC_DEFAULT_HYSTART_ALGORITHM picoquic_hystart_alg_hystart_t
 
 #define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
 #define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
@@ -649,7 +645,7 @@ typedef struct st_picoquic_quic_t {
     uint64_t stateless_reset_next_time; /* Next time Stateless Reset or VN packet can be sent */
     uint64_t stateless_reset_min_interval; /* Enforced interval between two stateless reset packets */
     uint64_t cwin_max; /* max value of cwin per connection */
-    uint32_t default_hystart_alg; /* 0 = disabled, 1 = HyStart, 2 = HyStart++. */
+    picoquic_hystart_alg_t default_hystart_alg; /* 0 = HyStart (default), 1 = HyStart++, 2 = disabled. */
     /* Flags */
     unsigned int check_token : 1;
     unsigned int force_check_token : 1;
@@ -1198,7 +1194,7 @@ typedef struct st_picoquic_path_t {
     uint64_t last_cwin_blocked_time;
     uint64_t last_time_acked_data_frame_sent;
     void* congestion_alg_state;
-    int hystart_algorithm; /* 0 = disabled, 1 = HyStart (default), 2 = HyStart++. */
+    picoquic_hystart_alg_t hystart_algorithm; /* 0 = HyStart (default), 1 = HyStart++ (default), 2 = disabled. */
     picoquic_pacing_t pacing;
 
     /* MTU safety tracking */
@@ -1440,7 +1436,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int stream_blocked : 1;
     /* Congestion algorithm */
     picoquic_congestion_algorithm_t const* congestion_alg;
-    int hystart_alg; /* HyStart alg. */
+    picoquic_hystart_alg_t hystart_alg; /* HyStart algorithm. */
     /* Management of quality signalling updates */
     uint64_t rtt_update_delta;
     uint64_t pacing_rate_update_delta;

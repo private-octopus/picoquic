@@ -102,7 +102,7 @@ typedef struct st_picoquic_ns_client_t {
     uint64_t start_time;
     picoquic_cnx_t* cnx;
     picoquic_congestion_algorithm_t* cc_algo;
-    int hystart_algo;
+    picoquic_hystart_alg_t hystart_algo;
     quicperf_ctx_t* quicperf_ctx;
     picoquic_connection_id_t icid;
 } picoquic_ns_client_t;
@@ -490,8 +490,10 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec)
             }
         }
         /* Set HyStart algorithm. */
-        for (int i = 0; ret == 0 && i < 2; i++) {
-            picoquic_set_default_hystart_algorithm(cc_ctx->q_ctx[i], spec->main_hystart_algo);
+        if (spec->main_hystart_algo) {
+            for (int i = 0; ret == 0 && i < 2; i++) {
+                picoquic_set_default_hystart_algorithm(cc_ctx->q_ctx[i], spec->main_hystart_algo);
+            }
         }
         /* Create the required links */
         if (ret == 0){

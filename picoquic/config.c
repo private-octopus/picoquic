@@ -440,12 +440,12 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     }
     case picoquic_option_HYSTART: {
         int v = config_atoi(params, nb_params, 0, &ret);
-        if (ret != 0 || v < 0 || v > (int)picoquic_hystart_hystart_pp) {
+        if (ret != 0 || v < 0 || v > (int)picoquic_hystart_alg_disabled_t) {
             fprintf(stderr, "Invalid HyStart algorithm: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
             ret = (ret == 0) ? -1 : ret;
         }
         else {
-            config->hystart_algorithm = (picoquic_hystart_algorithm_enum)v;
+            config->hystart_algorithm = (picoquic_hystart_alg_t)v;
         }
         break;
     }

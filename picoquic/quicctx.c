@@ -5001,12 +5001,12 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
     }
 }
 
-void picoquic_set_default_hystart_algorithm(picoquic_quic_t* quic, int hystart_algorithm)
+void picoquic_set_default_hystart_algorithm(picoquic_quic_t* quic, picoquic_hystart_alg_t hystart_algorithm)
 {
     quic->default_hystart_alg = hystart_algorithm;
 }
 
-void picoquic_set_hystart_algorithm(picoquic_cnx_t* cnx, int hystart_algorithm)
+void picoquic_set_hystart_algorithm(picoquic_cnx_t* cnx, picoquic_hystart_alg_t hystart_algorithm)
 {
     cnx->hystart_alg = hystart_algorithm;
 }

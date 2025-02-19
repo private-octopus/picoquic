@@ -224,16 +224,6 @@ typedef enum {
 } picoquic_lossbit_version_enum;
 
 /*
-* HyStart algorithm variants
-*/
-
-typedef enum {
-    picoquic_hystart_disabled = 0, /* HyStart disabled. */
-    picoquic_hystart_hystart = 1, /* HyStart enabled. */
-    picoquic_hystart_hystart_pp = 2, /* HyStart++ enabled. */
-} picoquic_hystart_algorithm_enum;
-
-/*
 * Path statuses
 */
 
@@ -1541,6 +1531,18 @@ typedef enum {
     picoquic_congestion_notification_lost_feedback /* notification of lost feedback */
 } picoquic_congestion_notification_t;
 
+/** HyStart algorithms:
+ *  - HyStart (https://doi.org/10.1016/j.comnet.2011.01.014)
+ *  - HyStart++ (RFC 9406)
+ *  - disabled (Slow Start)
+ */
+
+typedef enum {
+    picoquic_hystart_alg_hystart_t = 0,
+    picoquic_hystart_alg_hystart_pp_t,
+    picoquic_hystart_alg_disabled_t
+} picoquic_hystart_alg_t;
+
 typedef struct st_picoquic_per_ack_state_t {
     uint64_t rtt_measurement; /* RTT as measured when receiving the ACK */
     uint64_t one_way_delay; /* One way delay when receiving the ACK, 0 if unknown */
@@ -1599,9 +1601,9 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
  * 2: HyStart++ (CUBIC support)
  * TODO disabled & update description if more CC algos are supported. */
 
-void picoquic_set_default_hystart_algorithm(picoquic_quic_t* quic, int hystart_algorithm);
+void picoquic_set_default_hystart_algorithm(picoquic_quic_t* quic, picoquic_hystart_alg_t hystart_algorithm);
 
-void picoquic_set_hystart_algorithm(picoquic_cnx_t* cnx, int hystart_algorithm);
+void picoquic_set_hystart_algorithm(picoquic_cnx_t* cnx, picoquic_hystart_alg_t hystart_algorithm);
 
 /* Special code for Wi-Fi network. These networks are subject to occasional
  * "suspension", for power saving reasons. If the suspension is too long,

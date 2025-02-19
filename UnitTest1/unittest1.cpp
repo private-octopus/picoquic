@@ -3301,7 +3301,7 @@ namespace UnitTest1
         }
 
         TEST_METHOD(hystart_pp_example_test) {
-            int ret = slow_start_example_test();
+            int ret = hystart_pp_example_test();
 
             Assert::AreEqual(ret, 0);
         }

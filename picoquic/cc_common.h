@@ -105,7 +105,7 @@ int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_mea
  * HyStart++
  */
 
-#define IS_HYSTART_PP_ENABLED(cnx) (cnx->hystart_alg == PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART_PP)
+#define IS_HYSTART_PP_ENABLED(cnx) (cnx->hystart_alg == picoquic_hystart_alg_hystart_pp_t)
 #define IS_IN_CSS(hystart_pp_state) (hystart_pp_state.css_baseline_min_rtt == UINT64_MAX)
 
 typedef struct st_picoquic_hystart_pp_round_t {

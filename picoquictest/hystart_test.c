@@ -1,6 +1,6 @@
 /*
-* Author: Christian Huitema
-* Copyright (c) 2025, Private Octopus, Inc.
+* Author: Matthias Hofstaetter
+* Copyright (c) 2025, Matthias Hofstaetter
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -31,7 +31,7 @@
 #include "autoqlog.h"
 #include "picoquictest.h"
 
-static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hystart_algorithm_enum hystart_algo, size_t data_size, uint64_t max_completion_time,
+static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hystart_alg_t hystart_algo, size_t data_size, uint64_t max_completion_time,
     uint64_t datarate, uint64_t latency, uint64_t jitter, int has_loss)
 {
     uint64_t simulated_time = 0;
@@ -98,15 +98,15 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
 /* TODO These test doesn't make sense currently. For debugging only. */
 int slow_start_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_disabled, 1000000, 1000000, 10, 20000, 5000, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_disabled_t, 1000000, 1000000, 10, 20000, 5000, 0);
 }
 
 int hystart_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_hystart, 1000000, 1000000, 10, 20000, 5000, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_t, 1000000, 1000000, 10, 20000, 5000, 0);
 }
 
 int hystart_pp_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_hystart_pp, 1000000, 1000000, 10, 20000, 5000, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_pp_t, 1000000, 1000000, 10, 20000, 5000, 0);
 }

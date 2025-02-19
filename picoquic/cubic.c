@@ -338,7 +338,7 @@ static void cubic_notify(
                     cubic_state->ssthresh == UINT64_MAX) {
 
                     switch (cnx->hystart_alg) {
-                        case PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART:
+                        case picoquic_hystart_alg_hystart_t:
                             /* HyStart. */
                             /* Using RTT increases as signal to get out of initial slow start */
                             if (picoquic_cc_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
@@ -383,7 +383,7 @@ static void cubic_notify(
                                 }
                             }
                             break;
-                        case PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART_PP:
+                        case picoquic_hystart_alg_hystart_pp_t:
                             /* HyStart++. */
                             /* Keep track of the minimum RTT seen so far. */
                             picoquic_hystart_pp_keep_track(&cubic_state->hystart_pp_state, ack_state->rtt_measurement);
@@ -531,7 +531,7 @@ static void dcubic_notify(
                         }
 
                         switch (cnx->hystart_alg) {
-                            case PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART:
+                            case picoquic_hystart_alg_hystart_t:
                                 /* HyStart. */
                                 /* Using RTT increases as congestion signal. This is used
                                  * for getting out of slow start, but also for ending a cycle
@@ -541,7 +541,7 @@ static void dcubic_notify(
                                     dcubic_exit_slow_start(cnx, path_x, notification, cubic_state, current_time);
                                 }
                                 break;
-                            case PICOQUIC_HYSTART_ALGO_NUMBER_HYSTART_PP:
+                            case picoquic_hystart_alg_hystart_pp_t:
                                 /* HyStart++. */
                                 /* Using RTT increases as congestion signal. This is used
                                  * for getting out of slow start, but also for ending a cycle

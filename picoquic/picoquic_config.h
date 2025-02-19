@@ -103,7 +103,7 @@ typedef struct st_picoquic_quic_config_t {
     int bdp_frame_option;
     uint64_t cwin_max;
     int address_discovery_mode;
-    int hystart_algorithm; /* 0 = disabled, 1 = HyStart (default), 2 = HyStart++. */
+    picoquic_hystart_alg_t hystart_algorithm; /* 0 = HyStart (default), 1 = HyStart++, 2 = disabled. */
     /* TODO: control other extensions, e.g. time stamp, ack delay */
     /* Common flags */
     unsigned int initial_random;
