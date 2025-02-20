@@ -111,6 +111,9 @@ typedef struct st_picoquic_prague_state_t {
     uint64_t l4s_epoch_ect1;
     uint64_t l4s_epoch_ce;
     picoquic_min_max_rtt_t rtt_filter;
+
+    /* HyStart++ */
+    picoquic_hystart_pp_state_t hystart_pp_state;
 } picoquic_prague_state_t;
 
 static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
@@ -136,6 +139,11 @@ void picoquic_prague_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_
     }
     else {
         path_x->congestion_alg_state = NULL;
+    }
+
+    /* HyStart++ */
+    if (IS_HYSTART_PP_ENABLED(cnx)) {
+        picoquic_hystart_pp_init(&pr_state->hystart_pp_state, cnx, path_x);
     }
 }
 
@@ -168,6 +176,7 @@ static void picoquic_prague_reset(picoquic_cnx_t * cnx, picoquic_prague_state_t*
 {
     picoquic_prague_init_reno(pr_state, path_x);
     picoquic_prague_reset_l3s(cnx, pr_state, path_x);
+    picoquic_hystart_pp_reset(&pr_state->hystart_pp_state);
 }
 
 
@@ -363,15 +372,52 @@ void picoquic_prague_notify(
                     path_x->cwin = picoquic_cc_update_cwin_for_long_rtt(path_x);
                 }
 
-                /* HyStart. */
-                /* Using RTT increases as signal to get out of initial slow start */
-                if (picoquic_cc_hystart_test(&pr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
-                    cnx->path[0]->pacing.packet_time_microsec, current_time,
-                    cnx->is_time_stamp_enabled)) {
-                    /* RTT increased too much, get out of slow start! */
-                    pr_state->ssthresh = path_x->cwin;
-                    pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
-                    path_x->is_ssthresh_initialized = 1;
+                switch (cnx->hystart_alg) {
+                    case picoquic_hystart_alg_hystart_t:
+                        /* HyStart. */
+                        /* Using RTT increases as signal to get out of initial slow start */
+                        if (picoquic_cc_hystart_test(&pr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                            cnx->path[0]->pacing.packet_time_microsec, current_time,
+                            cnx->is_time_stamp_enabled)) {
+                            /* RTT increased too much, get out of slow start! */
+                            pr_state->ssthresh = path_x->cwin;
+                            pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
+                            path_x->is_ssthresh_initialized = 1;
+                        }
+                        break;
+                    case picoquic_hystart_alg_hystart_pp_t:
+                        /* HyStart++. */
+                        /* Keep track of the minimum RTT seen so far. */
+                        picoquic_hystart_pp_keep_track(&pr_state->hystart_pp_state, ack_state->rtt_measurement);
+
+                        /* Switch between SS and CSS. */
+                        picoquic_hystart_pp_test(&pr_state->hystart_pp_state);
+
+                        /* Check if we reached the end of the round. */
+                        /* HyStart++ measures rounds using sequence numbers, as follows:
+                         * - When windowEnd is ACKed, the current round ends and windowEnd is set to SND.NXT.
+                         */
+                        if (picoquic_cc_get_ack_number(cnx, path_x) != UINT64_MAX && picoquic_cc_get_ack_number(cnx, path_x) >= pr_state->hystart_pp_state.current_round.window_end) {
+                            /* Round has ended. */
+                            if (IS_IN_CSS(pr_state->hystart_pp_state)) {
+                                /* In CSS increase CSS round counter. */
+                                pr_state->hystart_pp_state.css_round_count++;
+
+                                /* Enter CA if css round counter > max css rounds. */
+                                if (pr_state->hystart_pp_state.css_round_count >= PICOQUIC_HYSTART_PP_CSS_ROUNDS) {
+                                    /* RTT increased too much, get out of slow start! */
+                                    pr_state->ssthresh = path_x->cwin;
+                                    pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
+                                    path_x->is_ssthresh_initialized = 1;
+                                }
+                            }
+
+                            /* Start new round. */
+                            picoquic_hystart_pp_start_new_round(&pr_state->hystart_pp_state, cnx, path_x);
+                        }
+                        break;
+                    default:
+                        break;
                 }
             }
             break;
