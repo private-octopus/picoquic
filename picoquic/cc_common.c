@@ -274,6 +274,11 @@ void picoquic_hystart_pp_reset(picoquic_hystart_pp_state_t* hystart_pp_state) {
     /* TODO Move start round here. */
 }
 
+void picoquic_hystart_pp_init(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x) {
+    picoquic_hystart_pp_reset(hystart_pp_state);
+    picoquic_hystart_pp_start_new_round(hystart_pp_state, cnx, path_x);
+}
+
 /** At the start of each round during standard slow start [RFC5681] and CSS, initialize the variables used to
  *  compute the last round's and current round's minimum RTT:
  *  - lastRoundMinRTT = currentRoundMinRTT

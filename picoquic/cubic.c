@@ -52,6 +52,7 @@ typedef struct st_picoquic_cubic_state_t {
 
 static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time) {
     memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
+    memset(&cubic_state->hystart_pp_state, 0, sizeof(picoquic_hystart_pp_state_t));
     memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
     cubic_state->alg_state = picoquic_cubic_alg_slow_start;
     cubic_state->ssthresh = UINT64_MAX;
@@ -62,13 +63,6 @@ static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_cnx_t* cnx
     cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
     cubic_state->recovery_sequence = 0;
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
-
-    /* HyStart++ */
-    memset(&cubic_state->hystart_pp_state, 0, sizeof(picoquic_hystart_pp_state_t));
-    if (IS_HYSTART_PP_ENABLED(cnx)) {
-        picoquic_hystart_pp_reset(&cubic_state->hystart_pp_state);
-        picoquic_hystart_pp_start_new_round(&cubic_state->hystart_pp_state, cnx, path_x);
-    }
 }
 
 static void cubic_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t current_time)
@@ -81,6 +75,11 @@ static void cubic_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t c
     path_x->congestion_alg_state = (void*)cubic_state;
     if (cubic_state != NULL) {
         cubic_reset(cubic_state, cnx, path_x, current_time);
+    }
+
+    /* HyStart++ */
+    if (IS_HYSTART_PP_ENABLED(cnx)) {
+        picoquic_hystart_pp_init(&cubic_state->hystart_pp_state, cnx, path_x);
     }
 }
 
