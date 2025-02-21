@@ -658,7 +658,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                 if (cb_ctx->multipath_initiated == 0) {
                     int is_already_allowed = 0;
                     cb_ctx->multipath_initiated = 1;
-                    if (ret = picoquic_subscribe_new_path_allowed(cb_ctx->cnx_client, &is_already_allowed) == 0) {
+                    if ((ret = picoquic_subscribe_new_path_allowed(cb_ctx->cnx_client, &is_already_allowed)) == 0) {
                         if (is_already_allowed) {
                             ret = client_create_additional_path(cb_ctx->cnx_client, cb_ctx);
                         }

@@ -644,7 +644,7 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
         link->last_packet = previous_packet;
     }
     /* Requeue the other packets:
-    /* reset the queue time to current_time, i.e., after packets in transit are delivered.*/
+     * reset the queue time to current_time, i.e., after packets in transit are delivered.*/
     link->queue_time = current_time;
     /* reset the leaky bucket, so it starts working from the current time. */
     link->bucket_arrival_last = current_time;
