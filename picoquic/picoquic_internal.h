@@ -1024,7 +1024,7 @@ typedef struct st_picoquic_pacing_t {
 * - At the beginning of the connection for path[0]
 * - When sending or receiving packets to a or from new addresses and ports.
 * 
-* When a path is created, it is assigned a local connection idand a remote connection ID.
+* When a path is created, it is assigned a local connection id and a remote connection ID.
 * After that, the path has to be validated by a successful challenge/response.
 *
 * If multipath is supported, paths remain in the list until they are abandoned.

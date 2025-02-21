@@ -11,9 +11,9 @@ will be available in the root folder.
 Usage
 -----
 Usage:
-    ../picoquic_sample client server_name port folder *queried_file
-or :
-    ../picoquic_sample server port cert_file private_key_file folder
+    `../picoquic_sample client server_name port folder *queried_file`  
+or :  
+    `../picoquic_sample server port cert_file private_key_file folder`  
 
 Example
 -------
