@@ -245,15 +245,18 @@ static void picoquic_newreno_notify(
             if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                 /* TODO app limited. */
                 /* TODO CSS increase. */
-                picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
-                path_x->cwin = nr_state->nrss.cwin;
-                /*path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged,
+                if (IS_HYSTART_PP_ENABLED(cnx)) {
+                    path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged,
                             (IS_HYSTART_PP_ENABLED(cnx)) ? IS_IN_CSS(nr_state->hystart_pp_state) : 0);
-                nr_state->nrss.cwin = path_x->cwin;
+                    nr_state->nrss.cwin = path_x->cwin;
 
-                if (nr_state->nrss.cwin >= nr_state->nrss.ssthresh) {
-                    nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
-                }*/
+                    if (nr_state->nrss.cwin >= nr_state->nrss.ssthresh) {
+                        nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
+                    }
+                } else {
+                    picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
+                    path_x->cwin = nr_state->nrss.cwin;
+                }
             }
             break;
         case picoquic_congestion_notification_seed_cwin:
