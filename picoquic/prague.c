@@ -176,6 +176,9 @@ static void picoquic_prague_reset(picoquic_cnx_t * cnx, picoquic_prague_state_t*
 {
     picoquic_prague_init_reno(pr_state, path_x);
     picoquic_prague_reset_l3s(cnx, pr_state, path_x);
+
+    /* HyStart++. */
+    memset(&pr_state->hystart_pp_state, 0, sizeof(pr_state->hystart_pp_state));
     picoquic_hystart_pp_reset(&pr_state->hystart_pp_state);
 }
 

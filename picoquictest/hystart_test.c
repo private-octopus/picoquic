@@ -98,15 +98,15 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
 /* TODO These test doesn't make sense currently. For debugging only. */
 int slow_start_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_disabled_t, 1000000, 1000000, 10, 20000, 5000, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_disabled_t, 1000000, 950000, 10, 20000, 5000, 0);
 }
 
 int hystart_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_t, 1000000, 1000000, 10, 20000, 5000, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_t, 1000000, 950000, 10, 20000, 5000, 0);
 }
 
 int hystart_pp_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_pp_t, 1000000, 1000000, 10, 20000, 5000, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_pp_t, 1000000, 1050000, 10, 20000, 5000, 0);
 }

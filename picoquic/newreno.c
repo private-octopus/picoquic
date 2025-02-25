@@ -177,6 +177,7 @@ void picoquic_newreno_sim_notify(
 typedef struct st_picoquic_newreno_state_t {
     picoquic_newreno_sim_state_t nrss;
     picoquic_min_max_rtt_t rtt_filter;
+    picoquic_hystart_pp_state_t hystart_pp_state;
 } picoquic_newreno_state_t;
 
 static void picoquic_newreno_reset(picoquic_newreno_state_t* nr_state, picoquic_path_t* path_x)
@@ -184,6 +185,10 @@ static void picoquic_newreno_reset(picoquic_newreno_state_t* nr_state, picoquic_
     memset(nr_state, 0, sizeof(picoquic_newreno_state_t));
     picoquic_newreno_sim_reset(&nr_state->nrss);
     path_x->cwin = nr_state->nrss.cwin;
+
+    /* HyStart++. */
+    memset(&nr_state->hystart_pp_state, 0, sizeof(nr_state->hystart_pp_state));
+    picoquic_hystart_pp_reset(&nr_state->hystart_pp_state);
 }
 
 static void picoquic_newreno_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t current_time)
@@ -198,6 +203,11 @@ static void picoquic_newreno_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x,
     if (nr_state != NULL) {
         picoquic_newreno_reset(nr_state, path_x);
         path_x->congestion_alg_state = nr_state;
+
+        /* HyStart++ */
+        if (IS_HYSTART_PP_ENABLED(cnx)) {
+            picoquic_hystart_pp_init(&nr_state->hystart_pp_state, cnx, path_x);
+        }
     }
     else {
         path_x->congestion_alg_state = NULL;
@@ -234,8 +244,16 @@ static void picoquic_newreno_notify(
 
             if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                 /* TODO app limited. */
+                /* TODO CSS increase. */
                 picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
                 path_x->cwin = nr_state->nrss.cwin;
+                /*path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged,
+                            (IS_HYSTART_PP_ENABLED(cnx)) ? IS_IN_CSS(nr_state->hystart_pp_state) : 0);
+                nr_state->nrss.cwin = path_x->cwin;
+
+                if (nr_state->nrss.cwin >= nr_state->nrss.ssthresh) {
+                    nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
+                }*/
             }
             break;
         case picoquic_congestion_notification_seed_cwin:
@@ -271,13 +289,51 @@ static void picoquic_newreno_notify(
 
                 /* HyStart. */
                 /* Using RTT increases as signal to get out of initial slow start */
-                if (picoquic_cc_hystart_test(&nr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
-                    cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
-                    /* RTT increased too much, get out of slow start! */
-                    nr_state->nrss.ssthresh = nr_state->nrss.cwin;
-                    nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
-                    path_x->cwin = nr_state->nrss.cwin;
-                    path_x->is_ssthresh_initialized = 1;
+                switch (cnx->hystart_alg) {
+                    case  picoquic_hystart_alg_hystart_t:
+                        if (picoquic_cc_hystart_test(&nr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                            cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
+                            /* RTT increased too much, get out of slow start! */
+                            nr_state->nrss.ssthresh = nr_state->nrss.cwin;
+                            nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
+                            path_x->cwin = nr_state->nrss.cwin;
+                            path_x->is_ssthresh_initialized = 1;
+                        }
+                        break;
+                    case picoquic_hystart_alg_hystart_pp_t:
+                        /* HyStart++. */
+                        /* Keep track of the minimum RTT seen so far. */
+                        picoquic_hystart_pp_keep_track(&nr_state->hystart_pp_state, ack_state->rtt_measurement);
+
+                        /* Switch between SS and CSS. */
+                        picoquic_hystart_pp_test(&nr_state->hystart_pp_state);
+
+                        /* Check if we reached the end of the round. */
+                        /* HyStart++ measures rounds using sequence numbers, as follows:
+                         * - When windowEnd is ACKed, the current round ends and windowEnd is set to SND.NXT.
+                         */
+                        if (picoquic_cc_get_ack_number(cnx, path_x) != UINT64_MAX && picoquic_cc_get_ack_number(cnx, path_x) >= nr_state->hystart_pp_state.current_round.window_end) {
+                            /* Round has ended. */
+                            if (IS_IN_CSS(nr_state->hystart_pp_state)) {
+                                /* In CSS increase CSS round counter. */
+                                nr_state->hystart_pp_state.css_round_count++;
+
+                                /* Enter CA if css round counter > max css rounds. */
+                                if (nr_state->hystart_pp_state.css_round_count >= PICOQUIC_HYSTART_PP_CSS_ROUNDS) {
+                                    /* RTT increased too much, get out of slow start! */
+                                    nr_state->nrss.ssthresh = nr_state->nrss.cwin;
+                                    nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
+                                    path_x->cwin = nr_state->nrss.cwin;
+                                    path_x->is_ssthresh_initialized = 1;
+                                }
+                            }
+
+                            /* Start new round. */
+                            picoquic_hystart_pp_start_new_round(&nr_state->hystart_pp_state, cnx, path_x);
+                        }
+                        break;
+                    default:
+                        break;
                 }
             }
             break;
