@@ -366,14 +366,24 @@ typedef struct st_picoquic_stream_data_node_t {
     uint8_t data[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_stream_data_node_t;
 
-/* Data structure used to hold chunk of stream data queued by application */
+/* Data structure used to hold chunk of stream data queued by application
+ * The function block_send_done_fn is documented if the application uses
+ * picoquic_add_block_to_stream(). It is called from the internal
+ * function picoquic_release_stream_queue_node() when the block
+ * has been sent.
+ */
+
 typedef struct st_picoquic_stream_queue_node_t {
     picoquic_quic_t* quic;
     struct st_picoquic_stream_queue_node_t* next_stream_data;
+    picoquic_block_sent_fn block_sent_fn;
+    void* block_sent_ctx;
     uint64_t offset;  /* Stream offset of the first octet in "bytes" */
     size_t length;    /* Number of octets in "bytes" */
     uint8_t* bytes;
 } picoquic_stream_queue_node_t;
+
+picoquic_stream_queue_node_t* picoquic_release_stream_queue_node(picoquic_stream_queue_node_t* stream_data);
 
 /*
  * The simple packet structure is used to store packets that

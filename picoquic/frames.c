@@ -245,13 +245,7 @@ uint8_t * picoquic_format_stream_reset_frame(picoquic_cnx_t* cnx, picoquic_strea
 
             /* Free the queued data */
             while (stream->send_queue != NULL) {
-                picoquic_stream_queue_node_t* next = stream->send_queue->next_stream_data;
-
-                if (stream->send_queue->bytes != NULL) {
-                    free(stream->send_queue->bytes);
-                }
-                free(stream->send_queue);
-                stream->send_queue = next;
+                stream->send_queue = picoquic_release_stream_queue_node(stream->send_queue);
             }
             (void)picoquic_delete_stream_if_closed(cnx, stream);
         }
@@ -1776,10 +1770,7 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
 
                     stream->send_queue->offset += length;
                     if (stream->send_queue->offset >= stream->send_queue->length) {
-                        picoquic_stream_queue_node_t* next = stream->send_queue->next_stream_data;
-                        free(stream->send_queue->bytes);
-                        free(stream->send_queue);
-                        stream->send_queue = next;
+                        stream->send_queue = picoquic_release_stream_queue_node(stream->send_queue);
                     }
 
                     stream->sent_offset += length;
@@ -2423,10 +2414,7 @@ uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t
 
                     stream->send_queue->offset += length;
                     if (stream->send_queue->offset >= stream->send_queue->length) {
-                        picoquic_stream_queue_node_t* next = stream->send_queue->next_stream_data;
-                        free(stream->send_queue->bytes);
-                        free(stream->send_queue);
-                        stream->send_queue = next;
+                        stream->send_queue = picoquic_release_stream_queue_node(stream->send_queue);
                     }
 
                     stream->sent_offset += length;

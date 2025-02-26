@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.31.0
+        VERSION 1.1.32.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -145,6 +145,7 @@ set(PICOQUIC_LOGLIB_HEADERS
 set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
     picoquictest/ack_frequency_test.c
+    picoquictest/add_block_test.c
     picoquictest/app_limited.c
     picoquictest/bytestream_test.c
     picoquictest/cc_compete_test.c

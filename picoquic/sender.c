@@ -209,8 +209,25 @@ int picoquic_mark_high_priority_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
     return ret;
 }
 
-int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
-    const uint8_t* data, size_t length, int set_fin, void * app_stream_ctx)
+/* Handling of stream_queue_node: allocated when queuing data, freed when the
+* last bit is sent, or the 
+ */
+picoquic_stream_queue_node_t* picoquic_release_stream_queue_node(picoquic_stream_queue_node_t* stream_data)
+{
+    picoquic_stream_queue_node_t* next = stream_data->next_stream_data;
+    if (stream_data->block_sent_fn) {
+        stream_data->block_sent_fn(stream_data->bytes, stream_data->block_sent_ctx);
+    }
+    else {
+        free(stream_data->bytes);
+    }
+    free(stream_data);
+    return next;
+}
+
+int picoquic_add_block_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
+    const uint8_t* data, size_t length, int set_fin, void* app_stream_ctx,
+    picoquic_block_sent_fn block_sent_fn, void* block_sent_ctx)
 {
     int ret = 0;
     picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
@@ -221,7 +238,8 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
             if (length > 0) {
                 ret = -1;
             }
-        } else {
+        }
+        else {
             stream->fin_requested = 1;
         }
     }
@@ -236,35 +254,40 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
             malloc(sizeof(picoquic_stream_queue_node_t));
         if (stream_data == 0) {
             ret = -1;
-        } else {
-            stream_data->bytes = (uint8_t*)malloc(length);
-
-            if (stream_data->bytes == NULL) {
-                free(stream_data);
-                stream_data = NULL;
-                ret = -1;
-            } else {
-                picoquic_stream_queue_node_t** pprevious = &stream->send_queue;
-                picoquic_stream_queue_node_t* next = stream->send_queue;
-
-                memcpy(stream_data->bytes, data, length);
-                stream_data->length = length;
-                stream_data->offset = 0;
-                stream_data->next_stream_data = NULL;
-
-                while (next != NULL) {
-                    pprevious = &next->next_stream_data;
-                    next = next->next_stream_data;
-                }
-
-                *pprevious = stream_data;
-            }
         }
+        else if (block_sent_fn != NULL) {
+                stream_data->bytes = (uint8_t*)data;
+        }
+        else if ((stream_data->bytes = (uint8_t*)malloc(length)) != NULL) {
+            memcpy(stream_data->bytes, data, length);
+        }
+        else {
+            free(stream_data);
+            stream_data = NULL;
+            ret = -1;
+        }
+        if (ret == 0) {
+            picoquic_stream_queue_node_t** pprevious = &stream->send_queue;
+            picoquic_stream_queue_node_t* next = stream->send_queue;
 
+            /* Complete the stream_data field */
+            stream_data->length = length;
+            stream_data->offset = 0;
+            stream_data->next_stream_data = NULL;
+            stream_data->block_sent_fn = block_sent_fn;
+            stream_data->block_sent_ctx = block_sent_ctx;
+
+            /* Go to the end of the send queue and queue the stream data there */
+            while (next != NULL) {
+                pprevious = &next->next_stream_data;
+                next = next->next_stream_data;
+            }
+            *pprevious = stream_data;
+        }
+        /* Reschedule the connection */
         picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
-    }
 
-    if (ret == 0) {
+        /* Statistics and context */
         cnx->nb_bytes_queued += length;
         stream->is_active = 0;
         stream->app_stream_ctx = app_stream_ctx;
@@ -273,10 +296,16 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
     return ret;
 }
 
+int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
+    const uint8_t* data, size_t length, int set_fin, void * app_stream_ctx)
+{
+    return picoquic_add_block_to_stream(cnx, stream_id, data, length, set_fin, app_stream_ctx, NULL, NULL);
+}
+
 int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     const uint8_t* data, size_t length, int set_fin)
 {
-    return picoquic_add_to_stream_with_ctx(cnx, stream_id, data, length, set_fin, NULL);
+    return picoquic_add_block_to_stream(cnx, stream_id, data, length, set_fin, NULL, NULL, NULL);
 }
 
 int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t expected_data_size)

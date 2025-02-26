@@ -403,6 +403,7 @@ static const picoquic_test_def_t test_table[] = {
     { "quality_update", quality_update_test },
     { "direct_receive", direct_receive_test },
     { "address_discovery", address_discovery_test },
+    { "add_block", add_block_test },
     { "app_limit_cc", app_limit_cc_test },
     { "app_limited_bbr", app_limited_bbr_test },
     { "app_limited_cubic", app_limited_cubic_test },
