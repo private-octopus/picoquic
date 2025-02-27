@@ -1341,7 +1341,6 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
     picoquic_stream_head_t* stream = first_stream;
     picoquic_stream_head_t* found_stream = NULL;
 
-
     /* Look for a ready stream */
     while (stream != NULL) {
         int has_data = 0;

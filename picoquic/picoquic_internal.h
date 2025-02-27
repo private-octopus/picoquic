@@ -374,7 +374,6 @@ typedef struct st_picoquic_stream_data_node_t {
  */
 
 typedef struct st_picoquic_stream_queue_node_t {
-    picoquic_quic_t* quic;
     struct st_picoquic_stream_queue_node_t* next_stream_data;
     picoquic_block_sent_fn block_sent_fn;
     void* block_sent_ctx;

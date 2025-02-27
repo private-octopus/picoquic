@@ -39,10 +39,11 @@
 * - verify that the received content matches what was sent.
  */
 
+#define ADD_BLOCK_TEST_ALPN "ADD_BLOCK_TEST"
 #define add_block_test_unique_1 0x1111111111111111uul
 #define add_block_test_unique_2 0x2222222222222222uul
 #define add_block_test_max_block_nb 10
-#define add_block_test_max_sent size_t(1<<20)
+#define add_block_test_max_sent 0x100000
 
 #define add_block_test_block_unknown 1
 #define add_block_test_block_not_sent 2
@@ -64,7 +65,7 @@ typedef struct st_add_block_test_stream_t {
 
 typedef struct st_add_block_test_block_t {
     /* we only use one stream, but we use this data type to test that the context is passed correctly */
-    add_block_test_ctx_t* block_test_ctx;
+    struct st_add_block_test_ctx_t* block_test_ctx;
     int block_id;
     int block_was_sent;
     int block_was_confirmed;
@@ -87,6 +88,7 @@ typedef struct st_add_block_test_ctx_t {
     int fin_sent;
     int fin_recv;
     add_block_test_block_t block[add_block_test_max_block_nb];
+    int next_block_id;
     add_block_test_stream_t client_stream;
     add_block_test_stream_t server_stream;
 } add_block_test_ctx_t;
@@ -100,20 +102,20 @@ int picoquic_add_block_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     const uint8_t* data, size_t length, int set_fin, void* app_stream_ctx,
     picoquic_block_sent_fn block_sent_fn, void* block_sent_ctx);
 
-void add_block_test_sent_fn(const uint8_t* data, void* v_add_block_ctx)
+void add_block_test_sent_fn(const uint8_t* data, void* v_block_sent_ctx)
 {
     add_block_test_block_t* block_sent_ctx = (add_block_test_block_t*)v_block_sent_ctx;
 
     if (block_sent_ctx->block_test_ctx != current_ctx ||
         block_sent_ctx->block_id >= add_block_test_max_block_nb ||
-        &block_sent_ctx->block[block_sent_ctx->block_id] != block_sent_ctx) {
+        &block_sent_ctx->block_test_ctx->block[block_sent_ctx->block_id] != block_sent_ctx) {
         /* This is really bad. */
         error_found |= add_block_test_block_unknown;
     }
     else if (!block_sent_ctx->block_was_sent) {
         error_found |= add_block_test_block_not_sent;
     }
-    else if (!block_sent_ctx->block_was_confirmed) {
+    else if (block_sent_ctx->block_was_confirmed) {
         error_found |= add_block_test_block_already_reported;
     }
     else {
@@ -126,8 +128,8 @@ void add_block_test_sent_fn(const uint8_t* data, void* v_add_block_ctx)
 
 void add_block_test_send(add_block_test_ctx_t* add_block_ctx, int block_id)
 {
-    for (int i = 0; i < block_id; i++) {
-        int new_id = block_id + i;
+    for (int i = 0; i <= block_id; i++) {
+        int new_id = add_block_ctx->next_block_id;
 
         if (new_id >= add_block_test_max_block_nb || add_block_ctx->send_offset >= add_block_ctx->test_data_length) {
             /* we are done */
@@ -150,13 +152,16 @@ void add_block_test_send(add_block_test_ctx_t* add_block_ctx, int block_id)
                 set_fin = 1;
             }
             add_block_ctx->block[new_id].block_was_sent = 1;
-            add_block_ctx->block[new_id].is_trigger = (i == 0);
+            add_block_ctx->block[new_id].block_is_trigger = (i == 0);
             add_block_ctx->block[new_id].block_id = new_id;
+            add_block_ctx->block[new_id].block_test_ctx = add_block_ctx;
+            add_block_ctx->next_block_id = new_id + 1;
+            
             if (picoquic_add_block_to_stream(add_block_ctx->cnx_client,
                 add_block_ctx->stream_id,
                 add_block_ctx->test_data + add_block_ctx->send_offset,
                 length, set_fin, &add_block_ctx->client_stream,
-                add_block_test_sent_fn, &add_block_ctx->block[new_id]) == 0) {
+                add_block_test_sent_fn, &add_block_ctx->block[new_id]) != 0) {
                 error_found |= add_block_test_block_send_failed;
                 break;
             }
@@ -169,15 +174,17 @@ void add_block_test_send(add_block_test_ctx_t* add_block_ctx, int block_id)
 
 int add_block_test_recv(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* add_block_ctx, void* v_stream_ctx)
+    picoquic_call_back_event_t fin_or_event, add_block_test_ctx_t* add_block_ctx, void* v_stream_ctx)
 {
+    int ret = 0;
+
     if (cnx == add_block_ctx->cnx_client) {
         /* the client is not expected to receive data. It MAY receive a FIN mark */
         if (fin_or_event != picoquic_callback_stream_fin || length > 0) {
             ret = -1;
         }
     }
-    else if (picoquic_get_quic(cnx) != add_block_ctx->quic[0]) {
+    else if (cnx->quic != add_block_ctx->quic[1]) {
         /* Not from the expected server */
         ret = -1;
     }
@@ -190,12 +197,15 @@ int add_block_test_recv(picoquic_cnx_t* cnx,
         ret = -1;
     }
     else {
-        memcpy(add_block_ctx->recv_data + add_block_ctx->recv_length, bytes, length);
+        if (length > 0) {
+            memcpy(add_block_ctx->recv_data + add_block_ctx->recv_length, bytes, length);
+        }
         add_block_ctx->recv_length += length;
         if (fin_or_event == picoquic_callback_stream_fin) {
             add_block_ctx->fin_recv = 1;
         }
     }
+    return ret;
 }
 
 int add_block_test_callback(picoquic_cnx_t* cnx,
@@ -203,7 +213,7 @@ int add_block_test_callback(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
-    add_block_test_ctx_t* add_block_ctx = (sample_add_block_ctx_t*)callback_ctx;
+    add_block_test_ctx_t* add_block_ctx = (add_block_test_ctx_t*)callback_ctx;
 
     if (add_block_ctx == NULL) {
         /* This should never happen, because the callback context is initialized
@@ -216,7 +226,7 @@ int add_block_test_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_data:
         case picoquic_callback_stream_fin:
             /* Data arrival on stream #x, maybe with fin mark */
-
+            ret = add_block_test_recv(cnx, stream_id, bytes, length, fin_or_event, add_block_ctx, v_stream_ctx);
             break;
         case picoquic_callback_stop_sending: /* Should not happen, treated as reset */
             ret = -1;
@@ -229,7 +239,8 @@ int add_block_test_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_application_close: /* Received application close */
             fprintf(stdout, "Connection closed.\n");
             /* Mark the connection as completed */
-            add_block_ctx->is_disconnected = 1;
+            add_block_ctx->fin_sent = 1;
+            add_block_ctx->fin_recv = 1;
             /* Remove the application callback */
             picoquic_set_callback(cnx, NULL, NULL);
             break;
@@ -406,10 +417,6 @@ int add_block_test_is_finished(add_block_test_ctx_t* add_block_ctx)
 
 void add_block_test_delete_ctx(add_block_test_ctx_t* add_block_ctx)
 {
-    /* Delete the connections */
-    while (add_block_ctx->first_cnx != NULL) {
-        add_block_test_delete_cnx_context(add_block_ctx->first_cnx);
-    }
     /* Delete the links */
     for (int i = 0; i < 2; i++) {
         if (add_block_ctx->link[i] != NULL) {
@@ -429,23 +436,22 @@ void add_block_test_delete_ctx(add_block_test_ctx_t* add_block_ctx)
     }
 
     if (add_block_ctx->recv_data) {
-        free(add_block_ctx->test_data);
-        add_block_ctx->test_data = NULL;
+        free(add_block_ctx->recv_data);
+        add_block_ctx->recv_data = NULL;
     }
 
     /* Free the context */
     free(add_block_ctx);
 }
 
-add_block_test_ctx_t* add_block_test_configure(int media_test_id, add_block_test_spec_t* spec)
+add_block_test_ctx_t* add_block_test_configure()
 {
     int ret = 0;
     add_block_test_ctx_t* add_block_ctx = NULL;
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
-    picoquic_connection_id_t icid = { { 0xed, 0x1a, 0x7e, 0x57, 0, 0, 0, 0}, 8 };
-    icid.id[4] = media_test_id;
+    picoquic_connection_id_t icid = { { 0xad, 0xdb, 0x10, 0xc8, 0, 0, 0, 0}, 8 };
 
     ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
 
@@ -473,17 +479,10 @@ add_block_test_ctx_t* add_block_test_configure(int media_test_id, add_block_test
         add_block_ctx->quic[1] = picoquic_create(4,
             test_server_cert_file, test_server_key_file, test_server_cert_store_file,
             ADD_BLOCK_TEST_ALPN, add_block_test_callback, (void*)add_block_ctx, NULL, NULL, NULL,
-            add_block_ctx->simulated_time, &add_block_ctx->simulated_time, NULL, add_block_test_ticket_encrypt_key, sizeof(add_block_test_ticket_encrypt_key));
+            add_block_ctx->simulated_time, &add_block_ctx->simulated_time, NULL, NULL, 0);
 
         if (add_block_ctx->quic[0] == NULL || add_block_ctx->quic[1] == NULL) {
             ret = -1;
-        }
-
-        if (spec->ccalgo != NULL) {
-            for (int i = 0; i < 2 && ret == 0; i++) {
-                picoquic_set_default_congestion_algorithm(add_block_ctx->quic[i], spec->ccalgo);
-                ret = picoquic_set_binlog(add_block_ctx->quic[i], ".");
-            }
         }
     }
 
@@ -498,8 +497,7 @@ add_block_test_ctx_t* add_block_test_configure(int media_test_id, add_block_test
         }
         /* register the links */
         for (int i = 0; i < 2; i++) {
-            add_block_ctx->link[i] = picoquictest_sim_link_create(0.01,
-                (spec->link_latency == 0) ? 10000 : spec->link_latency, NULL, 0, 0);
+            add_block_ctx->link[i] = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
             if (add_block_ctx->link[i] == NULL) {
                 ret = -1;
                 break;
@@ -515,9 +513,15 @@ add_block_test_ctx_t* add_block_test_configure(int media_test_id, add_block_test
             ret = -1;
         }
         else {
+            uint64_t rdx = 0xdeeddaadd00dd11dull;
             add_block_ctx->test_data_length = add_block_test_max_sent;
 
-            picoquic_public_random(add_block_ctx->test_data, add_block_ctx->test_data_length);
+            for (size_t i = 0; i < add_block_ctx->test_data_length; i++) {
+                add_block_ctx->test_data[i] = (uint8_t)(rdx & 0xff);
+                rdx *= 101;
+                rdx += 0xbadc0ffee;
+                rdx += i;
+            }
             memset(add_block_ctx->recv_data, 0, add_block_ctx->test_data_length);
         }
     }
@@ -528,7 +532,7 @@ add_block_test_ctx_t* add_block_test_configure(int media_test_id, add_block_test
             icid, picoquic_null_connection_id,
             (struct sockaddr*)&add_block_ctx->addr[1], add_block_ctx->simulated_time, 0, PICOQUIC_TEST_SNI, ADD_BLOCK_TEST_ALPN, 1);
         /* Start the connection and create the context */
-        if (add_block_ctx->cnx_client = NULL) {
+        if (add_block_ctx->cnx_client == NULL) {
             ret = -1;
         }
         else {
@@ -537,8 +541,8 @@ add_block_test_ctx_t* add_block_test_configure(int media_test_id, add_block_test
             /* Queue the first block */
             add_block_test_send(add_block_ctx, 0);
             /* start the connection */
-            if (picoquic_start_client_cnx(cnx) != 0) {
-                picoquic_delete_cnx(cnx);
+            if (picoquic_start_client_cnx(add_block_ctx->cnx_client) != 0) {
+                picoquic_delete_cnx(add_block_ctx->cnx_client);
                 ret = -1;
             }
         }
@@ -582,7 +586,8 @@ int add_block_test()
     int is_finished = 0;
 
     /* set the configuration */
-    add_block_test_ctx_t* add_block_ctx = add_block_test_configure(media_test_id, spec);
+    add_block_test_ctx_t* add_block_ctx = add_block_test_configure();
+    current_ctx = add_block_ctx;
     if (add_block_ctx == NULL) {
         ret = -1;
     }

@@ -149,6 +149,7 @@
   <ItemGroup>
     <ClCompile Include="ack_frequency_test.c" />
     <ClCompile Include="ack_of_ack_test.c" />
+    <ClCompile Include="add_block_test.c" />
     <ClCompile Include="app_limited.c" />
     <ClCompile Include="bytestream_test.c" />
     <ClCompile Include="cc_compete_test.c" />

@@ -214,13 +214,14 @@ int picoquic_mark_high_priority_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
  */
 picoquic_stream_queue_node_t* picoquic_release_stream_queue_node(picoquic_stream_queue_node_t* stream_data)
 {
-    picoquic_stream_queue_node_t* next = stream_data->next_stream_data;
+    picoquic_stream_queue_node_t* next;
     if (stream_data->block_sent_fn) {
         stream_data->block_sent_fn(stream_data->bytes, stream_data->block_sent_ctx);
     }
     else {
         free(stream_data->bytes);
     }
+    next = stream_data->next_stream_data;
     free(stream_data);
     return next;
 }
@@ -283,6 +284,8 @@ int picoquic_add_block_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
                 next = next->next_stream_data;
             }
             *pprevious = stream_data;
+            /* add stream to output streams */
+            picoquic_insert_output_stream(cnx, stream);
         }
         /* Reschedule the connection */
         picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));

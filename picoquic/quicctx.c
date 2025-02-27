@@ -3357,7 +3357,7 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
 void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir)
 {
     uint64_t old_rank = STREAM_RANK_FROM_ID(old_limit);
-    uint64_t first_new_id = STREAM_ID_FROM_RANK(old_rank + 1ull, cnx->client_mode, !is_bidir);
+    uint64_t first_new_id = STREAM_ID_FROM_RANK(old_rank + (is_bidir && cnx->client_mode)?1ull:0ull, cnx->client_mode, !is_bidir);
     picoquic_stream_head_t* stream = picoquic_find_stream(cnx, first_new_id );
 
     while (stream) {
