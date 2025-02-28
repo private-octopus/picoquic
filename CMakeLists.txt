@@ -18,6 +18,7 @@ option(DISABLE_DEBUG_PRINTF "Disable Picoquic debug output" OFF)
 option(ENABLE_ASAN "Enable AddressSanitizer (ASAN) for debugging" OFF)
 option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan) for debugging" OFF)
 option(BUILD_DEMO "Build picoquicdemo" ON)
+option(BUILD_MULTICAST "Build multicast sample" ON)
 option(BUILD_HTTP "Build picohttp" ON)
 option(BUILD_LOGLIB "Build picoquic-log" ON)
 option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
@@ -342,7 +343,7 @@ target_link_libraries(picoquic-core
         Threads::Threads)
 set_picoquic_compile_settings(picoquic-core)
 
-if (BUILD_DEMO OR BUILD_LOGREADER OR (BUILD_TESTING AND picoquic_BUILD_TESTS))
+if (BUILD_DEMO OR BUILD_MULTICAST OR BUILD_LOGREADER OR (BUILD_TESTING AND picoquic_BUILD_TESTS))
     if (NOT BUILD_LOGLIB)
         set(BUILD_LOGLIB ON)
     endif()
@@ -398,6 +399,23 @@ if (BUILD_DEMO)
             picohttp-core)
     target_include_directories(picoquicdemo PRIVATE picohttp)
     set_picoquic_compile_settings(picoquicdemo)
+endif()
+
+if (BUILD_MULTICAST)
+    add_executable(multicast
+        multicast_sample/multicast.c
+        multicast_sample/multicast_server.c
+        multicast_sample/multicast_client.c
+        multicast_sample/multicast_background.c)
+    target_link_libraries(multicast
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picoquic-log
+            picoquic-core
+            picohttp-core)
+    set_picoquic_compile_settings(multicast)
 endif()
 
 if (BUILD_LOGREADER)
@@ -486,6 +504,11 @@ endif()
 
 if (TARGET picoquicdemo)
     install(TARGETS picoquicdemo
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+if (TARGET multicast)
+    install(TARGETS multicast
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
