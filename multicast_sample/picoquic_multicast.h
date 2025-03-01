@@ -1,31 +1,32 @@
 /*
-* Author: Christian Huitema
-* Copyright (c) 2020, Private Octopus, Inc.
-* All rights reserved.
-*
-* Permission to use, copy, modify, and distribute this software for any
-* purpose with or without fee is hereby granted, provided that the above
-* copyright notice and this permission notice appear in all copies.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-* DISCLAIMED. IN NO EVENT SHALL Private Octopus, Inc. BE LIABLE FOR ANY
-* DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-* ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Author: Christian Huitema
+ * Copyright (c) 2020, Private Octopus, Inc.
+ * All rights reserved.
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL Private Octopus, Inc. BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #ifndef PICOQUIC_MULTICAST_H
 #define PICOQUIC_MULTICAST_H
-/* Header file for the picoquic multicast project. 
+/* Header file for the picoquic multicast project.
  * It contains the definitions common to client and server */
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #define PICOQUIC_MULTICAST_ALPN "picoquic_multicast"
@@ -45,12 +46,12 @@ extern "C" {
 
 #define PICOQUIC_MULTICAST_BACKGROUND_MAX_FILES 32
 
-int picoquic_multicast_client(char const* server_name, int server_port, char const* default_dir,
-    int nb_files, char const** file_names);
+    int picoquic_multicast_client(char const *server_name, int server_port, char const *default_dir,
+                                  int nb_files, char const **file_names);
 
-int picoquic_multicast_background(char const* server_name, int server_port, char const* default_dir);
+    int picoquic_multicast_background(char const *server_name, int server_port, char const *default_dir);
 
-int picoquic_multicast_server(int server_port, const char* pem_cert, const char* pem_key, const char * default_dir);
+    int picoquic_multicast_server(int server_port, const char *pem_cert, const char *pem_key, const char *default_dir);
 
 #ifdef __cplusplus
 }
