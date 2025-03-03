@@ -41,10 +41,11 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include <picoquic.h>
 #include <picosocks.h>
 #include <picoquic_utils.h>
 #include <autoqlog.h>
+#include "picoquic.h"
+#include "picoquic_internal.h"
 #include "picoquic_multicast.h"
 #include "picoquic_packet_loop.h"
 
@@ -462,6 +463,10 @@ int picoquic_multicast_server(int server_port, const char *server_cert, const ch
         picoquic_set_log_level(quic, 1);
 
         picoquic_set_key_log_file_from_env(quic);
+
+        // Always accept enable multipath
+        picoquic_set_default_multipath_option(quic, 1);
+        printf("Accept enable multipath: %s.\n", (quic->default_multipath_option) ? "Yes" : "No");
     }
 
     /* Wait for packets using the wait loop provided in the library.

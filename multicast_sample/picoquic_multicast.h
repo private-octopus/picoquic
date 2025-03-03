@@ -29,8 +29,15 @@ extern "C"
 {
 #endif
 
-#define PICOQUIC_MULTICAST_ALPN "picoquic_multicast"
-#define PICOQUIC_MULTICAST_SNI "test.example.com"
+// The demo program currently uses fixed example values below
+#define PICOQUIC_MULTICAST_ALPN "picoquic_multicast_test"
+#define PICOQUIC_MULTICAST_SNI "localhost"
+#define PICOQUIC_MULTICAST_SOURCE_IP "127.0.0.1"
+#define PICOQUIC_MULTICAST_GROUP_IP "232.10.1.12"
+#define PICOQUIC_MULTICAST_GROUP_PORT 1234
+
+#define PICOQUIC_MULTICAST_CLIENT_IP "127.0.0.1"
+#define PICOQUIC_MULTICAST_CLIENT_PORT 4422
 
 #define PICOQUIC_MULTICAST_NO_ERROR 0
 #define PICOQUIC_MULTICAST_INTERNAL_ERROR 0x101

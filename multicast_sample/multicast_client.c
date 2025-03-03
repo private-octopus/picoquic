@@ -42,6 +42,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <picoquic.h>
+#include "picoquic_internal.h"
 #include <picoquic_utils.h>
 #include <picosocks.h>
 #include <autoqlog.h>
@@ -92,13 +93,23 @@ typedef struct st_multicast_client_ctx_t
 {
     picoquic_cnx_t *cnx;
     char const *default_dir;
+    char const *saved_alpn;
     char const **file_names;
     multicast_client_stream_ctx_t *first_stream;
     multicast_client_stream_ctx_t *last_stream;
+    struct sockaddr_storage multicast_source_address;
+    struct sockaddr_storage multicast_group_address;
+    struct sockaddr_storage multicast_local_address;
+    int notified_ready;
     int nb_files;
     int nb_files_received;
     int nb_files_failed;
     int is_disconnected;
+    int multipath_allowed;
+    int multipath_initiated;
+    int multipath_state;
+    int multipath_probe_done;
+    uint16_t local_port;
 } multicast_client_ctx_t;
 
 static int multicast_client_create_stream(picoquic_cnx_t *cnx,
@@ -212,6 +223,79 @@ static void multicast_client_free_context(multicast_client_ctx_t *client_ctx)
     client_ctx->last_stream = NULL;
 }
 
+/* Create the required additional path for testing multicast data sending */
+int multicast_client_create_additional_path(picoquic_cnx_t *cnx, multicast_client_ctx_t *cb_ctx)
+{
+    int ret = 0;
+    struct sockaddr *addr_source = NULL;
+    struct sockaddr *addr_group = NULL;
+    struct sockaddr *addr_local = NULL;
+    int need_to_wait = 0;
+
+    // TODO MC: Check if ports are correct below (currently set to zero)
+
+    if (cb_ctx->multipath_state != 0)
+    {
+        fprintf(stdout, "Error while creating additional path: multipath_state is already 1\n");
+        return 1;
+    }
+
+    if (picoquic_store_text_addr(&cb_ctx->multicast_source_address, PICOQUIC_MULTICAST_SOURCE_IP, 0) != 0)
+    {
+        fprintf(stdout, "Error while parsing PICOQUIC_MULTICAST_SOURCE_IP: %s\n", PICOQUIC_MULTICAST_SOURCE_IP);
+        return 1;
+    }
+
+    if (picoquic_store_text_addr(&cb_ctx->multicast_group_address, PICOQUIC_MULTICAST_GROUP_IP, PICOQUIC_MULTICAST_GROUP_PORT) != 0)
+    {
+        fprintf(stdout, "Error while parsing PICOQUIC_MULTICAST_GROUP_IP: %s:%d\n", PICOQUIC_MULTICAST_GROUP_IP, PICOQUIC_MULTICAST_GROUP_PORT);
+        return 1;
+    }
+
+    if (picoquic_store_text_addr(&cb_ctx->multicast_local_address, PICOQUIC_MULTICAST_CLIENT_IP, 0) != 0)
+    {
+
+        fprintf(stdout, "Error while parsing PICOQUIC_MULTICAST_CLIENT_IP: %s\n", PICOQUIC_MULTICAST_GROUP_IP);
+        return 1;
+    }
+
+    addr_source = (struct sockaddr *)&cb_ctx->multicast_source_address;
+    addr_group = (struct sockaddr *)&cb_ctx->multicast_group_address;
+    addr_local = (struct sockaddr *)&cb_ctx->multicast_local_address;
+
+    // TODO MC: Rewrite this to join the multicast group instead of just creating an additional path to the multicast source IP
+
+    cb_ctx->multipath_state = 1; /* Unless we detect a transient error, mark this path as tried */
+    if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx, addr_source,
+                                          addr_local, 0, picoquic_get_quic_time(picoquic_get_quic_ctx(cnx)), 0)) != 0)
+    {
+        /* Check whether the code returned a transient error */
+        if (ret == PICOQUIC_ERROR_PATH_ID_BLOCKED ||
+            ret == PICOQUIC_ERROR_PATH_CID_BLOCKED ||
+            ret == PICOQUIC_ERROR_PATH_NOT_READY)
+        {
+            cb_ctx->multipath_state = 0; /* oops, not ready yet, need to keep looping */
+            need_to_wait = 1;
+            ret = 0;
+        }
+        else
+        {
+            fprintf(stdout, "Probe new path failed with exit code %d\n", ret);
+        }
+    }
+    else
+    {
+        fprintf(stdout, "New path added, total paths available: %d\n", cb_ctx->cnx->nb_paths);
+    }
+
+    if (!need_to_wait)
+    {
+        cb_ctx->multipath_probe_done = 1;
+    }
+
+    return ret;
+}
+
 int multicast_client_callback(picoquic_cnx_t *cnx,
                               uint64_t stream_id, uint8_t *bytes, size_t length,
                               picoquic_call_back_event_t fin_or_event, void *callback_ctx, void *v_stream_ctx)
@@ -231,6 +315,11 @@ int multicast_client_callback(picoquic_cnx_t *cnx,
     {
         switch (fin_or_event)
         {
+        // TODO MC: Maybe set flag here to react to in the other callback
+        case picoquic_callback_next_path_allowed:
+            client_ctx->multipath_allowed = 1;
+            fprintf(stdout, "Next path allowed!\n");
+            break;
         case picoquic_callback_stream_data:
         case picoquic_callback_stream_fin:
             /* Data arrival on stream #x, maybe with fin mark */
@@ -355,9 +444,14 @@ int multicast_client_callback(picoquic_cnx_t *cnx,
             }
             break;
         case picoquic_callback_stateless_reset:
-        case picoquic_callback_close:             /* Received connection close */
-        case picoquic_callback_application_close: /* Received application close */
-            fprintf(stdout, "Connection closed.\n");
+            fprintf(stdout, "Received a stateless reset.\n");
+            break;
+        case picoquic_callback_close:
+            fprintf(stdout, "Received request to close connection\n");
+            client_ctx->is_disconnected = 1;
+            break;
+        case picoquic_callback_application_close:
+            fprintf(stdout, "Received request to close application.\n");
             /* Mark the connection as completed */
             client_ctx->is_disconnected = 1;
             /* Remove the application callback */
@@ -443,7 +537,7 @@ int multicast_client_callback(picoquic_cnx_t *cnx,
 /* Multicast client,  loop call back management.
  * The function "picoquic_packet_loop" will call back the application when it is ready to
  * receive or send packets, after receiving a packet, and after sending a packet.
- * We implement here a minimal callback that instruct  "picoquic_packet_loop" to exit
+ * We implement here a minimal callback that instruct "picoquic_packet_loop" to exit
  * when the connection is complete.
  */
 
@@ -465,12 +559,83 @@ static int multicast_client_loop_cb(picoquic_quic_t *quic, picoquic_packet_loop_
             fprintf(stdout, "Waiting for packets.\n");
             break;
         case picoquic_packet_loop_after_receive:
+            // TODO MC: The code below is adapted from picoquicdemo, currently not executed.
+            // It seems that the state is never be reached
+            if (picoquic_get_cnx_state(cb_ctx->cnx) == picoquic_state_client_almost_ready && cb_ctx->notified_ready == 0)
+            {
+                // TODO MC: Check if handshake check below is needed
+                /* if almost ready, display results of negotiation */
+                if (picoquic_tls_is_psk_handshake(cb_ctx->cnx))
+                {
+                    fprintf(stdout, "The session was properly resumed!\n");
+                    picoquic_log_app_message(cb_ctx->cnx,
+                                             "%s", "The session was properly resumed!");
+                }
+
+                // TODO MC: The following is copied from picoquicdemo, check if 0-RTT should be supported
+                if (cb_ctx->cnx->zero_rtt_data_accepted)
+                {
+                    fprintf(stdout, "Zero RTT data is accepted!\n");
+                    picoquic_log_app_message(cb_ctx->cnx,
+                                             "%s", "Zero RTT data is accepted!");
+                }
+
+                if (cb_ctx->cnx->alpn != NULL)
+                {
+                    fprintf(stdout, "Negotiated ALPN: %s\n", cb_ctx->cnx->alpn);
+                    picoquic_log_app_message(cb_ctx->cnx,
+                                             "Negotiated ALPN: %s", cb_ctx->cnx->alpn);
+                    cb_ctx->saved_alpn = picoquic_string_duplicate(cb_ctx->cnx->alpn);
+                }
+                cb_ctx->notified_ready = 1;
+            }
+
+            // TODO MC: Check conditions here (in which state the new path will be opened?)
+
+            if (picoquic_get_cnx_state(cb_ctx->cnx) > picoquic_state_client_almost_ready && cb_ctx->multipath_initiated == 0)
+            {
+                int is_already_allowed = 0;
+                if ((ret = picoquic_subscribe_new_path_allowed(cb_ctx->cnx, &is_already_allowed)) == 0)
+                {
+                    if (is_already_allowed)
+                    {
+                        ret = multicast_client_create_additional_path(cb_ctx->cnx, cb_ctx);
+                        if (ret == 0)
+                        {
+                            fprintf(stdout, "New path for multicast successfully opened with cnx_state %d\n", picoquic_get_cnx_state(cb_ctx->cnx));
+                        }
+                        else
+                        {
+                            fprintf(stdout, "Failed to open additional path with cnx_state %d\n", picoquic_get_cnx_state(cb_ctx->cnx));
+                        }
+                        cb_ctx->multipath_initiated = 1;
+                    }
+                    else
+                    {
+                        if (cb_ctx->cnx->is_subscribed_to_path_allowed)
+                        {
+                            fprintf(stdout, "Multipath not allowed: Transient error with cnx_state %d\n", picoquic_get_cnx_state(cb_ctx->cnx));
+                        }
+                    }
+                }
+                else
+                {
+                    cb_ctx->multipath_initiated = 1;
+                    fprintf(stdout, "Multipath permission check failed\n");
+                }
+            }
+
             break;
         case picoquic_packet_loop_after_send:
-            if (cb_ctx->is_disconnected)
+            if (picoquic_get_cnx_state(cb_ctx->cnx) == picoquic_state_disconnected)
             {
                 ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
             }
+
+            // if (cb_ctx->is_disconnected)
+            // {
+            //     ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+            // }
             break;
         case picoquic_packet_loop_port_update:
             break;
@@ -547,6 +712,10 @@ static int multicast_client_init(char const *server_name, int server_port, char 
             picoquic_set_key_log_file_from_env(*quic);
             picoquic_set_qlog(*quic, qlog_dir);
             picoquic_set_log_level(*quic, 1);
+
+            // Always enable multipath
+            picoquic_set_default_multipath_option(*quic, 1);
+            printf("Accept multipath: %s.\n", ((*quic)->default_multipath_option) ? "Yes" : "No");
         }
     }
     /* Initialize the callback context and create the connection context.
@@ -622,6 +791,7 @@ int picoquic_multicast_client(char const *server_name, int server_port, char con
     picoquic_quic_t *quic = NULL;
     picoquic_cnx_t *cnx = NULL;
     multicast_client_ctx_t client_ctx = {0};
+    picoquic_packet_loop_param_t param = {0};
     char const *ticket_store_filename = PICOQUIC_MULTICAST_CLIENT_TICKET_STORE;
     char const *token_store_filename = PICOQUIC_MULTICAST_CLIENT_TOKEN_STORE;
 
@@ -646,8 +816,19 @@ int picoquic_multicast_client(char const *server_name, int server_port, char con
         }
     }
 
+    param.local_af = server_address.ss_family;
+    param.local_port = (uint16_t)picoquic_uniform_random(30000) + 20000;
+    param.extra_socket_required = 1;
+    param.prefer_extra_socket = 0;
+    client_ctx.local_port = param.local_port;
+
     /* Wait for packets */
-    ret = picoquic_packet_loop(quic, 0, server_address.ss_family, 0, 0, 0, multicast_client_loop_cb, &client_ctx);
+    ret = picoquic_packet_loop_v2(quic, &param, multicast_client_loop_cb, &client_ctx);
+
+    if (ret == 0)
+    {
+        fprintf(stdout, "Enable multipath: %s.\n", (client_ctx.cnx->is_multipath_enabled) ? "Success" : "Refused");
+    }
 
     /* Done. At this stage, we could print out statistics, etc. */
     multicast_client_report(&client_ctx);

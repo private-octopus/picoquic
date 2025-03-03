@@ -11,32 +11,44 @@ will be available in the root folder.
 Usage
 -----
 Usage:
-    `../picoquic_sample client server_name port folder *queried_file`  
+
+```bash
+../picoquic_sample client server_name port folder *queried_file
+```
+
 or :  
-    `../picoquic_sample server port cert_file private_key_file folder`  
+
+```bash
+../picoquic_sample server port cert_file private_key_file folder
+```
 
 Example
 -------
 
 Generate the certificates:
-```
+
+```bash
 openssl req -x509 -newkey rsa:2048 -days 365 -keyout ca-key.pem -out ca-cert.pem
 openssl req -newkey rsa:2048 -keyout server-key.pem -out server-req.pem
 ```
+
 These commands will prompt a few questions, you don't need to put actual data
 for this simple test.
 
 Create a folder to hold server files:
-```
+
+```bash
 mkdir server_files
 echo "Hello world!" >> ./server_files/index.htm
 ```
 And run the server:
-```
+
+```bash
 ./picoquic_sample server 4433 ./ca-cert.pem ./server-key.pem ./server_files
 ```
 Then, test if you can reach it using the client:
-```
+
+```bash
 ./picoquic_sample client localhost 4433 /tmp index.htm
 ```
 
@@ -51,10 +63,12 @@ They will be added to the working directory of client or server. The name of the
 the initial connection identifier used for the connection, which is represented
 as a string of hexadecimal digits. For example, if the Initial CID is
 `012345678abcdef`, the logs created by client and server will be:
+
 ```
 012345678abcdef.client.qlog
 012345678abcdef.server.qlog
 ```
+
 The qlog syntax is defined using JSON. The logs can be read using a text editor,
 or with specialized tools like [QVIS](https://qvis.edm.uhasselt.be/)
 
