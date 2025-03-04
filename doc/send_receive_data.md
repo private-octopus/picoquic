@@ -46,13 +46,24 @@ ready to send a stream frame for the specified stream, gets access to the packet
 that is being formatted, and writes the application data directly into that
 packet just before the packet is sent on the network.
 
-Using the just in time API is a bit more complex than just queuing data, but
-avoiding copying data in queues reduces memory and CPU consumption. For
-example, when serving an image on a web page, the HTTP stack can compose
+A downside of the basic queuing API is that the stack needs to allocate
+memory for holding the data, copy the queued data to that memory, and
+free that memory when the data has been sent. The overhead of the
+allocating memory and copying data can be avoided if the application
+queues a "block" of data using the block queuing API. The stack will
+copy data directly from the application provided memory block. It will not
+free the memory when transmission is complete, but will instead issue a
+callback to the application, letting the application manage memory as
+it sees fit.
+
+Using the just in time API is significantly more complex than the simple queuing API.
+Like the block queuing API, it avoids unnecessary memory allocation and copy.
+Instead, it lets the application directly copy its data in an outgoing packet.
+For example, when serving an image on a web page, the HTTP stack can compose
 stream data frames directly from the image file, instead of loading the image in
 memory and copying it in the stream queue.
 
-For "real time" applications, the just in time API also has the advantage of
+For "real time" applications, the just in time API has the advantage of
 sending the most up to date data. Suppose for example an application that
 provides the time over the network. With the "just in time" API, it can read
 the clock immediately before sending the packet, providing more accurate time to
@@ -79,6 +90,27 @@ callbacks.
 When using these API, the data to be sent is copied and added to an internal
 queue per stream. It will be sent on the network as soon as flow control,
 congestion control and scheduling priorities permit.
+
+The block queuing API is implemented with a similar function:
+
+~~~
+typedef void (*picoquic_block_sent_fn)(const uint8_t* data, void* block_sent_ctx);
+
+int picoquic_add_block_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
+    const uint8_t* data, size_t length, int set_fin, void* app_stream_ctx,
+    picoquic_block_sent_fn block_sent_fn, void* block_sent_ctx);
+~~~
+
+The API is very similar to `picoquic_add_to_stream_with_ctx`, but it
+adds two parameters: a pointer to a callback function, and a context.
+The callback function shall be an implementation of the
+`picoquic_block_sent_fn` prototype. It will be called when
+the stack is done sending the data, with the `data` and `block_sent_ctx`
+parameters copied from the call to `picoquic_add_block_to_stream`.
+
+Calling `picoquic_add_block_to_stream` with a  NULL value of the
+parameter `block_sent_fn` is equivalent to calling `picoquic_add_to_stream_with_ctx`.
+The parameter `block_sent_ctx` will be ignored.
 
 ### Just in time stream data
 
