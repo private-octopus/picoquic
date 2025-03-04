@@ -6048,13 +6048,13 @@ uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* 
                 struct sockaddr_in6* addr = (struct sockaddr_in6*)&path_x->peer_addr;
                 ftype = picoquic_frame_type_observed_address_v6;
                 ip_addr = (uint8_t*)&addr->sin6_addr;
-                port = addr->sin6_port;
+                port = ntohs(addr->sin6_port);
             }
             else {
                 struct sockaddr_in* addr = (struct sockaddr_in*)&path_x->peer_addr;
                 ftype = picoquic_frame_type_observed_address_v4;
                 ip_addr = (uint8_t*)&addr->sin_addr;
-                port = addr->sin_port;
+                port = ntohs(addr->sin_port);
             }
 
             uint8_t *bytes_next = picoquic_format_observed_address_frame(
@@ -6126,14 +6126,14 @@ const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const
             memset(o_addr, 0, sizeof(struct sockaddr_in));
             o_addr->sin_family = AF_INET;
             memcpy(&o_addr->sin_addr, addr, 4);
-            o_addr->sin_port = port;
+            o_addr->sin_port = htons(port);
         }
         else {
             struct sockaddr_in6* o_addr = (struct sockaddr_in6*)&path_x->observed_addr;
             memset(o_addr, 0, sizeof(struct sockaddr_in6));
             o_addr->sin6_family = AF_INET6;
             memcpy(&o_addr->sin6_addr, addr, 16);
-            o_addr->sin6_port = port;
+            o_addr->sin6_port = htons(port);
         }
         if (cnx->callback_fn != NULL) {
             (void)cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_address_observed, cnx->callback_ctx, path_x->app_path_ctx);
