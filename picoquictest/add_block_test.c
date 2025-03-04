@@ -355,7 +355,6 @@ int add_block_test_step(add_block_test_ctx_t* add_block_ctx, int is_losing_data,
     int arrival_index = -1;
     uint64_t next_departure_time = UINT64_MAX;
     int departure_index = -1;
-    int need_frame_departure = 0;
     uint64_t next_frame_time = UINT64_MAX;
     uint64_t next_time;
     /* Check earliest packet arrival */
