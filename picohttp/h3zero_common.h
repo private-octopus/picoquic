@@ -59,7 +59,7 @@ extern "C" {
     /* Define the table of special-purpose paths used for POST, REST, or connect queries */
     /* TODO: is there a need for path context? */
     typedef struct st_picohttp_server_path_item_t {
-        char* path;
+        const char* path;
         size_t path_length;
         picohttp_post_data_cb_fn path_callback;
         void* path_app_ctx;
@@ -244,6 +244,11 @@ extern "C" {
     int h3zero_set_datagram_ready(picoquic_cnx_t* cnx, uint64_t stream_id);
     void h3zero_receive_datagram_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, h3zero_capsule_t* capsule, h3zero_callback_ctx_t* h3_ctx);
     uint8_t* h3zero_provide_datagram_buffer(void* context, size_t length, int ready_to_send);
+
+    int h3zero_queue_connect_header_frame(
+        picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
+        char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
+        char const* origin, char const* ua_string);
 
     int h3zero_callback(picoquic_cnx_t* cnx,
         uint64_t stream_id, uint8_t* bytes, size_t length,
