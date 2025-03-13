@@ -843,6 +843,9 @@ size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     size_t pn_offset = 0;
     size_t pn_length = 0;
     size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
+    size_t pn_iv_size = picoquic_pn_iv_size(pn_enc);
+    size_t pn_sample_start;
+    size_t pn_sample_end;
     uint8_t first_mask = 0x0F;
 
     /* Create the packet header just before encrypting the content */
@@ -856,6 +859,12 @@ size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
 #endif
         picoquic_log_app_message(cnx, "BUFFER OVERFLOW? Packet header prediction fails, %zu instead of %zu\n", h_length, header_length);
     }
+
+    // https://datatracker.ietf.org/doc/html/rfc9001#section-5.4.2
+    // ensure there are enough iv bytes for pn encryption
+    pn_sample_start = pn_offset + 4;
+    pn_sample_end = pn_sample_start + pn_iv_size;
+    length = picoquic_pad_to_target_length(bytes, length, pn_sample_end - aead_checksum_length); // discount aead checksum length added later
 
     if (ptype == picoquic_packet_1rtt_protected) {
         if (cnx->is_loss_bit_enabled_outgoing) {
