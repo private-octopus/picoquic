@@ -1500,9 +1500,11 @@ size_t textlog_path_cid_blocked_frame(FILE* F, const uint8_t* bytes, size_t byte
     const uint8_t* bytes0 = bytes;
     uint64_t frame_id = 0;
     uint64_t path_id;
+    uint64_t next_sequence_number;
     size_t byte_index = 0;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_end, &frame_id)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL) {
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &next_sequence_number)) == NULL) {
         /* log format error */
         fprintf(F, "    Malformed %s frame: ", textlog_frame_names(frame_id));
         /* log format error */
@@ -1516,9 +1518,9 @@ size_t textlog_path_cid_blocked_frame(FILE* F, const uint8_t* bytes, size_t byte
         byte_index = bytes_max;
     }
     else {
-        fprintf(F, "    %s, path_id: %" PRIu64 "\n",
+        fprintf(F, "    %s, path_id: %" PRIu64 ", next_sequence_number: %" PRIu64 "\n",
             textlog_frame_names(picoquic_frame_type_path_cid_blocked),
-            path_id);
+            path_id, next_sequence_number);
         byte_index = (bytes - bytes0);
     }
     return byte_index;
