@@ -413,6 +413,7 @@ int pacing_update_test();
 int quality_update_test();
 int direct_receive_test();
 int address_discovery_test();
+int add_block_test();
 int app_limit_cc_test();
 int app_limited_bbr_test();
 int app_limited_cubic_test();

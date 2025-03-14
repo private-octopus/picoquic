@@ -2073,6 +2073,8 @@ static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, 
                 stream_data->length = length;
                 stream_data->offset = 0;
                 stream_data->next_stream_data = NULL;
+                stream_data->block_sent_fn = NULL;
+                stream_data->block_sent_ctx = NULL;
 
                 while (next != NULL) {
                     pprevious = &next->next_stream_data;

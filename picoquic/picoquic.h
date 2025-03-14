@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.31.0"
+#define PICOQUIC_VERSION "1.1.32.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1361,6 +1361,20 @@ void picoquic_reset_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
  * The context is used in call backs, so the application can directly process responses.
  */
 int picoquic_add_to_stream_with_ctx(picoquic_cnx_t * cnx, uint64_t stream_id, const uint8_t * data, size_t length, int set_fin, void * app_stream_ctx);
+
+/* picoquic_add_block_to_stream:
+* If the parameter `block_send_done_fn` is NULL, behaves exactly as
+* as "picoquic_add_to_stream_with_ctx". If it is set, the data at the
+* specified address will be sent without intermediate
+* memory allocation of copy, and the specified function will be called
+* when the sending is done and picoquic does not need accesss to it any
+* more.
+ */
+typedef void (*picoquic_block_sent_fn)(const uint8_t* data, void* block_sent_ctx);
+
+int picoquic_add_block_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
+    const uint8_t* data, size_t length, int set_fin, void* app_stream_ctx,
+    picoquic_block_sent_fn block_sent_fn, void* block_sent_ctx);
 
 /* Reset a stream, indicating that no more data will be sent on 
  * that stream and that any data currently queued can be abandoned. */
