@@ -257,6 +257,47 @@ void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_callback_ctx
 	}
 }
 
+int h3zero_queue_connect_header_frame(
+	picoquic_cnx_t * cnx, h3zero_stream_ctx_t * stream_ctx,
+	char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
+	char const* origin, char const* ua_string)
+{
+	/* Format and send the connect frame. */
+	int ret = 0;
+	uint8_t buffer[1024];
+	uint8_t* bytes = buffer;
+	uint8_t* bytes_max = bytes + 1024;
+
+	*bytes++ = h3zero_frame_header;
+	bytes += 2; /* reserve two bytes for frame length */
+
+	bytes = h3zero_create_connect_header_frame(bytes, bytes_max, authority, path, path_length, protocol, NULL,
+		ua_string);
+
+	if (bytes == NULL) {
+		ret = -1;
+	}
+	else {
+		/* Encode the header length */
+		size_t header_length = bytes - &buffer[3];
+		if (header_length < 64) {
+			buffer[1] = (uint8_t)(header_length);
+			memmove(&buffer[2], &buffer[3], header_length);
+			bytes--;
+		}
+		else {
+			buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
+			buffer[2] = (uint8_t)(header_length & 0xFF);
+		}
+		size_t connect_length = bytes - buffer;
+		stream_ctx->ps.stream_state.is_upgrade_requested = 1;
+		ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, buffer, connect_length,
+			0, stream_ctx);
+	}
+
+	return ret;
+}
+
 #if 0
 /* Unused code */
 uint64_t h3zero_parse_stream_prefix(uint8_t* buffer_8, size_t* nb_in_buffer, uint8_t* data, size_t data_length, size_t * nb_read)
