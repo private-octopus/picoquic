@@ -294,6 +294,8 @@ static const picoquic_test_def_t test_table[] = {
     { "short_initial_cid", short_initial_cid_test },
     { "stream_id_max", stream_id_max_test },
     { "padding_test", padding_test },
+    { "padding_null", padding_null_test },
+    { "padding_zero_min", padding_zero_min_test },
     { "packet_trace", packet_trace_test },
     { "qlog_auto", qlog_auto_test },
     { "qlog_error", qlog_error_test },

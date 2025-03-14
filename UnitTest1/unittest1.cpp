@@ -1765,6 +1765,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(padding_null)
+        {
+            int ret = padding_null_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(padding_zero_min)
+        {
+            int ret = padding_zero_min_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(packet_trace)
         {
             int ret = packet_trace_test();
