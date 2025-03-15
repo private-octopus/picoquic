@@ -501,7 +501,7 @@ int multipath_quality_test();
 int multipath_stream_af_test();
 int multipath_datagram_test();
 int multipath_dg_af_test();
-int multipath_standby_test();
+int multipath_backup_test();
 int multipath_standup_test();
 int multipath_discovery_test();
 int multipath_qlog_test();

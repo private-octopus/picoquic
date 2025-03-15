@@ -329,6 +329,7 @@ static uint8_t test_frame_type_path_cid_blocked[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_cid_blocked >> 24)), (uint8_t)(picoquic_frame_type_path_cid_blocked >> 16),
     (uint8_t)(picoquic_frame_type_path_cid_blocked >> 8), (uint8_t)(picoquic_frame_type_path_cid_blocked & 0xFF),
     0x07, /* path id = 7 */
+    0x01 /* next sequence number = 1 */
 };
 
 static uint8_t test_frame_observed_address_v4[] = {
@@ -1554,13 +1555,13 @@ uint8_t* picoquic_format_stream_data_blocked_frame(uint8_t* bytes,
 uint8_t* picoquic_format_stream_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_stream_head_t* stream);
 uint8_t* picoquic_format_datagram_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, size_t length, const uint8_t* src);
-uint8_t* picoquic_format_path_available_or_standby_frame(
+uint8_t* picoquic_format_path_available_or_backup_frame(
     uint8_t* bytes, const uint8_t* bytes_max, uint64_t frame_type,
     uint64_t path_id, uint64_t sequence, int * more_data);
 uint8_t* picoquic_format_paths_blocked_frame(
     uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id, int* more_data);
 uint8_t* picoquic_format_path_cid_blocked_frame(
-    uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id, int* more_data);
+    uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id, uint64_t next_sequence_number, int* more_data);
 
 int frames_format_test()
 {
@@ -1629,10 +1630,10 @@ int frames_format_test()
         FRAME_FORMAT_TEST(picoquic_format_immediate_ack_frame, bytes, bytes_max, &more_data);
         FRAME_FORMAT_TEST(picoquic_format_time_stamp_frame, cnx, buffer, bytes_max, &more_data, simulated_time);
         FRAME_FORMAT_TEST(picoquic_format_path_abandon_frame, bytes, bytes_max, &more_data, 1, 3);
-        FRAME_FORMAT_TEST(picoquic_format_path_available_or_standby_frame, bytes, bytes_max, picoquic_frame_type_path_available, 1, 17, &more_data);
+        FRAME_FORMAT_TEST(picoquic_format_path_available_or_backup_frame, bytes, bytes_max, picoquic_frame_type_path_available, 1, 17, &more_data);
         FRAME_FORMAT_TEST(picoquic_format_max_path_id_frame, bytes, bytes_max, 123, &more_data);
         FRAME_FORMAT_TEST(picoquic_format_paths_blocked_frame, bytes, bytes_max, 123, &more_data);
-        FRAME_FORMAT_TEST(picoquic_format_path_cid_blocked_frame, bytes, bytes_max, 123, &more_data);
+        FRAME_FORMAT_TEST(picoquic_format_path_cid_blocked_frame, bytes, bytes_max, 123, 0, &more_data);
         FRAME_FORMAT_TEST(picoquic_format_observed_address_frame, bytes, bytes_max, picoquic_frame_type_observed_address_v4, 13, addr_bytes, 4433, &more_data);
     }
 

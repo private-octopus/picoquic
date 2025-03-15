@@ -2841,8 +2841,8 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(multipath_standby) {
-            int ret = multipath_standby_test();
+        TEST_METHOD(multipath_backup) {
+            int ret = multipath_backup_test();
 
             Assert::AreEqual(ret, 0);
         }

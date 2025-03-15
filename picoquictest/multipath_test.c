@@ -446,7 +446,7 @@ typedef enum {
     multipath_test_abandon,
     multipath_test_datagram,
     multipath_test_dg_af,
-    multipath_test_standby,
+    multipath_test_backup,
     multipath_test_standup,
     multipath_test_tunnel,
     multipath_test_fail,
@@ -901,9 +901,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 DBG_PRINTF("Cannot set stream affinity, ret = %d", ret);
             }
         }
-        else if (test_id == multipath_test_standby ||
+        else if (test_id == multipath_test_backup ||
             test_id == multipath_test_standup) {
-            ret = picoquic_set_path_status(test_ctx->cnx_client, 1, picoquic_path_status_standby);
+            ret = picoquic_set_path_status(test_ctx->cnx_client, 1, picoquic_path_status_backup);
         }
     }
 
@@ -1134,13 +1134,13 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = multipath_verify_datagram_sent(&dg_ctx, test_id);
     }
 
-    /* In the standby scenario, verify that the flag is set
+    /* In the backup scenario, verify that the flag is set
     * correctly at the server, and that not too much data is
-    * sent on standby path.
+    * sent on backup path.
     */
-    if (ret == 0 && (test_id == multipath_test_standby)) {
-        if (!test_ctx->cnx_server->path[1]->path_is_standby) {
-            DBG_PRINTF("Standby not set on server path 1 (%d).\n", test_ctx->cnx_server->path[1]->path_is_standby);
+    if (ret == 0 && (test_id == multipath_test_backup)) {
+        if (!test_ctx->cnx_server->path[1]->path_is_backup) {
+            DBG_PRINTF("Backup not set on server path 1 (%d).\n", test_ctx->cnx_server->path[1]->path_is_backup);
             ret = -1;
         }
         else if (test_ctx->cnx_server->path[1]->delivered > 50000) {
@@ -1378,11 +1378,11 @@ int multipath_dg_af_test()
     return multipath_test_one(max_completion_microsec, multipath_test_dg_af);
 }
 
-int multipath_standby_test()
+int multipath_backup_test()
 {
     uint64_t max_completion_microsec = 2000000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_standby);
+    return multipath_test_one(max_completion_microsec, multipath_test_backup);
 }
 
 int multipath_standup_test()
