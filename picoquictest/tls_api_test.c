@@ -8254,7 +8254,7 @@ int padding_test_one(uint32_t padding_multiple, uint32_t padding_min_size)
 
             while (ret == 0 && nb_trials < 256 && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
                 int was_active = 0;
-                int ack_is_queued = 0;
+
                 nb_trials++;
                 if ((picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server) &&
                     test_ctx->c_to_s_link->first_packet == NULL && test_ctx->s_to_c_link->first_packet == NULL)) {
@@ -8271,7 +8271,6 @@ int padding_test_one(uint32_t padding_multiple, uint32_t padding_min_size)
 
                 if (ret == 0 && is_queued && test_ctx->c_to_s_link->first_packet != NULL) {
                     size_t length = test_ctx->c_to_s_link->first_packet->length;
-                    uint8_t* bytes = test_ctx->c_to_s_link->first_packet->bytes;
                     size_t pn_offset = 1 + test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len;
                     size_t pn_length = padding_test_predict_pn_length(&test_ctx->cnx_client->pkt_ctx[picoquic_packet_context_application]);
                     size_t raw_length = pn_offset + pn_length + test_sizes[i];
