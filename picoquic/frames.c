@@ -3822,7 +3822,17 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
         (((is_ecn) ? picoquic_frame_type_path_ack_ecn : picoquic_frame_type_path_ack));
 
     /* Check that there something to acknowledge */
+#if 1
+    int not_needed = picoquic_sack_list_is_empty(&ack_ctx->sack_list);
+    if (!not_needed && !ack_ctx->act[is_opportunistic].ack_needed &&
+        ack_ctx->sack_list.ack_tree.size == 1) {
+        picoquic_sack_item_t* last_sack = picoquic_sack_last_item(&ack_ctx->sack_list);
+        not_needed = (last_sack->nb_times_sent[is_opportunistic] >= PICOQUIC_MAX_ACK_RANGE_REPEAT);
+    }
+    if (!not_needed){
+#else
     if (!picoquic_sack_list_is_empty(&ack_ctx->sack_list)) {
+#endif
         uint8_t* num_block_byte = NULL;
         picoquic_sack_item_t* last_sack = picoquic_sack_last_item(&ack_ctx->sack_list);
 
@@ -3956,6 +3966,15 @@ uint8_t * picoquic_format_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t
         for (int path_id = 0; path_id < cnx->nb_paths; path_id++) {
             if (bytes != NULL) {
                 ack_ctx = &cnx->path[path_id]->ack_ctx;
+                /* Adding test to verify that we do not send too many acks after demotion. */
+                if (cnx->path[path_id]->path_is_demoted &&
+                    !ack_ctx->act[is_opportunistic].ack_needed &&
+                    ack_ctx->sack_list.ack_tree.size == 1) {
+                    picoquic_sack_item_t* last_sack = picoquic_sack_last_item(&ack_ctx->sack_list);
+                    if (last_sack->nb_times_sent[is_opportunistic] >= PICOQUIC_MIN_ACK_RANGE_REPEAT) {
+                        continue;
+                    }
+                }
                 bytes = picoquic_format_ack_frame_in_context(cnx, bytes, bytes_max, more_data,
                     current_time, ack_ctx, &need_time_stamp, cnx->path[path_id]->unique_path_id, is_opportunistic);
                 if (is_opportunistic) {
