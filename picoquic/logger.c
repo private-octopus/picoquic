@@ -1398,7 +1398,7 @@ size_t textlog_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_ma
     return byte_index;
 }
 
-size_t textlog_path_available_or_standby_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+size_t textlog_path_available_or_backup_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     const uint8_t* bytes_end = bytes + bytes_max;
     const uint8_t* bytes0 = bytes;
@@ -1755,7 +1755,7 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
             break;
         case picoquic_frame_type_path_backup:
         case picoquic_frame_type_path_available:
-            byte_index += textlog_path_available_or_standby_frame(F, bytes + byte_index, length - byte_index);
+            byte_index += textlog_path_available_or_backup_frame(F, bytes + byte_index, length - byte_index);
             break;
         case picoquic_frame_type_max_path_id:
             byte_index += textlog_max_path_id_frame(F, bytes + byte_index, length - byte_index);

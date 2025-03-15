@@ -229,7 +229,7 @@ typedef enum {
 
 typedef enum {
     picoquic_path_status_available = 0, /* Path available for sending */
-    picoquic_path_status_standby = 1 /* Do not use if other path available */
+    picoquic_path_status_backup = 1 /* Do not use if other path available */
 } picoquic_path_status_enum;
 
 /*

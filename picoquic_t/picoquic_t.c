@@ -491,7 +491,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_stream_af", multipath_stream_af_test },
     { "multipath_datagram", multipath_datagram_test },
     { "multipath_dg_af", multipath_dg_af_test },
-    { "multipath_standby", multipath_standby_test },
+    { "multipath_backup", multipath_backup_test },
     { "multipath_standup", multipath_standup_test },
     { "multipath_discovery", multipath_discovery_test },
     { "multipath_qlog", multipath_qlog_test },
