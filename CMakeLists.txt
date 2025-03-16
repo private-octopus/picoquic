@@ -83,6 +83,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/cubic.c
     picoquic/fastcc.c
     picoquic/frames.c
+    picoquic/hybla.c
     picoquic/intformat.c
     picoquic/logger.c
     picoquic/logwriter.c
@@ -337,6 +338,7 @@ target_link_libraries(picoquic-core
     PRIVATE
         ${OPENSSL_LIBRARIES}
         ${MBEDTLS_LIBRARIES}
+        m
     PUBLIC
         ${PTLS_LIBRARIES}
         Threads::Threads)
