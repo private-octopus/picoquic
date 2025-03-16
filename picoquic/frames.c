@@ -5319,7 +5319,7 @@ const uint8_t* picoquic_decode_immediate_ack_frame(const uint8_t* bytes, const u
     /* This code assumes that the frame type is already skipped */
     if (bytes != NULL && bytes < bytes_max){
         if (!cnx->is_ack_frequency_negotiated) {
-            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
                 picoquic_frame_type_immediate_ack);
             bytes = NULL;
         }
@@ -5434,7 +5434,7 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
 
     if (!cnx->is_multipath_enabled) {
         /* Frame is unexpected */
-        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_path_abandon, "multipath not negotiated");
     }
     else if ((bytes = picoquic_parse_path_abandon_frame(bytes, bytes_max, &unique_path_id, &reason)) == NULL) {
@@ -5604,7 +5604,7 @@ const uint8_t* picoquic_decode_path_available_or_backup_frame(const uint8_t* byt
 
     if (!cnx->is_multipath_enabled) {
         /* Frame is unexpected */
-        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             frame_id64, "multipath not negotiated");
     }
     else if ((bytes = picoquic_parse_path_available_or_backup_frame(bytes, bytes_max, &path_id, &sequence)) == NULL) {
@@ -5715,7 +5715,7 @@ const uint8_t* picoquic_decode_max_path_id_frame(const uint8_t* bytes, const uin
 
     if (!cnx->is_multipath_enabled) {
         /* Frame is unexpected */
-        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_max_path_id, "unique path_id not negotiated");
     }
     else if ((bytes = picoquic_parse_max_path_id_frame(bytes, bytes_max, &max_path_id)) == NULL) {
@@ -5831,7 +5831,7 @@ const uint8_t* picoquic_decode_paths_blocked_frame(const uint8_t* bytes, const u
 
     if (!cnx->is_multipath_enabled) {
         /* Frame is unexpected */
-        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_paths_blocked, "multipath extension not negotiated");
     }
     else if ((bytes = picoquic_parse_paths_blocked_frame(bytes, bytes_max, &max_path_id)) == NULL) {
@@ -5970,7 +5970,7 @@ const uint8_t* picoquic_decode_path_cid_blocked_frame(const uint8_t* bytes, cons
 
     if (!cnx->is_multipath_enabled) {
         /* Frame is unexpected */
-        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_path_cid_blocked, "multipath extension not negotiated");
     }
     else if ((bytes = picoquic_parse_path_cid_blocked_frame(bytes, bytes_max, &unique_path_id, &next_sequence_number)) == NULL) {
@@ -6166,7 +6166,7 @@ const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const
 
     if (!cnx->is_address_discovery_receiver) {
         /* Frame is unexpected */
-        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             ftype, "address discovery not negotiated as receiver");
     }
     else if ((bytes = picoquic_parse_observed_address_frame(bytes, bytes_max, ftype, &sequence, &addr, &port)) == NULL) {
@@ -6615,7 +6615,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             break;
                         default:
                             /* Not implemented yet! */
-                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, frame_id64);
+                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, frame_id64);
                             bytes = NULL;
                             break;
                         }
