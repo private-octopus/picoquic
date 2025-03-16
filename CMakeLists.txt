@@ -129,10 +129,10 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_lb.h
      picoquic/picoquic_newreno.h
      picoquic/picoquic_cubic.h
-     picoquic/picquic_bbr.h
-     picoquic/picquic_bbr1.h
-     picoquic/picquic_fastcc.h
-     picoquic/picquic_prague.h
+     picoquic/picoquic_bbr.h
+     picoquic/picoquic_bbr1.h
+     picoquic/picoquic_fastcc.h
+     picoquic/picoquic_prague.h
      picoquic/siphash.h)
 
 set(LOGLIB_LIBRARY_FILES
