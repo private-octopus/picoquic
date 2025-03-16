@@ -1565,6 +1565,8 @@ typedef struct st_picoquic_congestion_algorithm_t {
     picoquic_congestion_algorithm_observe alg_observe;
 } picoquic_congestion_algorithm_t;
 
+#if 1
+#else
 extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm;
@@ -1572,10 +1574,19 @@ extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_prague_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_bbr1_algorithm;
+#endif
 
 #define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
 
-picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name);
+
+extern picoquic_congestion_algorithm_t const** picoquic_congestion_control_algorithms;
+extern size_t picoquic_nb_congestion_control_algorithms;
+/* Register a custom table of congestion control algorithms */
+void picoquic_register_congestion_control_algorithms(picoquic_congestion_algorithm_t const** alg, size_t nb_algorithms);
+/* Register a full list of congestion control algorithms */
+void picoquic_register_all_congestion_control_algorithms();
+
+picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_id);
 
 void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
 

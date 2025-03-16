@@ -1317,6 +1317,7 @@ int main(int argc, char** argv)
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
+    picoquic_register_all_congestion_control_algorithms();
     picoquic_config_init(&config);
     memcpy(option_string, "A:u:f:1", 7);
     ret = picoquic_config_option_letters(option_string + 7, sizeof(option_string) - 7, NULL);

@@ -102,6 +102,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/port_blocking.c
     picoquic/prague.c
     picoquic/quicctx.c
+    picoquic/register_all_cc_algorithms.c
     picoquic/sacks.c
     picoquic/sender.c
     picoquic/sim_link.c
@@ -126,6 +127,12 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_binlog.h
      picoquic/picoquic_config.h
      picoquic/picoquic_lb.h
+     picoquic/picoquic_newreno.h
+     picoquic/picoquic_cubic.h
+     picoquic/picquic_bbr.h
+     picoquic/picquic_bbr1.h
+     picoquic/picquic_fastcc.h
+     picoquic/picquic_prague.h
      picoquic/siphash.h)
 
 set(LOGLIB_LIBRARY_FILES

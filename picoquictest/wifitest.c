@@ -28,6 +28,10 @@
 #include "picoquictest_internal.h"
 #include "autoqlog.h"
 #include "picoquic_binlog.h"
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
 
 /* Wifi test: explore the behavior of QUIC over Wi-Fi links.
 * 

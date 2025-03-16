@@ -32,7 +32,7 @@
 #include <time.h>
 #include <errno.h>
 #endif
-
+#include "picoquic_newreno.h"
 
 /*
  * Supported versions. Specific versions may mandate different processing of different
@@ -4909,42 +4909,41 @@ picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* res
     return ret;
 }
 
-/* Get congestion control algorithm by name
- * TODO: if we want to minimize code size, we should not require linking a whole library
- * of congestion control algorithms. Intead, the application should have a list of
- * configured algorithms, and the configuration program should select from that list.
+/* Management of congestion control algorithms
+ * We want to minimize code size, and thus we do not want to require loading the
+ * entire list of congestion control algorithms in every executable.
+ * Instead, we require applications to provide a list of the congestion
+ * control algorithms that they support.
  */
+
+picoquic_congestion_algorithm_t const** picoquic_congestion_control_algorithms = NULL;
+size_t picoquic_nb_congestion_control_algorithms = 0;
+
+/* Register a list of congestion control algorithm */
+void picoquic_register_congestion_control_algorithms(picoquic_congestion_algorithm_t const** alg, size_t nb_algorithms)
+{
+    picoquic_congestion_control_algorithms = alg;
+    picoquic_nb_congestion_control_algorithms = nb_algorithms;
+}
+
 picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name)
 {
     picoquic_congestion_algorithm_t const* alg = NULL;
-    if (alg_name != NULL) {
-        if (strcmp(alg_name, "reno") == 0) {
-            alg = picoquic_newreno_algorithm;
+
+    if (alg_name != NULL && picoquic_congestion_control_algorithms != NULL) {
+        for (size_t i = 0; i < picoquic_nb_congestion_control_algorithms; i++) {
+            if (strcmp(alg_name, picoquic_congestion_control_algorithms[i]->congestion_algorithm_id) == 0) {
+                alg = picoquic_congestion_control_algorithms[i];
+                break;
+            }
         }
-        else if (strcmp(alg_name, "cubic") == 0) {
-            alg = picoquic_cubic_algorithm;
-        }
-        else if (strcmp(alg_name, "dcubic") == 0) {
-            alg = picoquic_dcubic_algorithm;
-        }
-        else if (strcmp(alg_name, "fast") == 0) {
-            alg = picoquic_fastcc_algorithm;
-        }
-        else if (strcmp(alg_name, "bbr") == 0) {
-            alg = picoquic_bbr_algorithm;
-        }
-        else if (strcmp(alg_name, "prague") == 0) {
-            alg = picoquic_prague_algorithm;
-        }
-        else if (strcmp(alg_name, "bbr1") == 0) {
-            alg = picoquic_bbr1_algorithm;
-        }
-        else {
-            alg = NULL;
+        if (alg == NULL && strcmp(alg_name, "reno") == 0) {
+            alg = picoquic_get_congestion_algorithm("newreno");
         }
     }
     return alg;
 }
+
 /*
  * Set or reset the congestion control algorithm
  */

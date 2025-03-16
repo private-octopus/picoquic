@@ -28,6 +28,7 @@
 #include "picoquic_binlog.h"
 #include "logreader.h"
 #include "qlog.h"
+#include "picoquic_bbr.h"
 
 /* Add the additional links for multipath scenario */
 static int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop)

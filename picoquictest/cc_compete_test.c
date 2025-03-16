@@ -24,6 +24,12 @@
 #include <string.h>
 #include <stdint.h>
 #include "picoquic_ns.h"
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_prague.h"
 
 /* Congestion compete test.
 * These tests measure what happens when multiple connections fight for the same

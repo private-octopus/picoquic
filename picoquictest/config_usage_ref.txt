@@ -11,7 +11,8 @@ Picoquic options:
   -s <32 hex chars> Reset seed
   -X              Disable the check for blocked ports
   -S folder       Set the path to the source files to find the default files
-  -G cc_algorithm Use the specified congestion control algorithm: reno, cubic, bbr or fast. Defaults to bbr.
+  -G cc_algorithm Use the specified congestion control algorithm. Defaults to bbr. Supported values are:
+                  newreno, cubic, bbr.
   -P number       Set the default spinbit policy
   -O number       Set the default lossbit policy
   -M              Enable QUIC multipath extension
