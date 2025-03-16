@@ -664,6 +664,9 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                         }
                     }
                 }
+                if (!cb_ctx->multipath_probe_done && cb_ctx->cnx_client->is_notified_that_path_is_allowed) {
+                    ret = client_create_additional_path(cb_ctx->cnx_client, cb_ctx);
+                }
                 /* Track the migration to server preferred address */
                 if (cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined && !cb_ctx->migration_to_preferred_finished) {
                     if (picoquic_compare_addr(

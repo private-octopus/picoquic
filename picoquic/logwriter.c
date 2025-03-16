@@ -443,7 +443,7 @@ static const uint8_t* picoquic_log_path_available_or_backup_frame(FILE* f, const
 {
     const uint8_t* bytes_begin = bytes;
     bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
-    bytes = picoquic_skip_path_available_or_standby_frame(bytes, bytes_max); /* skip available or standby frame */
+    bytes = picoquic_skip_path_available_or_backup_frame(bytes, bytes_max); /* skip available or backup frame */
     picoquic_binlog_frame(f, bytes_begin, bytes);
 
     return bytes;

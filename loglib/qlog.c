@@ -833,8 +833,11 @@ void qlog_paths_blocked_frame(FILE* f, bytestream* s)
 void qlog_path_cid_blocked_frame(FILE* f, bytestream* s)
 {
     uint64_t path_id = 0;
+    uint64_t next_sequence_number = 0;
     byteread_vint(s, &path_id);
+    byteread_vint(s, &next_sequence_number);
     fprintf(f, ", \"path_id\": %"PRIu64, path_id);
+    fprintf(f, ", \"next_sequence_number\": %"PRIu64, next_sequence_number);
 }
 
 void qlog_reset_stream_frame(FILE* f, bytestream* s)

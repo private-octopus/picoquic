@@ -8189,12 +8189,35 @@ int stream_id_max_test()
  * Test whether padding policy is correctly applied, and whether the corresponding
  * connection succeeds.
  */
+size_t padding_test_predict_pn_length(picoquic_packet_context_t * pkt_ctx)
+{
+    /* Predict acceptable length of packet number */
+    size_t pn_l = 4;
+    int64_t delta = (pkt_ctx->send_sequence==0)?0: pkt_ctx->send_sequence-1;
+    if (pkt_ctx->pending_first != NULL) {
+        delta -= pkt_ctx->pending_first->sequence_number;
+    }
+    if (delta < 262144) {
+        pn_l = 3;
+        if (pkt_ctx->send_sequence < 1024) {
+            pn_l = 2;
+            if (pkt_ctx->send_sequence < 16) {
+                pn_l = 1;
+            }
+        }
+    }
+    return pn_l;
+}
 
-int padding_test()
+int padding_test_one(uint32_t padding_multiple, uint32_t padding_min_size)
 {
     uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    uint8_t data[PICOQUIC_MAX_PACKET_SIZE];
+    const size_t test_sizes[] = { 1, 2, 3, 5, 8, 13, 21, 44, 65, 109, 174, 283, 457, 740, 1023 };
+    const size_t nb_test_sizes = sizeof(test_sizes) / sizeof(size_t);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -8203,15 +8226,126 @@ int padding_test()
     /* Set the padding policy in the server context and in the client connection
      */
     if (ret == 0) {
-        picoquic_set_default_padding(test_ctx->qserver, 128, 64);
-        picoquic_cnx_set_padding_policy(test_ctx->cnx_client, 128, 64);
-
-        /* Run a basic test scenario
-         */
-
-        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_many_streams, sizeof(test_scenario_many_streams), 0, 0, 0, 0, 250000);
+        picoquic_set_default_padding(test_ctx->qserver, padding_multiple, padding_min_size);
+        picoquic_cnx_set_padding_policy(test_ctx->cnx_client, padding_multiple, padding_min_size);
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
+
+    /* start the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        size_t checksum_length = picoquic_get_checksum_length(test_ctx->cnx_client, picoquic_epoch_1rtt);
+        size_t pn_iv_length = picoquic_pn_iv_size(test_ctx->cnx_client->crypto_context[picoquic_epoch_1rtt].pn_enc);
+
+        for (size_t i = 0; ret == 0 && i < nb_test_sizes; i++) {
+            /* repeat: queue a packet of size X, wait until it is acknowledged.
+             * verify that the padding is as expected.
+             */
+            int nb_trials = 0;
+            int nb_inactive = 0;
+            int is_queued = 0;
+            int is_success = 0;
+
+            memset(data, picoquic_frame_type_padding, test_sizes[i] - 1);
+            data[test_sizes[i] - 1] = picoquic_frame_type_ping;
+
+            while (ret == 0 && nb_trials < 256 && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
+                int was_active = 0;
+
+                nb_trials++;
+                if ((picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server) &&
+                    test_ctx->c_to_s_link->first_packet == NULL && test_ctx->s_to_c_link->first_packet == NULL)) {
+                    if (!is_queued) {
+                        ret = picoquic_queue_misc_frame(test_ctx->cnx_client, data, test_sizes[i], 0, picoquic_packet_context_application);
+                        is_queued = 1;
+                    }
+                    else {
+                        is_success = 1;
+                        break;
+                    }
+                }
+                ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+                if (ret == 0 && is_queued && test_ctx->c_to_s_link->first_packet != NULL) {
+                    size_t length = test_ctx->c_to_s_link->first_packet->length;
+                    size_t pn_offset = 1 + test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len;
+                    size_t pn_length = padding_test_predict_pn_length(&test_ctx->cnx_client->pkt_ctx[picoquic_packet_context_application]);
+                    size_t raw_length = pn_offset + pn_length + test_sizes[i];
+
+                    if (pn_length == 1 && raw_length + checksum_length > length) {
+                        /* Too short for this length.
+                         * The test depends on correct prediction of pn length, which is hard, so
+                         * we only do it if the predicted  pn_length is 1 */
+                        ret = -1;
+                    }
+                    else if (pn_offset + 4 + pn_iv_length > length) {
+                        /* Not enough length to fit the data */
+                        ret = -1;
+                    }
+                    else if (padding_multiple == 0 && padding_min_size == 0) {
+                        /* No padding. The size should be equal to either the natural size of the minimum valid,
+                         * unless the stack queued an acknowledgement, which would add 5 or 6 bytes */
+                        if (raw_length + checksum_length + 6 < length && pn_offset + 4 + pn_iv_length != length) {
+                            ret = -1;
+                        }
+                    }
+                    else if (padding_min_size != 0 && length < padding_min_size) {
+                        /* Size should be at least min size */
+                        ret = -1;
+                    }
+                    else if (padding_min_size != 0 &&
+                        raw_length  < padding_min_size &&
+                        length != padding_min_size + checksum_length) {
+                        /* too much padding */
+                        ret = -1;
+                    }
+                    else if (padding_multiple != 0){
+                        if ((length - padding_min_size - checksum_length) % padding_multiple != 0 &&
+                            length != test_ctx->cnx_client->path[0]->send_mtu) {
+                            /* padding does not match formula */
+                            ret = -1;
+                        }
+                        else if (raw_length > padding_min_size &&
+                            ((length - checksum_length) - raw_length) >= padding_multiple) {
+                            /* Too much padding */
+                            ret = -1;
+                        }
+                    }
+                }
+
+                if (ret < 0)
+                {
+                    break;
+                }
+
+                if (was_active) {
+                    nb_inactive = 0;
+                }
+                else {
+                    nb_inactive++;
+                }
+            }
+
+            if (ret == 0 && !is_success) {
+                ret = -1;
+            }
+        }
+    }
+
+#if 0
+    /* Prepare to send data, setting a scenario that creates packets of multiple sizes. */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_many_streams, sizeof(test_scenario_many_streams));
+    }
+
+    if (ret == 0) {
+        /* do the sending loop until everything is received. */
+        ret = tls_api_data_sending_loop(test_ctx, NULL, &simulated_time, 0);
+    }
+#endif
 
     /* And then free the resource
      */
@@ -8223,6 +8357,22 @@ int padding_test()
 
     return ret;
 }
+
+int padding_test()
+{
+    return padding_test_one(128, 64);
+}
+
+int padding_null_test()
+{
+    return padding_test_one(0, 0);
+}
+
+int padding_zero_min_test()
+{
+    return padding_test_one(128, 0);
+}
+
 
 /*
  * Test whether the server correctly processes coalesced packets when one of the segments does not decrypt correctly 

@@ -333,7 +333,6 @@
 [76910, 1, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 55, "packet_number": 6, "dcid": "1209080706050403" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 9733}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[1, 12]]}, { 
-    "frame_type": "path_ack", "path_id": 1, "ack_delay": 0, "acked_ranges": [[0, 0]]}, { 
     "frame_type": "padding"}]}],
 [76910, 0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 39, "packet_number": 15, "dcid": "0908070605040302" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 9613}, { 
