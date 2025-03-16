@@ -597,7 +597,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_grease_quic_bit 0x2ab2
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
-#define picoquic_tp_initial_max_path_id  0x0f739bbc1b666d0cull /* per draft quic multipath 12 */ 
+#define picoquic_tp_initial_max_path_id 0x0f739bbc1b666d0dull /* per draft quic multipath 13 */ 
 #define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
@@ -1103,7 +1103,7 @@ typedef struct st_picoquic_path_t {
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
     unsigned int nat_challenge_required : 1;
-    unsigned int path_is_standby : 1;
+    unsigned int path_is_backup : 1;
     unsigned int path_is_demoted : 1;
     unsigned int path_abandon_received : 1;
     unsigned int path_abandon_sent : 1;
@@ -2051,8 +2051,8 @@ void picoquic_update_peer_addr(picoquic_path_t* path_x, const struct sockaddr* p
 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max);
-const uint8_t* picoquic_skip_path_available_or_standby_frame(const uint8_t* bytes, const uint8_t* bytes_max);
-int picoquic_queue_path_available_or_standby_frame(
+const uint8_t* picoquic_skip_path_available_or_backup_frame(const uint8_t* bytes, const uint8_t* bytes_max);
+int picoquic_queue_path_available_or_backup_frame(
     picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_path_status_enum status);
 /* Internal only API, notify that next path is now allowed. */
 void picoquic_test_and_signal_new_path_allowed(picoquic_cnx_t* cnx);

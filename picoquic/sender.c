@@ -875,6 +875,9 @@ size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     size_t pn_offset = 0;
     size_t pn_length = 0;
     size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
+    size_t pn_iv_size = picoquic_pn_iv_size(pn_enc);
+    size_t pn_sample_start;
+    size_t pn_sample_end;
     uint8_t first_mask = 0x0F;
 
     /* Create the packet header just before encrypting the content */
@@ -888,6 +891,12 @@ size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
 #endif
         picoquic_log_app_message(cnx, "BUFFER OVERFLOW? Packet header prediction fails, %zu instead of %zu\n", h_length, header_length);
     }
+
+    // https://datatracker.ietf.org/doc/html/rfc9001#section-5.4.2
+    // ensure there are enough iv bytes for pn encryption
+    pn_sample_start = pn_offset + 4;
+    pn_sample_end = pn_sample_start + pn_iv_size;
+    length = picoquic_pad_to_target_length(bytes, length, pn_sample_end - aead_checksum_length); // discount aead checksum length added later
 
     if (ptype == picoquic_packet_1rtt_protected) {
         if (cnx->is_loss_bit_enabled_outgoing) {
@@ -3977,7 +3986,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
  * criteria evolves over time:
  * - as long as continuity is not verified, a path is not available.
  * - if continuity is verified but the path is not "validated", the path
- *   is marked as standby.
+ *   is marked as backup.
  * - if the path is validated and no other path has a higher priority,
  *   the path is available.
  * If several paths are available at the same priority level, the code
@@ -3987,14 +3996,14 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
  *
  * There are potential corner cases. If a challenge or a response is required
  * on a path, that takes priority over sending data. A challenge may be required
- * on a "standby" path to test continuity if no data has been received for
+ * on a "backup" path to test continuity if no data has been received for
  * a long time, or maybe following a packet loss episode.
  *
  * If all available paths are blocked by congestion control and acknowledgements
  * need to be sent, the lowest RTT path not blocked by pacing is selected.
  *
  * Need to consider special code for dealing with packet losses. If a path
- * exhibits persistent packet loss, it loses its priority and moves to "standby"
+ * exhibits persistent packet loss, it loses its priority and moves to "backup"
  * state. At that point, the "challenge needed" flag is set, triggering a
  * continuity test.
  *
@@ -4029,8 +4038,8 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
  * Instead, these various interactions may need to be selective, mark some
  * paths as ready based on conditions.
  * 
- * The handling of "standby" should be integrated in the sending process,
- * so congestion controlled data is not sent on standby path, and delay
+ * The handling of "backup" should be integrated in the sending process,
+ * so congestion controlled data is not sent on backup path, and delay
  * sensitive data is not sent on suspect paths.
  */
 
@@ -4092,7 +4101,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     }
 
     for (i = 0; i < cnx->nb_paths; i++) {
-        int path_priority = (cnx->path[i]->path_is_standby) ? 0 : 1;
+        int path_priority = (cnx->path[i]->path_is_backup) ? 0 : 1;
         cnx->path[i]->is_probing_nat = 0;
         if (cnx->path[i]->nb_retransmit > 0) {
             path_priority = 0;
@@ -4249,8 +4258,8 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
         }
         path_id = 0;
     }
-    if (cnx->path[path_id]->path_is_standby && challenge_path != path_id) {
-        /* Set the selected path to available if it was standby. Selecting a standby
+    if (cnx->path[path_id]->path_is_backup && challenge_path != path_id) {
+        /* Set the selected path to available if it was backup. Selecting a backup
          * path means that the available path was of lower quality, the only exception
          * being if the selection was due to a pending challenge. */
         (void)picoquic_set_path_status(cnx, cnx->path[path_id]->unique_path_id, picoquic_path_status_available);
