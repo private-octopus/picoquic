@@ -84,8 +84,8 @@
     "frame_type": "path_retire_connection_id", "path_id": 0, "sequence_number": 2}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 5, "packet_number": 39, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "paths_blocked", "max_path_id": 17}]}],
-[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 5, "packet_number": 40, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "path_cid_blocked", "path_id": 7}]}],
+[0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 6, "packet_number": 40, "dcid": "01020304" }, "frames": [{ 
+    "frame_type": "path_cid_blocked", "path_id": 7, "next_sequence_number": 1}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 12, "packet_number": 41, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "bdp", "lifetime": 1, "bytes_in_flight": 2, "min_rtt": 3, "ip": "0a000001"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 11, "packet_number": 42, "dcid": "01020304" }, "frames": [{ 

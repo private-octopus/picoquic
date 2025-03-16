@@ -1765,6 +1765,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(padding_null)
+        {
+            int ret = padding_null_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(padding_zero_min)
+        {
+            int ret = padding_zero_min_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(packet_trace)
         {
             int ret = packet_trace_test();
@@ -2827,8 +2841,8 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(multipath_standby) {
-            int ret = multipath_standby_test();
+        TEST_METHOD(multipath_backup) {
+            int ret = multipath_backup_test();
 
             Assert::AreEqual(ret, 0);
         }
