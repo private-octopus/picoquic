@@ -223,53 +223,26 @@ int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stre
 {
     /* register the stream ID as session ID */
     int ret = h3zero_declare_stream_prefix(ctx, stream_ctx->stream_id, wt_callback, wt_ctx);
-    if (cnx != NULL) {
-        picoquic_log_app_message(cnx, "Allocated prefix for control stream %" PRIu64, stream_ctx->stream_id);
-    }
-    /* set the required stream parameters for the state of the stream. */
-    stream_ctx->is_open = 1;
-    stream_ctx->path_callback = wt_callback;
-    stream_ctx->path_callback_ctx = wt_ctx;
-
-    /* Declare the outgoing connection through the callback, so it can update its own state */
-    ret = wt_callback(cnx, NULL, 0, picohttp_callback_connecting, stream_ctx, wt_ctx);
-
     if (ret == 0) {
-        /* Format and send the connect frame. */
-        uint8_t buffer[1024];
-        uint8_t* bytes = buffer;
-        uint8_t* bytes_max = bytes + 1024;
-
-        *bytes++ = h3zero_frame_header;
-        bytes += 2; /* reserve two bytes for frame length */
-
-        bytes = h3zero_create_connect_header_frame(bytes, bytes_max, authority, (const uint8_t*)path, strlen(path), "webtransport", NULL,
-            H3ZERO_USER_AGENT_STRING);
-
-        if (bytes == NULL) {
-            ret = -1;
+        if (cnx != NULL) {
+            picoquic_log_app_message(cnx, "Allocated prefix for control stream %" PRIu64, stream_ctx->stream_id);
         }
-        else {
-            /* Encode the header length */
-            size_t header_length = bytes - &buffer[3];
-            if (header_length < 64) {
-                buffer[1] = (uint8_t)(header_length);
-                memmove(&buffer[2], &buffer[3], header_length);
-                bytes--;
-            }
-            else {
-                buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
-                buffer[2] = (uint8_t)(header_length & 0xFF);
-            }
-            size_t connect_length = bytes - buffer;
-            stream_ctx->ps.stream_state.is_upgrade_requested = 1;
-            ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, buffer, connect_length,
-                    0, stream_ctx);
-        }
+        /* set the required stream parameters for the state of the stream. */
+        stream_ctx->is_open = 1;
+        stream_ctx->path_callback = wt_callback;
+        stream_ctx->path_callback_ctx = wt_ctx;
 
-        if (ret != 0) {
-            /* remove the stream prefix */
-            h3zero_delete_stream_prefix(cnx, ctx, stream_ctx->stream_id);
+        /* Declare the outgoing connection through the callback, so it can update its own state */
+        ret = wt_callback(cnx, NULL, 0, picohttp_callback_connecting, stream_ctx, wt_ctx);
+
+        if (ret == 0) {
+            ret = h3zero_queue_connect_header_frame(cnx, stream_ctx, authority, (const uint8_t*)path, strlen(path), "webtransport", NULL,
+                H3ZERO_USER_AGENT_STRING);
+
+            if (ret != 0) {
+                /* remove the stream prefix */
+                h3zero_delete_stream_prefix(cnx, ctx, stream_ctx->stream_id);
+            }
         }
     }
     return ret;
