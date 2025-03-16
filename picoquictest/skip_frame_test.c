@@ -681,7 +681,7 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM_OLD_MPATH("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3, ERR_F, 0, 1),
     TEST_SKIP_ITEM_OLD_MPATH("bad_bdp_addr", test_frame_type_bdp_bad_addr, 1, 0, 3, ERR_F, 0, 1),
     TEST_SKIP_ITEM_OLD_MPATH("bad_bdp_length", test_frame_type_bdp_bad_length, 1, 0, 3, ERR_F, 1, 1),
-    TEST_SKIP_ITEM_OLD("bad_frame_id", test_frame_type_bad_frame_id, 1, 0, 3, ERR_F, 1)
+    TEST_SKIP_ITEM_OLD("bad_frame_id", test_frame_type_bad_frame_id, 1, 0, 3, ERR_P, 1)
 };
 
 size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_skip_frames_t);
@@ -1159,7 +1159,7 @@ int parse_frame_test()
             }
 
             t_ret = parse_test_packet(qclient, (struct sockaddr*) & saddr, simulated_time,
-                buffer, byte_max, test_frame_error_list[i].epoch, &ack_needed, &err, test_skip_list[i].mpath);
+                buffer, byte_max, test_frame_error_list[i].epoch, &ack_needed, &err, test_frame_error_list[i].mpath);
 
             if (t_ret == 0) {
                 DBG_PRINTF("Parse error frame <%s> does not fails, ret = %d\n", test_frame_error_list[i].name, t_ret);
