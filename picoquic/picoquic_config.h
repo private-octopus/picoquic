@@ -44,6 +44,7 @@ typedef enum {
     picoquic_option_DisablePortBlocking,
     picoquic_option_SOLUTION_DIR,
     picoquic_option_CC_ALGO,
+    picoquic_option_HYBLA_RTT0,
     picoquic_option_SPINBIT,
     picoquic_option_LOSSBIT,
     picoquic_option_MULTIPATH,

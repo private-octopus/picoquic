@@ -1572,6 +1572,11 @@ extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_prague_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_bbr1_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_hybla_algorithm;
+
+// Functions to set Hybla-specific parameters
+void picoquic_hybla_set_rtt0_param(int rtt0);
+void picoquic_hybla_set_initial_ssthresh_param(uint64_t initial_ssthresh);
 
 #define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
 
