@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 
 #ifdef BBRExperiment
-#define BBRExpGate(ctx, test, action) { if (ctx->exp_flags.test) action; }
+#define BBRExpGate(ctx, test, action) { if (!ctx->exp_flags.test) action; }
 #define BBRExpTest(ctx, test) ( (ctx)->exp_flags.test )
 #else
 #define BBRExpGate(ctx, test, action) {}
@@ -440,7 +440,7 @@ static void BBRInitFullPipe(picoquic_bbr_state_t* bbr_state)
 
 /* Initialization of optional variables defined in text string
 * Syntax:
-* - Single letter options, all optional:
+* - Single letter options that control the "BBR Experiment"
 *   E: do_early_exit
 *   R: do_rapid_start
 *   H: do_handle_suspension
@@ -451,10 +451,23 @@ static void BBRInitFullPipe(picoquic_bbr_state_t* bbr_state)
 *   T999999999: wifi_shadow_rtt, microseconds
 *   Q99999.999: quantum_ratio, %
 * 
+* The "BBR Experiment" is an attempt to improve behavior of BBR for
+* realtime support on some networks, mostly Wi-Fi. The experiment was a
+* success, and the corresponding support is on by default, The individual
+* option flags can be used to turn off some parts of the experiment,
+* for example when doing before/after measurements.
 */
 static void BBRSetOptions(picoquic_bbr_state_t* bbr_state)
 {
     const char* x = bbr_state->option_string;
+#ifdef BBRExperiment
+    bbr_state->exp_flags.do_early_exit = 1;
+    bbr_state->exp_flags.do_rapid_start = 1;
+    bbr_state->exp_flags.do_handle_suspension = 1;
+    bbr_state->exp_flags.do_control_lost = 1;
+    bbr_state->exp_flags.do_exit_probeBW_up_on_delay = 1;
+    bbr_state->exp_flags.do_enter_probeBW_after_limited = 1;
+#endif
 
     if (x != NULL) {
         char c;
@@ -463,22 +476,22 @@ static void BBRSetOptions(picoquic_bbr_state_t* bbr_state)
             switch (c) {
 #ifdef BBRExperiment
             case 'E':
-                bbr_state->exp_flags.do_early_exit = 1;
+                bbr_state->exp_flags.do_early_exit = 0;
                 break;
             case 'R':
-                bbr_state->exp_flags.do_rapid_start = 1;
+                bbr_state->exp_flags.do_rapid_start = 0;
                 break;
             case 'H':
-                bbr_state->exp_flags.do_handle_suspension = 1;
+                bbr_state->exp_flags.do_handle_suspension = 0;
                 break;
             case 'L':
-                bbr_state->exp_flags.do_control_lost = 1;
+                bbr_state->exp_flags.do_control_lost = 0;
                 break;
             case 'D':
-                bbr_state->exp_flags.do_exit_probeBW_up_on_delay = 1;
+                bbr_state->exp_flags.do_exit_probeBW_up_on_delay = 0;
                 break;
             case 'A':
-                bbr_state->exp_flags.do_enter_probeBW_after_limited = 1;
+                bbr_state->exp_flags.do_enter_probeBW_after_limited = 0;
                 break;
 #endif
             case 'T': {
@@ -550,6 +563,7 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
     */
     memset(bbr_state, 0, sizeof(picoquic_bbr_state_t));
     bbr_state->option_string = option_string;
+
     BBRInitRandom(bbr_state, path_x, current_time);
     /* If RTT was already sampled, use it, other wise set min RTT to infinity */
     if (path_x->smoothed_rtt == PICOQUIC_INITIAL_RTT
