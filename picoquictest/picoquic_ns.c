@@ -101,7 +101,7 @@
 typedef struct st_picoquic_ns_client_t {
     uint64_t start_time;
     picoquic_cnx_t* cnx;
-    picoquic_congestion_algorithm_t* cc_algo;
+    picoquic_congestion_algorithm_t const* cc_algo;
     char const* cc_option_string;
     quicperf_ctx_t* quicperf_ctx;
     picoquic_connection_id_t icid;
