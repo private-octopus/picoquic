@@ -62,7 +62,9 @@ typedef struct st_picoquic_ns_spec_t {
     const char* main_scenario_text;
     const char* background_scenario_text;
     picoquic_congestion_algorithm_t* main_cc_algo;
+    char const* main_cc_options;
     picoquic_congestion_algorithm_t* background_cc_algo;
+    char const* background_cc_options;
     int nb_connections;
     double data_rate_in_gbps; /* datarate, server to clients, defaults to 10 mbps */
     double data_rate_up_in_gbps; /* datarate, server to clients, defaults to data rate */
