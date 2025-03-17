@@ -264,7 +264,7 @@ void picoquic_hystart_pp_reset(picoquic_hystart_pp_state_t* hystart_pp_state) {
     hystart_pp_state->current_round.current_round_min_rtt = UINT64_MAX;
     //hystart_pp_state.curr_rtt = UINT64_MAX;
     hystart_pp_state->current_round.rtt_sample_count = 0;
-    hystart_pp_state->current_round.window_end = UINT64_MAX;
+    hystart_pp_state->current_round.window_end = 0;
 
     /* init state */
     //hystart_pp_state->rtt_thresh = UINT64_MAX;
