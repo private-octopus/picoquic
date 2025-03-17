@@ -29,6 +29,12 @@
 #include "picoquic_binlog.h"
 #include "picoquic_logger.h"
 #include "qlog.h"
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_prague.h"
 
 /* Test of the pacing functions.
 */

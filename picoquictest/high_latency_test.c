@@ -37,7 +37,9 @@
 #include "picoquic_logger.h"
 #include "performance_log.h"
 #include "picoquictest.h"
-
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
 
 /* Very high latency test. This requires relaxing the handshake timer, so that it covers
  * at least one rtt.

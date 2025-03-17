@@ -26,6 +26,12 @@
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
 #include "picoquic.h"
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_prague.h"
 
 /* Verify that the getter/setter functions work as expected 
  */
@@ -229,10 +235,13 @@ int getter_test()
             ret = -1;
         }
     }
-
+    /* set the algorithm list to the complete value before the alogorithm set/get test
+    * Hopefully, nobody is going to call their algorithm "wuovipfwds".
+     */
+    picoquic_register_all_congestion_control_algorithms();
     if (ret == 0) {
         char const* alg_name[] = {
-            "reno", "cubic", "dcubic", "fast", "bbr", "prague", "bbr1", "abracadabra", NULL
+            "reno", "cubic", "dcubic", "fast", "bbr", "prague", "bbr1", "wuovipfwds", NULL
         };
         picoquic_congestion_algorithm_t const* alg[] = {
             picoquic_newreno_algorithm, picoquic_cubic_algorithm, picoquic_dcubic_algorithm,
