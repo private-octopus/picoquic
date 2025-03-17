@@ -32,9 +32,9 @@
 #include "picoquic_bbr.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:h";
 #endif
 int config_option_letters_test()
 {
@@ -69,7 +69,8 @@ static picoquic_quic_config_t param1 = {
     -1, /* int cnx_id_length; */
     PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000, /* int idle_timeout */
     655360, /* Socket buffer size */
-    "cubic", /* const picoquic_congestion_algorithm_t* cc_algorithm; */
+    "bbr", /* const picoquic_congestion_algorithm_t* cc_algorithm; */
+    "T250000", /* BBR option */
     "0N8C-000123", /* char const* cnx_id_cbdata; */
     3, /* spin bit policy */
     2, /* loss bit policy */
@@ -122,7 +123,8 @@ static char const* config_argv1[] = {
     "-p", "4433",
     "-e", "1",
     "-m", "1536",
-    "-G", "cubic",
+    "-G", "bbr",
+    "-H", "T250000",
     "-P", "3",
     "-O", "2",
     "-M",
@@ -157,6 +159,7 @@ static picoquic_quic_config_t param2 = {
     1234567, /* int idle_timeout */
     0, /* socket_buffer_size */
     NULL, /* const picoquic_congestion_algorithm_t* cc_algorithm; */
+    NULL, /* option string */
     NULL, /* char const* cnx_id_cbdata; */
     0, /* spin bit policy */
     0, /* loss bit policy */

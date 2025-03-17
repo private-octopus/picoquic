@@ -1545,7 +1545,7 @@ typedef struct st_picoquic_per_ack_state_t {
     unsigned int is_cwnd_limited: 1; /* path marked CWIN limited after packet was sent. */
 } picoquic_per_ack_state_t;
 
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, char const * option_string, uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
@@ -1565,17 +1565,6 @@ typedef struct st_picoquic_congestion_algorithm_t {
     picoquic_congestion_algorithm_observe alg_observe;
 } picoquic_congestion_algorithm_t;
 
-#if 1
-#else
-extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_prague_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_bbr1_algorithm;
-#endif
-
 #define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
 
 
@@ -1588,54 +1577,15 @@ void picoquic_register_all_congestion_control_algorithms();
 
 picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_id);
 
+
 void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
+void picoquic_set_default_congestion_algorithm_ex(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* alg, char const* alg_option_string);
 
 void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
+void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg, char const* alg_option_string);
 
-/* Special code for Wi-Fi network. These networks are subject to occasional
- * "suspension", for power saving reasons. If the suspension is too long,
- * it causes transmission to stop after cngestion control credits are
- * exhausted. We expect that the effects of suspension are not so bad if
- * the congestion control parameters allow for transmission through the
- * suspension. The "wifi shadow RTT" parameter tells the congestion control
- * algorithm BBR to set the CWIN large enough to sustain transmission through
- * that duration. The value is in microseconds.
- * 
- * This parameter should be set before the first connections are started.
- * Changing the settings will not affect existing connections.
- */
-void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt);
-
-/* The experimental API `picoquic_set_default_bbr_quantum_ratio`
-* allows application to change the "quantum ratio" parameter of the BBR
-* algorithm. The default value is 0.001 (1/1000th of the pacing rate
-* in bytes per second). Larger values like 0.01 would increase the
-* size of the "leaky bucket" used by the pacing algorithms. Whether
-* that's a good idea or not is debatable, probably depends on the
-* application.
-*/
-void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio);
-
-/* Temporary code, do define a set of BBR flags that
-* turn on and off individual extensions. We want to use that
-* to do "before/after" measurements.
- */
-#define BBRExperiment on
-#ifdef BBRExperiment
-/* Control flags for BBR improvements */
-typedef struct st_bbr_exp {
-    unsigned int do_early_exit : 1;
-    unsigned int do_rapid_start : 1;
-    unsigned int do_handle_suspension : 1;
-    unsigned int do_control_lost : 1;
-    unsigned int do_exit_probeBW_up_on_delay : 1;
-    unsigned int do_enter_probeBW_after_limited : 1;
-} bbr_exp;
-
-void picoquic_set_bbr_exp(picoquic_quic_t * quic, bbr_exp* exp);
-#endif
 /* The experimental API 'picoquic_set_priority_limit_for_bypass' 
 * instruct the stack to send the high priority streams or datagrams
 * immediately, even if congestion control would normally prevent it.

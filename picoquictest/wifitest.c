@@ -83,9 +83,9 @@ typedef struct st_wifi_test_spec_t {
     uint64_t latency;
     wifi_test_suspension_t * suspension;
     picoquic_congestion_algorithm_t* ccalgo;
+    const char* cc_algo_option;
     uint64_t target_time;
     int simulate_receive_block;
-    uint64_t wifi_shadow_rtt;
     uint64_t queue_max_delay;
 } wifi_test_spec_t;
 
@@ -112,13 +112,8 @@ static int wifi_test_one(wifi_test_enum test_id, wifi_test_spec_t * spec)
     }
 
     if (ret == 0) {
-        if (spec->wifi_shadow_rtt > 0) {
-            picoquic_set_default_wifi_shadow_rtt(test_ctx->qserver, spec->wifi_shadow_rtt);
-            picoquic_set_default_wifi_shadow_rtt(test_ctx->qclient, spec->wifi_shadow_rtt);
-        }
-
-        picoquic_set_default_congestion_algorithm(test_ctx->qserver, spec->ccalgo);
-        picoquic_set_congestion_algorithm(test_ctx->cnx_client, spec->ccalgo);
+        picoquic_set_default_congestion_algorithm_ex(test_ctx->qserver, spec->ccalgo, spec->cc_algo_option);
+        picoquic_set_congestion_algorithm_ex(test_ctx->cnx_client, spec->ccalgo, spec->cc_algo_option);
 
         test_ctx->c_to_s_link->microsec_latency = spec->latency;
         test_ctx->s_to_c_link->microsec_latency = spec->latency;
@@ -218,7 +213,6 @@ void wifi_test_set_default_spec(wifi_test_spec_t* spec, picoquic_congestion_algo
     spec->ccalgo = ccalgo;
     spec->target_time = target_time;
     spec->simulate_receive_block = 0;
-    spec->wifi_shadow_rtt = 0;
     spec->queue_max_delay = 260000;
 }
 
@@ -277,6 +271,7 @@ int wifi_bbr_hard_test()
         3000,
         suspension_hard,
         picoquic_bbr_algorithm,
+        NULL,
         4060000,
         0 };
     int ret = wifi_test_one(wifi_test_bbr_hard, &spec);
@@ -291,6 +286,7 @@ int wifi_bbr1_hard_test()
         3000,
         suspension_hard,
         picoquic_bbr1_algorithm,
+        NULL,
         4060000,
         0 };
     int ret = wifi_test_one(wifi_test_bbr1_hard, &spec);
@@ -305,6 +301,7 @@ int wifi_cubic_hard_test()
         3000,
         suspension_hard,
         picoquic_cubic_algorithm,
+        NULL,
         4700000,
         0 };
     int ret = wifi_test_one(wifi_test_cubic_hard, &spec);
@@ -319,6 +316,7 @@ int wifi_reno_hard_test()
         3000,
         suspension_hard,
         picoquic_newreno_algorithm,
+        NULL,
         4250000,
         0 };
     int ret = wifi_test_one(wifi_test_reno_hard, &spec);
@@ -333,6 +331,7 @@ int wifi_bbr_long_test()
         50000,
         suspension_basic,
         picoquic_bbr_algorithm,
+        NULL,
         3400000,
         1 };
     int ret = wifi_test_one(wifi_test_bbr_long, &spec);
@@ -347,6 +346,7 @@ int wifi_bbr1_long_test()
         50000,
         suspension_basic,
         picoquic_bbr1_algorithm,
+        NULL,
         3400000,
         1 };
     int ret = wifi_test_one(wifi_test_bbr1_long, &spec);
@@ -381,7 +381,7 @@ int wifi_bbr_shadow_test()
 {
     wifi_test_spec_t spec;
     wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 2750000);
-    spec.wifi_shadow_rtt = 250000;
+    spec.cc_algo_option = "T250000";
     spec.queue_max_delay = 600000;
     spec.simulate_receive_block = 1;
 
@@ -408,6 +408,7 @@ int wifi_bbr_many_test()
         3000,
         suspension_many,
         picoquic_bbr_algorithm,
+        NULL,
         4070000,
         0 };
     int ret = wifi_test_one(wifi_test_bbr_many, &spec);
