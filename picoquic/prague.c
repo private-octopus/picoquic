@@ -121,12 +121,13 @@ static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoqui
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
 }
 
-void picoquic_prague_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t current_time)
+void picoquic_prague_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_prague_state_t* pr_state = (picoquic_prague_state_t*)malloc(sizeof(picoquic_prague_state_t));
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(option_string);
 #endif
 
     if (pr_state != NULL) {

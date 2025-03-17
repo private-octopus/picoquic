@@ -680,8 +680,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_stateless_packet_t* pending_stateless_packet;
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;
-    uint64_t wifi_shadow_rtt;
-    double bbr_quantum_ratio;
+    char const* default_congestion_alg_option_string;
 
     struct st_picoquic_cnx_t* cnx_list;
     struct st_picoquic_cnx_t* cnx_last;
@@ -1441,6 +1440,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int stream_blocked : 1;
     /* Congestion algorithm */
     picoquic_congestion_algorithm_t const* congestion_alg;
+    char const* congestion_alg_option_string;
     /* Management of quality signalling updates */
     uint64_t rtt_update_delta;
     uint64_t pacing_rate_update_delta;

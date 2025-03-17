@@ -29,6 +29,7 @@
 #include "picoquic_internal.h"
 #include "tls_api.h"
 #include "picoquictest_internal.h"
+#include "picoquic_bbr.h"
 #ifdef _WINDOWS
 #include "wincompat.h"
 #else

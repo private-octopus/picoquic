@@ -32,7 +32,7 @@
 #include <time.h>
 #include <errno.h>
 #endif
-
+#include "picoquic_newreno.h"
 
 /*
  * Supported versions. Specific versions may mandate different processing of different
@@ -1928,7 +1928,7 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
 
         /* Set the congestion algorithm for the new path */
         if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_init(cnx, path_x, current_time);
+            cnx->congestion_alg->alg_init(cnx, path_x, cnx->congestion_alg_option_string, current_time);
         }
 
         /* Mark old path as demoted */
@@ -4011,8 +4011,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         picosplay_init_tree(&cnx->stream_tree, picoquic_stream_node_compare, picoquic_stream_node_create, picoquic_stream_node_delete, picoquic_stream_node_value);
 
         cnx->congestion_alg = cnx->quic->default_congestion_alg;
+        cnx->congestion_alg_option_string = cnx->quic->default_congestion_alg_option_string;
         if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_init(cnx, cnx->path[0], start_time);
+            cnx->congestion_alg->alg_init(cnx, cnx->path[0], cnx->congestion_alg_option_string, start_time);
         }
     }
 
@@ -4909,54 +4910,59 @@ picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, const uint8_t* res
     return ret;
 }
 
-/* Get congestion control algorithm by name
- * TODO: if we want to minimize code size, we should not require linking a whole library
- * of congestion control algorithms. Intead, the application should have a list of
- * configured algorithms, and the configuration program should select from that list.
+/* Management of congestion control algorithms
+ * We want to minimize code size, and thus we do not want to require loading the
+ * entire list of congestion control algorithms in every executable.
+ * Instead, we require applications to provide a list of the congestion
+ * control algorithms that they support.
  */
+
+picoquic_congestion_algorithm_t const** picoquic_congestion_control_algorithms = NULL;
+size_t picoquic_nb_congestion_control_algorithms = 0;
+
+/* Register a list of congestion control algorithm */
+void picoquic_register_congestion_control_algorithms(picoquic_congestion_algorithm_t const** alg, size_t nb_algorithms)
+{
+    picoquic_congestion_control_algorithms = alg;
+    picoquic_nb_congestion_control_algorithms = nb_algorithms;
+}
+
 picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name)
 {
     picoquic_congestion_algorithm_t const* alg = NULL;
-    if (alg_name != NULL) {
-        if (strcmp(alg_name, "reno") == 0) {
-            alg = picoquic_newreno_algorithm;
+
+    if (alg_name != NULL && picoquic_congestion_control_algorithms != NULL) {
+        for (size_t i = 0; i < picoquic_nb_congestion_control_algorithms; i++) {
+            if (strcmp(alg_name, picoquic_congestion_control_algorithms[i]->congestion_algorithm_id) == 0) {
+                alg = picoquic_congestion_control_algorithms[i];
+                break;
+            }
         }
-        else if (strcmp(alg_name, "cubic") == 0) {
-            alg = picoquic_cubic_algorithm;
-        }
-        else if (strcmp(alg_name, "dcubic") == 0) {
-            alg = picoquic_dcubic_algorithm;
-        }
-        else if (strcmp(alg_name, "fast") == 0) {
-            alg = picoquic_fastcc_algorithm;
-        }
-        else if (strcmp(alg_name, "bbr") == 0) {
-            alg = picoquic_bbr_algorithm;
-        }
-        else if (strcmp(alg_name, "prague") == 0) {
-            alg = picoquic_prague_algorithm;
-        }
-        else if (strcmp(alg_name, "bbr1") == 0) {
-            alg = picoquic_bbr1_algorithm;
-        }
-        else {
-            alg = NULL;
+        if (alg == NULL && strcmp(alg_name, "reno") == 0) {
+            alg = picoquic_get_congestion_algorithm("newreno");
         }
     }
     return alg;
 }
+
 /*
  * Set or reset the congestion control algorithm
  */
 
-void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* alg)
+void picoquic_set_default_congestion_algorithm_ex(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* alg, char const * alg_option_string)
 {
     quic->default_congestion_alg = alg;
+    quic->default_congestion_alg_option_string = alg_option_string;
+}
+
+void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* alg)
+{
+    picoquic_set_default_congestion_algorithm_ex(quic, alg, NULL);
 }
 
 void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const * alg_name)
 {
-    quic->default_congestion_alg = picoquic_get_congestion_algorithm(alg_name);
+    picoquic_set_default_congestion_algorithm_ex(quic, picoquic_get_congestion_algorithm(alg_name), NULL);
 }
 
 /*
@@ -4978,7 +4984,7 @@ void picoquic_set_preemptive_repeat_per_cnx(picoquic_cnx_t* cnx, int do_repeat)
     cnx->is_preemptive_repeat_enabled = (do_repeat) ? 1 : 0;
 }
 
-void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg)
+void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg, char const* alg_option_string)
 {
     if (cnx->congestion_alg != NULL) {
         if (cnx->path != NULL) {
@@ -4989,32 +4995,22 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
     }
 
     cnx->congestion_alg = alg;
+    cnx->congestion_alg_option_string = alg_option_string;
 
     if (cnx->congestion_alg != NULL) {
         if (cnx->path != NULL) {
             for (int i = 0; i < cnx->nb_paths; i++) {
-                cnx->congestion_alg->alg_init(cnx, cnx->path[i], picoquic_get_quic_time(cnx->quic));
+                cnx->congestion_alg->alg_init(cnx, cnx->path[i], alg_option_string, picoquic_get_quic_time(cnx->quic));
             }
         }
     }
 }
 
-void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt)
+void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg)
 {
-    quic->wifi_shadow_rtt = wifi_shadow_rtt;
+    picoquic_set_congestion_algorithm_ex(cnx, alg, NULL);
 }
 
-void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio)
-{
-    quic->bbr_quantum_ratio = quantum_ratio;
-}
-
-#ifdef BBRExperiment
-void picoquic_set_bbr_exp(picoquic_quic_t* quic, bbr_exp* exp)
-{
-    quic->bbr_exp_flags = *exp;
-}
-#endif
 void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit)
 {
     cnx->priority_limit_for_bypass = priority_limit;

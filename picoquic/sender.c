@@ -4144,7 +4144,7 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
                 int is_new_priority = 0;
                 /* Set the congestion algorithm for the new path */
                 if (cnx->congestion_alg != NULL && cnx->path[i]->congestion_alg_state == NULL) {
-                    cnx->congestion_alg->alg_init(cnx, cnx->path[i], current_time);
+                    cnx->congestion_alg->alg_init(cnx, cnx->path[i], cnx->congestion_alg_option_string, current_time);
                 }
 
                 if (path_priority > highest_priority) {

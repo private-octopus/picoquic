@@ -30,6 +30,14 @@
 #include "logreader.h"
 #include "qlog.h"
 
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_prague.h"
+
+
 /* Add a series of tests to study the behavior of cpu-limited clients.
 * This requires simulating clients that have cpu limitations, such
 * as only being able to proceed a set number of messages per second.

@@ -38,6 +38,11 @@
 #include "picoquic_logger.h"
 #include "performance_log.h"
 #include "picoquictest.h"
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_prague.h"
 
 static const uint8_t test_ticket_encrypt_key[32] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,

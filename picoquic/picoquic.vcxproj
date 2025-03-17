@@ -171,6 +171,7 @@
     <ClCompile Include="quicctx.c" />
     <ClCompile Include="packet.c" />
     <ClCompile Include="picohash.c" />
+    <ClCompile Include="register_all_cc_algorithms.c" />
     <ClCompile Include="sacks.c" />
     <ClCompile Include="sender.c" />
     <ClCompile Include="bbr.c" />

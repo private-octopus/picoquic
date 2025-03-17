@@ -42,7 +42,7 @@
 #include "picoquic_logger.h"
 #include "performance_log.h"
 #include "picoquictest.h"
-
+#include "picoquic_bbr.h"
 /*
  * Test whether datagrams are sent and received properly
  */
