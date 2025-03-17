@@ -954,6 +954,10 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     {
         free((void*)config->cc_algo_id);
     }
+    if (config->cc_algo_option_string != NULL)
+    {
+        free((void*)config->cc_algo_option_string);
+    }
     if (config->cnx_id_cbdata != NULL)
     {
         free((void*)config->cnx_id_cbdata);

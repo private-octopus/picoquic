@@ -235,7 +235,7 @@ int getter_test()
             ret = -1;
         }
     }
-    /* set the algorithm list to the completevalue before the alogorithm set/get test
+    /* set the algorithm list to the complete value before the alogorithm set/get test
     * Hopefully, nobody is going to call their algorithm "wuovipfwds".
      */
     picoquic_register_all_congestion_control_algorithms();

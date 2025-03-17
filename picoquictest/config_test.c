@@ -293,7 +293,7 @@ static size_t nb_config_errors = sizeof(config_errors) / sizeof(config_error_tes
 
 
 /* Register a small and stable list of congestion control algorithms,
-* sufficient to test the cc algorithm configurationfunctions.
+* sufficient to test the cc algorithm configuration functions.
  */
 
 static picoquic_congestion_algorithm_t const* config_test_cc_algo_list[3] = {
