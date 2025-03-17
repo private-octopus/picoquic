@@ -1817,7 +1817,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
             if (cnx->path[i]->path_is_demoted) {
                 continue;
             }
-            if (cnx->path[i]->path_is_standby && path_backup < 0) {
+            if (cnx->path[i]->path_is_backup && path_backup < 0) {
                 path_backup = i;
             }
             else {
@@ -1826,8 +1826,8 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
             }
         }
         if (path_left < 0 && path_backup >= 0) {
-            cnx->path[path_backup]->path_is_standby = 0;
-            (void)picoquic_queue_path_available_or_standby_frame(cnx, cnx->path[path_backup], picoquic_path_status_available);
+            cnx->path[path_backup]->path_is_backup = 0;
+            (void)picoquic_queue_path_available_or_backup_frame(cnx, cnx->path[path_backup], picoquic_path_status_available);
         }
     }
 }
@@ -2547,8 +2547,8 @@ int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoq
     int ret = 0;
     int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
     if (path_id >= 0) {
-        cnx->path[path_id]->path_is_standby = (status != picoquic_path_status_available);
-        ret = picoquic_queue_path_available_or_standby_frame(cnx, cnx->path[path_id], status);
+        cnx->path[path_id]->path_is_backup = (status != picoquic_path_status_available);
+        ret = picoquic_queue_path_available_or_backup_frame(cnx, cnx->path[path_id], status);
     }
     return ret;
 }

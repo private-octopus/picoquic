@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.31.0"
+#define PICOQUIC_VERSION "1.1.32.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -137,6 +137,8 @@ extern "C" {
 
 #define PICOQUIC_TRANSPORT_APPLICATION_ABANDON (0x4150504C4142414E)
 #define PICOQUIC_TRANSPORT_RESOURCE_LIMIT_REACHED (0x5245534C494D4954)
+#define PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE (0x554e5f494e5446)
+#define PICOQUIC_TRANSPORT_NO_CID_AVAILABLE (0x4e4f5f4349445f)
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
@@ -229,7 +231,7 @@ typedef enum {
 
 typedef enum {
     picoquic_path_status_available = 0, /* Path available for sending */
-    picoquic_path_status_standby = 1 /* Do not use if other path available */
+    picoquic_path_status_backup = 1 /* Do not use if other path available */
 } picoquic_path_status_enum;
 
 /*
