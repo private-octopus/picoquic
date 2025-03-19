@@ -81,7 +81,7 @@ int getter_test()
     if (ret == 0) {
         int partial_match = 0;
         int path_id = picoquic_find_path_by_address(test_ctx->cnx_client, NULL,
-            (struct sockaddr*)&test_ctx->cnx_client->path[0]->peer_addr, &partial_match);
+            (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->peer_addr, &partial_match);
         if (path_id != 0 || partial_match == 0) {
             ret = -1;
         }
@@ -93,7 +93,7 @@ int getter_test()
             /* Second call should fail because the address is already set */
             ret = -1;
         }
-        memset(&test_ctx->cnx_client->path[0]->local_addr, 0, sizeof(struct sockaddr_storage));
+        memset(&test_ctx->cnx_client->path[0]->first_tuple->local_addr, 0, sizeof(struct sockaddr_storage));
     }
 
     if (ret == 0) {
@@ -139,7 +139,7 @@ int getter_test()
     /* Test a series of getter interfaces */
 
     if (ret == 0 &&
-        picoquic_get_local_if_index(cnx) != cnx->path[0]->if_index_dest) {
+        picoquic_get_local_if_index(cnx) != cnx->path[0]->first_tuple->if_index_dest) {
         ret = -1;
     }
 

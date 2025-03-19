@@ -750,7 +750,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                             picoquic_log_app_message(last_cnx, "Testing organized migration, port=%d, af=%d",
                                 next_port, sock_af[0]);
                         }
-                        picoquic_store_addr(&local_address, (struct sockaddr*) & last_cnx->path[0]->local_addr);
+                        picoquic_store_addr(&local_address, (struct sockaddr*) & last_cnx->path[0]->first_tuple->local_addr);
                         if (local_address.ss_family == AF_INET6) {
                             ((struct sockaddr_in6*) & local_address)->sin6_port = next_port;
                         }
@@ -762,7 +762,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                         events[nb_sockets] = mig_sock_event;
                         nb_sockets++;
                         testing_migration = 1;
-                        ret = picoquic_probe_new_path(last_cnx, (struct sockaddr*) & last_cnx->path[0]->peer_addr,
+                        ret = picoquic_probe_new_path(last_cnx, (struct sockaddr*) & last_cnx->path[0]->first_tuple->peer_addr,
                             (struct sockaddr*) & local_address, current_time);
                     }
                     else {

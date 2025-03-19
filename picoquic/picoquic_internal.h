@@ -1017,6 +1017,36 @@ typedef struct st_picoquic_pacing_t {
     int64_t packet_time_nanosec;
 } picoquic_pacing_t;
 
+/* Tuple context.
+* Tuple context are created to hold address and port pairs used to contact peers.
+* Address pairs are "verified" by successful path challenge/response exchanges.
+* On the client side, they are placed in "validated" or "backup" state by
+* local interactions. On the server side, they move from "backup" to
+* "validated" when the client starts using them.
+* 
+* The tuple context contains the data necessary for managing the challenge/response.
+ */
+typedef struct st_picoquic_tuple_t {
+    /* Path for which the tuple is registered */
+    uint64_t unique_path_id;
+    /* Next tuple registered for this path */
+    struct st_picoquic_tuple_t* next_tuple;
+    /* Peer address. */
+    struct sockaddr_storage peer_addr;
+    /* Local address, on the local network */
+    struct sockaddr_storage local_addr;
+    unsigned long if_index_dest;
+    /* Address observed by the peer */
+    struct sockaddr_storage observed_addr;
+    /* Challenge used for this path */
+    uint64_t challenge_response;
+    uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
+    uint64_t challenge_time;
+    uint64_t demotion_time;
+    uint64_t challenge_time_first;
+    uint8_t challenge_repeat_count;
+} picoquic_tuple_t;
+
 /*
 * Per path context.
 * Path contexts are created:
@@ -1044,11 +1074,14 @@ typedef struct st_picoquic_path_t {
     picohash_item net_id_hash_item;
     struct st_picoquic_cnx_t* cnx;
     uint64_t unique_path_id;
-
     void* app_path_ctx;
     /* If using unique path id multipath */
     picoquic_ack_context_t ack_ctx;
     picoquic_packet_context_t pkt_ctx;
+#if 1
+    /* First tuple is the one used by default for the path */
+    picoquic_tuple_t* first_tuple;
+#else
     /* Peer address. */
     struct sockaddr_storage peer_addr;
     /* Local address, on the local network */
@@ -1056,6 +1089,7 @@ typedef struct st_picoquic_path_t {
     unsigned long if_index_dest;
     /* Address observed by the peer */
     struct sockaddr_storage observed_addr;
+#endif
     /* Manage the reception of observed addresses */
     uint64_t observed_address_received;
     /* Manage the publishing of observed addresses */
@@ -1065,13 +1099,16 @@ typedef struct st_picoquic_path_t {
     uint64_t observed_time;
     /* Manage path probing logic */
     uint64_t last_non_path_probing_pn;
+#if 1
+#else
     /* Challenge used for this path */
     uint64_t challenge_response;
     uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t challenge_time;
-    uint64_t demotion_time;
     uint64_t challenge_time_first;
     uint8_t challenge_repeat_count;
+#endif
+    uint64_t demotion_time;
     /* NAT Challenge for this path, if using unique path id */
     uint64_t nat_challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t nat_challenge_time;

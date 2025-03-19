@@ -5636,7 +5636,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid, uint64_t laten
     }
 
     if (ret == 0) {
-        initial_challenge = test_ctx->cnx_server->path[0]->challenge[0];
+        initial_challenge = test_ctx->cnx_server->path[0]->first_tuple->challenge[0];
         loss_mask = loss_mask_data; 
         
         /* Change the client address */
@@ -5690,7 +5690,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid, uint64_t laten
         if (test_ctx->cnx_server == NULL) {
             DBG_PRINTF("%s", "Server connection disappeared");
             ret = -1;
-        } else if (initial_challenge == test_ctx->cnx_server->path[0]->challenge[0]) {
+        } else if (initial_challenge == test_ctx->cnx_server->path[0]->first_tuple->challenge[0]) {
             DBG_PRINTF("%s", "Challenge was not renewed after NAT rebinding");
             ret = -1;
         }
@@ -5804,10 +5804,10 @@ int fast_nat_rebinding_test()
             }
 
             if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state == picoquic_state_ready) {
-                if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == 0) {
-                    DBG_PRINTF("Client address out of sync, port: %d", ((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port);
+                if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr)->sin_port == 0) {
+                    DBG_PRINTF("Client address out of sync, port: %d", ((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr)->sin_port);
                 }
-                else if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == test_ctx->client_addr_natted.sin_port) {
+                else if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr)->sin_port == test_ctx->client_addr_natted.sin_port) {
                     if (switched) {
                         if (simulated_time > switch_time + delta_t &&
                             nb_switched < nb_switches_required) {
@@ -6358,7 +6358,7 @@ int probe_api_test()
             if (ret == 0 && ret_probe == 0) {
                 int path_id = test_ctx->cnx_client->nb_paths - 1;
                 for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                    test_ctx->cnx_client->path[path_id]->challenge[ichal] = (uint64_t)10000 + (uint64_t)10 * i + j + (uint64_t)1000*ichal;
+                    test_ctx->cnx_client->path[path_id]->first_tuple->challenge[ichal] = (uint64_t)10000 + (uint64_t)10 * i + j + (uint64_t)1000*ichal;
                 }
             }
         }
@@ -6442,7 +6442,7 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY
         && TEST_SERVER_READY
         && (test_ctx->cnx_server->path[0]->challenge_verified != 1 || test_ctx->cnx_client->path[0]->path_is_demoted == 1 ||
-            initial_challenge == test_ctx->cnx_server->path[0]->challenge[0])) {
+            initial_challenge == test_ctx->cnx_server->path[0]->first_tuple->challenge[0])) {
         int was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
@@ -6451,7 +6451,7 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     /* Verify that the challenge was updated and done */
     /* TODO: verify that exactly one challenge was sent */
     if (ret == 0 && test_ctx->cnx_server != NULL) {
-        if (initial_challenge == test_ctx->cnx_server->path[0]->challenge[0]) {
+        if (initial_challenge == test_ctx->cnx_server->path[0]->first_tuple->challenge[0]) {
             DBG_PRINTF("%s", "Challenge was not renewed after migration");
             ret = -1;
         }
@@ -8695,8 +8695,8 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog, uint8_t recv_ecn)
         memset(p, 0, sizeof(p));
         memcpy(p + 1, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id_len);
         p[0] |= 64;
-        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr,
-            (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
     }
 
     /* Free the resource, which will close the log file.
@@ -9575,14 +9575,14 @@ int preferred_address_test_one(int migration_disabled, int cid_zero)
 
     /* Verify that the client and server have both migrated to using the preferred address */
     if (ret == 0 && picoquic_compare_addr((struct sockaddr*)&server_preferred,
-        (struct sockaddr*)&test_ctx->cnx_client->path[0]->peer_addr) != 0) {
+        (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->peer_addr) != 0) {
         DBG_PRINTF("%s", "Server address at client not updated\n");
         ret = -1;
     }
 
     if (ret == 0 && test_ctx->cnx_server != NULL &&
         picoquic_compare_addr((struct sockaddr*)&server_preferred,
-        (struct sockaddr*)&test_ctx->cnx_server->path[0]->local_addr) != 0) {
+        (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->local_addr) != 0) {
         DBG_PRINTF("%s", "Server address not promoted\n");
         ret = -1;
     }
@@ -10945,8 +10945,8 @@ int integrity_limit_test()
         memset(p, 0, sizeof(p));
         memcpy(p + 1, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id_len);
         p[0] |= 64;
-        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr,
-            (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
 
         if (test_ctx->cnx_server->cnx_state != picoquic_state_disconnecting) {
             DBG_PRINTF("Connection not disconnecting, limit 0x%" PRIx64 ", reached %" PRIx64,

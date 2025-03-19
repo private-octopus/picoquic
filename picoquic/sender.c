@@ -1470,8 +1470,8 @@ static size_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_
             probe_length = cnx->remote_parameters.max_packet_size;
 
             if (cnx->quic->mtu_max > 0 && (int)probe_length >
-                cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->peer_addr)) {
-                probe_length = cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->peer_addr);
+                cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->first_tuple->peer_addr)) {
+                probe_length = cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->first_tuple->peer_addr);
             }
             else if (probe_length > PICOQUIC_MAX_PACKET_SIZE) {
                 probe_length = PICOQUIC_MAX_PACKET_SIZE;
@@ -1481,7 +1481,7 @@ static size_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_
             }
         }
         else if (cnx->quic->mtu_max > 0) {
-            probe_length = cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->peer_addr);
+            probe_length = cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->first_tuple->peer_addr);
         }
         else {
             probe_length = PICOQUIC_PRACTICAL_MAX_MTU;
@@ -1808,7 +1808,7 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
             memset(&dest_addr, 0, sizeof(struct sockaddr_storage));
 
             /* program a migration. */
-            if (ipv4_received && cnx->path[0]->peer_addr.ss_family == AF_INET) {
+            if (ipv4_received && cnx->path[0]->first_tuple->peer_addr.ss_family == AF_INET) {
                 /* select IPv4 */
                 ipv6_received = 0;
             }
@@ -1831,11 +1831,11 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
             /* Only send a probe if not already using that address
              * and the target address is not using a protected port number
              */
-            if (picoquic_compare_addr((struct sockaddr *)&dest_addr, (struct sockaddr *)&cnx->path[0]->peer_addr) != 0 &&
+            if (picoquic_compare_addr((struct sockaddr *)&dest_addr, (struct sockaddr *)&cnx->path[0]->first_tuple->peer_addr) != 0 &&
                 (cnx->quic->is_port_blocking_disabled || !picoquic_check_addr_blocked((struct sockaddr *)&dest_addr))) {
                 struct sockaddr* local_addr = NULL;
-                if (cnx->path[0]->local_addr.ss_family != 0 && cnx->path[0]->local_addr.ss_family == dest_addr.ss_family) {
-                    local_addr = (struct sockaddr*) & cnx->path[0]->local_addr;
+                if (cnx->path[0]->first_tuple->local_addr.ss_family != 0 && cnx->path[0]->first_tuple->local_addr.ss_family == dest_addr.ss_family) {
+                    local_addr = (struct sockaddr*) & cnx->path[0]->first_tuple->local_addr;
                 }
 
                 ret = picoquic_probe_new_path_ex(cnx, (struct sockaddr *)&dest_addr, local_addr, 0,
@@ -2153,13 +2153,13 @@ uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path
 {
     /* "Challenge time" holds the time at which the last challenge was set. We
      * use the value to compute an estimate of the RTT */
-    uint64_t next_challenge_time = path_x->challenge_time;
+    uint64_t next_challenge_time = path_x->first_tuple->challenge_time;
 
-    if (path_x->challenge_repeat_count == 0) {
+    if (path_x->first_tuple->challenge_repeat_count == 0) {
         next_challenge_time = current_time;
     } else {
-        if (path_x->challenge_repeat_count >= 2) {
-            next_challenge_time += path_x->retransmit_timer << (path_x->challenge_repeat_count-1);
+        if (path_x->first_tuple->challenge_repeat_count >= 2) {
+            next_challenge_time += path_x->retransmit_timer << (path_x->first_tuple->challenge_repeat_count-1);
         }
         else {
             next_challenge_time += PICOQUIC_INITIAL_RETRANSMIT_TIMER;
@@ -2175,8 +2175,8 @@ uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path
                 nat_challenge_time = current_time;
             }
             else {
-                if (path_x->challenge_repeat_count >= 2) {
-                    nat_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
+                if (path_x->first_tuple->challenge_repeat_count >= 2) {
+                    nat_challenge_time += path_x->retransmit_timer << path_x->first_tuple->challenge_repeat_count;
                 }
                 else {
                     nat_challenge_time += path_x->retransmit_timer;
@@ -2667,7 +2667,7 @@ void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time)
         size_t token_size;
         picoquic_connection_id_t n_cid = picoquic_null_connection_id;
 
-        if (picoquic_prepare_retry_token(cnx->quic, (struct sockaddr*) & cnx->path[0]->peer_addr,
+        if (picoquic_prepare_retry_token(cnx->quic, (struct sockaddr*) & cnx->path[0]->first_tuple->peer_addr,
             current_time + PICOQUIC_TOKEN_DELAY_LONG, &n_cid, &n_cid, 0,
             token_buffer, sizeof(token_buffer), &token_size) == 0) {
             if (picoquic_queue_new_token_frame(cnx, token_buffer, token_size) != 0) {
@@ -2792,14 +2792,14 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
                     *is_challenge_padding_needed = 1;
                 }
             }
-            else if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
+            else if (path_x->first_tuple->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
                 /* When blocked, repeat the path challenge or wait */
 
                 bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, more_data, is_pure_ack,
-                    path_x->challenge[path_x->challenge_repeat_count]);
+                    path_x->first_tuple->challenge[path_x->first_tuple->challenge_repeat_count]);
                 if (bytes_next > bytes_challenge) {
-                    path_x->challenge_time = current_time;
-                    path_x->challenge_repeat_count++;
+                    path_x->first_tuple->challenge_time = current_time;
+                    path_x->first_tuple->challenge_repeat_count++;
                     if (path_x->is_nat_challenge == 0){
                         if (cnx->client_mode || ((path_x->bytes_sent + PICOQUIC_ENFORCED_INITIAL_MTU) <= path_x->received)) {
                             *is_challenge_padding_needed = 1;
@@ -2869,7 +2869,7 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
     if (path_x->response_required) {
         uint8_t* bytes_response = bytes_next;
         if ((bytes_next = picoquic_format_path_response_frame(bytes_response, bytes_max,
-            more_data, is_pure_ack, path_x->challenge_response)) > bytes_response) {
+            more_data, is_pure_ack, path_x->first_tuple->challenge_response)) > bytes_response) {
             path_x->response_required = 0;
             *is_challenge_padding_needed |= cnx->client_mode || ((path_x->bytes_sent + PICOQUIC_ENFORCED_INITIAL_MTU) <= path_x->received);
         }
@@ -4029,15 +4029,15 @@ static void picoquic_set_path_addresses(picoquic_cnx_t* cnx, int path_id, int is
     }
     else {
         if (p_addr_to != NULL) {
-            picoquic_store_addr(p_addr_to, (struct sockaddr*)&cnx->path[path_id]->peer_addr);
+            picoquic_store_addr(p_addr_to, (struct sockaddr*)&cnx->path[path_id]->first_tuple->peer_addr);
         }
 
         if (p_addr_from != NULL) {
-            picoquic_store_addr(p_addr_from, (struct sockaddr*)&cnx->path[path_id]->local_addr);
+            picoquic_store_addr(p_addr_from, (struct sockaddr*)&cnx->path[path_id]->first_tuple->local_addr);
         }
 
         if (if_index != NULL) {
-            *if_index = cnx->path[path_id]->if_index_dest;
+            *if_index = cnx->path[path_id]->first_tuple->if_index_dest;
         }
     }
 }
@@ -4282,7 +4282,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
             }
             else if (cnx->path[i]->challenge_required) {
                 uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, cnx->path[i], current_time, NULL);
-                if (cnx->path[i]->challenge_repeat_count == 0 ||
+                if (cnx->path[i]->first_tuple->challenge_repeat_count == 0 ||
                     current_time >= next_challenge_time) {
                     /* will try this path, unless a validated path came in */
                     path_id = i;

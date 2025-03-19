@@ -171,8 +171,8 @@ int wait_client_migration_done(picoquic_test_tls_api_ctx_t* test_ctx,
     struct sockaddr_storage old_dest;
 
     /* Check the selected path */
-    picoquic_store_addr(&old_srce, (struct sockaddr*)&test_ctx->cnx_client->path[0]->local_addr);
-    picoquic_store_addr(&old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr);
+    picoquic_store_addr(&old_srce, (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->local_addr);
+    picoquic_store_addr(&old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->peer_addr);
 
 
     while (*simulated_time < time_out &&
@@ -180,11 +180,11 @@ int wait_client_migration_done(picoquic_test_tls_api_ctx_t* test_ctx,
         nb_trials < 1024 &&
         nb_inactive < 64 &&
         ret == 0 && (
-            (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->local_addr) == 0 &&
-                picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr) == 0)
+            (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->local_addr) == 0 &&
+                picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->peer_addr) == 0)
             ||
-            (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr) == 0 &&
-                picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr) == 0))){
+            (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr) == 0 &&
+                picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->local_addr) == 0))){
         was_active = 0;
         nb_trials++;
 
@@ -199,11 +199,11 @@ int wait_client_migration_done(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     if (ret != 0 || (test_ctx->cnx_client->cnx_state != picoquic_state_ready ||
-        (picoquic_compare_addr((struct sockaddr*) & old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->local_addr) == 0 &&
-            picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr) == 0))
+        (picoquic_compare_addr((struct sockaddr*) & old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->local_addr) == 0 &&
+            picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->peer_addr) == 0))
         ||
-        (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr) == 0 &&
-            picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr) == 0)){
+        (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr) == 0 &&
+            picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->local_addr) == 0)){
         DBG_PRINTF("Could not complete migration, client state = %d\n",
             test_ctx->cnx_client->cnx_state);
         ret = -1;
@@ -390,8 +390,8 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     struct sockaddr_storage old_dest;
 
     /* Check the selected path */
-    picoquic_store_addr(&old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->local_addr);
-    picoquic_store_addr(&old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr);
+    picoquic_store_addr(&old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->local_addr);
+    picoquic_store_addr(&old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->peer_addr);
 
     while (*simulated_time < time_out &&
         ret == 0 &&
@@ -1086,7 +1086,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             test_ctx->cnx_client->nb_paths < 2 ||
             test_ctx->cnx_server->path[0]->unique_path_id != 0 ||
             test_ctx->cnx_client->path[0]->unique_path_id != 0 ||
-            picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->peer_addr,
+            picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
                 (struct sockaddr*)&test_ctx->client_addr_natted) != 0) {
             DBG_PRINTF("%s", "NAT traversal looks wrong.\n");
             ret = -1;
@@ -1157,14 +1157,14 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
         for (int p = 0; p < 2; p++) {
             if (picoquic_compare_addr(
-                (struct sockaddr*)&test_ctx->cnx_client->path[p]->local_addr,
-                (struct sockaddr*)&test_ctx->cnx_client->path[p]->observed_addr) != 0) {
+                (struct sockaddr*)&test_ctx->cnx_client->path[p]->first_tuple->local_addr,
+                (struct sockaddr*)&test_ctx->cnx_client->path[p]->first_tuple->observed_addr) != 0) {
                 char text1[256];
                 char text2[256];
 
                 DBG_PRINTF("Path %d, Local: %s, observed: %s", p,
-                    picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[p]->local_addr, text1, sizeof(text1)),
-                    picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[p]->observed_addr, text2, sizeof(text2)));
+                    picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[p]->first_tuple->local_addr, text1, sizeof(text1)),
+                    picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[p]->first_tuple->observed_addr, text2, sizeof(text2)));
                 ret = -1;
             }
         }
@@ -1753,8 +1753,8 @@ int multipath_trace_test_one()
         memset(p, 0, sizeof(p));
         memcpy(p + 1, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id_len);
         p[0] |= 64;
-        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr,
-            (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
     }
 
     /* Delete the context, which will close the log file. */

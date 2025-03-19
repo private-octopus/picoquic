@@ -1410,13 +1410,13 @@ int picoquic_incoming_client_initial(
         }
         else if ((*pcnx)->cnx_state < picoquic_state_server_almost_ready) {
             /* Document the incoming addresses */
-            if ((*pcnx)->path[0]->local_addr.ss_family == 0 && addr_to != NULL) {
-                picoquic_store_addr(&(*pcnx)->path[0]->local_addr, addr_to);
+            if ((*pcnx)->path[0]->first_tuple->local_addr.ss_family == 0 && addr_to != NULL) {
+                picoquic_store_addr(&(*pcnx)->path[0]->first_tuple->local_addr, addr_to);
             }
-            if ((*pcnx)->path[0]->peer_addr.ss_family == 0 && addr_from != NULL) {
-                picoquic_store_addr(&(*pcnx)->path[0]->peer_addr, addr_from);
+            if ((*pcnx)->path[0]->first_tuple->peer_addr.ss_family == 0 && addr_from != NULL) {
+                picoquic_store_addr(&(*pcnx)->path[0]->first_tuple->peer_addr, addr_from);
             }
-            (*pcnx)->path[0]->if_index_dest = if_index_to;
+            (*pcnx)->path[0]->first_tuple->if_index_dest = if_index_to;
 
             /* decode the incoming frames */
             if (ret == 0) {
@@ -1617,10 +1617,10 @@ int picoquic_incoming_server_initial(
     if (ret == 0) {
         if (cnx->cnx_state <= picoquic_state_client_handshake_start) {
             /* Document local address if not present */
-            if (cnx->path[0]->local_addr.ss_family == 0 && addr_to != NULL) {
-                picoquic_store_addr(&cnx->path[0]->local_addr, addr_to);
+            if (cnx->path[0]->first_tuple->local_addr.ss_family == 0 && addr_to != NULL) {
+                picoquic_store_addr(&cnx->path[0]->first_tuple->local_addr, addr_to);
             }
-            cnx->path[0]->if_index_dest = if_index_to;
+            cnx->path[0]->first_tuple->if_index_dest = if_index_to;
             /* Accept the incoming frames */
             if (ph->payload_length == 0) {
                 /* empty payload! */
@@ -1933,7 +1933,7 @@ int picoquic_find_incoming_unique_path(picoquic_cnx_t* cnx, picoquic_packet_head
              */
             path_id = cnx->nb_paths - 1;
             path_x = cnx->path[path_id];
-            path_x->if_index_dest = if_index_to;
+            path_x->first_tuple->if_index_dest = if_index_to;
 
              /* when creating the path, we need to copy the dest CID and chose
               * destination CID with the matching path ID.
@@ -1959,10 +1959,10 @@ int picoquic_find_incoming_unique_path(picoquic_cnx_t* cnx, picoquic_packet_head
             }
         }
         /* If the addresses match, we are good. */
-        if (picoquic_compare_addr(addr_from, (struct sockaddr*)&path_x->peer_addr) == 0) {
+        if (picoquic_compare_addr(addr_from, (struct sockaddr*)&path_x->first_tuple->peer_addr) == 0) {
             /* Consider whether to document the local address */
-            if (path_x->local_addr.ss_family == AF_UNSPEC) {
-                picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+            if (path_x->first_tuple->local_addr.ss_family == AF_UNSPEC) {
+                picoquic_store_addr(&cnx->path[path_id]->first_tuple->local_addr, addr_to);
             }
         }
         /* Else, this might be a NAT rebinding. But we only handle one NAT rebinding at a time.
@@ -2011,7 +2011,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     if (path_id < 0 && partial_match_path >= 0) {
         /* Document the source address and promote to full match. */
         path_id = partial_match_path;
-        picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+        picoquic_store_addr(&cnx->path[path_id]->first_tuple->local_addr, addr_to);
     }
 
     if (path_id >= 0) {
@@ -2228,7 +2228,7 @@ int picoquic_incoming_1rtt(
         else if (ret == 0) {
             picoquic_path_t* path_x = cnx->path[path_id];
 
-            path_x->if_index_dest = if_index_to;
+            path_x->first_tuple->if_index_dest = if_index_to;
             cnx->is_1rtt_received = 1;
             picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
             /* Accept the incoming frames */

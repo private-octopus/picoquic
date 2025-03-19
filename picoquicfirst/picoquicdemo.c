@@ -492,7 +492,7 @@ static int simulate_migration(client_loop_cb_t* cb_ctx)
     fprintf(stdout, "Simulating migration to port %u (local address is %s)\n", cb_ctx->alt_port, 
         picoquic_addr_text((struct sockaddr*)&cb_ctx->client_address, text1, sizeof(text1)));
     picoquic_store_addr(&addr_from,
-        (struct sockaddr*)&cb_ctx->cnx_client->path[0]->local_addr);
+        (struct sockaddr*)&cb_ctx->cnx_client->path[0]->first_tuple->local_addr);
     if (addr_from.ss_family == AF_INET6) {
         ((struct sockaddr_in6*)&addr_from)->sin6_port = htons(cb_ctx->alt_port);
     }
@@ -536,7 +536,7 @@ int client_create_additional_path(picoquic_cnx_t* cnx, client_loop_cb_t* cb_ctx)
             picoquic_compare_addr((struct sockaddr*)&addr_zero4, (struct sockaddr*)&cb_ctx->client_alt_address[i]) == 0)) {
             picoquic_log_app_message(cb_ctx->cnx_client, "%s\n", "Will try to simulate new path");
             picoquic_store_addr(&simulate_addr,
-                (struct sockaddr*)&cb_ctx->cnx_client->path[0]->local_addr);
+                (struct sockaddr*)&cb_ctx->cnx_client->path[0]->first_tuple->local_addr);
             if (simulate_addr.ss_family == AF_INET6) {
                 ((struct sockaddr_in6*)&simulate_addr)->sin6_port = htons(cb_ctx->alt_port);
             }
@@ -620,13 +620,13 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             }
             /* Keeping track of the addresses and ports, as we
              * need them to verify the migration behavior */
-            if (!cb_ctx->address_updated && cb_ctx->cnx_client->path[0]->local_addr.ss_family != 0) {
-                uint16_t updated_port = (cb_ctx->cnx_client->path[0]->local_addr.ss_family == AF_INET) ?
-                    ((struct sockaddr_in*) & cb_ctx->cnx_client->path[0]->local_addr)->sin_port :
-                    ((struct sockaddr_in6*) & cb_ctx->cnx_client->path[0]->local_addr)->sin6_port;
+            if (!cb_ctx->address_updated && cb_ctx->cnx_client->path[0]->first_tuple->local_addr.ss_family != 0) {
+                uint16_t updated_port = (cb_ctx->cnx_client->path[0]->first_tuple->local_addr.ss_family == AF_INET) ?
+                    ((struct sockaddr_in*) & cb_ctx->cnx_client->path[0]->first_tuple->local_addr)->sin_port :
+                    ((struct sockaddr_in6*) & cb_ctx->cnx_client->path[0]->first_tuple->local_addr)->sin6_port;
                 if (updated_port != 0) {
                     cb_ctx->address_updated = 1;
-                    picoquic_store_addr(&cb_ctx->client_address, (struct sockaddr*) & cb_ctx->cnx_client->path[0]->local_addr);
+                    picoquic_store_addr(&cb_ctx->client_address, (struct sockaddr*) & cb_ctx->cnx_client->path[0]->first_tuple->local_addr);
                     fprintf(stdout, "Client port (AF=%d): %d.\n", cb_ctx->client_address.ss_family, updated_port);
                 }
             }
@@ -670,7 +670,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                 /* Track the migration to server preferred address */
                 if (cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined && !cb_ctx->migration_to_preferred_finished) {
                     if (picoquic_compare_addr(
-                        (struct sockaddr*) & cb_ctx->server_address, (struct sockaddr*) & cb_ctx->cnx_client->path[0]->peer_addr) != 0) {
+                        (struct sockaddr*) & cb_ctx->server_address, (struct sockaddr*) & cb_ctx->cnx_client->path[0]->first_tuple->peer_addr) != 0) {
                         fprintf(stdout, "Migrated to server preferred address!\n");
                         picoquic_log_app_message(cb_ctx->cnx_client, "%s", "Migrated to server preferred address!");
                         cb_ctx->migration_to_preferred_finished = 1;
@@ -711,11 +711,11 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                     switch (cb_ctx->force_migration) {
                     case 1:
                         fprintf(stdout, "Switch to new port. Will test NAT rebinding support.\n");
-                        if (cb_ctx->cnx_client->path[0]->local_addr.ss_family == AF_INET) {
-                            ((struct sockaddr_in*)&cb_ctx->cnx_client->path[0]->local_addr)->sin_port = cb_ctx->local_port;
+                        if (cb_ctx->cnx_client->path[0]->first_tuple->local_addr.ss_family == AF_INET) {
+                            ((struct sockaddr_in*)&cb_ctx->cnx_client->path[0]->first_tuple->local_addr)->sin_port = cb_ctx->local_port;
                         }
                         else {
-                            ((struct sockaddr_in6*)&cb_ctx->cnx_client->path[0]->local_addr)->sin6_port = cb_ctx->local_port;
+                            ((struct sockaddr_in6*)&cb_ctx->cnx_client->path[0]->first_tuple->local_addr)->sin6_port = cb_ctx->local_port;
                         }
                         ret = PICOQUIC_NO_ERROR_SIMULATE_NAT;
                         break;
@@ -1111,7 +1111,7 @@ int quic_client(const char* ip_address_text, int server_port,
             }
             else {
                 int source_addr_cmp = picoquic_compare_addr(
-                    (struct sockaddr*) & cnx_client->path[0]->local_addr,
+                    (struct sockaddr*) & cnx_client->path[0]->first_tuple->local_addr,
                     (struct sockaddr*) & loop_cb.client_address);
                 int dest_cid_cmp = picoquic_compare_connection_id(
                     &cnx_client->path[0]->p_remote_cnxid->cnx_id,

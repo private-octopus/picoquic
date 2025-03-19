@@ -842,7 +842,7 @@ void binlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
     picoquic_parse_packet_header((cnx == NULL) ? NULL : cnx->quic, send_buffer, send_length,
         ((cnx == NULL || cnx->path[0] == NULL) ? (struct sockaddr *)&default_addr :
-        (struct sockaddr *)&cnx->path[0]->local_addr), &ph, &pcnx, 0);
+        (struct sockaddr *)&cnx->path[0]->first_tuple->local_addr), &ph, &pcnx, 0);
 
     if (cnx != NULL) {
         picoquic_epoch_enum epoch = (ph.ptype == picoquic_packet_1rtt_protected) ? picoquic_epoch_1rtt :
