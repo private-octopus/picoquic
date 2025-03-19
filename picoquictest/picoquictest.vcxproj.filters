@@ -168,12 +168,48 @@
     <ClCompile Include="pacing_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="p2p_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ack_frequency_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="quicperf_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="getter_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="spinbit_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="congestion_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="picolog_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="memlog_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="qlog_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="cc_compete_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="picoquic_ns.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picoquictest_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picoquic_ns.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

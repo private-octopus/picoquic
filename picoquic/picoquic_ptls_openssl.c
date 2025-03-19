@@ -24,6 +24,7 @@
  */
 
 #include "picotls.h"
+#include "picoquic.h"
 #include "picoquic_crypto_provider_api.h"
 
 #ifdef PTLS_WITHOUT_OPENSSL
@@ -130,14 +131,19 @@ static int set_openssl_private_key_from_key_file(char const* keypem, ptls_contex
 {
     int ret = 0;
     BIO* bio = BIO_new_file(keypem, "rb");
-    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
-    if (pkey == NULL) {
+    if (bio == NULL) {
         ret = -1;
     }
     else {
-        ret = set_openssl_sign_certificate_from_key(pkey, ctx);
+        EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+        if (pkey == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = set_openssl_sign_certificate_from_key(pkey, ctx);
+        }
+        BIO_free(bio);
     }
-    BIO_free(bio);
     return ret;
 }
 
@@ -208,16 +214,29 @@ ptls_openssl_verify_certificate_t* picoquic_openssl_get_openssl_certificate_veri
     return verifier;
 }
 
-ptls_verify_certificate_t* picoquic_openssl_get_certificate_verifier(char const* cert_root_file_name,
-    unsigned int* is_cert_store_not_empty)
-{
-    ptls_openssl_verify_certificate_t* verifier = picoquic_openssl_get_openssl_certificate_verifier(cert_root_file_name,
-        is_cert_store_not_empty);
-    return (verifier == NULL) ? NULL : (ptls_verify_certificate_t*)&verifier->super;
-}
-
 void picoquic_openssl_dispose_certificate_verifier(ptls_verify_certificate_t* verifier) {
     ptls_openssl_dispose_verify_certificate((ptls_openssl_verify_certificate_t*)verifier);
+    /* The ptls_openssl call does not free the verifier context.
+     * We free it here, in order to match the programming pattern of picoquic.
+     */
+    free(verifier);
+}
+
+ptls_verify_certificate_t* picoquic_openssl_get_certificate_verifier(char const* cert_root_file_name,
+    unsigned int* is_cert_store_not_empty, picoquic_free_verify_certificate_ctx * free_certificate_verifier_fn)
+{
+    ptls_verify_certificate_t* verify_cert = NULL;
+    ptls_openssl_verify_certificate_t* verifier = picoquic_openssl_get_openssl_certificate_verifier(cert_root_file_name,
+        is_cert_store_not_empty);
+
+    if (verifier == NULL) {
+        free_certificate_verifier_fn = NULL;
+    }
+    else {
+        verify_cert = &verifier->super;
+        *free_certificate_verifier_fn = picoquic_openssl_dispose_certificate_verifier;
+    }
+    return verify_cert;
 }
 
 /* Set the list of root certificates used by the client.

@@ -145,9 +145,14 @@ The application could combine `nb_bytes_ = 0` (no data to send now) and `fin = 1
 if finished sending that stream. The stack will then send a stream data frame with
 no content but the `FIN` bit set, marking the end of the stream.
 
-The application could also set `is_still_active=1`, or call `picoquic_mark_active_stream`
-from within the call back, which is equivalent. But that's a bit of a gamble.
-The stack will try to fill the current packet with some other content,
+The application could also set `is_still_active=1` from within the call back if more data is to be polled, e.g.:
+~~~
+    /* Poll for data in the next callback */
+    (void)picoquic_provide_stream_data_buffer(context, 0, 0, 1);
+~~~
+It is to be noted that using mark_active_stream from within the callback is ambiguous, and may not behave the same way as `setting is_still_active=1`, as shown above, since it is not linked to the callback context. 
+
+When setting the is_still_active stream from within the callback, the stack will try to fill the current packet with some other content,
 but will immediately repeat the callback when ready to send another packet.
 That kind of "hyper active polling" may not be the best for performance, except in the
 case when the application message does not fit in the length of the buffer, maybe
@@ -281,7 +286,7 @@ in an error `PICOQUIC_ERROR_DATAGRAM_TOO_LONG`.
 With the just in time API, the application:
 
 - indicates its readiness to send datagrams marks a stream as `active` using
-  the API `picoquic_set_datagram_ready`.
+  the API `picoquic_mark_datagram_ready`.
 
 - receives the callback `picoquic_callback_prepare_datagram` when the stack is ready
 to send datagrams in a packet.

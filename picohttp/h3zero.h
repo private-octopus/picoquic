@@ -51,6 +51,7 @@ extern "C" {
 #define H3ZERO_USER_AGENT_STRING "H3Zero/1.0"
 
 #define H3ZERO_CAPSULE_CLOSE_WEBTRANSPORT_SESSION 0x2843
+#define H3ZERO_CAPSULE_DRAIN_WEBTRANSPORT_SESSION 0x78ae
 
 typedef enum {
 	h3zero_frame_data = 0,
@@ -141,6 +142,7 @@ typedef enum {
 #define H3ZERO_QPACK_AUTHORITY 0
 #define H3ZERO_QPACK_SCHEME_HTTPS 23
 #define H3ZERO_QPACK_TEXT_PLAIN 53
+#define H3ZERO_QPACK_RANGE 55
 #define H3ZERO_QPACK_USER_AGENT 95
 #define H3ZERO_QPACK_ORIGIN 90
 #define H3ZERO_QPACK_SERVER 92
@@ -183,6 +185,8 @@ typedef struct st_h3zero_header_parts_t {
     h3zero_method_enum method;
     uint8_t const * path;
     size_t path_length;
+    uint8_t const * range;
+    size_t range_length;
     int status;
     h3zero_content_type_enum content_type;
     uint8_t const * protocol;
@@ -190,7 +194,11 @@ typedef struct st_h3zero_header_parts_t {
     unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
 
-/* Setting codes. */
+/* Setting codes.
+* This list includes the "extension" settings for datagrams and web
+* transport, because we want to have common functions for coding and
+* decoding setting values.
+ */
 #define h3zero_setting_reserved = 0x0
 #define h3zero_setting_header_table_size 0x1
 #define h3zero_setting_max_header_list_size 0x6
@@ -225,15 +233,20 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t const * path, size_t path_length, char const * host);
 uint8_t* h3zero_create_request_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
-    uint8_t const* path, size_t path_length, char const* host, char const* ua_string);
+    uint8_t const* path, size_t path_length, uint8_t const* range, size_t range_length,
+    char const* host, char const* ua_string);
 uint8_t * h3zero_create_post_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t const * path, size_t path_length, char const * host,
     h3zero_content_type_enum content_type);
+uint8_t* h3zero_create_request_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
+    uint8_t const* path, size_t path_length, uint8_t const* range, size_t range_length,
+    char const* host, char const* ua_string);
 uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
-    uint8_t const* path, size_t path_length, char const* protocol, char const* origin,
-    char const* ua_string);
+    char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
+    char const* origin, char const* ua_string);
 uint8_t* h3zero_create_post_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
-    uint8_t const* path, size_t path_length, char const* host, h3zero_content_type_enum content_type, char const* ua_string);
+    uint8_t const* path, size_t path_length, uint8_t const* range, size_t range_length,
+    char const* host, h3zero_content_type_enum content_type, char const* ua_string);
 uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_content_type_enum doc_type);
 uint8_t* h3zero_create_error_frame(uint8_t* bytes, uint8_t* bytes_max, char const* error_code, char const* server_string);

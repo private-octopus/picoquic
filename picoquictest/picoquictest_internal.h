@@ -197,6 +197,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     test_api_callback_t server_callback;
     size_t nb_test_streams;
     test_api_stream_t test_stream[PICOQUIC_TEST_MAX_TEST_STREAMS];
+    uint64_t loss_mask_default;
     picoquictest_sim_link_t* c_to_s_link;
     picoquictest_sim_link_t* c_to_s_link_2; /* for use in multipath tests */
     picoquictest_sim_link_t* s_to_c_link;
@@ -223,6 +224,8 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     int streams_finished;
     int reset_received;
     int immediate_exit;
+    /* Checking that addresses are discovered */
+    int nb_address_observed;
 
     /* Blackhole period if needed */
     uint64_t blackhole_start;
@@ -256,6 +259,7 @@ typedef struct st_test_skip_frames_t {
     uint64_t expected_error;
     int skip_fails;
     int mpath;
+    int nb_varints;
 } test_skip_frames_t;
 
 extern test_skip_frames_t test_skip_list[];
@@ -375,6 +379,7 @@ void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_lo
 uint64_t picoquic_sqrt_for_tests(uint64_t y);
 
 int picoquic_test_set_minimal_cnx(picoquic_quic_t** quic, picoquic_cnx_t** cnx);
+int picoquic_test_set_minimal_cnx_with_time(picoquic_quic_t** quic, picoquic_cnx_t** cnx, uint64_t* simulated_time);
 int picoquic_test_reset_minimal_cnx(picoquic_quic_t* quic, picoquic_cnx_t** cnx);
 void picoquic_test_delete_minimal_cnx(picoquic_quic_t** quic, picoquic_cnx_t** cnx);
 

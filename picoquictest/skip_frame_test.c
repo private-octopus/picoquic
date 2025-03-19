@@ -221,7 +221,7 @@ static uint8_t test_frame_type_ack_frequency_t5[] = {
 };
 
 static uint8_t test_frame_type_immediate_ack[] = {
-    0x40, picoquic_frame_type_immediate_ack
+    picoquic_frame_type_immediate_ack
 };
 
 static uint8_t test_frame_type_time_stamp[] = {
@@ -233,24 +233,19 @@ static uint8_t test_frame_type_path_abandon_0[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
     0x01, /* Path 0 */
-    0x00, /* No error */
-    0x00 /* No phrase */
+    0x00 /* No error */
 };
 
 static uint8_t test_frame_type_path_abandon_1[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
     0x01,
-    0x11, /* Some new error */
-    0x03, 
-    (uint8_t)'b',
-    (uint8_t)'a',
-    (uint8_t)'d',
+    0x11 /* Some new error */
 };
 
-static uint8_t test_frame_type_path_standby[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_standby >> 24)), (uint8_t)(picoquic_frame_type_path_standby >> 16),
-    (uint8_t)(picoquic_frame_type_path_standby >> 8), (uint8_t)(picoquic_frame_type_path_standby & 0xFF),
+static uint8_t test_frame_type_path_backup[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_backup >> 24)), (uint8_t)(picoquic_frame_type_path_backup >> 16),
+    (uint8_t)(picoquic_frame_type_path_backup >> 8), (uint8_t)(picoquic_frame_type_path_backup & 0xFF),
     0x00, /* Path 0 */
     0x0F, /* Sequence = 0x0F */
 };
@@ -270,11 +265,11 @@ static uint8_t test_frame_type_bdp[] = {
     0x04, 0x0A, 0x0, 0x0, 0x01
 };
 
-static uint8_t test_frame_type_ack_mp[] = {
-    (uint8_t)(0x80|(picoquic_frame_type_ack_mp>>24)),
-    (uint8_t)(picoquic_frame_type_ack_mp>>16),
-    (uint8_t)(picoquic_frame_type_ack_mp>>8),
-    (uint8_t)(picoquic_frame_type_ack_mp),
+static uint8_t test_frame_type_path_ack[] = {
+    (uint8_t)(0x80|(picoquic_frame_type_path_ack>>24)),
+    (uint8_t)(picoquic_frame_type_path_ack>>16),
+    (uint8_t)(picoquic_frame_type_path_ack>>8),
+    (uint8_t)(picoquic_frame_type_path_ack),
     0,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
     0x44, 0,
@@ -284,11 +279,11 @@ static uint8_t test_frame_type_ack_mp[] = {
     5, 12
 };
 
-static uint8_t test_frame_type_ack_mp_ecn[] = {
-    (uint8_t)(0x80|(picoquic_frame_type_ack_mp_ecn>>24)),
-    (uint8_t)(picoquic_frame_type_ack_mp_ecn>>16),
-    (uint8_t)(picoquic_frame_type_ack_mp_ecn>>8),
-    (uint8_t)(picoquic_frame_type_ack_mp_ecn),
+static uint8_t test_frame_type_path_ack_ecn[] = {
+    (uint8_t)(0x80|(picoquic_frame_type_path_ack_ecn>>24)),
+    (uint8_t)(picoquic_frame_type_path_ack_ecn>>16),
+    (uint8_t)(picoquic_frame_type_path_ack_ecn>>8),
+    (uint8_t)(picoquic_frame_type_path_ack_ecn),
     0,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
     0x44, 0,
@@ -299,68 +294,135 @@ static uint8_t test_frame_type_ack_mp_ecn[] = {
     3, 0, 1
 };
 
-static uint8_t test_frame_type_max_paths[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_max_paths >> 24)), (uint8_t)(picoquic_frame_type_max_paths >> 16),
-    (uint8_t)(picoquic_frame_type_max_paths >> 8), (uint8_t)(picoquic_frame_type_max_paths & 0xFF),
+static uint8_t test_frame_type_max_path_id[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_max_path_id >> 24)), (uint8_t)(picoquic_frame_type_max_path_id >> 16),
+    (uint8_t)(picoquic_frame_type_max_path_id >> 8), (uint8_t)(picoquic_frame_type_max_path_id & 0xFF),
     0x11, /* max paths = 17 */
 };
 
-#define TEST_SKIP_ITEM(n, x, a, l, e, err, skip_err) \
-    {                                                \
-        n, x, sizeof(x), a, l, e, err, skip_err, 0   \
+static uint8_t test_frame_type_path_new_connection_id[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_new_connection_id >> 24)), (uint8_t)(picoquic_frame_type_path_new_connection_id >> 16),
+    (uint8_t)(picoquic_frame_type_path_new_connection_id >> 8), (uint8_t)(picoquic_frame_type_path_new_connection_id & 0xFF),
+    1,
+    7,
+    0,
+    8,
+    1, 2, 3, 4, 5, 6, 7, 8,
+    0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8,
+    0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF, 0xB0
+};
+
+static uint8_t test_frame_type_path_retire_connection_id[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_retire_connection_id >> 24)), (uint8_t)(picoquic_frame_type_path_retire_connection_id >> 16),
+    (uint8_t)(picoquic_frame_type_path_retire_connection_id >> 8), (uint8_t)(picoquic_frame_type_path_retire_connection_id & 0xFF),
+    0,
+    2
+};
+
+static uint8_t test_frame_type_paths_blocked[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_paths_blocked >> 24)), (uint8_t)(picoquic_frame_type_paths_blocked >> 16),
+    (uint8_t)(picoquic_frame_type_paths_blocked >> 8), (uint8_t)(picoquic_frame_type_paths_blocked & 0xFF),
+    0x11, /* max paths = 17 */
+};
+
+static uint8_t test_frame_type_path_cid_blocked[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_path_cid_blocked >> 24)), (uint8_t)(picoquic_frame_type_path_cid_blocked >> 16),
+    (uint8_t)(picoquic_frame_type_path_cid_blocked >> 8), (uint8_t)(picoquic_frame_type_path_cid_blocked & 0xFF),
+    0x07, /* path id = 7 */
+};
+
+static uint8_t test_frame_observed_address_v4[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_observed_address_v4 >> 24)), (uint8_t)(picoquic_frame_type_observed_address_v4 >> 16),
+    (uint8_t)(picoquic_frame_type_observed_address_v4 >> 8), (uint8_t)(picoquic_frame_type_observed_address_v4 & 0xFF),
+    1,
+    0x1, 0x2, 0x3, 0x4,
+    0x12, 0x34,
+};
+
+static uint8_t test_frame_observed_address_v6[] = {
+    (uint8_t)(0x80 | (picoquic_frame_type_observed_address_v6 >> 24)), (uint8_t)(picoquic_frame_type_observed_address_v6 >> 16),
+    (uint8_t)(picoquic_frame_type_observed_address_v6 >> 8), (uint8_t)(picoquic_frame_type_observed_address_v6 & 0xFF),
+    2,
+    0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0x0,
+    0x45, 0x67,
+};
+
+#define TEST_SKIP_ITEM_OLD(n, x, a, l, e, err, skip_err)    \
+    {                                                       \
+        n, x, sizeof(x), a, l, e, err, skip_err, 0, 0       \
     }
 
-#define TEST_SKIP_ITEM_MPATH(n, x, a, l, e, err, skip_err, mpath) \
-    {                                                \
-        n, x, sizeof(x), a, l, e, err, skip_err, mpath   \
+#define TEST_SKIP_ITEM_OLD_MPATH(n, x, a, l, e, err, skip_err, mpath) \
+    {                                                             \
+        n, x, sizeof(x), a, l, e, err, skip_err, mpath, 0         \
+    }
+
+
+#define TEST_SKIP_ITEM(n, x, a, l, e, err, skip_err, varints) \
+    {                                                         \
+        n, x, sizeof(x), a, l, e, err, skip_err, 0, varints   \
+    }
+
+#define TEST_SKIP_ITEM_MPATH(n, x, a, l, e, err, skip_err, mpath, varints) \
+    {                                                                      \
+        n, x, sizeof(x), a, l, e, err, skip_err, mpath, varints         \
     }
 
 test_skip_frames_t test_skip_list[] = {
-    TEST_SKIP_ITEM("padding", test_frame_type_padding, 1, 0, 0, 0, 0),
-    TEST_SKIP_ITEM("reset_stream", test_frame_type_reset_stream, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("connection_close", test_type_connection_close, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("application_close", test_type_application_close, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 0, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("padding", test_frame_type_padding, 1, 0, 0, 0, 0, 0),
+    TEST_SKIP_ITEM("reset_stream", test_frame_type_reset_stream, 0, 0, 3, 0, 0, 3),
+    TEST_SKIP_ITEM("connection_close", test_type_connection_close, 0, 0, 3, 0, 0, 3),
+    TEST_SKIP_ITEM("application_close", test_type_application_close, 0, 0, 3, 0, 0, 2),
+    TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 0, 0, 3, 0, 0, 2),
 
-    TEST_SKIP_ITEM("max_data", test_frame_type_max_data, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("max_stream_data", test_frame_type_max_stream_data, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("max_streams_bidir", test_frame_type_max_streams_bidir, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("max_streams_unidir", test_frame_type_max_streams_unidir, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("ping", test_frame_type_ping, 0, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("max_data", test_frame_type_max_data, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM("max_stream_data", test_frame_type_max_stream_data, 0, 0, 3, 0, 0, 2),
+    TEST_SKIP_ITEM("max_streams_bidir", test_frame_type_max_streams_bidir, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM("max_streams_unidir", test_frame_type_max_streams_unidir, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM_OLD("ping", test_frame_type_ping, 0, 0, 3, 0, 0),
 
-    TEST_SKIP_ITEM("blocked", test_frame_type_blocked, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("stream_data_blocked", test_frame_type_stream_blocked, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("streams_blocked_bidir", test_frame_type_streams_blocked_bidir, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("streams_blocked_unidir", test_frame_type_streams_blocked_unidir, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("new_connection_id", test_frame_type_new_connection_id, 0, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("blocked", test_frame_type_blocked, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM("stream_data_blocked", test_frame_type_stream_blocked, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM("streams_blocked_bidir", test_frame_type_streams_blocked_bidir, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM("streams_blocked_unidir", test_frame_type_streams_blocked_unidir, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM("new_connection_id", test_frame_type_new_connection_id, 0, 0, 3, 0, 0, 4),
 
-    TEST_SKIP_ITEM("stop_sending", test_frame_type_stop_sending, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("challenge", test_frame_type_path_challenge, 1, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("response", test_frame_type_path_response, 1, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("new_token", test_frame_type_new_token, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("ack", test_frame_type_ack, 1, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("stop_sending", test_frame_type_stop_sending, 0, 0, 3, 0, 0, 2),
+    TEST_SKIP_ITEM("challenge", test_frame_type_path_challenge, 1, 0, 3, 0, 0, 0),
+    TEST_SKIP_ITEM("response", test_frame_type_path_response, 1, 0, 3, 0, 0, 0),
+    TEST_SKIP_ITEM("new_token", test_frame_type_new_token, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM("ack", test_frame_type_ack, 1, 0, 3, 0, 0, 8),
 
-    TEST_SKIP_ITEM("ack_ecn", test_frame_type_ack_ecn, 1, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("stream_min", test_frame_type_stream_range_min, 0, 1, 3, 0, 0),
-    TEST_SKIP_ITEM("stream_max", test_frame_type_stream_range_max, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("crypto_hs", test_frame_type_crypto_hs, 0, 0, 2, 0, 0),
-    TEST_SKIP_ITEM("retire_connection_id", test_frame_type_retire_connection_id, 0, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("ack_ecn", test_frame_type_ack_ecn, 1, 0, 3, 0, 0, 11),
+    TEST_SKIP_ITEM("stream_min", test_frame_type_stream_range_min, 0, 1, 3, 0, 0, 1),
+    TEST_SKIP_ITEM("stream_max", test_frame_type_stream_range_max, 0, 0, 3, 0, 0, 4),
+    TEST_SKIP_ITEM("crypto_hs", test_frame_type_crypto_hs, 0, 0, 2, 0, 0, 2),
+    TEST_SKIP_ITEM("retire_connection_id", test_frame_type_retire_connection_id, 0, 0, 3, 0, 0, 1),
 
-    TEST_SKIP_ITEM("datagram", test_frame_type_datagram, 0, 1, 3, 0, 0),
-    TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("ack_frequency_t5", test_frame_type_ack_frequency_t5, 0, 0, 3, 0, 0),
+    TEST_SKIP_ITEM("datagram", test_frame_type_datagram, 0, 1, 3, 0, 0, 0),
+    TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3, 0, 0, 0),
+    TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3, 0, 0, 4),
+    TEST_SKIP_ITEM("ack_frequency_t5", test_frame_type_ack_frequency_t5, 0, 0, 3, 0, 0, 4),
 
-    TEST_SKIP_ITEM("immediate_ack", test_frame_type_immediate_ack, 0, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3, 0, 0),
-    TEST_SKIP_ITEM_MPATH("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3, 0, 0, 1),
-    TEST_SKIP_ITEM_MPATH("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0, 1),
-    TEST_SKIP_ITEM_MPATH("path_standby", test_frame_type_path_standby, 0, 0, 3, 0, 0, 1),
-    TEST_SKIP_ITEM_MPATH("path_available", test_frame_type_path_available, 0, 0, 3, 0, 0, 1),
-    TEST_SKIP_ITEM_MPATH("max paths", test_frame_type_max_paths, 0, 0, 3, 0, 0, 2),
+    TEST_SKIP_ITEM("immediate_ack", test_frame_type_immediate_ack, 0, 0, 3, 0, 0, 0),
+    TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM_MPATH("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3, 0, 0, 1, 2),
+    TEST_SKIP_ITEM_MPATH("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0, 1, 2),
+    TEST_SKIP_ITEM_MPATH("path_backup", test_frame_type_path_backup, 0, 0, 3, 0, 0, 1, 2),
 
-    TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3, 0, 0)
+    TEST_SKIP_ITEM_MPATH("path_available", test_frame_type_path_available, 0, 0, 3, 0, 0, 1, 2),
+    TEST_SKIP_ITEM_MPATH("max paths", test_frame_type_max_path_id, 0, 0, 3, 0, 0, 1, 1),
+    TEST_SKIP_ITEM_MPATH("path_new_connection_id", test_frame_type_path_new_connection_id, 0, 0, 3, 0, 0, 1, 5),
+    TEST_SKIP_ITEM_MPATH("path_retire_connection_id", test_frame_type_path_retire_connection_id, 0, 0, 3, 0, 0, 1, 2),
+    TEST_SKIP_ITEM_MPATH("paths blocked", test_frame_type_paths_blocked, 0, 0, 3, 0, 0, 1, 1),
+    TEST_SKIP_ITEM_MPATH("path cid blocked", test_frame_type_path_cid_blocked, 0, 0, 3, 0, 0, 1, 1),
+
+    TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3, 0, 0, 4),
+    TEST_SKIP_ITEM_MPATH("observed_address_v4", test_frame_observed_address_v4, 0, 0, 3, 0, 0, 2, 1),
+    TEST_SKIP_ITEM_MPATH("observed_address_v6", test_frame_observed_address_v6, 0, 0, 3, 0, 0, 2, 1),
+    TEST_SKIP_ITEM_MPATH("path_ack", test_frame_type_path_ack, 1, 0, 3, 0, 0, 1, 9),
+    TEST_SKIP_ITEM_MPATH("path_ack_ecn", test_frame_type_path_ack_ecn, 1, 0, 3, 0, 0, 1, 12),
 };
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
@@ -540,28 +602,13 @@ static uint8_t test_frame_type_path_abandon_bad_0[] = {
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
     /* Missing path id */
     0x00, /* No error */
-    0x00 /* No phrase */
 };
 
 static uint8_t test_frame_type_path_abandon_bad_1[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)),
-    (uint8_t)(picoquic_frame_type_path_abandon >> 16),
-    (uint8_t)(picoquic_frame_type_path_abandon >> 8), 
-    (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
-    0x01,
-    0x11, /* Some new error */
-    0xff, /* bad length */
-    (uint8_t)'b',
-    (uint8_t)'a',
-    (uint8_t)'d',
-};
-
-static uint8_t test_frame_type_path_abandon_bad_2[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
     (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
     0x00,
-    0xFF, /* Bad error  */
-    0x00 /* No phrase */
+    0xFF /* Bad error  */
 };
 
 static uint8_t test_frame_type_path_available_bad[] = {
@@ -604,50 +651,39 @@ static uint8_t test_frame_type_bad_ack_first_range[] = {
 #define ERR_S PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR
 
 test_skip_frames_t test_frame_error_list[] = {
-    TEST_SKIP_ITEM("bad_reset_stream_offset", test_frame_type_bad_reset_stream_offset, 0, 0, 3, PICOQUIC_TRANSPORT_FLOW_CONTROL_ERROR, 0),
-    TEST_SKIP_ITEM("bad_reset_stream", test_frame_type_bad_reset_stream, 0, 0, 3, ERR_S, 0),
-    TEST_SKIP_ITEM("bad_reset_stream2", test_frame_type_bad_reset_stream2, 0, 1, 3, ERR_F, 0),
-    TEST_SKIP_ITEM("bad_connection_close", test_type_bad_connection_close, 0, 0, 3, ERR_F, 1),
-    TEST_SKIP_ITEM("bad_connection_close2", test_type_bad_connection_close2, 0, 1, 3, ERR_F, 1),
-    TEST_SKIP_ITEM("bad_application_close", test_type_bad_application_close, 0, 0, 3, ERR_F, 1),
-    TEST_SKIP_ITEM("bad_max_stream_stream", test_frame_type_bad_max_stream_stream, 0, 0, 3, ERR_S, 0),
-    TEST_SKIP_ITEM("bad_max_streams_bidir", test_frame_type_max_bad_streams_bidir, 0, 0, 3, ERR_S, 0),
-    TEST_SKIP_ITEM("bad_max_streams_unidir", test_frame_type_bad_max_streams_unidir, 0, 0, 3, ERR_S, 0),
-    TEST_SKIP_ITEM("bad_new_connection_id_length", test_frame_type_bad_new_cid_length, 0, 0, 3, ERR_F, 1),
-    TEST_SKIP_ITEM("bad_new_connection_id_retire", test_frame_type_bad_new_cid_retire, 0, 0, 3, ERR_F, 0),
-    TEST_SKIP_ITEM("illegal_new_cid_retire", test_frame_type_illegal_new_cid_retire, 0, 0, 3, ERR_F, 0),
-    TEST_SKIP_ITEM("too_long_new_cid", test_frame_type_too_long_new_cid, 0, 0, 3, ERR_P, 0),
-    TEST_SKIP_ITEM("bad_stop_sending", test_frame_type_bad_stop_sending, 0, 0, 3, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR, 0),
-    TEST_SKIP_ITEM("bad_stop_sending2", test_frame_type_bad_stop_sending2, 0, 1, 3, ERR_F, 0),
-    TEST_SKIP_ITEM("bad_new_token", test_frame_type_bad_new_token, 0, 0, 3, ERR_F, 1),
-    TEST_SKIP_ITEM("bad_ack_range", test_frame_type_bad_ack_range, 1, 0, 3, ERR_F, 0),
-    TEST_SKIP_ITEM("bad_ack_first_range", test_frame_type_bad_ack_first_range, 1, 0, 3, ERR_F, 0),
-    TEST_SKIP_ITEM("bad_ack_gaps", test_frame_type_bad_ack_gaps, 1, 0, 3, ERR_F, 0),
-    TEST_SKIP_ITEM("bad_ack_blocks", test_frame_type_bad_ack_blocks, 1, 0, 3, ERR_F, 1),
-    TEST_SKIP_ITEM("bad_crypto_hs", test_frame_type_bad_crypto_hs, 0, 0, 2, ERR_F, 1),
-    TEST_SKIP_ITEM("bad_datagram", test_frame_type_bad_datagram, 1, 0, 3, ERR_F, 1),
-    TEST_SKIP_ITEM("stream_hang", test_frame_stream_hang, 1, 0, 3, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0),
-    TEST_SKIP_ITEM_MPATH("bad_abandon_0", test_frame_type_path_abandon_bad_0, 0, 1, 3, ERR_F, 1, 1),
-    TEST_SKIP_ITEM_MPATH("bad_abandon_1", test_frame_type_path_abandon_bad_1, 0, 0, 3, ERR_F, 1, 1),
-    TEST_SKIP_ITEM_MPATH("bad_abandon_2", test_frame_type_path_abandon_bad_2, 0, 0, 3, ERR_F, 1, 1),
-    TEST_SKIP_ITEM_MPATH("bad_path_available", test_frame_type_path_available_bad, 0, 1, 3, ERR_F, 1, 1),
-    TEST_SKIP_ITEM_MPATH("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3, ERR_F, 0, 1),
-    TEST_SKIP_ITEM_MPATH("bad_bdp_addr", test_frame_type_bdp_bad_addr, 1, 0, 3, ERR_F, 0, 1),
-    TEST_SKIP_ITEM_MPATH("bad_bdp_length", test_frame_type_bdp_bad_length, 1, 0, 3, ERR_F, 1, 1),
-    TEST_SKIP_ITEM("bad_frame_id", test_frame_type_bad_frame_id, 1, 0, 3, ERR_F, 1)
+    TEST_SKIP_ITEM_OLD("bad_reset_stream_offset", test_frame_type_bad_reset_stream_offset, 0, 0, 3, PICOQUIC_TRANSPORT_FLOW_CONTROL_ERROR, 0),
+    TEST_SKIP_ITEM_OLD("bad_reset_stream", test_frame_type_bad_reset_stream, 0, 0, 3, ERR_S, 0),
+    TEST_SKIP_ITEM_OLD("bad_reset_stream2", test_frame_type_bad_reset_stream2, 0, 1, 3, ERR_F, 0),
+    TEST_SKIP_ITEM_OLD("bad_connection_close", test_type_bad_connection_close, 0, 0, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("bad_connection_close2", test_type_bad_connection_close2, 0, 1, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("bad_application_close", test_type_bad_application_close, 0, 0, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("bad_max_stream_stream", test_frame_type_bad_max_stream_stream, 0, 0, 3, ERR_S, 0),
+    TEST_SKIP_ITEM_OLD("bad_max_streams_bidir", test_frame_type_max_bad_streams_bidir, 0, 0, 3, ERR_S, 0),
+    TEST_SKIP_ITEM_OLD("bad_max_streams_unidir", test_frame_type_bad_max_streams_unidir, 0, 0, 3, ERR_S, 0),
+    TEST_SKIP_ITEM_OLD("bad_new_connection_id_length", test_frame_type_bad_new_cid_length, 0, 0, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("bad_new_connection_id_retire", test_frame_type_bad_new_cid_retire, 0, 0, 3, ERR_F, 0),
+    TEST_SKIP_ITEM_OLD("illegal_new_cid_retire", test_frame_type_illegal_new_cid_retire, 0, 0, 3, ERR_F, 0),
+    TEST_SKIP_ITEM_OLD("too_long_new_cid", test_frame_type_too_long_new_cid, 0, 0, 3, ERR_P, 0),
+    TEST_SKIP_ITEM_OLD("bad_stop_sending", test_frame_type_bad_stop_sending, 0, 0, 3, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR, 0),
+    TEST_SKIP_ITEM_OLD("bad_stop_sending2", test_frame_type_bad_stop_sending2, 0, 1, 3, ERR_F, 0),
+    TEST_SKIP_ITEM_OLD("bad_new_token", test_frame_type_bad_new_token, 0, 0, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("bad_ack_range", test_frame_type_bad_ack_range, 1, 0, 3, ERR_F, 0),
+    TEST_SKIP_ITEM_OLD("bad_ack_first_range", test_frame_type_bad_ack_first_range, 1, 0, 3, ERR_F, 0),
+    TEST_SKIP_ITEM_OLD("bad_ack_gaps", test_frame_type_bad_ack_gaps, 1, 0, 3, ERR_F, 0),
+    TEST_SKIP_ITEM_OLD("bad_ack_blocks", test_frame_type_bad_ack_blocks, 1, 0, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("bad_crypto_hs", test_frame_type_bad_crypto_hs, 0, 0, 2, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("bad_datagram", test_frame_type_bad_datagram, 1, 0, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("stream_hang", test_frame_stream_hang, 1, 0, 3, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0),
+    TEST_SKIP_ITEM_OLD_MPATH("bad_abandon_0", test_frame_type_path_abandon_bad_0, 0, 1, 3, ERR_F, 1, 1),
+    TEST_SKIP_ITEM_OLD_MPATH("bad_abandon_1", test_frame_type_path_abandon_bad_1, 0, 0, 3, ERR_F, 1, 1),
+    TEST_SKIP_ITEM_OLD_MPATH("bad_path_available", test_frame_type_path_available_bad, 0, 1, 3, ERR_F, 1, 1),
+    TEST_SKIP_ITEM_OLD_MPATH("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3, ERR_F, 0, 1),
+    TEST_SKIP_ITEM_OLD_MPATH("bad_bdp_addr", test_frame_type_bdp_bad_addr, 1, 0, 3, ERR_F, 0, 1),
+    TEST_SKIP_ITEM_OLD_MPATH("bad_bdp_length", test_frame_type_bdp_bad_length, 1, 0, 3, ERR_F, 1, 1),
+    TEST_SKIP_ITEM_OLD("bad_frame_id", test_frame_type_bad_frame_id, 1, 0, 3, ERR_F, 1)
 };
 
 size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_skip_frames_t);
-
-/* Log list:
-* List of frames that are interesting when testing the log, but
-* should not be added to the "skip list" 
- */
-test_skip_frames_t test_log_list[] = {
-    TEST_SKIP_ITEM("ack_mp", test_frame_type_ack_mp, 1, 0, 3, 0, 0),
-    TEST_SKIP_ITEM("ack_mp_ecn", test_frame_type_ack_mp_ecn, 1, 0, 3, 0, 0)
-};
-size_t nb_test_log_list = sizeof(test_log_list) / sizeof(test_skip_frames_t);
 
 static size_t format_random_packet(uint8_t * bytes, size_t bytes_max, uint64_t * random_context, int epoch)
 {
@@ -705,6 +741,56 @@ static void skip_test_fuzz_packet(uint8_t * target, uint8_t * source, size_t byt
         target[fuzz_index + i] = (uint8_t)(fuzz_data & 0xFF);
         fuzz_data >>= 8;
     }
+}
+
+static size_t create_test_varint_frame(uint8_t* buffer, size_t buffer_size, size_t i, int v)
+{
+    const uint8_t* bytes = test_skip_list[i].val;
+    const uint8_t* bytes_max = bytes + test_skip_list[i].len;
+    uint64_t u = 0;
+    size_t skipped = 0;
+    /* skip the type and v-1 integers */
+    for (int n = 0; bytes != NULL && n < v; n++) {
+        bytes = picoquic_frames_varint_skip(bytes, bytes_max);
+    }
+    skipped = bytes - test_skip_list[i].val;
+    memcpy(buffer, test_skip_list[i].val, skipped);
+    if (bytes != NULL) {
+        bytes = picoquic_frames_varint_decode(bytes, bytes_max, &u);
+    }
+    if (bytes != NULL) {
+        buffer[skipped++] = 0xc0 + (uint8_t)(u >> 56);
+        buffer[skipped++] = (uint8_t)(u >> 48);
+        buffer[skipped++] = (uint8_t)(u >> 40);
+        buffer[skipped++] = (uint8_t)(u >> 32);
+        buffer[skipped++] = (uint8_t)(u >> 24);
+        buffer[skipped++] = (uint8_t)(u >> 16);
+        buffer[skipped++] = (uint8_t)(u >> 8);
+        /* Last byte is omitted, to force a decoding error */
+    }
+    else {
+        skipped = 0;
+    }
+
+    return skipped;
+}
+
+int skip_frame_varint_test(uint8_t * buffer, size_t buffer_size)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+        for (int v = 1; v <= test_skip_list[i].nb_varints; v++) {
+            size_t consumed = 0;
+            int pure_ack = 0;
+            size_t len = create_test_varint_frame(buffer, buffer_size, i, v);
+            if (len > 0 &&
+                picoquic_skip_frame(buffer, len, &consumed, &pure_ack) == 0) {
+                ret = -1;
+            }
+        }
+    }
+    return ret;
 }
 
 int skip_frame_test()
@@ -776,6 +862,10 @@ int skip_frame_test()
             }
         }
     }
+    /* Derive and test a series of packets with bad varint encodings */
+    if (ret == 0) {
+        ret = skip_frame_varint_test(buffer, PICOQUIC_MAX_PACKET_SIZE);
+    }
 
     /* Do a minimal fuzz test */
     for (size_t i = 0; ret == 0 && i < 100; i++) {
@@ -806,8 +896,49 @@ int skip_frame_test()
     return ret;
 }
 
+void parse_test_packet_cnx_fix(picoquic_cnx_t* cnx, uint64_t simulated_time, int epoch, int mpath)
+{
+    /* Stupid fix to ensure that the NCID decoding test will not protest */
+    cnx->path[0]->p_remote_cnxid->cnx_id.id_len = 8;
+
+    cnx->pkt_ctx[0].send_sequence = 0x0102030406;
+    cnx->path[0]->pkt_ctx.send_sequence = 0x0102030406;
+
+    /* create a local cid  which can be retired with a connection_id_retire frame */
+    (void)picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time);
+
+    /* enable time stamp so it can be used in test */
+    cnx->is_time_stamp_enabled = 1;
+
+    /* Set datagram max size to pass verification */
+    cnx->local_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+
+    /* Set min ack delay so there is no issue with ack frequency frame */
+    cnx->is_ack_frequency_negotiated = 1;
+    cnx->remote_parameters.min_ack_delay = 1000;
+
+    /* Set enable_bdp so there is no issue with bdp frame */
+    cnx->local_parameters.enable_bdp_frame = 3;
+
+    /* Enable multipath so the test of multipath frames works. */
+    if (mpath != 0) {
+        cnx->is_multipath_enabled = 1;
+        cnx->max_path_id_local = 5;
+        if (mpath >= 2) {
+            /* Enable the P2P extensions. */
+            cnx->is_address_discovery_provider = 1;
+            cnx->is_address_discovery_receiver = 1;
+        }
+    }
+
+    /* if testing handshake done, set state to ready so frame is ignored. */
+    if (epoch == 3) {
+        cnx->cnx_state = picoquic_state_ready;
+    }
+}
+
 int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
-    uint8_t * buffer, size_t byte_max, int epoch,  int* ack_needed, uint64_t * err, int mpath)
+    uint8_t * buffer, size_t byte_max, int epoch, int* ack_needed, uint64_t * err, int mpath)
 {
     int ret = 0;
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
@@ -823,37 +954,7 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         ret = -1;
     }
     else {
-        /* Stupid fix to ensure that the NCID decoding test will not protest */
-        cnx->path[0]->p_remote_cnxid->cnx_id.id_len = 8;
-
-        cnx->pkt_ctx[0].send_sequence = 0x0102030406;
-
-        /* create a local cid  which can be retired with a connection_id_retire frame */
-        (void)picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time);
-
-        /* enable time stamp so it can be used in test */
-        cnx->is_time_stamp_enabled = 1;
-
-        /* Set datagram max size to pass verification */
-        cnx->local_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
-
-        /* Set min ack delay so there is no issue with ack frequency frame */
-        cnx->is_ack_frequency_negotiated = 1;
-        cnx->remote_parameters.min_ack_delay = 1000;
-        
-        /* Set enable_bdp so there is no issue with bdp frame */
-        cnx->local_parameters.enable_bdp_frame = 3;
-
-        /* Enable multipath so the test of multipath frames works. */
-        if (mpath != 0) {
-            cnx->is_multipath_enabled = 1;
-            cnx->max_paths_local = 5;
-        }
-       
-        /* if testing handshake done, set state to ready so frame is ignored. */
-        if (epoch == 3) {
-            cnx->cnx_state = picoquic_state_ready;
-        }
+        parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
 
         ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, NULL, epoch, 
             NULL, NULL, 0, 0, simulated_time);
@@ -869,11 +970,107 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
         }
 
         picoquic_delete_cnx(cnx);
-
     }
 
     return ret;
 }
+
+int parse_frame_varint_test(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    uint8_t* buffer, size_t buffer_size)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+        for (int v = 1; v <= test_skip_list[i].nb_varints; v++) {
+            int ack_needed = 0;
+            uint64_t err = 0;
+            size_t len = create_test_varint_frame(buffer, buffer_size, i, v);
+            if (len > 0 &&
+                parse_test_packet(qclient, saddr, simulated_time, buffer, len,
+                    test_skip_list[i].epoch, &ack_needed, &err, test_skip_list[i].mpath) == 0) {
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}
+
+int parse_frame_not_mpath_test(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    uint8_t* buffer, size_t buffer_size)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+        if (test_skip_list[i].mpath){
+            int ack_needed = 0;
+            uint64_t err = 0;
+            size_t len = test_skip_list[i].len;
+            memcpy(buffer, test_skip_list[i].val, len);
+
+            if (parse_test_packet(qclient, saddr, simulated_time, buffer, len,
+                test_skip_list[i].epoch, &ack_needed, &err, 0) == 0) {
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}
+
+int parse_frame_0rtt_test(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    uint8_t* buffer, size_t buffer_size)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+        uint64_t frame_type = 0;
+        if (picoquic_frames_varint_decode(test_skip_list[i].val, test_skip_list[i].val + test_skip_list[i].len, &frame_type) != NULL) {
+            int ack_needed = 0;
+            uint64_t err = 0;
+            size_t len = test_skip_list[i].len;
+            int l_ret = 0;
+            memcpy(buffer, test_skip_list[i].val, len);
+            l_ret = parse_test_packet(qclient, saddr, simulated_time, buffer, len,
+                picoquic_epoch_0rtt, &ack_needed, &err, test_skip_list[i].mpath);
+            if (frame_type >= picoquic_frame_type_stream_range_min && frame_type <= picoquic_frame_type_stream_range_max) {
+                if (l_ret != 0) {
+                    ret = -1;
+                }
+            } else {
+                switch (frame_type) {
+                case picoquic_frame_type_padding:
+                case picoquic_frame_type_ping:
+                case picoquic_frame_type_reset_stream:
+                case picoquic_frame_type_stop_sending:
+                case picoquic_frame_type_connection_close:
+                case picoquic_frame_type_application_close:
+                case picoquic_frame_type_max_data:
+                case picoquic_frame_type_max_stream_data:
+                case picoquic_frame_type_max_streams_bidir:
+                case picoquic_frame_type_max_streams_unidir:
+                case picoquic_frame_type_data_blocked:
+                case picoquic_frame_type_stream_data_blocked:
+                case picoquic_frame_type_streams_blocked_bidir:
+                case picoquic_frame_type_streams_blocked_unidir:
+                case picoquic_frame_type_new_connection_id:
+                case picoquic_frame_type_path_challenge:
+                case picoquic_frame_type_datagram:
+                case picoquic_frame_type_datagram_l:
+                    if (l_ret != 0) {
+                        ret = -1;
+                    }
+                    break;
+                default:
+                    if (l_ret == 0) {
+                        ret = -1;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    return ret;
+}
+
 
 int parse_frame_test()
 {
@@ -925,6 +1122,24 @@ int parse_frame_test()
                 ret = -1;
             }
         }
+    }
+
+    /* Decode a series of packets with modified length */
+    if (ret == 0) {
+        ret = parse_frame_varint_test(qclient, (struct sockaddr*)&saddr, simulated_time,
+            buffer, sizeof(buffer));
+    }
+
+    /* Decode a series of multipath packets without the multipath option */
+    if (ret == 0) {
+        ret = parse_frame_not_mpath_test(qclient, (struct sockaddr*)&saddr, simulated_time,
+            buffer, sizeof(buffer));
+    }
+
+    /* Verify that 0rtt tests are properly implemented */
+    if (ret == 0) {
+        ret = parse_frame_0rtt_test(qclient, (struct sockaddr*)&saddr, simulated_time,
+            buffer, sizeof(buffer));
     }
 
     /* Decode a series of known bad packets */
@@ -1019,6 +1234,406 @@ int parse_frame_test()
     if (ret == 0) {
         DBG_PRINTF("Fuzz skip test passes after %d trials, %d error detected\n",
             fuzz_count, fuzz_fail);
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+
+    return ret;
+}
+
+int frame_repeat_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    uint8_t* bytes, size_t bytes_max, int epoch, uint64_t* err, int mpath, int expect_error)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id, saddr,
+        simulated_time, 0, "test-sni", "test-alpn", 1);
+
+    if (cnx == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+        ret = -1;
+    }
+    else {
+        int do_not_detect_spurious = 0;
+        int is_preemptive_needed = 0;
+        int no_need_to_repeat = 0;
+        int c_ret = 0;
+        picoquic_packet_type_enum p_type;
+
+        switch (epoch) {
+        case picoquic_epoch_initial:
+            p_type = picoquic_packet_initial;
+            break;
+        case picoquic_epoch_0rtt:
+            p_type = picoquic_packet_0rtt_protected;
+            break;
+        case picoquic_epoch_handshake:
+            p_type = picoquic_packet_handshake;
+            break;
+        default:
+            p_type = picoquic_packet_1rtt_protected;
+            break;
+        }
+
+        parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
+       
+        c_ret = picoquic_check_frame_needs_repeat(cnx, bytes, bytes_max, p_type,
+            &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed);
+        
+        if (expect_error && c_ret == 0 &&
+            !no_need_to_repeat) {
+            ret = -1;
+        }
+
+        if (!expect_error && c_ret != 0) {
+            ret = -1;
+        }
+
+        picoquic_delete_cnx(cnx);
+    }
+    return ret;
+}
+
+int frames_repeat_test()
+{
+    int ret = 0;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+            uint64_t err = 0;
+            size_t len = test_skip_list[i].len;
+            uint64_t frame_type = 0;
+            const uint8_t* type_byte = NULL;
+            if ((type_byte = picoquic_frames_varint_decode(test_skip_list[i].val, test_skip_list[i].val + test_skip_list[i].len, &frame_type)) != NULL) {
+                memcpy(buffer, test_skip_list[i].val, len);
+                if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len,
+                    test_skip_list[i].epoch, &err, test_skip_list[i].mpath, 0) != 0) {
+                    ret = -1;
+                }
+                else if (len > 1 && !test_skip_list[i].is_pure_ack) {
+                    switch (frame_type) {
+                    case picoquic_frame_type_connection_close:
+                    case picoquic_frame_type_application_close:
+                    case picoquic_frame_type_new_token:
+                    case picoquic_frame_type_path_abandon:
+                    case picoquic_frame_type_bdp:
+                    case picoquic_frame_type_observed_address_v4:
+                    case picoquic_frame_type_observed_address_v6:
+                        break;
+                    default:
+                        if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len - 1,
+                            test_skip_list[i].epoch, &err, test_skip_list[i].mpath, 1) != 0) {
+                            if (test_skip_list[i].nb_varints > 0) {
+                                /* Try again with shorter length */
+                                size_t type_len = type_byte - test_skip_list[i].val;
+                                if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, type_len,
+                                    test_skip_list[i].epoch, &err, test_skip_list[i].mpath, 1) != 0) {
+                                    ret = -1;
+                                }
+                            }
+                            else {
+                                ret = -1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        picoquic_free(qclient);
+    }
+    return ret;
+}
+
+/* Use
+* void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p, 
+*    int is_spurious, uint64_t current_time)
+ */
+
+void frame_init_test_packet(picoquic_packet_t* p, picoquic_cnx_t* cnx, int epoch, uint64_t simulated_time)
+{
+    memset(p, 0, sizeof(picoquic_packet_t));
+    /* struct st_picoquic_packet_t* packet_next; */
+    /* struct st_picoquic_packet_t* packet_previous; */
+    p->send_path = cnx->path[0];
+    p->sequence_number = 12345;
+    p->send_time = simulated_time / 2;
+
+    /*
+    uint64_t delivered_prior;
+    uint64_t delivered_time_prior;
+    uint64_t delivered_sent_prior;
+    uint64_t lost_prior;
+    uint64_t inflight_prior;
+    size_t data_repeat_frame;
+    size_t data_repeat_index;
+    */
+
+    /*
+    uint64_t data_repeat_priority;
+    uint64_t data_repeat_stream_id;
+    uint64_t data_repeat_stream_offset;
+    size_t data_repeat_stream_data_length;
+    */
+
+    /*
+    unsigned int is_evaluated : 1;
+    unsigned int is_ack_eliciting : 1;
+    unsigned int is_mtu_probe : 1;
+    unsigned int is_multipath_probe : 1;
+    unsigned int is_ack_trap : 1;
+    unsigned int delivered_app_limited : 1;
+    unsigned int sent_cwin_limited : 1;
+    unsigned int is_preemptive_repeat : 1;
+    unsigned int was_preemptively_repeated : 1;
+    unsigned int is_queued_to_path : 1;
+    unsigned int is_queued_for_retransmit : 1;
+    unsigned int is_queued_for_spurious_detection : 1;
+    unsigned int is_queued_for_data_repeat : 1;
+    */
+    p->checksum_overhead = 16;
+        switch (epoch) {
+        case picoquic_epoch_initial:
+            p->ptype = picoquic_packet_initial;
+            p->pc = picoquic_packet_context_initial;
+            break;
+        case picoquic_epoch_0rtt:
+            p->ptype = picoquic_packet_0rtt_protected;
+            p->pc = picoquic_packet_context_application;
+            break;
+        case picoquic_epoch_handshake:
+            p->ptype = picoquic_packet_handshake;
+            p->pc = picoquic_packet_context_handshake;
+            break;
+        default:
+            p->ptype = picoquic_packet_1rtt_protected;
+            p->pc = picoquic_packet_context_application;
+            break;
+        }
+    if (p->ptype == picoquic_packet_1rtt_protected) {
+        p->offset = 1 + 8 + 4;
+    }
+    else {
+        p->offset = 1 + 1 + 8 + 1 + 8 + 2 + 4;
+    }
+}
+
+int frame_ackack_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    picoquic_packet_t* p, size_t i, int v, int epoch, int mpath, int * disconnected)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id, saddr,
+        simulated_time, 0, "test-sni", "test-alpn", 1);
+
+    if (cnx == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+        ret = -1;
+    }
+    else {
+        int is_spurious = 0;
+        size_t len;
+        picoquic_state_enum previous_state;
+
+        parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
+        frame_init_test_packet(p, cnx, epoch, simulated_time);
+        len = create_test_varint_frame(p->bytes + p->offset, PICOQUIC_MAX_PACKET_SIZE, i, v);
+        p->length = p->offset + len;
+
+        previous_state = cnx->cnx_state;
+        picoquic_process_ack_of_frames(cnx, p, is_spurious, simulated_time);
+        *disconnected = (cnx->cnx_state != previous_state);
+
+        picoquic_delete_cnx(cnx);
+    }
+    return ret;
+}
+
+int frames_ackack_error_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+    picoquic_packet_t p;
+    int nb_trials = 0;
+    int nb_disconnected = 0;
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+            for (int v = 1; v <= test_skip_list[i].nb_varints; v++) {
+                int disconnected = 0;
+                
+                frame_ackack_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, &p, i, v,
+                        test_skip_list[i].epoch, test_skip_list[i].mpath, &disconnected);
+                nb_trials++;
+                nb_disconnected += disconnected;
+            }
+        }
+        picoquic_free(qclient);
+    }
+    DBG_PRINTF("%d ackack trials, %d disconnections", nb_trials, nb_disconnected);
+
+    return ret;
+}
+
+picoquic_cnx_t * frames_format_test_get_cnx(picoquic_quic_t * qclient, struct sockaddr * saddr, picoquic_epoch_enum epoch, uint64_t simulated_time, int mpath)
+{
+    picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id, saddr,
+        simulated_time, 0, "test-sni", "test-alpn", 1);
+
+    if (cnx == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+    }
+    else {
+        parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
+    }
+    return cnx;
+}
+
+
+#define FRAME_FORMAT_TEST_ONCE(format_func, s_max, ...)                                               \
+    if (ret == 0) {                                                                                   \
+        bytes_max = buffer + s_max;                                                                   \
+        bytes = buffer;                                                                               \
+        more_data = 0;                                                                                \
+        is_pure_ack = 0;                                                                              \
+        bytes = format_func(__VA_ARGS__);                                                             \
+        if (bytes != buffer || !more_data) {                                                          \
+            ret = -1;                                                                                 \
+        }                                                                                             \
+    }
+
+#define FRAME_FORMAT_TEST(format_func, ...)                                                               \
+    if (ret == 0) {                                                                                       \
+        bytes_max = buffer + PICOQUIC_MAX_PACKET_SIZE;                                                    \
+        for (round = 0; round < 2; round++) {                                                             \
+            bytes = buffer;                                                                               \
+            more_data = 0;                                                                                \
+            is_pure_ack = 0;                                                                              \
+            bytes = format_func(__VA_ARGS__);                                                             \
+            if (bytes == NULL || bytes == buffer) {                                                       \
+                break;                                                                                    \
+            }                                                                                             \
+            bytes_max = bytes - 1;                                                                        \
+        }                                                                                                 \
+        if (bytes != buffer || !more_data) {                                                              \
+            ret = -1;                                                                                     \
+        }                                                                                                 \
+    }
+
+/* Declarations of format functions that are not already public. */
+uint8_t* picoquic_format_retire_connection_id_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
+    int is_mp, uint64_t unique_path_id, uint64_t sequence);
+uint8_t* picoquic_format_new_token_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
+    uint8_t* token, size_t token_length);
+uint8_t* picoquic_format_stop_sending_frame(picoquic_stream_head_t* stream,
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_stream_reset_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_data_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_stream_data_blocked_frame(uint8_t* bytes,
+    uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_stream_head_t* stream);
+uint8_t* picoquic_format_stream_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_stream_head_t* stream);
+uint8_t* picoquic_format_datagram_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, size_t length, const uint8_t* src);
+uint8_t* picoquic_format_path_available_or_standby_frame(
+    uint8_t* bytes, const uint8_t* bytes_max, uint64_t frame_type,
+    uint64_t path_id, uint64_t sequence, int * more_data);
+uint8_t* picoquic_format_paths_blocked_frame(
+    uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id, int* more_data);
+uint8_t* picoquic_format_path_cid_blocked_frame(
+    uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id, int* more_data);
+
+int frames_format_test()
+{
+    int ret = 0;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint8_t data[] = { 0xaa, 0xaa };
+    uint8_t* bytes = NULL;
+    uint8_t* bytes_max;
+    int more_data;
+    uint64_t current_time = 0;
+    int is_pure_ack = 0;
+    picoquic_stream_head_t* stream = NULL;
+    int round;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+    uint8_t addr_bytes[4] = { 1, 2, 3, 4 };
+    picoquic_cnx_t* cnx;
+    picoquic_local_cnxid_list_t* local_cnxid_list = NULL;
+    picoquic_local_cnxid_t* l_cid = NULL; 
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        cnx = frames_format_test_get_cnx(qclient, (struct sockaddr *)&saddr, picoquic_epoch_1rtt, simulated_time, 1);
+        if (cnx == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0)  {
+        local_cnxid_list = cnx->first_local_cnxid_list;
+        l_cid = picoquic_create_local_cnxid(cnx, local_cnxid_list->unique_path_id, NULL, current_time);
+        picoquic_add_to_stream(cnx, 0, data, 2, 0);
+        stream = picoquic_find_stream(cnx, 0);
+        if (stream == NULL) {
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        stream->reset_requested = 1;
+        FRAME_FORMAT_TEST_ONCE(picoquic_format_stream_reset_frame, 2, cnx, stream, bytes, bytes_max, &more_data, &is_pure_ack);
+        stream->reset_requested = 0;
+        FRAME_FORMAT_TEST(picoquic_format_new_connection_id_frame, cnx, local_cnxid_list, bytes, bytes_max, &more_data, &is_pure_ack, l_cid);
+        FRAME_FORMAT_TEST(picoquic_format_retire_connection_id_frame, bytes, bytes_max, &more_data, &is_pure_ack, 1, 0, 17);
+        FRAME_FORMAT_TEST(picoquic_format_new_token_frame, bytes, bytes_max, &more_data, &is_pure_ack, data, 2);
+        stream->stop_sending_requested = 1;
+        FRAME_FORMAT_TEST_ONCE(picoquic_format_stop_sending_frame, 2, stream, bytes, bytes_max, &more_data, &is_pure_ack);
+        stream->stop_sending_requested = 0;
+        stream->stop_sending_sent = 0;
+        FRAME_FORMAT_TEST_ONCE(picoquic_format_data_blocked_frame, 1, cnx, bytes, bytes_max, &more_data, &is_pure_ack);
+        FRAME_FORMAT_TEST(picoquic_format_stream_data_blocked_frame, bytes, bytes_max, &more_data, &is_pure_ack, stream);
+        stream->stream_data_blocked_sent = 0;
+        FRAME_FORMAT_TEST_ONCE(picoquic_format_stream_blocked_frame, 1, cnx, bytes, bytes_max, &more_data, &is_pure_ack, stream);
+        cnx->stream_blocked_bidir_sent = 0;
+        FRAME_FORMAT_TEST(picoquic_format_connection_close_frame, cnx, bytes, bytes_max, &more_data, &is_pure_ack);
+        FRAME_FORMAT_TEST(picoquic_format_application_close_frame, cnx, bytes, bytes_max, &more_data, &is_pure_ack);
+        FRAME_FORMAT_TEST(picoquic_format_max_stream_data_frame, cnx, stream, bytes, bytes_max, &more_data, &is_pure_ack, 100000000);
+        FRAME_FORMAT_TEST(picoquic_format_path_challenge_frame, bytes, bytes_max, &more_data, &is_pure_ack, 0xaabbccddeeff0011ull);
+        FRAME_FORMAT_TEST(picoquic_format_path_response_frame, bytes, bytes_max, &more_data, &is_pure_ack, 0xaabbccddeeff0011ull);
+        FRAME_FORMAT_TEST(picoquic_format_datagram_frame, bytes, bytes_max, &more_data, &is_pure_ack, 2, data);
+        FRAME_FORMAT_TEST_ONCE(picoquic_format_ack_frequency_frame, 2, cnx, bytes, bytes_max, &more_data);
+        FRAME_FORMAT_TEST(picoquic_format_immediate_ack_frame, bytes, bytes_max, &more_data);
+        FRAME_FORMAT_TEST(picoquic_format_time_stamp_frame, cnx, buffer, bytes_max, &more_data, simulated_time);
+        FRAME_FORMAT_TEST(picoquic_format_path_abandon_frame, bytes, bytes_max, &more_data, 1, 3);
+        FRAME_FORMAT_TEST(picoquic_format_path_available_or_standby_frame, bytes, bytes_max, picoquic_frame_type_path_available, 1, 17, &more_data);
+        FRAME_FORMAT_TEST(picoquic_format_max_path_id_frame, bytes, bytes_max, 123, &more_data);
+        FRAME_FORMAT_TEST(picoquic_format_paths_blocked_frame, bytes, bytes_max, 123, &more_data);
+        FRAME_FORMAT_TEST(picoquic_format_path_cid_blocked_frame, bytes, bytes_max, 123, &more_data);
+        FRAME_FORMAT_TEST(picoquic_format_observed_address_frame, bytes, bytes_max, picoquic_frame_type_observed_address_v4, 13, addr_bytes, 4433, &more_data);
     }
 
     if (qclient != NULL) {
@@ -1353,9 +1968,6 @@ int logger_test()
         for (size_t i = 0; i < nb_test_skip_list; i++) {
             picoquic_textlog_frames(quic->F_log, 0, test_skip_list[i].val, test_skip_list[i].len);
         }
-        for (size_t i = 0; i < nb_test_log_list; i++) {
-            picoquic_textlog_frames(quic->F_log, 0, test_log_list[i].val, test_log_list[i].len);
-        }
         for (size_t i = 0; i < nb_test_frame_error_list; i++) {
             picoquic_textlog_frames(quic->F_log, 0, test_frame_error_list[i].val, test_frame_error_list[i].len);
         }
@@ -1530,7 +2142,7 @@ int binlog_test()
     }
     else {
         picoquic_set_binlog(quic, ".");        
-        picoquic_set_default_spinbit_policy(quic, picoquic_spinbit_null);
+        (void)picoquic_set_default_spinbit_policy(quic, picoquic_spinbit_null);
 
         struct sockaddr_in saddr;
         memset(&saddr, 0, sizeof(struct sockaddr_in));
@@ -2810,7 +3422,7 @@ int send_stream_blocked_test()
 }
 
 int picoquic_queue_network_input(picoquic_quic_t * quic, picosplay_tree_t* tree, uint64_t consumed_offset,
-    uint64_t stream_ofs, const uint8_t* bytes, size_t length, picoquic_stream_data_node_t* received_data, int* new_data_available);
+    uint64_t stream_ofs, const uint8_t* bytes, size_t length, int is_last_frame, picoquic_stream_data_node_t* received_data, int* new_data_available);
 
 int64_t picoquic_stream_data_node_compare(void* l, void* r);
 picosplay_node_t* picoquic_stream_data_node_create(void* value);
@@ -2849,7 +3461,7 @@ int queue_network_input_test()
     /* Fill 0..3 */
     if (ret == 0) {
         new_data_available = 0;
-        if ((ret = picoquic_queue_network_input(quic, tree, 0, 0, data, 4, NULL,
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 0, data, 4, 1, NULL,
             &new_data_available)) != 0) {
             DBG_PRINTF("picoquic_queue_network_input(0, 0, 4) failed (%d)", ret);
         }
@@ -2862,7 +3474,7 @@ int queue_network_input_test()
     /* Fill 6..9 */
     if (ret == 0) {
         new_data_available = 0;
-        if ((ret = picoquic_queue_network_input(quic, tree, 0, 6, data + 6, 4, NULL, &new_data_available)) != 0) {
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 6, data + 6, 4, 1, NULL, &new_data_available)) != 0) {
             DBG_PRINTF("picoquic_queue_network_input(0, 6, 4) failed (%d)", ret);
         } else if (new_data_available == 0) {
             DBG_PRINTF("new_data_available doesn't signal new data (%d)", new_data_available);
@@ -2873,7 +3485,7 @@ int queue_network_input_test()
     /* Fill the gap from 4..5 with a chunk from 2..7 */
     if (ret == 0) {
         new_data_available = 0;
-        if ((ret = picoquic_queue_network_input(quic, tree, 0, 2, data + 2, 6, NULL, &new_data_available)) != 0) {
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 2, data + 2, 6, 1, NULL, &new_data_available)) != 0) {
             DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed (%d)", ret);
         } else if (new_data_available == 0) {
             DBG_PRINTF("new_data_available signals new data (%d)", new_data_available);
@@ -2884,7 +3496,7 @@ int queue_network_input_test()
     /* No new data delivered by chunk 2..7 */
     if (ret == 0) {
         new_data_available = 0;
-        if ((ret = picoquic_queue_network_input(quic, tree, 0, 2, data, 6, NULL, &new_data_available)) != 0) {
+        if ((ret = picoquic_queue_network_input(quic, tree, 0, 2, data, 6, 1, NULL, &new_data_available)) != 0) {
             DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed (%d)", ret);
         }
 

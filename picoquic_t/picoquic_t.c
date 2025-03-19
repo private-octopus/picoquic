@@ -45,11 +45,14 @@ typedef enum {
 static const picoquic_test_def_t test_table[] = {
     { "connection_id_print", util_connection_id_print_test },
     { "connection_id_parse", util_connection_id_parse_test },
-    { "sprintf", util_sprintf_test },
-    { "memcmp", util_memcmp_test },
+    { "util_sprintf", util_sprintf_test },
+    { "util_debug_print", util_debug_print_test },
+    { "util_uint8_to_str", util_uint8_to_str_test },
+    { "util_memcmp", util_memcmp_test },
     { "threading", util_threading_test },
     { "picohash", picohash_test },
     { "picohash_embedded", picohash_embedded_test },
+    { "picolog_basic", picolog_basic_test },
     { "bytestream", bytestream_test },
     { "sockloop_basic", sockloop_basic_test },
     { "sockloop_eio", sockloop_eio_test },
@@ -60,7 +63,8 @@ static const picoquic_test_def_t test_table[] = {
     { "sockloop_thread", sockloop_thread_test },
     { "sockloop_thread_name", sockloop_thread_name_test },
     { "splay", splay_test },
-    { "cnxcreation", cnxcreation_test },
+    { "create_cnx", create_cnx_test },
+    { "create_quic", create_quic_test },
     { "parseheader", parseheadertest },
     { "incoming_initial", incoming_initial_test },
     { "header_length", header_length_test },
@@ -69,8 +73,11 @@ static const picoquic_test_def_t test_table[] = {
     { "varint", varint_test },
     { "sqrt_for_test", sqrt_for_test_test },
     { "ack_sack", sacktest },
-    { "skip_frames", skip_frame_test },
-    { "parse_frames", parse_frame_test },
+    { "frames_skip", skip_frame_test },
+    { "frames_parse", parse_frame_test },
+    { "frames_repeat", frames_repeat_test },
+    { "frames_ackack_error", frames_ackack_error_test },
+    { "frames_format", frames_format_test },
     { "logger", logger_test },
     { "binlog", binlog_test },
     { "app_message_overflow", app_message_overflow_test },
@@ -88,6 +95,8 @@ static const picoquic_test_def_t test_table[] = {
     { "ack_disorder", ack_disorder_test },
     { "ack_horizon", ack_horizon_test },
     { "ack_of_ack", ack_of_ack_test },
+    { "ackfrq_basic", ackfrq_basic_test },
+    { "ackfrq_short", ackfrq_short_test },
     { "sim_link", sim_link_test },
     { "clear_text_aead", cleartext_aead_test },
     { "pn_ctr", pn_ctr_test },
@@ -231,7 +240,11 @@ static const picoquic_test_def_t test_table[] = {
     { "nat_rebinding_zero", nat_rebinding_zero_test },
     { "nat_rebinding_latency", nat_rebinding_latency_test },
     { "nat_rebinding_fast", fast_nat_rebinding_test},
-    { "spin_bit", spin_bit_test},
+    { "spinbit", spinbit_test },
+    { "spinbit_bad", spinbit_bad_test },
+    { "spinbit_null", spinbit_null_test },
+    { "spinbit_randclient", spinbit_randclient_test },
+    { "spinbit_random", spinbit_random_test },
     { "loss_bit", loss_bit_test},
     { "client_error", client_error_test },
     { "client_only", client_only_test },
@@ -252,6 +265,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cnxid_transmit_r_disable", transmit_cnxid_retire_disable_test },
     { "cnxid_transmit_r_early", transmit_cnxid_retire_early_test },
     { "probe_api", probe_api_test },
+    { "memlog", memlog_test },
     { "migration" , migration_test },
     { "migration_long", migration_test_long },
     { "migration_with_loss", migration_test_loss },
@@ -274,15 +288,17 @@ static const picoquic_test_def_t test_table[] = {
     { "nat_handshake", nat_handshake_test },
     { "key_rotation_vector", key_rotation_vector_test },
     { "key_rotation_stress", key_rotation_stress_test },
+    { "keylog_test", keylog_test },
     { "short_initial_cid", short_initial_cid_test },
     { "stream_id_max", stream_id_max_test },
     { "padding_test", padding_test },
     { "packet_trace", packet_trace_test },
+    { "qlog_auto", qlog_auto_test },
+    { "qlog_error", qlog_error_test },
     { "qlog_trace", qlog_trace_test },
     { "qlog_trace_auto", qlog_trace_auto_test },
     { "qlog_trace_only", qlog_trace_only_test },
     { "qlog_trace_ecn", qlog_trace_ecn_test },
-    { "path_packet_queue", path_packet_queue_test },
     { "perflog", perflog_test },
     { "nat_rebinding_stress", rebinding_stress_test },
     { "random_padding", random_padding_test },
@@ -304,10 +320,13 @@ static const picoquic_test_def_t test_table[] = {
     { "reset_need_max", reset_need_max_test },
     { "reset_need_reset", reset_need_reset_test },
     { "reset_need_stop", reset_need_stop_test },
+    { "initial_pto", initial_pto_test },
+    { "initial_pto_srv", initial_pto_srv_test },
     { "ready_to_send", ready_to_send_test },
     { "ready_to_skip", ready_to_skip_test },
     { "ready_to_zfin", ready_to_zfin_test },
     { "ready_to_zero", ready_to_zero_test },
+    { "crypto_hs_offset", crypto_hs_offset_test },
     { "cubic", cubic_test },
     { "cubic_jitter", cubic_jitter_test },
     { "fastcc", fastcc_test },
@@ -323,6 +342,7 @@ static const picoquic_test_def_t test_table[] = {
     { "bbr_asym100_nodelay", bbr_asym100_nodelay_test },
     { "bbr_asym400", bbr_asym400_test },
     { "bbr1", bbr1_test },
+    { "bbr1_long", bbr1_long_test },
     { "l4s_reno", l4s_reno_test },
     { "l4s_prague", l4s_prague_test },
     { "l4s_prague_updown", l4s_prague_updown_test },
@@ -335,6 +355,7 @@ static const picoquic_test_def_t test_table[] = {
     { "high_latency_probeRTT", high_latency_probeRTT_test },
     { "satellite_basic", satellite_basic_test },
     { "satellite_seeded", satellite_seeded_test },
+    { "satellite_seeded_bbr1", satellite_seeded_bbr1_test },
     { "satellite_loss", satellite_loss_test },
     { "satellite_loss_fc", satellite_loss_fc_test},
     { "satellite_jitter", satellite_jitter_test },
@@ -343,8 +364,12 @@ static const picoquic_test_def_t test_table[] = {
     { "satellite_preemptive_fc", satellite_preemptive_fc_test },
     { "satellite_small", satellite_small_test },
     { "satellite_small_up", satellite_small_up_test },
+    { "satellite_bbr1", satellite_bbr1_test },
     { "satellite_cubic", satellite_cubic_test },
+    { "satellite_cubic_seeded", satellite_cubic_seeded_test },
     { "satellite_cubic_loss", satellite_cubic_loss_test },
+    { "satellite_dcubic_seeded", satellite_dcubic_seeded_test },
+    { "satellite_prague_seeded", satellite_prague_seeded_test },
     { "bdp_basic", bdp_basic_test },
     { "bdp_delay", bdp_delay_test },
     { "bdp_ip", bdp_ip_test },
@@ -353,6 +378,7 @@ static const picoquic_test_def_t test_table[] = {
 #if 0
     { "bdp_cubic", bdp_cubic_test },
 #endif
+    { "bdp_bbr1", bdp_bbr1_test },
     { "bdp_short", bdp_short_test },
     { "bdp_short_hi", bdp_short_hi_test },
     { "bdp_short_lo", bdp_short_lo_test },
@@ -374,6 +400,7 @@ static const picoquic_test_def_t test_table[] = {
     { "pacing_update", pacing_update_test },
     { "quality_update", quality_update_test },
     { "direct_receive", direct_receive_test },
+    { "address_discovery", address_discovery_test },
     { "app_limit_cc", app_limit_cc_test },
     { "app_limited_bbr", app_limited_bbr_test },
     { "app_limited_cubic", app_limited_cubic_test },
@@ -396,9 +423,11 @@ static const picoquic_test_def_t test_table[] = {
     { "mediatest_video_data_audio", mediatest_video_data_audio_test },
     { "mediatest_video2_down", mediatest_video2_down_test },
     { "mediatest_video2_back", mediatest_video2_back_test },
+    { "mediatest_video2_probe", mediatest_video2_probe_test },
     { "mediatest_wifi", mediatest_wifi_test },
     { "mediatest_worst", mediatest_worst_test },
     { "mediatest_suspension", mediatest_suspension_test },
+    { "mediatest_suspension2", mediatest_suspension2_test },
     { "warptest_video", warptest_video_test },
     { "warptest_video_audio", warptest_video_audio_test },
     { "warptest_video_data_audio", warptest_video_data_audio_test },
@@ -409,6 +438,9 @@ static const picoquic_test_def_t test_table[] = {
     { "wifi_bbr_long", wifi_bbr_long_test },
     { "wifi_bbr_many", wifi_bbr_many_test },
     { "wifi_bbr_shadow", wifi_bbr_shadow_test },
+    { "wifi_bbr1", wifi_bbr1_test },
+    { "wifi_bbr1_hard", wifi_bbr1_hard_test },
+    { "wifi_bbr1_long", wifi_bbr1_long_test },
     { "wifi_cubic", wifi_cubic_test },
     { "wifi_cubic_hard", wifi_cubic_hard_test },
     { "wifi_cubic_long", wifi_cubic_long_test },
@@ -422,6 +454,11 @@ static const picoquic_test_def_t test_table[] = {
 #ifdef PICOQUIC_WITH_MBEDTLS
     { "mbedtls", mbedtls_test },
     { "mbedtls_crypto", mbedtls_crypto_test },
+    { "mbedtls_load_key", mbedtls_load_key_test },
+    { "mbedtls_load_key_fail", mbedtls_load_key_fail_test },
+    { "mbedtls_retrieve_pubkey", mbedtls_retrieve_pubkey_test },
+    { "mbedtls_sign_verify", mbedtls_sign_verify_test },
+    { "mbedtls_configure", mbedtls_configure_test },
 #endif
     { "openssl_cert", openssl_cert_test },
     { "monopath_basic", monopath_basic_test },
@@ -433,6 +470,8 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_basic", multipath_basic_test },
     { "multipath_drop_first", multipath_drop_first_test },
     { "multipath_drop_second", multipath_drop_second_test },
+    { "multipath_fail", multipath_fail_test },
+    { "multipath_ab1", multipath_ab1_test },
     { "multipath_sat_plus", multipath_sat_plus_test },
     { "multipath_renew", multipath_renew_test },
     { "multipath_rotation", multipath_rotation_test },
@@ -441,6 +480,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_abandon", multipath_abandon_test },
     { "multipath_back1", multipath_back1_test },
     { "multipath_nat", multipath_nat_test },
+    { "multipath_nat_challenge", multipath_nat_challenge_test },
     { "multipath_perf", multipath_perf_test },
     { "multipath_callback", multipath_callback_test },
     { "multipath_quality", multipath_quality_test },
@@ -449,24 +489,14 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_dg_af", multipath_dg_af_test },
     { "multipath_standby", multipath_standby_test },
     { "multipath_standup", multipath_standup_test },
+    { "multipath_discovery", multipath_discovery_test },
     { "multipath_qlog", multipath_qlog_test },
     { "multipath_tunnel", multipath_tunnel_test },
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },
-    { "simple_multipath_basic", simple_multipath_basic_test },
-    { "simple_multipath_drop_first", simple_multipath_drop_first_test },
-    { "simple_multipath_drop_second", simple_multipath_drop_second_test },
-    { "simple_multipath_sat_plus", simple_multipath_sat_plus_test },
-    { "simple_multipath_renew", simple_multipath_renew_test },
-    { "simple_multipath_rotation", simple_multipath_rotation_test },
-    { "simple_multipath_break1", simple_multipath_break1_test },
-    { "simple_multipath_socket_error", simple_multipath_socket_error_test },
-    { "simple_multipath_abandon", simple_multipath_abandon_test },
-    { "simple_multipath_back1", simple_multipath_back1_test },
-    { "simple_multipath_nat", simple_multipath_nat_test },
-    { "simple_multipath_perf", simple_multipath_perf_test },
-    { "simple_multipath_qlog", simple_multipath_qlog_test },
-    { "simple_multipath_quality", simple_multipath_quality_test },
+    { "get_hash", get_hash_test },
+    { "get_tls_errors", get_tls_errors_test },
+    { "getter", getter_test },
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },
     { "pn_random", pn_random_test },
@@ -531,10 +561,11 @@ int usage(char const * argv0)
     fprintf(stderr, "  -o n1 n2          Only run test numbers in range [n1,n2]");
     fprintf(stderr, "  -s nnn            Run stress for nnn minutes.\n");
     fprintf(stderr, "  -f nnn            Run fuzz for nnn minutes.\n");
+    fprintf(stderr, "  -C ccc            Use nnn stress clients in parallel.\n");
     fprintf(stderr, "  -c nnn ccc        Run connection stress for nnn minutes, ccc connections.\n");
     fprintf(stderr, "  -d ppp uuu dir    Run connection ddoss for ppp packets, uuu usec intervals,\n");
-    fprintf(stderr, "  -F nnn            Run the corrupt file fuzzer nnn times,\n");
     fprintf(stderr, "                    logs in dir. No logs if dir=\"-\"");
+    fprintf(stderr, "  -F nnn            Run the corrupt file fuzzer nnn times,\n");
     fprintf(stderr, "  -n                Disable debug prints.\n");
     fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
@@ -562,6 +593,7 @@ int main(int argc, char** argv)
     int nb_test_tried = 0;
     int nb_test_failed = 0;
     int stress_minutes = 0;
+    int stress_clients = 0;
     int auto_bypass = 0;
     int cf_rounds = 0;
     test_status_t * test_status = (test_status_t *) calloc(nb_tests, sizeof(test_status_t));
@@ -593,7 +625,7 @@ int main(int argc, char** argv)
     {
         memset(test_status, 0, nb_tests * sizeof(test_status_t));
 
-        while (ret == 0 && (opt = getopt(argc, argv, "c:d:f:F:s:S:x:o:nrh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "c:C:d:f:F:s:S:x:o:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 optind--;
@@ -659,6 +691,15 @@ int main(int argc, char** argv)
                     ret = usage(argv[0]);
                 }
                 break;
+            case 'C':
+                do_stress = 1;
+                stress_clients = atoi(optarg);
+                if (stress_clients <= 0) {
+                    fprintf(stderr, "Incorrect number of stress clients: %s\n", optarg);
+                    ret = usage(argv[0]);
+                }
+                break;
+
             case 'c':
                 if (optind + 1 > argc) {
                     fprintf(stderr, "option requires more arguments -- c\n");
@@ -748,6 +789,7 @@ int main(int argc, char** argv)
             if (do_stress || do_fuzz) {
                 picoquic_stress_test_duration = stress_minutes;
                 picoquic_stress_test_duration *= 60000000;
+                picoquic_stress_nb_clients = stress_clients;
             }
 
             for (size_t i = 0; i < nb_tests; i++) {

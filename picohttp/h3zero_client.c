@@ -31,8 +31,8 @@
  * but the client implementation is barebone.
  */
 
-int h3zero_client_create_stream_request(
-    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, uint64_t post_size, const char * host, size_t * consumed)
+int h3zero_client_create_stream_request_ex(
+    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, const char * range, size_t range_len, uint64_t post_size, const char * host, size_t * consumed)
 {
     int ret = 0;
     uint8_t * o_bytes = buffer;
@@ -51,8 +51,8 @@ int h3zero_client_create_stream_request(
         *o_bytes++ = h3zero_frame_header;
         o_bytes += 2; /* reserve two bytes for frame length */
         if (post_size == 0) {
-            o_bytes = h3zero_create_request_header_frame(o_bytes, o_bytes_max,
-                (const uint8_t *)path, path_len, host);
+            o_bytes = h3zero_create_request_header_frame_ex(o_bytes, o_bytes_max,
+                (const uint8_t *)path, path_len, (const uint8_t *)range, range_len, host, H3ZERO_USER_AGENT_STRING);
         }
         else {
             o_bytes = h3zero_create_post_header_frame(o_bytes, o_bytes_max,
@@ -99,5 +99,10 @@ int h3zero_client_create_stream_request(
     return ret;
 }
 
+int h3zero_client_create_stream_request(
+    uint8_t* buffer, size_t max_bytes, uint8_t const* path, size_t path_len, uint64_t post_size, const char* host, size_t* consumed)
+{
+    return h3zero_client_create_stream_request_ex(buffer, max_bytes, path, path_len, NULL, 0, post_size, host, consumed);
+}
 
 

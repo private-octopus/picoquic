@@ -92,7 +92,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(OPENSSLDIR)\include;..\..\picotls\include;$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(SolutionDir)\loglib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OPENSSLDIR)\include;..\..\picotls\include;$(SolutionDir)picoquic;$(SolutionDir)picohttp;$(SolutionDir)loglib;$(SolutionDir)picoquicfirst;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -109,7 +109,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(OPENSSLDIR)\include;..\..\picotls\include;$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(SolutionDir)\loglib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OPENSSLDIR)\include;..\..\picotls\include;$(SolutionDir)picoquic;$(SolutionDir)picohttp;$(SolutionDir)loglib;$(SolutionDir)picoquicfirst;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -126,7 +126,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(OPENSSL64DIR)\include;..\..\picotls\include;$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(SolutionDir)\loglib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OPENSSL64DIR)\include;..\..\picotls\include;$(SolutionDir)picoquic;$(SolutionDir)picohttp;$(SolutionDir)loglib;$(SolutionDir)picoquicfirst;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -143,7 +143,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(OPENSSL64DIR)\include;..\..\picotls\include;$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(SolutionDir)\loglib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OPENSSL64DIR)\include;..\..\picotls\include;$(SolutionDir)picoquic;$(SolutionDir)picohttp;$(SolutionDir)loglib;$(SolutionDir)picoquicfirst;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

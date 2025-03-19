@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.20.0"
+#define PICOQUIC_VERSION "1.1.30.1"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -129,7 +129,8 @@ extern "C" {
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
 #define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x11)
 
-#define PICOQUIC_TRANSPORT_MP_PROTOCOL_VIOLATION (0x1001d76d3ded42f3ull)
+#define PICOQUIC_TRANSPORT_APPLICATION_ABANDON (0x4150504C4142414E)
+#define PICOQUIC_TRANSPORT_RESOURCE_LIMIT_REACHED (0x5245534C494D4954)
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
@@ -137,6 +138,7 @@ extern "C" {
 #define PICOQUIC_RESET_SECRET_SIZE 16
 #define PICOQUIC_RESET_PACKET_PAD_SIZE 23
 #define PICOQUIC_RESET_PACKET_MIN_SIZE (PICOQUIC_RESET_PACKET_PAD_SIZE + PICOQUIC_RESET_SECRET_SIZE)
+#define PICOQUIC_MAX_CRYPTO_BUFFER_GAP 16384
 
 #define PICOQUIC_LOG_PACKET_MAX_SEQUENCE 100
 
@@ -173,6 +175,15 @@ typedef enum {
     picoquic_state_draining,
     picoquic_state_disconnected
 } picoquic_state_enum;
+
+/* Packet contexts */
+typedef enum {
+    picoquic_packet_context_application = 0,
+    picoquic_packet_context_handshake = 1,
+    picoquic_packet_context_initial = 2,
+    picoquic_nb_packet_context = 3
+} picoquic_packet_context_enum;
+
 
 /* PMTUD 
  */
@@ -261,7 +272,9 @@ typedef enum {
     picoquic_callback_path_available, /* A new path is available, or a suspended path is available again */
     picoquic_callback_path_suspended, /* An available path is suspended */
     picoquic_callback_path_deleted, /* An existing path has been deleted */
-    picoquic_callback_path_quality_changed /* Some path quality parameters have changed */
+    picoquic_callback_path_quality_changed, /* Some path quality parameters have changed */
+    picoquic_callback_path_address_observed, /* The peer has reported an address for the path */
+    picoquic_callback_app_wakeup /* wakeup timer set by application has expired */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -302,12 +315,11 @@ typedef struct st_picoquic_tp_t {
     int enable_time_stamp; /* (x&1) want, (x&2) can */
     uint64_t min_ack_delay;
     int do_grease_quic_bit;
-    int enable_multipath;
     picoquic_tp_version_negotiation_t version_negotiation;
     int enable_bdp_frame;
-    int enable_simple_multipath;
     int is_multipath_enabled;
-    uint64_t initial_max_paths;
+    uint64_t initial_max_path_id;
+    int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
 } picoquic_tp_t;
 
 /*
@@ -423,6 +435,28 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
  */
 void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_names);
 
+/* The SSLKEYLOG function defines a way to publish the encryption keys
+* used by QUIC. If that feature is enabled, the code read the environment
+* variable SSLKEYLOG to find the path of the file where to log the encryption
+* file. If the environment variable is not present, no file is set.
+* 
+* This is a very dangerous feature, that can be abused to break encryption.
+* Using an environment variable may be a fine way to specify on which file
+* copies of keys have to be written, but it is a terrible way to specify
+* whether these keys should be. Environment variables can be installed by
+* scripts, etc., and there are many ways of doing that without user awareness.
+* 
+* This feature is enabled by setting the "SSLKEYLOG" option (option -8 if
+* using the "config" module in the application), or by calling
+* the "picoquic_enable_sslkeylog" API. This setting is "off" by default.
+* The SSLKEYLOG feature will be disabled, whatever the
+* setting, on builds of picoquic that are compiled with the macro
+* "PICOQUIC_WITHOUT_SSLKEYLOG" defined (e.g., set CFLAGS=-DPICOQUIC_WITHOUT_SSLKEYLOG).
+*/
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+void picoquic_enable_sslkeylog(picoquic_quic_t* quic, int enable_sslkeylog);
+int picoquic_is_sslkeylog_enabled(picoquic_quic_t* quic);
+#endif
 /* 
  * picoquic_set_random_initial:
  * randomization of initial PN numbers, i.e.. the number assigned to
@@ -477,6 +511,10 @@ int picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_conn
 /* Get number of open connections */
 uint32_t picoquic_current_number_connections(picoquic_quic_t * quic);
 
+/* Set get the retry threshold -- if passed, new connection will trigger retry */
+void picoquic_set_max_half_open_retry_threshold(picoquic_quic_t* quic, uint32_t max_half_open_before_retry);
+uint32_t picoquic_get_max_half_open_retry_threshold(picoquic_quic_t* quic);
+
 /* Obtain the reasons why a connection was closed */
 void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason,
     uint64_t* remote_reason, uint64_t* local_application_reason,
@@ -487,7 +525,7 @@ void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason,
  * If `data` and `sign` are empty buffers, an error occurred and `verify_ctx` should be freed.
  * Expect `0` as return value, when the data matches the signature.
  */
-
+typedef struct st_ptls_verify_certificate_t ptls_verify_certificate_t;
 typedef int (*picoquic_verify_sign_cb_fn)(void* verify_ctx, ptls_iovec_t data, ptls_iovec_t sign);
 /* Will be called to verify a certificate of a connection.
  * The arguments `verify_sign` and `verify_sign_ctx` are expected to be set, when the function returns `0`.
@@ -497,7 +535,7 @@ typedef int (*picoquic_verify_certificate_cb_fn)(void* ctx, picoquic_cnx_t* cnx,
                                                  picoquic_verify_sign_cb_fn* verify_sign, void** verify_sign_ctx);
 
 /* Is called to free the verify certificate ctx */
-typedef void (*picoquic_free_verify_certificate_ctx)(void* ctx);
+typedef void (*picoquic_free_verify_certificate_ctx)(ptls_verify_certificate_t* ctx);
 
 /* Management of the blocked port list */
 int picoquic_check_port_blocked(uint16_t port);
@@ -583,8 +621,7 @@ void picoquic_set_null_verifier(picoquic_quic_t* quic);
 int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len);
 
 /* Set the verify certificate callback and context. */
-typedef struct st_ptls_verify_certificate_t ptls_verify_certificate_t;
-int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, 
+void picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, 
     ptls_verify_certificate_t * cb, picoquic_free_verify_certificate_ctx free_fn);
 
 /* Set client authentication in TLS (if enabled, client is required to send certificates). */
@@ -601,14 +638,23 @@ void picoquic_enforce_client_only(picoquic_quic_t* quic, int do_enforce);
 /* Set default padding policy for the context */
 void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize);
 
-/* Set default spin bit policy for the context */
-void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
+/* Set default spin bit policy for the context
+* return 0 if OK, -1 if the policy was invalid.
+* Note that "picoquic_spinbit_on" is only allowed as a default policy,
+* translating to unconditional setup when connections are created for
+* the context. As a per conection setup, it is invalid.
+ */
+int picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
+int picoquic_set_spinbit_policy(picoquic_cnx_t* cnx, picoquic_spinbit_version_enum spinbit_policy);
 
 /* Set default loss bit policy for the context */
 void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy);
 
 /* Set the multipath option for the context */
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option);
+
+/* Set the Address Discovery mode for the context */
+void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode);
 
 /** picoquic_set_cwin_max:
  * Set a maximum value for the congestion window (default: UINT64_MAX)
@@ -794,6 +840,9 @@ void picoquic_close_immediate(picoquic_cnx_t* cnx);
 
 void picoquic_delete_cnx(picoquic_cnx_t* cnx);
 
+/* set the app wake up time (or cancel it by setting it to zero) */
+void picoquic_set_app_wake_time(picoquic_cnx_t* cnx, uint64_t app_wake_time);
+
 /* Support for version negotiation:
  * Setting the "desired version" parameter will trigger compatible version
  * negotiation from the current version to that desired version, if the
@@ -815,7 +864,10 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * The "abandon path" should only be used if multipath is enabled, and if more than
  * one path is available -- otherwise, just close the connection. If the command
  * is accepted, the peer will be informed of the need to close the path, and the
- * path will be demoted after a short delay.
+ * path will be demoted after a short delay. 
+ * 
+ * Like all user-level networking API, the "probe new path" API assumes that the
+ * port numbers in the socket addresses structures are expressed in network order.
  * 
  * Path event callbacks can be enabled by calling "picoquic_enable_path_callbacks".
  * This can be set as the default for new connections by calling
@@ -872,10 +924,19 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
 void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
 void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
 int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
-int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason, char const* phrase);
+int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, 
+    uint64_t reason, char const* phrase, uint64_t current_time);
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
+/* The get path addr API provides the IP addresses used by a specific path.
+* The "local" argument determines whether the APi returns the local address
+* (local == 1), the address of the peer (local == 2) or the address observed by the peer (local == 3).
+* Like all user-level networking API, the "picoquic_get_path_addr" API assumes that the
+* port numbers in the socket addresses structures are expressed in network order.
+*/
+int picoquic_get_path_addr(picoquic_cnx_t* cnx, uint64_t unique_path_id, int local, struct sockaddr_storage* addr);
+
 /*
 * The calls to picoquic_get_path_quality takes as argument a structure
 * of type `picoquic_path_quality_t`.
@@ -971,11 +1032,13 @@ void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required)
 /* Check whether the handshake is of type PSK*/
 int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx);
 
-/* Manage addresses */
+/* Manage addresses
+* The port value in the set or returned socket addresses structures are
+* always expressed in network order.
+ */
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
-
 int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr);
 
 /* Manage connection IDs*/
@@ -988,7 +1051,7 @@ picoquic_connection_id_t picoquic_get_logging_cnxid(picoquic_cnx_t* cnx);
 
 /* Manage connections */
 uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t* cnx);
-uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx);
+int picoquic_is_0rtt_available(picoquic_cnx_t* cnx);
 
 int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx);
 
@@ -1004,7 +1067,8 @@ picoquic_stream_data_cb_fn picoquic_get_callback_function(picoquic_cnx_t * cnx);
 void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
 
 /* Send extra frames */
-int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length, int is_pure_ack);
+int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length,
+    int is_pure_ack, picoquic_packet_context_enum pc);
 
 /* Queue a datagram frame for sending later.
  * The datagram length must be no more than PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH,
@@ -1017,6 +1081,8 @@ int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, size_t length, const uint
 /* The incoming packet API is used to pass incoming packets to a 
  * Quic context. The API handles the decryption of the packets
  * and their processing in the context of connections.
+ * 
+ * The port numbers in the socket addresses structures are expressed in network order.
  */
 
 int picoquic_incoming_packet(
@@ -1044,7 +1110,9 @@ int picoquic_incoming_packet_ex(
  * next packet that will be set over the network. The API for that is
  * picoquic_prepare_next_packet", which operates on a "quic context".
  * The API "picoquic_prepare_packet" does the same but for just one
- * connection at a time. 
+ * connection at a time.
+ * 
+* The port numbers in the socket addresses structures are expressed in network order.
  */
 
 int picoquic_prepare_next_packet_ex(picoquic_quic_t* quic, 
@@ -1081,6 +1149,8 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
  * picoquic_prepare_next_packet API, the if_index parameter indicates the interface ID
  * suggested by the stack. The socket_err parameter may be used by the stack for logging
  * purposes.
+ * 
+ * The port numbers in the socket addresses structures are expressed in network order.
  */
 void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx,
      uint64_t current_time, struct sockaddr* addr_peer, struct sockaddr* addr_local, int if_index, int socket_err);
@@ -1275,7 +1345,7 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
  * of the stream to NULL */
 int picoquic_discard_stream(picoquic_cnx_t* cnx, uint64_t stream_id, uint16_t local_stream_error);
 
-/* The function picoquic_set_datagram_ready indicates to the stack
+/* The function picoquic_mark_datagram_ready indicates to the stack
  * whether the application is ready to send datagrams. 
  * 
  * When running in a multipath environment, some applications may want to
@@ -1304,8 +1374,8 @@ int picoquic_mark_datagram_ready_path(picoquic_cnx_t* cnx, uint64_t unique_path_
  * number of bytes at the provided address, and provide a return code 0 from
  * the callback in case of success, or non zero in case of error.
  * 
- * There are two variants of "picoquic_callback_prepare_datagram", the old one
- * and the new one, "picoquic_callback_prepare_datagram_ex", which adds
+ * There are two variants of "picoquic_provide_datagram_buffer", the old one
+ * and the new one, "picoquic_provide_datagram_buffer_ex", which adds
  * an "is_active" parameter. This parameter helps handling some cases:
  * 
  * - if the application marked the context ready by mistake, it 
@@ -1497,6 +1567,24 @@ void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_s
 */
 void picoquic_set_default_bbr_quantum_ratio(picoquic_quic_t* quic, double quantum_ratio);
 
+/* Temporary code, do define a set of BBR flags that
+* turn on and off individual extensions. We want to use that
+* to do "before/after" measurements.
+ */
+#define BBRExperiment on
+#ifdef BBRExperiment
+/* Control flags for BBR improvements */
+typedef struct st_bbr_exp {
+    unsigned int do_early_exit : 1;
+    unsigned int do_rapid_start : 1;
+    unsigned int do_handle_suspension : 1;
+    unsigned int do_control_lost : 1;
+    unsigned int do_exit_probeBW_up_on_delay : 1;
+    unsigned int do_enter_probeBW_after_limited : 1;
+} bbr_exp;
+
+void picoquic_set_bbr_exp(picoquic_quic_t * quic, bbr_exp* exp);
+#endif
 /* The experimental API 'picoquic_set_priority_limit_for_bypass' 
 * instruct the stack to send the high priority streams or datagrams
 * immediately, even if congestion control would normally prevent it.
@@ -1544,6 +1632,18 @@ void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priorit
 */
 void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify);
 
+/* The experimental API `picoquic_request_forced_probe_up` direct the 
+ * stack to send filler traffic when the congestion control algorithm is 
+ * "probing for bandwidth". This is intended for "real time" applications
+ * that often send less traffic that congestion control will allow, and
+ * may suffer from an insufficient estimate of the path capacity.
+ * Forcing more traffic will remedy that. 
+ * 
+ * When more traffic is requested, there is a risk of filling buffers and
+ * creating packet losses. The stack will try to alleviate that risk
+ * by building traffic with redundant copies of unacknowledged packets.
+ */
+void picoquic_request_forced_probe_up(picoquic_cnx_t* cnx, unsigned int request_forced_probe_up);
 /* Bandwidth update and congestion control parameters value.
  * Congestion control in picoquic is characterized by three values:
  * - pacing rate, expressed in bytes per second (for example, 10Mbps would be noted as 1250000)
@@ -1577,7 +1677,6 @@ typedef enum {
     picoquic_alpn_undef = 0,
     picoquic_alpn_http_0_9,
     picoquic_alpn_http_3,
-    picoquic_alpn_siduck,
     picoquic_alpn_quicperf
 } picoquic_alpn_enum;
 

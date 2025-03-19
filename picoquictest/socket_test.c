@@ -31,6 +31,7 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
     uint8_t buffer[1536];
     int bytes_sent = 0;
     int bytes_recv = 0;
+    struct sockaddr_storage server_addr_n = { 0 };
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_dest;
     int dest_if = 0;
@@ -42,9 +43,11 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
             message[i++] = (uint8_t)(current_time >> j);
         }
     }
+    memcpy(&server_addr_n, server_addr, (server_addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
 
     /* send from client to sever address */
-    bytes_sent = sendto(fd, (const char*)&message, sizeof(message), 0, server_addr, server_address_length);
+    
+    bytes_sent = sendto(fd, (const char*)&message, sizeof(message), 0, (struct sockaddr*)&server_addr_n, server_address_length);
 
     if (bytes_sent != (int)sizeof(message)) {
         DBG_PRINTF("Sendto sent %d bytes, expected %d\n", bytes_sent, (int)sizeof(message));

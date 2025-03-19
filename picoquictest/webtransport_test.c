@@ -117,33 +117,37 @@ static int picowt_baton_test_one(
     * We want to replace that by the demo client callback */
 
     if (ret == 0) {
-        /* use the generic H3 callback */
-        /* Set the client callback context */
-        h3zero_cb = h3zero_callback_create_context(NULL);
-        if (h3zero_cb == NULL) {
-            ret = 1;
-        }
-        else {
-            h3zero_cb->no_print = 1;
-            picoquic_set_callback(test_ctx->cnx_client, h3zero_callback, h3zero_cb);
-            /* Initialize the callback context. First, create a bidir stream */
-            wt_baton_ctx_init(&baton_ctx, h3zero_cb, NULL, NULL);
-            baton_ctx.is_client = 1;
-            baton_ctx.server_path = baton_path;
-            /* Create a stream context for the connect call. */
-            ret = wt_baton_connect(test_ctx->cnx_client, &baton_ctx, h3zero_cb);
-        }
-        /* Initialize the server -- should include the path setup for connect action */
-        memset(&server_param, 0, sizeof(picohttp_server_parameters_t));
-        server_param.web_folder = NULL;
-        server_param.path_table = path_item_list;
-        server_param.path_table_nb = 1;
+        /* Set the client callback context using as much as possible
+        * the generic picowt calls. */
+        h3zero_stream_ctx_t* control_stream_ctx = NULL;
 
-        picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
-        picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
+        ret = picowt_prepare_client_cnx(test_ctx->qclient, (struct sockaddr*)NULL,
+            &test_ctx->cnx_client, &h3zero_cb, &control_stream_ctx, simulated_time, PICOQUIC_TEST_SNI);
+
+        if (ret == 0) {
+            ret = wt_baton_prepare_context(test_ctx->cnx_client, &baton_ctx, h3zero_cb,
+                control_stream_ctx, PICOQUIC_TEST_SNI, baton_path);
+        }
+
+        if (ret == 0) {
+            ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
+                baton_ctx.authority, baton_ctx.server_path,
+                wt_baton_callback, &baton_ctx);
+        }
 
         if (ret == 0) {
             ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
+
+        if (ret == 0) {
+            /* Initialize the server -- should include the path setup for connect action */
+            memset(&server_param, 0, sizeof(picohttp_server_parameters_t));
+            server_param.web_folder = NULL;
+            server_param.path_table = path_item_list;
+            server_param.path_table_nb = 1;
+
+            picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
+            picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
         }
     }
 
@@ -265,6 +269,104 @@ int picowt_baton_multi_test()
 int picowt_baton_random_test()
 {
     int ret = picowt_baton_test_one(7, "/baton?count=4", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_tp_test()
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0) {
+        /* Reset the client TP to low values in order to test the picowt function */
+
+        if (cnx->local_parameters.initial_max_data >= 0x3FFF) {
+            cnx->local_parameters.initial_max_data = 0x1000;
+        }
+        if (cnx->local_parameters.initial_max_stream_data_bidi_local >= 0x3FFF) {
+            cnx->local_parameters.initial_max_stream_data_bidi_local = 0x1000;
+        }
+        if (cnx->local_parameters.initial_max_stream_data_bidi_remote >= 0x3FFF) {
+            cnx->local_parameters.initial_max_stream_data_bidi_remote = 0x1000;
+        }
+        if (cnx->local_parameters.initial_max_stream_data_uni >= 0x3FFF) {
+            cnx->local_parameters.initial_max_stream_data_uni = 0x1000;
+        }
+        if (cnx->local_parameters.initial_max_stream_id_bidir >= 0x3F) {
+            cnx->local_parameters.initial_max_stream_id_bidir = 0;
+        }
+        if (cnx->local_parameters.initial_max_stream_id_unidir >= 0x3F) {
+            cnx->local_parameters.initial_max_stream_id_unidir = 0;
+        }
+        if (cnx->local_parameters.max_datagram_frame_size > 0) {
+            cnx->local_parameters.max_datagram_frame_size = 0;
+        }
+        /* Call the setup function */
+        picowt_set_transport_parameters(cnx);
+
+        /* verify*/
+        if (cnx->local_parameters.initial_max_data < 0x3FFF ||
+            cnx->local_parameters.initial_max_stream_data_bidi_local < 0x3FFF ||
+            cnx->local_parameters.initial_max_stream_data_bidi_remote < 0x3FFF ||
+            cnx->local_parameters.initial_max_stream_data_uni < 0x3FFF ||
+            cnx->local_parameters.initial_max_stream_id_bidir < 0x3F ||
+            cnx->local_parameters.initial_max_stream_id_unidir < 0x3F ||
+            cnx->local_parameters.max_datagram_frame_size == 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int h3zero_set_test_context(picoquic_quic_t** quic, picoquic_cnx_t** cnx, h3zero_callback_ctx_t** h3_ctx, uint64_t* simulated_time);
+
+int picowt_drain_test_one(int expect_error)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
+
+    if (ret == 0) {
+        h3zero_stream_ctx_t* control_stream_ctx = picowt_set_control_stream(cnx, h3_ctx);
+
+        if (control_stream_ctx == NULL) {
+            ret = -1;
+        }
+        else if (expect_error) {
+            control_stream_ctx->ps.stream_state.is_fin_sent = 1;
+            if (picowt_send_drain_session_message(cnx, control_stream_ctx) == 0) {
+                ret = -1;
+            }
+        }
+        else {
+            ret = picowt_send_drain_session_message(cnx, control_stream_ctx);
+        }
+    }
+
+
+    picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int picowt_drain_test()
+{
+    int ret = picowt_drain_test_one(0);
+
+    if (ret == 0) {
+        ret = picowt_drain_test_one(1);
+    }
 
     return ret;
 }

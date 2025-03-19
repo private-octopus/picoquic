@@ -66,14 +66,18 @@ extern "C" {
 
 
 void debug_set_stream(FILE *F);
+#if 0
 void debug_set_callback(void (*cb)(const char *msg, void *argp), void *argp);
+#endif
 void debug_printf(const char* fmt, ...);
 void debug_printf_push_stream(FILE* f);
 void debug_printf_pop_stream(void);
 void debug_printf_suspend(void);
 void debug_printf_resume(void);
 int debug_printf_reset(int suspended);
+#ifdef _DEBUG
 void debug_dump(const void * x, int len);
+#endif
 
 /* utilities */
 char* picoquic_string_create(const char* original, size_t len);
@@ -88,14 +92,16 @@ int picoquic_is_connection_id_null(const picoquic_connection_id_t * cnx_id);
 int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, const picoquic_connection_id_t * cnx_id2);
 uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid);
 uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id);
-void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t val64);
 uint64_t picoquic_hash_addr(const struct sockaddr* addr);
 size_t picoquic_parse_hexa(char const* hex_input, size_t input_length, uint8_t* bin_output, size_t output_max);
 uint8_t picoquic_parse_connection_id_hexa(char const * hex_input, size_t input_length, picoquic_connection_id_t * cnx_id);
 int picoquic_print_connection_id_hexa(char* buf, size_t buf_len, const picoquic_connection_id_t* cnxid);
-uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t srce_len);
 
 int picoquic_compare_addr(const struct sockaddr* expected, const struct sockaddr* actual);
+int picoquic_compare_ip_addr(const struct sockaddr* expected, const struct sockaddr* actual);
+uint16_t picoquic_get_addr_port(const struct sockaddr* addr);
+void picoquic_set_addr_port(const struct sockaddr* addr, uint16_t port);
+
 int picoquic_addr_length(const struct sockaddr* addr);
 void picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr);
 void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * ip_addr_len);
@@ -166,8 +172,10 @@ const uint8_t* picoquic_frames_cid_decode(const uint8_t * bytes, const uint8_t *
 #define VARINT_LEN(bytes) (((uint8_t)1) << ((bytes[0] >> 6)&3))
 #define VARINT_LEN_T(bytes, t_len) (((t_len)1) << ((bytes[0] >> 6)&3))
 
+#if 0
 /* Predict length of a varint encoding */
 size_t picoquic_frames_varint_encode_length(uint64_t n64);
+#endif
 
 /* Encoding functions of the form uint8_t * picoquic_frame_XXX_encode(uint8_t * bytes, uint8_t * bytes-max, ...)
  */

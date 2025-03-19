@@ -51,18 +51,16 @@
 #endif
 
 #include <stddef.h>
+#include <stdlib.h>
 #include "picotls.h"
 #include "picoquic_internal.h"
-
 #ifndef PTLS_WITHOUT_OPENSSL
 #include "picotls/openssl.h"
 #endif
-
 #include "tls_api.h"
 #include "picoquic_crypto_provider_api.h"
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
 #include "picoquic_unified_log.h"
 
 #define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
@@ -103,29 +101,20 @@ struct st_picoquic_log_event_t {
 
 #ifdef CRYPTO_PROVIDERS_REGION
 
-#define PICOQUIC_CIPHER_SUITES_NB_MAX 8
-struct st_picoquic_cipher_suites_t {
-    ptls_cipher_suite_t* high_memory_suite;
-    ptls_cipher_suite_t* low_memory_suite;
-};
-
-static struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
+struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
 
 #define PICOQUIC_KEY_EXCHANGES_NB_MAX 4
-static ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
-static ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
+ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
+ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
 picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn = NULL;
-static picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn = NULL;
-static picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn = NULL;
-
-static picoquic_get_certificate_verifier_t picoquic_certificate_verifier_fn = NULL;
-static picoquic_dispose_certificate_verifier_t picoquic_dispose_certificate_verifier_fn = NULL;
-static picoquic_set_tls_root_certificates_t picoquic_set_tls_root_certificates_fn = NULL;
-
-static picoquic_explain_crypto_error_t picoquic_explain_crypto_error_fn = NULL;
-static picoquic_clear_crypto_errors_t picoquic_clear_crypto_errors_fn = NULL;
-
-static picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn = NULL;
+picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn = NULL;
+picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn = NULL;
+picoquic_get_certificate_verifier_t picoquic_get_certificate_verifier_fn = NULL;
+picoquic_dispose_certificate_verifier_t picoquic_dispose_certificate_verifier_fn = NULL;
+picoquic_set_tls_root_certificates_t picoquic_set_tls_root_certificates_fn = NULL;
+picoquic_explain_crypto_error_t picoquic_explain_crypto_error_fn = NULL;
+picoquic_clear_crypto_errors_t picoquic_clear_crypto_errors_fn = NULL;
+picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn = NULL;
 
 /* Initialization of the cryptographic tables and functions
  * 
@@ -176,7 +165,7 @@ void picoquic_tls_api_init_providers(int unload)
     // picoquic_bcrypt_load(unload);
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
-        DBG_PRINTF("%s", "%s fusion", (unload)?"Unloading":"Loading");
+        DBG_PRINTF("%s fusion", (unload)?"Unloading":"Loading");
         picoquic_ptls_fusion_load(unload);
     }
 #else
@@ -187,7 +176,7 @@ void picoquic_tls_api_init_providers(int unload)
 
 #ifdef PICOQUIC_WITH_MBEDTLS
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MBEDTLS) == 0) {
-        DBG_PRINTF("%s", "%s MbedTLS", (unload)?"Unloading":"Loading");
+        DBG_PRINTF("%s MbedTLS", (unload)?"Unloading":"Loading");
         picoquic_mbedtls_load(unload);
     }
 #endif
@@ -203,7 +192,7 @@ static void picoquic_tls_api_zero()
     picoquic_dispose_sign_certificate_fn = NULL;
     picoquic_get_certs_from_file_fn = NULL;
 
-    picoquic_certificate_verifier_fn = NULL;
+    picoquic_get_certificate_verifier_fn = NULL;
     picoquic_dispose_certificate_verifier_fn = NULL;
     picoquic_set_tls_root_certificates_fn = NULL;
 
@@ -263,7 +252,7 @@ void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory
 /* Registration of key exchange algorithms */
 void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key_exchange)
 {
-    for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX; i++) {
+    for (int i = 0; i < PICOQUIC_KEY_EXCHANGES_NB_MAX; i++) {
         if (picoquic_key_exchanges[i] == NULL ||
             picoquic_key_exchanges[i]->id == key_exchange->id) {
             /* Replace the lower priority provider if present! */
@@ -293,7 +282,7 @@ void picoquic_register_verify_certificate_fn(picoquic_get_certificate_verifier_t
     picoquic_dispose_certificate_verifier_t dispose_certificate_verifier_fn,
     picoquic_set_tls_root_certificates_t set_tls_root_certificates_fn)
 {
-    picoquic_certificate_verifier_fn = certificate_verifier_fn;
+    picoquic_get_certificate_verifier_fn = certificate_verifier_fn;
     picoquic_dispose_certificate_verifier_fn = dispose_certificate_verifier_fn;
     picoquic_set_tls_root_certificates_fn = set_tls_root_certificates_fn;
 }
@@ -377,7 +366,7 @@ int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
 }
 
 /* Obtain AES128GCM SHA256, AES256GCM_SHA384 or CHACHA20 suite according to current provider */
-ptls_cipher_suite_t* picoquic_get_selected_cipher_suite_by_id(int cipher_suite_id, int use_low_memory)
+ptls_cipher_suite_t* picoquic_get_cipher_suite_by_id(int cipher_suite_id, int use_low_memory)
 {
     ptls_cipher_suite_t* selected_suites[4];
     ptls_cipher_suite_t* cipher;
@@ -388,13 +377,8 @@ ptls_cipher_suite_t* picoquic_get_selected_cipher_suite_by_id(int cipher_suite_i
     else {
         cipher = selected_suites[0];
     }
-    
-    return cipher;
-}
 
-static ptls_cipher_suite_t* picoquic_get_cipher_suite_by_id(int cipher_suite_id, int use_low_memory)
-{
-    return picoquic_get_selected_cipher_suite_by_id(cipher_suite_id, use_low_memory);
+    return cipher;
 }
 
 static ptls_cipher_algorithm_t* picoquic_get_ecb_cipher_by_id(const char* ecb_cipher_name)
@@ -423,16 +407,20 @@ static ptls_cipher_algorithm_t* picoquic_get_ecb_cipher_by_id(const char* ecb_ci
 * then derive the ECB function from the selection of the AEAD function.
 * This will obviate the need of providing a specific API.
 */
-void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key)
+
+void* picoquic_ecb_create_by_name(int is_enc, const void* ecb_key, char const* alg_name)
 {
     void* created = NULL;
-    ptls_cipher_algorithm_t* ecb_cipher = picoquic_get_ecb_cipher_by_id("AES128-ECB");
+    ptls_cipher_algorithm_t* ecb_cipher = picoquic_get_ecb_cipher_by_id(alg_name);
 
     if (ecb_cipher != NULL) {
         created = (void*)ptls_cipher_new(ecb_cipher, is_enc, ecb_key);
     }
     
     return created;
+}
+void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key) {
+    return picoquic_ecb_create_by_name(is_enc, ecb_key, "AES128-ECB");
 }
 
 /* Obtain a hash algorithm from the table of supported cipher suites.*/
@@ -457,11 +445,6 @@ ptls_hash_algorithm_t* picoquic_get_hash_algorithm_by_name(const char* hash_algo
 ptls_hash_algorithm_t* picoquic_get_sha256()
 {
     return picoquic_get_hash_algorithm_by_name("sha256");
-}
-
-void* picoquic_get_sha256_v()
-{
-    return (void*)picoquic_get_sha256();
 }
 
 /* Export hash functions so applications do not need to access picotls.
@@ -563,10 +546,16 @@ int picoquic_set_private_key_from_file(picoquic_quic_t* quic, char const* file_n
 
 /* Clear certificate objects allocated by the crypto stack for a certficate
 */
-void picoquic_dispose_sign_certificate(ptls_sign_certificate_t* cert)
+void picoquic_dispose_sign_certificate(ptls_context_t* ctx)
 {
-    if (picoquic_dispose_sign_certificate_fn != NULL) {
-        picoquic_dispose_sign_certificate_fn(cert);
+    if (ctx->sign_certificate != NULL) {
+        if (picoquic_dispose_sign_certificate_fn != NULL) {
+            /* we expect the dispose function to free dependencies,
+             * but not the certificate itself. */
+            picoquic_dispose_sign_certificate_fn(ctx->sign_certificate);
+        }
+        free(ctx->sign_certificate);
+        ctx->sign_certificate = NULL;
     }
 }
 
@@ -584,13 +573,14 @@ ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count
 
 /* Return the certificate verifier callback provided by the crypto stack */
 ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_root_file_name,
-    unsigned int* is_cert_store_not_empty)
+    unsigned int* is_cert_store_not_empty, picoquic_free_verify_certificate_ctx * p_free_certificate_verifier_fn)
 {
-    if (picoquic_certificate_verifier_fn == NULL) {
+    if (picoquic_get_certificate_verifier_fn == NULL) {
         return NULL;
     }
     else {
-        return picoquic_certificate_verifier_fn(cert_root_file_name, is_cert_store_not_empty);
+        return picoquic_get_certificate_verifier_fn(cert_root_file_name, is_cert_store_not_empty,
+            p_free_certificate_verifier_fn);
     }
 }
 
@@ -1160,34 +1150,46 @@ uint64_t picoquic_get_simulated_time_cb(ptls_get_time_t* self)
 /*
  * Verify certificate
  */
-
-int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
+#if 0
+/* The custom cert call is not used and not tested, so disabled for now. */
+int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic)
+{
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
 
     ctx->verify_certificate = quic->verify_certificate_callback;
     quic->is_cert_store_not_empty = 1;
-    quic->is_cert_verifier_custom = 1;
     return 0;
 }
-
+#endif
 void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic) {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
 
-    if (ctx->verify_certificate != NULL){
-        if (quic->is_cert_verifier_custom) {
-            if (quic->free_verify_certificate_callback_fn != NULL) {
-                (quic->free_verify_certificate_callback_fn)(ctx->verify_certificate);
-                quic->free_verify_certificate_callback_fn = NULL;
-            }
-        } else {
-            picoquic_dispose_certificate_verifier(ctx->verify_certificate);
-            free(ctx->verify_certificate);
+    if (ctx->verify_certificate != NULL) {
+        if (quic->free_verify_certificate_callback_fn != NULL) {
+            picoquic_dispose_certificate_verifier_t disposer =
+                (picoquic_dispose_certificate_verifier_t)quic->free_verify_certificate_callback_fn;
+            disposer(ctx->verify_certificate);
+            quic->free_verify_certificate_callback_fn = NULL;
         }
+        /*
+        free(ctx->verify_certificate);
+        */
         ctx->verify_certificate = NULL;
-        quic->is_cert_verifier_custom = 0;
     }
-   
+
     ctx->verify_certificate = NULL;
+}
+
+void picoquic_tls_set_verify_certificate_callback(picoquic_quic_t* quic,
+    struct st_ptls_verify_certificate_t* cb, picoquic_free_verify_certificate_ctx free_fn)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+
+    picoquic_dispose_verify_certificate_callback(quic);
+
+    ctx->verify_certificate = cb;
+    quic->is_cert_store_not_empty = 1;
+    quic->free_verify_certificate_callback_fn = free_fn;
 }
 
 /* set key from secret: this is used to create AEAD contexts and PN encoding contexts
@@ -1578,7 +1580,6 @@ void picoquic_apply_rotated_keys(picoquic_cnx_t * cnx, int is_enc)
         cnx->crypto_context_new.aead_encrypt = NULL;
 
         cnx->key_phase_enc ^= 1;
-        picoquic_log_pn_dec_trial(cnx);
     }
     else {
         if (cnx->crypto_context_old.aead_decrypt != NULL) {
@@ -1726,10 +1727,14 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
             }
         }
 
-        ctx->verify_certificate = picoquic_get_certificate_verifier(cert_root_file_name, &is_cert_store_not_empty);
-        quic->is_cert_store_not_empty = is_cert_store_not_empty;
+        if (ret == 0) {
+            ctx->verify_certificate = picoquic_get_certificate_verifier(cert_root_file_name,
+                &is_cert_store_not_empty, (picoquic_free_verify_certificate_ctx*)
+                &quic->free_verify_certificate_callback_fn);
+            quic->is_cert_store_not_empty = is_cert_store_not_empty;
+        }
 
-        if (quic->ticket_file_name != NULL) {
+        if (ret == 0 && quic->ticket_file_name != NULL) {
             save_ticket = (ptls_save_ticket_t*)malloc(sizeof(ptls_save_ticket_t) + sizeof(picoquic_quic_t*));
             if (save_ticket != NULL) {
                 picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)save_ticket) + sizeof(ptls_save_ticket_t));
@@ -1749,6 +1754,9 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
             quic->tls_master_ctx = ctx;
             picoquic_public_random_seed(quic);
         } else {
+            quic->tls_master_ctx = ctx;
+            picoquic_master_tlscontext_free(quic);
+            quic->tls_master_ctx = NULL;
             free(ctx);
         }
     }
@@ -1779,11 +1787,7 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 
         free_certificates_list(ctx->certificates.list, ctx->certificates.count);
 
-        if (ctx->sign_certificate != NULL) {
-            picoquic_dispose_sign_certificate(ctx->sign_certificate);
-            free(ctx->sign_certificate);
-            ctx->sign_certificate = NULL;
-        }
+        picoquic_dispose_sign_certificate(ctx);
 
         picoquic_dispose_verify_certificate_callback(quic);
 
@@ -1829,13 +1833,22 @@ uint64_t picoquic_get_tls_time(picoquic_quic_t* quic)
 int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t current_time)
 {
     int ret = 0;
-    /* allocate a context structure */
-    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)malloc(sizeof(picoquic_tls_ctx_t));
+    /* allocate a context structure, but only if checks are correct */
+    picoquic_tls_ctx_t* ctx = NULL;
+
+    if (!cnx->client_mode && ((ptls_context_t*)quic->tls_master_ctx)->encrypt_ticket == NULL) {
+        /* A server side connection, but no cert/key where given for the master context */
+        ret = PICOQUIC_ERROR_TLS_SERVER_CON_WITHOUT_CERT;
+    }
+    else {
+        ctx = (picoquic_tls_ctx_t*)malloc(sizeof(picoquic_tls_ctx_t));
+        if (ctx == NULL) {
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+    }
 
     /* Create the TLS context */
-    if (ctx == NULL) {
-        ret = -1;
-    } else {
+    if (ctx != NULL) {
         memset(ctx, 0, sizeof(picoquic_tls_ctx_t));
         ctx->ext_data_size = PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE;
         if (!cnx->client_mode && quic->test_large_server_flight) {
@@ -1856,22 +1869,14 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
 
             ctx->tls = ptls_new((ptls_context_t*)quic->tls_master_ctx,
                 (ctx->client_mode) ? 0 : 1);
-            *ptls_get_data_ptr(ctx->tls) = cnx;
-
             if (ctx->tls == NULL) {
-                free(ctx);
+                picoquic_tlscontext_free(ctx);
                 ctx = NULL;
-                ret = -1;
+                ret = PICOQUIC_ERROR_MEMORY;
             }
-            else if (!ctx->client_mode) {
-                /* A server side connection, but no cert/key where given for the master context */
-                if (((ptls_context_t*)quic->tls_master_ctx)->encrypt_ticket == NULL) {
-                    ret = PICOQUIC_ERROR_TLS_SERVER_CON_WITHOUT_CERT;
-                    picoquic_tlscontext_free(ctx);
-                    ctx = NULL;
-                }
-
-                if (ctx != NULL) {
+            else{
+                *ptls_get_data_ptr(ctx->tls) = cnx;
+                if (!ctx->client_mode) {
                     /* The server should never attempt a stateless retry */
                     ctx->handshake_properties.server.enforce_retry = 0;
                     ctx->handshake_properties.server.retry_uses_cookie = 0;
@@ -1882,7 +1887,7 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
             }
         }
     }
-    
+
     if (cnx->tls_ctx != NULL) {
         picoquic_tlscontext_free(cnx->tls_ctx);
     }
@@ -1962,79 +1967,6 @@ void picoquic_set_key_log_file(picoquic_quic_t *quic, char const * keylog_filena
     }
 
     ctx->log_event = (ptls_log_event_t*)log_event;
-}
-
-/*
-Check whether the ticket that was received, or used, authorizes 0-RTT data.
-
-From TLS 1.3 spec:
-struct {
-uint32 ticket_lifetime;
-uint32 ticket_age_add;
-opaque ticket_nonce<0..255>;
-opaque ticket<1..2^16-1>;
-Extension extensions<0..2^16-2>;
-} NewSessionTicket;
-
-struct {
-ExtensionType extension_type;
-opaque extension_data<0..2^16-1>;
-} Extension;
-*/
-
-int picoquic_does_tls_ticket_allow_early_data(uint8_t* ticket, uint16_t ticket_length)
-{
-    uint8_t nonce_length = 0;
-    uint16_t ticket_val_length = 0;
-    uint16_t extension_length = 0;
-    uint8_t* extension_ptr = NULL;
-    uint16_t byte_index = 0;
-    uint16_t min_length = 4 + 4 + 1 + 2 + 2;
-    int ret = 0;
-
-    if (ticket_length >= min_length) {
-        byte_index += 4; /* Skip lifetime */
-        byte_index += 4; /* Skip age add */
-        nonce_length = ticket[byte_index++];
-        min_length += nonce_length;
-        if (ticket_length >= min_length) {
-            byte_index += nonce_length;
-
-            ticket_val_length = PICOPARSE_16(ticket + byte_index);
-            byte_index += 2;
-            min_length += ticket_val_length;
-            if (ticket_length >= min_length) {
-                byte_index += ticket_val_length;
-
-                extension_length = PICOPARSE_16(ticket + byte_index);
-                byte_index += 2;
-                min_length += extension_length;
-                if (ticket_length >= min_length) {
-                    extension_ptr = &ticket[byte_index];
-                }
-            }
-        }
-    }
-
-    if (extension_ptr != NULL) {
-        uint16_t x_index = 0;
-
-        while (x_index + 4 < extension_length) {
-            uint16_t x_type = PICOPARSE_16(extension_ptr + x_index);
-            uint16_t x_len = PICOPARSE_16(extension_ptr + x_index + 2);
-            x_index += 4 + x_len;
-
-            if (x_type == 42 && x_len == 4) {
-                uint32_t ed_len = PICOPARSE_32(extension_ptr + x_index - 4);
-                if (ed_len == 0xFFFFFFFF) {
-                    ret = 1;
-                }
-                break;
-            }
-        }
-    }
-
-    return ret;
 }
 
 /*
@@ -2237,10 +2169,13 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
             cnx->remote_parameters.initial_max_stream_data_uni = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_stream_data_uni];
             cnx->remote_parameters.initial_max_stream_id_bidir = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir];
             cnx->remote_parameters.initial_max_stream_id_unidir = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir];
-            /* Seed connection with remembered data */
-            picoquic_seed_bandwidth(cnx, stored_ticket->tp_0rtt[picoquic_tp_0rtt_rtt_local],
-                stored_ticket->tp_0rtt[picoquic_tp_0rtt_cwin_local],
-                stored_ticket->ip_addr, stored_ticket->ip_addr_length);
+
+            if (stored_ticket->time_valid_until > current_time) {
+                /* Seed connection with remembered data */
+                picoquic_seed_bandwidth(cnx, stored_ticket->tp_0rtt[picoquic_tp_0rtt_rtt_local],
+                    stored_ticket->tp_0rtt[picoquic_tp_0rtt_cwin_local],
+                    stored_ticket->ip_addr, stored_ticket->ip_addr_length);
+            }
         }
     }
 
@@ -2898,8 +2833,16 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
     odcid->id_len = 0;
 
     /* decode the encrypted token */
-    ret = picoquic_server_decrypt_retry_token(quic, addr_peer, is_new_token, token, token_size,
-        text, &text_len);
+    if (token_size > sizeof(text)) {
+        /* regular tokens produced by picoquic are always short, and a short decoding
+        * buffer should be sufficient. If this text fires, it probably because of
+        * an attack, or buggy code at the peer. */
+        ret = -1;
+    }
+    else {
+        ret = picoquic_server_decrypt_retry_token(quic, addr_peer, is_new_token, token, token_size,
+            text, &text_len);
+    }
 
     if (ret == 0) {
         /* Decode the clear text components */
@@ -2942,6 +2885,8 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
     return ret;
 }
 
+#if 0
+/* Disabling this code for now, as it is not used */
 /*
  * Encryption functions for CID encryption
  */
@@ -3013,6 +2958,7 @@ void picoquic_cid_decrypt_under_mask(void *cid_enc, const picoquic_connection_id
 {
     picoquic_cid_encrypt_under_mask(cid_enc, cid_in, mask, cid_out);
 }
+#endif
 
 /* Retry Packet Protection.
  * This is done by applying AES-GCM128 with a constant key and a NULL nonce,

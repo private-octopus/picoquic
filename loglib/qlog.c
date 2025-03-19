@@ -118,7 +118,7 @@ static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
 
         fprintf(f, "\"ip_v4\": \"%d.%d.%d.%d\", \"port_v4\":%d",
             addr[0], addr[1], addr[2], addr[3],
-            ntohs(s4->sin_port));
+            s4->sin_port);
     }
     else {
         struct sockaddr_in6* s6 = (struct sockaddr_in6*)addr_peer;
@@ -137,7 +137,7 @@ static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
                 fprintf(f, "%x", addr[(2 * i) + 1]);
             }
         }
-        fprintf(f, "\", \"port_v6\" :%d", ntohs(s6->sin6_port));
+        fprintf(f, "\", \"port_v6\" :%d", s6->sin6_port);
     }
 }
 
@@ -215,50 +215,64 @@ void qlog_preferred_address(FILE* f, bytestream* s, uint64_t len)
 void qlog_tp_version_negotiation(FILE* f, bytestream* s, uint64_t len)
 {
     size_t old_size = s->size;
+    size_t ptr_max = s->ptr + (size_t)len;
 
-    s->size = s->ptr + (size_t)len;
-    fprintf(f, "{ ");
-    if ((len & 3) != 0 || len == 0) {
-        fprintf(f, "\"bad_length\": \"%" PRIu64, len);
-    } else {
-        fprintf(f, "\"chosen\": \"");
-        for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
-            fprintf(f, "%02x", s->data[s->ptr]);
-        }
-        fprintf(f, "\"");
-        if (s->ptr < s->size) {
-            int is_first = 1;
-            fprintf(f, ", \"others\": [");
-            do {
-                fprintf(f, "%s", (is_first)?"\"":", \"");
-                is_first = 0;
-                for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
-                    fprintf(f, "%02x", s->data[s->ptr]);
-                }
-                fprintf(f, "\"");
-            } while (s->ptr < s->size);
-            fprintf(f, "]");
-        }
+    if (ptr_max > s->size) {
+        fprintf(f, ",\n    \"vnego_parameter_length\": %zu", (size_t)len);
+        fprintf(f, ",\n    \"bytes_available\": %zu", s->size - s->ptr);
     }
-    fprintf(f, "}");
-    s->size = old_size;
+    else {
+        s->size = s->ptr + (size_t)len;
+        fprintf(f, "{ ");
+        if ((len & 3) != 0 || len == 0) {
+            fprintf(f, "\"bad_length\": \"%" PRIu64, len);
+        }
+        else {
+            fprintf(f, "\"chosen\": \"");
+            for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
+                fprintf(f, "%02x", s->data[s->ptr]);
+            }
+            fprintf(f, "\"");
+            if (s->ptr < s->size) {
+                int is_first = 1;
+                fprintf(f, ", \"others\": [");
+                do {
+                    fprintf(f, "%s", (is_first) ? "\"" : ", \"");
+                    is_first = 0;
+                    for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
+                        fprintf(f, "%02x", s->data[s->ptr]);
+                    }
+                    fprintf(f, "\"");
+                } while (s->ptr < s->size);
+                fprintf(f, "]");
+            }
+        }
+        fprintf(f, "}");
+        s->size = old_size;
+    }
 }
 
 
-int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
+int qlog_transport_extensions(FILE* f, bytestream* v, size_t tp_length)
 {
     int ret = 0;
-    size_t ptr_max = s->ptr + tp_length;
+    size_t ptr_max = v->ptr + tp_length;
 
-    if (ptr_max < s->size) {
+    if (ptr_max > v->size) {
         fprintf(f, ",\n    \"transport_parameter_length\": %zu", tp_length);
-        fprintf(f, ",\n    \"bytes_available\": %zu" PRIu64, s->size - s->ptr);
+        fprintf(f, ",\n    \"bytes_available\": %zu" PRIu64, v->size - v->ptr);
     } else {
+        bytestream bs = { 0 };
+        bytestream* s = &bs;
+        bs.data = v->data;
+        bs.size = v->ptr + tp_length;
+        bs.ptr = v->ptr;
+        v->size += tp_length;
+
         while (ret == 0 && s->ptr < ptr_max) {
             uint64_t extension_type = UINT64_MAX;
             uint64_t extension_length = 0;
             size_t current_ptr = s->ptr;
-
 
             ret |= byteread_vint(s, &extension_type);
             ret |= byteread_vint(s, &extension_length);
@@ -266,9 +280,10 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
             fprintf(f, ",\n    ");
 
             if (ret != 0 || bytestream_remain(s) < extension_length) {
-                size_t len = bytestream_remain(s);
+                size_t len = 0;
                 ret = -1;
                 s->ptr = current_ptr;
+                len = bytestream_remain(s);
                 /* Print invalid parameter there */
                 fprintf(f, "\"Parameter_coding_error\": ");
                 qlog_string(f, s, len);
@@ -348,12 +363,6 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_grease_quic_bit:
                     qlog_boolean_transport_extension(f, "grease_quic_bit", s, extension_length);
                     break;
-                case picoquic_tp_enable_multipath:
-                    qlog_vint_transport_extension(f, "enable_multipath", s, extension_length);
-                    break;
-                case picoquic_tp_enable_simple_multipath:
-                    qlog_vint_transport_extension(f, "enable_simple_multipath", s, extension_length);
-                    break;
                 case picoquic_tp_version_negotiation:
                     fprintf(f, "\"version_negotiation\": ");
                     qlog_tp_version_negotiation(f, s, extension_length);
@@ -361,8 +370,11 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_enable_bdp_frame:
                     qlog_vint_transport_extension(f, "enable_bdp_frame", s, extension_length);
                     break;
-                case picoquic_tp_initial_max_paths:
-                    qlog_vint_transport_extension(f, "initial_max_paths", s, extension_length);
+                case picoquic_tp_initial_max_path_id:
+                    qlog_vint_transport_extension(f, "initial_max_path_id", s, extension_length);
+                    break;
+                case picoquic_tp_address_discovery:
+                    qlog_vint_transport_extension(f, "address_discovery", s, extension_length);
                     break;
                 default:
                     /* dump unknown extensions */
@@ -775,28 +787,14 @@ void qlog_path_abandon_frame(FILE* f, bytestream* s)
 {
     uint64_t path_id;
     uint64_t reason;
-    size_t phrase_length;
     
     byteread_vint(s, &path_id);
     byteread_vint(s, &reason);
-    byteread_vlen(s, &phrase_length);
     fprintf(f, ", \"path_id\": %"PRIu64, path_id);
     fprintf(f, ", \"reason\": %"PRIu64, reason);
-    if (phrase_length > 0) {
-        fprintf(f, ", \"phrase\": \"");
-        for (uint64_t i = 0; i < phrase_length && s->ptr < s->size; i++) {
-            int c = s->data[s->ptr++];
-
-            if (c < 0x20 || c > 0x7E) {
-                c = '.';
-            }
-            fprintf(f, "%c", c);
-        }
-        fprintf(f, "\"");
-    }
 }
 
-void qlog_path_standby_frame(FILE* f, bytestream* s)
+void qlog_path_backup_frame(FILE* f, bytestream* s)
 {
     uint64_t path_id = 0;
     uint64_t sequence;
@@ -818,11 +816,25 @@ void qlog_path_available_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"sequence\": %"PRIu64, sequence);
 }
 
-void qlog_max_paths_frame(FILE* f, bytestream* s)
+void qlog_max_path_id_frame(FILE* f, bytestream* s)
 {
-    uint64_t max_paths = 0;
-    byteread_vint(s, &max_paths);
-    fprintf(f, ", \"max_paths\": %"PRIu64, max_paths);
+    uint64_t max_path_id = 0;
+    byteread_vint(s, &max_path_id);
+    fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+}
+
+void qlog_paths_blocked_frame(FILE* f, bytestream* s)
+{
+    uint64_t max_path_id = 0;
+    byteread_vint(s, &max_path_id);
+    fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+}
+
+void qlog_path_cid_blocked_frame(FILE* f, bytestream* s)
+{
+    uint64_t path_id = 0;
+    byteread_vint(s, &path_id);
+    fprintf(f, ", \"path_id\": %"PRIu64, path_id);
 }
 
 void qlog_reset_stream_frame(FILE* f, bytestream* s)
@@ -956,7 +968,7 @@ void qlog_new_connection_id_frame(uint64_t ftype, FILE* f, bytestream* s)
     uint64_t retire_before = 0;
     uint64_t cid_length = 0;
 
-    if (ftype == picoquic_frame_type_mp_new_connection_id) {
+    if (ftype == picoquic_frame_type_path_new_connection_id) {
         uint64_t path_id;
         byteread_vint(s, &path_id);
         fprintf(f, ", \"path_id\": %"PRIu64"", path_id);
@@ -977,7 +989,7 @@ void qlog_retire_connection_id_frame(uint64_t ftype, FILE* f, bytestream* s)
 {
     uint64_t sequence_number = 0;
 
-    if (ftype == picoquic_frame_type_mp_retire_connection_id) {
+    if (ftype == picoquic_frame_type_path_retire_connection_id) {
         uint64_t path_id = 0;
         byteread_vint(s, &path_id);
         fprintf(f, ", \"path_id\": %"PRIu64"", path_id);
@@ -1052,7 +1064,7 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
     uint64_t ack_delay = 0;
     uint64_t num = 0;
     uint64_t path_id = 0;
-    if (ftype == picoquic_frame_type_ack_mp || ftype == picoquic_frame_type_ack_mp_ecn) {
+    if (ftype == picoquic_frame_type_path_ack || ftype == picoquic_frame_type_path_ack_ecn) {
         byteread_vint(s, &path_id);
         fprintf(f, ", \"path_id\": %"PRIu64"", path_id);
     }
@@ -1083,7 +1095,7 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
         largest -= range + 1;
     }
     fprintf(f, "]");
-    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_ack_mp_ecn) {
+    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_path_ack_ecn) {
         char const* ecn_name[3] = { "ect0", "ect1", "ce" };
         for (int ecnx = 0; ecnx < 3; ecnx++) {
             uint64_t ecn_v = 0;
@@ -1146,6 +1158,43 @@ void qlog_bdp_frame(FILE* f, bytestream* s)
     qlog_string(f, s, ip_len);
 }
 
+void qlog_observed_address_frame(uint64_t ftype, FILE* f, bytestream* s)
+{
+    unsigned int port = 0;
+    uint64_t sequence = 0;
+
+    byteread_vint(s, &sequence);
+    fprintf(f, ", \"sequence\": %"PRIu64", \"address\": \"", sequence);
+    if ((ftype & 1) == 0) {
+        /* IPv4 address */
+        for (int x = 0; x < 4 && s->ptr < s->size; x++) {
+            if (x != 0) {
+                fprintf(f, ".");
+            }
+            fprintf(f, "%d", s->data[s->ptr++]);
+        }
+    }
+    else {
+        /* IPv6 address */
+        for (int x = 0; x < 8 && s->ptr < s->size; x++) {
+            uint16_t w = 0;
+            for (int y = 0; y < 2 && s->ptr < s->size; y++) {
+                w <<= 8;
+                w += s->data[s->ptr++];
+            }
+            if (x != 0) {
+                fprintf(f, ":");
+            }
+            fprintf(f, "%x", w);
+        }
+    }
+    for (int y = 0; y < 2 && s->ptr < s->size; y++) {
+        port <<= 8;
+        port += s->data[s->ptr++];
+    }
+    fprintf(f, "\", \"port\": %u", port);
+}
+
 int qlog_packet_frame(bytestream * s, void * ptr)
 {
     qlog_context_t * ctx = (qlog_context_t*)ptr;
@@ -1198,8 +1247,8 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_ack:
     case picoquic_frame_type_ack_ecn:
-    case picoquic_frame_type_ack_mp:
-    case picoquic_frame_type_ack_mp_ecn:
+    case picoquic_frame_type_path_ack:
+    case picoquic_frame_type_path_ack_ecn:
         qlog_ack_frame(ftype, f, s);
         break;
     case picoquic_frame_type_reset_stream:
@@ -1235,11 +1284,11 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         qlog_streams_blocked_frame(ftype, f, s);
         break;
     case picoquic_frame_type_new_connection_id:
-    case picoquic_frame_type_mp_new_connection_id:
+    case picoquic_frame_type_path_new_connection_id:
         qlog_new_connection_id_frame(ftype, f, s);
         break;
     case picoquic_frame_type_retire_connection_id:
-    case picoquic_frame_type_mp_retire_connection_id:
+    case picoquic_frame_type_path_retire_connection_id:
         qlog_retire_connection_id_frame(ftype, f, s);
         break;
     case picoquic_frame_type_path_challenge:
@@ -1267,8 +1316,8 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     case picoquic_frame_type_path_abandon:
         qlog_path_abandon_frame(f, s);
         break;
-    case picoquic_frame_type_path_standby:
-        qlog_path_standby_frame(f, s);
+    case picoquic_frame_type_path_backup:
+        qlog_path_backup_frame(f, s);
         break;
     case picoquic_frame_type_path_available:
         qlog_path_available_frame(f, s);
@@ -1276,8 +1325,18 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     case picoquic_frame_type_bdp:
         qlog_bdp_frame(f, s);
         break;
-    case picoquic_frame_type_max_paths:
-        qlog_max_paths_frame(f, s);
+    case picoquic_frame_type_max_path_id:
+        qlog_max_path_id_frame(f, s);
+        break;
+    case picoquic_frame_type_paths_blocked:
+        qlog_paths_blocked_frame(f, s);
+        break;
+    case picoquic_frame_type_path_cid_blocked:
+        qlog_path_cid_blocked_frame(f, s);
+        break;
+    case picoquic_frame_type_observed_address_v4:
+    case picoquic_frame_type_observed_address_v6:
+        qlog_observed_address_frame(ftype, f, s);
         break;
     default:
         s->ptr = ptr_before_type;

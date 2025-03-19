@@ -128,6 +128,7 @@ int minicrypto_is_last_test()
 
 #if defined(PICOQUIC_WITH_MBEDTLS) || !defined(PTLS_WITHOUT_OPENSSL) || !defined(PTLS_WITHOUT_FUSION)
     expected_aes128gcm_sha256 = 0;
+    expected_set_key = 0;
 #endif
 #if defined(PICOQUIC_WITH_MBEDTLS) || !defined(PTLS_WITHOUT_OPENSSL)
     expected_aes128gcm_sha256_low = 0;

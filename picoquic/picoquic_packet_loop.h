@@ -38,7 +38,8 @@ extern "C" {
 typedef struct st_picoquic_socket_ctx_t {
     SOCKET_TYPE fd;
     int af;
-    uint16_t port;
+    uint16_t port; /* Port number to which the socket is bound */
+    uint16_t n_port; /* value of the port number in network order htons(port) */
 
     /* Flags */
     unsigned int is_started : 1;
@@ -78,8 +79,26 @@ typedef enum {
     picoquic_packet_loop_after_send, /* Argument type size_t*: nb packets sent */
     picoquic_packet_loop_port_update, /* argument type struct_sockaddr*: new address for wakeup */
     picoquic_packet_loop_time_check, /* argument type packet_loop_time_check_arg_t*. Optional. */
-    picoquic_packet_loop_wake_up /* no argument (void* NULL). Used when loop wakeup is supported */
+    picoquic_packet_loop_system_call_duration, /* argument type packet_loop_system_call_duration_t*. Optional. */
+    picoquic_packet_loop_wake_up, /* no argument (void* NULL). Used when loop wakeup is supported */
+    picoquic_packet_loop_alt_port /* Provide alt port for testing multipath or migration */
 } picoquic_packet_loop_cb_enum;
+
+/* System call statistics.
+* The socket loop uses 'zero delay' calls to check whether
+* more packets are ready to be received. In theory, these calls
+* return immediately. But these are system calls, and the OS
+* might decide to pause the process before returning from the
+* call. If the application selects the "system call duration"
+* option, it will receive callbacks when the call time varies
+* significantly.
+ */
+typedef struct st_packet_loop_system_call_duration_t {
+    uint64_t scd_last;
+    uint64_t scd_max;
+    uint64_t scd_smoothed;
+    uint64_t scd_dev;
+} packet_loop_system_call_duration_t;
 
 /* The time check option passes as argument a pointer to a structure specifying
 * the current time and the proposed delta. The application uses the specified
@@ -98,6 +117,8 @@ typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packe
  * the features that it supports */
 typedef struct st_picoquic_packet_loop_options_t {
     unsigned int do_time_check : 1; /* App should be polled for next time before sock select */
+    unsigned int do_system_call_duration : 1; /* App should be notified if the system call duration varies */
+    unsigned int provide_alt_port : 1; /* Used for simulating multipath or migrations. */
 } picoquic_packet_loop_options_t;
 
 /* Version 2 of packet loop, works in progress.
@@ -111,6 +132,7 @@ typedef struct st_picoquic_packet_loop_param_t {
     int socket_buffer_size;
     int do_not_use_gso;
     int extra_socket_required;
+    int prefer_extra_socket;
     int simulate_eio;
     size_t send_length_max;
 } picoquic_packet_loop_param_t;

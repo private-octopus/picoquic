@@ -32,20 +32,22 @@ picohash_table* picohash_create_ex(size_t nb_bin,
     picohash_item * (*picohash_key_to_item)(const void*))
 {
     picohash_table* t = (picohash_table*)malloc(sizeof(picohash_table));
-    if (t != NULL) {
+    size_t items_length = sizeof(picohash_item*) * nb_bin;
+    t->hash_bin = NULL;
+    if (t != NULL && (items_length / sizeof(picohash_item*)) == nb_bin) {
         t->hash_bin = (picohash_item**)malloc(sizeof(picohash_item*) * nb_bin);
+    }
 
-        if (t->hash_bin == NULL) {
-            free(t);
-            t = NULL;
-        } else {
-            (void)memset(t->hash_bin, 0, sizeof(picohash_item*) * nb_bin);
-            t->nb_bin = nb_bin;
-            t->count = 0;
-            t->picohash_hash = picohash_hash;
-            t->picohash_compare = picohash_compare;
-            t->picohash_key_to_item = picohash_key_to_item;
-        }
+    if (t->hash_bin == NULL) {
+        free(t);
+        t = NULL;
+    } else {
+        (void)memset(t->hash_bin, 0, sizeof(picohash_item*) * nb_bin);
+        t->nb_bin = nb_bin;
+        t->count = 0;
+        t->picohash_hash = picohash_hash;
+        t->picohash_compare = picohash_compare;
+        t->picohash_key_to_item = picohash_key_to_item;
     }
 
     return t;

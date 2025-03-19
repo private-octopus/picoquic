@@ -21,6 +21,7 @@
 
 #ifndef TLS_API_H
 #define TLS_API_H
+#include "picoquic.h"
 #include "picoquic_internal.h"
 
 #define PICOQUIC_LABEL_INITIAL_CLIENT "client in"
@@ -131,7 +132,8 @@ int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connectio
 char const* picoquic_tls_get_negotiated_alpn(picoquic_cnx_t* cnx);
 char const* picoquic_tls_get_sni(picoquic_cnx_t* cnx);
 
-int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic);
+void picoquic_tls_set_verify_certificate_callback(picoquic_quic_t* quic,
+    struct st_ptls_verify_certificate_t* cb, picoquic_free_verify_certificate_ctx free_fn);
 
 void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic);
 
@@ -152,19 +154,18 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
     const picoquic_connection_id_t* rcid, uint32_t initial_pn,
     const uint8_t * token, size_t token_size, int check_reuse);
 
+#if 0
 void picoquic_cid_free_under_mask_ctx(void * v_pn_enc);
 int picoquic_cid_get_under_mask_ctx(void ** v_pn_enc, const void * secret, const char *prefix_label);
 void picoquic_cid_encrypt_under_mask(void * cid_enc, const picoquic_connection_id_t * cid_in, const picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
 void picoquic_cid_decrypt_under_mask(void * cid_enc, const picoquic_connection_id_t * cid_in, const picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
-
 void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc);
+#endif
 
 /* Define hash functions here so applications don't need to directly interface picotls */
 #define PICOQUIC_HASH_SIZE_MAX 64
 void * picoquic_hash_create(char const * algorithm_name);
-#if 0
 size_t picoquic_hash_get_length(char const* algorithm_name);
-#endif
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context);
 void picoquic_hash_finalize(uint8_t* output, void* hash_context);
 
@@ -191,6 +192,7 @@ void* picoquic_get_aes128gcm_sha256_v(int use_low_memory);
 void* picoquic_get_aes128gcm_v(int use_low_memory);
 
 /* AES ECB function used for CID encryption */
+void* picoquic_ecb_create_by_name(int is_enc, const void* ecb_key, char const * alg_name);
 void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key);
 
 void picoquic_aes128_ecb_free(void* v_aesecb);

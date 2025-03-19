@@ -73,6 +73,8 @@ typedef enum {
     picoquic_option_BDP_frame,
     picoquic_option_CWIN_MAX,
     picoquic_option_CWIN_MIN,
+    picoquic_option_SSLKEYLOG,
+    picoquic_option_AddressDiscovery,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -101,6 +103,7 @@ typedef struct st_picoquic_quic_config_t {
     int bdp_frame_option;
     uint64_t cwin_min;
     uint64_t cwin_max;
+    int address_discovery_mode;
     /* TODO: control other extensions, e.g. time stamp, ack delay */
     /* Common flags */
     unsigned int initial_random;
@@ -108,6 +111,9 @@ typedef struct st_picoquic_quic_config_t {
     unsigned int do_preemptive_repeat : 1;
     unsigned int do_not_use_gso : 1;
     unsigned int disable_port_blocking : 1;
+#ifndef PICOQUIC_WITHOUT_SSLKEYLOG
+    unsigned int enable_sslkeylog : 1;
+#endif
     /* Server only */
     char const* www_dir;
     uint8_t reset_seed[16];
@@ -136,7 +142,15 @@ void picoquic_config_usage_file(FILE* F);
 void picoquic_config_usage();
 int picoquic_config_set_option(picoquic_quic_config_t* config, picoquic_option_enum_t option_num, const char* opt_val);
 
+/* picoquic_config_command_line:
+* parse options, with the restriction that all options must be identified by a single character, as in '-x'
+ */
 int picoquic_config_command_line(int opt, int* p_optind, int argc, char const** argv, char const* optarg, picoquic_quic_config_t* config);
+/* picoquic_config_command_line:
+* parse options, allowing both single character options (e.g. -X)
+* and named option (e.g. --disable_block)
+ */
+int picoquic_config_command_line_ex(char const* opt_string, int* p_optind, int argc, char const** argv, char const* optarg, picoquic_quic_config_t* config);
 
 #if 0
 /* It does not seem anyone uses this, and it is not tested */
