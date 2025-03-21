@@ -322,6 +322,7 @@ int multicast_server_callback(picoquic_cnx_t *cnx,
                         {
                             /* If data needs to be sent, set the context as active */
                             ret = picoquic_mark_active_stream(cnx, stream_id, 1, stream_ctx);
+                            picoquic_set_stream_path_affinity(cnx, stream_id, 1);
                         }
                         else
                         {
@@ -334,6 +335,7 @@ int multicast_server_callback(picoquic_cnx_t *cnx,
             }
             break;
         case picoquic_callback_prepare_to_send:
+
             /* Active sending API */
             if (stream_ctx == NULL)
             {
@@ -461,6 +463,8 @@ int picoquic_multicast_server(int server_port, const char *server_cert, const ch
         picoquic_set_qlog(quic, qlog_dir);
 
         picoquic_set_log_level(quic, 1);
+
+        picoquic_enable_sslkeylog(quic, 1);
 
         picoquic_set_key_log_file_from_env(quic);
 
