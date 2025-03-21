@@ -2525,6 +2525,7 @@ int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, u
     picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
 
     if (stream == NULL) {
+        fprintf(stdout, "Setting affinty path FAILED: stream not found\n");
         ret = -1;
     } else if (unique_path_id == UINT64_MAX) {
         stream->affinity_path = NULL;
@@ -2533,6 +2534,7 @@ int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, u
         int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
         if (path_id >= 0) {
             stream->affinity_path = cnx->path[path_id];
+            fprintf(stdout, "Affinity path set to Path ID %i for Stream ID %li\n", path_id, stream_id);
         }
         else {
             ret = -1;

@@ -4196,10 +4196,18 @@ static int picoquic_select_next_path_mp(picoquic_cnx_t* cnx, uint64_t current_ti
     }
     else if (data_path_cwin >= 0) {
         /* if there is a path ready to send the most urgent data, select it */
-        if (affinity_path_id >= 0) {
+        if (affinity_path_id >= 0)
+        {
+            if (next_stream != NULL) {
+                // fprintf(stdout, "SENDER: use affinity path id %i for stream %li\n", affinity_path_id, next_stream->stream_id);
+            }
             path_id = affinity_path_id;
         }
-        else {
+        else
+        {
+            if (next_stream != NULL){
+                // fprintf(stdout, "SENDER: use other path %i for stream %li\n", data_path_cwin, next_stream->stream_id);
+            }
             path_id = data_path_cwin;
         }
     }
