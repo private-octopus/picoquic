@@ -27,7 +27,7 @@ Before using any of the stream APIs, the application must either learn the
 stream ID of a remote stream when receiving a callback related to that stream,
 or select a local bidirectional or unidirectional stream ID, using the
 `picoquic_get_next_local_stream_id` API:
-~~~
+~~~c
 /* Obtain the next available stream ID in the local category */
 uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
 ~~~
@@ -63,7 +63,7 @@ the receiver.
 Applications can "add" data to a stream by calling either `picoquic_add_to_stream`
 or `picoquic_add_to_stream_with_ctx`.
 
-~~~
+~~~c
 int picoquic_add_to_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, const uint8_t* data, size_t length, int set_fin);
 
@@ -94,7 +94,7 @@ API "picoquic_provide_stream_data_buffer", and copying the
 application data in that buffer.
 
 The APIs are documented in "picoquic.h":
-~~~
+~~~c
 /* Mark stream as active, or not.
  * If a stream is active, it will be polled for data when the transport
  * is ready to send. The polling will only start after all currently
@@ -132,7 +132,7 @@ The application can in that case state that it has nothing to send by
 calling `picoquic_provide_stream_data_buffer` and setting the number
 of bytes to zero, e.g.:
 
-~~~
+~~~c
     /* Not sending here! */
     (void)picoquic_provide_stream_data_buffer(context, 0, 0, 0);
 ~~~
@@ -146,7 +146,7 @@ if finished sending that stream. The stack will then send a stream data frame wi
 no content but the `FIN` bit set, marking the end of the stream.
 
 The application could also set `is_still_active=1` from within the call back if more data is to be polled, e.g.:
-~~~
+~~~c
     /* Poll for data in the next callback */
     (void)picoquic_provide_stream_data_buffer(context, 0, 0, 1);
 ~~~
@@ -172,7 +172,7 @@ before issuing the callback `picohttp_callback_provide_data`.
 In multipath environments, it is sometimes desirable to "pin" a QUIC stream to
 a specific path. Applications that want to pin path to streams must first
 monitor the state of paths, which is provided by callbacks such as:
-~~~
+~~~c
 /* A new path is available, or a suspended path is available again */
 picoquic_callback_path_available, 
 /* An available path is suspended */
@@ -184,7 +184,7 @@ picoquic_callback_path_quality_changed
 ~~~
 In these API, each path is identified by a 64 bit `unique_path_id`. This identifier
 can be used to set the "affinity" between a stream and a path:
-~~~
+~~~c
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, 
     uint64_t stream_id, uint64_t unique_path_id);
 ~~~
@@ -202,7 +202,7 @@ the last data for a stream, `picoquic_callback_stream_data`.
 The callback will indicate the stream ID. The `stream_ctx` argument
 will be set to the value associated with the stream in the last call
 to one of:
-~~~
+~~~c
 int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
     uint64_t stream_id, void* app_stream_ctx);
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
@@ -215,7 +215,7 @@ If an application discards a stream context, it should be careful to
 remove the memory association to this context in the stack. It can do
 that by setting the `stream_ctx` argument to NULL in one of the previous
 API, or by calling:
-~~~
+~~~c
 /* Remove association between stream and context */
 void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
 ~~~
@@ -232,7 +232,7 @@ which may also deliver the last data bytes for the stream.
 
 Application can also abruptly close the stream using the RESET mechanism,
 by calling the API:
-~~~
+~~~c
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint64_t local_stream_error);
 ~~~
@@ -275,7 +275,7 @@ and also by the maximum size negotiated during the handshake.
 ### Queuing datagrams
 
 Datagrams can be queued using the API:
-~~~
+~~~c
 int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, size_t length, const uint8_t* bytes);
 ~~~
 Trying to queue datagram larger than `PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH` will result
@@ -296,7 +296,7 @@ API `picoquic_provide_datagram_buffer` or `picoquic_provide_datagram_buffer_ex`,
 and copying the application data in that buffer.
 
 The APIs are defined in `picoquic.h`:
-~~~
+~~~c
 int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready);
 
 uint8_t* picoquic_provide_datagram_buffer(void* context, size_t length);
@@ -338,7 +338,7 @@ a path with a low latency and low packet loss.
 In a multipath connection, the API `picoquic_mark_datagram_ready` signals
 application readiness to send datagrams on any available path. The application can
 use the API `picoquic_mark_datagram_ready_path` to request sending on a specific path:
-~~~
+~~~c
 int picoquic_mark_datagram_ready_path(picoquic_cnx_t* cnx,
     uint64_t unique_path_id, int is_path_ready);
 ~~~
@@ -351,7 +351,7 @@ paths marked "ready".
 The application using multipath should use the "extended" variant of the
 datagram buffer API:
 
-~~~
+~~~c
 uint8_t* picoquic_provide_datagram_buffer_ex(void* context, size_t length,
          picoquic_datagram_active_enum is_active);
 ~~~
@@ -360,7 +360,7 @@ In that variant, the `is_active` enum provides options to describe whether
 the application wants to continue sending datagrams on this path, or on
 all paths, as stated in `picoquic.h`:
 
-~~~
+~~~c
 /*
  * In multipath environments, the application can use the API 
  * `picoquic_mark_datagram_ready_path` to signal that is is ready to send
@@ -387,7 +387,7 @@ all paths, as stated in `picoquic.h`:
 The QUIC specifications make no guarantee that datagram frames will be received in order,
 or at all. Picoquic allows applications some degree of control with three callbacks:
 
-~~~
+~~~c
 /* Ack for packet carrying datagram-frame received from peer */
 picoquic_callback_datagram_acked,
 /* Packet carrying datagram-frame probably lost */

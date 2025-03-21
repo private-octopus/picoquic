@@ -30,7 +30,7 @@ packet loop will not be linked in the application's binary.
 In synchronous operation, the application prepares a QUIC context and an application
 context and then calls `picoquic_packet_loop_v2`:
 
-```
+```c
 int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     picoquic_packet_loop_param_t * param,
     picoquic_packet_loop_cb_fn loop_callback,
@@ -90,7 +90,7 @@ In addition, the packet loop exposes a network level callback API, to handle
 network level events that are not directly linked to the QUIC connections.
 The callback API is defined by the function prototype:
 
-```
+```c
 typedef int (*picoquic_packet_loop_cb_fn)(picoquic_quic_t * quic, picoquic_packet_loop_cb_enum cb_mode, void * callback_ctx, void * callback_argv);
 ```
 
@@ -158,7 +158,7 @@ in asynchronous mode.
 Applications that operate in asynchronous mode will want start the packet loop
 using the `picoquic_start_network_thread` API:
 
-```
+```c
 picoquic_network_thread_ctx_t* picoquic_start_network_thread(
     picoquic_quic_t* quic,
     picoquic_packet_loop_param_t* param,
