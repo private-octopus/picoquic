@@ -1951,51 +1951,7 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
     }
 }
 
-/* Promote path to default. This happens when a new path is verified, at the end
- * of a migration, and becomes the new default path.
- */
 
-void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time)
-{
-    if (path_index > 0 && path_index < cnx->nb_paths) {
-        picoquic_path_t * path_x = cnx->path[path_index];
-
-        if (cnx->path[path_index]->path_is_preferred_path) {
-            /* this is a migration to the preferred path requested by the server */
-            if (cnx->client_mode) {
-                cnx->remote_parameters.migration_disabled = 0;
-            }
-            else {
-                cnx->local_parameters.migration_disabled = 0;
-            }
-        }
-
-        if (cnx->quic->F_log != NULL || cnx->f_binlog != NULL) {
-            char src_ip[128];
-            char dst_ip[128];
-
-            picoquic_log_app_message(cnx, "Path %d promoted to default at T=%fs, Local: %s, Remote: %s",
-                path_index, (double)(current_time - cnx->start_time) / 1000000.0,
-                picoquic_addr_text((struct sockaddr*) & cnx->path[path_index]->first_tuple->local_addr, src_ip, sizeof(src_ip)),
-                picoquic_addr_text((struct sockaddr*) & cnx->path[path_index]->first_tuple->peer_addr, dst_ip, sizeof(dst_ip)));
-        }
-
-        /* Set the congestion algorithm for the new path */
-        if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_init(cnx, path_x, cnx->congestion_alg_option_string, current_time);
-        }
-
-        /* Mark old path as demoted */
-        picoquic_demote_path(cnx, 0, current_time, 0, NULL);
-
-        /* Swap */
-        cnx->path[path_index] = cnx->path[0];
-        cnx->path[0] = path_x;
-
-        /* Update the secret */
-        (void)picoquic_register_net_secret(cnx);
-    }
-}
 
 /* set the challenge used for a tuple */
 void picoquic_set_tuple_challenge(picoquic_tuple_t * tuple, uint64_t current_time, int use_constant_challenges)
@@ -2331,6 +2287,7 @@ int picoquic_probe_new_tuple(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struc
                 /* There was no NAT ongoing NAT rebinding, we created one, we need to initiate path challenges. */
                 picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
                 tuple->challenge_required = 1;
+                tuple->to_preferred_address = to_preferred_address;
             }
         }
     }
@@ -2343,7 +2300,7 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
 {
     int path_id = -1;
 
-    if (!cnx->is_multipath_enabled) {
+    if (!cnx->is_multipath_enabled || to_preferred_address) {
         return picoquic_probe_new_tuple(cnx, cnx->path[0], addr_peer, addr_local, if_index, current_time, to_preferred_address);
     }
 
@@ -2368,7 +2325,6 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
                 path_x->path_is_published = 1;
                 picoquic_register_path(cnx, path_x);
                 picoquic_set_path_challenge(cnx, path_id, current_time);
-                path_x->path_is_preferred_path = to_preferred_address;
                 path_x->is_nat_challenge = 0;
                 // path_x->first_tuple->if_index = if_index;
             }
@@ -3954,9 +3910,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         memcpy(&cnx->local_parameters, &quic->default_tp, sizeof(picoquic_tp_t));
         /* If the default parameters include preferred address, document it */
         if (cnx->local_parameters.prefered_address.is_defined) {
-            /* Create an additional CID -- this depends on the multipath variant being already negotiated */
-            uint64_t unique_path_id = (cnx->is_multipath_enabled) ? 1 : 0;
-            picoquic_local_cnxid_t* cnxid1 = picoquic_create_local_cnxid(cnx, unique_path_id, NULL, start_time);
+            /* Create an additional CID -- always for path 0, even if multipath */
+            picoquic_local_cnxid_t* cnxid1 = picoquic_create_local_cnxid(cnx, 0, NULL, start_time);
             if (cnxid1 != NULL){
                 /* copy the connection ID into the local parameter */
                 cnx->local_parameters.prefered_address.connection_id = cnxid1->cnx_id;

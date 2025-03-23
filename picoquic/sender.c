@@ -1841,9 +1841,8 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
                 if (cnx->path[0]->first_tuple->local_addr.ss_family != 0 && cnx->path[0]->first_tuple->local_addr.ss_family == dest_addr.ss_family) {
                     local_addr = (struct sockaddr*) & cnx->path[0]->first_tuple->local_addr;
                 }
+                picoquic_probe_new_tuple(cnx, cnx->path[0], (struct sockaddr*)&dest_addr, local_addr, 0, picoquic_get_quic_time(cnx->quic),1);
 
-                ret = picoquic_probe_new_path_ex(cnx, (struct sockaddr *)&dest_addr, local_addr, 0,
-                    picoquic_get_quic_time(cnx->quic), 1);
             }
         }
     }

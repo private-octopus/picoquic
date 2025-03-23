@@ -1059,6 +1059,7 @@ typedef struct st_picoquic_tuple_t {
     unsigned int challenge_verified : 1;
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
+    unsigned int to_preferred_address : 1;
 } picoquic_tuple_t;
 
 /*
@@ -1115,7 +1116,6 @@ typedef struct st_picoquic_path_t {
     unsigned int current_spin : 1;
     unsigned int last_bw_estimate_path_limited : 1;
     unsigned int path_cid_rotated : 1;
-    unsigned int path_is_preferred_path : 1;
     unsigned int is_nat_challenge : 1;
     unsigned int is_cc_data_updated : 1;
     unsigned int is_multipath_probe_needed : 1;

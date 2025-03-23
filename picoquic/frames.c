@@ -4650,7 +4650,6 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
                  * source (addr_from) matches the peer address if known. */
                 picoquic_tuple_t* tuple = path_x->first_tuple;
                 while (tuple != NULL) {
-
                     if (addr_from == NULL ||
                         picoquic_compare_addr(addr_from, (struct sockaddr*)&tuple->peer_addr) == 0) {
                         /* If the source address matches, we must verify that the destination
@@ -4681,6 +4680,19 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
                     picoquic_addr_text((struct sockaddr*)&path_x->first_tuple->peer_addr, buf3, sizeof(buf3)),
                     picoquic_addr_text((struct sockaddr*)&path_x->first_tuple->local_addr, buf4, sizeof(buf4))
                 );
+            }
+            else if (!cnx->client_mode && cnx->local_parameters.migration_disabled) {
+                /* We do not expect path challenges, unless they are on the default path
+                * and match the preferred address.
+                 */
+                if (cnx->local_parameters.prefered_address.is_defined) {
+                    /* TODO: verify that this is going to the preferred address. */
+                    cnx->local_parameters.migration_disabled = 0;
+                    picoquic_log_app_message(cnx, "Enabling migration after preferred address validation on path %" PRIu64, path_x->unique_path_id);
+                }
+                else {
+                    picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, picoquic_frame_type_path_challenge, "Migration is disabled");
+                }
             }
         }
     }
@@ -4744,6 +4756,10 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                     previous_tuple->next_tuple = tuple->next_tuple;
                     tuple->next_tuple = path_x->first_tuple;
                     path_x->first_tuple = tuple;
+                    if (tuple->to_preferred_address) {
+                        cnx->remote_parameters.migration_disabled = 0;
+                        picoquic_log_app_message(cnx, "Migration to server preferred address successful on path %" PRIu64, path_x->unique_path_id);
+                    }
                     picoquic_reset_path_mtu(path_x);
                     if (cnx->are_path_callbacks_enabled &&
                         cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_available,
