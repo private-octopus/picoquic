@@ -525,7 +525,7 @@ int parseheadertest()
             cnx_10->path[0]->first_tuple->p_remote_cnxid->cnx_id = test_cnxid_r10;
         }
         header_length = picoquic_create_packet_header(cnx_10, test_entries[i].ph->ptype,
-            test_entries[i].ph->pn, cnx_10->path[0], NULL, 0, packet, &pn_offset, &pn_length);
+            test_entries[i].ph->pn, cnx_10->path[0], cnx_10->path[0]->first_tuple, 0, packet, &pn_offset, &pn_length);
         picoquic_update_payload_length(packet, pn_offset, pn_offset, pn_offset +
             test_entries[i].ph->payload_length);
         
@@ -1139,7 +1139,7 @@ static int header_length_test_one(header_length_case_t * hlc)
     if (ret == 0) {
         /* Compute the header length */
         header_length = picoquic_create_packet_header(cnx, hlc->ptype,
-            hlc->sequence, cnx->path[0], NULL, predicted_length, buffer, &pn_offset, &pn_length);
+            hlc->sequence, cnx->path[0], cnx->path[0]->first_tuple, predicted_length, buffer, &pn_offset, &pn_length);
         /* Check the results */
         if (header_length != predicted_length) {
             DBG_PRINTF("Error, predicted header length %zu, actual %zu", header_length, predicted_length);
