@@ -635,9 +635,9 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                                 send_ctx->last_err = -1;
                             }
                             else {
-                                if (last_cnx != NULL && last_cnx->path[0]->p_local_cnxid != NULL) {
+                                if (last_cnx != NULL && last_cnx->path[0]->first_tuple->p_local_cnxid != NULL) {
                                     /* Store the connection ID, in case there is an error */
-                                    send_ctx->local_cnxid = last_cnx->path[0]->p_local_cnxid->cnx_id;
+                                    send_ctx->local_cnxid = last_cnx->path[0]->first_tuple->p_local_cnxid->cnx_id;
                                 }
                                 else {
                                     send_ctx->local_cnxid.id_len = 0;

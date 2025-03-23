@@ -1035,16 +1035,30 @@ typedef struct st_picoquic_tuple_t {
     struct sockaddr_storage peer_addr;
     /* Local address, on the local network */
     struct sockaddr_storage local_addr;
-    unsigned long if_index_dest;
+    /* Selected interface */
+    unsigned long if_index;
     /* Address observed by the peer */
     struct sockaddr_storage observed_addr;
+    /* CNXID used for probing this tuple. */
+    picoquic_remote_cnxid_t* p_remote_cnxid;
+    picoquic_local_cnxid_t* p_local_cnxid;
+    /* Manage the publishing of observed addresses */
+    int nb_observed_repeat;
+    uint64_t observed_time;
     /* Challenge used for this path */
     uint64_t challenge_response;
     uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t challenge_time;
     uint64_t demotion_time;
     uint64_t challenge_time_first;
+    uint64_t is_nat_rebinding;
     uint8_t challenge_repeat_count;
+    /* Flags */
+    unsigned int is_backup;
+    unsigned int challenge_required : 1;
+    unsigned int challenge_verified : 1;
+    unsigned int challenge_failed : 1;
+    unsigned int response_required : 1;
 } picoquic_tuple_t;
 
 /*
@@ -1068,8 +1082,6 @@ typedef struct st_picoquic_tuple_t {
 * Packet numbering is global, see packet context.
 */
 typedef struct st_picoquic_path_t {
-    picoquic_local_cnxid_t* p_local_cnxid; 
-    picoquic_remote_cnxid_t* p_remote_cnxid;
     struct sockaddr_storage registered_peer_addr;
     picohash_item net_id_hash_item;
     struct st_picoquic_cnx_t* cnx;
@@ -1078,45 +1090,16 @@ typedef struct st_picoquic_path_t {
     /* If using unique path id multipath */
     picoquic_ack_context_t ack_ctx;
     picoquic_packet_context_t pkt_ctx;
-#if 1
     /* First tuple is the one used by default for the path */
     picoquic_tuple_t* first_tuple;
-#else
-    /* Peer address. */
-    struct sockaddr_storage peer_addr;
-    /* Local address, on the local network */
-    struct sockaddr_storage local_addr;
-    unsigned long if_index_dest;
-    /* Address observed by the peer */
-    struct sockaddr_storage observed_addr;
-#endif
-    /* Manage the reception of observed addresses */
+    /* Manage the transmission of observed addresses */
+    /* TODO: tie management to path/tuple creation. */
     uint64_t observed_address_received;
-    /* Manage the publishing of observed addresses */
-    unsigned int observed_addr_acked:1;
-    int nb_observed_repeat;
     uint64_t observed_sequence_sent;
-    uint64_t observed_time;
+    unsigned int observed_addr_acked : 1;
     /* Manage path probing logic */
     uint64_t last_non_path_probing_pn;
-#if 1
-#else
-    /* Challenge used for this path */
-    uint64_t challenge_response;
-    uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
-    uint64_t challenge_time;
-    uint64_t challenge_time_first;
-    uint8_t challenge_repeat_count;
-#endif
     uint64_t demotion_time;
-    /* NAT Challenge for this path, if using unique path id */
-    uint64_t nat_challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
-    uint64_t nat_challenge_time;
-    uint64_t nat_challenge_repeat_count;
-    picoquic_remote_cnxid_t* p_remote_nat_cnxid;
-    unsigned long if_index_nat_dest;
-    struct sockaddr_storage nat_peer_addr;
-    struct sockaddr_storage nat_local_addr;
     /* Last time a packet was sent on this path. */
     uint64_t last_sent_time;
     uint64_t status_sequence_to_receive_next;
@@ -1125,11 +1108,6 @@ typedef struct st_picoquic_path_t {
     /* flags */
     unsigned int mtu_probe_sent : 1;
     unsigned int path_is_published : 1;
-    unsigned int challenge_required : 1;
-    unsigned int challenge_verified : 1;
-    unsigned int challenge_failed : 1;
-    unsigned int response_required : 1;
-    unsigned int nat_challenge_required : 1;
     unsigned int path_is_backup : 1;
     unsigned int path_is_demoted : 1;
     unsigned int path_abandon_received : 1;
@@ -1610,9 +1588,12 @@ int picoquic_register_net_icid(picoquic_cnx_t* cnx);
 
 void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id, uint8_t id_length, picoquic_connection_id_t cnx_id_remote);
 
+/* Management of address tuples */
+picoquic_tuple_t * picoquic_create_tuple(picoquic_path_t* path_x, const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index);
+
 /* Management of path */
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
-    const struct sockaddr* local_addr, const struct sockaddr* peer_addr,
+    const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index,
     uint64_t unique_path_id);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
@@ -1622,10 +1603,13 @@ void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path
 void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
+void picoquic_set_tuple_challenge(picoquic_tuple_t* tuple, uint64_t current_time, int use_constant_challenges);
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);
 int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* addr_local, const struct sockaddr* addr_peer, int* partial_match);
 int picoquic_find_path_by_unique_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
-int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
+int picoquic_check_cid_for_new_tuple(picoquic_cnx_t* cnx, uint64_t unique_path_id);
+int picoquic_assign_peer_cnxid_to_tuple(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_tuple_t* tuple);
+//int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
 int picoquic_get_path_id_from_unique(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 
@@ -1751,6 +1735,7 @@ size_t picoquic_create_packet_header(
     picoquic_packet_type_enum packet_type,
     uint64_t sequence_number,
     picoquic_path_t* path_x,
+    picoquic_tuple_t* tuple,
     size_t header_length,
     uint8_t* bytes,
     size_t* pn_offset,
@@ -1768,7 +1753,8 @@ size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, picoquic_epoch_enum is_
 
 void picoquic_protect_packet_header(uint8_t* send_buffer, size_t pn_offset, uint8_t first_mask, void* pn_enc);
 
-size_t picoquic_protect_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, uint8_t* bytes, uint64_t sequence_number, size_t length, size_t header_length, uint8_t* send_buffer, size_t send_buffer_max, void* aead_context, void* pn_enc, picoquic_path_t* path_x, uint64_t current_time);
+size_t picoquic_protect_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, uint8_t* bytes, uint64_t sequence_number, size_t length, size_t header_length, uint8_t* send_buffer, size_t send_buffer_max, void* aead_context, void* pn_enc, 
+    picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time);
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
@@ -2073,7 +2059,7 @@ uint8_t* picoquic_format_observed_address_frame(
     uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype,
     uint64_t sequence_number, uint8_t* addr, uint16_t port, int * more_data);
 uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* bytes_max,
-    picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time,
+    picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time, uint64_t* next_wake_time,
     int* more_data, int* is_pure_ack);
 void picoquic_update_peer_addr(picoquic_path_t* path_x, const struct sockaddr* peer_addr);
 

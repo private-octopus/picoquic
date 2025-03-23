@@ -139,15 +139,15 @@ int getter_test()
     /* Test a series of getter interfaces */
 
     if (ret == 0 &&
-        picoquic_get_local_if_index(cnx) != cnx->path[0]->first_tuple->if_index_dest) {
+        picoquic_get_local_if_index(cnx) != cnx->path[0]->first_tuple->if_index) {
         ret = -1;
     }
 
     if (ret == 0) {
         picoquic_connection_id_t cid = picoquic_get_local_cnxid(cnx);
 
-        if (cid.id_len != cnx->path[0]->p_local_cnxid->cnx_id.id_len ||
-            memcmp(cid.id, cnx->path[0]->p_local_cnxid->cnx_id.id, cid.id_len) != 0) {
+        if (cid.id_len != cnx->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len ||
+            memcmp(cid.id, cnx->path[0]->first_tuple->p_local_cnxid->cnx_id.id, cid.id_len) != 0) {
             ret = -1;
         }
     }
@@ -155,8 +155,8 @@ int getter_test()
     if (ret == 0) {
         picoquic_connection_id_t cid = picoquic_get_remote_cnxid(cnx);
 
-        if (cid.id_len != cnx->path[0]->p_remote_cnxid->cnx_id.id_len ||
-            memcmp(cid.id, cnx->path[0]->p_remote_cnxid->cnx_id.id, cid.id_len) != 0) {
+        if (cid.id_len != cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len ||
+            memcmp(cid.id, cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id, cid.id_len) != 0) {
             ret = -1;
         }
     }
@@ -172,8 +172,8 @@ int getter_test()
 
     if (ret == 0) {
         picoquic_connection_id_t cid = picoquic_get_client_cnxid(cnx);
-        if (cid.id_len != cnx->path[0]->p_local_cnxid->cnx_id.id_len ||
-            memcmp(cid.id, cnx->path[0]->p_local_cnxid->cnx_id.id, cid.id_len) != 0) {
+        if (cid.id_len != cnx->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len ||
+            memcmp(cid.id, cnx->path[0]->first_tuple->p_local_cnxid->cnx_id.id, cid.id_len) != 0) {
             ret = -1;
         }
         else {
@@ -187,8 +187,8 @@ int getter_test()
 
     if (ret == 0) {
         picoquic_connection_id_t cid = picoquic_get_server_cnxid(cnx);
-        if (cid.id_len != cnx->path[0]->p_remote_cnxid->cnx_id.id_len ||
-            memcmp(cid.id, cnx->path[0]->p_remote_cnxid->cnx_id.id, cid.id_len) != 0) {
+        if (cid.id_len != cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len ||
+            memcmp(cid.id, cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id, cid.id_len) != 0) {
             ret = -1;
         }
         else {
@@ -355,7 +355,7 @@ int getter_test()
     if (ret == 0) {
         picoquic_connection_id_t cid = { { 1, 2, 3}, 3 };
         if (picoquic_is_local_cid(test_ctx->qclient, &cid) ||
-            !picoquic_is_local_cid(test_ctx->qclient, &cnx->path[0]->p_local_cnxid->cnx_id)) {
+            !picoquic_is_local_cid(test_ctx->qclient, &cnx->path[0]->first_tuple->p_local_cnxid->cnx_id)) {
             ret = -1;
         }
     }
@@ -377,7 +377,7 @@ int getter_test()
         }
     }
 
-    if (ret == 0 && picoquic_register_cnx_id(test_ctx->qclient, cnx, cnx->path[0]->p_local_cnxid) == 0) {
+    if (ret == 0 && picoquic_register_cnx_id(test_ctx->qclient, cnx, cnx->path[0]->first_tuple->p_local_cnxid) == 0) {
         /* Should be already registered ! */
         ret = -1;
     }

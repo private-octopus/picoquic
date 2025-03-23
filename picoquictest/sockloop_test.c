@@ -173,8 +173,8 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                 /* Store the initial versions of address and CID */
                 picoquic_store_addr(&cb_ctx->client_address, (struct sockaddr*)&cnx_client->path[0]->first_tuple->local_addr);
                 picoquic_store_addr(&cb_ctx->server_address, (struct sockaddr*)&cnx_client->path[0]->first_tuple->peer_addr);
-                cb_ctx->client_cid_before_migration = cnx_client->path[0]->p_local_cnxid->cnx_id;
-                cb_ctx->server_cid_before_migration = cnx_client->path[0]->p_remote_cnxid->cnx_id;
+                cb_ctx->client_cid_before_migration = cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id;
+                cb_ctx->server_cid_before_migration = cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id;
             }
             else if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_ready) {
                 /* Handle migration tests */
@@ -411,15 +411,15 @@ int sockloop_test_verify_migration(sockloop_test_cb_t * loop_cb, picoquic_cnx_t*
             (struct sockaddr*) & cnx_client->path[0]->first_tuple->local_addr,
             (struct sockaddr*) & loop_cb->client_address);
         int dest_cid_cmp = picoquic_compare_connection_id(
-            &cnx_client->path[0]->p_remote_cnxid->cnx_id,
+            &cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id,
             &loop_cb->server_cid_before_migration);
-        if (cnx_client->path[0]->p_local_cnxid == NULL) {
+        if (cnx_client->path[0]->first_tuple->p_local_cnxid == NULL) {
             DBG_PRINTF("%s", "Local CID is NULL!\n");
             ret = -1;
         }
         else {
             int source_cid_cmp = picoquic_compare_connection_id(
-                &cnx_client->path[0]->p_local_cnxid->cnx_id,
+                &cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id,
                 &loop_cb->client_cid_before_migration);
 
             if (loop_cb->force_migration == 1 || loop_cb->force_migration == 3) {

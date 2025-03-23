@@ -1327,7 +1327,7 @@ int initial_pto_ack(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* p_simulated
         send_buffer, PICOQUIC_MAX_PACKET_SIZE, 
         test_ctx->cnx_server->crypto_context[picoquic_epoch_initial].aead_encrypt,
         test_ctx->cnx_server->crypto_context[picoquic_epoch_initial].pn_enc,
-        test_ctx->cnx_server->path[0], *p_simulated_time);
+        test_ctx->cnx_server->path[0], NULL, *p_simulated_time);
     /* Submit to client. */
     if (send_length == 0) {
         ret = -1;
