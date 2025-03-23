@@ -1950,7 +1950,12 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
         /* If the local CID is not set, set it */
         if (path_x->first_tuple->p_local_cnxid == NULL) {
             path_x->first_tuple->p_local_cnxid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
-
+            if (!cnx->client_mode && cnx->is_multipath_enabled && path_x->first_tuple->challenge_verified) {
+                /* If the peer renewed its connection id, the retire connection ID frame may already
+                 * have arrived on a separate path. If the server noticed that, it should also renew
+                 * its "remote path" ID */
+                (void)picoquic_renew_connection_id(cnx, path_id);
+            }
         }
 
         /* Treat the special case of the unkown local address, which should only happen
