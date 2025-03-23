@@ -4744,7 +4744,7 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                     previous_tuple->next_tuple = tuple->next_tuple;
                     tuple->next_tuple = path_x->first_tuple;
                     path_x->first_tuple = tuple;
-
+                    picoquic_reset_path_mtu(path_x);
                     if (cnx->are_path_callbacks_enabled &&
                         cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_available,
                             cnx->callback_ctx, path_x->app_path_ctx) != 0) {

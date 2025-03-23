@@ -4054,10 +4054,14 @@ picoquic_tuple_t* picoquic_check_path_control_needed(picoquic_cnx_t* cnx, picoqu
 /* Find available paths:
 * Check that there is at least one available path. If not, promote one of the candidates.
 */
-int picoquic_verify_path_available(picoquic_cnx_t * cnx, picoquic_path_t** next_path, uint64_t current_time)
+int picoquic_verify_path_available(picoquic_cnx_t * cnx, picoquic_path_t** next_path, uint64_t * min_retransmit, uint64_t current_time)
 {
     int backup_index = -1;
     int nb_available = 0;
+    uint64_t best_available_retransmit = UINT64_MAX;
+    uint64_t best_backup_retransmit = UINT64_MAX;
+
+    *min_retransmit = 0;
 
     for (int path_index = 0; path_index < cnx->nb_paths; path_index++) {
         picoquic_path_t* path_x = cnx->path[path_index];
@@ -4068,24 +4072,33 @@ int picoquic_verify_path_available(picoquic_cnx_t * cnx, picoquic_path_t** next_
                 cnx->congestion_alg->alg_init(cnx, path_x, cnx->congestion_alg_option_string, current_time);
             }
             /* track the available paths */
-            /* TODO: handle number of retransmissions? */
             if (path_x->path_is_backup) {
-                if (backup_index < 0) {
+                if (backup_index < 0 || path_x->nb_retransmit < best_backup_retransmit) {
+                    best_backup_retransmit = path_x->nb_retransmit;
                     backup_index = path_index;
                 }
             }
             else
             {
-                *next_path = path_x;
+                if (path_x->nb_retransmit < best_available_retransmit) {
+                    best_available_retransmit = path_x->nb_retransmit;
+                    *next_path = path_x;
+                    nb_available = 0;
+                }
                 nb_available++;
             }
         }
     }
-    if (nb_available == 0 && backup_index >= 0) {
+    if (best_available_retransmit > 0 && best_backup_retransmit < best_available_retransmit){
         cnx->path[backup_index]->path_is_backup = 0;
         *next_path = cnx->path[backup_index];
-        nb_available += 1;
-        /* TODO: some logging. Queue PATH_AVAILABLE frame. */
+        nb_available = 1;
+        *min_retransmit = best_backup_retransmit;
+        /* TODO: some logging. Queue PATH_AVAILABLE frame? */
+    }
+    else
+    {
+        *min_retransmit = best_available_retransmit;
     }
     return nb_available;
 }
@@ -4095,7 +4108,7 @@ int picoquic_verify_path_available(picoquic_cnx_t * cnx, picoquic_path_t** next_
  */
 
 void picoquic_sort_available_paths(picoquic_cnx_t * cnx, uint64_t current_time, uint64_t* next_wake_time,
-    picoquic_path_t** next_path, picoquic_tuple_t** next_tuple)
+    picoquic_path_t** next_path, uint64_t min_retransmit, picoquic_tuple_t** next_tuple)
 {
     int data_path_cwin = -1;
     int data_path_pacing = -1;
@@ -4115,7 +4128,7 @@ void picoquic_sort_available_paths(picoquic_cnx_t * cnx, uint64_t current_time, 
         /* Clear the nominal ack path flag from all path -- it will be reset to the low RTT path later */
         path_x->is_nominal_ack_path = 0;
         /* Only continue processing if the path is available */
-        if (path_x->path_is_backup || !path_x->first_tuple->challenge_verified || path_x->path_is_demoted) {
+        if (path_x->path_is_backup || !path_x->first_tuple->challenge_verified || path_x->path_is_demoted || path_x->nb_retransmit > min_retransmit) {
             continue;
         }
         /* This path is a candidate for min rtt */
@@ -4221,6 +4234,7 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
     picoquic_path_t** next_path, picoquic_tuple_t** next_tuple)
 {
     int nb_available = 0;
+    uint64_t min_retransmit = 0;
 
     *next_path = NULL;
     *next_tuple = NULL;
@@ -4236,16 +4250,16 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
             (*next_path)->challenger++;
             break;
         }
-        else if (cnx->path[path_index]->first_tuple->challenge_verified && cnx->path[path_index]->nb_retransmit > 0 &&
+        else if (cnx->nb_paths > 0 && cnx->path[path_index]->first_tuple->challenge_verified && cnx->path[path_index]->nb_retransmit > 0 &&
             cnx->cnx_state == picoquic_state_ready && cnx->path[path_index]->bytes_in_transit == 0) {
             cnx->path[path_index]->is_multipath_probe_needed = 1;
             *next_path = cnx->path[path_index];
+            *next_tuple = (*next_path)->first_tuple;
             (*next_path)->challenger++;
             break;
         }
     }
     if (*next_path != NULL) {
-        *next_tuple = (*next_path)->first_tuple;
         /* we are done */
     }
     else  if (cnx->nb_paths == 1) {
@@ -4253,7 +4267,7 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
         *next_path = cnx->path[0];
         *next_tuple = (*next_path)->first_tuple;
     }
-    else if ((nb_available = picoquic_verify_path_available(cnx, next_path, current_time)) < 2) {
+    else if ((nb_available = picoquic_verify_path_available(cnx, next_path, &min_retransmit, current_time)) < 2) {
         /* Only 0 or 1 path to chose from. Just select that. */
         if (*next_path == NULL) {
             *next_path = cnx->path[0];
@@ -4265,7 +4279,7 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
         * available path that can send ACK, or paced data, or congestion 
         * controlled data.
          */
-        picoquic_sort_available_paths(cnx, current_time, next_wake_time, next_path, next_tuple);
+        picoquic_sort_available_paths(cnx, current_time, next_wake_time, next_path, min_retransmit, next_tuple);
     }
 }
 
@@ -4284,8 +4298,6 @@ static void picoquic_set_path_addresses_from_tuple(picoquic_tuple_t* tuple,
         *if_index = tuple->if_index;
     }
 }
-
-
 
 /* manage the CC timer, if any */
 static int picoquic_check_cc_feedback_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_time, uint64_t current_time)
