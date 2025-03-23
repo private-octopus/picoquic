@@ -4228,13 +4228,24 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
     /* First check whether path contol messages are needed */
     for (int path_index = 0; path_index < cnx->nb_paths; path_index++)
     {
+        if (cnx->path[path_index]->path_is_demoted) {
+            continue;
+        }
         if ((*next_tuple = picoquic_check_path_control_needed(cnx, cnx->path[path_index], current_time, next_wake_time)) != NULL) {
+            *next_path = cnx->path[path_index];
+            (*next_path)->challenger++;
+            break;
+        }
+        else if (cnx->path[path_index]->first_tuple->challenge_verified && cnx->path[path_index]->nb_retransmit > 0 &&
+            cnx->cnx_state == picoquic_state_ready && cnx->path[path_index]->bytes_in_transit == 0) {
+            cnx->path[path_index]->is_multipath_probe_needed = 1;
             *next_path = cnx->path[path_index];
             (*next_path)->challenger++;
             break;
         }
     }
     if (*next_path != NULL) {
+        *next_tuple = (*next_path)->first_tuple;
         /* we are done */
     }
     else  if (cnx->nb_paths == 1) {
