@@ -6331,7 +6331,7 @@ int probe_api_test()
      */
     nb_trials = 0;
 
-    for (int i = 1; ret == 0 && test_ctx->cnx_client->nb_paths < PICOQUIC_NB_PATH_TARGET; i++) {
+    for (int i = 1; ret == 0 && test_ctx->cnx_client->nb_paths < PICOQUIC_NB_PATH_TARGET && i < PICOQUIC_NB_PATH_TARGET; i++) {
         for (int j = 0; ret == 0 && j < 2; j++) {
             int ret_probe;
             if (j == 0) {
