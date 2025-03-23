@@ -1825,9 +1825,9 @@ int multipath_tunnel_test()
  * Key values include:
  * cnx->path[i]->status_set_by_peer
  * cnx->path[i]->path_is_demoted
- * cnx->path[i]->challenge_failed (leads to demotion)
- * cnx->path[i]->response_required (set challenge path)
- * cnx->path[i]->challenge_verified (and next challenge time)
+ * cnx->path[i]->first_tuple->challenge_failed (leads to demotion)
+ * cnx->path[i]->first_tuple->response_required (set challenge path)
+ * cnx->path[i]->first_tuple->challenge_verified (and next challenge time)
  * cnx->path[i]->challenge_repeat_count
  * cnx->path[i]->nb_retransmit
  * cnx->path[i]->rtt_min

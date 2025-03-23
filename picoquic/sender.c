@@ -4245,7 +4245,10 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
         if (cnx->path[path_index]->path_is_demoted) {
             continue;
         }
-        if ((*next_tuple = picoquic_check_path_control_needed(cnx, cnx->path[path_index], current_time, next_wake_time)) != NULL) {
+        else if (cnx->is_multipath_enabled && cnx->path[path_index]->first_tuple->challenge_failed && !cnx->path[path_index]->path_abandon_sent) {
+            (void)picoquic_abandon_path(cnx, cnx->path[path_index]->unique_path_id, PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE, NULL, current_time);
+        }
+        else if ((*next_tuple = picoquic_check_path_control_needed(cnx, cnx->path[path_index], current_time, next_wake_time)) != NULL) {
             *next_path = cnx->path[path_index];
             (*next_path)->challenger++;
             break;
