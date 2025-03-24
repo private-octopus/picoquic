@@ -4008,7 +4008,7 @@ uint64_t  picoquic_tuple_challenge_time(picoquic_path_t* path_x, picoquic_tuple_
     }
     else {
         if (tuple->challenge_repeat_count >= 2) {
-            next_challenge_time += path_x->retransmit_timer << (path_x->first_tuple->challenge_repeat_count - 1);
+            next_challenge_time += path_x->retransmit_timer << (tuple->challenge_repeat_count - 1);
         }
         else {
             next_challenge_time += PICOQUIC_INITIAL_RETRANSMIT_TIMER;

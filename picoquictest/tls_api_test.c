@@ -6564,7 +6564,7 @@ int migration_fail_test()
     }
 
     if (ret == 0) {
-        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 1000000);
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 1100000);
     }
 
     if (test_ctx != NULL) {

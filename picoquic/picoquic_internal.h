@@ -1597,6 +1597,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     uint64_t unique_path_id);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
+void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason, char const * phrase);
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
