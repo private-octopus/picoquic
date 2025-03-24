@@ -1286,6 +1286,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int stream_blocked_unidir_sent : 1; /* If stream_blocked has been sent to peer and no stream limit update since */
     unsigned int max_stream_data_needed : 1; /* If at least one stream needs more data */
     unsigned int path_demotion_needed : 1; /* If at least one path was recently demoted */
+    unsigned int tuple_demotion_needed : 1; /* if at least one tuple should be deleted */
     unsigned int alt_path_challenge_needed : 1; /* If at least one alt path challenge is needed or in progress */
     unsigned int is_handshake_finished : 1; /* If there are no more packets to ack or retransmit in initial  or handshake contexts */
     unsigned int is_handshake_done_acked : 1; /* If the peer has acked the handshake done packet */

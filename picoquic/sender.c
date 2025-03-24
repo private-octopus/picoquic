@@ -2784,6 +2784,7 @@ uint8_t* picoquic_prepare_tuple_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
                 picoquic_tuple_t* previous_tuple = NULL;
 
                 tuple->challenge_failed = 1;
+                tuple->demotion_time = current_time + (path_x->retransmit_timer << PICOQUIC_CHALLENGE_REPEAT_MAX);
 
                 while (next_tuple != NULL) {
                     if (next_tuple == tuple) {
@@ -4018,6 +4019,35 @@ uint64_t  picoquic_tuple_challenge_time(picoquic_path_t* path_x, picoquic_tuple_
     return next_challenge_time;
 }
 
+/* Remove old tuples that are not needed anymore. 
+ */
+void picoquic_delete_demoted_tuples(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time)
+{
+    for (int path_index = 0; path_index < cnx->nb_paths; path_index++) {
+        picoquic_path_t* path_x = cnx->path[path_index];
+        if (!path_x->path_is_demoted) {
+            /* examine each tuple record */
+            picoquic_tuple_t* tuple = path_x->first_tuple;
+            picoquic_tuple_t* next_tuple;
+
+            while (tuple != NULL && (next_tuple = tuple->next_tuple) != NULL) {
+                if (next_tuple->challenge_failed) {
+                    if (current_time > next_tuple->demotion_time) {
+                        picoquic_delete_tuple(path_x, next_tuple);
+                        continue;
+                    }
+                    else if (*next_wake_time > next_tuple->demotion_time) {
+                        *next_wake_time = next_tuple->demotion_time;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                    }
+                }
+                tuple = next_tuple;
+            }
+        }
+    }
+    cnx->tuple_demotion_needed = 0;
+}
+
 /* picoquic_check_path_control_needed:
  * Find whether a path needs to send a challenge or a response. 
  * Todo: consider the need to keep alive the paths marked as "backup"
@@ -4029,6 +4059,9 @@ picoquic_tuple_t* picoquic_check_path_control_needed(picoquic_cnx_t* cnx, picoqu
 
     while (tuple != NULL) {
         if (tuple->challenge_failed) {
+            if (tuple != path_x->first_tuple && current_time > tuple->demotion_time) {
+                cnx->tuple_demotion_needed = 1;
+            }
             /* go to next tuple */
         }
         else if (tuple->response_required) {
@@ -4404,7 +4437,9 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         if (cnx->path_demotion_needed) {
             picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
         }
-
+        if (cnx->tuple_demotion_needed) {
+            picoquic_delete_demoted_tuples(cnx, current_time, &next_wake_time);
+        }
         /* Select the next path, and the corresponding addresses */
         picoquic_select_next_path_tuple(cnx, current_time, &next_wake_time, &path_x, &tuple);
         picoquic_set_path_addresses_from_tuple(tuple, p_addr_to, p_addr_from, if_index);
