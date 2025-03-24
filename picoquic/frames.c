@@ -4761,13 +4761,13 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                         picoquic_log_app_message(cnx, "Migration to server preferred address successful on path %" PRIu64, path_x->unique_path_id);
                     }
                     picoquic_reset_path_mtu(path_x);
-                    if (cnx->are_path_callbacks_enabled &&
-                        cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_available,
-                            cnx->callback_ctx, path_x->app_path_ctx) != 0) {
-                        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
-                            picoquic_frame_type_path_response, "path available callback");
-                        bytes = NULL;
-                    }
+                }
+                if (cnx->are_path_callbacks_enabled &&
+                    cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_available,
+                        cnx->callback_ctx, path_x->app_path_ctx) != 0) {
+                    picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
+                        picoquic_frame_type_path_response, "path available callback");
+                    bytes = NULL;
                 }
             }
         }
