@@ -1958,7 +1958,7 @@ void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t curr
                 cnx->path[path_id]->challenge[ichal] = picoquic_public_random_64();
             }
         }
-        if (cnx->path[path_id]->challenge_verified && cnx->are_path_callbacks_enabled) {
+        if (cnx->path[path_id]->challenge_verified && cnx->are_path_callbacks_enabled && cnx->callback_fn != NULL) {
             if (cnx->callback_fn(cnx, cnx->path[path_id]->unique_path_id, NULL, 0, picoquic_callback_path_suspended,
                 cnx->callback_ctx, cnx->path[path_id]->app_path_ctx) != 0) {
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_path_challenge);

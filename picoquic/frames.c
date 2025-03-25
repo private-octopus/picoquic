@@ -4753,7 +4753,7 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                 /* Provide a qualified time estimate from challenge time */
                 picoquic_update_path_rtt(cnx, path_x, path_x, -1, path_x->challenge_time_first, current_time, 0, 0);
 
-                if (cnx->are_path_callbacks_enabled &&
+                if (cnx->are_path_callbacks_enabled && cnx->callback_fn != NULL &&
                     cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_available,
                     cnx->callback_ctx, path_x->app_path_ctx) != 0) {
                     picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
@@ -5164,7 +5164,7 @@ uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, picoquic_path
         datagram_data_context.is_old_api = 0;
         datagram_data_context.was_called = 0;
 
-        if ((cnx->callback_fn)(cnx, (cnx->are_path_callbacks_enabled)?path_x->unique_path_id:0, (uint8_t*)&datagram_data_context, allowed_space,
+        if (cnx->callback_fn != NULL && (cnx->callback_fn)(cnx, (cnx->are_path_callbacks_enabled)?path_x->unique_path_id:0, (uint8_t*)&datagram_data_context, allowed_space,
             picoquic_callback_prepare_datagram, cnx->callback_ctx, NULL) != 0) {
             /* something went wrong */
             picoquic_log_app_message(cnx, "Prepare datagram returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
