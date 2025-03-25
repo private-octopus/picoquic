@@ -1757,7 +1757,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     }
 
     /* Signal to the application */
-    if (cnx->are_path_callbacks_enabled &&
+    if (cnx->are_path_callbacks_enabled && cnx->callback_fn != NULL &&
         cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_deleted,
         cnx->callback_ctx, path_x->app_path_ctx) != 0) {
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0, "Path deleted callback failed.");
@@ -1978,7 +1978,7 @@ void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t curr
         /* Reset the path challenge */
         cnx->path[path_id]->first_tuple->challenge_required = 1;
         picoquic_set_tuple_challenge(cnx->path[path_id]->first_tuple, current_time, cnx->quic->use_constant_challenges);
-        if (cnx->path[path_id]->first_tuple->challenge_verified && cnx->are_path_callbacks_enabled) {
+        if (cnx->path[path_id]->first_tuple->challenge_verified && cnx->are_path_callbacks_enabled && cnx->callback_fn != NULL) {
             if (cnx->callback_fn(cnx, cnx->path[path_id]->unique_path_id, NULL, 0, picoquic_callback_path_suspended,
                 cnx->callback_ctx, cnx->path[path_id]->app_path_ctx) != 0) {
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_path_challenge);
