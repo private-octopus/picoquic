@@ -1264,7 +1264,10 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
 
     /* get the IP address of the server */
     memset(server_address, 0, sizeof(struct sockaddr_storage));
-    *is_name = 0;
+
+    if (is_name != NULL) {
+        *is_name = 0;
+    }
 
     if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1) {
         /* Valid IPv4 address */
@@ -1274,6 +1277,9 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
         /* Valid IPv6 address */
         ipv6_dest->sin6_family = AF_INET6;
         ipv6_dest->sin6_port = htons((unsigned short)server_port);
+    }
+    else if (is_name == NULL) {
+        ret = -1;
     } else {
         /* Server is described by name. Do a lookup for the IP address,
         * and then use the name as SNI parameter */
