@@ -300,7 +300,7 @@ void picoquic_prague_notify(
             /* Regardless of the alg state, update alpha */
             picoquic_prague_update_alpha(cnx, path_x, pr_state, ack_state->nb_bytes_acknowledged, current_time);
 
-            /* Increae or reduce the congestion window based on alpha */
+            /* Increase or reduce the congestion window based on alpha */
             switch (pr_state->alg_state) {
             case picoquic_prague_alg_slow_start:
                 /* TODO l4s_prague test fails. Have to increase max_completion time about 100 ms */
@@ -383,11 +383,11 @@ void picoquic_prague_notify(
             /* ignore */
             break;
         }
-    }
 
-    /* Compute pacing data */
-    picoquic_update_pacing_data(cnx, path_x, pr_state->alg_state == picoquic_prague_alg_slow_start &&
-        pr_state->ssthresh == UINT64_MAX);
+        /* Compute pacing data */
+        picoquic_update_pacing_data(cnx, path_x, pr_state->alg_state == picoquic_prague_alg_slow_start &&
+            pr_state->ssthresh == UINT64_MAX);
+    }
 }
 
 /* Release the state of the congestion control algorithm */
