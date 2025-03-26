@@ -130,14 +130,14 @@ int address_discovery_test()
 
     /* Check that the observed address was set on the client connection */
     if (ret == 0 && picoquic_compare_addr(
-        (struct sockaddr*)&test_ctx->cnx_client->path[0]->local_addr,
-        (struct sockaddr*)&test_ctx->cnx_client->path[0]->observed_addr) != 0) {
+        (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->local_addr,
+        (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->observed_addr) != 0) {
         char text1[256];
         char text2[256];
 
         DBG_PRINTF("Local: %s, observed: %s",
-            picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[0]->local_addr, text1, sizeof(text1)),
-            picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[0]->observed_addr, text2, sizeof(text2)));
+            picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->local_addr, text1, sizeof(text1)),
+            picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->observed_addr, text2, sizeof(text2)));
         ret = -1;
     }
 

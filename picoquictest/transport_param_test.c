@@ -554,8 +554,8 @@ int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** 
             ret = -1;
         }
         else {
-            (*test_cnx)->path[0]->p_local_cnxid->cnx_id = remote_cnx_id;
-            (*test_cnx)->path[0]->p_remote_cnxid->cnx_id = remote_cnx_id;
+            (*test_cnx)->path[0]->first_tuple->p_local_cnxid->cnx_id = remote_cnx_id;
+            (*test_cnx)->path[0]->first_tuple->p_remote_cnxid->cnx_id = remote_cnx_id;
         }
     }
 
@@ -610,7 +610,7 @@ int transport_param_one_test(int mode, int grease, uint32_t version, uint32_t pr
             else {
                 uint8_t target_secret[PICOQUIC_RESET_SECRET_SIZE];
 
-                (void)picoquic_create_cnxid_reset_secret(quic_ctx, &test_cnx->path[0]->p_local_cnxid->cnx_id,
+                (void)picoquic_create_cnxid_reset_secret(quic_ctx, &test_cnx->path[0]->first_tuple->p_local_cnxid->cnx_id,
                     target_secret);
 
                 if (memcmp(buffer, target, target_length - PICOQUIC_RESET_SECRET_SIZE) != 0) {

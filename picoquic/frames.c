@@ -705,9 +705,9 @@ const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, c
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             (is_mp)?picoquic_frame_type_path_retire_connection_id:picoquic_frame_type_retire_connection_id);
     }
-    else if (path_x->p_local_cnxid != NULL &&
+    else if (path_x->first_tuple->p_local_cnxid != NULL &&
         (!is_mp || path_x->unique_path_id == unique_path_id) &&
-        sequence == path_x->p_local_cnxid->sequence) {
+        sequence == path_x->first_tuple->p_local_cnxid->sequence) {
         /* Cannot delete the path through which it arrives */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             (is_mp) ? picoquic_frame_type_path_retire_connection_id : picoquic_frame_type_retire_connection_id);
@@ -3822,7 +3822,6 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
         (((is_ecn) ? picoquic_frame_type_path_ack_ecn : picoquic_frame_type_path_ack));
 
     /* Check that there something to acknowledge */
-#if 1
     int not_needed = picoquic_sack_list_is_empty(&ack_ctx->sack_list);
     if (!not_needed && !ack_ctx->act[is_opportunistic].ack_needed &&
         ack_ctx->sack_list.ack_tree.size == 1) {
@@ -3830,9 +3829,6 @@ uint8_t* picoquic_format_ack_frame_in_context(picoquic_cnx_t* cnx, uint8_t* byte
         not_needed = (last_sack->nb_times_sent[is_opportunistic] >= PICOQUIC_MAX_ACK_RANGE_REPEAT);
     }
     if (!not_needed){
-#else
-    if (!picoquic_sack_list_is_empty(&ack_ctx->sack_list)) {
-#endif
         uint8_t* num_block_byte = NULL;
         picoquic_sack_item_t* last_sack = picoquic_sack_last_item(&ack_ctx->sack_list);
 
@@ -4031,9 +4027,9 @@ uint64_t picoquic_ack_gap_override_if_needed(picoquic_cnx_t* cnx, int path_index
     uint64_t ack_gap = cnx->ack_gap_remote;
     if (cnx->is_multipath_enabled) {
         if (!cnx->path[path_index]->path_is_demoted &&
-            !cnx->path[path_index]->challenge_failed &&
-            !cnx->path[path_index]->response_required &&
-            cnx->path[path_index]->challenge_verified &&
+            !cnx->path[path_index]->first_tuple->challenge_failed &&
+            !cnx->path[path_index]->first_tuple->response_required &&
+            cnx->path[path_index]->first_tuple->challenge_verified &&
             cnx->path[path_index]->received < 100 * PICOQUIC_MAX_PACKET_SIZE) {
             ack_gap = 2;
         }
@@ -4652,35 +4648,51 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
             if (!is_valid) {
                 /* If multipath is not enabled, we must verify that the addresses
                  * source (addr_from) matches the peer address if known. */
-                if (addr_from == NULL ||
-                    picoquic_compare_addr(addr_from, (struct sockaddr*)&path_x->peer_addr) == 0) {
-                    /* If the source address matches, we must verify that the destination
-                    * address also matches. Given how the socket code works there will be cases
-                    * when the local port is now yet known. In that case, we only compare
-                    * the IP address component . Otherwise, we compare the whole address.
-                    */
-                    if (addr_to == NULL ||
-                        (picoquic_get_addr_port((struct sockaddr*)&path_x->local_addr) == 0 &&
-                            picoquic_compare_ip_addr(addr_to, (struct sockaddr*)&path_x->local_addr) == 0) ||
-                        picoquic_compare_addr(addr_to, (struct sockaddr*)&path_x->local_addr) == 0) {
-                        is_valid = 1;
+                picoquic_tuple_t* tuple = path_x->first_tuple;
+                while (tuple != NULL) {
+                    if (addr_from == NULL ||
+                        picoquic_compare_addr(addr_from, (struct sockaddr*)&tuple->peer_addr) == 0) {
+                        /* If the source address matches, we must verify that the destination
+                        * address also matches. Given how the socket code works there will be cases
+                        * when the local port is now yet known. In that case, we only compare
+                        * the IP address component . Otherwise, we compare the whole address.
+                        */
+                        if (addr_to == NULL ||
+                            (picoquic_get_addr_port((struct sockaddr*)&tuple->local_addr) == 0 &&
+                                picoquic_compare_ip_addr(addr_to, (struct sockaddr*)&tuple->local_addr) == 0) ||
+                            picoquic_compare_addr(addr_to, (struct sockaddr*)&tuple->local_addr) == 0) {
+                            is_valid = 1;
+                            tuple->challenge_response = challenge_response;
+                            tuple->response_required = 1;
+                            break;
+                        }
                     }
+                    tuple = tuple->next_tuple;
                 }
             }
-            if (is_valid) {
-                path_x->challenge_response = challenge_response;
-                path_x->response_required = 1;
-            }
-            else {
+            if (!is_valid) {
                 char buf1[128], buf2[128], buf3[128], buf4[128];
                 picoquic_log_app_message(cnx,
                     "Path challenge[%" PRIu64 "] from %s to %s ignored, wrong addresses, expected %s - %s.\n",
                     path_x->unique_path_id,
                     picoquic_addr_text(addr_from, buf1, sizeof(buf1)),
                     picoquic_addr_text(addr_to, buf2, sizeof(buf2)),
-                    picoquic_addr_text((struct sockaddr*)&path_x->peer_addr, buf3, sizeof(buf3)),
-                    picoquic_addr_text((struct sockaddr*)&path_x->local_addr, buf4, sizeof(buf4))
+                    picoquic_addr_text((struct sockaddr*)&path_x->first_tuple->peer_addr, buf3, sizeof(buf3)),
+                    picoquic_addr_text((struct sockaddr*)&path_x->first_tuple->local_addr, buf4, sizeof(buf4))
                 );
+            }
+            else if (!cnx->client_mode && cnx->local_parameters.migration_disabled) {
+                /* We do not expect path challenges, unless they are on the default path
+                * and match the preferred address.
+                 */
+                if (cnx->local_parameters.prefered_address.is_defined) {
+                    /* TODO: verify that this is going to the preferred address. */
+                    cnx->local_parameters.migration_disabled = 0;
+                    picoquic_log_app_message(cnx, "Enabling migration after preferred address validation on path %" PRIu64, path_x->unique_path_id);
+                }
+                else {
+                    picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, picoquic_frame_type_path_challenge, "Migration is disabled");
+                }
             }
         }
     }
@@ -4714,54 +4726,49 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
         /* Per QUIC V1, path responses must come on the same path. Ignore them if this cannot be verified. */
         if (path_x != NULL) {
             int found_challenge = 0;
-            int found_nat_challenge = 0;
+            picoquic_tuple_t* tuple = path_x->first_tuple;
+            picoquic_tuple_t* previous_tuple = NULL;
 
-            for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                if (response == path_x->challenge[ichal]) {
-                    found_challenge = 1;
-                    break;
-                }
-            }
-            if (!found_challenge && path_x->nat_peer_addr.ss_family != AF_UNSPEC) {
+            while (tuple != NULL) {
                 for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                    if (response == path_x->nat_challenge[ichal]) {
-                        found_nat_challenge = 1;
+                    if (response == tuple->challenge[ichal]) {
+                        found_challenge = 1;
                         break;
                     }
                 }
-            }
-            if (found_nat_challenge && !path_x->challenge_verified) {
-                /* while probing NAT, the NAT response arrived before the normal path response */
-                /* Update the addresses */
-                picoquic_store_addr(&path_x->local_addr, (struct sockaddr*)&path_x->nat_local_addr);
-                picoquic_update_peer_addr(path_x, (struct sockaddr*)&path_x->nat_peer_addr);
-                path_x->if_index_dest = path_x->if_index_nat_dest;
-                /* if useful, update the CID */
-                if (path_x->p_remote_nat_cnxid != NULL) {
-                    picoquic_dereference_stashed_cnxid(cnx, path_x, 0);
-                    path_x->p_remote_cnxid = path_x->p_remote_nat_cnxid;
-                    path_x->p_remote_nat_cnxid = NULL;
+                if (found_challenge) {
+                    break;
                 }
-                /* Consider this a successful challenge */
-                found_challenge = 1;
+                previous_tuple = tuple;
+                tuple = tuple->next_tuple;
             }
 
-            if (found_challenge && !path_x->challenge_verified){
-                /* TODO: update the RTT if using initial value */
-                path_x->challenge_verified = 1;
-
+            if (found_challenge && !tuple->challenge_verified) {
+                tuple->challenge_verified = 1;
                 /* Provide a qualified time estimate from challenge time */
-                picoquic_update_path_rtt(cnx, path_x, path_x, -1, path_x->challenge_time_first, current_time, 0, 0);
-
+                picoquic_update_path_rtt(cnx, path_x, path_x, -1, tuple->challenge_time_first, current_time, 0, 0);
+                /* This challenge is verified. 
+                * If this is a client, the path should replace the current path.
+                * If this is a server, the replacement should happen if we have a NAT, maybe,
+                * or if qualifying data is received, which will happen later.
+                */
+                if (previous_tuple != NULL /* && cnx->client_mode */) {
+                    previous_tuple->next_tuple = tuple->next_tuple;
+                    tuple->next_tuple = path_x->first_tuple;
+                    path_x->first_tuple = tuple;
+                    if (tuple->to_preferred_address) {
+                        cnx->remote_parameters.migration_disabled = 0;
+                        picoquic_log_app_message(cnx, "Migration to server preferred address successful on path %" PRIu64, path_x->unique_path_id);
+                    }
+                    picoquic_reset_path_mtu(path_x);
+                }
                 if (cnx->are_path_callbacks_enabled && cnx->callback_fn != NULL &&
                     cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_available,
-                    cnx->callback_ctx, path_x->app_path_ctx) != 0) {
+                        cnx->callback_ctx, path_x->app_path_ctx) != 0) {
                     picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
                         picoquic_frame_type_path_response, "path available callback");
                     bytes = NULL;
                 }
-                /* Erase the NAT address, to avoid continuing the NAT challenge */
-                path_x->nat_peer_addr.ss_family = AF_UNSPEC;
             }
         }
     }
@@ -4788,15 +4795,15 @@ int picoquic_should_repeat_path_response_frame(picoquic_cnx_t* cnx, const uint8_
         int path_index = -1;
 
         for (int i = 0; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->challenge_response == response) {
+            if (cnx->path[i]->first_tuple->challenge_response == response) {
                 path_index = i;
                 break;
             }
         }
 
         if (path_index >= 0 &&
-            (cnx->path[path_index]->challenge_verified ||
-                (cnx->client_mode && !cnx->path[path_index]->challenge_failed))) {
+            (cnx->path[path_index]->first_tuple->challenge_verified ||
+                (cnx->client_mode && !cnx->path[path_index]->first_tuple->challenge_failed))) {
             should_repeat = 1;
         }
         else {
@@ -5549,7 +5556,7 @@ int picoquic_queue_path_available_or_backup_frame(
 {
     int ret = 0;
 
-    if (path_x->p_remote_cnxid == NULL) {
+    if (path_x->first_tuple->p_remote_cnxid == NULL) {
         ret = -1;
     }
     else {
@@ -5560,7 +5567,7 @@ int picoquic_queue_path_available_or_backup_frame(
         uint64_t sequence = cnx->status_sequence_to_send_next++;
         uint64_t path_id = (cnx->is_multipath_enabled)?
             path_x->unique_path_id :
-            path_x->p_remote_cnxid->sequence;
+            path_x->first_tuple->p_remote_cnxid->sequence;
         int is_pure_ack = 0;
         int more_data = 0;
         uint8_t* bytes_next = picoquic_format_path_available_or_backup_frame(
@@ -6071,21 +6078,24 @@ uint8_t* picoquic_format_observed_address_frame(
     return bytes;
 }
 
+
+
 uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* bytes_max,
-    picoquic_path_t* path_x, uint64_t current_time, uint64_t * next_wake_time,
+    picoquic_path_t* path_x, picoquic_tuple_t * tuple,
+    uint64_t current_time, uint64_t * next_wake_time,
     int * more_data, int* is_pure_ack)
 {
-    if (!path_x->observed_addr_acked && 
-        path_x->nb_observed_repeat < 4 &&
-        path_x->peer_addr.ss_family != AF_UNSPEC) {
+    if (!path_x->observed_addr_acked &&
+        tuple->nb_observed_repeat < 4 &&
+        tuple->peer_addr.ss_family != AF_UNSPEC) {
         int is_needed = 0;
 
-        if (path_x->nb_observed_repeat == 0) {
+        if (tuple->nb_observed_repeat == 0) {
             is_needed = 1;
             path_x->observed_sequence_sent = path_x->cnx->observed_number++;
         }
         else {
-            uint64_t repeat_time = path_x->observed_time + path_x->retransmit_timer;
+            uint64_t repeat_time = tuple->observed_time + path_x->retransmit_timer;
 
             if (repeat_time <= current_time) {
                 is_needed = 1;
@@ -6100,14 +6110,14 @@ uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* 
             uint8_t* ip_addr = NULL;
             uint16_t port = 0;
 
-            if (path_x->peer_addr.ss_family == AF_INET6) {
-                struct sockaddr_in6* addr = (struct sockaddr_in6*)&path_x->peer_addr;
+            if (tuple->peer_addr.ss_family == AF_INET6) {
+                struct sockaddr_in6* addr = (struct sockaddr_in6*)&tuple->peer_addr;
                 ftype = picoquic_frame_type_observed_address_v6;
                 ip_addr = (uint8_t*)&addr->sin6_addr;
                 port = ntohs(addr->sin6_port);
             }
             else {
-                struct sockaddr_in* addr = (struct sockaddr_in*)&path_x->peer_addr;
+                struct sockaddr_in* addr = (struct sockaddr_in*)&tuple->peer_addr;
                 ftype = picoquic_frame_type_observed_address_v4;
                 ip_addr = (uint8_t*)&addr->sin_addr;
                 port = ntohs(addr->sin_port);
@@ -6119,8 +6129,8 @@ uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* 
             if (bytes_next > bytes) {
                 *is_pure_ack = 0;
                 bytes = bytes_next;
-                path_x->nb_observed_repeat += 1;
-                path_x->observed_time = current_time;
+                tuple->nb_observed_repeat += 1;
+                tuple->observed_time = current_time;
             }
         }
     }
@@ -6174,18 +6184,18 @@ const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             ftype, "bad observed address frame");
     }
-    else if (sequence > path_x->observed_address_received || (path_x->observed_address_received == 0 && path_x->observed_addr.ss_family == AF_UNSPEC)) {
+    else if (sequence > path_x->observed_address_received || (path_x->observed_address_received == 0 && path_x->first_tuple->observed_addr.ss_family == AF_UNSPEC)) {
         /* We only update the observed address if this is a new value*/
         path_x->observed_address_received = sequence;
         if ((ftype & 1) == 0) {
-            struct sockaddr_in* o_addr = (struct sockaddr_in *)&path_x->observed_addr;
+            struct sockaddr_in* o_addr = (struct sockaddr_in *)&path_x->first_tuple->observed_addr;
             memset(o_addr, 0, sizeof(struct sockaddr_in));
             o_addr->sin_family = AF_INET;
             memcpy(&o_addr->sin_addr, addr, 4);
             o_addr->sin_port = htons(port);
         }
         else {
-            struct sockaddr_in6* o_addr = (struct sockaddr_in6*)&path_x->observed_addr;
+            struct sockaddr_in6* o_addr = (struct sockaddr_in6*)&path_x->first_tuple->observed_addr;
             memset(o_addr, 0, sizeof(struct sockaddr_in6));
             o_addr->sin6_family = AF_INET6;
             memcpy(&o_addr->sin6_addr, addr, 16);
@@ -6208,6 +6218,7 @@ int picoquic_process_ack_of_observed_address_frame(picoquic_cnx_t* cnx, picoquic
         ret = -1;
     }
     else {
+        /* TODO: tie this to a specific address and port */
         path_x->observed_addr_acked = 1;
         *consumed = bytes_next - bytes;
     }
@@ -6278,7 +6289,7 @@ const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* byt
             else if (lifetime > current_time) {
                 uint8_t* client_ip;
                 uint8_t client_ip_length;
-                picoquic_get_ip_addr((struct sockaddr*) & path_x->peer_addr, &client_ip, &client_ip_length);
+                picoquic_get_ip_addr((struct sockaddr*) & path_x->first_tuple->peer_addr, &client_ip, &client_ip_length);
                 /* Store received BDP, but only if the IP address of the client matches the
                  * value found in the ticket */
                 if (saved_ip_length > 0 && client_ip_length == saved_ip_length &&

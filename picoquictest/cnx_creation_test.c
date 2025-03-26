@@ -138,7 +138,7 @@ int create_cnx_test()
                 ret = -1;
             }
             else {
-                test_cid[i] = test_cnx[i]->path[0]->p_local_cnxid->cnx_id;
+                test_cid[i] = test_cnx[i]->path[0]->first_tuple->p_local_cnxid->cnx_id;
             }
         }
 

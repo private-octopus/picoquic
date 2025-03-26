@@ -912,8 +912,8 @@ int reset_repeat_test_receive_frame(int test_id, picoquic_cnx_t * cnx, const uin
     picoquic_stream_data_node_t dn;
     int ret = picoquic_decode_frames(cnx, cnx->path[0], frame, frame_size,
         &dn, picoquic_epoch_1rtt,
-        (struct sockaddr*)&cnx->path[0]->peer_addr,
-        (struct sockaddr*)&cnx->path[0]->local_addr,
+        (struct sockaddr*)&cnx->path[0]->first_tuple->peer_addr,
+        (struct sockaddr*)&cnx->path[0]->first_tuple->local_addr,
         123, 0, simulated_time);
 
     if (ret != 0 || cnx->cnx_state > picoquic_state_ready) {
@@ -1327,7 +1327,7 @@ int initial_pto_ack(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* p_simulated
         send_buffer, PICOQUIC_MAX_PACKET_SIZE, 
         test_ctx->cnx_server->crypto_context[picoquic_epoch_initial].aead_encrypt,
         test_ctx->cnx_server->crypto_context[picoquic_epoch_initial].pn_enc,
-        test_ctx->cnx_server->path[0], *p_simulated_time);
+        test_ctx->cnx_server->path[0], NULL, *p_simulated_time);
     /* Submit to client. */
     if (send_length == 0) {
         ret = -1;
