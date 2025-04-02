@@ -466,9 +466,9 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int soc
     int sock_ret = 0;
 
     if (local_af == 0) {
-        nb_af = 2;
+        nb_af = 1;
         af[0] = AF_INET;
-        af[1] = AF_INET6;
+        // af[1] = AF_INET6;
     }
     else {
         nb_af = 1;
@@ -848,7 +848,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         * received and processed successfully. We call select again with
         * a delay set to zero to check whether more packets need to be
         * received, trying to empty the receive queue before sending
-        * more packet. However, this code is a bit dangerous, 
+        * more packet. However, this code is a bit dangerous,
         * because it can lead to long series of receiving packets without
         * ever sending responses or ACKs. We moderate that by counting the number
         * of loops in "immediate" mode, and ignoring the "loop
@@ -945,7 +945,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 
                 /* If the number of packets received in immediate mode has not
                 * reached the threshold, set the "immediate" flag and bypass
-                * the sending code. 
+                * the sending code.
                  */
                 if (ret == 0 && nb_loop_immediate < PICOQUIC_PACKET_LOOP_RECV_MAX) {
                     loop_immediate = 1;
