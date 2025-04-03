@@ -645,6 +645,7 @@ void picoquic_socks_cmsg_format(
             }
 #else 
             /* The IP_PKTINFO structure is not defined on BSD */
+            /* Some versions of freeBSD do not define IP_SENDSRCADDR, use IP_RECVDSTADDR instead. */
             struct in_addr* pktinfo = (struct in_addr*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
                 &control_length, IPPROTO_IP,
 #ifdef IP_SENDSRCADDR
