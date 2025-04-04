@@ -44,7 +44,7 @@
 #endif
 #include "autoqlog.h"
 #include "picoquic_binlog.h"
-#include "picoquic_utils.h"
+#include "picoquic_bbr.h"
 
 /*
  * Test of the prefixed integer encoding

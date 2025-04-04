@@ -30,6 +30,10 @@
 #include "picoquic_binlog.h"
 #include "logreader.h"
 #include "qlog.h"
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_prague.h"
 
 static test_api_stream_desc_t test_scenario_l4s[] = {
     { 4, 0, 257, 1000000 },

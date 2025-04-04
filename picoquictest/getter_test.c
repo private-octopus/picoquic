@@ -26,6 +26,12 @@
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
 #include "picoquic.h"
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_prague.h"
 
 /* Verify that the getter/setter functions work as expected 
  */
@@ -75,7 +81,7 @@ int getter_test()
     if (ret == 0) {
         int partial_match = 0;
         int path_id = picoquic_find_path_by_address(test_ctx->cnx_client, NULL,
-            (struct sockaddr*)&test_ctx->cnx_client->path[0]->peer_addr, &partial_match);
+            (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->peer_addr, &partial_match);
         if (path_id != 0 || partial_match == 0) {
             ret = -1;
         }
@@ -87,7 +93,7 @@ int getter_test()
             /* Second call should fail because the address is already set */
             ret = -1;
         }
-        memset(&test_ctx->cnx_client->path[0]->local_addr, 0, sizeof(struct sockaddr_storage));
+        memset(&test_ctx->cnx_client->path[0]->first_tuple->local_addr, 0, sizeof(struct sockaddr_storage));
     }
 
     if (ret == 0) {
@@ -133,15 +139,15 @@ int getter_test()
     /* Test a series of getter interfaces */
 
     if (ret == 0 &&
-        picoquic_get_local_if_index(cnx) != cnx->path[0]->if_index_dest) {
+        picoquic_get_local_if_index(cnx) != cnx->path[0]->first_tuple->if_index) {
         ret = -1;
     }
 
     if (ret == 0) {
         picoquic_connection_id_t cid = picoquic_get_local_cnxid(cnx);
 
-        if (cid.id_len != cnx->path[0]->p_local_cnxid->cnx_id.id_len ||
-            memcmp(cid.id, cnx->path[0]->p_local_cnxid->cnx_id.id, cid.id_len) != 0) {
+        if (cid.id_len != cnx->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len ||
+            memcmp(cid.id, cnx->path[0]->first_tuple->p_local_cnxid->cnx_id.id, cid.id_len) != 0) {
             ret = -1;
         }
     }
@@ -149,8 +155,8 @@ int getter_test()
     if (ret == 0) {
         picoquic_connection_id_t cid = picoquic_get_remote_cnxid(cnx);
 
-        if (cid.id_len != cnx->path[0]->p_remote_cnxid->cnx_id.id_len ||
-            memcmp(cid.id, cnx->path[0]->p_remote_cnxid->cnx_id.id, cid.id_len) != 0) {
+        if (cid.id_len != cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len ||
+            memcmp(cid.id, cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id, cid.id_len) != 0) {
             ret = -1;
         }
     }
@@ -166,8 +172,8 @@ int getter_test()
 
     if (ret == 0) {
         picoquic_connection_id_t cid = picoquic_get_client_cnxid(cnx);
-        if (cid.id_len != cnx->path[0]->p_local_cnxid->cnx_id.id_len ||
-            memcmp(cid.id, cnx->path[0]->p_local_cnxid->cnx_id.id, cid.id_len) != 0) {
+        if (cid.id_len != cnx->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len ||
+            memcmp(cid.id, cnx->path[0]->first_tuple->p_local_cnxid->cnx_id.id, cid.id_len) != 0) {
             ret = -1;
         }
         else {
@@ -181,8 +187,8 @@ int getter_test()
 
     if (ret == 0) {
         picoquic_connection_id_t cid = picoquic_get_server_cnxid(cnx);
-        if (cid.id_len != cnx->path[0]->p_remote_cnxid->cnx_id.id_len ||
-            memcmp(cid.id, cnx->path[0]->p_remote_cnxid->cnx_id.id, cid.id_len) != 0) {
+        if (cid.id_len != cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len ||
+            memcmp(cid.id, cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id, cid.id_len) != 0) {
             ret = -1;
         }
         else {
@@ -229,10 +235,13 @@ int getter_test()
             ret = -1;
         }
     }
-
+    /* set the algorithm list to the complete value before the alogorithm set/get test
+    * Hopefully, nobody is going to call their algorithm "wuovipfwds".
+     */
+    picoquic_register_all_congestion_control_algorithms();
     if (ret == 0) {
         char const* alg_name[] = {
-            "reno", "cubic", "dcubic", "fast", "bbr", "prague", "bbr1", "abracadabra", NULL
+            "reno", "cubic", "dcubic", "fast", "bbr", "prague", "bbr1", "wuovipfwds", NULL
         };
         picoquic_congestion_algorithm_t const* alg[] = {
             picoquic_newreno_algorithm, picoquic_cubic_algorithm, picoquic_dcubic_algorithm,
@@ -346,7 +355,7 @@ int getter_test()
     if (ret == 0) {
         picoquic_connection_id_t cid = { { 1, 2, 3}, 3 };
         if (picoquic_is_local_cid(test_ctx->qclient, &cid) ||
-            !picoquic_is_local_cid(test_ctx->qclient, &cnx->path[0]->p_local_cnxid->cnx_id)) {
+            !picoquic_is_local_cid(test_ctx->qclient, &cnx->path[0]->first_tuple->p_local_cnxid->cnx_id)) {
             ret = -1;
         }
     }
@@ -368,7 +377,7 @@ int getter_test()
         }
     }
 
-    if (ret == 0 && picoquic_register_cnx_id(test_ctx->qclient, cnx, cnx->path[0]->p_local_cnxid) == 0) {
+    if (ret == 0 && picoquic_register_cnx_id(test_ctx->qclient, cnx, cnx->path[0]->first_tuple->p_local_cnxid) == 0) {
         /* Should be already registered ! */
         ret = -1;
     }

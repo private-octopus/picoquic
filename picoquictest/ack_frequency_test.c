@@ -29,6 +29,12 @@
 #include "logreader.h"
 #include "qlog.h"
 
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_fastcc.h"
+
 /* Verify that the ack frequency is correctly set.
  */
 

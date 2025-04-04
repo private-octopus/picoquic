@@ -26,7 +26,7 @@
 #include "picoquic_utils.h"
 
 #ifdef BBRExperiment
-#define BBRExpGate(ctx, test, action) { if (ctx->exp_flags.test) action; }
+#define BBRExpGate(ctx, test, action) { if (!ctx->exp_flags.test) action; }
 #define BBRExpTest(ctx, test) ( (ctx)->exp_flags.test )
 #else
 #define BBRExpGate(ctx, test, action) {}
@@ -141,6 +141,22 @@ typedef enum {
 
 #define BBRExcessiveEcnCE 0.2
 
+/* Temporary code, do define a set of BBR flags that
+* turn on and off individual extensions. We want to use that
+* to do "before/after" measurements.
+ */
+#define BBRExperiment on
+#ifdef BBRExperiment
+ /* Control flags for BBR improvements */
+typedef struct st_bbr_exp {
+    unsigned int do_early_exit : 1;
+    unsigned int do_rapid_start : 1;
+    unsigned int do_handle_suspension : 1;
+    unsigned int do_control_lost : 1;
+    unsigned int do_exit_probeBW_up_on_delay : 1;
+    unsigned int do_enter_probeBW_after_limited : 1;
+} bbr_exp;
+#endif
 typedef struct st_picoquic_bbr_state_t {
     /* Algorithm state: */
     picoquic_bbr_alg_state_t state;
@@ -260,13 +276,13 @@ typedef struct st_picoquic_bbr_state_t {
     unsigned int probe_bdp_seed;
     
     /* Experimental extensions, may or maynot be a good idea. */
+    char const* option_string;
     uint64_t wifi_shadow_rtt; /* Shadow RTT used for wifi connections. */
     double quantum_ratio; /* allow application to use a different default than 0.1% of bandwidth (or 1ms of traffic) */
 #ifdef BBRExperiment
     /* Control flags for BBR improvements */
     bbr_exp exp_flags;
 #endif
-
 } picoquic_bbr_state_t;
 
 /* BBR v3 assumes that there is state associated with the acknowledgements.
@@ -422,13 +438,132 @@ static void BBRInitFullPipe(picoquic_bbr_state_t* bbr_state)
     bbr_state->full_bw_count = 0;
 }
 
+/* Initialization of optional variables defined in text string
+* Syntax:
+* - Single letter options that control the "BBR Experiment"
+*   E: do_early_exit
+*   R: do_rapid_start
+*   H: do_handle_suspension
+*   L: do_control_lost
+*   D: do_exit_probeBW_up_on_delay
+*   A: do_enter_probeBW_after_limited
+* - Complex options, ends with ':'
+*   T999999999: wifi_shadow_rtt, microseconds
+*   Q99999.999: quantum_ratio, %
+* 
+* The "BBR Experiment" is an attempt to improve behavior of BBR for
+* realtime support on some networks, mostly Wi-Fi. The experiment was a
+* success, and the corresponding support is on by default, The individual
+* option flags can be used to turn off some parts of the experiment,
+* for example when doing before/after measurements.
+*/
+static void BBRSetOptions(picoquic_bbr_state_t* bbr_state)
+{
+    const char* x = bbr_state->option_string;
+#ifdef BBRExperiment
+    bbr_state->exp_flags.do_early_exit = 1;
+    bbr_state->exp_flags.do_rapid_start = 1;
+    bbr_state->exp_flags.do_handle_suspension = 1;
+    bbr_state->exp_flags.do_control_lost = 1;
+    bbr_state->exp_flags.do_exit_probeBW_up_on_delay = 1;
+    bbr_state->exp_flags.do_enter_probeBW_after_limited = 1;
+#endif
+
+    if (x != NULL) {
+        char c;
+        while ((c = *x) != 0) {
+            x++;
+            switch (c) {
+#ifdef BBRExperiment
+            case 'E':
+                bbr_state->exp_flags.do_early_exit = 0;
+                break;
+            case 'R':
+                bbr_state->exp_flags.do_rapid_start = 0;
+                break;
+            case 'H':
+                bbr_state->exp_flags.do_handle_suspension = 0;
+                break;
+            case 'L':
+                bbr_state->exp_flags.do_control_lost = 0;
+                break;
+            case 'D':
+                bbr_state->exp_flags.do_exit_probeBW_up_on_delay = 0;
+                break;
+            case 'A':
+                bbr_state->exp_flags.do_enter_probeBW_after_limited = 0;
+                break;
+#endif
+            case 'T': {
+                /* Reading digits into an uint64_t  */
+                uint64_t u = 0;
+                while ((c = *x) != 0) {
+                    if (c >= '0' && c <= '9') {
+                        u *= 10;
+                        u += c - '0';
+                        x++;
+                    }
+                    else {
+                        break;
+                    }
+                }
+                bbr_state->wifi_shadow_rtt = u;
+                break;
+            }
+            case 'Q': {
+                /* Reading digits ad one dot into a double  */
+                while ((c = *x) != 0) {
+                    double d = 0;
+                    double div = 1.0;
+                    int dotted = 0;
+                    while ((c = *x) != 0) {
+                        if (c >= '0' && c <= '9') {
+                            if (!dotted) {
+                                d *= 10;
+                                d += c - '0';
+                            }
+                            else {
+                                div /= 10.0;
+                                d += div * (c - '0');
+                            }
+                            x++;
+                        }
+                        else if (c == '.') {
+                            if (dotted) {
+                                break;
+                            }
+                            else {
+                                dotted = 1;
+                                x++;
+                            }
+                        }
+                        else {
+                            break;
+                        }
+                    }
+                    bbr_state->quantum_ratio = d;
+                    break;
+                }
+            }
+            case ':':
+                /* Ignore */
+                break;
+            default:
+                break;
+            }
+        }
+    }
+}
+
 /* Initialization of the BBR state */
-static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time, char const * option_string)
 {
     /* TODO:
     init_windowed_max_filter(filter = BBR.MaxBwFilter, value = 0, time = 0)
     */
     memset(bbr_state, 0, sizeof(picoquic_bbr_state_t));
+    bbr_state->option_string = option_string;
+
     BBRInitRandom(bbr_state, path_x, current_time);
     /* If RTT was already sampled, use it, other wise set min RTT to infinity */
     if (path_x->smoothed_rtt == PICOQUIC_INITIAL_RTT
@@ -446,15 +581,8 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
     bbr_state->min_rtt_stamp = current_time;
     bbr_state->extra_acked_interval_start = current_time;
     bbr_state->extra_acked_delivered = 0;
-    /* Support for the wifi_shadow_rtt hack */
-    bbr_state->wifi_shadow_rtt = path_x->cnx->quic->wifi_shadow_rtt;
-
-#ifdef BBRExperiment
-    /* Support for BBR Experiment */
-    bbr_state->exp_flags = path_x->cnx->quic->bbr_exp_flags;
-#endif
-    /* Support for experimenting with the send_quantum ratio */
-    bbr_state->quantum_ratio = path_x->cnx->quic->bbr_quantum_ratio;
+    /* Support for the experimental options */
+    BBRSetOptions(bbr_state);
     if (bbr_state->quantum_ratio == 0) {
         bbr_state->quantum_ratio = 0.001;
     }
@@ -469,17 +597,17 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
 
 static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
 {
-    BBROnInit(bbr_state, path_x, current_time);
+    BBROnInit(bbr_state, path_x, current_time, bbr_state->option_string);
 }
 
-static void picoquic_bbr_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t current_time)
+static void picoquic_bbr_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)malloc(sizeof(picoquic_bbr_state_t));
 
     path_x->congestion_alg_state = (void*)bbr_state;
     if (bbr_state != NULL) {
-        BBROnInit(bbr_state, path_x, current_time);
+        BBROnInit(bbr_state, path_x, current_time, option_string);
     }
 }
 

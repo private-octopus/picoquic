@@ -37,6 +37,7 @@
 #include "picoquic_logger.h"
 #include "performance_log.h"
 #include "picoquictest.h"
+#include "picoquic_newreno.h"
 
 
 /* Delay tolerant networking tests.

@@ -37,6 +37,10 @@
 #include "picoquic_logger.h"
 #include "performance_log.h"
 #include "picoquictest.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_prague.h"
 
 
 /* This is similar to the long rtt test, but operating at a higher speed.

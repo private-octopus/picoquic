@@ -27,6 +27,7 @@
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
 #include "autoqlog.h"
+#include "picoquic_bbr.h"
 
 /* Warp tests:
 * These tests are very similar to the "media tests", with one twist.

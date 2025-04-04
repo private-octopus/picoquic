@@ -533,7 +533,7 @@ void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x
     uint8_t ip_addr_length;
     uint32_t version = picoquic_supported_versions[cnx->version_index].version;
 
-    picoquic_get_ip_addr((struct sockaddr *)&path_x->peer_addr, &ip_addr, &ip_addr_length);
+    picoquic_get_ip_addr((struct sockaddr *)&path_x->first_tuple->peer_addr, &ip_addr, &ip_addr_length);
 
     if (ip_addr != NULL && ip_addr_length <= PICOQUIC_STORED_IP_MAX) {
         picoquic_stored_ticket_t* next = picoquic_get_stored_ticket(
@@ -581,7 +581,7 @@ void picoquic_seed_ticket(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
         if (path_x->bandwidth_estimate_max > 0) {
             target_cwin = (path_x->bandwidth_estimate_max * path_x->rtt_min) / 1000000ull;
         }
-        picoquic_get_ip_addr((struct sockaddr*) & path_x->peer_addr, &ip_addr, &ip_addr_length);
+        picoquic_get_ip_addr((struct sockaddr*) & path_x->first_tuple->peer_addr, &ip_addr, &ip_addr_length);
         (void) picoquic_remember_issued_ticket(cnx->quic, cnx->issued_ticket_id,
             path_x->rtt_min, target_cwin, ip_addr, ip_addr_length);
     }

@@ -30,6 +30,13 @@
 #include "picoquic_logger.h"
 #include "qlog.h"
 
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_prague.h"
+
 static test_api_stream_desc_t test_scenario_congestion[] = {
     { 4, 0, 257, 1000000 },
     { 8, 4, 257, 1000000 },

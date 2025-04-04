@@ -29,6 +29,11 @@
 #include "picoquic_binlog.h"
 #include "logreader.h"
 #include "qlog.h"
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_fastcc.h"
 
 /* Add a series of tests to study the behavior of rate limited
 * clients, such as those sending at a sustained rate lower

@@ -842,7 +842,7 @@ void binlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
     picoquic_parse_packet_header((cnx == NULL) ? NULL : cnx->quic, send_buffer, send_length,
         ((cnx == NULL || cnx->path[0] == NULL) ? (struct sockaddr *)&default_addr :
-        (struct sockaddr *)&cnx->path[0]->local_addr), &ph, &pcnx, 0);
+        (struct sockaddr *)&cnx->path[0]->first_tuple->local_addr), &ph, &pcnx, 0);
 
     if (cnx != NULL) {
         picoquic_epoch_enum epoch = (ph.ptype == picoquic_packet_1rtt_protected) ? picoquic_epoch_1rtt :
@@ -1059,7 +1059,7 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
 
         bytewrite_int8(msg, cnx->client_mode != 0);
         bytewrite_int32(msg, cnx->proposed_version);
-        bytewrite_cid(msg, &cnx->path[0]->p_remote_cnxid->cnx_id);
+        bytewrite_cid(msg, &cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id);
 
         /* Algorithms used */
         bytewrite_cstr(msg, cnx->congestion_alg->congestion_algorithm_id);
