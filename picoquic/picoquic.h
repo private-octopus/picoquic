@@ -303,6 +303,17 @@ typedef struct st_picoquic_tp_version_negotiation_t {
     uint32_t* supported;
 } picoquic_tp_version_negotiation_t;
 
+typedef struct st_picoquic_tp_multicast_client_params_t {
+    int ipv6_channels_allowed;
+    int ipv4_channels_allowed;
+    uint64_t max_aggregate_rate;
+    uint64_t max_channel_ids;
+    uint64_t hash_algorithms_supported;
+    uint64_t encryption_algorithms_supported;
+    uint64_t hash_algorithms_list[16];
+    uint64_t encryption_algorithms_list[16];
+} picoquic_tp_multicast_client_params_t;
+
 typedef struct st_picoquic_tp_t {
     uint64_t initial_max_stream_data_bidi_local;
     uint64_t initial_max_stream_data_bidi_remote;
@@ -325,6 +336,8 @@ typedef struct st_picoquic_tp_t {
     picoquic_tp_version_negotiation_t version_negotiation;
     int enable_bdp_frame;
     int is_multipath_enabled;
+    int is_multicast_enabled;
+    picoquic_tp_multicast_client_params_t multicast_client_params;
     uint64_t initial_max_path_id;
     int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
 } picoquic_tp_t;

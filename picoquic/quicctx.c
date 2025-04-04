@@ -850,6 +850,25 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
     }
 }
 
+void picoquic_set_default_multicast_option(picoquic_quic_t* quic, int multicast_option)
+{
+    quic->default_multicast_option = multicast_option;
+
+    if (multicast_option & 1) {
+        quic->default_tp.is_multipath_enabled = 1; // TODO MC check if needed
+        quic->default_tp.is_multicast_enabled = 1;
+        quic->default_tp.initial_max_path_id = 2;
+    }
+}
+
+void picoquic_set_default_multicast_client_params(picoquic_quic_t* quic, 
+    picoquic_tp_multicast_client_params_t* params)
+{
+    if (quic->default_multicast_option & 1) {
+        memcpy(&quic->default_tp.multicast_client_params, params, sizeof(picoquic_tp_multicast_client_params_t));
+    }
+}
+
 void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode)
 {
     if (mode > 0 && mode <= 3) {

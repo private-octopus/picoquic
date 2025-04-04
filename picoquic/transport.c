@@ -280,6 +280,39 @@ const uint8_t * picoquic_process_tp_version_negotiation(const uint8_t* bytes, co
     return bytes;
 }
 
+// TODO MC: Implement correctly
+uint8_t * picoquic_encode_transport_param_multicast_client_params(uint8_t * bytes, uint8_t * bytes_max,
+    picoquic_tp_prefered_address_t * prefered_address)
+{
+    /* first compute the length */
+    uint64_t coded_length = ((uint64_t)(4 + 2 + 16 + 2 + 1)) + prefered_address->connection_id.id_len + ((uint64_t)16);
+
+    if (bytes != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_server_preferred_address)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, coded_length)) != NULL){
+        if (bytes + coded_length > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            memcpy(bytes, prefered_address->ipv4Address, 4);
+            bytes += 4;
+            picoformat_16(bytes, prefered_address->ipv4Port);
+            bytes += 2;
+            memcpy(bytes, prefered_address->ipv6Address, 16);
+            bytes += 16;
+            picoformat_16(bytes, prefered_address->ipv4Port);
+            bytes += 2;
+            *bytes++ = prefered_address->connection_id.id_len;
+            bytes += picoquic_format_connection_id(bytes, bytes_max - bytes,
+                prefered_address->connection_id);
+            memcpy(bytes, prefered_address->statelessResetToken, 16);
+            bytes += 16;
+        }
+    }
+
+    return bytes;
+}
+
 int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
 {
     int ret = 0;
@@ -459,6 +492,13 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             picoquic_tp_initial_max_path_id,
             (uint64_t)cnx->local_parameters.initial_max_path_id);
     }
+
+    /* Set multicast_server_support transport parameter */
+    if (cnx->local_parameters.is_multicast_enabled > 0 && bytes != NULL && extension_mode == 1){
+        bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_multicast_server_support);
+    }
+
+    // TODO MC: Add multicast_client_params parameter here
 
     if (cnx->local_parameters.address_discovery_mode > 0 && bytes != NULL) {
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max,

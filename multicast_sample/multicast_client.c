@@ -738,9 +738,10 @@ static int multicast_client_init(char const *server_name, int server_port, char 
             picoquic_set_log_level(*quic, 1);
             picoquic_enable_path_callbacks_default(*quic, 1);
 
-            // Always enable multipath
-            picoquic_set_default_multipath_option(*quic, 1);
-            printf("init: Accept multipath: %s.\n", ((*quic)->default_multipath_option) ? "Yes" : "No");
+            // Always enable multicast
+            picoquic_set_default_multicast_option(*quic, 1);
+            picoquic_set_default_multicast_client_params(*quic, NULL); // TODO MC: Add real value instead of NULL
+            printf("init: Accept multicast: %s.\n", ((*quic)->default_multicast_option) ? "Yes" : "No");
         }
     }
     /* Initialize the callback context and create the connection context.
@@ -843,7 +844,7 @@ int picoquic_multicast_client(char const *server_name, int server_port, char con
 
     if (ret == 0)
     {
-        fprintf(stdout, "client: Enable multipath: %s.\n", (client_ctx.cnx->is_multipath_enabled) ? "Success" : "Refused");
+        fprintf(stdout, "client: Enable multicast: %s.\n", (client_ctx.cnx->is_multicast_enabled) ? "Success" : "Refused");
     }
 
     /* Done. At this stage, we could print out statistics, etc. */
