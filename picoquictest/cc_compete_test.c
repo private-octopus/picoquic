@@ -24,6 +24,12 @@
 #include <string.h>
 #include <stdint.h>
 #include "picoquic_ns.h"
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_prague.h"
 
 /* Congestion compete test.
 * These tests measure what happens when multiple connections fight for the same
@@ -219,16 +225,19 @@ int cc_ns_low_and_up_test()
     return picoquic_ns(&spec);
 }
 
-/* Check that the picoquic_ns simulations can correctly test the low_and_up scenario.
+/* Check that the picoquic_ns simulations can correctly test the wifi fade scenario.
+* also check the cc options are handled as expected.
  */
 int cc_ns_wifi_fade_test()
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xff, 0xbb, 0, 0, 0, 0, 0}, 8 };
     spec.main_cc_algo = picoquic_bbr_algorithm;
+    spec.main_cc_options = "T50000";
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_batch_scenario_4M;
     spec.background_cc_algo = picoquic_bbr_algorithm;
+    spec.background_cc_options = "T50000";
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 1;

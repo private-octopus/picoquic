@@ -101,7 +101,8 @@
 typedef struct st_picoquic_ns_client_t {
     uint64_t start_time;
     picoquic_cnx_t* cnx;
-    picoquic_congestion_algorithm_t* cc_algo;
+    picoquic_congestion_algorithm_t const* cc_algo;
+    char const* cc_option_string;
     quicperf_ctx_t* quicperf_ctx;
     picoquic_connection_id_t icid;
 } picoquic_ns_client_t;
@@ -140,10 +141,10 @@ int picoquic_ns_server_callback(picoquic_cnx_t* cnx,
         cc_ctx = (picoquic_ns_ctx_t*)callback_ctx;
         ret = -1; /* will reset to zero if find a matching client */
         for (int i = 0; i < cc_ctx->nb_connections; i++) {
-            if (cc_ctx->client_ctx[i]->cnx != NULL &&
-                picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id,
-                    &cc_ctx->client_ctx[i]->cnx->path[0]->p_local_cnxid->cnx_id) == 0) {
-                picoquic_set_congestion_algorithm(cnx, cc_ctx->client_ctx[i]->cc_algo);
+            if (cc_ctx->client_ctx[i] != NULL && cc_ctx->client_ctx[i]->cnx != NULL &&
+                picoquic_compare_connection_id(&cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id,
+                    &cc_ctx->client_ctx[i]->cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id) == 0) {
+                picoquic_set_congestion_algorithm_ex(cnx, cc_ctx->client_ctx[i]->cc_algo, cc_ctx->client_ctx[i]->cc_option_string);
                 ret = 0;
             }
         }
@@ -194,11 +195,13 @@ int picoquic_ns_create_client_ctx(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t*
         if (client_id == 0) {
             client_ctx->start_time = spec->main_start_time;
             client_ctx->cc_algo = spec->main_cc_algo;
+            client_ctx->cc_option_string = spec->main_cc_options;
             scenario_text = spec->main_scenario_text;
         }
         else {
             client_ctx->start_time = spec->background_start_time;
             client_ctx->cc_algo = spec->background_cc_algo;
+            client_ctx->cc_option_string = spec->background_cc_options;
             scenario_text = spec->background_scenario_text;
         }
         if ((client_ctx->quicperf_ctx = quicperf_create_ctx(scenario_text)) == NULL) {
@@ -584,7 +587,7 @@ int picoquic_ns_start_connection(picoquic_ns_ctx_t* cc_ctx, int cnx_id)
         ret = -1;
     }
     else {
-        picoquic_set_congestion_algorithm(cc_ctx->client_ctx[cnx_id]->cnx, cc_ctx->client_ctx[cnx_id]->cc_algo);
+        picoquic_set_congestion_algorithm_ex(cc_ctx->client_ctx[cnx_id]->cnx, cc_ctx->client_ctx[cnx_id]->cc_algo, cc_ctx->client_ctx[cnx_id]->cc_option_string);
         picoquic_set_callback(cc_ctx->client_ctx[cnx_id]->cnx, quicperf_callback,
             cc_ctx->client_ctx[cnx_id]->quicperf_ctx);
         cc_ctx->client_ctx[cnx_id]->cnx->local_parameters.max_datagram_frame_size = 1532;
