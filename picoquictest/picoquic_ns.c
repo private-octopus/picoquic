@@ -141,9 +141,9 @@ int picoquic_ns_server_callback(picoquic_cnx_t* cnx,
         cc_ctx = (picoquic_ns_ctx_t*)callback_ctx;
         ret = -1; /* will reset to zero if find a matching client */
         for (int i = 0; i < cc_ctx->nb_connections; i++) {
-            if (cc_ctx->client_ctx[i]->cnx != NULL &&
-                picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id,
-                    &cc_ctx->client_ctx[i]->cnx->path[0]->p_local_cnxid->cnx_id) == 0) {
+            if (cc_ctx->client_ctx[i] != NULL && cc_ctx->client_ctx[i]->cnx != NULL &&
+                picoquic_compare_connection_id(&cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id,
+                    &cc_ctx->client_ctx[i]->cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id) == 0) {
                 picoquic_set_congestion_algorithm_ex(cnx, cc_ctx->client_ctx[i]->cc_algo, cc_ctx->client_ctx[i]->cc_option_string);
                 ret = 0;
             }

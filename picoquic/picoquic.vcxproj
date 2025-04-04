@@ -158,6 +158,7 @@
     <ClCompile Include="loss_recovery.c" />
     <ClCompile Include="newreno.c" />
     <ClCompile Include="pacing.c" />
+    <ClCompile Include="paths.c" />
     <ClCompile Include="performance_log.c" />
     <ClCompile Include="picoquic_lb.c" />
     <ClCompile Include="picoquic_mbedtls.c" />
