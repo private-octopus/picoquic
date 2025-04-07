@@ -282,9 +282,51 @@ const uint8_t * picoquic_process_tp_version_negotiation(const uint8_t* bytes, co
 
 // TODO MC: Implement correctly
 uint8_t * picoquic_encode_transport_param_multicast_client_params(uint8_t * bytes, uint8_t * bytes_max,
-    picoquic_tp_prefered_address_t * prefered_address)
+    picoquic_tp_multicast_client_params_t * client_params)
 {
-    /* first compute the length */
+    /* 
+     * absolute maximum length is 289 bytes, so we may need up to 2 bytes for the length field,
+     * but due to a lot of variable-length integers we don't know yet the real length.
+     */
+    
+    uint8_t min_length = ((uint8_t) 1 + 1 + 1 + 1 + 1 + 16 + 16);
+
+     if (bytes == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_multicast_client_params)) == NULL){
+        return bytes;
+    }
+
+    /* Reserve two bytes for now and move everything back by one byte if the second byte is not needed. */
+    if (bytes + 2 > bytes_max) {
+        bytes = NULL;
+        return bytes;
+    }
+
+    uint8_t* byte_l = bytes += 2;
+
+    if (bytes + min_length > bytes_max) {
+        bytes = NULL;
+        return bytes;
+    }
+
+    uint8_t first_byte = 0;
+    first_byte = first_byte | (uint8_t) client_params->ipv4_channels_allowed << (uint8_t) 0;
+    first_byte = first_byte | (uint8_t) client_params->ipv6_channels_allowed << (uint8_t) 1;
+
+    if (bytes == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, client_params->max_aggregate_rate)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, client_params->max_channel_ids)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, client_params->hash_algorithms_supported)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, client_params->encryption_algorithms_supported)) == NULL){
+        bytes = NULL;
+        return bytes;
+    }
+    
+    // TODO MC: Include hash algorithms list & encryption algorithms list
+    // TODO MC: calculate length of full client_params, put into the length field and maybe move everything back by one byte
+
+    /* TODO MC: Remove example code below:
+
     uint64_t coded_length = ((uint64_t)(4 + 2 + 16 + 2 + 1)) + prefered_address->connection_id.id_len + ((uint64_t)16);
 
     if (bytes != NULL &&
@@ -308,7 +350,7 @@ uint8_t * picoquic_encode_transport_param_multicast_client_params(uint8_t * byte
             memcpy(bytes, prefered_address->statelessResetToken, 16);
             bytes += 16;
         }
-    }
+    }*/
 
     return bytes;
 }
@@ -335,6 +377,8 @@ int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
 
     return ret;
 }
+
+// TODO MC: Negotiate multicast options
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_length, size_t* consumed)
