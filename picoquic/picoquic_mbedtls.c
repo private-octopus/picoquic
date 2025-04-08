@@ -23,6 +23,12 @@
 * required variables and function pointers so they can be used by picoquic.
 */
 
+
+#ifdef _WINDOWS
+#include "wincompat.h"
+#include "ws2ipdef.h"
+#pragma warning(disable:4100)
+#endif
 #include "picotls.h"
 #ifndef PICOQUIC_WITH_MBEDTLS
 void picoquic_mbedtls_load(int unload)

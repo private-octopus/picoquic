@@ -23,7 +23,12 @@
  * required variables and function pointers so they can be used by picoquic.
  */
 
-#include "picotls.h"
+#ifdef _WINDOWS
+#include "wincompat.h"
+#include "ws2ipdef.h"
+#pragma warning(disable:4100)
+#endif
+#include <picotls.h>
 #include "picoquic_crypto_provider_api.h"
 
 #ifdef _WINDOWS_TRY_AGAIN

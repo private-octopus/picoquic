@@ -22,17 +22,17 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WINDOWS
+#include "wincompat.h"
+#include "ws2ipdef.h"
+#else
+#include <signal.h>
+#endif
 #include <picotls.h>
 #include "picoquic_utils.h"
 #include "picoquic_internal.h"
 #include "tls_api.h"
 #include "picoquictest_internal.h"
-#ifdef _WINDOWS
-#include "wincompat.h"
-#else
-#include <signal.h>
-#endif
-
 #define CNX_STRESS_ALPN "cnxstress"
 
 typedef struct st_cnx_stress_stream_ctx_t {
