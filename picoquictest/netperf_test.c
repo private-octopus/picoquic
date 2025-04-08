@@ -23,6 +23,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#ifdef _WINDOWS
+#include "wincompat.h"
+#include "ws2ipdef.h"
+#pragma warning(disable:4100)
+#else
+#include <signal.h>
+#endif
 #include <picotls.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
@@ -30,11 +37,6 @@
 #include "tls_api.h"
 #include "picoquictest_internal.h"
 #include "picoquic_bbr.h"
-#ifdef _WINDOWS
-#include "wincompat.h"
-#else
-#include <signal.h>
-#endif
 
 /* Test the coalesced Send API.
  * The simulation here involves:
