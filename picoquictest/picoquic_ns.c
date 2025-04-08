@@ -143,7 +143,7 @@ int picoquic_ns_server_callback(picoquic_cnx_t* cnx,
         for (int i = 0; i < cc_ctx->nb_connections; i++) {
             if (cc_ctx->client_ctx[i] != NULL && cc_ctx->client_ctx[i]->cnx != NULL &&
                 picoquic_compare_connection_id(&cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id,
-                    &cc_ctx->client_ctx[i]->cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id) == 0) {
+                    &cc_ctx->client_ctx[i]->cnx->path[0]->first_tuple->p_local_cnxid->cnx_id) == 0) {
                 picoquic_set_congestion_algorithm_ex(cnx, cc_ctx->client_ctx[i]->cc_algo, cc_ctx->client_ctx[i]->cc_option_string);
                 ret = 0;
             }
@@ -838,6 +838,14 @@ int picoquic_ns(picoquic_ns_spec_t* spec)
         if (picoquic_ns_is_finished(cc_ctx) != 0) {
             break;
         }
+    }
+
+    if (ret == 0 &&
+        (cc_ctx->client_ctx[0]->cnx == NULL ||
+        (cc_ctx->client_ctx[0]->cnx->cnx_state == picoquic_state_disconnected &&
+            (cc_ctx->client_ctx[0]->cnx->local_error != 0 ||
+                cc_ctx->client_ctx[0]->cnx->remote_error != 0)))) {
+        ret = -1;
     }
 
     /* TODO: check the completion. Should it be done there or inside each test? */
