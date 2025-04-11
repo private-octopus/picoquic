@@ -2112,10 +2112,16 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
                 else {
                     /* buffer is too short -- do not send the FIN bit, do not set the length, just copy bytes */
                     size_t available = bytes_max - before_length;
-                    bytes_next = before_length;
-                    memcpy(bytes_next, frame_bytes, available);
-                    bytes_next += available;
-                    bytes_not_sent = data_available - available;
+                    if (available < PICOQUIC_MIN_STREAM_DATA_FRAGMENT) {
+                        bytes_not_sent = data_available;
+                        bytes_next = bytes_first;
+                    }
+                    else {
+                        bytes_next = before_length;
+                        memcpy(bytes_next, frame_bytes, available);
+                        bytes_next += available;
+                        bytes_not_sent = data_available - available;
+                    }
                 }
             }
         }
