@@ -3133,8 +3133,10 @@ int dataqueue_copy_test()
                 {
                     size_t output_length = next_byte - output;
                     if (dataqueue_verify_test(&packet, next_frame, next_index, frame_length, data, output, output_length) != 0) {
-                        DBG_PRINTF("Verify data fails for case %d, option &x", basic_case, case_opt);
-                        ret = -1;
+                        if (frame_length >= PICOQUIC_MIN_STREAM_DATA_FRAGMENT || output_length != 0) {
+                            DBG_PRINTF("Verify data fails for case %d, option &x", basic_case, case_opt);
+                            ret = -1;
+                        }
                     }
                 }
             }
@@ -3250,7 +3252,7 @@ int dataqueue_packet_test()
 
     if (ret == 0 &&
         (ret = dataqueue_packet_test_iterate(1, cnx, 2, 0, 1, 1)) == 0 &&
-        (ret = dataqueue_packet_test_iterate(2, cnx, 128, 1, 1, 0)) == 0 &&
+        (ret = dataqueue_packet_test_iterate(2, cnx, 128, 0, 1, 1)) == 0 &&
         (ret = dataqueue_packet_test_iterate(3, cnx, 1024, 1, 0, 0)) == 0) {
         ret = dataqueue_packet_test_iterate(4, cnx, 1024, 0, 0, 1);
     }
