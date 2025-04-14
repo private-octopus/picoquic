@@ -280,13 +280,13 @@ const uint8_t * picoquic_process_tp_version_negotiation(const uint8_t* bytes, co
     return bytes;
 }
 
-// TODO MC: Implement correctly
 uint8_t * picoquic_encode_transport_param_multicast_client_params(uint8_t * bytes, uint8_t * bytes_max,
     picoquic_tp_multicast_client_params_t * client_params)
 {
     /* 
-     * absolute maximum length is 289 bytes, so we may need up to 2 bytes for the length field,
-     * but due to a lot of variable-length integers we don't know yet the real length.
+     * absolute maximum length is 68 bytes (although practically it will most likely
+     * never be more than 57 bytes), so we may need up to 2 bytes for the length field, but 
+     * due to a lot of variable-length integers we don't know yet the real length.
      */
     
     uint8_t min_length = ((uint8_t) 1 + 1 + 1 + 1 + 1 + 16 + 16);
@@ -296,13 +296,14 @@ uint8_t * picoquic_encode_transport_param_multicast_client_params(uint8_t * byte
         return bytes;
     }
 
-    /* Reserve two bytes for now and move everything back by one byte if the second byte is not needed. */
+    // Reserve two bytes for length for now and move everything back by one byte if the second byte is not needed.
     if (bytes + 2 > bytes_max) {
         bytes = NULL;
         return bytes;
     }
 
-    uint8_t* byte_l = bytes += 2;
+    uint8_t* byte_l = bytes;
+    bytes += 2;
 
     if (bytes + min_length > bytes_max) {
         bytes = NULL;
@@ -312,6 +313,8 @@ uint8_t * picoquic_encode_transport_param_multicast_client_params(uint8_t * byte
     uint8_t first_byte = 0;
     first_byte = first_byte | (uint8_t) client_params->ipv4_channels_allowed << (uint8_t) 0;
     first_byte = first_byte | (uint8_t) client_params->ipv6_channels_allowed << (uint8_t) 1;
+    memcpy(bytes, &first_byte, 1);
+    bytes++;
 
     if (bytes == NULL ||
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, client_params->max_aggregate_rate)) == NULL ||
@@ -322,38 +325,31 @@ uint8_t * picoquic_encode_transport_param_multicast_client_params(uint8_t * byte
         return bytes;
     }
     
-    // TODO MC: Include hash algorithms list & encryption algorithms list
-    // TODO MC: calculate length of full client_params, put into the length field and maybe move everything back by one byte
+    // Hash algo list consists of client_params->hash_algorithms_supported * 16-bit integers
+    for (uint8_t i = 0; i < client_params->hash_algorithms_supported; i++) {
+        picoformat_16(bytes, client_params->hash_algorithms_list[i]);
+        bytes += 2;
+    }
 
-    /* TODO MC: Remove example code below:
+    // Encryption algo list consists of client_params->encryption_algorithms_supported * 16-bit integers
+    for (uint8_t i = 0; i < client_params->encryption_algorithms_supported; i++) {
+        picoformat_16(bytes, client_params->encryption_algorithms_list[i]);
+        bytes += 2;
+    }
 
-    uint64_t coded_length = ((uint64_t)(4 + 2 + 16 + 2 + 1)) + prefered_address->connection_id.id_len + ((uint64_t)16);
+    // calculate length of full client_params, put into the length field and maybe move everything back by one byte
+    uint16_t length = bytes - byte_l - 2;
+    picoquic_frames_varint_encode(byte_l, bytes_max, length);
 
-    if (bytes != NULL &&
-        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_server_preferred_address)) != NULL &&
-        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, coded_length)) != NULL){
-        if (bytes + coded_length > bytes_max) {
-            bytes = NULL;
-        }
-        else {
-            memcpy(bytes, prefered_address->ipv4Address, 4);
-            bytes += 4;
-            picoformat_16(bytes, prefered_address->ipv4Port);
-            bytes += 2;
-            memcpy(bytes, prefered_address->ipv6Address, 16);
-            bytes += 16;
-            picoformat_16(bytes, prefered_address->ipv4Port);
-            bytes += 2;
-            *bytes++ = prefered_address->connection_id.id_len;
-            bytes += picoquic_format_connection_id(bytes, bytes_max - bytes,
-                prefered_address->connection_id);
-            memcpy(bytes, prefered_address->statelessResetToken, 16);
-            bytes += 16;
-        }
-    }*/
+    if (length < 64) {
+        memmove(byte_l + 1, byte_l + 2, length);
+        *(--bytes) = (uint8_t) 0;
+    }
 
     return bytes;
 }
+
+// TODO MC: Implement multipath_client_params decoding / processing
 
 int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
 {
@@ -537,12 +533,14 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             (uint64_t)cnx->local_parameters.initial_max_path_id);
     }
 
-    /* Set multicast_server_support transport parameter */
-    if (cnx->local_parameters.is_multicast_enabled > 0 && bytes != NULL && extension_mode == 1){
-        bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_multicast_server_support);
+    /* Set multicast transport parameters */
+    if (cnx->local_parameters.is_multicast_enabled > 0 && bytes != NULL){
+        if (extension_mode == 1) {
+            bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_multicast_server_support);
+        } else {
+            bytes = picoquic_encode_transport_param_multicast_client_params(bytes, bytes_max, &cnx->local_parameters.multicast_client_params);
+        }
     }
-
-    // TODO MC: Add multicast_client_params parameter here
 
     if (cnx->local_parameters.address_discovery_mode > 0 && bytes != NULL) {
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max,

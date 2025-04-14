@@ -310,8 +310,8 @@ typedef struct st_picoquic_tp_multicast_client_params_t {
     uint64_t max_channel_ids;
     uint64_t hash_algorithms_supported;
     uint64_t encryption_algorithms_supported;
-    uint64_t hash_algorithms_list[16];
-    uint64_t encryption_algorithms_list[16];
+    uint16_t hash_algorithms_list[16];
+    uint16_t encryption_algorithms_list[16];
 } picoquic_tp_multicast_client_params_t;
 
 typedef struct st_picoquic_tp_t {
@@ -672,6 +672,12 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 
 /* Set the multipath option for the context */
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option);
+
+/* Set the multicast option for the context */
+void picoquic_set_default_multicast_option(picoquic_quic_t* quic, int multicast_option);
+
+/* Set the multicast client params for the context */
+void picoquic_set_default_multicast_client_params(picoquic_quic_t* quic, picoquic_tp_multicast_client_params_t* params);
 
 /* Set the Address Discovery mode for the context */
 void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode);

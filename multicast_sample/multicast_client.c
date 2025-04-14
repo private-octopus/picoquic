@@ -740,7 +740,26 @@ static int multicast_client_init(char const *server_name, int server_port, char 
 
             // Always enable multicast
             picoquic_set_default_multicast_option(*quic, 1);
-            picoquic_set_default_multicast_client_params(*quic, NULL); // TODO MC: Add real value instead of NULL
+
+            picoquic_tp_multicast_client_params_t * client_params = NULL;
+            if ((client_params = malloc(sizeof(*client_params))) == NULL) {
+                fprintf(stderr, "init: Could not alloc multicast_client_params");
+                return -1;
+            }
+
+            client_params->ipv4_channels_allowed = 1;
+            client_params->ipv6_channels_allowed = 0;
+            client_params->max_aggregate_rate = (uint8_t) 20;
+            client_params->max_channel_ids = (uint8_t) 2;
+
+            client_params->hash_algorithms_supported = (uint8_t) 2;
+            client_params->hash_algorithms_list[0] = (uint16_t) 1; // sha-256
+            client_params->hash_algorithms_list[1] = (uint16_t) 8; // sha-512
+
+            client_params->encryption_algorithms_supported = 1;
+            client_params->encryption_algorithms_list[0] = (uint16_t) 1; // rsa-sign
+
+            picoquic_set_default_multicast_client_params(*quic, client_params);
             printf("init: Accept multicast: %s.\n", ((*quic)->default_multicast_option) ? "Yes" : "No");
         }
     }
