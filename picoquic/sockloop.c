@@ -375,7 +375,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
         picoquic_get_local_address(s_ctx->fd, &local_address) != 0 ||
         picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
     {
-        DBG_PRINTF("5.Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
+        DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
         ret = -1;
     }
     else {
