@@ -855,7 +855,7 @@ int picoquic_ns_media_check(quicperf_ctx_t* quicperf_ctx, picoquic_ns_spec_t* sp
 {
     int ret = 0;
 
-    for (int i = 0; i < quicperf_ctx->nb_scenarios; i++) {
+    for (size_t i = 0; i < quicperf_ctx->nb_scenarios; i++) {
         if (quicperf_ctx->scenarios[i].media_type != quicperf_media_batch &&
             !picoquic_ns_media_excluded(spec->media_excluded, quicperf_ctx->scenarios[i].id)) {
             quicperf_stream_report_t* report = &quicperf_ctx->reports[i];
