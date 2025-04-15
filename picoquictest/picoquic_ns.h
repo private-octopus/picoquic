@@ -83,6 +83,11 @@ typedef struct st_picoquic_ns_spec_t {
     picoquic_ns_link_scenario_enum link_scenario; /* specify link transition scenario if needed */
     size_t vary_link_nb; /* Number of "vary_link" items */
     picoquic_ns_link_spec_t* vary_link_spec; /* one item for each of the successive states of the link. */
+    char const* qperf_log;
+    uint64_t media_stats_start;
+    char const* media_excluded;
+    uint64_t media_latency_average;
+    uint64_t media_latency_max;
 } picoquic_ns_spec_t;
 
 int picoquic_ns(picoquic_ns_spec_t* spec);

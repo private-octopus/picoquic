@@ -863,7 +863,7 @@ void quicperf_receive_datagram(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, const u
                 fprintf(ctx->report_file, "#%" PRIu64 ", ", stream_ctx->stream_desc_index);
             }
             fprintf(ctx->report_file, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",\n",
-                stream_ctx->rep_number, stream_ctx->group_id, frame_id, timestamp, current_time);
+                stream_ctx->rep_number, stream_ctx->group_id, frame_id, expected_time, current_time);
         }
     }
 }
@@ -1052,19 +1052,22 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
                 if (stream_ctx->nb_frames_received > 0 && stream_ctx->frequency > 0) {
                     expected_time += (stream_ctx->nb_frames_received * 1000000) / stream_ctx->frequency;
                 }
-                report->nb_frames_received += 1;
-                if (current_time <= expected_time) {
-                    rtt = 0;
-                }
-                else {
-                    rtt = current_time - expected_time;
-                }
-                report->sum_delays += rtt;
-                if (report->min_delays == 0 || rtt < report->min_delays) {
-                    report->min_delays = rtt;
-                }
-                if (rtt > report->max_delays) {
-                    report->max_delays = rtt;
+
+                if (expected_time >= ctx->stats_start) {
+                    report->nb_frames_received += 1;
+                    if (current_time <= expected_time) {
+                        rtt = 0;
+                    }
+                    else {
+                        rtt = current_time - expected_time;
+                    }
+                    report->sum_delays += rtt;
+                    if (report->min_delays == 0 || rtt < report->min_delays) {
+                        report->min_delays = rtt;
+                    }
+                    if (rtt > report->max_delays) {
+                        report->max_delays = rtt;
+                    }
                 }
 
                 if (ctx->report_file != NULL) {
@@ -1076,7 +1079,7 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
                     }
                     fprintf(ctx->report_file, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",\n",
                         stream_ctx->rep_number, stream_ctx->group_id, stream_ctx->nb_frames_received,
-                        stream_ctx->frame_start_stamp, current_time);
+                        expected_time, current_time);
                 }
             }
 

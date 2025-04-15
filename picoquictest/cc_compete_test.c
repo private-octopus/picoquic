@@ -153,6 +153,41 @@ int cc_ns_asym_test()
      return picoquic_ns(&spec);
  }
 
+
+/* Check that the picoquic_ns simulations can correctly test asymmetric paths.
+ */
+
+char const* cc_compete_media_scenario = "=a1:d50:p2:S:n250:80; \
+     = vlow: s30 :p4:S:n150 : 3750 : G30 : I37500; \
+     = vmid: s30 :p6:S:n150 : 6250 : G30 : I62500 : D250000;";
+
+int cc_ns_media_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xed, 0x1a, 0, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_media_scenario;
+    spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 1;
+    spec.data_rate_in_gbps = 0.1;
+    spec.data_rate_up_in_gbps = 0.1;
+    spec.latency = 15000;
+    spec.main_target_time = 40000000;
+    spec.queue_delay_max = 100000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+    spec.qperf_log = "./ns_qperflog.csv";
+    spec.media_stats_start = 200000;
+    spec.media_latency_average = 30500;
+    spec.media_latency_max = 44000;
+    spec.media_excluded = "vhigh, vmid, vlast";
+
+    return picoquic_ns(&spec);
+}
+
 /* Check that the picoquic_ns simulations can correctly test the black hole scenario.
  */
 int cc_ns_blackhole_test()

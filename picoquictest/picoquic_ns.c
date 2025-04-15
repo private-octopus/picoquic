@@ -207,6 +207,18 @@ int picoquic_ns_create_client_ctx(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t*
         if ((client_ctx->quicperf_ctx = quicperf_create_ctx(scenario_text)) == NULL) {
             ret = -1;
         }
+        else{
+            /* Set log and trigger for media statistsics and file. */
+            client_ctx->quicperf_ctx->stats_start = spec->media_stats_start;
+            if (spec->qperf_log != NULL) {
+                /* scenario requires a performance log */
+                client_ctx->quicperf_ctx->report_file = picoquic_file_open(spec->qperf_log, "w");
+                if (client_ctx->quicperf_ctx->report_file == NULL) {
+                    fprintf(stdout, "Error opening file %s\n", spec->qperf_log);
+                    ret = -1;
+                }
+            }
+        }
     }
     return ret;
 }
@@ -222,6 +234,10 @@ void picoquic_ns_delete_client_ctx(picoquic_ns_ctx_t* cc_ctx, int client_id)
             client_ctx->cnx = NULL;
         }
         if (client_ctx->quicperf_ctx != NULL) {
+            if (client_ctx->quicperf_ctx->report_file != NULL) {
+                (void)picoquic_file_close(client_ctx->quicperf_ctx->report_file);
+                client_ctx->quicperf_ctx->report_file = NULL;
+            }
             quicperf_delete_ctx(client_ctx->quicperf_ctx);
             client_ctx->quicperf_ctx = NULL;
         }
@@ -810,6 +826,62 @@ int picoquic_ns_is_finished(picoquic_ns_ctx_t* cc_ctx)
     return ret;
 }
 
+static int picoquic_ns_media_excluded(char const* media_excluded, char const* id)
+{
+    int is_excluded = 0;
+    size_t id_len = strlen(id);
+    while (*media_excluded != 0){
+        size_t to_next_comma = 0;
+
+        while (*media_excluded == ' ' || *media_excluded == '\t') {
+            media_excluded++;
+        }
+        while (media_excluded[to_next_comma] != 0 && media_excluded[to_next_comma] != ',') {
+            to_next_comma++;
+        }
+        if (to_next_comma == id_len && memcmp(media_excluded, id, id_len) == 0) {
+            is_excluded = 1;
+            break;
+        }
+        media_excluded += to_next_comma;
+        if (*media_excluded == ',') {
+            media_excluded++;
+        }
+    }
+    return is_excluded;
+}
+
+int picoquic_ns_media_check(quicperf_ctx_t* quicperf_ctx, picoquic_ns_spec_t* spec)
+{
+    int ret = 0;
+
+    for (int i = 0; i < quicperf_ctx->nb_scenarios; i++) {
+        if (quicperf_ctx->scenarios[i].media_type != quicperf_media_batch &&
+            !picoquic_ns_media_excluded(spec->media_excluded, quicperf_ctx->scenarios[i].id)) {
+            quicperf_stream_report_t* report = &quicperf_ctx->reports[i];
+            if (report->nb_frames_received == 0) {
+                ret = -1;
+                break;
+            }
+            else {
+                if (spec->media_latency_average > 0) {
+                    double average_delay = ((double)report->sum_delays) / report->nb_frames_received;
+                    if (average_delay > (double)spec->media_latency_average) {
+                        ret = -1;
+                        break;
+                    }
+                }
+                if (spec->media_latency_max > 0 && report->max_delays > spec->media_latency_max) {
+                    ret = -1;
+                    break;
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
 int picoquic_ns(picoquic_ns_spec_t* spec)
 {
     int ret = 0;
@@ -851,6 +923,10 @@ int picoquic_ns(picoquic_ns_spec_t* spec)
     /* TODO: check the completion. Should it be done there or inside each test? */
     if (ret == 0 && cc_ctx->simulated_time > spec->main_target_time) {
         ret = -1;
+    }
+
+    if (ret == 0 && cc_ctx->client_ctx[0] != NULL) {
+        ret = picoquic_ns_media_check(cc_ctx->client_ctx[0]->quicperf_ctx, spec);
     }
 
     if (cc_ctx != NULL) {
