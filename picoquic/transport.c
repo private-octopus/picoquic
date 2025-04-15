@@ -28,6 +28,31 @@
 #include "tls_api.h"
 #include <string.h>
 
+// CLEAN MC: Debug print functions
+void print_bits(const uint8_t* array, size_t length) {
+    for (size_t i = 0; i < length; i++) {
+        for (int bit = 7; bit >= 0; bit--) {
+            printf("%d", (array[i] >> bit) & 1);
+        }
+        printf(" ");
+    }
+    printf("\n");
+}
+
+void print_bits_16(const uint16_t* array, size_t length) {
+    for (size_t i = 0; i < length; i++) {
+        for (int bit = 7; bit >= 0; bit--) {
+            printf("%d", (array[i] >> bit) & 1);
+        }
+        printf(" ");
+        for (int bit = 15; bit >= 8; bit--) {
+            printf("%d", (array[i] >> bit) & 1);
+        }
+        printf(", ");
+    }
+    printf("\n");
+}
+
 uint64_t picoquic_transport_param_varint_decode(picoquic_cnx_t * cnx, uint8_t* bytes, uint64_t extension_length, int* ret) 
 {
     uint64_t n64 = 0;
@@ -284,19 +309,21 @@ uint8_t * picoquic_encode_transport_param_multicast_client_params(uint8_t * byte
     picoquic_tp_multicast_client_params_t * client_params)
 {
     /* 
-     * absolute maximum length is 68 bytes (although practically it will most likely
-     * never be more than 57 bytes), so we may need up to 2 bytes for the length field, but 
-     * due to a lot of variable-length integers we don't know yet the real length.
+     * maximum length is 24 bytes currently, when only supporting up to 3 hash algos 
+     * and up to 3 encryption algos and not more than 63 channels
      */
     
-    uint8_t min_length = ((uint8_t) 1 + 1 + 1 + 1 + 1 + 16 + 16);
+    uint8_t min_length = ((uint8_t) 1 + 1 + 1 + 1 + 1 + 2 + 2);
 
      if (bytes == NULL ||
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_multicast_client_params)) == NULL){
         return bytes;
     }
 
-    // Reserve two bytes for length for now and move everything back by one byte if the second byte is not needed.
+    /* 
+     * Reserve two bytes for length for now and move everything back by one byte if the second byte is not needed.
+     * Currently, this is not really needed, because the length will only be 24 bytes max. 
+     */
     if (bytes + 2 > bytes_max) {
         bytes = NULL;
         return bytes;
@@ -349,7 +376,48 @@ uint8_t * picoquic_encode_transport_param_multicast_client_params(uint8_t * byte
     return bytes;
 }
 
-// TODO MC: Implement multipath_client_params decoding / processing
+size_t picoquic_decode_transport_param_multicast_client_params(uint8_t * bytes, size_t extension_length,
+    picoquic_tp_multicast_client_params_t * client_params)
+{
+    uint8_t min_length = ((uint8_t) 1 + 1 + 1 + 1 + 1 + 2 + 2);
+    size_t byte_index = 0;
+
+    if (extension_length < min_length) {
+        return 0;
+    }
+
+    client_params->ipv4_channels_allowed = *(bytes+byte_index) & (uint8_t) 1 << (uint8_t) 0;
+    client_params->ipv6_channels_allowed = *(bytes+byte_index) & (uint8_t) 1 << (uint8_t) 1;
+    byte_index++;
+
+    size_t max_agg_size = picoquic_varint_decode(bytes + byte_index, extension_length - byte_index, &client_params->max_aggregate_rate);
+    byte_index += max_agg_size;
+
+    size_t max_chid_size = picoquic_varint_decode(bytes + byte_index, extension_length - byte_index, &client_params->max_channel_ids);
+    byte_index += max_chid_size;
+
+    size_t num_hash_algos_length = picoquic_varint_decode(bytes + byte_index, extension_length - byte_index, &client_params->hash_algorithms_supported);
+    byte_index += num_hash_algos_length;
+
+    size_t num_encr_algos_length = picoquic_varint_decode(bytes + byte_index, extension_length - byte_index, &client_params->encryption_algorithms_supported);
+    byte_index += num_encr_algos_length;
+
+    if (client_params->hash_algorithms_supported > 10 || client_params->encryption_algorithms_supported > 10) {
+        return 0;
+    }
+
+    for (uint64_t i = 0; i < client_params->hash_algorithms_supported; i++) {
+        memcpy(&client_params->hash_algorithms_list[i], bytes + byte_index, 2);
+        byte_index += 2;
+    }
+
+    for (uint64_t i = 0; i < client_params->encryption_algorithms_supported; i++) {
+        memcpy(&client_params->encryption_algorithms_list[i], bytes + byte_index, 2);
+        byte_index += 2;
+    }
+
+    return byte_index;
+}
 
 int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
 {
@@ -375,6 +443,28 @@ int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
 }
 
 // TODO MC: Negotiate multicast options
+int picoquic_negotiate_multicast_option(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+
+    cnx->is_multicast_enabled = 0;
+
+    if (cnx->remote_parameters.is_multicast_enabled && cnx->local_parameters.is_multicast_enabled &&
+        (cnx->client_mode || cnx->remote_parameters.multicast_client_params.ipv4_channels_allowed || 
+            cnx->remote_parameters.multicast_client_params.ipv6_channels_allowed)
+        ) {
+        // TODO MC: Check hash and encryption algo support match and choose one each
+        /* Enable the multicast option */
+        cnx->is_multicast_enabled = 1;
+    } 
+    else {
+        if (!cnx->client_mode) {
+            cnx->local_parameters.is_multicast_enabled = 0;
+        } 
+    }
+
+    return ret;
+}
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_length, size_t* consumed)
@@ -538,7 +628,11 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         if (extension_mode == 1) {
             bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_multicast_server_support);
         } else {
+            // CLEAN MC: Debug prints
+            uint8_t* bytes_before = bytes;
             bytes = picoquic_encode_transport_param_multicast_client_params(bytes, bytes_max, &cnx->local_parameters.multicast_client_params);
+            int length = bytes - bytes_before;
+            print_bits(bytes_before, length);
         }
     }
 
@@ -909,6 +1003,38 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     break;
                 }
+                case picoquic_tp_multicast_server_support: {
+                    cnx->remote_parameters.is_multicast_enabled = 1;
+                    break;
+                }
+                case picoquic_tp_multicast_client_params: {
+                    cnx->remote_parameters.is_multicast_enabled = 1;
+
+                    uint64_t coded_length = picoquic_decode_transport_param_multicast_client_params(
+                        bytes + byte_index, (size_t)extension_length, &cnx->remote_parameters.multicast_client_params);
+
+                    if (coded_length != extension_length) {
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Multicast Client Params TP");
+                    } 
+
+                    // CLEAN MC: Debug prints
+                    fprintf(stdout, "Received: IPv4: %i, IPv6: %i, Max Aggr: %lu, Max Channels: %lu, Hash Algos supported: %lu, Encr Algos supported: %lu\n", 
+                        cnx->remote_parameters.multicast_client_params.ipv4_channels_allowed, 
+                        cnx->remote_parameters.multicast_client_params.ipv6_channels_allowed, 
+                        cnx->remote_parameters.multicast_client_params.max_aggregate_rate,
+                        cnx->remote_parameters.multicast_client_params.max_channel_ids,
+                        cnx->remote_parameters.multicast_client_params.hash_algorithms_supported,
+                        cnx->remote_parameters.multicast_client_params.encryption_algorithms_supported
+                    );
+
+                    fprintf(stdout, "Hash Algos supported: ");
+                    print_bits_16(cnx->remote_parameters.multicast_client_params.hash_algorithms_list, cnx->remote_parameters.multicast_client_params.hash_algorithms_supported);
+
+                    fprintf(stdout, "Encr Algos supported: ");
+                    print_bits_16(cnx->remote_parameters.multicast_client_params.encryption_algorithms_list, cnx->remote_parameters.multicast_client_params.encryption_algorithms_supported);
+
+                    break;
+                }
                 default:
                     /* ignore unknown extensions */
                     break;
@@ -1016,6 +1142,11 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (ret == 0) {
         /* Negotiate the multipath option */
         ret = picoquic_negotiate_multipath_option(cnx);
+    }
+
+    if (ret == 0) {
+        /* Negotiate the multicast option */
+        ret = picoquic_negotiate_multicast_option(cnx);
     }
 
     /* Loss bit is only enabled if negotiated by both parties */

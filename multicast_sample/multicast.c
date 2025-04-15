@@ -86,7 +86,7 @@ int main(int argc, char** argv)
             exit_code = picoquic_multicast_client(argv[2], server_port, argv[4], nb_files, file_names);
         }
     }
-    // TODO MC: Implement or remove background function
+    // CHECK MC: Implement or remove background function
     // else if (strcmp(argv[1], "background") == 0) {
     //     if (argc != 5) {
     //         usage(argv[0]);

@@ -39,7 +39,7 @@
  * ID (in hexa), with the suffix ".client.qlog".
  */
 
-// TODO MC: Implement or remove this file
+// CHECK MC: Implement or remove this file
 
 #include <stdint.h>
 #include <stdio.h>

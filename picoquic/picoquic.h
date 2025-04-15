@@ -156,6 +156,10 @@ extern "C" {
 
 #define PICOQUIC_GROUP_SECP256R1 23
 
+/* See: https://www.iana.org/assignments/named-information/named-information.xhtml#hash-alg */
+#define PICOQUIC_SHA256 1
+#define PICOQUIC_SHA384 7
+
 /*
 * Connection states, useful to expose the state to the application.
 */
@@ -310,8 +314,8 @@ typedef struct st_picoquic_tp_multicast_client_params_t {
     uint64_t max_channel_ids;
     uint64_t hash_algorithms_supported;
     uint64_t encryption_algorithms_supported;
-    uint16_t hash_algorithms_list[16];
-    uint16_t encryption_algorithms_list[16];
+    uint16_t hash_algorithms_list[10];
+    uint16_t encryption_algorithms_list[10];
 } picoquic_tp_multicast_client_params_t;
 
 typedef struct st_picoquic_tp_t {
@@ -677,7 +681,7 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
 void picoquic_set_default_multicast_option(picoquic_quic_t* quic, int multicast_option);
 
 /* Set the multicast client params for the context */
-void picoquic_set_default_multicast_client_params(picoquic_quic_t* quic, picoquic_tp_multicast_client_params_t* params);
+int picoquic_set_default_multicast_client_params(picoquic_quic_t* quic, picoquic_tp_multicast_client_params_t* params);
 
 /* Set the Address Discovery mode for the context */
 void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode);
