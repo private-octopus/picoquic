@@ -31,6 +31,7 @@
  */
 
 #include <picoquic.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -90,7 +91,7 @@ typedef struct st_picoquic_ns_spec_t {
     uint64_t media_latency_max;
 } picoquic_ns_spec_t;
 
-int picoquic_ns(picoquic_ns_spec_t* spec);
+int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd);
 
 #ifdef __cplusplus
 }
