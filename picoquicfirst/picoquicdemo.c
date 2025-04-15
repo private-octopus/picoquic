@@ -898,7 +898,7 @@ int quic_client(const char* ip_address_text, int server_port,
         if (config->alpn != NULL && strcmp(config->alpn, QUICPERF_ALPN) == 0) {
             /* Set a QUICPERF client */
             is_quicperf = 1;
-            quicperf_ctx = quicperf_create_ctx(client_scenario_text);
+            quicperf_ctx = quicperf_create_ctx(client_scenario_text, NULL);
             if (quicperf_ctx == NULL) {
                 fprintf(stdout, "Could not get ready to run QUICPERF\n");
                 return -1;

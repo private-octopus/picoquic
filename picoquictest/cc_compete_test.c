@@ -30,6 +30,7 @@
 #include "picoquic_bbr1.h"
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
+#include "picoquic_utils.h"
 
 /* Congestion compete test.
 * These tests measure what happens when multiple connections fight for the same
@@ -76,7 +77,7 @@ int cc_compete_cubic2_test()
     spec.icid = icid;
     spec.qlog_dir = ".";
 
-    return picoquic_ns(&spec);
+    return picoquic_ns(&spec, NULL);
 }
 
 int cc_compete_prague2_test()
@@ -97,7 +98,7 @@ int cc_compete_prague2_test()
     spec.icid = icid;
     spec.qlog_dir = ".";
 
-    return picoquic_ns(&spec);
+    return picoquic_ns(&spec, NULL);
 }
 
 /* The current version of the "compete_d_cubic" test shows how the throughput
@@ -126,7 +127,7 @@ int cc_compete_d_cubic_test()
     spec.icid = icid;
     spec.qlog_dir = ".";
 
-    return picoquic_ns(&spec);
+    return picoquic_ns(&spec, NULL);
 }
 
 /* Check that the picoquic_ns simulations can correctly test asymmetric paths.
@@ -150,7 +151,7 @@ int cc_ns_asym_test()
      spec.icid = icid;
      spec.qlog_dir = ".";
 
-     return picoquic_ns(&spec);
+     return picoquic_ns(&spec, NULL);
  }
 
 
@@ -160,11 +161,14 @@ int cc_ns_asym_test()
 char const* cc_compete_media_scenario = "=a1:d50:p2:S:n250:80; \
      = vlow: s30 :p4:S:n150 : 3750 : G30 : I37500; \
      = vmid: s30 :p6:S:n150 : 6250 : G30 : I62500 : D250000;";
+#define MEDIA_TEST_LOG "ns_mediatest_log.csv"
 
 int cc_ns_media_test()
 {
+    int ret = 0;
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xed, 0x1a, 0, 0, 0, 0, 0}, 8 };
+    FILE* err_fd = NULL;
     spec.main_cc_algo = picoquic_cubic_algorithm;
     spec.main_start_time = 0;
     spec.main_scenario_text = cc_compete_media_scenario;
@@ -185,7 +189,16 @@ int cc_ns_media_test()
     spec.media_latency_max = 44000;
     spec.media_excluded = "vhigh, vmid,  vlast";
 
-    return picoquic_ns(&spec);
+    err_fd = picoquic_file_open(MEDIA_TEST_LOG, "w");
+    if (err_fd == NULL) {
+        DBG_PRINTF("Cannot open %s\n", MEDIA_TEST_LOG);
+        ret = -1;
+    }
+    else {
+        ret = picoquic_ns(&spec, err_fd);
+        picoquic_file_close(err_fd);
+    }
+    return ret;
 }
 
 /* Check that the picoquic_ns simulations can correctly test the black hole scenario.
@@ -209,7 +222,7 @@ int cc_ns_blackhole_test()
     spec.qlog_dir = ".";
     spec.link_scenario = link_scenario_black_hole;
 
-    return picoquic_ns(&spec);
+    return picoquic_ns(&spec, NULL);
 }
 
 /* Check that the picoquic_ns simulations can correctly test the drop_and_back scenario.
@@ -233,7 +246,7 @@ int cc_ns_drop_and_back_test()
     spec.qlog_dir = ".";
     spec.link_scenario = link_scenario_drop_and_back;
 
-    return picoquic_ns(&spec);
+    return picoquic_ns(&spec, NULL);
 }
 
 /* Check that the picoquic_ns simulations can correctly test the low_and_up scenario.
@@ -257,7 +270,7 @@ int cc_ns_low_and_up_test()
     spec.qlog_dir = ".";
     spec.link_scenario = link_scenario_low_and_up;
 
-    return picoquic_ns(&spec);
+    return picoquic_ns(&spec, NULL);
 }
 
 /* Check that the picoquic_ns simulations can correctly test the wifi fade scenario.
@@ -284,7 +297,7 @@ int cc_ns_wifi_fade_test()
     spec.qlog_dir = ".";
     spec.link_scenario = link_scenario_wifi_fade;
 
-    return picoquic_ns(&spec);
+    return picoquic_ns(&spec, NULL);
 }
 
 
@@ -309,7 +322,7 @@ int cc_ns_wifi_suspension_test()
     spec.qlog_dir = ".";
     spec.link_scenario = link_scenario_wifi_suspension;
 
-    return picoquic_ns(&spec);
+    return picoquic_ns(&spec, NULL);
 }
 
 
@@ -344,5 +357,5 @@ int cc_ns_varylink_test()
     spec.vary_link_nb = sizeof(cc_varylink_test_spec) / sizeof(picoquic_ns_link_spec_t);
     spec.vary_link_spec = cc_varylink_test_spec;
 
-    return picoquic_ns(&spec);
+    return picoquic_ns(&spec, NULL);
 }
