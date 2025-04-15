@@ -183,7 +183,7 @@ int cc_ns_media_test()
     spec.media_stats_start = 200000;
     spec.media_latency_average = 30500;
     spec.media_latency_max = 44000;
-    spec.media_excluded = "vhigh, vmid, vlast";
+    spec.media_excluded = "vhigh, vmid,  vlast";
 
     return picoquic_ns(&spec);
 }
