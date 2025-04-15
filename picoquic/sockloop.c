@@ -405,7 +405,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
 
             s_ctx->port = ntohs(((struct sockaddr_in*)&local_address)->sin_port);
         }
-#if IPV6_PKTINFO
+#ifndef ESP_PLATFORM
         if (socket_buffer_size > 0) {
             socklen_t opt_len;
             int opt_ret;
@@ -460,9 +460,12 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int soc
     int sock_ret = 0;
 
     if (local_af == 0) {
+#ifdef ESP_PLATFORM
         nb_af = 1;
         af[0] = AF_INET;
-#ifdef IPV6_PKTINFO
+#else
+        nb_af = 2;
+        af[0] = AF_INET;
         af[1] = AF_INET6;
 #endif
     }
