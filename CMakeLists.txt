@@ -281,7 +281,6 @@ IF (WITH_MBEDTLS)
     ENDIF()
 ENDIF ()
 
-
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
 macro(set_picoquic_compile_settings)

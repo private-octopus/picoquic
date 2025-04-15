@@ -46,6 +46,9 @@ void picoquic_mbedtls_load(int unload)
 #include "ptls_mbedtls.h"
 #include "picoquic_crypto_provider_api.h"
 #include "picoquic_utils.h"
+#ifndef ESP_PLATFORM
+#include "mbedtls/chacha20.h"
+#endif
 #include "mbedtls/ecdh.h"
 
 #include "picoquic_crypto_provider_api.h"
@@ -82,6 +85,9 @@ void picoquic_mbedtls_load(int unload)
 
         picoquic_register_ciphersuite(&ptls_mbedtls_aes128gcmsha256, 1);
         picoquic_register_ciphersuite(&ptls_mbedtls_aes256gcmsha384, 1);
+#ifndef ESP_PLATFORM
+        picoquic_register_ciphersuite(&ptls_mbedtls_chacha20poly1305sha256, 1);
+#endif
         picoquic_register_key_exchange_algorithm(&ptls_mbedtls_secp256r1);
         picoquic_register_key_exchange_algorithm(&ptls_mbedtls_x25519);
 

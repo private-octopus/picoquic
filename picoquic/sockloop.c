@@ -367,19 +367,13 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
     s_ctx->fd = socket(s_ctx->af, SOCK_DGRAM, IPPROTO_UDP);
 #endif
 
-    if (s_ctx->fd == INVALID_SOCKET) {
-        DBG_PRINTF("1.Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
-        ret = -1;
-    //} else if (picoquic_socket_set_pkt_info(s_ctx->fd, s_ctx->af) != 0) {
-    //    DBG_PRINTF("2.Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
-    //    ret = -1;
-    }else if (picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0) {
-        DBG_PRINTF("3.Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
-        ret = -1;
-    } else if (picoquic_get_local_address(s_ctx->fd, &local_address) != 0) {
-        DBG_PRINTF("4.Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
-        ret = -1;
-    } else if (picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
+    if (s_ctx->fd == INVALID_SOCKET ||
+        /* TODO: set option IPv6 only */
+        picoquic_socket_set_ecn_options(s_ctx->fd, s_ctx->af, &recv_set, &send_set) != 0 ||
+        picoquic_socket_set_pkt_info(s_ctx->fd, s_ctx->af) != 0 ||
+        picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0 ||
+        picoquic_get_local_address(s_ctx->fd, &local_address) != 0 ||
+        picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
     {
         DBG_PRINTF("5.Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
         ret = -1;
@@ -411,7 +405,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
 
             s_ctx->port = ntohs(((struct sockaddr_in*)&local_address)->sin_port);
         }
-#if 0
+#if IPV6_PKTINFO
         if (socket_buffer_size > 0) {
             socklen_t opt_len;
             int opt_ret;
@@ -468,7 +462,9 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int soc
     if (local_af == 0) {
         nb_af = 1;
         af[0] = AF_INET;
-        // af[1] = AF_INET6;
+#ifdef IPV6_PKTINFO
+        af[1] = AF_INET6;
+#endif
     }
     else {
         nb_af = 1;

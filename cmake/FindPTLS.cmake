@@ -8,24 +8,23 @@ if (PICOQUIC_FETCH_PTLS OR PICOQUIC_PTLS_SUBMODULE)
     set(PTLS_MINICRYPTO_LIBRARY picotls-minicrypto)
 
     if(WITH_MBEDTLS)
-        set(PTLS_WITH_FUSION_DEFAULT OFF)
-        set(PTLS_LIBRARIES ${PTLS_CORE_LIBRARY} ${PTLS_OPENSSL_LIBRARY}  ${PTLS_MINICRYPTO_LIBRARY})
-        unset(PTLS_FUSION_LIBRARY)
-        set(PTLS_INCLUDE_DIRS ${PTLS_INCLUDE_DIR})
-#[[
-        find_package_handle_standard_args(PTLS REQUIRED_VARS
-            PTLS_CORE_LIBRARY
-            PTLS_MINICRYPTO_LIBRARY
-            PTLS_INCLUDE_DIR)
-]]
-
-#[[
-        if (PTLS_FOUND)
-            set(PTLS_LIBRARIES ${PTLS_CORE_LIBRARY} ${PTLS_MINICRYPTO_LIBRARY})
-            set(PTLS_INCLUDE_DIRS ${PTLS_INCLUDE_DIR})
+        if (PLATFORM_ESP_IDF)
             set(PTLS_WITH_FUSION_DEFAULT OFF)
+            set(PTLS_LIBRARIES ${PTLS_CORE_LIBRARY} ${PTLS_OPENSSL_LIBRARY}  ${PTLS_MINICRYPTO_LIBRARY})
+            unset(PTLS_FUSION_LIBRARY)
+            set(PTLS_INCLUDE_DIRS ${PTLS_INCLUDE_DIR})
+        else()
+            find_package_handle_standard_args(PTLS REQUIRED_VARS
+                PTLS_CORE_LIBRARY
+                PTLS_MINICRYPTO_LIBRARY
+                PTLS_INCLUDE_DIR)
+
+            if (PTLS_FOUND)
+                set(PTLS_LIBRARIES ${PTLS_CORE_LIBRARY} ${PTLS_MINICRYPTO_LIBRARY})
+                set(PTLS_INCLUDE_DIRS ${PTLS_INCLUDE_DIR})
+                set(PTLS_WITH_FUSION_DEFAULT OFF)
+            endif ()
         endif ()
-]]
     else()
         set(PTLS_OPENSSL_LIBRARY picotls-openssl)
         if(WITH_FUSION)
