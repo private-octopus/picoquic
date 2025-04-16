@@ -101,8 +101,8 @@
 typedef struct st_picoquic_ns_client_t {
     uint64_t start_time;
     picoquic_cnx_t* cnx;
-    picoquic_congestion_algorithm_t* cc_algo;
-    picoquic_hystart_alg_t hystart_algo;
+    picoquic_congestion_algorithm_t const* cc_algo;
+    char const* cc_option_string;
     quicperf_ctx_t* quicperf_ctx;
     picoquic_connection_id_t icid;
 } picoquic_ns_client_t;
@@ -141,18 +141,17 @@ int picoquic_ns_server_callback(picoquic_cnx_t* cnx,
         cc_ctx = (picoquic_ns_ctx_t*)callback_ctx;
         ret = -1; /* will reset to zero if find a matching client */
         for (int i = 0; i < cc_ctx->nb_connections; i++) {
-            if (cc_ctx->client_ctx[i]->cnx != NULL &&
-                picoquic_compare_connection_id(&cnx->path[0]->p_remote_cnxid->cnx_id,
-                    &cc_ctx->client_ctx[i]->cnx->path[0]->p_local_cnxid->cnx_id) == 0) {
-                picoquic_set_congestion_algorithm(cnx, cc_ctx->client_ctx[i]->cc_algo);
-                picoquic_set_hystart_algorithm(cnx, cc_ctx->client_ctx[i]->hystart_algo);
+            if (cc_ctx->client_ctx[i] != NULL && cc_ctx->client_ctx[i]->cnx != NULL &&
+                picoquic_compare_connection_id(&cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id,
+                    &cc_ctx->client_ctx[i]->cnx->path[0]->first_tuple->p_local_cnxid->cnx_id) == 0) {
+                picoquic_set_congestion_algorithm_ex(cnx, cc_ctx->client_ctx[i]->cc_algo, cc_ctx->client_ctx[i]->cc_option_string);
                 ret = 0;
             }
         }
     }
     if (ret == 0) {
         /* set the server connection context */
-        perf_ctx = quicperf_create_ctx(NULL);
+        perf_ctx = quicperf_create_ctx(NULL, NULL);
         if (perf_ctx == NULL) {
             /* cannot handle the connection */
             picoquic_close(cnx, QUICPERF_ERROR_INTERNAL_ERROR);
@@ -168,12 +167,15 @@ int picoquic_ns_server_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int picoquic_ns_create_client_ctx(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t* spec, int client_id)
+int picoquic_ns_create_client_ctx(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t* spec, int client_id, FILE* err_fd)
 {
     int ret = 0;
     picoquic_ns_client_t* client_ctx = (picoquic_ns_client_t*)malloc(sizeof(picoquic_ns_client_t));
 
     if (client_ctx == NULL) {
+        if (err_fd != NULL) {
+            fprintf(err_fd, "Could not allocate memory.\n");
+        }
         ret = -1;
     }
     else {
@@ -196,17 +198,34 @@ int picoquic_ns_create_client_ctx(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t*
         if (client_id == 0) {
             client_ctx->start_time = spec->main_start_time;
             client_ctx->cc_algo = spec->main_cc_algo;
-            client_ctx->hystart_algo = spec->main_hystart_algo;
+            client_ctx->cc_option_string = spec->main_cc_options;
             scenario_text = spec->main_scenario_text;
         }
         else {
             client_ctx->start_time = spec->background_start_time;
             client_ctx->cc_algo = spec->background_cc_algo;
-            client_ctx->hystart_algo = spec->background_hystart_algo;
+            client_ctx->cc_option_string = spec->background_cc_options;
             scenario_text = spec->background_scenario_text;
         }
-        if ((client_ctx->quicperf_ctx = quicperf_create_ctx(scenario_text)) == NULL) {
+        if ((client_ctx->quicperf_ctx = quicperf_create_ctx(scenario_text, err_fd)) == NULL) {
+            if (err_fd != NULL) {
+                fprintf(err_fd, "Could not create quicperf context.\n");
+            }
             ret = -1;
+        }
+        else{
+            /* Set log and trigger for media statistsics and file. */
+            client_ctx->quicperf_ctx->stats_start = spec->media_stats_start;
+            if (spec->qperf_log != NULL) {
+                /* scenario requires a performance log */
+                client_ctx->quicperf_ctx->report_file = picoquic_file_open(spec->qperf_log, "w");
+                if (client_ctx->quicperf_ctx->report_file == NULL) {
+                    if (err_fd != NULL) {
+                        fprintf(err_fd, "Error opening qperf log file %s\n", spec->qperf_log);
+                    }
+                    ret = -1;
+                }
+            }
         }
     }
     return ret;
@@ -223,6 +242,10 @@ void picoquic_ns_delete_client_ctx(picoquic_ns_ctx_t* cc_ctx, int client_id)
             client_ctx->cnx = NULL;
         }
         if (client_ctx->quicperf_ctx != NULL) {
+            if (client_ctx->quicperf_ctx->report_file != NULL) {
+                (void)picoquic_file_close(client_ctx->quicperf_ctx->report_file);
+                client_ctx->quicperf_ctx->report_file = NULL;
+            }
             quicperf_delete_ctx(client_ctx->quicperf_ctx);
             client_ctx->quicperf_ctx = NULL;
         }
@@ -407,7 +430,7 @@ void picoquic_ns_delete_ctx(picoquic_ns_ctx_t* cc_ctx)
     free(cc_ctx);
 }
 
-picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec)
+picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec, FILE* err_fd)
 {
     int ret = 0;
     char test_server_cert_file[512];
@@ -427,6 +450,9 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec)
                 picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE) != 0)
         {
             DBG_PRINTF("%s", "Could not find the default server key and certs");
+            if (err_fd != NULL) {
+                fprintf(err_fd, "Could not find the default server key and certs.\n");
+            }
             ret = -1;
         }
     }
@@ -459,6 +485,9 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec)
             NULL,
             NULL,
             0)) == NULL) {
+            if (err_fd != NULL) {
+                fprintf(err_fd, "Could not create picoquic server context.\n");
+            }
             ret = -1;
         }
         /* Create client side quic context */
@@ -478,6 +507,9 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec)
             NULL,
             NULL,
             0)) == NULL) {
+            if (err_fd != NULL) {
+                fprintf(err_fd, "Could not create picoquic client context.\n");
+            }
             ret = -1;
         }
         else {
@@ -487,17 +519,18 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec)
             for (int i = 0; ret == 0 && i < 2; i++) {
                 ret = picoquic_set_qlog(cc_ctx->q_ctx[i], spec->qlog_dir);
                 picoquic_set_log_level(cc_ctx->q_ctx[i], 1);
-            }
-        }
-        /* Set HyStart algorithm. */
-        if (spec->main_hystart_algo) {
-            for (int i = 0; ret == 0 && i < 2; i++) {
-                picoquic_set_default_hystart_algorithm(cc_ctx->q_ctx[i], spec->main_hystart_algo);
+
+                if (ret != 0 && err_fd != NULL) {
+                    fprintf(err_fd, "Could not set qlog in dir %s\n", spec->qlog_dir);
+                }
             }
         }
         /* Create the required links */
         if (ret == 0){
             ret = picoquic_ns_create_links(cc_ctx, spec);
+            if (ret != 0 && err_fd != NULL) {
+                fprintf(err_fd, "Could not create links.\n");
+            }
         }
         if (spec->l4s_max > 0) {
             cc_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_1;
@@ -509,7 +542,10 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec)
         else {
             cc_ctx->nb_connections = spec->nb_connections;
             for (int i = 0; ret == 0 && i < cc_ctx->nb_connections; i++) {
-                ret = picoquic_ns_create_client_ctx(cc_ctx, spec, i);
+                ret = picoquic_ns_create_client_ctx(cc_ctx, spec, i, err_fd);
+                if (ret != 0 && err_fd != NULL) {
+                    fprintf(err_fd, "Could not create client context [%d]\n", i);
+                }
             }
         }
     }
@@ -594,8 +630,7 @@ int picoquic_ns_start_connection(picoquic_ns_ctx_t* cc_ctx, int cnx_id)
         ret = -1;
     }
     else {
-        picoquic_set_congestion_algorithm(cc_ctx->client_ctx[cnx_id]->cnx, cc_ctx->client_ctx[cnx_id]->cc_algo);
-        picoquic_set_hystart_algorithm(cc_ctx->client_ctx[cnx_id]->cnx, cc_ctx->client_ctx[cnx_id]->hystart_algo);
+        picoquic_set_congestion_algorithm_ex(cc_ctx->client_ctx[cnx_id]->cnx, cc_ctx->client_ctx[cnx_id]->cc_algo, cc_ctx->client_ctx[cnx_id]->cc_option_string);
         picoquic_set_callback(cc_ctx->client_ctx[cnx_id]->cnx, quicperf_callback,
             cc_ctx->client_ctx[cnx_id]->quicperf_ctx);
         cc_ctx->client_ctx[cnx_id]->cnx->local_parameters.max_datagram_frame_size = 1532;
@@ -818,10 +853,78 @@ int picoquic_ns_is_finished(picoquic_ns_ctx_t* cc_ctx)
     return ret;
 }
 
-int picoquic_ns(picoquic_ns_spec_t* spec)
+static int picoquic_ns_media_excluded(char const* media_excluded, char const* id)
+{
+    int is_excluded = 0;
+    size_t id_len = strlen(id);
+    while (*media_excluded != 0){
+        size_t to_next_comma = 0;
+
+        while (*media_excluded == ' ' || *media_excluded == '\t') {
+            media_excluded++;
+        }
+        while (media_excluded[to_next_comma] != 0 && media_excluded[to_next_comma] != ',') {
+            to_next_comma++;
+        }
+        if (to_next_comma == id_len && memcmp(media_excluded, id, id_len) == 0) {
+            is_excluded = 1;
+            break;
+        }
+        media_excluded += to_next_comma;
+        if (*media_excluded == ',') {
+            media_excluded++;
+        }
+    }
+    return is_excluded;
+}
+
+int picoquic_ns_media_check(quicperf_ctx_t* quicperf_ctx, picoquic_ns_spec_t* spec, FILE* err_fd)
 {
     int ret = 0;
-    picoquic_ns_ctx_t* cc_ctx = picoquic_ns_create_ctx(spec);
+
+    for (size_t i = 0; i < quicperf_ctx->nb_scenarios; i++) {
+        if (quicperf_ctx->scenarios[i].media_type != quicperf_media_batch &&
+            !picoquic_ns_media_excluded(spec->media_excluded, quicperf_ctx->scenarios[i].id)) {
+            quicperf_stream_report_t* report = &quicperf_ctx->reports[i];
+            if (report->nb_frames_received == 0) {
+                if (err_fd != NULL) {
+                    fprintf(stderr, "No frame received for media %zu (%s)\n",
+                        i, quicperf_ctx->scenarios[i].id);
+                }
+                ret = -1;
+                break;
+            }
+            else {
+                if (spec->media_latency_average > 0) {
+                    double average_delay = ((double)report->sum_delays) / report->nb_frames_received;
+                    if (average_delay > (double)spec->media_latency_average) {
+                        if (err_fd != NULL) {
+                            fprintf(stderr, "Media %zu (%s), latency average %f, expected %"PRIu64"\n",
+                                i, quicperf_ctx->scenarios[i].id, average_delay, spec->media_latency_average);
+                        }
+                        ret = -1;
+                        break;
+                    }
+                }
+                if (spec->media_latency_max > 0 && report->max_delays > spec->media_latency_max) {
+                    if (err_fd != NULL) {
+                        fprintf(stderr, "Media %zu (%s), latency max %"PRIu64", expected %"PRIu64"\n",
+                            i, quicperf_ctx->scenarios[i].id, report->max_delays, spec->media_latency_max);
+                    }
+                    ret = -1;
+                    break;
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
+{
+    int ret = 0;
+    picoquic_ns_ctx_t* cc_ctx = picoquic_ns_create_ctx(spec, err_fd);
     int nb_inactive = 0;
 
     if (cc_ctx == NULL) {
@@ -848,9 +951,25 @@ int picoquic_ns(picoquic_ns_spec_t* spec)
         }
     }
 
+    if (ret == 0 &&
+        (cc_ctx->client_ctx[0]->cnx == NULL ||
+        (cc_ctx->client_ctx[0]->cnx->cnx_state == picoquic_state_disconnected &&
+            (cc_ctx->client_ctx[0]->cnx->local_error != 0 ||
+                cc_ctx->client_ctx[0]->cnx->remote_error != 0)))) {
+        ret = -1;
+    }
+
     /* TODO: check the completion. Should it be done there or inside each test? */
     if (ret == 0 && cc_ctx->simulated_time > spec->main_target_time) {
+        if (err_fd != NULL) {
+            fprintf(err_fd, "Simulated time %" PRIu64 ", expected %" PRIu64 "\n",
+                cc_ctx->simulated_time, spec->main_target_time);
+        }
         ret = -1;
+    }
+
+    if (ret == 0 && cc_ctx->client_ctx[0] != NULL) {
+        ret = picoquic_ns_media_check(cc_ctx->client_ctx[0]->quicperf_ctx, spec, err_fd);
     }
 
     if (cc_ctx != NULL) {

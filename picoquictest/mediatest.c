@@ -27,6 +27,8 @@
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
 #include "picoquic_binlog.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
 
 /* Media tests: simulate media transmission, include cases in which
 * the media bandwidth is much lower than the available bandwidth on

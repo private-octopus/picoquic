@@ -30,6 +30,13 @@
 #include "picoquic_logger.h"
 #include "qlog.h"
 
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_prague.h"
+
 static test_api_stream_desc_t test_scenario_congestion[] = {
     { 4, 0, 257, 1000000 },
     { 8, 4, 257, 1000000 },
@@ -721,9 +728,12 @@ static int blackhole_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
     uint64_t latency = 15000;
     uint64_t picoseq_per_byte_10 = (1000000ull * 8) / 10;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0xb1, 0xac, 2, 3, 4, 5, 6, 7}, 8 };
     int ret = 0;
 
-    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+    initial_cid.id[2] = ccalgo->congestion_algorithm_number;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -742,6 +752,9 @@ static int blackhole_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
         test_ctx->s_to_c_link->jitter = jitter;
         test_ctx->blackhole_end = 7000000;
         test_ctx->blackhole_start = 5000000;
+
+
+        picoquic_set_binlog(test_ctx->qserver, ".");
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, 2 * latency, max_completion_time);

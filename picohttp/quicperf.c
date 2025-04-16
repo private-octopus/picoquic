@@ -353,8 +353,10 @@ char const* quicperf_parse_stream_desc(char const* text, quicperf_stream_desc_t*
 }
 
 /* stream_choice = [ '=' id ':' ][ '=' previous_id ':' ]['*' repeat_count ':'] { stream_description | media_stream | datagram_stream } */
-char const* quicperf_parse_stream_choice(char const* text, quicperf_stream_desc_t* desc)
+char const* quicperf_parse_stream_choice(char const* text, quicperf_stream_desc_t* desc, FILE* err_fd)
 {
+    char const* text0 = text;
+
     /* Parse the stream ID if present */
     text = quicperf_parse_stream_id(quicperf_parse_stream_spaces(text), desc->id, sizeof(desc->id));
 
@@ -385,14 +387,23 @@ char const* quicperf_parse_stream_choice(char const* text, quicperf_stream_desc_
             text = quicperf_parse_stream_spaces(text + 1);
         }
         else if (*text != 0) {
+            if (err_fd != NULL) {
+                fprintf(err_fd, "Unexpected text in quicperf scenario: %s\n", text);
+            }
             text = NULL;
         }
+    }
+    else if (err_fd != NULL) {
+        fprintf(err_fd, "Cannot parse media stream \"%s\" description: %s\n", 
+            (desc->id == NULL || desc->id[0] == 0) ? "no ID parsed" : desc->id,
+            text0);
+
     }
     return text;
 }
 
 
-int quicperf_parse_scenario_desc(char const* text, size_t* nb_streams, quicperf_stream_desc_t** desc)
+int quicperf_parse_scenario_desc(char const* text, size_t* nb_streams, quicperf_stream_desc_t** desc, FILE* err_fd)
 {
     int ret = 0;
     /* first count the number of streams and allocate memory */
@@ -401,6 +412,9 @@ int quicperf_parse_scenario_desc(char const* text, size_t* nb_streams, quicperf_
     *desc = (quicperf_stream_desc_t*)malloc(nb_desc * sizeof(quicperf_stream_desc_t));
 
     if (*desc == NULL) {
+        if (err_fd != NULL) {
+            fprintf(err_fd, "Could not allocate memory for quicperf stream.\n");
+        }
         *nb_streams = 0;
         ret = -1;
     }
@@ -409,13 +423,16 @@ int quicperf_parse_scenario_desc(char const* text, size_t* nb_streams, quicperf_
         memset(*desc, 0, nb_desc * sizeof(quicperf_stream_desc_t));
 
         while (text != NULL && *text != 0 && i < nb_desc) {
-            text = quicperf_parse_stream_choice(text, &(*desc)[i]);
+            text = quicperf_parse_stream_choice(text, &(*desc)[i], err_fd);
             i++;
         }
 
         *nb_streams = i;
 
         if (text == NULL || i != nb_desc) {
+            if (err_fd != NULL) {
+                fprintf(err_fd, "Could not parse quicperf scenario.\n");
+            }
             ret = -1;
         }
     }
@@ -562,7 +579,7 @@ quicperf_stream_ctx_t* quicperf_find_stream_ctx(quicperf_ctx_t* ctx, uint64_t st
     return (quicperf_stream_ctx_t*)picosplay_find(&ctx->quicperf_stream_tree, (void*)&target);
 }
 
-quicperf_ctx_t* quicperf_create_ctx(const char* scenario_text)
+quicperf_ctx_t* quicperf_create_ctx(const char* scenario_text, FILE* err_fd)
 {
     quicperf_ctx_t* ctx = (quicperf_ctx_t*)malloc(sizeof(quicperf_ctx_t));
 
@@ -570,7 +587,7 @@ quicperf_ctx_t* quicperf_create_ctx(const char* scenario_text)
         memset(ctx, 0, sizeof(quicperf_ctx_t));
 
         if (scenario_text != NULL) {
-            if (quicperf_parse_scenario_desc(scenario_text, &ctx->nb_scenarios, &ctx->scenarios) == 0 &&
+            if (quicperf_parse_scenario_desc(scenario_text, &ctx->nb_scenarios, &ctx->scenarios, err_fd) == 0 &&
                 (ctx->reports = (quicperf_stream_report_t*)malloc(sizeof(quicperf_stream_report_t) * ctx->nb_scenarios)) != NULL){
                 memset(ctx->reports, 0, sizeof(quicperf_stream_report_t) * ctx->nb_scenarios);
                 ctx->is_client = 1;
@@ -863,7 +880,7 @@ void quicperf_receive_datagram(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, const u
                 fprintf(ctx->report_file, "#%" PRIu64 ", ", stream_ctx->stream_desc_index);
             }
             fprintf(ctx->report_file, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",\n",
-                stream_ctx->rep_number, stream_ctx->group_id, frame_id, timestamp, current_time);
+                stream_ctx->rep_number, stream_ctx->group_id, frame_id, expected_time, current_time);
         }
     }
 }
@@ -1052,19 +1069,22 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
                 if (stream_ctx->nb_frames_received > 0 && stream_ctx->frequency > 0) {
                     expected_time += (stream_ctx->nb_frames_received * 1000000) / stream_ctx->frequency;
                 }
-                report->nb_frames_received += 1;
-                if (current_time <= expected_time) {
-                    rtt = 0;
-                }
-                else {
-                    rtt = current_time - expected_time;
-                }
-                report->sum_delays += rtt;
-                if (report->min_delays == 0 || rtt < report->min_delays) {
-                    report->min_delays = rtt;
-                }
-                if (rtt > report->max_delays) {
-                    report->max_delays = rtt;
+
+                if (expected_time >= ctx->stats_start) {
+                    report->nb_frames_received += 1;
+                    if (current_time <= expected_time) {
+                        rtt = 0;
+                    }
+                    else {
+                        rtt = current_time - expected_time;
+                    }
+                    report->sum_delays += rtt;
+                    if (report->min_delays == 0 || rtt < report->min_delays) {
+                        report->min_delays = rtt;
+                    }
+                    if (rtt > report->max_delays) {
+                        report->max_delays = rtt;
+                    }
                 }
 
                 if (ctx->report_file != NULL) {
@@ -1076,7 +1096,7 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
                     }
                     fprintf(ctx->report_file, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",\n",
                         stream_ctx->rep_number, stream_ctx->group_id, stream_ctx->nb_frames_received,
-                        stream_ctx->frame_start_stamp, current_time);
+                        expected_time, current_time);
                 }
             }
 
@@ -1483,7 +1503,7 @@ int quicperf_callback(picoquic_cnx_t* cnx,
 
     if (callback_ctx == NULL || callback_ctx == picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx))) {
         /* This will happen at the first call to  server */
-        ctx = quicperf_create_ctx(NULL);
+        ctx = quicperf_create_ctx(NULL, NULL);
         if (ctx == NULL) {
             /* cannot handle the connection */
             picoquic_close(cnx, QUICPERF_ERROR_INTERNAL_ERROR);

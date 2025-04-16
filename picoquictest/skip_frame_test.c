@@ -900,7 +900,7 @@ int skip_frame_test()
 void parse_test_packet_cnx_fix(picoquic_cnx_t* cnx, uint64_t simulated_time, int epoch, int mpath)
 {
     /* Stupid fix to ensure that the NCID decoding test will not protest */
-    cnx->path[0]->p_remote_cnxid->cnx_id.id_len = 8;
+    cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len = 8;
 
     cnx->pkt_ctx[0].send_sequence = 0x0102030406;
     cnx->path[0]->pkt_ctx.send_sequence = 0x0102030406;
@@ -2348,8 +2348,8 @@ int cnxid_stash_test()
             ret = -1;
         } else {
             /* init the various connection id to a length compatible with test */
-            cnx->path[0]->p_local_cnxid->cnx_id = stash_test_init_local;
-            cnx->path[0]->p_remote_cnxid->cnx_id = stash_test_init_remote;
+            cnx->path[0]->first_tuple->p_local_cnxid->cnx_id = stash_test_init_local;
+            cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id = stash_test_init_remote;
         }
 
         for (size_t i = 0; ret == 0 && i < nb_stash_test_case; i++) {
@@ -3133,8 +3133,10 @@ int dataqueue_copy_test()
                 {
                     size_t output_length = next_byte - output;
                     if (dataqueue_verify_test(&packet, next_frame, next_index, frame_length, data, output, output_length) != 0) {
-                        DBG_PRINTF("Verify data fails for case %d, option &x", basic_case, case_opt);
-                        ret = -1;
+                        if (frame_length >= PICOQUIC_MIN_STREAM_DATA_FRAGMENT || output_length != 0) {
+                            DBG_PRINTF("Verify data fails for case %d, option &x", basic_case, case_opt);
+                            ret = -1;
+                        }
                     }
                 }
             }
@@ -3250,7 +3252,7 @@ int dataqueue_packet_test()
 
     if (ret == 0 &&
         (ret = dataqueue_packet_test_iterate(1, cnx, 2, 0, 1, 1)) == 0 &&
-        (ret = dataqueue_packet_test_iterate(2, cnx, 128, 1, 1, 0)) == 0 &&
+        (ret = dataqueue_packet_test_iterate(2, cnx, 128, 0, 1, 1)) == 0 &&
         (ret = dataqueue_packet_test_iterate(3, cnx, 1024, 1, 0, 0)) == 0) {
         ret = dataqueue_packet_test_iterate(4, cnx, 1024, 0, 0, 1);
     }

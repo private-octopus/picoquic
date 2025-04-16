@@ -38,6 +38,11 @@
 #include "picoquic_logger.h"
 #include "performance_log.h"
 #include "picoquictest.h"
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_bbr.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_prague.h"
 
 static const uint8_t test_ticket_encrypt_key[32] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
@@ -1447,12 +1452,12 @@ static void tls_api_prepare_coalesce_test(picoquic_test_tls_api_ctx_t* test_ctx,
     picoformat_32(&test_ctx->send_buffer[hl],
         picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
     hl += 4;
-    test_ctx->send_buffer[hl++] = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len;
+    test_ctx->send_buffer[hl++] = test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len;
     hl += picoquic_format_connection_id(&test_ctx->send_buffer[hl],
-        send_buffer_size - hl, test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id);
-    test_ctx->send_buffer[hl++] = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id.id_len;
+        send_buffer_size - hl, test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id);
+    test_ctx->send_buffer[hl++] = test_ctx->cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len;
     hl += picoquic_format_connection_id(&test_ctx->send_buffer[hl],
-        send_buffer_size - hl, test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id);
+        send_buffer_size - hl, test_ctx->cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id);
     test_ctx->send_buffer[hl++] = 21;
     picoquic_public_random(&test_ctx->send_buffer[hl], 21);
     *coalesced_length = hl + 21;
@@ -2566,8 +2571,8 @@ size_t test_version_negotiation_get_spoofed(picoquic_cnx_t* cnx, int spoof_mode,
             packet_index += picoquic_format_connection_id(&packet[packet_index], packet_length - packet_index, bad_cid);
         }
         else {
-            packet[packet_index++] = cnx->path[0]->p_local_cnxid->cnx_id.id_len;
-            packet_index += picoquic_format_connection_id(&packet[packet_index], packet_length - packet_index, cnx->path[0]->p_local_cnxid->cnx_id);
+            packet[packet_index++] = cnx->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len;
+            packet_index += picoquic_format_connection_id(&packet[packet_index], packet_length - packet_index, cnx->path[0]->first_tuple->p_local_cnxid->cnx_id);
         }
     }
     /* SCID */
@@ -3192,8 +3197,8 @@ int stateless_reset_test()
         uint8_t ref_secret[PICOQUIC_RESET_SECRET_SIZE];
 
         (void)picoquic_create_cnxid_reset_secret(test_ctx->qserver,
-            &test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id, ref_secret);
-        if (memcmp(test_ctx->cnx_client->path[0]->p_remote_cnxid->reset_secret, ref_secret,
+            &test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id, ref_secret);
+        if (memcmp(test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->reset_secret, ref_secret,
             PICOQUIC_RESET_SECRET_SIZE) != 0) {
             ret = -1;
         }
@@ -3255,7 +3260,7 @@ int stateless_reset_bad_test()
     if (ret == 0) {
         size_t byte_index = 0;
         buffer[byte_index++] = 0x41;
-        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id);
+        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id);
         memset(buffer + byte_index, 0xcc, sizeof(buffer) - byte_index);
         
         /* Submit bogus request to client */
@@ -3303,7 +3308,7 @@ int stateless_reset_client_test()
         size_t byte_index = 0;
         buffer[byte_index++] = 0x41;
         /* Copy the client ID */
-        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id);
+        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id);
         /* Change one byte of the client ID */
         if (byte_index > 5) {
             buffer[5] ^= 0xff;
@@ -3356,10 +3361,10 @@ int stateless_reset_handshake_test()
     if (ret == 0) {
         size_t byte_index = 0;
         buffer[byte_index++] = 0xff;
-        buffer[byte_index++] = test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id_len;
-        buffer[byte_index++] = test_ctx->cnx_server->path[0]->p_remote_cnxid->cnx_id.id_len;
+        buffer[byte_index++] = test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len;
+        buffer[byte_index++] = test_ctx->cnx_server->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len;
         /* Copy the client ID */
-        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id);
+        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id);
         /* Change one byte of the client ID */
         if (byte_index > 5) {
             buffer[5] ^= 0xff;
@@ -3368,7 +3373,7 @@ int stateless_reset_handshake_test()
             buffer[1] ^= 0xff;
         }
         /* Copy the server ID */
-        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_server->path[0]->p_remote_cnxid->cnx_id);
+        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_server->path[0]->first_tuple->p_remote_cnxid->cnx_id);
         /* rest of packet is null */
         memset(buffer + byte_index, 0xcc, sizeof(buffer) - byte_index);
 
@@ -5631,7 +5636,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid, uint64_t laten
     }
 
     if (ret == 0) {
-        initial_challenge = test_ctx->cnx_server->path[0]->challenge[0];
+        initial_challenge = test_ctx->cnx_server->path[0]->first_tuple->challenge[0];
         loss_mask = loss_mask_data; 
         
         /* Change the client address */
@@ -5658,7 +5663,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid, uint64_t laten
     loss_mask = 0;
     while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY 
         && TEST_SERVER_READY && !zero_cid
-        && (test_ctx->cnx_server->path[0]->challenge_verified != 1 ||
+        && (test_ctx->cnx_server->path[0]->first_tuple->challenge_verified != 1 ||
             test_ctx->cnx_server->nb_paths > 1 ||
             test_ctx->cnx_server->first_remote_cnxid_stash->cnxid_stash_first->sequence == 0 ||
             nat_rebinding_count_r_cid(test_ctx->cnx_server) < 8 )) {
@@ -5685,11 +5690,11 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid, uint64_t laten
         if (test_ctx->cnx_server == NULL) {
             DBG_PRINTF("%s", "Server connection disappeared");
             ret = -1;
-        } else if (initial_challenge == test_ctx->cnx_server->path[0]->challenge[0]) {
+        } else if (initial_challenge == test_ctx->cnx_server->path[0]->first_tuple->challenge[0]) {
             DBG_PRINTF("%s", "Challenge was not renewed after NAT rebinding");
             ret = -1;
         }
-        else if (test_ctx->cnx_server->path[0]->challenge_verified != 1) {
+        else if (test_ctx->cnx_server->path[0]->first_tuple->challenge_verified != 1) {
             DBG_PRINTF("%s", "Challenge was not verified after NAT rebinding");
             ret = -1;
         }
@@ -5799,10 +5804,10 @@ int fast_nat_rebinding_test()
             }
 
             if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state == picoquic_state_ready) {
-                if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == 0) {
-                    DBG_PRINTF("Client address out of sync, port: %d", ((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port);
+                if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr)->sin_port == 0) {
+                    DBG_PRINTF("Client address out of sync, port: %d", ((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr)->sin_port);
                 }
-                else if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == test_ctx->client_addr_natted.sin_port) {
+                else if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr)->sin_port == test_ctx->client_addr_natted.sin_port) {
                     if (switched) {
                         if (simulated_time > switch_time + delta_t &&
                             nb_switched < nb_switches_required) {
@@ -5939,7 +5944,7 @@ int client_error_test_modal(int mode)
                 *x++ = 0x99; /* Hommage to Dilbert's random generator */
             }
             /* deliberate error: repeat the reset secret defined for path[0] */
-            memcpy(x, test_ctx->cnx_server->path[0]->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+            memcpy(x, test_ctx->cnx_server->path[0]->first_tuple->p_remote_cnxid->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
             x += PICOQUIC_RESET_SECRET_SIZE;
             picoquic_queue_misc_frame(test_ctx->cnx_client, new_cnxid_error, x - new_cnxid_error, 0,
                 picoquic_packet_context_application);
@@ -6183,8 +6188,8 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration, int retire
 
     if (ret == 0 && retire_number_zero) {
         /* verify that the path 0 on client uses CID number > 1 */
-        if (test_ctx->cnx_client->path[0]->p_remote_cnxid->sequence == 0) {
-            DBG_PRINTF("First path still has CNX_ID=%d", test_ctx->cnx_client->path[0]->p_remote_cnxid->sequence);
+        if (test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->sequence == 0) {
+            DBG_PRINTF("First path still has CNX_ID=%d", test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->sequence);
             ret = -1;
         }
     }
@@ -6326,7 +6331,7 @@ int probe_api_test()
      */
     nb_trials = 0;
 
-    for (int i = 1; ret == 0 && test_ctx->cnx_client->nb_paths < PICOQUIC_NB_PATH_TARGET; i++) {
+    for (int i = 1; ret == 0 && test_ctx->cnx_client->nb_paths < PICOQUIC_NB_PATH_TARGET && i < PICOQUIC_NB_PATH_TARGET; i++) {
         for (int j = 0; ret == 0 && j < 2; j++) {
             int ret_probe;
             if (j == 0) {
@@ -6353,7 +6358,7 @@ int probe_api_test()
             if (ret == 0 && ret_probe == 0) {
                 int path_id = test_ctx->cnx_client->nb_paths - 1;
                 for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                    test_ctx->cnx_client->path[path_id]->challenge[ichal] = (uint64_t)10000 + (uint64_t)10 * i + j + (uint64_t)1000*ichal;
+                    test_ctx->cnx_client->path[path_id]->first_tuple->challenge[ichal] = (uint64_t)10000 + (uint64_t)10 * i + j + (uint64_t)1000*ichal;
                 }
             }
         }
@@ -6407,9 +6412,15 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
             (struct sockaddr *)&test_ctx->client_addr, simulated_time);
 
         if (ret == 0) {
-            target_id = test_ctx->cnx_client->path[test_ctx->cnx_client->nb_paths-1]->p_remote_cnxid->cnx_id;
-            if (!cid_zero) {
-                previous_local_id = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
+            if (test_ctx->cnx_client->path[0]->first_tuple->next_tuple == NULL ||
+                test_ctx->cnx_client->path[0]->first_tuple->next_tuple->p_remote_cnxid == NULL) {
+                ret = -1;
+            }
+            else {
+                target_id = test_ctx->cnx_client->path[0]->first_tuple->next_tuple->p_remote_cnxid->cnx_id;
+                if (!cid_zero) {
+                    previous_local_id = test_ctx->cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id;
+                }
             }
         }
     }
@@ -6436,8 +6447,8 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     loss_mask = 0;
     while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY
         && TEST_SERVER_READY
-        && (test_ctx->cnx_server->path[0]->challenge_verified != 1 || test_ctx->cnx_client->path[0]->path_is_demoted == 1 ||
-            initial_challenge == test_ctx->cnx_server->path[0]->challenge[0])) {
+        && (test_ctx->cnx_server->path[0]->first_tuple->challenge_verified != 1 || test_ctx->cnx_client->path[0]->path_is_demoted == 1 ||
+            initial_challenge == test_ctx->cnx_server->path[0]->first_tuple->challenge[0])) {
         int was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
@@ -6446,11 +6457,11 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     /* Verify that the challenge was updated and done */
     /* TODO: verify that exactly one challenge was sent */
     if (ret == 0 && test_ctx->cnx_server != NULL) {
-        if (initial_challenge == test_ctx->cnx_server->path[0]->challenge[0]) {
+        if (initial_challenge == test_ctx->cnx_server->path[0]->first_tuple->challenge[0]) {
             DBG_PRINTF("%s", "Challenge was not renewed after migration");
             ret = -1;
         }
-        else if (test_ctx->cnx_server->path[0]->challenge_verified != 1) {
+        else if (test_ctx->cnx_server->path[0]->first_tuple->challenge_verified != 1) {
             DBG_PRINTF("%s", "Challenge was not verified after migration");
             ret = -1;
         }
@@ -6458,11 +6469,11 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
 
     /* Verify that the connection ID are what we expect */
     if (ret == 0) {
-        if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id, &target_id) != 0) {
+        if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id, &target_id) != 0) {
             DBG_PRINTF("%s", "The remote CNX ID did not change to selected value");
             ret = -1;
         }
-        else if (!cid_zero && picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id, &previous_local_id) == 0) {
+        else if (!cid_zero && picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id, &previous_local_id) == 0) {
             DBG_PRINTF("%s", "The local CNX ID did not change to a new value");
             ret = -1;
         }
@@ -6553,7 +6564,7 @@ int migration_fail_test()
     }
 
     if (ret == 0) {
-        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 1000000);
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 1100000);
     }
 
     if (test_ctx != NULL) {
@@ -6775,8 +6786,8 @@ int cnxid_renewal_test()
     if (ret == 0) {
         ret = picoquic_renew_connection_id(test_ctx->cnx_client, 0);
         if (ret == 0) {
-            target_id = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id;
-            previous_local_id = test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id;
+            target_id = test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id;
+            previous_local_id = test_ctx->cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id;
         }
     }
 
@@ -6815,11 +6826,11 @@ int cnxid_renewal_test()
 
     /* Verify that the connection ID are what we expect */
     if (ret == 0) {
-        if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id, &target_id) != 0) {
+        if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id, &target_id) != 0) {
             DBG_PRINTF("%s", "The remote CNX ID migrated from the selected value");
             ret = -1;
         }
-        else if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id, &previous_local_id) == 0) {
+        else if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id, &previous_local_id) == 0) {
             DBG_PRINTF("%s", "The local CNX ID did not change to a new value");
             ret = -1;
         }
@@ -7379,8 +7390,8 @@ static int inject_false_rotation(picoquic_test_tls_api_ctx_t* test_ctx, int targ
 
         packet->bytes[0] = 0x3F | ((cnx->key_phase_dec) ? 0 : 0x40); /* Set phase to opposite of expected value */
 
-        for (uint8_t i = 0; i < cnx->path[0]->p_local_cnxid->cnx_id.id_len; i++) {
-            packet->bytes[byte_index++] = cnx->path[0]->p_local_cnxid->cnx_id.id[i];
+        for (uint8_t i = 0; i < cnx->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len; i++) {
+            packet->bytes[byte_index++] = cnx->path[0]->first_tuple->p_local_cnxid->cnx_id.id[i];
         }
         picoquic_test_random_bytes(&random_context, packet->bytes + byte_index, 128u - byte_index);
         packet->length = 128;
@@ -7847,7 +7858,7 @@ int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size
             nb_trials++;
 
             if (nb_injected == 0) {
-                if ((target_client && test_ctx->cnx_client->pkt_ctx[false_pc].send_sequence > false_rank && test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len != 0) ||
+                if ((target_client && test_ctx->cnx_client->pkt_ctx[false_pc].send_sequence > false_rank && test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len != 0) ||
                     (!target_client && test_ctx->cnx_server != NULL && test_ctx->cnx_server->pkt_ctx[false_pc].send_sequence > false_rank)) {
                     /* Inject a spoofed packet in the context */
                     ret = false_migration_inject(test_ctx, target_client, false_pc, simulated_time);
@@ -8007,7 +8018,7 @@ int nat_handshake_test_one(int test_rank)
 
                 switch (test_rank) {
                 case 0: /* check that at least one packet was received from the server, setting the CNX_ID */
-                    should_nat = (test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len > 0);
+                    should_nat = (test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len > 0);
                     break;
                 case 1: /* Check that the connection is almost complete, but finished has not been sent */
                     should_nat = (test_ctx->cnx_client->crypto_context[3].aead_decrypt != NULL);
@@ -8271,7 +8282,7 @@ int padding_test_one(uint32_t padding_multiple, uint32_t padding_min_size)
 
                 if (ret == 0 && is_queued && test_ctx->c_to_s_link->first_packet != NULL) {
                     size_t length = test_ctx->c_to_s_link->first_packet->length;
-                    size_t pn_offset = 1 + test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id.id_len;
+                    size_t pn_offset = 1 + test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len;
                     size_t pn_length = padding_test_predict_pn_length(&test_ctx->cnx_client->pkt_ctx[picoquic_packet_context_application]);
                     size_t raw_length = pn_offset + pn_length + test_sizes[i];
 
@@ -8688,10 +8699,10 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog, uint8_t recv_ecn)
         uint8_t p[256];
 
         memset(p, 0, sizeof(p));
-        memcpy(p + 1, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id_len);
+        memcpy(p + 1, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len);
         p[0] |= 64;
-        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr,
-            (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
     }
 
     /* Free the resource, which will close the log file.
@@ -9068,12 +9079,12 @@ int cid_length_test_one(uint8_t length)
             test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 20000, 100000);
 
         if (ret == 0 &&
-            test_ctx->cnx_client->path[0]->p_local_cnxid->cnx_id.id_len != length) {
+            test_ctx->cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len != length) {
             ret = -1;
         }
 
         if (ret == 0 &&
-            test_ctx->cnx_server->path[0]->p_remote_cnxid->cnx_id.id_len != length) {
+            test_ctx->cnx_server->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len != length) {
             ret = -1;
         }
     }
@@ -9570,29 +9581,29 @@ int preferred_address_test_one(int migration_disabled, int cid_zero)
 
     /* Verify that the client and server have both migrated to using the preferred address */
     if (ret == 0 && picoquic_compare_addr((struct sockaddr*)&server_preferred,
-        (struct sockaddr*)&test_ctx->cnx_client->path[0]->peer_addr) != 0) {
+        (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->peer_addr) != 0) {
         DBG_PRINTF("%s", "Server address at client not updated\n");
         ret = -1;
     }
 
     if (ret == 0 && test_ctx->cnx_server != NULL &&
         picoquic_compare_addr((struct sockaddr*)&server_preferred,
-        (struct sockaddr*)&test_ctx->cnx_server->path[0]->local_addr) != 0) {
+        (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->local_addr) != 0) {
         DBG_PRINTF("%s", "Server address not promoted\n");
         ret = -1;
     }
 
     /* verify that both have migrated to a new CID */
     if (ret == 0 && !cid_zero && 
-        (test_ctx->cnx_client->path[0]->p_local_cnxid == NULL || 
-            test_ctx->cnx_client->path[0]->p_local_cnxid->sequence == 0)){
+        (test_ctx->cnx_client->path[0]->first_tuple->p_local_cnxid == NULL || 
+            test_ctx->cnx_client->path[0]->first_tuple->p_local_cnxid->sequence == 0)){
         DBG_PRINTF("%s", "Client CID not updated\n");
         ret = -1;
     }
 
     if (ret == 0 && test_ctx->cnx_server != NULL &&
-        (test_ctx->cnx_server->path[0]->p_local_cnxid == NULL ||
-            test_ctx->cnx_server->path[0]->p_local_cnxid->sequence == 0)) {
+        (test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid == NULL ||
+            test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->sequence == 0)) {
         DBG_PRINTF("%s", "Server CID not updated\n");
         ret = -1;
     }
@@ -10428,7 +10439,7 @@ int cid_quiescence_test()
     }
 
     if (ret == 0) {
-        previous_remote_id = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id;
+        previous_remote_id = test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id;
         /* Prepare to send data */
         ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
     }
@@ -10438,7 +10449,7 @@ int cid_quiescence_test()
     }
 
     if (ret == 0) {
-        previous_remote_id = test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id;
+        previous_remote_id = test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id;
         simulated_time += PICOQUIC_CID_REFRESH_DELAY;
     }
 
@@ -10454,7 +10465,7 @@ int cid_quiescence_test()
     
     /* Verify that the CID has rotated */
     if (ret == 0 &&
-        picoquic_compare_connection_id(&previous_remote_id, &test_ctx->cnx_client->path[0]->p_remote_cnxid->cnx_id) == 0) {
+        picoquic_compare_connection_id(&previous_remote_id, &test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id) == 0) {
         ret = -1;
     }
     
@@ -10938,10 +10949,10 @@ int integrity_limit_test()
             test_ctx->cnx_server->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
 
         memset(p, 0, sizeof(p));
-        memcpy(p + 1, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id_len);
+        memcpy(p + 1, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len);
         p[0] |= 64;
-        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr,
-            (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
 
         if (test_ctx->cnx_server->cnx_state != picoquic_state_disconnecting) {
             DBG_PRINTF("Connection not disconnecting, limit 0x%" PRIx64 ", reached %" PRIx64,

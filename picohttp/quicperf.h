@@ -141,13 +141,15 @@ typedef struct st_quicperf_ctx_t {
     int datagram_is_activated;
     /* Reporting file if available */
     FILE* report_file;
+    /* Start of media statistics */
+    uint64_t stats_start;
     /* Statistics gathered on client */
     uint64_t data_sent;
     uint64_t data_received;
     uint64_t nb_streams;
 } quicperf_ctx_t;
 
-quicperf_ctx_t* quicperf_create_ctx(const char* scenario_text);
+quicperf_ctx_t* quicperf_create_ctx(const char* scenario_text, FILE* err_fd);
 void quicperf_delete_ctx(quicperf_ctx_t* ctx);
 
 int quicperf_callback(picoquic_cnx_t* cnx,

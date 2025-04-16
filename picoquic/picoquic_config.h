@@ -44,6 +44,7 @@ typedef enum {
     picoquic_option_DisablePortBlocking,
     picoquic_option_SOLUTION_DIR,
     picoquic_option_CC_ALGO,
+    picoquic_option_CC_OPTION,
     picoquic_option_SPINBIT,
     picoquic_option_LOSSBIT,
     picoquic_option_MULTIPATH,
@@ -94,6 +95,7 @@ typedef struct st_picoquic_quic_config_t {
     int idle_timeout;
     int socket_buffer_size;
     char const* cc_algo_id;
+    char const* cc_algo_option_string;
     char const * cnx_id_cbdata;
     /* TODO: control key logging */
     picoquic_spinbit_version_enum spinbit_policy; /* control spin bit */
