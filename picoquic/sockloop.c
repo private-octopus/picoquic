@@ -390,10 +390,12 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
         int tos = 0xb8; // 0x88 = AF41, 0xb8 == EF
 
         if (local_address.ss_family == AF_INET6) {
+
+#ifndef LWIP_IPV6
             if(setsockopt(s_ctx->fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(tos)) < 0) {
                 DBG_PRINTF("setsockopt IPv46 TC CLASS (0x%x) fails, errno: %d\n", tos, errno);
             }
-
+#endif
             s_ctx->port = ntohs(((struct sockaddr_in6*)&local_address)->sin6_port);
         }
         else if (local_address.ss_family == AF_INET) {
@@ -403,7 +405,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
 
             s_ctx->port = ntohs(((struct sockaddr_in*)&local_address)->sin_port);
         }
-
+#ifndef ESP_PLATFORM
         if (socket_buffer_size > 0) {
             socklen_t opt_len;
             int opt_ret;
@@ -435,6 +437,8 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
                 ret = -1;
             }
         }
+#endif
+
 #ifdef _WINDOWS
         if (ret == 0) {
             ret = picoquic_packet_set_windows_socket(send_coalesced, recv_coalesced, s_ctx);
@@ -456,9 +460,14 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int soc
     int sock_ret = 0;
 
     if (local_af == 0) {
+#ifdef ESP_PLATFORM
+        nb_af = 1;
+        af[0] = AF_INET;
+#else
         nb_af = 2;
         af[0] = AF_INET;
         af[1] = AF_INET6;
+#endif
     }
     else {
         nb_af = 1;
@@ -780,13 +789,19 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         param->local_af, param->socket_buffer_size,
         param->extra_socket_required, param->do_not_use_gso, s_ctx)) <= 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+        DBG_PRINTF("%s", "Thread cannot run:picoquic_packet_loop_open_sockets error ");
     }
     else if (loop_callback != NULL) {
         struct sockaddr_storage l_addr;
         ret = loop_callback(quic, picoquic_packet_loop_ready, loop_callback_ctx, &options);
+        if (ret != 0)
+            DBG_PRINTF("%s", "Thread cannot run:.loopcallback error ");
 
         if (picoquic_store_loopback_addr(&l_addr, s_ctx[0].af, s_ctx[0].port) == 0) {
             ret = loop_callback(quic, picoquic_packet_loop_port_update, loop_callback_ctx, &l_addr);
+            if (ret != 0)
+                DBG_PRINTF("%s", "Thread cannot run:store loopcallback error ");
+
         }
         if (ret == 0 && options.provide_alt_port) {
             int alt_sock = (nb_sockets > 2 && param->local_af == 0) ? 2 : 1;
@@ -804,6 +819,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         }
         send_buffer = malloc(send_buffer_size);
         if (send_buffer == NULL) {
+            DBG_PRINTF("Thread cannot run, Malloc Error <%d>", send_buffer_size);
+            DBG_PRINTF("%s", "Thread cannot run:. malloc error");
             ret = -1;
         }
     }
@@ -830,7 +847,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         * received and processed successfully. We call select again with
         * a delay set to zero to check whether more packets need to be
         * received, trying to empty the receive queue before sending
-        * more packet. However, this code is a bit dangerous, 
+        * more packet. However, this code is a bit dangerous,
         * because it can lead to long series of receiving packets without
         * ever sending responses or ACKs. We moderate that by counting the number
         * of loops in "immediate" mode, and ignoring the "loop
@@ -927,7 +944,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 
                 /* If the number of packets received in immediate mode has not
                 * reached the threshold, set the "immediate" flag and bypass
-                * the sending code. 
+                * the sending code.
                  */
                 if (ret == 0 && nb_loop_immediate < PICOQUIC_PACKET_LOOP_RECV_MAX) {
                     loop_immediate = 1;

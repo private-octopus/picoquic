@@ -894,29 +894,29 @@ int ptls_mbedtls_load_private_key(char const *pem_fname, ptls_context_t *ctx)
 
 /* Handling of certificates.
 * Certificates in picotls are used both at the client and the server side.
-* 
+*
 * The server is programmed with a copy of the certificate chain linking
 * the local key and identity to a certificate authority. Picotls formats
 * that key and sends it as part of the "server hello". It is signed with
 * the server key.
-* 
+*
 * The client is programmed with a list of trusted certificates. It should
 * process the list received from the server and verifies that it does
 * correctly link the server certificate to one of the certificates in the
 * root list.
-* 
+*
 * Mbedtls documents a series of certificate related API in `x509_crt.h`.
-* 
+*
 * On the server side, we read the certificates from a PEM encoded
 * file, and provide it to the server.
-* 
+*
 * For verify certificate, picotls uses a two phase API:
-* 
+*
 * - During initialization, prepare a "verify certificate callback"
 * - During the handshake, picotls executes the callback.
-* 
+*
 * Picotls verifies certificates using the "verify_certificate" callback.
-* 
+*
 * if ((ret = tls->ctx->verify_certificate->cb(tls->ctx->verify_certificate,
 *       tls, server_name, &tls->certificate_verify.cb,
 *       &tls->certificate_verify.verify_ctx, certs, num_certs)) != 0)
@@ -928,16 +928,16 @@ int ptls_mbedtls_load_private_key(char const *pem_fname, ptls_context_t *ctx)
 * the first member of that structure, followed by other arguments.
 * The callback structure is passed as the first argument in the
 * callback, with type "self".
-* 
+*
 * The callback should return 0 if the certificate is good. The call may
-* also set the value of tls->certificate_verify.cb and 
+* also set the value of tls->certificate_verify.cb and
 * tls->certificate_verify.verify_ctx. If these are set, picotls will
 * then use tls->certificate_verify.cb to verify that the TLS messages
 * are properly signed using that certificate.
 *
 * The function mbedtls_verify_certificate is implemented using the
 * function "mbedtls_x509_crt_verify", which has the following arguments:
-* 
+*
 * - A chain of certificates, starting from the server certificate and hopefully
 *   going all the way to one of the root certificates. In our code, this
 *   is obtained by parsing the "certs" argument provided by picotls, which
@@ -949,14 +949,14 @@ int ptls_mbedtls_load_private_key(char const *pem_fname, ptls_context_t *ctx)
 * - A certificate revocation list. We leave that parameter NULL for now.
 * - The expected server name, a NULL terminated string.
 * - A "verify" function pointer, and its argument.
-* 
+*
 * The call returns 0 (and flags set to 0) if the chain was verified and valid,
 * MBEDTLS_ERR_X509_CERT_VERIFY_FAILED if the chain was verified but found to
 * be invalid, in which case *flags will have one or more MBEDTLS_X509_BADCERT_XXX
 * or MBEDTLS_X509_BADCRL_XXX flags set, or another error
 * (and flags set to 0xffffffff) in case of a fatal error encountered
-* during the verification process. 
-* 
+* during the verification process.
+*
 * The verify callback is a user-supplied callback that can clear / modify / add
 * flags for a certificate. If set, the verification callback is called for each
 * certificate in the chain (from the trust-ca down to the presented crt).
@@ -965,21 +965,21 @@ int ptls_mbedtls_load_private_key(char const *pem_fname, ptls_context_t *ctx)
 * for that specific certificate and the certificate depth from the bottom
 * (Peer cert depth = 0). Function pointer and parameters can be set in the call
 * to `ptls_mbedssl_init_verify_certificate`.
-* 
+*
 * If the certificate verification is successfull, the code sets the pointer
 * and the context for the certificate_verify callback:
-* 
+*
 * struct {
 *    int (*cb)(void *verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t signature);
 *    void *verify_ctx;
 * } certificate_verify;
-* 
+*
 * The structure "certificate_verify" is allocated as part of the PTLS context. We will
 * allcoate a a "ptls_mbetls_certificate_verify_ctx_t" ctx as part of the
-* 
+*
 * The verify callback is implemented using `psa_verify_message`, which takes the following
 * arguments:
-* 
+*
 * psa_status_t psa_verify_message(psa_key_id_t key,
 *                                psa_algorithm_t alg,
 *                                const uint8_t * input,
@@ -994,7 +994,7 @@ int ptls_mbedtls_load_private_key(char const *pem_fname, ptls_context_t *ctx)
 * be derived from the algo parameter of the callback, which is a 16 bit
 * "signature scheme" (see
 * https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-signaturescheme).
-* 
+*
 * Picotls will use that callback exactly once, then reset the callback
 * pointer to NULL. It does not reset of free the "verify_ctx" -- if necessary,
 * the value there should be reset after the first call.
@@ -1222,7 +1222,7 @@ static int mbedtls_verify_certificate(ptls_verify_certificate_t *_self, ptls_t *
 * up to 16 certificates, and convert the base64 encoded
 * data to DER encoded binary. No attempt is made to verify
 * that these actually are certificates.
-* 
+*
 * Discuss: picotls has a built in function for this.
 * Is it really necessary to program an alternative?
 */
@@ -1276,7 +1276,7 @@ static int mbedtls_verify_certificate(ptls_verify_certificate_t *_self, ptls_t *
 
 int ptls_mbedtls_load_certificates(ptls_context_t *ctx, char const *cert_pem_file)
 {
-    ctx->certificates.list = picoquic_mbedtls_get_certs_from_file(cert_pem_file, 
+    ctx->certificates.list = picoquic_mbedtls_get_certs_from_file(cert_pem_file,
         &ctx->certificates.count);
     return((ctx->certificates.list == NULL) ? 0 : -1);
 }
@@ -1285,7 +1285,7 @@ int ptls_mbedtls_load_certificates(ptls_context_t *ctx, char const *cert_pem_fil
 * merely has to provide a "certicate verifier" callback. We consider two ways of
 * providing this callback: an API very close to the details of the MBedTLS code,
 * with a list of explicit parameters, and a "portable" API whose only
-* parameter is a file name for the list of trusted certificates. 
+* parameter is a file name for the list of trusted certificates.
 */
 
 ptls_mbedtls_verify_certificate_t* ptls_mbedssl_init_verify_certificate_complete(
@@ -1316,7 +1316,12 @@ ptls_verify_certificate_t* ptls_mbedtls_get_certificate_verifier(char const* pem
         int psa_ret;
         mbedtls_x509_crt_init(chain_head);
 
-        psa_ret = mbedtls_x509_crt_parse_file(chain_head, pem_fname);
+        psa_ret = 1;
+        if (pem_fname)
+        {
+            psa_ret = mbedtls_x509_crt_parse_file(chain_head, pem_fname);
+        }
+
         if (psa_ret == 0) {
             *is_cert_store_not_empty = 1;
             verifier = ptls_mbedssl_init_verify_certificate_complete(chain_head, NULL, NULL, NULL);
