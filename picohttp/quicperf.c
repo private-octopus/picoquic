@@ -395,7 +395,7 @@ char const* quicperf_parse_stream_choice(char const* text, quicperf_stream_desc_
     }
     else if (err_fd != NULL) {
         fprintf(err_fd, "Cannot parse media stream \"%s\" description: %s\n", 
-            (desc->id == NULL || desc->id[0] == 0) ? "no ID parsed" : desc->id,
+            (desc->id[0] == 0) ? "no ID parsed" : desc->id,
             text0);
 
     }
