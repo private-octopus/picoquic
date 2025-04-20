@@ -161,7 +161,7 @@ int cc_ns_asym_test()
 char const* cc_compete_media_scenario = "=a1:d50:p2:S:n250:80; \
      = vlow: s30 :p4:S:n150 : 3750 : G30 : I37500; \
      = vmid: s30 :p6:S:n150 : 6250 : G30 : I62500 : D250000;";
-#define MEDIA_TEST_LOG "ns_mediatest_log.csv"
+#define MEDIA_TEST_LOG "ns_mediatest_log.txt"
 
 int cc_ns_media_test()
 {
