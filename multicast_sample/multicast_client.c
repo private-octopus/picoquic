@@ -241,7 +241,7 @@ int multicast_client_create_additional_path(picoquic_cnx_t *cnx, multicast_clien
     struct sockaddr_storage addr_local_storage;
     int need_to_wait = 0;
 
-    // TODO MC: Check if ports are correct below (currently set to zero)
+    // CHECK MC: Check if ports are correct below (currently set to zero)
 
     if (cb_ctx->multipath_state != 0)
     {
@@ -320,7 +320,7 @@ int multicast_client_callback(picoquic_cnx_t *cnx,
     {
         switch (fin_or_event)
         {
-        // TODO MC: Maybe set flag here to react to in the other callback
+        // CHECK MC: Maybe set flag here to react to in the other callback
         case picoquic_callback_path_available:
             client_ctx->second_path_unique_id = stream_id; /* stream id is used as unique path id here */
 
@@ -590,11 +590,11 @@ static int multicast_client_loop_cb(picoquic_quic_t *quic, picoquic_packet_loop_
             }
             else
             {
-                // TODO MC: The code below is adapted from picoquicdemo, currently not executed.
+                // CHECK MC: The code below is adapted from picoquicdemo, currently not executed.
                 // It seems that the state is never be reached
                 if (picoquic_get_cnx_state(cb_ctx->cnx) == picoquic_state_client_almost_ready && cb_ctx->notified_ready == 0)
                 {
-                    // TODO MC: Check if handshake check below is needed
+                    // CHECK MC: Check if handshake check below is needed
                     /* if almost ready, display results of negotiation */
                     if (picoquic_tls_is_psk_handshake(cb_ctx->cnx))
                     {
@@ -603,7 +603,7 @@ static int multicast_client_loop_cb(picoquic_quic_t *quic, picoquic_packet_loop_
                                                  "%s", "netloop: The session was properly resumed!");
                     }
 
-                    // TODO MC: The following is copied from picoquicdemo, check if 0-RTT should be supported
+                    // CHECK MC: The following is copied from picoquicdemo, check if 0-RTT should be supported
                     if (cb_ctx->cnx->zero_rtt_data_accepted)
                     {
                         fprintf(stdout, "netloop: Zero RTT data is accepted!\n");
@@ -621,7 +621,7 @@ static int multicast_client_loop_cb(picoquic_quic_t *quic, picoquic_packet_loop_
                     cb_ctx->notified_ready = 1;
                 }
 
-                // TODO MC: Check conditions here (in which state the new path will be opened?)
+                // CHECK MC: Check conditions here (in which state the new path will be opened?)
                 if (picoquic_get_cnx_state(cb_ctx->cnx) >= picoquic_state_server_almost_ready && cb_ctx->multipath_initiated == 0)
                 {
                     int is_already_allowed = 0;
@@ -738,9 +738,10 @@ static int multicast_client_init(char const *server_name, int server_port, char 
             picoquic_set_log_level(*quic, 1);
             picoquic_enable_path_callbacks_default(*quic, 1);
 
-            // Always enable multipath
-            picoquic_set_default_multipath_option(*quic, 1);
-            printf("init: Accept multipath: %s.\n", ((*quic)->default_multipath_option) ? "Yes" : "No");
+            // Always enable multicast
+            picoquic_set_default_multicast_option(*quic, 1);
+            picoquic_set_default_multicast_client_params(*quic, NULL);
+            printf("init: Accept multicast: %s.\n", ((*quic)->default_multicast_option) ? "Yes" : "No");
         }
     }
     /* Initialize the callback context and create the connection context.
@@ -843,7 +844,7 @@ int picoquic_multicast_client(char const *server_name, int server_port, char con
 
     if (ret == 0)
     {
-        fprintf(stdout, "client: Enable multipath: %s.\n", (client_ctx.cnx->is_multipath_enabled) ? "Success" : "Refused");
+        fprintf(stdout, "client: Enable multicast: %s.\n", (client_ctx.cnx->is_multicast_enabled) ? "Success" : "Refused");
     }
 
     /* Done. At this stage, we could print out statistics, etc. */

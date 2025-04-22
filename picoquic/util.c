@@ -1341,3 +1341,28 @@ char* picoquic_uint8_to_str(char* text, size_t text_len, const uint8_t* data, si
 
     return text;
 }
+
+// CLEAN MC: Debug print functions
+void print_bits(const uint8_t* array, size_t length) {
+    for (size_t i = 0; i < length; i++) {
+        for (int bit = 7; bit >= 0; bit--) {
+            printf("%d", (array[i] >> bit) & 1);
+        }
+        printf(" ");
+    }
+    printf("\n");
+}
+
+void print_bits_16(const uint16_t* array, size_t length) {
+    for (size_t i = 0; i < length; i++) {
+        for (int bit = 15; bit >= 8; bit--) {
+            printf("%d", (array[i] >> bit) & 1);
+        }
+        printf(" ");
+        for (int bit = 7; bit >= 0; bit--) {
+            printf("%d", (array[i] >> bit) & 1);
+        }
+        printf(", ");
+    }
+    printf("\n");
+}

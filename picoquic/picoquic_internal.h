@@ -589,6 +589,8 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
 #define picoquic_tp_initial_max_path_id  0x0f739bbc1b666d0cull /* per draft quic multipath 12 */ 
+#define picoquic_tp_multicast_server_support  0xff3e808 /* per draft-jholland-quic-multicast-06 */
+#define picoquic_tp_multicast_client_params  0xff3e800 /* per draft-jholland-quic-multicast-06 */ 
 #define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
@@ -631,6 +633,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_spinbit_version_enum default_spin_policy;
     picoquic_lossbit_version_enum default_lossbit_policy;
     uint32_t default_multipath_option;
+    uint32_t default_multicast_option;
     uint64_t default_handshake_timeout;
     uint64_t crypto_epoch_length_max; /* Default packet interval between key rotations */
     uint32_t max_simultaneous_logs;
@@ -1309,6 +1312,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_datagram_ready : 1; /* Active polling for datagrams */
     unsigned int is_immediate_ack_required : 1; /* Should send an ACK asap */
     unsigned int is_multipath_enabled : 1; /* Unique path ID extension has been negotiated */
+    unsigned int is_multicast_enabled : 1; /* multicast support extension has been negotiated */
     unsigned int is_lost_feedback_notification_required : 1; /* CC algorithm requests lost feedback notification */
     unsigned int is_forced_probe_up_required : 1; /* application wants "probe up" if CC requests it */
     unsigned int is_address_discovery_provider : 1; /* send the address discovery extension */

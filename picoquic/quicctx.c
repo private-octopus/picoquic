@@ -850,6 +850,46 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
     }
 }
 
+void picoquic_set_default_multicast_option(picoquic_quic_t* quic, int multicast_option)
+{
+    quic->default_multicast_option = multicast_option;
+
+    if (multicast_option & 1) {
+        quic->default_tp.is_multicast_enabled = 1;
+    }
+}
+
+int picoquic_set_default_multicast_client_params(picoquic_quic_t* quic, 
+    picoquic_tp_multicast_client_params_t* params)
+{
+    if (params == NULL) {
+        if ((params = malloc(sizeof(*params))) == NULL) {
+            fprintf(stderr, "init: Could not alloc multicast_client_params");
+            return -1;
+        }
+
+        // CHECK MC: Review these default settings
+        params->ipv4_channels_allowed = 1;
+        params->ipv6_channels_allowed = 0;
+        params->max_aggregate_rate = (uint8_t) 20; // 20 kbits
+        params->max_channel_ids = (uint8_t) 2;
+
+        params->hash_algorithms_supported = (uint8_t) 2;
+        params->hash_algorithms_list[0] = (uint16_t) PICOQUIC_SHA384;
+        params->hash_algorithms_list[1] = (uint16_t) PICOQUIC_SHA256;
+
+        params->encryption_algorithms_supported = 2;
+        params->encryption_algorithms_list[0] = (uint16_t) PICOQUIC_AES_256_GCM_SHA384;
+        params->encryption_algorithms_list[1] = (uint16_t) PICOQUIC_AES_128_GCM_SHA256;
+    }
+
+    if (quic->default_multicast_option & 1) {
+        memcpy(&quic->default_tp.multicast_client_params, params, sizeof(picoquic_tp_multicast_client_params_t));
+    }
+
+    return 0;
+}
+
 void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode)
 {
     if (mode > 0 && mode <= 3) {

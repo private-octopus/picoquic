@@ -156,6 +156,10 @@ extern "C" {
 
 #define PICOQUIC_GROUP_SECP256R1 23
 
+/* See: https://www.iana.org/assignments/named-information/named-information.xhtml#hash-alg */
+#define PICOQUIC_SHA256 1
+#define PICOQUIC_SHA384 7
+
 /*
 * Connection states, useful to expose the state to the application.
 */
@@ -303,6 +307,17 @@ typedef struct st_picoquic_tp_version_negotiation_t {
     uint32_t* supported;
 } picoquic_tp_version_negotiation_t;
 
+typedef struct st_picoquic_tp_multicast_client_params_t {
+    int ipv6_channels_allowed;
+    int ipv4_channels_allowed;
+    uint64_t max_aggregate_rate;
+    uint64_t max_channel_ids;
+    uint64_t hash_algorithms_supported;
+    uint64_t encryption_algorithms_supported;
+    uint16_t hash_algorithms_list[10];
+    uint16_t encryption_algorithms_list[10];
+} picoquic_tp_multicast_client_params_t;
+
 typedef struct st_picoquic_tp_t {
     uint64_t initial_max_stream_data_bidi_local;
     uint64_t initial_max_stream_data_bidi_remote;
@@ -325,6 +340,8 @@ typedef struct st_picoquic_tp_t {
     picoquic_tp_version_negotiation_t version_negotiation;
     int enable_bdp_frame;
     int is_multipath_enabled;
+    int is_multicast_enabled;
+    picoquic_tp_multicast_client_params_t multicast_client_params;
     uint64_t initial_max_path_id;
     int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
 } picoquic_tp_t;
@@ -659,6 +676,12 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 
 /* Set the multipath option for the context */
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option);
+
+/* Set the multicast option for the context */
+void picoquic_set_default_multicast_option(picoquic_quic_t* quic, int multicast_option);
+
+/* Set the multicast client params for the context */
+int picoquic_set_default_multicast_client_params(picoquic_quic_t* quic, picoquic_tp_multicast_client_params_t* params);
 
 /* Set the Address Discovery mode for the context */
 void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode);
