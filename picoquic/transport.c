@@ -41,11 +41,11 @@ void print_bits(const uint8_t* array, size_t length) {
 
 void print_bits_16(const uint16_t* array, size_t length) {
     for (size_t i = 0; i < length; i++) {
-        for (int bit = 7; bit >= 0; bit--) {
+        for (int bit = 15; bit >= 8; bit--) {
             printf("%d", (array[i] >> bit) & 1);
         }
         printf(" ");
-        for (int bit = 15; bit >= 8; bit--) {
+        for (int bit = 7; bit >= 0; bit--) {
             printf("%d", (array[i] >> bit) & 1);
         }
         printf(", ");
@@ -407,12 +407,12 @@ size_t picoquic_decode_transport_param_multicast_client_params(uint8_t * bytes, 
     }
 
     for (uint64_t i = 0; i < client_params->hash_algorithms_supported; i++) {
-        memcpy(&client_params->hash_algorithms_list[i], bytes + byte_index, 2);
+        client_params->hash_algorithms_list[i] = PICOPARSE_16(bytes + byte_index);
         byte_index += 2;
     }
 
     for (uint64_t i = 0; i < client_params->encryption_algorithms_supported; i++) {
-        memcpy(&client_params->encryption_algorithms_list[i], bytes + byte_index, 2);
+        client_params->encryption_algorithms_list[i] = PICOPARSE_16(bytes + byte_index);
         byte_index += 2;
     }
 
@@ -442,26 +442,54 @@ int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
     return ret;
 }
 
-// TODO MC: Negotiate multicast options
 int picoquic_negotiate_multicast_option(picoquic_cnx_t* cnx)
 {
     int ret = 0;
-
     cnx->is_multicast_enabled = 0;
 
     if (cnx->remote_parameters.is_multicast_enabled && cnx->local_parameters.is_multicast_enabled &&
         (cnx->client_mode || cnx->remote_parameters.multicast_client_params.ipv4_channels_allowed || 
             cnx->remote_parameters.multicast_client_params.ipv6_channels_allowed)
         ) {
-        // TODO MC: Check hash and encryption algo support match and choose one each
-        /* Enable the multicast option */
-        cnx->is_multicast_enabled = 1;
-    } 
-    else {
-        if (!cnx->client_mode) {
-            cnx->local_parameters.is_multicast_enabled = 0;
-        } 
+        if (cnx->client_mode) { 
+            /* Enable the multicast option on client */
+            fprintf(stdout, "Enable multicast on client - Remote: %i, Local: %i\n", cnx->remote_parameters.is_multicast_enabled, cnx->local_parameters.is_multicast_enabled);
+            cnx->is_multicast_enabled = 1;
+            return ret;
+        }
+
+        int hash_supported = 0;
+        int encr_supported = 0;
+
+        for (int i = 0; i < cnx->remote_parameters.multicast_client_params.hash_algorithms_supported; i++) {
+            if ((uint16_t) cnx->remote_parameters.multicast_client_params.hash_algorithms_list[i] == (uint16_t) PICOQUIC_SHA384
+            || (uint16_t) cnx->remote_parameters.multicast_client_params.hash_algorithms_list[i] == (uint16_t) PICOQUIC_SHA256) {
+                hash_supported = 1;
+                break;
+            }
+        }
+
+        for (int i = 0; i < cnx->remote_parameters.multicast_client_params.encryption_algorithms_supported; i++) {
+            if (cnx->remote_parameters.multicast_client_params.encryption_algorithms_list[i] == PICOQUIC_AES_256_GCM_SHA384
+            || cnx->remote_parameters.multicast_client_params.encryption_algorithms_list[i] == PICOQUIC_AES_128_GCM_SHA256) {
+                encr_supported = 1;
+                break;
+            }
+        }
+
+        if (hash_supported && encr_supported) {
+            /* Enable the multicast option on server */
+            fprintf(stdout, "Enable multicast on server - Remote: %i, Local: %i\n", cnx->remote_parameters.is_multicast_enabled, cnx->local_parameters.is_multicast_enabled);
+            cnx->is_multicast_enabled = 1;
+            return ret;
+        }
     }
+    if (!cnx->client_mode && cnx->is_multicast_enabled == 0) {
+        /* Reset local multicast support */
+        cnx->local_parameters.is_multicast_enabled = 0;
+    }
+
+    fprintf(stdout, "Multicast negotiation result: CNX parameter: %i, Remote: %i, Local: %i\n", cnx->is_multicast_enabled, cnx->remote_parameters.is_multicast_enabled, cnx->local_parameters.is_multicast_enabled);
 
     return ret;
 }
