@@ -28,31 +28,6 @@
 #include "tls_api.h"
 #include <string.h>
 
-// CLEAN MC: Debug print functions
-void print_bits(const uint8_t* array, size_t length) {
-    for (size_t i = 0; i < length; i++) {
-        for (int bit = 7; bit >= 0; bit--) {
-            printf("%d", (array[i] >> bit) & 1);
-        }
-        printf(" ");
-    }
-    printf("\n");
-}
-
-void print_bits_16(const uint16_t* array, size_t length) {
-    for (size_t i = 0; i < length; i++) {
-        for (int bit = 15; bit >= 8; bit--) {
-            printf("%d", (array[i] >> bit) & 1);
-        }
-        printf(" ");
-        for (int bit = 7; bit >= 0; bit--) {
-            printf("%d", (array[i] >> bit) & 1);
-        }
-        printf(", ");
-    }
-    printf("\n");
-}
-
 uint64_t picoquic_transport_param_varint_decode(picoquic_cnx_t * cnx, uint8_t* bytes, uint64_t extension_length, int* ret) 
 {
     uint64_t n64 = 0;

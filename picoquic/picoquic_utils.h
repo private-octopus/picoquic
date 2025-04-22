@@ -170,6 +170,10 @@ const uint8_t* picoquic_frames_uint64_decode(const uint8_t * bytes, const uint8_
 const uint8_t* picoquic_frames_length_data_skip(const uint8_t * bytes, const uint8_t * bytes_max);
 const uint8_t* picoquic_frames_cid_decode(const uint8_t * bytes, const uint8_t * bytes_max, picoquic_connection_id_t * cid);
 
+// CLEAN MC: Remove debugging functions
+void print_bits(const uint8_t* array, size_t length);
+void print_bits_16(const uint16_t* array, size_t length);
+
 #define VARINT_LEN(bytes) (((uint8_t)1) << ((bytes[0] >> 6)&3))
 #define VARINT_LEN_T(bytes, t_len) (((t_len)1) << ((bytes[0] >> 6)&3))
 
