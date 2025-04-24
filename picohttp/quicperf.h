@@ -141,6 +141,7 @@ typedef struct st_quicperf_ctx_t {
     int datagram_is_activated;
     /* Reporting file if available */
     FILE* report_file;
+    unsigned int report_file_has_header : 1;
     /* Start of media statistics */
     uint64_t stats_start;
     /* Statistics gathered on client */
