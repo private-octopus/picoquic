@@ -650,7 +650,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         /* Manage key rotation */
         if (ph->key_phase == cnx->key_phase_dec) {
             /* AEAD Decrypt */
-            if (cnx->is_multipath_enabled && ph->ptype) {
+            if (cnx->is_multipath_enabled && ph->ptype == picoquic_packet_1rtt_protected) {
                 decoded = picoquic_aead_decrypt_mp(decoded_bytes + ph->offset,
                     bytes + ph->offset,
                     ph->payload_length, 
@@ -2079,6 +2079,16 @@ int picoquic_incoming_segment(
         current_time, decrypted_data, &ph, &cnx, consumed, &new_context_created);
     bytes = decrypted_data->data;
 
+    if (ret == 0 && cnx != NULL) {
+        if (ph.ptype == picoquic_packet_1rtt_protected) {
+            /* Find the arrival path and update its state */
+            ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, if_index_to, current_time, &path_id, &path_is_not_allocated);
+        }
+        else {
+            path_id = 0;
+        }
+    }
+
     /* Verify that the segment coalescing is for the same destination ID */
     if (picoquic_is_connection_id_null(previous_dest_id)) {
         /* This is the first segment in the incoming packet */
@@ -2089,7 +2099,8 @@ int picoquic_incoming_segment(
 
         /* if needed, log that the packet is received */
         if (cnx != NULL) {
-            picoquic_log_pdu(cnx, 1, current_time, addr_from, addr_to, packet_length);
+            picoquic_log_pdu(cnx, 1, current_time, addr_from, addr_to, packet_length,
+                (path_id >= 0) ? cnx->path[path_id]->unique_path_id : 0);
         }
         else {
             picoquic_log_quic_pdu(quic, 1, current_time, picoquic_val64_connection_id(ph.dest_cnx_id),
@@ -2128,14 +2139,9 @@ int picoquic_incoming_segment(
                 /* Reserved bits were not set to zero */
                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
             }
-            else {
-                /* Find the arrival path and update its state */
-                ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, if_index_to, current_time, &path_id, &path_is_not_allocated);
-            }
         }
 
         if (ret == 0) {
-            /* TODO: identify incoming path */
             picoquic_log_packet(cnx, (path_id < 0)?NULL:cnx->path[path_id], 1, current_time, &ph, bytes, *consumed);
         }
         else if (is_buffered) {

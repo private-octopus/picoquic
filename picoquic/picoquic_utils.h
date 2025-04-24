@@ -276,7 +276,6 @@ typedef struct st_picoquictest_sim_link_t {
     uint64_t queue_delay_max;
     uint64_t picosec_per_byte;
     uint64_t microsec_latency;
-    uint64_t* loss_mask;
     uint64_t packets_dropped;
     uint64_t packets_sent;
     uint64_t jitter;
@@ -284,6 +283,13 @@ typedef struct st_picoquictest_sim_link_t {
     size_t path_mtu;
     picoquictest_sim_packet_t* first_packet;
     picoquictest_sim_packet_t* last_packet;
+    /* variables for inserting packet loss */
+    uint64_t* loss_mask; /* 64 bit error mask used in unit tests */
+    uint64_t nb_loss_in_burst; /* Size of the error burst in picoquic_ns */
+    uint64_t packets_between_losses; /* Bursts will happen every N packets */
+    uint64_t packets_sent_next_burst; /* Next burst starts when this many packets are sent. */
+    uint64_t nb_losses_this_burst; /* Number of packets still to lose in this burst */
+    uint64_t end_of_burst_time; /* Bursts are limited in time to avoid silly effects */
     /* Variables for random early drop simulation */
     uint64_t red_drop_mask;
     uint64_t red_queue_max;

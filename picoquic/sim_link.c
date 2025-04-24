@@ -39,7 +39,7 @@ picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
     uint64_t microsec_latency, uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t current_time)
 {
     picoquictest_sim_link_t* link = (picoquictest_sim_link_t*)malloc(sizeof(picoquictest_sim_link_t));
-    if (link != 0) {
+    if (link != NULL) {
         double pico_d = (data_rate_in_gps <= 0) ? 0 : (8000.0 / data_rate_in_gps);
         memset(link, 0, sizeof(picoquictest_sim_link_t));
         pico_d *= (1.024 * 1.024); /* account for binary units */
@@ -136,6 +136,32 @@ static int picoquictest_sim_link_testloss(uint64_t* loss_mask)
     return (int)loss_bit;
 }
 
+static int picoquictest_sim_link_simloss(picoquictest_sim_link_t* link, uint64_t current_time)
+{
+    int loss = 0;
+
+    if (link->nb_loss_in_burst > 0) {
+        if (link->packets_sent > link->packets_sent_next_burst)
+        {
+            uint64_t picosec_wait = link->nb_loss_in_burst * link->picosec_per_byte * 1536;
+            link->packets_sent_next_burst = link->packets_sent + link->packets_between_losses;
+            link->nb_losses_this_burst = link->nb_loss_in_burst - 1;
+            link->end_of_burst_time = current_time + (picosec_wait / 1000000);
+            loss = 1;
+        }
+        else if (link->nb_losses_this_burst > 0) {
+            if (current_time > link->end_of_burst_time) {
+                link->nb_losses_this_burst = 0;
+            }
+            else {
+                loss = 1;
+                link->nb_losses_this_burst -= 1;
+            }
+        }
+    }
+    return loss;
+}
+
 static uint64_t picoquictest_sim_link_jitter(picoquictest_sim_link_t* link)
 {
     uint64_t jitter = link->jitter;
@@ -203,7 +229,7 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
             packet->ecn_mark = PICOQUIC_ECN_CE;
         }
         if (packet->length > link->path_mtu || picoquictest_sim_link_testloss(link->loss_mask) != 0 ||
-            link->is_switched_off) {
+            link->is_switched_off || picoquictest_sim_link_simloss(link, current_time)) {
             link->packets_dropped++;
             free(packet);
         } else {

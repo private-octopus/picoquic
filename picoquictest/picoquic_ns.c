@@ -371,6 +371,10 @@ int picoquic_ns_create_link(picoquic_ns_ctx_t* cc_ctx, int link_id)
     }
     else {
         cc_ctx->link[link_id]->l4s_max = link_spec->l4s_max;
+        cc_ctx->link[link_id]->nb_loss_in_burst = link_spec->nb_loss_in_burst;
+        cc_ctx->link[link_id]->packets_between_losses = link_spec->packets_between_losses;
+        cc_ctx->link[link_id]->packets_sent_next_burst = cc_ctx->link[link_id]->packets_sent +
+            link_spec->packets_between_losses;
     }
     return ret;
 }
@@ -705,6 +709,10 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
     link->queue_delay_max = vary_link_spec->queue_delay_max;
     link->l4s_max = vary_link_spec->l4s_max;
     link->is_suspended = (data_rate_in_gps <= 0);
+    link->nb_loss_in_burst = vary_link_spec->nb_loss_in_burst;
+    link->packets_between_losses = vary_link_spec->packets_between_losses;
+    link->packets_sent_next_burst = link->packets_sent + vary_link_spec->packets_between_losses;
+
 
     /* Reschedule the next packets */
     while (packet != NULL) {
