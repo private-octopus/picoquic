@@ -359,3 +359,31 @@ int cc_ns_varylink_test()
 
     return picoquic_ns(&spec, NULL);
 }
+
+/* Check using seed bandwidth and seed RTT for a satellite test.
+* Without setting the seed parameters, this test completes in
+* 7.25 seconds. If the seed is properly set, it completes in
+* 6.25 seconds. Stting the target completion time to 6.5 seconds
+* verifies that seeding works as expected.
+ */
+static char const* cc_compete_satellite_scenario = "=b1:*1:397:20000000;";
+
+int cc_ns_satellite_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0x5a, 0xbb, 0, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_bbr_algorithm;
+    spec.nb_connections = 1;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_satellite_scenario;
+    spec.data_rate_in_gbps = 0.05;
+    spec.latency = 300000;
+    spec.main_target_time = 6500000;
+    spec.queue_delay_max = 600000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+    spec.seed_cwin = 3750000;
+    spec.seed_rtt = 600010;
+
+    return picoquic_ns(&spec, NULL);
+}
