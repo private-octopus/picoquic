@@ -105,6 +105,8 @@ typedef struct st_picoquic_ns_client_t {
     char const* cc_option_string;
     quicperf_ctx_t* quicperf_ctx;
     picoquic_connection_id_t icid;
+    uint64_t seed_cwin;
+    uint64_t seed_rtt;
 } picoquic_ns_client_t;
 
 typedef struct st_picoquic_ns_ctx_t {
@@ -144,7 +146,17 @@ int picoquic_ns_server_callback(picoquic_cnx_t* cnx,
             if (cc_ctx->client_ctx[i] != NULL && cc_ctx->client_ctx[i]->cnx != NULL &&
                 picoquic_compare_connection_id(&cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id,
                     &cc_ctx->client_ctx[i]->cnx->path[0]->first_tuple->p_local_cnxid->cnx_id) == 0) {
-                picoquic_set_congestion_algorithm_ex(cnx, cc_ctx->client_ctx[i]->cc_algo, cc_ctx->client_ctx[i]->cc_option_string);
+                picoquic_set_congestion_algorithm_ex(cnx, cc_ctx->client_ctx[i]->cc_algo,
+                    cc_ctx->client_ctx[i]->cc_option_string);
+                if (cc_ctx->client_ctx[i]->seed_cwin > 0 &&
+                    cc_ctx->client_ctx[i]->seed_rtt > 0) {
+                    uint8_t* ip_addr;
+                    uint8_t ip_addr_len;
+                    picoquic_get_ip_addr((struct sockaddr*)&cc_ctx->addr[1], &ip_addr, &ip_addr_len);
+                    picoquic_seed_bandwidth(cnx, cc_ctx->client_ctx[i]->seed_rtt,
+                        cc_ctx->client_ctx[i]->seed_cwin, ip_addr, ip_addr_len);
+                }
+                
                 ret = 0;
             }
         }
@@ -199,6 +211,8 @@ int picoquic_ns_create_client_ctx(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t*
             client_ctx->start_time = spec->main_start_time;
             client_ctx->cc_algo = spec->main_cc_algo;
             client_ctx->cc_option_string = spec->main_cc_options;
+            client_ctx->seed_cwin = spec->seed_cwin;
+            client_ctx->seed_rtt = spec->seed_rtt;
             scenario_text = spec->main_scenario_text;
         }
         else {
@@ -371,6 +385,10 @@ int picoquic_ns_create_link(picoquic_ns_ctx_t* cc_ctx, int link_id)
     }
     else {
         cc_ctx->link[link_id]->l4s_max = link_spec->l4s_max;
+        cc_ctx->link[link_id]->nb_loss_in_burst = link_spec->nb_loss_in_burst;
+        cc_ctx->link[link_id]->packets_between_losses = link_spec->packets_between_losses;
+        cc_ctx->link[link_id]->packets_sent_next_burst = cc_ctx->link[link_id]->packets_sent +
+            link_spec->packets_between_losses;
     }
     return ret;
 }
@@ -536,7 +554,7 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec, FILE* err_fd
             cc_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_1;
         }
         /* Create the client contexts */
-        if (spec->nb_connections > PICOQUIC_NS_MAX_CLIENTS) {
+        if (spec->nb_connections > PICOQUIC_NS_MAX_CLIENTS || spec->nb_connections == 0) {
             ret = -1;
         }
         else {
@@ -705,6 +723,10 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
     link->queue_delay_max = vary_link_spec->queue_delay_max;
     link->l4s_max = vary_link_spec->l4s_max;
     link->is_suspended = (data_rate_in_gps <= 0);
+    link->nb_loss_in_burst = vary_link_spec->nb_loss_in_burst;
+    link->packets_between_losses = vary_link_spec->packets_between_losses;
+    link->packets_sent_next_burst = link->packets_sent + vary_link_spec->packets_between_losses;
+
 
     /* Reschedule the next packets */
     while (packet != NULL) {

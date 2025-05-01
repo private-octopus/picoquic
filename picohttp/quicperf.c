@@ -395,7 +395,7 @@ char const* quicperf_parse_stream_choice(char const* text, quicperf_stream_desc_
     }
     else if (err_fd != NULL) {
         fprintf(err_fd, "Cannot parse media stream \"%s\" description: %s\n", 
-            (desc->id == NULL || desc->id[0] == 0) ? "no ID parsed" : desc->id,
+            (desc->id[0] == 0) ? "no ID parsed" : desc->id,
             text0);
 
     }
@@ -811,6 +811,14 @@ int quicperf_send_datagrams(picoquic_cnx_t* cnx, uint64_t current_time, quicperf
     return ret;
 }
 
+static void quicperf_set_report_file_header(quicperf_ctx_t* ctx)
+{
+    if (ctx->report_file != NULL && !ctx->report_file_has_header) {
+        (void)fprintf(ctx->report_file, "stream, repeat, group, frame, init_time, recv_time,\n");
+        ctx->report_file_has_header = 1;
+    }
+}
+
 /* Receive a datagram
 */
 void quicperf_receive_datagram(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, const uint8_t* bytes, size_t length)
@@ -873,6 +881,7 @@ void quicperf_receive_datagram(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, const u
         }
 
         if (ctx->report_file != NULL) {
+            quicperf_set_report_file_header(ctx);
             if (ctx->scenarios[stream_ctx->stream_desc_index].id[0] != 0) {
                 fprintf(ctx->report_file, "%s,", ctx->scenarios[stream_ctx->stream_desc_index].id);
             }
@@ -1088,6 +1097,7 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
                 }
 
                 if (ctx->report_file != NULL) {
+                    quicperf_set_report_file_header(ctx);
                     if (ctx->scenarios[stream_ctx->stream_desc_index].id[0] != 0) {
                         fprintf(ctx->report_file, "%s,", ctx->scenarios[stream_ctx->stream_desc_index].id);
                     }

@@ -54,6 +54,8 @@ typedef struct st_picoquic_ns_link_spec_t {
     uint64_t jitter; /* delay jitter, microseconds, both directions */
     uint64_t queue_delay_max; /* if specified, specify the max buffer queuing for the link, in microseconds */
     uint64_t l4s_max; /* if specified, specify the max buffer queuing for the link, in microseconds */
+    uint64_t nb_loss_in_burst; /* if specified, loose that many packet in burst of errors every interval */
+    uint64_t packets_between_losses; /* packets to send between two losses */
 } picoquic_ns_link_spec_t;
 
 typedef struct st_picoquic_ns_spec_t {
@@ -66,6 +68,8 @@ typedef struct st_picoquic_ns_spec_t {
     char const* main_cc_options;
     picoquic_congestion_algorithm_t const* background_cc_algo;
     char const* background_cc_options;
+    uint64_t seed_cwin; /* seed bandwidth, server side. */
+    uint64_t seed_rtt; /* seed rtt, server side. */
     int nb_connections;
     double data_rate_in_gbps; /* datarate, server to clients, defaults to 10 mbps */
     double data_rate_up_in_gbps; /* datarate, server to clients, defaults to data rate */

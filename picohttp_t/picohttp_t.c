@@ -119,6 +119,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cc_ns_wifi_fade", cc_ns_wifi_fade_test },
     { "cc_ns_wifi_suspension", cc_ns_wifi_suspension_test },
     { "cc_ns_varylink", cc_ns_varylink_test },
+    { "cc_ns_satellite", cc_ns_satellite_test },
     { "cc_ns_media", cc_ns_media_test }
 };
 
