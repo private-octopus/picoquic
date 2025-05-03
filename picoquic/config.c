@@ -101,7 +101,6 @@ static option_table_line_t option_table[] = {
     { picoquic_option_SSLKEYLOG, '8', "sslkeylog", 0, "", "Enable SSLKEYLOG" },
 #endif
     { picoquic_option_AddressDiscovery, 'J', "addr_disc", 1, "mode", "provider (0), receiver (1) or both (2)."},
-    { picoquic_option_HYSTART, 'H', "hystart", 1, "number", "Enable HyStart. (0 = disabled, 1 = HyStart (default), 2 = HyStart++)"},
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -440,17 +439,6 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         else {
             config->address_discovery_mode = v + 1;
-        }
-        break;
-    }
-    case picoquic_option_HYSTART: {
-        int v = config_atoi(params, nb_params, 0, &ret);
-        if (ret != 0 || v < 0 || v > (int)picoquic_hystart_alg_disabled_t) {
-            fprintf(stderr, "Invalid HyStart algorithm: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
-            ret = (ret == 0) ? -1 : ret;
-        }
-        else {
-            config->hystart_algorithm = (picoquic_hystart_alg_t)v;
         }
         break;
     }
@@ -870,8 +858,6 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
 
         picoquic_set_log_level(quic, config->use_long_log);
 
-        picoquic_set_default_hystart_algorithm(quic, config->hystart_algorithm);
-
         picoquic_set_preemptive_repeat_policy(quic, config->do_preemptive_repeat);
 
         picoquic_disable_port_blocking(quic, config->disable_port_blocking);
@@ -930,7 +916,6 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     config->initial_random = 3;
     config->cwin_max = UINT64_MAX;
     config->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000;
-    config->hystart_algorithm = PICOQUIC_DEFAULT_HYSTART_ALGORITHM; /* Set HyStart as default HyStart algorithm. */
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)

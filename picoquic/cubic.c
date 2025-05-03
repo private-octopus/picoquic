@@ -45,12 +45,37 @@ typedef struct st_picoquic_cubic_state_t {
     double W_reno;
     uint64_t ssthresh;
     picoquic_min_max_rtt_t rtt_filter;
+    picoquic_hystart_alg_t hystart_alg;
+    const char* option_string;
 
     /* HyStart++ */
     picoquic_hystart_pp_state_t hystart_pp_state;
 } picoquic_cubic_state_t;
 
-static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time) {
+static void cubic_set_options(picoquic_cubic_state_t* cubic_state)
+{
+    const char* x = cubic_state->option_string;
+
+    if (x != NULL) {
+        char c;
+        while ((c = *x) != 0) {
+            x++;
+            switch (c) {
+            case 'Y': {
+                /* Reading digits into an uint64_t  */
+                cubic_state->hystart_alg = atoi(x);
+                x++;
+                break;
+            }
+            case ':':
+            default:
+                break;
+            }
+        }
+    }
+}
+
+static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, const char* option_string, uint64_t current_time) {
     memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
     memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
     cubic_state->alg_state = picoquic_cubic_alg_slow_start;
@@ -61,10 +86,17 @@ static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_cnx_t* cnx
     cubic_state->previous_start_of_epoch = 0;
     cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
     cubic_state->recovery_sequence = 0;
-    path_x->cwin = PICOQUIC_CWIN_INITIAL;
+    cubic_state->option_string = option_string;
+    cubic_set_options(cubic_state);
 
+    /* HyStart++ */
     memset(&cubic_state->hystart_pp_state, 0, sizeof(picoquic_hystart_pp_state_t));
-    picoquic_hystart_pp_reset(&cubic_state->hystart_pp_state);
+    if (IS_HYSTART_PP(cubic_state->hystart_alg)) {
+        picoquic_hystart_pp_reset(&cubic_state->hystart_pp_state);
+        picoquic_hystart_pp_init(&cubic_state->hystart_pp_state, cnx, path_x);
+    }
+
+    path_x->cwin = PICOQUIC_CWIN_INITIAL;
 }
 
 static void cubic_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
@@ -77,12 +109,7 @@ static void cubic_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const
 #endif
     path_x->congestion_alg_state = (void*)cubic_state;
     if (cubic_state != NULL) {
-        cubic_reset(cubic_state, cnx, path_x, current_time);
-    }
-
-    /* HyStart++ */
-    if (IS_HYSTART_PP_ENABLED(cnx)) {
-        picoquic_hystart_pp_init(&cubic_state->hystart_pp_state, cnx, path_x);
+        cubic_reset(cubic_state, cnx, path_x, option_string, current_time);
     }
 }
 
@@ -156,8 +183,10 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
     uint64_t current_time)
 {
     cubic_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
+
     /* Update similar to new reno, but different beta */
     cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
+
     /* Apply fast convergence */
     if (cubic_state->W_max < cubic_state->W_last_max) {
         cubic_state->W_last_max = cubic_state->W_max;
@@ -166,6 +195,7 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
     else {
         cubic_state->W_last_max = cubic_state->W_max;
     }
+
     /* Compute the new ssthresh */
     cubic_state->ssthresh = (uint64_t)(cubic_state->W_max * PICOQUIC_CUBIC_BETA_ECN * (double)path_x->send_mtu);
     if (cubic_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
@@ -242,7 +272,7 @@ static void cubic_notify(
 
     if (cubic_state != NULL) {
         switch (notification) {
-            /* RTT measurements will happen before acknowledgement is signalled */
+            /* RTT measurements will happen before acknowledgement is signaled */
             case picoquic_congestion_notification_acknowledgement:
                 switch (cubic_state->alg_state) {
                     case picoquic_cubic_alg_slow_start:
@@ -253,7 +283,7 @@ static void cubic_notify(
                             /* cubic_state->hystart_pp_state.css_baseline_min_rtt == UINT64_MAX -> in SS
                              * cubic_state->hystart_pp_state.css_baseline_min_rtt < UINT64_MAX -> in CSS */
                             path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged,
-                            (IS_HYSTART_PP_ENABLED(cnx)) ? IS_IN_CSS(cubic_state->hystart_pp_state) : 0);
+                            (IS_HYSTART_PP(cubic_state->hystart_alg)) ? IS_IN_CSS(cubic_state->hystart_pp_state) : 0);
 
                             /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                             if (path_x->cwin >= cubic_state->ssthresh) {
@@ -339,7 +369,7 @@ static void cubic_notify(
                 if (cubic_state->alg_state == picoquic_cubic_alg_slow_start &&
                     cubic_state->ssthresh == UINT64_MAX) {
 
-                    switch (cnx->hystart_alg) {
+                    switch (cubic_state->hystart_alg) {
                         case picoquic_hystart_alg_hystart_t:
                             /* HyStart. */
                             /* Using RTT increases as signal to get out of initial slow start */
@@ -442,11 +472,10 @@ static void cubic_notify(
              * cover cubic_reset().
              */
             case picoquic_congestion_notification_reset:
-                cubic_reset(cubic_state, cnx, path_x, current_time);
+                cubic_reset(cubic_state, cnx, path_x, cubic_state->option_string, current_time);
                 break;
             default:
                 break;
-
         }
 
         /* Compute pacing data */
@@ -491,7 +520,7 @@ static void dcubic_exit_slow_start(
 /*
  * Define delay-based Cubic, dcubic, and alternative congestion control protocol similar to Cubic but 
  * using delay measurements instead of reacting to packet losses. This is a quic hack, intended for
- * trials of a lossy satellite networks.
+ * trials of lossy satellite networks.
  */
 static void dcubic_notify(
     picoquic_cnx_t* cnx, picoquic_path_t* path_x,
@@ -532,7 +561,7 @@ static void dcubic_notify(
                             path_x->cwin = picoquic_cc_update_cwin_for_long_rtt(path_x);
                         }
 
-                        switch (cnx->hystart_alg) {
+                        switch (cubic_state->hystart_alg) {
                             case picoquic_hystart_alg_hystart_t:
                                 /* HyStart. */
                                 /* Using RTT increases as congestion signal. This is used
@@ -608,8 +637,6 @@ static void dcubic_notify(
                 }
                 break;
             case picoquic_congestion_notification_spurious_repeat:
-                /* In contrast to Cubic, do nothing here */
-                break;
             case picoquic_congestion_notification_ecn_ec:
                 /* In contrast to Cubic, do nothing here */
                 break;

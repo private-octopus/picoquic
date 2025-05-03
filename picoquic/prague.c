@@ -111,16 +111,51 @@ typedef struct st_picoquic_prague_state_t {
     uint64_t l4s_epoch_ect1;
     uint64_t l4s_epoch_ce;
     picoquic_min_max_rtt_t rtt_filter;
+    picoquic_hystart_alg_t hystart_alg;
+    const char* option_string;
 
     /* HyStart++ */
     picoquic_hystart_pp_state_t hystart_pp_state;
 } picoquic_prague_state_t;
 
-static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
+static void prague_set_options(picoquic_prague_state_t* pr_state)
+{
+    const char* x = pr_state->option_string;
+
+    if (x != NULL) {
+        char c;
+        while ((c = *x) != 0) {
+            x++;
+            switch (c) {
+                case 'Y': {
+                    /* Reading digits into an uint64_t  */
+                    pr_state->hystart_alg = atoi(x);
+                    x++;
+                    break;
+                }
+                case ':':
+                default:
+                    break;
+            }
+        }
+    }
+}
+
+static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, char const* option_string)
 {
     pr_state->alg_state = picoquic_prague_alg_slow_start;
     pr_state->ssthresh = UINT64_MAX;
     pr_state->alpha = 0;
+    pr_state->option_string = option_string;
+    prague_set_options(pr_state);
+
+    /* HyStart++. */
+    memset(&pr_state->hystart_pp_state, 0, sizeof(pr_state->hystart_pp_state));
+    if (IS_HYSTART_PP(pr_state->hystart_alg)) {
+        picoquic_hystart_pp_reset(&pr_state->hystart_pp_state);
+        picoquic_hystart_pp_init(&pr_state->hystart_pp_state, cnx, path_x);
+    }
+
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
 }
 
@@ -136,15 +171,10 @@ void picoquic_prague_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char co
     if (pr_state != NULL) {
         memset(pr_state, 0, sizeof(picoquic_prague_state_t));
         path_x->congestion_alg_state = (void*)pr_state;
-        picoquic_prague_init_reno(pr_state, path_x);
+        picoquic_prague_init_reno(pr_state, cnx, path_x, option_string);
     }
     else {
         path_x->congestion_alg_state = NULL;
-    }
-
-    /* HyStart++ */
-    if (IS_HYSTART_PP_ENABLED(cnx)) {
-        picoquic_hystart_pp_init(&pr_state->hystart_pp_state, cnx, path_x);
     }
 }
 
@@ -173,14 +203,10 @@ static void picoquic_prague_reset_l3s(picoquic_cnx_t* cnx, picoquic_prague_state
 }
 
 
-static void picoquic_prague_reset(picoquic_cnx_t * cnx, picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
+static void picoquic_prague_reset(picoquic_cnx_t * cnx, picoquic_prague_state_t* pr_state, picoquic_path_t* path_x, const char* option_string)
 {
-    picoquic_prague_init_reno(pr_state, path_x);
+    picoquic_prague_init_reno(pr_state, cnx, path_x, option_string);
     picoquic_prague_reset_l3s(cnx, pr_state, path_x);
-
-    /* HyStart++. */
-    memset(&pr_state->hystart_pp_state, 0, sizeof(pr_state->hystart_pp_state));
-    picoquic_hystart_pp_reset(&pr_state->hystart_pp_state);
 }
 
 
@@ -376,7 +402,7 @@ void picoquic_prague_notify(
                     path_x->cwin = picoquic_cc_update_cwin_for_long_rtt(path_x);
                 }
 
-                switch (cnx->hystart_alg) {
+                switch (pr_state->hystart_alg) {
                     case picoquic_hystart_alg_hystart_t:
                         /* HyStart. */
                         /* Using RTT increases as signal to get out of initial slow start */
@@ -426,7 +452,7 @@ void picoquic_prague_notify(
             }
             break;
         case picoquic_congestion_notification_reset:
-            picoquic_prague_reset(cnx, pr_state, path_x);
+            picoquic_prague_reset(cnx, pr_state, path_x, pr_state->option_string);
             break;
         default:
             /* ignore */

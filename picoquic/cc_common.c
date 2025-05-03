@@ -198,9 +198,9 @@ uint64_t picoquic_cc_slow_start_increase(picoquic_path_t * path_x, uint64_t nb_d
      * path_x->cnx->cwin_blocked is set to true
      * (path_x->cwin < path_x->bytes_in_transit) != path_x->cnx->cwin_blocked?
      */
-    if (!path_x->cnx->cwin_blocked) {
+    /*if (!path_x->cnx->cwin_blocked) {
         return 0;
-    }
+    }*/
 
     return nb_delivered;
 }

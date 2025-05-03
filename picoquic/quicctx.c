@@ -665,7 +665,6 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         quic->default_datagram_priority = PICOQUIC_DEFAULT_STREAM_PRIORITY;
         quic->cwin_max = UINT64_MAX;
         quic->sequence_hole_pseudo_period = PICOQUIC_DEFAULT_HOLE_PERIOD;
-        quic->default_hystart_alg = PICOQUIC_DEFAULT_HYSTART_ALGORITHM;
 
         picoquic_init_transport_parameters(&quic->default_tp, 0);
 
@@ -3977,7 +3976,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->callback_fn = quic->default_callback_fn;
         cnx->callback_ctx = quic->default_callback_ctx;
         cnx->congestion_alg = quic->default_congestion_alg;
-        cnx->hystart_alg = quic->default_hystart_alg;
         cnx->is_preemptive_repeat_enabled = quic->is_preemptive_repeat_enabled;
 
         /* Initialize key rotation interval to default value */
@@ -5083,17 +5081,6 @@ void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congesti
 }
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg)
-void picoquic_set_default_hystart_algorithm(picoquic_quic_t* quic, picoquic_hystart_alg_t hystart_algorithm)
-{
-    quic->default_hystart_alg = hystart_algorithm;
-}
-
-void picoquic_set_hystart_algorithm(picoquic_cnx_t* cnx, picoquic_hystart_alg_t hystart_algorithm)
-{
-    cnx->hystart_alg = hystart_algorithm;
-}
-
-void picoquic_set_default_wifi_shadow_rtt(picoquic_quic_t* quic, uint64_t wifi_shadow_rtt)
 {
     picoquic_set_congestion_algorithm_ex(cnx, alg, NULL);
 }

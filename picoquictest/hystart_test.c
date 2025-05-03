@@ -30,9 +30,10 @@
 #include "picoquic_binlog.h"
 #include "autoqlog.h"
 #include "picoquictest.h"
+#include "picoquic_cubic.h"
 
 static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hystart_alg_t hystart_algo, size_t data_size, uint64_t max_completion_time,
-    uint64_t datarate, uint64_t latency, uint64_t jitter, int has_loss)
+                            uint64_t datarate, uint64_t latency, uint64_t jitter, int has_loss)
 {
     uint64_t simulated_time = 0;
     uint64_t picoseq_per_byte = (1000000ull * 8) / datarate;
@@ -58,11 +59,19 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
 
     if (ret == 0) {
         /* Set CC algo. */
-        picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
-        picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
-        /* Enable HyStart++. */
-        picoquic_set_default_hystart_algorithm(test_ctx->qserver, hystart_algo);
-        picoquic_set_hystart_algorithm(test_ctx->cnx_client, hystart_algo);
+        const char* option_string = "Y0";
+        switch (hystart_algo) {
+            case picoquic_hystart_alg_hystart_pp_t:
+                option_string = "Y1";
+                break;
+            case picoquic_hystart_alg_disabled_t:
+                option_string = "Y2";
+                break;
+            default:
+                break;
+        }
+        picoquic_set_default_congestion_algorithm_ex(test_ctx->qserver, ccalgo, option_string);
+        picoquic_set_congestion_algorithm_ex(test_ctx->cnx_client, ccalgo, option_string);
 
         /* Configure links. */
         test_ctx->c_to_s_link->jitter = jitter;
@@ -75,7 +84,7 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
         test_ctx->immediate_exit = 1;
 
         /* set the binary log on the client side */
-        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
         /* Since the client connection was created before the binlog was set, force log of connection header */
         binlog_new_connection(test_ctx->cnx_client);
@@ -98,15 +107,15 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
 /* TODO These test doesn't make sense currently. For debugging only. */
 int slow_start_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_disabled_t, 1000000, 950000, 10, 20000, 5000, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_disabled_t, 20000000, 950000, 50, 300000, 0, 0);
 }
 
 int hystart_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_t, 1000000, 950000, 10, 20000, 5000, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_t, 20000000, 950000, 50, 300000, 0, 0);
 }
 
 int hystart_pp_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_pp_t, 1000000, 1050000, 10, 20000, 5000, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_pp_t, 20000000, 1050000, 50, 300000, 0, 0);
 }
