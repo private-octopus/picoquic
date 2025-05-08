@@ -132,7 +132,7 @@ void picoquic_hystart_pp_keep_track(picoquic_hystart_pp_state_t* hystart_pp_stat
 
 void picoquic_hystart_pp_test(picoquic_hystart_pp_state_t* hystart_pp_state);
 
-int picoquic_cc_hystart_pp_test(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_per_ack_state_t* ack_state);
+int picoquic_cc_hystart_pp_test(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t rtt_measurement);
 
 /*
  * Returns CWIN based on bandwidth estimation if larger than current CWIN. Otherwise, returns current CWIN.

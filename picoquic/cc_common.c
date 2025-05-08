@@ -347,11 +347,11 @@ void picoquic_hystart_pp_test(picoquic_hystart_pp_state_t *hystart_pp_state) {
     }
 }
 
-int picoquic_cc_hystart_pp_test(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_per_ack_state_t* ack_state) {
+int picoquic_cc_hystart_pp_test(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t rtt_measurement) {
     int ret = 0;
 
     /* Keep track of the minimum RTT seen so far. */
-    picoquic_hystart_pp_keep_track(hystart_pp_state, ack_state->rtt_measurement);
+    picoquic_hystart_pp_keep_track(hystart_pp_state, rtt_measurement);
 
     /* Switch between SS and CSS. */
     picoquic_hystart_pp_test(hystart_pp_state);

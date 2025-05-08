@@ -260,6 +260,9 @@ typedef struct st_picoquic_bbr1_state_t {
     uint64_t bytes_delivered; /* Number of bytes signalled in ACK notify, but not processed yet */
     uint64_t send_quantum;
     picoquic_min_max_rtt_t rtt_filter;
+    /* HyStart++. */
+    picoquic_hystart_alg_t hystart_alg;
+    picoquic_hystart_pp_state_t hystart_pp_state;
     uint64_t target_cwnd;
     double pacing_gain;
     double cwnd_gain;
@@ -436,9 +439,12 @@ static void picoquic_bbr1_set_options(picoquic_bbr1_state_t* bbr1_state)
                     break;
                 }
             }
-            case ':':
-                /* Ignore */
+            case 'Y':
+                /* Reading digits into an uint64_t  */
+                bbr1_state->hystart_alg = atoi(x);
+                x++;
                 break;
+            case ':': /* Ignore. */
             default:
                 break;
             }
@@ -446,7 +452,7 @@ static void picoquic_bbr1_set_options(picoquic_bbr1_state_t* bbr1_state)
     }
 }
 
-static void picoquic_bbr1_reset(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x, uint64_t current_time)
+static void picoquic_bbr1_reset(picoquic_bbr1_state_t* bbr1_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
     memset(bbr1_state, 0, sizeof(picoquic_bbr1_state_t));
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
@@ -464,6 +470,12 @@ static void picoquic_bbr1_reset(picoquic_bbr1_state_t* bbr1_state, picoquic_path
     BBR1EnterStartup(bbr1_state);
     BBR1SetSendQuantum(bbr1_state, path_x);
     BBR1UpdateTargetCwnd(bbr1_state);
+
+    /* HyStart++ */
+    memset(&bbr1_state->hystart_pp_state, 0, sizeof(picoquic_hystart_pp_state_t));
+    if (IS_HYSTART_PP(bbr1_state->hystart_alg)) {
+        picoquic_hystart_pp_reset(&bbr1_state->hystart_pp_state, cnx, path_x);
+    }
 }
 
 static void picoquic_bbr1_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
@@ -474,7 +486,7 @@ static void picoquic_bbr1_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, ch
     path_x->congestion_alg_state = (void*)bbr1_state;
     if (bbr1_state != NULL) {
         bbr1_state->option_string = option_string;
-        picoquic_bbr1_reset(bbr1_state, path_x, current_time);
+        picoquic_bbr1_reset(bbr1_state, cnx, path_x, current_time);
     }
 }
 
@@ -1238,9 +1250,21 @@ static void picoquic_bbr1_notify(
             }
 
             if (bbr1_state->state == picoquic_bbr1_alg_startup_long_rtt) {
-                if (picoquic_cc_hystart_test(&bbr1_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
-                    cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
-                    BBR1ExitStartupLongRtt(bbr1_state, path_x, current_time);
+                switch (bbr1_state->hystart_alg) {
+                    case picoquic_hystart_alg_hystart_t:
+                        if (picoquic_cc_hystart_test(&bbr1_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                        cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
+                                BBR1ExitStartupLongRtt(bbr1_state, path_x, current_time);
+                        }
+                        break;
+                    case picoquic_hystart_alg_hystart_pp_t:
+                        if (picoquic_cc_hystart_pp_test(&bbr1_state->hystart_pp_state, cnx, path_x, ack_state->rtt_measurement)) {
+                            BBR1ExitStartupLongRtt(bbr1_state, path_x, current_time);
+                        }
+                        break;
+                    case picoquic_hystart_alg_disabled_t:
+                    default:
+                        break;
                 }
             }
 
@@ -1255,7 +1279,8 @@ static void picoquic_bbr1_notify(
                     bbr1_state->rt_prop_stamp = current_time;
                 }
                 if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                    path_x->cwin += picoquic_cc_slow_start_increase(path_x, bbr1_state->bytes_delivered);
+                    path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged,
+                            (IS_HYSTART_PP(bbr1_state->hystart_alg)) ? IS_IN_CSS(bbr1_state->hystart_pp_state) : 0);
                 }
                 bbr1_state->bytes_delivered = 0;
 
@@ -1288,7 +1313,7 @@ static void picoquic_bbr1_notify(
         case picoquic_congestion_notification_cwin_blocked:
             break;
         case picoquic_congestion_notification_reset:
-            picoquic_bbr1_reset(bbr1_state, path_x, current_time);
+            picoquic_bbr1_reset(bbr1_state, cnx, path_x, current_time);
             break;
         case picoquic_congestion_notification_seed_cwin:
             if (bbr1_state->state == picoquic_bbr1_alg_startup_long_rtt) {

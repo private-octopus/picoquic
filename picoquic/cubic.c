@@ -416,7 +416,7 @@ static void cubic_notify(
                             break;
                         case picoquic_hystart_alg_hystart_pp_t:
                             /* HyStart++. */
-                            if (picoquic_cc_hystart_pp_test(&cubic_state->hystart_pp_state, cnx, path_x, ack_state)) {
+                            if (picoquic_cc_hystart_pp_test(&cubic_state->hystart_pp_state, cnx, path_x, ack_state->rtt_measurement)) {
                                 /* Enter CA. */
                                 cubic_state->ssthresh = path_x->cwin;
                                 cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
@@ -554,7 +554,7 @@ static void dcubic_notify(
                                 break;
                             case picoquic_hystart_alg_hystart_pp_t:
                                 /* HyStart++. */
-                                if (picoquic_cc_hystart_pp_test(&cubic_state->hystart_pp_state, cnx, path_x, ack_state)) {
+                                if (picoquic_cc_hystart_pp_test(&cubic_state->hystart_pp_state, cnx, path_x, ack_state->rtt_measurement)) {
                                     /* Enter CA. */
                                     cubic_state->ssthresh = path_x->cwin;
                                     cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
