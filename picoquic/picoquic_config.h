@@ -75,7 +75,6 @@ typedef enum {
     picoquic_option_CWIN_MAX,
     picoquic_option_SSLKEYLOG,
     picoquic_option_AddressDiscovery,
-    picoquic_option_HYSTART,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
