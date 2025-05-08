@@ -417,35 +417,15 @@ void picoquic_prague_notify(
                         break;
                     case picoquic_hystart_alg_hystart_pp_t:
                         /* HyStart++. */
-                        /* Keep track of the minimum RTT seen so far. */
-                        picoquic_hystart_pp_keep_track(&pr_state->hystart_pp_state, ack_state->rtt_measurement);
-
-                        /* Switch between SS and CSS. */
-                        picoquic_hystart_pp_test(&pr_state->hystart_pp_state);
-
-                        /* Check if we reached the end of the round. */
-                        /* HyStart++ measures rounds using sequence numbers, as follows:
-                         * - When windowEnd is ACKed, the current round ends and windowEnd is set to SND.NXT.
-                         */
-                        if (picoquic_cc_get_ack_number(cnx, path_x) != UINT64_MAX && picoquic_cc_get_ack_number(cnx, path_x) >= pr_state->hystart_pp_state.current_round.window_end) {
-                            /* Round has ended. */
-                            if (IS_IN_CSS(pr_state->hystart_pp_state)) {
-                                /* In CSS increase CSS round counter. */
-                                pr_state->hystart_pp_state.css_round_count++;
-
-                                /* Enter CA if css round counter > max css rounds. */
-                                if (pr_state->hystart_pp_state.css_round_count >= PICOQUIC_HYSTART_PP_CSS_ROUNDS) {
-                                    /* RTT increased too much, get out of slow start! */
-                                    pr_state->ssthresh = path_x->cwin;
-                                    pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
-                                    path_x->is_ssthresh_initialized = 1;
-                                }
-                            }
-
-                            /* Start new round. */
-                            picoquic_hystart_pp_start_new_round(&pr_state->hystart_pp_state, cnx, path_x);
+                        if (picoquic_cc_hystart_pp_test(&pr_state->hystart_pp_state, cnx, path_x, ack_state)) {
+                            /* Enter CA. */
+                            pr_state->ssthresh = path_x->cwin;
+                            pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
+                            path_x->is_ssthresh_initialized = 1;
                         }
                         break;
+                    case picoquic_hystart_alg_disabled_t:
+                        /* do nothing. */
                     default:
                         break;
                 }

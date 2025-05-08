@@ -198,9 +198,9 @@ uint64_t picoquic_cc_slow_start_increase(picoquic_path_t * path_x, uint64_t nb_d
      * path_x->cnx->cwin_blocked is set to true
      * (path_x->cwin < path_x->bytes_in_transit) != path_x->cnx->cwin_blocked?
      */
-    /*if (!path_x->cnx->cwin_blocked) {
+    if (!path_x->cnx->cwin_blocked) {
         return 0;
-    }*/
+    }
 
     return nb_delivered;
 }
@@ -337,7 +337,7 @@ void picoquic_hystart_pp_test(picoquic_hystart_pp_state_t *hystart_pp_state) {
             uint64_t rtt_thresh = MAX(PICOQUIC_HYSTART_PP_MIN_RTT_THRESH, MIN(hystart_pp_state->current_round.last_round_min_rtt / PICOQUIC_HYSTART_PP_MIN_RTT_DIVISOR, PICOQUIC_HYSTART_PP_MAX_RTT_THRESH));
 
             if (hystart_pp_state->current_round.current_round_min_rtt >= (hystart_pp_state->current_round.last_round_min_rtt + rtt_thresh)) {
-                fprintf(stdout, "Enter CSS.\n");
+                fprintf(stdout, "Enter CSS.\n"); /* TODO remove after debug. */
                 /* Exit slow start and enter CSS. */
                 hystart_pp_state->css_baseline_min_rtt = hystart_pp_state->current_round.current_round_min_rtt;
             }
@@ -346,12 +346,44 @@ void picoquic_hystart_pp_test(picoquic_hystart_pp_state_t *hystart_pp_state) {
         /* In conservative slow start (CSS) */
         if (hystart_pp_state->current_round.rtt_sample_count >= PICOQUIC_HYSTART_PP_N_RTT_SAMPLE) {
             if (hystart_pp_state->current_round.current_round_min_rtt < hystart_pp_state->css_baseline_min_rtt) {
-                fprintf(stdout, "Resume SS.\n");
+                fprintf(stdout, "Resume SS.\n"); /* TODO remove after debug. */
                 /* Resume slow start including hystart++. */
                 hystart_pp_state->css_baseline_min_rtt = UINT64_MAX;
             }
         }
     }
+}
+
+int picoquic_cc_hystart_pp_test(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_per_ack_state_t* ack_state) {
+    int ret = 0;
+
+    /* Keep track of the minimum RTT seen so far. */
+    picoquic_hystart_pp_keep_track(hystart_pp_state, ack_state->rtt_measurement);
+
+    /* Switch between SS and CSS. */
+    picoquic_hystart_pp_test(hystart_pp_state);
+
+    /* Check if we reached the end of the round. */
+    /* HyStart++ measures rounds using sequence numbers, as follows:
+     * - When windowEnd is ACKed, the current round ends and windowEnd is set to SND.NXT.
+     */
+    if (picoquic_cc_get_ack_number(cnx, path_x) != UINT64_MAX && picoquic_cc_get_ack_number(cnx, path_x) >= hystart_pp_state->current_round.window_end) {
+        /* Round has ended. */
+        if (IS_IN_CSS((*hystart_pp_state))) {
+            /* In CSS increase CSS round counter. */
+            hystart_pp_state->css_round_count++;
+
+            /* Enter CA if css round counter > max css rounds. */
+            if (hystart_pp_state->css_round_count >= PICOQUIC_HYSTART_PP_CSS_ROUNDS) {
+                ret = 1;
+            }
+        }
+
+        /* Start new round. */
+        picoquic_hystart_pp_start_new_round(hystart_pp_state, cnx, path_x);
+    }
+
+    return ret;
 }
 
 uint64_t picoquic_cc_update_target_cwin_estimation(picoquic_path_t* path_x) {

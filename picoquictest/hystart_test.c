@@ -91,7 +91,7 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-                NULL, 0, data_size, (has_loss) ? 0x10000000 : 0, 0, 2 * latency, max_completion_time);
+                NULL, 0, data_size, (has_loss) ? 0x10000000 : 0, 0, 20 * latency, max_completion_time);
         }
     }
 
@@ -107,15 +107,15 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
 /* TODO These test doesn't make sense currently. For debugging only. */
 int slow_start_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_disabled_t, 20000000, 950000, 50, 300000, 0, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_disabled_t, 10000000, 8000000, 10, 20000, 0, 0);
 }
 
 int hystart_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_t, 20000000, 950000, 50, 300000, 0, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_t, 10000000, 8000000, 10, 20000, 0, 0);
 }
 
 int hystart_pp_example_test()
 {
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_pp_t, 20000000, 1050000, 50, 300000, 0, 0);
+    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_pp_t, 10000000, 8000000, 10, 20000, 0, 0);
 }
