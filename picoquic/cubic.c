@@ -92,8 +92,7 @@ static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_cnx_t* cnx
     /* HyStart++ */
     memset(&cubic_state->hystart_pp_state, 0, sizeof(picoquic_hystart_pp_state_t));
     if (IS_HYSTART_PP(cubic_state->hystart_alg)) {
-        picoquic_hystart_pp_reset(&cubic_state->hystart_pp_state);
-        picoquic_hystart_pp_init(&cubic_state->hystart_pp_state, cnx, path_x);
+        picoquic_hystart_pp_reset(&cubic_state->hystart_pp_state, cnx, path_x);
     }
 
     path_x->cwin = PICOQUIC_CWIN_INITIAL;

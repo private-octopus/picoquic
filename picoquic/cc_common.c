@@ -258,7 +258,7 @@ uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t n
  * - currentRoundMinRTT = infinity
  * - currRTT = infinity
  */
-void picoquic_hystart_pp_reset(picoquic_hystart_pp_state_t* hystart_pp_state) {
+void picoquic_hystart_pp_reset(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x) {
     /* init round */
     hystart_pp_state->current_round.last_round_min_rtt = UINT64_MAX;
     hystart_pp_state->current_round.current_round_min_rtt = UINT64_MAX;
@@ -271,11 +271,6 @@ void picoquic_hystart_pp_reset(picoquic_hystart_pp_state_t* hystart_pp_state) {
     hystart_pp_state->css_baseline_min_rtt = UINT64_MAX;
     hystart_pp_state->css_round_count = 0;
 
-    /* TODO Move start round here. */
-}
-
-void picoquic_hystart_pp_init(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x) {
-    picoquic_hystart_pp_reset(hystart_pp_state);
     picoquic_hystart_pp_start_new_round(hystart_pp_state, cnx, path_x);
 }
 
@@ -337,7 +332,6 @@ void picoquic_hystart_pp_test(picoquic_hystart_pp_state_t *hystart_pp_state) {
             uint64_t rtt_thresh = MAX(PICOQUIC_HYSTART_PP_MIN_RTT_THRESH, MIN(hystart_pp_state->current_round.last_round_min_rtt / PICOQUIC_HYSTART_PP_MIN_RTT_DIVISOR, PICOQUIC_HYSTART_PP_MAX_RTT_THRESH));
 
             if (hystart_pp_state->current_round.current_round_min_rtt >= (hystart_pp_state->current_round.last_round_min_rtt + rtt_thresh)) {
-                fprintf(stdout, "Enter CSS.\n"); /* TODO remove after debug. */
                 /* Exit slow start and enter CSS. */
                 hystart_pp_state->css_baseline_min_rtt = hystart_pp_state->current_round.current_round_min_rtt;
             }
@@ -346,7 +340,6 @@ void picoquic_hystart_pp_test(picoquic_hystart_pp_state_t *hystart_pp_state) {
         /* In conservative slow start (CSS) */
         if (hystart_pp_state->current_round.rtt_sample_count >= PICOQUIC_HYSTART_PP_N_RTT_SAMPLE) {
             if (hystart_pp_state->current_round.current_round_min_rtt < hystart_pp_state->css_baseline_min_rtt) {
-                fprintf(stdout, "Resume SS.\n"); /* TODO remove after debug. */
                 /* Resume slow start including hystart++. */
                 hystart_pp_state->css_baseline_min_rtt = UINT64_MAX;
             }

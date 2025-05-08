@@ -152,8 +152,7 @@ static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoqui
     /* HyStart++. */
     memset(&pr_state->hystart_pp_state, 0, sizeof(pr_state->hystart_pp_state));
     if (IS_HYSTART_PP(pr_state->hystart_alg)) {
-        picoquic_hystart_pp_reset(&pr_state->hystart_pp_state);
-        picoquic_hystart_pp_init(&pr_state->hystart_pp_state, cnx, path_x);
+        picoquic_hystart_pp_reset(&pr_state->hystart_pp_state, cnx, path_x);
     }
 
     path_x->cwin = PICOQUIC_CWIN_INITIAL;

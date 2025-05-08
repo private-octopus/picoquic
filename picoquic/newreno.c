@@ -217,8 +217,7 @@ static void picoquic_newreno_reset(picoquic_newreno_state_t* nr_state, picoquic_
     /* HyStart++. */
     memset(&nr_state->hystart_pp_state, 0, sizeof(nr_state->hystart_pp_state));
     if (IS_HYSTART_PP(nr_state->hystart_alg)) {
-        picoquic_hystart_pp_reset(&nr_state->hystart_pp_state);
-        picoquic_hystart_pp_init(&nr_state->hystart_pp_state, cnx, path_x);
+        picoquic_hystart_pp_reset(&nr_state->hystart_pp_state, cnx, path_x);
     }
 
     path_x->cwin = nr_state->nrss.cwin;

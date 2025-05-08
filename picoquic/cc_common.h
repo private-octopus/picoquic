@@ -114,10 +114,6 @@ typedef struct st_picoquic_hystart_pp_round_t {
     //uint64_t curr_rtt; /* TODO check if needed */
     uint64_t rtt_sample_count;
     uint64_t window_end;
-
-    /* TODO DEBUG. Remove after development finished. */
-    uint64_t start_time;
-    uint64_t window_start;
 } picoquic_hystart_pp_round_t;
 
 typedef struct st_picoquic_hystart_pp_state_t {
@@ -128,9 +124,7 @@ typedef struct st_picoquic_hystart_pp_state_t {
     uint64_t css_round_count;
 } picoquic_hystart_pp_state_t;
 
-void picoquic_hystart_pp_reset(picoquic_hystart_pp_state_t* hystart_pp_state);
-
-void picoquic_hystart_pp_init(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x);
+void picoquic_hystart_pp_reset(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 void picoquic_hystart_pp_start_new_round(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
