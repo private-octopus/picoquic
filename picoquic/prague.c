@@ -342,7 +342,7 @@ void picoquic_prague_notify(
             case picoquic_prague_alg_slow_start:
                 /* TODO l4s_prague test fails. Have to increase max_completion time about 100 ms */
                 if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                    path_x->cwin += picoquic_cc_slow_start_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
+                    path_x->cwin += picoquic_cc_slow_start_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, (IS_HYSTART_PP(pr_state->hystart_alg)) ? IS_IN_CSS(pr_state->hystart_pp_state) : 0, pr_state->alpha);
 
                     /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                     if (path_x->cwin >= pr_state->ssthresh) {

@@ -515,9 +515,7 @@ static const picoquic_test_def_t test_table[] = {
     { "config_option_letters", config_option_letters_test },
     { "config_quic", config_quic_test },
     { "config_usage", config_usage_test },
-    {"slow_start_example", slow_start_example_test },
-    {"hystart_example", hystart_example_test },
-    {"hystart_pp_example", hystart_pp_example_test }
+    {"hystart", hystart_test },
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

@@ -30,14 +30,19 @@
 #include "picoquic_binlog.h"
 #include "autoqlog.h"
 #include "picoquictest.h"
+#include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
 #include "picoquic_cubic.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_newreno.h"
+#include "picoquic_prague.h"
 
 static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hystart_alg_t hystart_algo, size_t data_size, uint64_t max_completion_time,
                             uint64_t datarate, uint64_t latency, uint64_t jitter, int has_loss)
 {
     uint64_t simulated_time = 0;
     uint64_t picoseq_per_byte = (1000000ull * 8) / datarate;
-    picoquic_connection_id_t initial_cid = { {0x55, 0x45, 0, 0, 0, 0, 0, 0}, 8 };
+    picoquic_connection_id_t initial_cid = { {0x08, 0x22, 0, 0, 0, 0, 0, 0}, 8 };
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = 0;
 
@@ -104,18 +109,32 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
     return ret;
 }
 
-/* TODO These test doesn't make sense currently. For debugging only. */
-int slow_start_example_test()
-{
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_disabled_t, 10000000, 8000000, 10, 20000, 0, 0);
-}
+int hystart_test() {
+    picoquic_congestion_algorithm_t* ccalgos[] = {
+        picoquic_newreno_algorithm,
+        picoquic_cubic_algorithm,
+        picoquic_dcubic_algorithm,
+        //picoquic_fastcc_algorithm,
+        picoquic_bbr_algorithm,
+        picoquic_prague_algorithm,
+        picoquic_bbr1_algorithm
+    };
+    uint64_t max_completion_times[] = {
+        22000,
+        23500,
+        22000,
+        //21000,
+        25000,
+        25000,
+        25000
+    };
+    int ret = 0;
 
-int hystart_example_test()
-{
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_t, 10000000, 8000000, 10, 20000, 0, 0);
-}
+    for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
+        for (picoquic_hystart_alg_t hystart = picoquic_hystart_alg_hystart_t; hystart <= picoquic_hystart_alg_disabled_t; hystart++) {
+            ret = hystart_test_one(ccalgos[i], hystart, 200000000, max_completion_times[i], 250, 125000, 0, 0);
+        }
+    }
 
-int hystart_pp_example_test()
-{
-    return hystart_test_one(picoquic_cubic_algorithm, picoquic_hystart_alg_hystart_pp_t, 10000000, 8000000, 10, 20000, 0, 0);
+    return ret;
 }
