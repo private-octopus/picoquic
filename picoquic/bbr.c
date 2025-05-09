@@ -564,7 +564,7 @@ static void BBRSetOptions(picoquic_bbr_state_t* bbr_state)
 }
 
 /* Initialization of the BBR state */
-static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time, char const * option_string)
+static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, char const * option_string)
 {
     /* TODO:
     init_windowed_max_filter(filter = BBR.MaxBwFilter, value = 0, time = 0)
@@ -601,11 +601,17 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
     BBRInitFullPipe(bbr_state);
     BBRInitPacingRate(bbr_state, path_x);
     BBREnterStartup(bbr_state, path_x);
+
+    /* HyStart++ */
+    memset(&bbr_state->hystart_pp_state, 0, sizeof(picoquic_hystart_pp_state_t));
+    if (IS_HYSTART_PP(bbr_state->hystart_alg)) {
+        picoquic_hystart_pp_reset(&bbr_state->hystart_pp_state, cnx, path_x);
+    }
 }
 
-static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
-    BBROnInit(bbr_state, path_x, current_time, bbr_state->option_string);
+    BBROnInit(bbr_state, cnx, path_x, current_time, bbr_state->option_string);
 }
 
 static void picoquic_bbr_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
@@ -615,7 +621,7 @@ static void picoquic_bbr_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, cha
 
     path_x->congestion_alg_state = (void*)bbr_state;
     if (bbr_state != NULL) {
-        BBROnInit(bbr_state, path_x, current_time, option_string);
+        BBROnInit(bbr_state, cnx, path_x, current_time, option_string);
     }
 }
 
@@ -2464,7 +2470,7 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_cwin_blocked:
             break;
         case picoquic_congestion_notification_reset:
-            picoquic_bbr_reset(bbr_state, path_x, current_time);
+            picoquic_bbr_reset(bbr_state, cnx, path_x, current_time);
             break;
         case picoquic_congestion_notification_seed_cwin:
             BBRSetBdpSeed(bbr_state, ack_state->nb_bytes_acknowledged);

@@ -454,7 +454,6 @@ static void picoquic_bbr1_set_options(picoquic_bbr1_state_t* bbr1_state)
 
 static void picoquic_bbr1_reset(picoquic_bbr1_state_t* bbr1_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
-    memset(bbr1_state, 0, sizeof(picoquic_bbr1_state_t));
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
     bbr1_state->rt_prop = UINT64_MAX; 
     picoquic_bbr1_set_options(bbr1_state);
@@ -485,6 +484,7 @@ static void picoquic_bbr1_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, ch
 
     path_x->congestion_alg_state = (void*)bbr1_state;
     if (bbr1_state != NULL) {
+        memset(bbr1_state, 0, sizeof(picoquic_bbr1_state_t));
         bbr1_state->option_string = option_string;
         picoquic_bbr1_reset(bbr1_state, cnx, path_x, current_time);
     }

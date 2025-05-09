@@ -38,7 +38,7 @@
 #include "picoquic_prague.h"
 
 static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hystart_alg_t hystart_algo, size_t data_size, uint64_t max_completion_time,
-                            uint64_t datarate, uint64_t latency, uint64_t jitter, int has_loss)
+                            uint64_t datarate, uint64_t latency, uint64_t jitter, uint64_t queue_delay_max)
 {
     uint64_t simulated_time = 0;
     uint64_t picoseq_per_byte = (1000000ull * 8) / datarate;
@@ -51,10 +51,7 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
     initial_cid.id[4] = (datarate > 0xff) ? 0xff : (uint8_t)datarate;
     initial_cid.id[5] = (latency > 2550000) ? 0xff : (uint8_t)(latency / 10000);
     initial_cid.id[6] = (jitter > 255000) ? 0xff : (uint8_t)(jitter / 1000);
-    initial_cid.id[7] = (has_loss) ? 0x30 : 0x00;
-    if (has_loss) {
-        initial_cid.id[7] |= 0x20;
-    }
+    initial_cid.id[7] = (queue_delay_max > 255000) ? 0xff : (uint8_t)(queue_delay_max / 1000);
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid, 0);
 
@@ -94,10 +91,8 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
         /* Since the client connection was created before the binlog was set, force log of connection header */
         binlog_new_connection(test_ctx->cnx_client);
 
-        if (ret == 0) {
-            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-                NULL, 0, data_size, (has_loss) ? 0x10000000 : 0, 0, 20 * latency, max_completion_time);
-        }
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            NULL, 0, data_size, 0, 0, queue_delay_max, max_completion_time);
     }
 
     /* Free the resource, which will close the log file. */
@@ -120,19 +115,22 @@ int hystart_test() {
         picoquic_bbr1_algorithm
     };
     uint64_t max_completion_times[] = {
-        22000,
-        23500,
-        22000,
+        10000000,
+        10500000,
+        10500000,
         //21000,
-        25000,
-        25000,
-        25000
+        10000000,
+        10000000,
+        10000000
     };
     int ret = 0;
 
-    for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
-        for (picoquic_hystart_alg_t hystart = picoquic_hystart_alg_hystart_t; hystart <= picoquic_hystart_alg_disabled_t; hystart++) {
-            ret = hystart_test_one(ccalgos[i], hystart, 200000000, max_completion_times[i], 250, 125000, 0, 0);
+    for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*) && !ret; i++) {
+        for (picoquic_hystart_alg_t hystart_alg = picoquic_hystart_alg_hystart_t; hystart_alg <= picoquic_hystart_alg_disabled_t && !ret; hystart_alg++) {
+            ret = hystart_test_one(ccalgos[i], hystart_alg, 50000000, max_completion_times[i], 50, 125000, 0, 125000 * 10);
+            if (ret != 0) {
+                DBG_PRINTF("HyStart test fails for <%s><%i>", ccalgos[i]->congestion_algorithm_id, hystart_alg);
+            }
         }
     }
 
