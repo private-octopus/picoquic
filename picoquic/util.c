@@ -1308,6 +1308,39 @@ double picoquic_test_gauss_random(uint64_t* random_context)
     return dx;
 }
 
+/*
+* From Knuth:
+*   init:
+*        Let L = exp(-lambda), k = 0 and p = 1.
+*   do:
+*        k = k + 1.
+*        Generate uniform random number u in [0,1] and let p = p * u.
+*   while p > L.
+*   return k - 1.
+*
+* We implement that using fixed point logic, with a parameter equal to
+*     exp_minus_lambda_2_30 = (uint64_t)(exp(-lambda))*0x40000000)
+* We encode the random variable r on up to 30 bits,
+* and the variable p on up to 31 bits(initial value: 0x40000000)
+* The product p*r is encoded on up to 61 bits -- no overflow on u64
+*/
+
+uint64_t picoquic_test_poisson_random(uint64_t* random_context, uint64_t exp_minus_lambda_2_30)
+{
+    uint64_t k = 0;
+    uint64_t p = 0x40000000;
+
+    do {
+        uint64_t r = picoquic_test_random(random_context);
+        r ^= r >> 30;
+        r &= 0x3fffffff;
+        p = (p * r) >> 30;
+        k = k + 1;
+    } while (p > exp_minus_lambda_2_30);
+
+    return (k - 1);
+}
+
 /* Convert binary string to test string for logging purposes.
  */
 char* picoquic_uint8_to_str(char* text, size_t text_len, const uint8_t* data, size_t data_len)

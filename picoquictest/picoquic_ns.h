@@ -56,6 +56,7 @@ typedef struct st_picoquic_ns_link_spec_t {
     uint64_t l4s_max; /* if specified, specify the max buffer queuing for the link, in microseconds */
     uint64_t nb_loss_in_burst; /* if specified, loose that many packet in burst of errors every interval */
     uint64_t packets_between_losses; /* packets to send between two losses */
+    int is_wifi_jitter; /* 0 = guaussian jitter (default), 1 = wifi jitter emulation. */
 } picoquic_ns_link_spec_t;
 
 typedef struct st_picoquic_ns_spec_t {
@@ -75,6 +76,7 @@ typedef struct st_picoquic_ns_spec_t {
     double data_rate_up_in_gbps; /* datarate, server to clients, defaults to data rate */
     uint64_t latency; /* one way latency, microseconds, both directions */
     uint64_t jitter; /* delay jitter, microseconds, both directions */
+    int is_wifi_jitter; /* 0 = guaussian jitter (default), 1 = wifi jitter emulation. */
     uint64_t queue_delay_max; /* if specified, specify the max buffer queuing for the link, in microseconds */
     uint64_t l4s_max; /* if specified, specify the max buffer queuing for the link, in microseconds */
     picoquic_connection_id_t icid; /* if specified, set the ICID of connections. Last byte will be overwriten by connection number */
