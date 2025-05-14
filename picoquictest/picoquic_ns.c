@@ -345,9 +345,15 @@ int picoquic_ns_create_link_spec(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t* 
         case link_scenario_wifi_fade:
             if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 3)) == 0) {
                 cc_ctx->vary_link_spec[0].duration = 1000000;
+                cc_ctx->vary_link_spec[0].jitter = 999;
+                cc_ctx->vary_link_spec[0].is_wifi_jitter = 1;
                 cc_ctx->vary_link_spec[1].duration = 2000000;
-                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down *= 0.1;
-                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up *= 0.1;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down *= 0.9;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up *= 0.9;
+                cc_ctx->vary_link_spec[1].is_wifi_jitter = 1;
+                cc_ctx->vary_link_spec[1].jitter = 12000;
+                cc_ctx->vary_link_spec[2].jitter = 999;
+                cc_ctx->vary_link_spec[2].is_wifi_jitter = 1;
                 cc_ctx->vary_link_spec[2].duration = UINT64_MAX;
             }
             break;
@@ -720,6 +726,7 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
     link->picosec_per_byte = (uint64_t)pico_d;
     link->microsec_latency = vary_link_spec->latency;
     link->jitter = vary_link_spec->jitter;
+    link->jitter_mode = (vary_link_spec->is_wifi_jitter) ? jitter_wifi : jitter_gauss;
     link->queue_delay_max = vary_link_spec->queue_delay_max;
     link->l4s_max = vary_link_spec->l4s_max;
     link->is_suspended = (data_rate_in_gps <= 0);

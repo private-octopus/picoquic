@@ -162,16 +162,66 @@ static int picoquictest_sim_link_simloss(picoquictest_sim_link_t* link, uint64_t
     return loss;
 }
 
-static uint64_t picoquictest_sim_link_jitter(picoquictest_sim_link_t* link)
-{
-    uint64_t jitter = link->jitter;
-    double x = picoquic_test_gauss_random(&link->jitter_seed);
-    if (x < -3.0) {
-        x = -3.0;
-    }
-    x /= 3.0;
-    jitter += (int64_t)(x * (double)jitter);
+/* Jitter can have two modes: wifi or gauss. 
+* Gauss variable has a specified mid value and a std deviation
+* equal to that value.
+* Wifi variable is the sum of three components
+* - short term jitter: Poisson of form N1*1000, with lambda=1
+* - medium term: X*N2*7000, where:
+*     X is 0 if target jitter <= 1000
+*     X is 1 if target jitter > 85000
+*     otherwise using random r (0..1):
+*         X is 0 if r > (jitter - 1000)/84000, 1 otherwise
+*         N2 is Poisson with lambda = 12
+* This formula is derived empirically from measurements in "bad"
+* wifi networks.
+ */
 
+uint64_t picoquictest_sim_link_wifi_jitter(picoquictest_sim_link_t* link)
+{
+    const uint64_t exp_minus_1_x40000000 = 395007542; /* exp(-1) time 2^30 */
+    const uint64_t primary_jitter = 1000;
+    uint64_t N1 = picoquic_test_poisson_random(&link->jitter_seed, exp_minus_1_x40000000);
+    uint64_t jitter = N1 * primary_jitter;
+    if (N1 > 0) {
+        /* smoothing variable */
+        jitter  -= picoquic_test_uniform_random(&link->jitter_seed, primary_jitter);
+    }
+
+    if (link->jitter > 1000) {
+        uint64_t r = picoquic_test_random(&link->jitter_seed);
+        r ^= r >> 30;
+        r &= 0x3fffffff;
+        r *= 84000;
+        if (r < ((link->jitter - 1000) << 30)) {
+            const uint64_t exp_minus_12_x40000000 = 6597; /* exp(-12) time 2^30 */
+            const uint64_t secondary_jitter = 7500;
+            uint64_t N2 = picoquic_test_poisson_random(&link->jitter_seed, exp_minus_12_x40000000);
+            jitter += N2 * secondary_jitter;
+            if (N2 > 1) {
+                jitter -= picoquic_test_uniform_random(&link->jitter_seed, secondary_jitter);
+            }
+        }
+    }
+    return jitter;
+}
+
+uint64_t picoquictest_sim_link_jitter(picoquictest_sim_link_t* link)
+{
+    uint64_t jitter;
+
+    if (link->jitter_mode == jitter_wifi) {
+        jitter = picoquictest_sim_link_wifi_jitter(link);
+    }
+    else {
+        double x = picoquic_test_gauss_random(&link->jitter_seed);
+        jitter = link->jitter;
+        if (x < -3.0) {
+            x = -3.0;
+        }
+        x /= 3.0;
+        jitter += (int64_t)(x * (double)jitter);
+    }
     return jitter;
 }
 
