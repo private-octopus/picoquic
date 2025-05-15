@@ -326,6 +326,51 @@ int cc_ns_wifi_suspension_test()
 }
 
 
+/*
+* Test a "bad wifi" scenario. The connection experiences a high rate of jitter,
+* and remains in that state -- by opposition to the wifi "fade" scenario, in
+*
+*/
+
+int cc_ns_wifi_bad_cubic_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xfb, 0xcb, 0, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.nb_connections = 1;
+    spec.data_rate_in_gbps = 0.01;
+    spec.latency = 1000;
+    spec.jitter = 12500;
+    spec.is_wifi_jitter = 1;
+    spec.main_target_time = 4500000;
+    spec.queue_delay_max = 80000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+
+    return picoquic_ns(&spec, NULL);
+}
+
+int cc_ns_wifi_bad_bbr_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xfb, 0xbb, 0, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_bbr_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.nb_connections = 1;
+    spec.data_rate_in_gbps = 0.01;
+    spec.latency = 1000;
+    spec.jitter = 12500;
+    spec.is_wifi_jitter = 1;
+    spec.main_target_time = 4500000;
+    spec.queue_delay_max = 80000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+
+    return picoquic_ns(&spec, NULL);
+}
 /* Check that the picoquic_ns simulations can correctly test the low_and_up scenario.
 * The simple scenario merely duplicates the "wifi fade" scenario, the only difference
 * being that the "varylink" structure is user specified.

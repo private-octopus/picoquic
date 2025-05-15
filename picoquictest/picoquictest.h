@@ -284,6 +284,8 @@ int cc_ns_drop_and_back_test();
 int cc_ns_low_and_up_test();
 int cc_ns_wifi_fade_test();
 int cc_ns_wifi_suspension_test();
+int cc_ns_wifi_bad_cubic_test();
+int cc_ns_wifi_bad_bbr_test();
 int cc_ns_varylink_test();
 int cc_ns_satellite_test();
 int cc_ns_media_test();
